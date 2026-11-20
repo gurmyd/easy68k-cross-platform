@@ -1482,8 +1482,11 @@ real 5.16.1 does and the port must reproduce them; tests should pin all of them:
 
 (Object code from the experiment with TABLE = $1000 and the first line at $1008; [ORA] the same eight
 results - both columns - came out of the native build with and without the 5.16.1 OPPARSE.CPP.)
-Whether the shipped EDIT68K.exe 5.16.1 was built from exactly these sources is UNVERIFIED; one run of
-the lines above through the real program settles it. The file dates are consistent with it: OPPARSE.CPP
+CONFIRMED on the shipped EDIT68K.exe 5.16.1 (run under Wine, `official-oracle.md` section 3.6): with
+TABLE = $1000 and the first probe at $1008 the official editor produced exactly the 5.16.1 column above
+for all eight lines (`323B 00FE`, `323B 00F2`, `323B 00FE`, `343B 90FE`, three "Invalid syntax", `3228 001C`),
+and also `083B 0003 00FC` for `BTST #3,(TABLE,PC,D0.W)`, `4EFB 10FE` for `JMP (TABLE,PC,D1.W)`,
+`41FB 08FE` for `LEA (TABLE,PC,D0.L),A0`, and assembled `(SCORE,PC)` / `(PTR,PC)` normally. The file dates are consistent with it: OPPARSE.CPP
 is dated 2018-03-08 (the day of the second change), asm.h 2018-03-13, and the EDIT68K.exe inside the
 official installer 2018-03-15 (`c:\easy64k\reference\official-extracted\`, see `ground-truth.md`).
 

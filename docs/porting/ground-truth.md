@@ -220,6 +220,13 @@ have, so both line-ending styles need test coverage.
 
 ### Wine in a Linux container (assessment only, not tried)
 
+Update: since tried, and it works - see `official-oracle.md` (corpus assembled with the official
+EDIT68K, text received by the assembler captured and checked, both simulator recipes proven,
+risks below measured). In short: risk 1 materialised only for NUL bytes, a UTF-8 byte-order mark,
+a bare CR at end of file and a trailer without final newline; risk 2 is 60-70 instructions/s with
+Auto Trace at 10 ms and display updates off (the interval must be applied through the Auto Trace
+Options dialog); risk 3 did not occur. The original assessment follows.
+
 Likely to work. Reasons: both programs are self-contained 32-bit GUI executables that use only core Win32
 libraries; the official home page itself says EASy68K runs "on a Windows PC or Wine" and links a WineHQ AppDB
 entry (id 6792); Docker is running here with a linux/amd64 engine (29.5.3). A container needs 32-bit Wine, a

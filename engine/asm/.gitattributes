@@ -1,0 +1,4 @@
+# The original Edit68K assembler sources are bytes, not text for git to
+# normalise: Windows-1252, CR LF line ends and a trailing Ctrl-Z.
+# check-patches.mjs compares them byte by byte against the originals.
+src/** -text
