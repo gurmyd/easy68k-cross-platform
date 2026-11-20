@@ -5,6 +5,8 @@
   outputs byte for byte.
 
 .DESCRIPTION
+  Needs tools\build-asm-oracle.ps1 and tools\build-asm-oracle-wasm.ps1 run
+  first (the second copies tests\oracle\asm-cli\run-asy68k.mjs into -WasmDir).
   Work directory: <project>\build\oracle\compare\<name>\
       native\         asy68k.exe                                  (Windows CRT text mode)
       wasm-raw\       node run-asy68k.mjs                  file   (bytes copied verbatim)
@@ -32,10 +34,10 @@
   Use another native build instead of bin\asy68k.exe (e.g. bin\asy68k-dbg.exe).
 
 .EXAMPLE
-  powershell -NoProfile -ExecutionPolicy Bypass -File c:\easy64k\tools\compare-asm-oracle.ps1 -Source c:\easy64k\build\oracle\smoke-test\smoke.X68
+  powershell -NoProfile -ExecutionPolicy Bypass -File c:\easy64k\tools\compare-asm-oracle.ps1 -Source c:\easy64k\tests\oracle\asm-cli\smoke-test\smoke.X68
 
 .EXAMPLE
-  powershell -NoProfile -ExecutionPolicy Bypass -File c:\easy64k\tools\compare-asm-oracle.ps1 -Source c:\easy64k\build\oracle\smoke-test\smoke.X68 -AsmOptions "--macroexpand,--structureexpan,--expandconstants"
+  powershell -NoProfile -ExecutionPolicy Bypass -File c:\easy64k\tools\compare-asm-oracle.ps1 -Source c:\easy64k\tests\oracle\asm-cli\smoke-test\smoke.X68 -AsmOptions "--macroexpand,--structureexpan,--expandconstants"
 #>
 [CmdletBinding()]
 param(

@@ -1,0 +1,21 @@
+# Prettier also skips everything in .gitignore.
+
+# Not ours to format: the engines, the oracle of the official binaries, the
+# reference material, and the documents (prose is formatted by hand).
+/engine/
+/tools/oracle-official/
+/reference/
+/docs/
+/README.md
+/CHANGELOG.md
+/LICENSE
+
+# Third-party or byte-exact content.
+/app/public/
+/tests/corpus/
+/tests/oracle/asm-cli/
+**/golden/
+
+# Lockfile and output.
+package-lock.json
+**/dist/

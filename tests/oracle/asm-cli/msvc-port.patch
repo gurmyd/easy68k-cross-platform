@@ -1,0 +1,121 @@
+msvc-port.patch - every change made to the ASM68K v5.15.4 command-line port
+(reference/easy68k-asm-cli/ASM68Kv5.15.4, upstream
+https://github.com/rayarachelian/EASy68K-asm commit 7102f27) so that it builds
+with Microsoft Visual C++ (cl.exe 19.44, VS 2022) as the native Windows oracle.
+
+No original file is modified. The patch ADDS two files:
+
+  src/msvc-compat/msvc_compat.h   force-included with  cl /FI msvc_compat.h
+  src/msvc-compat/unistd.h        found through        cl /I src\msvc-compat
+
+They supply the names the port takes from glibc/POSIX/Borland VCL that MSVC
+lacks: strcasecmp, strncasecmp, strcasestr, <unistd.h> (for unlink) and
+DateTimeToStr(Now()).
+
+Apply from build/oracle/asm-cli-5.15.4 (the directory holding this file), after
+copying the reference sources to ./src:
+
+    git apply msvc-port.patch
+
+tools/build-asm-oracle.ps1 does the copy, the apply and the build.
+Generated with: git diff --no-index src-orig src   (src-orig = pristine copy)
+
+diff --git a/src/msvc-compat/msvc_compat.h b/src/msvc-compat/msvc_compat.h
+new file mode 100644
+index 0000000..e8f6da3
+--- /dev/null
++++ b/src/msvc-compat/msvc_compat.h
+@@ -0,0 +1,79 @@
++/* msvc_compat.h - lets the unmodified ASM68K v5.15.4 command-line port
++ * (github.com/rayarachelian/EASy68K-asm) compile with Microsoft Visual C++.
++ *
++ * It is force-included in front of every translation unit:
++ *     cl /FI msvc_compat.h /I msvc-compat ...
++ * so NO original source file is edited. Everything here is a name the port
++ * expects from glibc / POSIX / Borland VCL but that MSVC does not provide.
++ * Nothing in the assembler's own logic is touched.
++ *
++ *   strcasecmp, strncasecmp   POSIX <strings.h>  -> _stricmp, _strnicmp
++ *   strcasestr                GNU extension      -> small local implementation
++ *   unlink (via <unistd.h>)   POSIX              -> <io.h>; see the stub unistd.h
++ *   DateTimeToStr(Now())      Borland VCL        -> local implementation, below
++ */
++#ifndef ASY68K_MSVC_COMPAT_H
++#define ASY68K_MSVC_COMPAT_H
++
++#ifdef _MSC_VER
++
++#include <ctype.h>
++#include <io.h>
++#include <stdio.h>
++#include <string.h>
++#include <time.h>
++
++/* asm.h does "#define stricmp strcasecmp" (and strcmpi, strnicmpi); MACRO.CPP
++ * calls strncasecmp directly. Every call site only tests the result for zero. */
++#define strcasecmp  _stricmp
++#define strncasecmp _strnicmp
++
++/* GNU strcasestr: first case-insensitive occurrence of needle in haystack, or
++ * NULL. ASSEMBLE.CPP only tests the result against NULL (INCLUDE / INCBIN). */
++static inline char *strcasestr(const char *haystack, const char *needle)
++{
++  size_t i;
++  if (!*needle)
++    return (char *)haystack;
++  for (; *haystack; haystack++) {
++    for (i = 0; needle[i]; i++)
++      if (tolower((unsigned char)haystack[i]) != tolower((unsigned char)needle[i]))
++        break;                  /* also stops at the end of haystack ('\0' != needle[i]) */
++    if (!needle[i])
++      return (char *)haystack;
++  }
++  return NULL;
++}
++
++#ifdef __cplusplus
++#include <string>
++
++/* LISTING.CPP, in its "#if defined(_WIN32)" branch, keeps the original Borland
++ * line
++ *     AnsiString timeStr = DateTimeToStr(Now());
++ * for the "Created On:" line of the listing. VCL's DateTimeToStr formats with
++ * the Windows short-date and long-time formats; the port's own comment gives
++ * the expected result as "4/29/2019 8:47:37 PM". This implementation always
++ * produces that en-US form (M/D/YYYY h:mm:ss AM|PM) so that the oracle's
++ * output does not depend on the regional settings of the machine it runs on. */
++static inline time_t Now(void) { return time(NULL); }
++
++static inline std::string DateTimeToStr(time_t when)
++{
++  char text[64];
++  struct tm *lt = localtime(&when);
++  int hour12;
++  if (!lt)
++    return std::string();
++  hour12 = lt->tm_hour % 12;
++  if (hour12 == 0)
++    hour12 = 12;
++  snprintf(text, sizeof text, "%d/%d/%d %d:%02d:%02d %s",
++           lt->tm_mon + 1, lt->tm_mday, lt->tm_year + 1900,
++           hour12, lt->tm_min, lt->tm_sec, (lt->tm_hour < 12) ? "AM" : "PM");
++  return std::string(text);
++}
++#endif /* __cplusplus */
++
++#endif /* _MSC_VER */
++#endif /* ASY68K_MSVC_COMPAT_H */
+diff --git a/src/msvc-compat/unistd.h b/src/msvc-compat/unistd.h
+new file mode 100644
+index 0000000..33a482d
+--- /dev/null
++++ b/src/msvc-compat/unistd.h
+@@ -0,0 +1,8 @@
++/* unistd.h - stub for Microsoft Visual C++ only (found through /I msvc-compat).
++ * ASSEMBLE.CPP includes <unistd.h> for a single call: unlink() of the
++ * temporary file in main(). MSVC declares unlink()/_unlink() in <io.h>. */
++#ifndef ASY68K_MSVC_UNISTD_H
++#define ASY68K_MSVC_UNISTD_H
++#include <io.h>
++#include <stdio.h>
++#endif

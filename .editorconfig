@@ -1,0 +1,38 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.ps1]
+indent_size = 4
+
+# 68000 sources, listings and S-records: Windows-1252 bytes with CR LF line
+# ends, as the original writes them (ARCHITECTURE.md 5.1). Editors must not
+# convert them.
+[*.{X68,x68,L68,l68,S68,s68}]
+charset = unset
+end_of_line = crlf
+insert_final_newline = unset
+trim_trailing_whitespace = false
+indent_style = unset
+indent_size = unset
+
+[{engine,reference,tools/oracle-official}/**]
+charset = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+indent_style = unset
+indent_size = unset
+
+[*.patch]
+trim_trailing_whitespace = false
+insert_final_newline = unset

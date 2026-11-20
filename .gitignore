@@ -11,6 +11,19 @@
 dist/
 node_modules/
 
+# Generated at build time (tools/build-info.mjs)
+/app/src/build-info.ts
+
+# Test and packaging output
+test-results/
+playwright-report/
+*.tsbuildinfo
+/desktop/release/
+.vite/
+.vitest/
+__pycache__/
+*.pyc
+
 # OS and editor noise
 .DS_Store
 Thumbs.db

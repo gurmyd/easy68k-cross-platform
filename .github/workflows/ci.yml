@@ -1,0 +1,398 @@
+# Continuous integration (ARCHITECTURE.md 6, 7.3, 7.4).
+#
+# Every job of 7.4 is here from wave 0. A job whose tests, script or folder do
+# not exist yet is skipped, and GitHub shows it as skipped: the `plan` job
+# looks at the checkout and sets one output per guard; each job's `if:` reads
+# it. When the owning package adds the file a guard names, its job starts to
+# run with no change to this workflow. The guards:
+#
+#   job / step                 runs when this exists
+#   conformance                tests/conformance/*/vitest.config.ts or tests/parity/vitest.config.ts
+#   e2e                        tests/e2e/**/*.spec.ts or tests/a11y/**/*.spec.ts
+#   windows-oracles: GDI       tests/oracle/gdi-capture/run.mjs     (npm run oracle:gdi, T2)
+#   windows-oracles: twins     tests/oracle/native-twin/run.mjs     (npm run oracle:twins, T4)
+#   windows-oracles: asm CLI   tests/oracle/asm-cli/run.mjs         (T1)
+#   windows-oracles: engines   weekly schedule or manual run: Windows engine build vs Linux (7.3)
+#   desktop-dev                tests/desktop/dev/playwright.config.ts (DV2), and desktop/** or app/** changed
+#
+# check and unit run on every push and pull request.
+#
+# The weekly schedule exists only for the Windows engine comparison of 7.3:
+# on a scheduled run, plan sets every guard but engines_weekly to false and
+# check and unit are skipped, so the run is engines + windows-oracles (with
+# only the comparison step). A manual run (workflow_dispatch) runs everything
+# a push would, plus the comparison. The engines come from the reusable workflow
+# engines.yml as the artifact "engine-dist"; a job downloads it when it exists.
+#
+# Shared configuration: written in wave 0, changed only at an integration gate.
+
+name: ci
+
+on:
+  push:
+  pull_request:
+  schedule:
+    # Weekly, Monday 04:17 UTC: only the comparison of the Windows engine
+    # build with the canonical Linux build (7.3); every other job is skipped.
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  FORCE_COLOR: '1'
+
+defaults:
+  run:
+    # One shell on all three systems (Git Bash on Windows). PowerShell's npm
+    # shim would swallow the "--" of `npm run x -- args`.
+    shell: bash
+
+jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      conformance: ${{ steps.guards.outputs.conformance }}
+      e2e: ${{ steps.guards.outputs.e2e }}
+      gdi: ${{ steps.guards.outputs.gdi }}
+      twins: ${{ steps.guards.outputs.twins }}
+      asm_cli: ${{ steps.guards.outputs.asm_cli }}
+      engines_weekly: ${{ steps.guards.outputs.engines_weekly }}
+      windows_oracles: ${{ steps.guards.outputs.windows_oracles }}
+      desktop_dev: ${{ steps.guards.outputs.desktop_dev }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Decide which jobs can run
+        id: guards
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -u
+          has() { [ -n "$(find "$@" -print -quit 2>/dev/null)" ]; }
+          flag() { if "$@"; then echo true; else echo false; fi; }
+
+          conformance=$(flag has tests/conformance -mindepth 2 -maxdepth 2 -name vitest.config.ts)
+          [ -f tests/parity/vitest.config.ts ] && conformance=true
+          e2e=$(flag has tests/e2e tests/a11y -name '*.spec.ts')
+          gdi=$(flag test -f tests/oracle/gdi-capture/run.mjs)
+          twins=$(flag test -f tests/oracle/native-twin/run.mjs)
+          asm_cli=$(flag test -f tests/oracle/asm-cli/run.mjs)
+          engines_weekly=false
+          case "$EVENT" in schedule|workflow_dispatch) engines_weekly=true ;; esac
+          windows_oracles=false
+          for g in "$gdi" "$twins" "$asm_cli" "$engines_weekly"; do [ "$g" = true ] && windows_oracles=true; done
+
+          # desktop-dev: only when desktop/** or app/** changed (7.4).
+          changed=true
+          base=""
+          case "$EVENT" in
+            pull_request) base="$PR_BASE" ;;
+            push) base="$BEFORE" ;;
+          esac
+          if [ -n "$base" ] && [ "$base" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
+            if git diff --quiet "$base" HEAD -- desktop app; then changed=false; else changed=true; fi
+          fi
+          desktop_dev=false
+          if [ -f tests/desktop/dev/playwright.config.ts ] && [ "$changed" = true ]; then desktop_dev=true; fi
+
+          # The weekly schedule runs the engine comparison only (7.3, 7.4).
+          if [ "$EVENT" = schedule ]; then
+            conformance=false; e2e=false; gdi=false; twins=false; asm_cli=false; desktop_dev=false
+          fi
+
+          {
+            echo "conformance=$conformance"
+            echo "e2e=$e2e"
+            echo "gdi=$gdi"
+            echo "twins=$twins"
+            echo "asm_cli=$asm_cli"
+            echo "engines_weekly=$engines_weekly"
+            echo "windows_oracles=$windows_oracles"
+            echo "desktop_dev=$desktop_dev"
+          } | tee -a "$GITHUB_OUTPUT"
+          {
+            echo "### Job guards"
+            echo "| guard | runs |"
+            echo "|---|---|"
+            for name in conformance e2e gdi twins asm_cli engines_weekly windows_oracles desktop_dev; do
+              eval "value=\$$name"
+              echo "| $name | $value |"
+            done
+            echo
+            echo "desktop/** or app/** changed: $changed"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  engines:
+    name: engines
+    uses: ./.github/workflows/engines.yml
+
+  check:
+    name: check (typecheck, lint, format)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Format check
+        run: npm run format:check
+
+  unit:
+    name: unit (${{ matrix.os }})
+    needs: [engines]
+    if: github.event_name != 'schedule'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Download engine-dist
+        if: needs.engines.outputs.available != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: engine-dist
+          path: engine/dist
+      - name: Unit tests
+        run: npm test
+
+  conformance:
+    name: conformance (${{ matrix.os }})
+    needs: [plan, engines]
+    if: needs.plan.outputs.conformance == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Download engine-dist
+        if: needs.engines.outputs.available != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: engine-dist
+          path: engine/dist
+      - name: Conformance tests against the committed goldens
+        run: npm run test:conformance
+
+  e2e:
+    name: e2e (${{ matrix.os }}, ${{ matrix.browser }})
+    needs: [plan, engines]
+    if: needs.plan.outputs.e2e == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        browser: [chromium, webkit]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Download engine-dist
+        if: needs.engines.outputs.available != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: engine-dist
+          path: engine/dist
+      - name: Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Restore Playwright browsers
+        id: browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          # Playwright's default browser folder on Linux, macOS and Windows.
+          path: |
+            ~/.cache/ms-playwright
+            ~/Library/Caches/ms-playwright
+            ~/AppData/Local/ms-playwright
+          key: playwright-${{ steps.playwright.outputs.version }}-${{ runner.os }}-${{ runner.arch }}-${{ matrix.browser }}
+      - name: Install ${{ matrix.browser }}
+        if: steps.browsers.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Install the system libraries for ${{ matrix.browser }}
+        if: steps.browsers.outputs.cache-hit == 'true' && runner.os == 'Linux'
+        run: npx playwright install-deps ${{ matrix.browser }}
+      - name: Production build
+        run: npm run build
+      - name: End-to-end tests
+        run: npm run test:e2e -- --project ${{ matrix.browser }}
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report-${{ matrix.os }}-${{ matrix.browser }}
+          path: |
+            tests/playwright-report/
+            tests/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  windows-oracles:
+    name: windows-oracles
+    needs: [plan, engines]
+    if: needs.plan.outputs.windows_oracles == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      EMSDK_VERSION: '7.0.0'
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Download engine-dist
+        if: needs.engines.outputs.available != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: engine-dist
+          path: engine/dist
+
+      - name: GDI capture, regenerate and compare (T2)
+        if: needs.plan.outputs.gdi == 'true'
+        run: npm run oracle:gdi
+      - name: Native twins (T4)
+        if: needs.plan.outputs.twins == 'true'
+        run: npm run oracle:twins
+      - name: Command-line assembler oracle (T1)
+        if: needs.plan.outputs.asm_cli == 'true'
+        run: node tests/oracle/asm-cli/run.mjs
+
+      # Weekly: build the engines on Windows and compare the .wasm files with
+      # the canonical Linux build. A difference is reported, never a failure.
+      - name: Restore Emscripten (weekly engine comparison)
+        if: needs.plan.outputs.engines_weekly == 'true' && needs.engines.outputs.available != ''
+        id: emsdk-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .toolchain/emsdk
+          key: emsdk-${{ env.EMSDK_VERSION }}-${{ runner.os }}-${{ runner.arch }}
+      - name: Install Emscripten (weekly engine comparison)
+        if: needs.plan.outputs.engines_weekly == 'true' && needs.engines.outputs.available != '' && steps.emsdk-cache.outputs.cache-hit != 'true'
+        run: npm run setup:emsdk
+      - name: Build the engines on Windows and compare with Linux (weekly)
+        if: needs.plan.outputs.engines_weekly == 'true' && needs.engines.outputs.available != ''
+        continue-on-error: true
+        run: |
+          mkdir -p build/engine-dist-linux
+          cp engine/dist/* build/engine-dist-linux/
+          node tools/build-engines.mjs
+          {
+            echo "### Windows engine build vs Linux (.wasm SHA-256)"
+            echo "| file | Linux | Windows | |"
+            echo "|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for linux in build/engine-dist-linux/*.wasm; do
+            name=$(basename "$linux")
+            a=$(sha256sum "$linux" | cut -d' ' -f1)
+            b=$( [ -f "engine/dist/$name" ] && sha256sum "engine/dist/$name" | cut -d' ' -f1 || echo missing)
+            if [ "$a" = "$b" ]; then verdict=same; else verdict=DIFFERENT; echo "::warning title=Engine build differs::$name built on Windows differs from the Linux build ($b vs $a)"; fi
+            echo "| $name | \`$a\` | \`$b\` | $verdict |" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+  desktop-dev:
+    name: desktop-dev (macos-15)
+    needs: [plan, engines]
+    if: needs.plan.outputs.desktop_dev == 'true'
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Download engine-dist
+        if: needs.engines.outputs.available != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: engine-dist
+          path: engine/dist
+      - name: Electron version
+        id: electron
+        run: echo "version=$(node -p "require('electron/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Restore the Electron download
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/electron
+          key: electron-${{ steps.electron.outputs.version }}-${{ runner.os }}-${{ runner.arch }}
+      - name: Install the Electron binary
+        run: node node_modules/electron/install.js
+      - name: Production build of the app
+        run: npm run build
+      - name: Desktop development-build tests (6.7)
+        run: npm run desktop:test -- dev

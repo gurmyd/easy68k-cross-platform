@@ -1,0 +1,40 @@
+# Line ends for the files of the application, the desktop app, the tests and
+# the tools: LF in the repository and in every checkout, whatever the local
+# core.autocrlf says, so that Prettier's check and shell scripts behave the
+# same on Windows, macOS and Linux.
+#
+# Deliberately scoped to these folders: the engines (engine/**) and the oracle
+# under tools/oracle-official/ carry original sources and fixtures that are
+# bytes, and they declare that in their own .gitattributes files.
+/*.json                text eol=lf
+/*.js                  text eol=lf
+/*.md                  text eol=lf
+/.editorconfig         text eol=lf
+/.gitattributes        text eol=lf
+/.gitignore            text eol=lf
+/.prettierrc           text eol=lf
+/.prettierignore       text eol=lf
+/.github/**            text eol=lf
+/app/**                text=auto eol=lf
+/desktop/**            text=auto eol=lf
+/tests/**              text=auto eol=lf
+/tools/*.mjs           text eol=lf
+/tools/*.sh            text eol=lf
+/tools/*.ps1           text eol=lf
+
+# 68000 sources, listings and S-records, and anything copied from the original
+# distribution, are Windows-1252 bytes with CR LF line ends (and sometimes a
+# Ctrl-Z): never converted (ARCHITECTURE.md 0 rule 6, 5.1).
+/app/public/**         -text
+/tests/**/*.X68        -text
+/tests/**/*.x68        -text
+/tests/**/*.L68        -text
+/tests/**/*.l68        -text
+/tests/**/*.S68        -text
+/tests/**/*.s68        -text
+/tests/**/*.wav        binary
+/tests/**/*.pix        binary
+/tests/**/*.bin        binary
+/tests/corpus/**       -text
+/tests/**/golden/**    -text
+/tests/oracle/asm-cli/** -text

@@ -1,0 +1,120 @@
+# Reusable workflow: builds the two WebAssembly engines once and hands them
+# to every other job as the artifact "engine-dist" (ARCHITECTURE.md 7.3).
+#
+# - The Linux build is the canonical one.
+# - When nothing that goes into the engines changed (key: Emscripten version
+#   plus the hash of engine/** and tools/build-engines.mjs), the build is
+#   skipped and engine/dist is restored from the cache.
+# - Emscripten is installed by tools/setup-emsdk.sh into .toolchain/emsdk and
+#   cached by version. No other job needs it.
+# - An engine whose folder or build script does not exist yet is reported and
+#   skipped (tools/build-engines.mjs); the output `available` lists the
+#   engines in the artifact ("asm sim", "sim", or empty). With no engine at
+#   all, no artifact is uploaded and callers skip their download.
+#
+# Shared configuration: written in wave 0, changed only at an integration gate.
+
+name: engines
+
+on:
+  workflow_call:
+    outputs:
+      available:
+        description: 'Engines in the engine-dist artifact, space separated ("asm sim"); empty when there is none'
+        value: ${{ jobs.build.outputs.available }}
+
+permissions:
+  contents: read
+
+env:
+  EMSDK_VERSION: '7.0.0'
+
+jobs:
+  build:
+    name: build (linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      available: ${{ steps.result.outputs.available }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Compute the engine cache key
+        id: key
+        run: echo "key=engine-dist-emsdk${EMSDK_VERSION}-${{ hashFiles('engine/**', 'tools/build-engines.mjs') }}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore engine/dist when the engine sources are unchanged
+        id: engine-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: engine/dist
+          key: ${{ steps.key.outputs.key }}
+
+      - name: Set up Node
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Restore Emscripten
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        id: emsdk-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .toolchain/emsdk
+          key: emsdk-${{ env.EMSDK_VERSION }}-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Install Emscripten ${{ env.EMSDK_VERSION }}
+        if: steps.engine-cache.outputs.cache-hit != 'true' && steps.emsdk-cache.outputs.cache-hit != 'true'
+        run: sh tools/setup-emsdk.sh
+
+      - name: Save Emscripten
+        if: steps.engine-cache.outputs.cache-hit != 'true' && steps.emsdk-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .toolchain/emsdk
+          key: emsdk-${{ env.EMSDK_VERSION }}-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Build the engines
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        run: node tools/build-engines.mjs
+
+      - name: List engine/dist
+        id: result
+        run: |
+          available=""
+          if [ -f engine/dist/asm68k.wasm ] && [ -f engine/dist/asm68k-loader.mjs ]; then available="asm"; fi
+          if [ -f engine/dist/sim68k.wasm ] && [ -f engine/dist/sim68k-loader.mjs ]; then available="${available:+$available }sim"; fi
+          echo "available=$available" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Engines"
+            if [ -z "$available" ]; then
+              echo "No engine exists yet: nothing was built, no artifact is uploaded."
+            else
+              echo "In the engine-dist artifact: $available"
+              echo
+              echo '```'
+              (cd engine/dist && sha256sum -- *)
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save engine/dist
+        if: steps.engine-cache.outputs.cache-hit != 'true' && steps.result.outputs.available != ''
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: engine/dist
+          key: ${{ steps.key.outputs.key }}
+
+      - name: Upload the engine-dist artifact
+        if: steps.result.outputs.available != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: engine-dist
+          path: engine/dist/
+          if-no-files-found: error
+          retention-days: 14

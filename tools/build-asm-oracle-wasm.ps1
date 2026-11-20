@@ -9,8 +9,9 @@
           <project>\reference\easy68k-asm-cli\ASM68Kv5.15.4). The MSVC shim in
           src\msvc-compat is NOT used: the sources compile unmodified.
   Output: <project>\build\oracle\asm-cli-5.15.4-wasm\asy68k.mjs + asy68k.wasm
-          (ES6 module, MODULARIZE, Node only). Run it through
-          <project>\build\oracle\asm-cli-5.15.4-wasm\run-asy68k.mjs.
+          (ES6 module, MODULARIZE, Node only), plus a copy of the tracked
+          runner <project>\tests\oracle\asm-cli\run-asy68k.mjs next to them.
+          Run it through <OutDir>\run-asy68k.mjs.
 
   The flags that matter (see docs\porting\toolchain.md for why):
     -ftrivial-auto-var-init=zero   REQUIRED at any -O level above -O0. Without
@@ -46,7 +47,9 @@ $root      = Split-Path -Parent $PSScriptRoot
 $reference = Join-Path $root 'reference\easy68k-asm-cli\ASM68Kv5.15.4'
 $src       = Join-Path $root 'build\oracle\asm-cli-5.15.4\src'
 if (-not $OutDir) { $OutDir = Join-Path $root 'build\oracle\asm-cli-5.15.4-wasm' }
+$runnerSrc = Join-Path $root 'tests\oracle\asm-cli\run-asy68k.mjs'
 
+if (-not (Test-Path $runnerSrc)) { throw "Runner not found: $runnerSrc" }
 if (-not (Test-Path (Join-Path $src 'ASSEMBLE.CPP'))) {
     throw "Sources not found in $src - run tools\build-asm-oracle.ps1 first."
 }
@@ -82,6 +85,8 @@ if ($code -ne 0) {
     Get-Content $log | Write-Host
     throw "em++ failed (exit $code); log: $log"
 }
+
+Copy-Item -LiteralPath $runnerSrc -Destination (Join-Path $OutDir 'run-asy68k.mjs') -Force
 
 $ver = (& emcc --version | Select-Object -First 1)
 Write-Host ""

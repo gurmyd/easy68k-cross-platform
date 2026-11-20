@@ -1,0 +1,54 @@
+{
+  "name": "easy68k-mac",
+  "version": "0.0.0",
+  "private": true,
+  "description": "EASy68K - unofficial web and macOS port of the EASy68K v5.16.1 68000 editor/assembler and simulator",
+  "license": "GPL-2.0-or-later",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "app",
+    "desktop",
+    "tests"
+  ],
+  "scripts": {
+    "setup:emsdk": "node -e \"const w = process.platform === 'win32'; const r = require('node:child_process').spawnSync(w ? 'powershell' : 'sh', w ? ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'tools/setup-emsdk.ps1'] : ['tools/setup-emsdk.sh'], { stdio: 'inherit' }); process.exit(r.status ?? 1)\"",
+    "build:engines": "node tools/build-engines.mjs",
+    "fetch:engines": "node tools/fetch-engines.mjs",
+    "dev": "npm run dev --workspace app --",
+    "build": "npm run build --workspace app --",
+    "preview": "npm run preview --workspace app --",
+    "typecheck": "node tools/typecheck.mjs",
+    "lint": "eslint . && vitest run --root tests/lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run test --workspace app --",
+    "test:conformance": "vitest run --config tests/vitest.workspace.ts",
+    "test:e2e": "playwright test --config tests/playwright.config.ts --pass-with-no-tests",
+    "test:all": "npm test && npm run test:conformance && npm run test:e2e",
+    "oracle:wine:build": "docker build -t easy68k-oracle-wine tests/oracle/wine",
+    "oracle:wine:asm": "node tests/oracle/wine/asm/regenerate.mjs",
+    "oracle:wine:sim": "node tests/oracle/wine/sim/regenerate.mjs",
+    "oracle:gdi": "node tests/oracle/gdi-capture/run.mjs",
+    "oracle:twins": "node tests/oracle/native-twin/run.mjs",
+    "import:help": "node tools/import-help.mjs",
+    "import:examples": "node tools/import-examples.mjs",
+    "desktop:dev": "node tools/desktop-dev.mjs",
+    "desktop:pack": "npm run build --workspace app && npm run pack --workspace desktop",
+    "desktop:dist": "npm run build --workspace app && npm run dist --workspace desktop --",
+    "desktop:test": "cd tests/desktop && playwright test --config",
+    "fonts:atlases": "node tools/make-font-atlases.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@napi-rs/canvas": "1.1.1",
+    "@types/node": "24.19.2",
+    "eslint": "10.15.0",
+    "globals": "17.14.0",
+    "prettier": "3.10.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.73.0"
+  }
+}

@@ -7,7 +7,7 @@
   1. Copies the read-only reference sources
          <project>\reference\easy68k-asm-cli\ASM68Kv5.15.4\*
      to  <project>\build\oracle\asm-cli-5.15.4\src        (wiped first)
-  2. Applies <project>\build\oracle\asm-cli-5.15.4\msvc-port.patch with
+  2. Applies <project>\tests\oracle\asm-cli\msvc-port.patch (tracked) with
      "git apply". The patch only ADDS two files (src\msvc-compat\msvc_compat.h
      and src\msvc-compat\unistd.h); no original file is edited.
   3. Verifies that every original file in src is still byte-identical to the
@@ -50,7 +50,7 @@ $root      = Split-Path -Parent $PSScriptRoot
 $reference = Join-Path $root 'reference\easy68k-asm-cli\ASM68Kv5.15.4'
 $oracle    = Join-Path $root 'build\oracle\asm-cli-5.15.4'
 $src       = Join-Path $oracle 'src'
-$patch     = Join-Path $oracle 'msvc-port.patch'
+$patch     = Join-Path $root 'tests\oracle\asm-cli\msvc-port.patch'
 $bin       = Join-Path $oracle 'bin'
 $obj       = Join-Path $oracle ("obj\" + $Configuration.ToLower())
 
