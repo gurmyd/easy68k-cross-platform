@@ -192,6 +192,17 @@ jobs:
         with:
           name: engine-dist
           path: engine/dist
+      # The engines carry their own suites on Node's built-in test runner. They
+      # need no npm packages, only engine/dist, and run on every OS so that the
+      # WebAssembly builds are proven outside the machine that built them.
+      - name: Assembler engine tests
+        if: contains(needs.engines.outputs.available, 'asm')
+        working-directory: engine/asm
+        run: node --test
+      - name: Simulator engine tests
+        if: contains(needs.engines.outputs.available, 'sim')
+        working-directory: engine/sim
+        run: node --test
       - name: Unit tests
         run: npm test
 
