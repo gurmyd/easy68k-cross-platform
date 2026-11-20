@@ -1,0 +1,335 @@
+00001000 Starting Address
+Assembler used: ASy68K Assembler v5.15.04
+Created On: 11/20/2026 12:00:00 PM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : io - TRAP #15 tasks at the engine / host boundary
+00000000                             3  * Written by : easy68k-mac project (test fixture, GPL-2.0-or-later)
+00000000                             4  * Description: The test puts a case number in D7 and runs.  Case n is the
+00000000                             5  *              code at $2000 + n*$80.  Results that the test checks are
+00000000                             6  *              stored with (A6)+ in RESULTS.  test/io.test.mjs asserts.
+00000000                             7  *-----------------------------------------------------------
+00000000                             8  T15     MACRO                   TRAP #15 task \1
+00000000                             9          MOVEQ   #\1,D0
+00000000                            10          TRAP    #15
+00000000                            11          ENDM
+00000000                            12  
+00001000                            13          ORG     $1000
+00001000  4DF9 00004000             14  START:  LEA     RESULTS,A6
+00001006  EF4F                      15          LSL.W   #7,D7
+00001008  41F8 2000                 16          LEA     $2000,A0
+0000100C  4EF0 7000                 17          JMP     0(A0,D7.W)
+00001010                            18  
+00002000                            19          ORG     $2000           case 0: text output, tasks 14 13 0 1 6
+00002000  43F9 00002A0C             20          LEA     TABC,A1
+00002006                            21m         T15     14              "ABC"
+0000200A  43F9 00002A10             22          LEA     TDEF,A1
+00002010                            23m         T15     13              "DEF" CR LF
+00002014  43F9 00002A14             24          LEA     TGHIJK,A1
+0000201A  223C FFFF0003             25          MOVE.L  #$FFFF0003,D1   only D1.W counts
+00002020                            26m         T15     0               "GHI" CR LF
+00002024  7202                      27          MOVEQ   #2,D1
+00002026                            28m         T15     1               "GH"
+0000202A  223C FFFFFF21             29          MOVE.L  #$FFFFFF21,D1   only D1.B counts
+00002030                            30m         T15     6               "!"
+00002034  FFFF FFFF                 31          SIMHALT
+00002038                            32  
+00002080                            33          ORG     $2080           case 1: numbers, tasks 3 15 17 20
+00002080  223C FFFFCFC7             34          MOVE.L  #-12345,D1
+00002086                            35m         T15     3               "-12345"
+0000208A  223C 000000FF             36          MOVE.L  #255,D1
+00002090  7410                      37          MOVEQ   #16,D2
+00002092                            38m         T15     15              "FF"
+00002096  7205                      39          MOVEQ   #5,D1
+00002098  7402                      40          MOVEQ   #2,D2
+0000209A                            41m         T15     15              "101"
+0000209E  72FF                      42          MOVE.L  #$FFFFFFFF,D1
+000020A0  740A                      43          MOVEQ   #10,D2
+000020A2                            44m         T15     15              "4294967295" (unsigned)
+000020A6  43F9 00002A1A             45          LEA     TNEQ,A1
+000020AC  722A                      46          MOVEQ   #42,D1
+000020AE                            47m         T15     17              "N=42"
+000020B2  722A                      48          MOVEQ   #42,D1
+000020B4  7406                      49          MOVEQ   #6,D2
+000020B6                            50m         T15     20              "    42"
+000020BA  72F9                      51          MOVEQ   #-7,D1
+000020BC  143C 00FA                 52          MOVE.B  #-6,D2
+000020C0                            53m         T15     20              "-7    " (negative width: left justified)
+000020C4  7401                      54          MOVEQ   #1,D2
+000020C6                            55m         T15     15              radix 1: nothing
+000020CA  FFFF FFFF                 56          SIMHALT
+000020CE                            57  
+00002100                            58          ORG     $2100           case 2: task 2, read a string
+00002100  43F9 00005000             59          LEA     INBUF,A1
+00002106  223C AAAAAAAA             60          MOVE.L  #$AAAAAAAA,D1
+0000210C                            61m         T15     2
+00002110  2CC1                      62          MOVE.L  D1,(A6)+        length (the whole of D1)
+00002112  43F9 00005000             63          LEA     INBUF,A1
+00002118                            64m         T15     14              print it back
+0000211C  FFFF FFFF                 65          SIMHALT
+00002120                            66  
+00002180                            67          ORG     $2180           case 3: task 4, read numbers
+00002180                            68m         T15     4
+00002184  2CC1                      69          MOVE.L  D1,(A6)+
+00002186                            70m         T15     4
+0000218A  2CC1                      71          MOVE.L  D1,(A6)+
+0000218C                            72m         T15     4
+00002190  2CC1                      73          MOVE.L  D1,(A6)+
+00002192  FFFF FFFF                 74          SIMHALT
+00002196                            75  
+00002200                            76          ORG     $2200           case 4: task 5 read a character, task 7 key pending?
+00002200  223C AAAAAAAA             77          MOVE.L  #$AAAAAAAA,D1
+00002206                            78m         T15     7
+0000220A  2CC1                      79          MOVE.L  D1,(A6)+        low byte 0 or 1, upper bits kept
+0000220C  223C BBBBBBBB             80          MOVE.L  #$BBBBBBBB,D1
+00002212                            81m         T15     5
+00002216  2CC1                      82          MOVE.L  D1,(A6)+        low byte = the key, upper bits kept
+00002218                            83m         T15     5
+0000221C  2CC1                      84          MOVE.L  D1,(A6)+
+0000221E  FFFF FFFF                 85          SIMHALT
+00002222                            86  
+00002280                            87          ORG     $2280           case 5: task 18, prompt then number
+00002280  43F9 00002A1A             88          LEA     TNEQ,A1
+00002286                            89m         T15     18
+0000228A  2CC1                      90          MOVE.L  D1,(A6)+
+0000228C  FFFF FFFF                 91          SIMHALT
+00002290                            92  
+00002300                            93          ORG     $2300           case 6: task 12 echo off, then task 2; task 16 prompt / LF options
+00002300  7200                      94          MOVEQ   #0,D1
+00002302                            95m         T15     12
+00002306  43F9 00005000             96          LEA     INBUF,A1
+0000230C                            97m         T15     2
+00002310  2CC1                      98          MOVE.L  D1,(A6)+
+00002312  7201                      99          MOVEQ   #1,D1
+00002314                           100m         T15     12
+00002318  7202                     101          MOVEQ   #2,D1
+0000231A                           102m         T15     16              no LF after CR on character input
+0000231E                           103m         T15     5
+00002322  2CC1                     104          MOVE.L  D1,(A6)+
+00002324  FFFF FFFF                105          SIMHALT
+00002328                           106  
+00002380                           107          ORG     $2380           case 7: task 11 cursor
+00002380  323C 0A05                108          MOVE.W  #$0A05,D1       column 10, row 5
+00002384                           109m         T15     11
+00002388  7258                     110          MOVEQ   #$58,D1
+0000238A                           111m         T15     6               "X" at (5,10)
+0000238E  223C 123400FF            112          MOVE.L  #$123400FF,D1
+00002394                           113m         T15     11              get position: D1.W = $0B05, upper word kept
+00002398  2CC1                     114          MOVE.L  D1,(A6)+
+0000239A  223C 0005000A            115          MOVE.L  #$0005000A,D1   task 22: row in the high word, column in the low word
+000023A0                           116m         T15     22              character at row 5, column 10 -> D1.B
+000023A4  2CC1                     117          MOVE.L  D1,(A6)+
+000023A6  323C FF00                118          MOVE.W  #$FF00,D1
+000023AA                           119m         T15     11              clear screen
+000023AE  223C 000000FF            120          MOVE.L  #$000000FF,D1
+000023B4                           121m         T15     11
+000023B8  2CC1                     122          MOVE.L  D1,(A6)+        position after clear: 0
+000023BA  FFFF FFFF                123          SIMHALT
+000023BE                           124  
+00002400                           125          ORG     $2400           case 8: time, cycles, hardware addresses, version
+00002400                           126m         T15     8
+00002404  2CC1                     127          MOVE.L  D1,(A6)+        centiseconds since midnight
+00002406                           128m         T15     30              clear cycle counter
+0000240A  4E71                     129          NOP
+0000240C                           130m         T15     31
+00002410  2CC1                     131          MOVE.L  D1,(A6)+        cycles since task 30: NOP (4) + MOVEQ (4)
+00002412  7201                     132          MOVEQ   #1,D1
+00002414                           133m         T15     32
+00002418  2CC1                     134          MOVE.L  D1,(A6)+        7-segment address
+0000241A  7202                     135          MOVEQ   #2,D1
+0000241C                           136m         T15     32
+00002420  2CC1                     137          MOVE.L  D1,(A6)+        LED address
+00002422  7203                     138          MOVEQ   #3,D1
+00002424                           139m         T15     32
+00002428  2CC1                     140          MOVE.L  D1,(A6)+        switch address
+0000242A  7207                     141          MOVEQ   #7,D1
+0000242C                           142m         T15     32
+00002430  2CC1                     143          MOVE.L  D1,(A6)+        push-button address
+00002432  7204                     144          MOVEQ   #4,D1
+00002434                           145m         T15     32
+00002438  2CC1                     146          MOVE.L  D1,(A6)+        version
+0000243A  FFFF FFFF                147          SIMHALT
+0000243E                           148  
+00002480                           149          ORG     $2480           case 9: task 23 delay
+00002480  43F9 00002A0C            150          LEA     TABC,A1
+00002486                           151m         T15     14
+0000248A  7232                     152          MOVEQ   #50,D1
+0000248C                           153m         T15     23              half a second
+00002490  43F9 00002A10            154          LEA     TDEF,A1
+00002496                           155m         T15     14
+0000249A                           156m         T15     8
+0000249E  2CC1                     157          MOVE.L  D1,(A6)+
+000024A0  FFFF FFFF                158          SIMHALT
+000024A4                           159  
+00002500                           160          ORG     $2500           case 10: files
+00002500  43F9 00002A1D            161          LEA     FNAME,A1
+00002506                           162m         T15     52              new file
+0000250A  3CC0                     163          MOVE.W  D0,(A6)+
+0000250C  2A01                     164          MOVE.L  D1,D5           file number
+0000250E  43F9 00002A14            165          LEA     TGHIJK,A1
+00002514  7405                     166          MOVEQ   #5,D2
+00002516  2205                     167          MOVE.L  D5,D1
+00002518                           168m         T15     54              write 5 bytes
+0000251C  3CC0                     169          MOVE.W  D0,(A6)+
+0000251E  2205                     170          MOVE.L  D5,D1
+00002520                           171m         T15     56              close
+00002524  3CC0                     172          MOVE.W  D0,(A6)+
+00002526  43F9 00002A1D            173          LEA     FNAME,A1
+0000252C                           174m         T15     51              open existing
+00002530  3CC0                     175          MOVE.W  D0,(A6)+
+00002532  2A01                     176          MOVE.L  D1,D5
+00002534  43F9 00005000            177          LEA     INBUF,A1
+0000253A  740A                     178          MOVEQ   #10,D2
+0000253C                           179m         T15     53              read up to 10: gets 5
+00002540  3CC0                     180          MOVE.W  D0,(A6)+
+00002542  2CC2                     181          MOVE.L  D2,(A6)+
+00002544  2205                     182          MOVE.L  D5,D1
+00002546  740A                     183          MOVEQ   #10,D2
+00002548                           184m         T15     53              at end of file: D0 = 1, D2 unchanged
+0000254C  3CC0                     185          MOVE.W  D0,(A6)+
+0000254E  2CC2                     186          MOVE.L  D2,(A6)+
+00002550  2205                     187          MOVE.L  D5,D1
+00002552  7403                     188          MOVEQ   #3,D2
+00002554                           189m         T15     55              position to 3
+00002558  3CC0                     190          MOVE.W  D0,(A6)+
+0000255A  2205                     191          MOVE.L  D5,D1
+0000255C  43F9 00005008            192          LEA     INBUF+8,A1
+00002562  7402                     193          MOVEQ   #2,D2
+00002564                           194m         T15     53              reads "JK"
+00002568  3CC0                     195          MOVE.W  D0,(A6)+
+0000256A  2205                     196          MOVE.L  D5,D1
+0000256C  7400                     197          MOVEQ   #0,D2
+0000256E  43F9 00002A14            198          LEA     TGHIJK,A1
+00002574                           199m         T15     54              zero-length write: error 2
+00002578  3CC0                     200          MOVE.W  D0,(A6)+
+0000257A                           201m         T15     50              close all
+0000257E  3CC0                     202          MOVE.W  D0,(A6)+
+00002580  43F9 00002A1D            203          LEA     FNAME,A1
+00002586  7200                     204          MOVEQ   #0,D1
+00002588                           205m         T15     59              exists? 0
+0000258C  3CC0                     206          MOVE.W  D0,(A6)+
+0000258E  43F9 00002A1D            207          LEA     FNAME,A1
+00002594                           208m         T15     57              delete
+00002598  3CC0                     209          MOVE.W  D0,(A6)+
+0000259A  43F9 00002A1D            210          LEA     FNAME,A1
+000025A0  7200                     211          MOVEQ   #0,D1
+000025A2                           212m         T15     59              exists? 2 (error)
+000025A6  3CC0                     213          MOVE.W  D0,(A6)+
+000025A8  43F9 00002A1D            214          LEA     FNAME,A1
+000025AE                           215m         T15     51              open a file that does not exist: D0 = 2, D1 = -1
+000025B2  3CC0                     216          MOVE.W  D0,(A6)+
+000025B4  2CC1                     217          MOVE.L  D1,(A6)+
+000025B6  7209                     218          MOVEQ   #9,D1
+000025B8                           219m         T15     56              close a file number that is out of range: 2
+000025BC  3CC0                     220          MOVE.W  D0,(A6)+
+000025BE  FFFF FFFF                221          SIMHALT
+000025C2                           222  
+00002680                           223          ORG     $2680           case 13: task 58 file dialog
+00002680  43F9 00002A0C            224          LEA     TABC,A1         title
+00002686  45F9 00002A10            225          LEA     TDEF,A2         filter
+0000268C  47F9 00005000            226          LEA     INBUF,A3        path buffer (in and out)
+00002692  16BC 0000                227          MOVE.B  #0,(A3)
+00002696  7200                     228          MOVEQ   #0,D1           open dialog
+00002698  203C FFFFFF3A            229          MOVE.L  #$FFFFFF3A,D0   task 58, upper bits set
+0000269E  4E4F                     230          TRAP    #15
+000026A0  2CC1                     231          MOVE.L  D1,(A6)+        1 = a file was chosen
+000026A2  2CC0                     232          MOVE.L  D0,(A6)+        task number is gone: D0.W = 0 (success), upper word kept
+000026A4  FFFF FFFF                233          SIMHALT
+000026A8                           234  
+00002700                           235          ORG     $2700           case 14: task 9 terminate; nothing after it runs
+00002700                           236m         T15     9
+00002704  2CFC 00000BAD            237          MOVE.L  #$BAD,(A6)+
+0000270A  FFFF FFFF                238          SIMHALT
+0000270E                           239  
+00002780                           240          ORG     $2780           case 15: key state, key and mouse interrupts, mouse read
+00002780  7241                     241          MOVE.L  #$00000041,D1
+00002782                           242m         T15     19              is 'A' down?
+00002786  2CC1                     243          MOVE.L  D1,(A6)+
+00002788  7200                     244          MOVEQ   #0,D1
+0000278A                           245m         T15     19              last key down / up codes
+0000278E  2CC1                     246          MOVE.L  D1,(A6)+
+00002790  223C 00000203            247          MOVE.L  #$0203,D1       key IRQ level 2 for down and up
+00002796                           248m         T15     62
+0000279A  223C 00000301            249          MOVE.L  #$0301,D1       mouse IRQ level 3 for button down
+000027A0                           250m         T15     60
+000027A4  7200                     251          MOVEQ   #0,D1
+000027A6                           252m         T15     61              current mouse state
+000027AA  2CC0                     253          MOVE.L  D0,(A6)+
+000027AC  2CC1                     254          MOVE.L  D1,(A6)+
+000027AE  7202                     255          MOVEQ   #2,D1
+000027B0                           256m         T15     61              state at the last button-down
+000027B4  2CC0                     257          MOVE.L  D0,(A6)+
+000027B6  2CC1                     258          MOVE.L  D1,(A6)+
+000027B8  FFFF FFFF                259          SIMHALT
+000027BC                           260  
+00002800                           261          ORG     $2800           case 16: graphics, sound, window tasks are forwarded with reduced arguments
+00002800  223C 00FF8040            262          MOVE.L  #$00FF8040,D1
+00002806                           263m         T15     80              pen colour
+0000280A  223C 1234FFFE            264          MOVE.L  #$1234FFFE,D1
+00002810  243C 56780003            265          MOVE.L  #$56780003,D2
+00002816                           266m         T15     82              pixel at (-2, 3): only the low words, sign-extended
+0000281A  7201                     267          MOVEQ   #1,D1
+0000281C  7402                     268          MOVEQ   #2,D2
+0000281E  7603                     269          MOVEQ   #3,D3
+00002820  7804                     270          MOVEQ   #4,D4
+00002822                           271m         T15     84              line
+00002826                           272m         T15     87              rectangle
+0000282A  223C 11112222            273          MOVE.L  #$11112222,D1
+00002830  243C 33334444            274          MOVE.L  #$33334444,D2
+00002836                           275m         T15     96              pen position: D1.W and D2.W only
+0000283A  2CC1                     276          MOVE.L  D1,(A6)+
+0000283C  2CC2                     277          MOVE.L  D2,(A6)+
+0000283E  7205                     278          MOVEQ   #5,D1
+00002840  7406                     279          MOVEQ   #6,D2
+00002842                           280m         T15     83              get pixel: all of D0
+00002846  2CC0                     281          MOVE.L  D0,(A6)+
+00002848  43F9 00002A0C            282          LEA     TABC,A1
+0000284E  720A                     283          MOVEQ   #10,D1
+00002850  7414                     284          MOVEQ   #20,D2
+00002852                           285m         T15     95              draw text
+00002856  223C 03200258            286          MOVE.L  #$03200258,D1   800 x 600
+0000285C                           287m         T15     33
+00002860  7200                     288          MOVEQ   #0,D1
+00002862                           289m         T15     33              get size
+00002866  2CC1                     290          MOVE.L  D1,(A6)+
+00002868  43F9 00002A0C            291          LEA     TABC,A1
+0000286E  70FF                     292          MOVE.L  #$FFFFFFFF,D0
+00002870  103C 0046                293          MOVE.B  #70,D0
+00002874  4E4F                     294          TRAP    #15             play sound: result in D0.W only
+00002876  2CC0                     295          MOVE.L  D0,(A6)+
+00002878  7201                     296          MOVE.L  #$00000001,D1
+0000287A  243C 00020003            297          MOVE.L  #$00020003,D2
+00002880  7601                     298          MOVEQ   #1,D3
+00002882                           299m         T15     25              scroll rectangle
+00002886  7018                     300          MOVEQ   #24,D0
+00002888  7201                     301          MOVEQ   #1,D1
+0000288A  4E4F                     302          TRAP    #15             disable simulator key commands
+0000288C  FFFF FFFF                303          SIMHALT
+00002890                           304  
+00002980                           305          ORG     $2980           case 19: task 0 with a negative length in D1.W
+00002980  43F9 00002A14            306          LEA     TGHIJK,A1
+00002986  323C 8000                307          MOVE.W  #$8000,D1
+0000298A                           308m         T15     1
+0000298E  FFFF FFFF                309          SIMHALT
+00002992                           310  
+00002A00                           311          ORG     $2A00           case 20: unknown task numbers are TRAP exceptions
+00002A00  203C 00000080            312          MOVE.L  #$00000080,D0   D0.B = $80: negative as a signed byte
+00002A06  4E4F                     313          TRAP    #15
+00002A08  FFFF FFFF                314          SIMHALT
+00002A0C                           315  
+00002A0C= 41 42 43 00              316  TABC    DC.B    'ABC',0
+00002A10= 44 45 46 00              317  TDEF    DC.B    'DEF',0
+00002A14= 47 48 49 4A 4B 00        318  TGHIJK  DC.B    'GHIJK',0
+00002A1A= 4E 3D 00                 319  TNEQ    DC.B    'N=',0
+00002A1D= 4F 55 54 2E 54 58 ...    320  FNAME   DC.B    'OUT.TXT',0
+00002A25                           321  
+00005000                           322          ORG     $5000
+00005000                           323  INBUF   DS.B    256
+00005100                           324  
+00004000                           325          ORG     $4000
+00004000                           326  RESULTS DS.B    128
+00004080                           327  
+00004080                           328          END     START
+
+No errors detected
+No warnings generated

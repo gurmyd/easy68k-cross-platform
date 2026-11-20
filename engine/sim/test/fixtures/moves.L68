@@ -1,0 +1,210 @@
+00001000 Starting Address
+Assembler used: ASy68K Assembler v5.15.04
+Created On: 11/20/2026 12:00:00 PM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : moves - data movement instructions and every addressing mode
+00000000                             3  * Written by : easy68k-mac project (test fixture, GPL-2.0-or-later)
+00000000                             4  * Description: Each case executes one instruction and records the status
+00000000                             5  *              register and one long result at (A6)+ (6 bytes per record).
+00000000                             6  *              test/instructions.test.mjs asserts the records.
+00000000                             7  *-----------------------------------------------------------
+00000000                             8  REC     MACRO                   record SR, then the long \1
+00000000                             9          MOVE    SR,(A6)+
+00000000                            10          MOVE.L  \1,(A6)+
+00000000                            11          ENDM
+00000000                            12  
+00001000                            13          ORG     $1000
+00001000  4DF9 00004000             14  START:  LEA     RESULTS,A6
+00001006  41F9 00002000             15          LEA     DATA,A0
+0000100C                            16  
+0000100C                            17  * ---- MOVE.L, the twelve source modes ---------------------
+0000100C  203C 11223344             18          MOVE.L  #$11223344,D0
+00001012  2E00                      19          MOVE.L  D0,D7                   1  Dn
+00001014                            20m         REC     D7
+00001018  227C 00FFFF80             21          MOVEA.L #$00FFFF80,A1
+0000101E  2E09                      22          MOVE.L  A1,D7                   2  An
+00001020                            23m         REC     D7
+00001024  2E10                      24          MOVE.L  (A0),D7                 3  (An)
+00001026                            25m         REC     D7
+0000102A  2E18                      26          MOVE.L  (A0)+,D7                4  (An)+
+0000102C                            27m         REC     D7
+00001030                            28m         REC     A0                      5  A0 advanced by 4
+00001034  2E20                      29          MOVE.L  -(A0),D7                6  -(An)
+00001036                            30m         REC     D7
+0000103A  2E28 0004                 31          MOVE.L  4(A0),D7                7  d16(An)
+0000103E                            32m         REC     D7
+00001042  7208                      33          MOVEQ   #8,D1
+00001044  2E30 1800                 34          MOVE.L  0(A0,D1.L),D7           8  d8(An,Dn.L)
+00001048                            35m         REC     D7
+0000104C  223C FFFF000C             36          MOVE.L  #$FFFF000C,D1
+00001052  2E30 1000                 37          MOVE.L  0(A0,D1.W),D7           9  d8(An,Dn.W): index sign-extended from word
+00001056                            38m         REC     D7
+Line 39 WARNING: Forcing SHORT addressing disables range checking of extension word
+0000105A  2E38 2000                 39          MOVE.L  $2000.W,D7              10 abs.W
+0000105E                            40m         REC     D7
+00001062  2E39 00002004             41          MOVE.L  DATA+4,D7               11 abs.L
+00001068                            42m         REC     D7
+0000106C  6008                      43          BRA.S   PCSKIP
+0000106E= CAFEBABE 0BADF00D         44  PCDATA  DC.L    $CAFEBABE,$0BADF00D
+00001076  2E3A FFF6                 45  PCSKIP  MOVE.L  PCDATA(PC),D7           12 d16(PC)
+0000107A                            46m         REC     D7
+0000107E  7204                      47          MOVEQ   #4,D1
+00001080  2E3B 10EC                 48          MOVE.L  PCDATA(PC,D1.W),D7      13 d8(PC,Xn)
+00001084                            49m         REC     D7
+00001088  2E3C 80000000             50          MOVE.L  #$80000000,D7           14 #imm (N set)
+0000108E                            51m         REC     D7
+00001092  7E00                      52          MOVE.L  #0,D7                   15 zero (Z set)
+00001094                            53m         REC     D7
+00001098                            54  
+00001098                            55  * ---- MOVE, the destination modes -------------------------
+00001098  45F9 00003000             56          LEA     SCRATCH,A2
+0000109E  203C A1B2C3D4             57          MOVE.L  #$A1B2C3D4,D0
+000010A4  2480                      58          MOVE.L  D0,(A2)                 16 (An)
+000010A6                            59m         REC     (A2)
+000010AA  34C0                      60          MOVE.W  D0,(A2)+                17 (An)+ word
+000010AC                            61m         REC     A2
+000010B0  1500                      62          MOVE.B  D0,-(A2)                18 -(An) byte: A2 = SCRATCH+1
+000010B2                            63m         REC     A2
+000010B6                            64m         REC     SCRATCH                 19 memory now C3 D4 C3 D4
+000010BE  45F9 00003000             65          LEA     SCRATCH,A2
+000010C4  2540 0008                 66          MOVE.L  D0,8(A2)                20 d16(An) -> SCRATCH+8 .. +11
+000010C8                            67m         REC     SCRATCH+8
+000010D0  7202                      68          MOVEQ   #2,D1
+000010D2  3580 1808                 69          MOVE.W  D0,8(A2,D1.L)           21 d8(An,Xn) -> SCRATCH+10
+000010D6                            70m         REC     SCRATCH+8
+Line 71 WARNING: Forcing SHORT addressing disables range checking of extension word
+000010DE  31FC 5566 3010            71          MOVE.W  #$5566,SCRATCH+16.W     22 abs.W
+000010E4  33FC 7788 00003012        72          MOVE.W  #$7788,SCRATCH+18       23 abs.L
+000010EC                            73m         REC     SCRATCH+16
+000010F4                            74  
+000010F4                            75  * ---- sizes: byte and word moves keep the upper register bits
+000010F4  7EFF                      76          MOVE.L  #$FFFFFFFF,D7
+000010F6  1E3C 0012                 77          MOVE.B  #$12,D7                 24
+000010FA                            78m         REC     D7
+000010FE  3E3C 8001                 79          MOVE.W  #$8001,D7               25 N from bit 15
+00001102                            80m         REC     D7
+00001106                            81  
+00001106                            82  * ---- MOVEA, MOVEQ, EXG, SWAP, EXT, CLR --------------------
+00001106  367C 8000                 83          MOVEA.W #$8000,A3               26 MOVEA.W sign-extends, flags unchanged
+0000110A                            84m         REC     A3
+0000110E  267C 12345678             85          MOVEA.L #$12345678,A3           27
+00001114                            86m         REC     A3
+00001118  7EFF                      87          MOVEQ   #-1,D7                  28
+0000111A                            88m         REC     D7
+0000111E  7E7F                      89          MOVEQ   #127,D7                 29
+00001120                            90m         REC     D7
+00001124  243C 11111111             91          MOVE.L  #$11111111,D2
+0000112A  263C 22222222             92          MOVE.L  #$22222222,D3
+00001130  C543                      93          EXG     D2,D3                   30
+00001132                            94m         REC     D2
+00001136  267C 33333333             95          MOVEA.L #$33333333,A3
+0000113C  287C 44444444             96          MOVEA.L #$44444444,A4
+00001142  C74C                      97          EXG     A3,A4                   31
+00001144                            98m         REC     A3
+00001148  C58C                      99          EXG     D2,A4                   32
+0000114A                           100m         REC     D2
+0000114E                           101m         REC     A4                      33
+00001152  2E3C 1234ABCD            102          MOVE.L  #$1234ABCD,D7
+00001158  4847                     103          SWAP    D7                      34
+0000115A                           104m         REC     D7
+0000115E  2E3C 123400FF            105          MOVE.L  #$123400FF,D7
+00001164  4887                     106          EXT.W   D7                      35 byte -> word
+00001166                           107m         REC     D7
+0000116A  2E3C 12348000            108          MOVE.L  #$12348000,D7
+00001170  48C7                     109          EXT.L   D7                      36 word -> long
+00001172                           110m         REC     D7
+00001176  7EFF                     111          MOVE.L  #$FFFFFFFF,D7
+00001178  4207                     112          CLR.B   D7                      37
+0000117A                           113m         REC     D7
+0000117E  4247                     114          CLR.W   D7                      38
+00001180                           115m         REC     D7
+00001184  4287                     116          CLR.L   D7                      39
+00001186                           117m         REC     D7
+0000118A                           118  
+0000118A                           119  * ---- LEA, PEA, LINK, UNLK ---------------------------------
+0000118A  47F9 00003000            120          LEA     SCRATCH,A3
+00001190  49EB 0004                121          LEA     4(A3),A4                40
+00001194                           122m         REC     A4
+00001198  7206                     123          MOVEQ   #6,D1
+0000119A  49F3 1002                124          LEA     2(A3,D1.W),A4           41
+0000119E                           125m         REC     A4
+000011A2  49FA FECA                126          LEA     PCDATA(PC),A4           42
+000011A6                           127m         REC     A4
+Line 128 WARNING: Forcing SHORT addressing disables range checking of extension word
+000011AA  49F8 7FFF                128          LEA     $7FFF.W,A4              43 abs.W positive
+000011AE                           129m         REC     A4
+000011B2  2E7C 00008000            130          MOVEA.L #$8000,A7               (supervisor stack)
+Line 131 WARNING: Forcing SHORT addressing disables range checking of extension word
+000011B8  4878 1234                131          PEA     $1234.W                 44
+000011BC                           132m         REC     (A7)
+000011C0                           133m         REC     A7                      45
+000011C4  2A7C 00007000            134          MOVEA.L #$00007000,A5
+000011CA  4E55 FFF8                135          LINK    A5,#-8                  46 push A5, A5 = SP, SP -= 8
+000011CE                           136m         REC     A5
+000011D2                           137m         REC     A7                      47
+000011D6                           138m         REC     (A5)                    48 saved A5
+000011DA  4E5D                     139          UNLK    A5                      49
+000011DC                           140m         REC     A5
+000011E0                           141m         REC     A7                      50
+000011E4                           142  
+000011E4                           143  * ---- MOVEM --------------------------------------------------
+000011E4  203C D0D0D0D0            144          MOVE.L  #$D0D0D0D0,D0
+000011EA  223C D1D1D1D1            145          MOVE.L  #$D1D1D1D1,D1
+000011F0  207C A0A0A0A0            146          MOVEA.L #$A0A0A0A0,A0
+000011F6  2E7C 00008000            147          MOVEA.L #$00008000,A7
+000011FC  48E7 C080                148          MOVEM.L D0-D1/A0,-(A7)          51 pushes A0, D1, D0 (D0 at the lowest address)
+00001200                           149m         REC     A7
+00001204                           150m         REC     (A7)                    52 D0
+00001208                           151m         REC     8(A7)                   53 A0
+0000120E  7000                     152          MOVEQ   #0,D0
+00001210  7200                     153          MOVEQ   #0,D1
+00001212  91C8                     154          SUBA.L  A0,A0
+00001214  4CDF 0103                155          MOVEM.L (A7)+,D0-D1/A0          54
+00001218                           156m         REC     D0
+0000121C                           157m         REC     A0                      55
+00001220                           158m         REC     A7                      56
+00001224  47F9 00003020            159          LEA     SCRATCH+32,A3
+0000122A  203C 1234FFFE            160          MOVE.L  #$1234FFFE,D0
+00001230  4893 0001                161          MOVEM.W D0,(A3)                 57 word to memory
+00001234  4C93 0010                162          MOVEM.W (A3),D4                 58 word from memory is sign-extended
+00001238                           163m         REC     D4
+0000123C                           164  
+0000123C                           165  * ---- MOVEP ---------------------------------------------------
+0000123C  47F9 00003030            166          LEA     SCRATCH+48,A3
+00001242  203C 01020304            167          MOVE.L  #$01020304,D0
+00001248  01CB 0000                168          MOVEP.L D0,0(A3)                59 bytes go to every other address
+0000124C                           169m         REC     (A3)
+00001250                           170m         REC     4(A3)                   60
+00001256  7800                     171          MOVEQ   #0,D4
+00001258  090B 0000                172          MOVEP.W 0(A3),D4                61 reads bytes at +0 and +2
+0000125C                           173m         REC     D4
+00001260                           174  
+00001260                           175  * ---- MOVE to / from CCR, SR, USP ------------------------------
+00001260  303C 001F                176          MOVE.W  #$001F,D0
+00001264  44C0                     177          MOVE    D0,CCR                  62 all five flags set
+00001266                           178m         REC     D0
+0000126A  46FC 2700                179          MOVE    #$2700,SR               63 interrupt mask 7
+0000126E                           180m         REC     D0
+00001272  40C4                     181          MOVE    SR,D4                   64
+00001274                           182m         REC     D4
+00001278  267C 00123456            183          MOVEA.L #$00123456,A3
+0000127E  4E63                     184          MOVE    A3,USP                  65
+00001280  4E6C                     185          MOVE    USP,A4
+00001282                           186m         REC     A4
+00001286  46FC 2000                187          MOVE    #$2000,SR
+0000128A  FFFF FFFF                188          SIMHALT
+0000128E                           189  
+00002000                           190          ORG     $2000
+00002000= DEADBEEF 01020304 ...    191  DATA    DC.L    $DEADBEEF,$01020304,$05060708,$090A0B0C
+00002010                           192  
+00003000                           193          ORG     $3000
+00003000                           194  SCRATCH DS.B    64
+00003040                           195  
+00004000                           196          ORG     $4000
+00004000                           197  RESULTS DS.B    6*80
+000041E0                           198  
+000041E0                           199          END     START
+
+No errors detected
+4 warnings generated

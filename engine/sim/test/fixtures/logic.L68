@@ -1,0 +1,163 @@
+00001000 Starting Address
+Assembler used: ASy68K Assembler v5.15.04
+Created On: 11/20/2026 12:00:00 PM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : logic - logical, shift, rotate and bit instructions
+00000000                             3  * Written by : easy68k-mac project (test fixture, GPL-2.0-or-later)
+00000000                             4  * Description: Each case records SR (word) and a long result at (A6)+.
+00000000                             5  *              test/instructions.test.mjs asserts the records.
+00000000                             6  *-----------------------------------------------------------
+00000000                             7  REC     MACRO                   record SR, then the long \1
+00000000                             8          MOVE    SR,(A6)+
+00000000                             9          MOVE.L  \1,(A6)+
+00000000                            10          ENDM
+00000000                            11  
+00001000                            12          ORG     $1000
+00001000  4DF9 00004000             13  START:  LEA     RESULTS,A6
+00001006  41F9 00003000             14          LEA     MEM,A0
+0000100C                            15  
+0000100C                            16  * ---- AND / OR / EOR / NOT ----------------------------------
+0000100C  203C F0F0F0F0             17          MOVE.L  #$F0F0F0F0,D0
+00001012  223C FF00FF00             18          MOVE.L  #$FF00FF00,D1
+00001018  44FC 001F                 19          MOVE    #$1F,CCR
+0000101C  C081                      20          AND.L   D1,D0                   1  N; V C cleared; X kept
+0000101E                            21m         REC     D0
+00001022  203C 0000F0F0             22          MOVE.L  #$0000F0F0,D0
+00001028  807C 0F0F                 23          OR.W    #$0F0F,D0               2  N (word)
+0000102C                            24m         REC     D0
+00001030  203C 12345678             25          MOVE.L  #$12345678,D0
+00001036  B180                      26          EOR.L   D0,D0                   3  Z
+00001038                            27m         REC     D0
+0000103C  203C 00FF00FF             28          MOVE.L  #$00FF00FF,D0
+00001042  4680                      29          NOT.L   D0                      4  N
+00001044                            30m         REC     D0
+00001048  20BC 0F0F0F0F             31          MOVE.L  #$0F0F0F0F,(A0)
+0000104E  203C 00FF00FF             32          MOVE.L  #$00FF00FF,D0
+00001054  C190                      33          AND.L   D0,(A0)                 5  to memory
+00001056                            34m         REC     (A0)
+0000105A  0010 0080                 35          ORI.B   #$80,(A0)               6  N (byte)
+0000105E                            36m         REC     (A0)
+00001062  0A68 FFFF 0002            37          EORI.W  #$FFFF,2(A0)            7
+00001068                            38m         REC     (A0)
+0000106C  0280 0000FFFF             39          ANDI.L  #$0000FFFF,D0           8
+00001072                            40m         REC     D0
+00001076                            41  * ---- to CCR -----------------------------------------------------
+00001076  44FC 0000                 42          MOVE    #$00,CCR
+0000107A  003C 0015                 43          ORI     #$15,CCR                9  X Z C
+0000107E                            44m         REC     D0
+00001082  023C 0011                 45          ANDI    #$11,CCR                10 X (the REC above cleared Z and C)
+00001086                            46m         REC     D0
+0000108A  0A3C 001F                 47          EORI    #$1F,CCR                11 N Z V C
+0000108E                            48m         REC     D0
+00001092                            49  * ---- shifts, register, immediate count ---------------------------
+00001092  44FC 0000                 50          MOVE    #$00,CCR
+00001096  203C C0000001             51          MOVE.L  #$C0000001,D0
+0000109C  E380                      52          ASL.L   #1,D0                   12 C X from bit 31; sign unchanged, so no V
+0000109E                            53m         REC     D0
+000010A2  203C 40000000             54          MOVE.L  #$40000000,D0
+000010A8  E380                      55          ASL.L   #1,D0                   13 sign changes: N V
+000010AA                            56m         REC     D0
+000010AE  203C 80000003             57          MOVE.L  #$80000003,D0
+000010B4  E280                      58          ASR.L   #1,D0                   14 sign kept: N C X
+000010B6                            59m         REC     D0
+000010BA  203C 80000003             60          MOVE.L  #$80000003,D0
+000010C0  E288                      61          LSR.L   #1,D0                   15 C X
+000010C2                            62m         REC     D0
+000010C6  203C 000000FF             63          MOVE.L  #$000000FF,D0
+000010CC  E908                      64          LSL.B   #4,D0                   16 byte: N C X
+000010CE                            65m         REC     D0
+000010D2  203C 00008001             66          MOVE.L  #$00008001,D0
+000010D8  E048                      67          LSR.W   #8,D0                   17 immediate 0 means 8
+000010DA                            68m         REC     D0
+000010DE                            69  * ---- shifts, count in a register --------------------------------------
+000010DE  7221                      70          MOVEQ   #33,D1
+000010E0  70FF                      71          MOVE.L  #$FFFFFFFF,D0
+000010E2  E3A8                      72          LSL.L   D1,D0                   18 count 33: result 0, C X clear
+000010E4                            73m         REC     D0
+000010E8  7200                      74          MOVEQ   #0,D1
+000010EA  44FC 0010                 75          MOVE    #$10,CCR
+000010EE  203C 80000000             76          MOVE.L  #$80000000,D0
+000010F4  E2A8                      77          LSR.L   D1,D0                   19 count 0: C cleared, X kept, N from value
+000010F6                            78m         REC     D0
+000010FA  7210                      79          MOVEQ   #16,D1
+000010FC  203C 00018000             80          MOVE.L  #$00018000,D0
+00001102  E260                      81          ASR.W   D1,D0                   20 word, count 16: all sign bits
+00001104                            82m         REC     D0
+00001108                            83  * ---- rotates ----------------------------------------------------------------
+00001108  44FC 0010                 84          MOVE    #$10,CCR
+0000110C  203C 80000001             85          MOVE.L  #$80000001,D0
+00001112  E398                      86          ROL.L   #1,D0                   21 C from bit rotated; X untouched
+00001114                            87m         REC     D0
+00001118  7001                      88          MOVE.L  #$00000001,D0
+0000111A  E258                      89          ROR.W   #1,D0                   22 N C
+0000111C                            90m         REC     D0
+00001120  44FC 0010                 91          MOVE    #$10,CCR
+00001124  7000                      92          MOVE.L  #$00000000,D0
+00001126  E390                      93          ROXL.L  #1,D0                   23 X shifted in; C X clear afterwards
+00001128                            94m         REC     D0
+0000112C  44FC 0000                 95          MOVE    #$00,CCR
+00001130  7001                      96          MOVE.L  #$00000001,D0
+00001132  E210                      97          ROXR.B  #1,D0                   24 Z C X
+00001134                            98m         REC     D0
+00001138  44FC 0010                 99          MOVE    #$10,CCR
+0000113C  7209                     100          MOVEQ   #9,D1
+0000113E  203C 000000A5            101          MOVE.L  #$000000A5,D0
+00001144  E330                     102          ROXL.B  D1,D0                   25 count 9 = full circle for a byte
+00001146                           103m         REC     D0
+0000114A                           104  * ---- memory shifts (word, one bit) ----------------------------------------------
+0000114A  30BC 8001                105          MOVE.W  #$8001,(A0)
+0000114E  E1D0                     106          ASL     (A0)                    26 C X V
+00001150                           107m         REC     (A0)
+00001154  30BC 0001                108          MOVE.W  #$0001,(A0)
+00001158  E6D0                     109          ROR     (A0)                    27 N C
+0000115A                           110m         REC     (A0)
+0000115E                           111  * ---- bit operations ------------------------------------------------------------------
+0000115E  203C 00000100            112          MOVE.L  #$00000100,D0
+00001164  44FC 001F                113          MOVE    #$1F,CCR
+00001168  0800 0008                114          BTST    #8,D0                   28 bit set: Z cleared, other flags kept
+0000116C                           115m         REC     D0
+00001170  7228                     116          MOVEQ   #40,D1
+00001172  0300                     117          BTST    D1,D0                   29 register operand: bit number modulo 32 (40 -> 8)
+00001174                           118m         REC     D0
+00001178  0840 0000                119          BCHG    #0,D0                   30 was 0: Z set, bit becomes 1
+0000117C                           120m         REC     D0
+00001180  0880 0008                121          BCLR    #8,D0                   31 was 1: Z clear
+00001184                           122m         REC     D0
+00001188  08C0 001F                123          BSET    #31,D0                  32 was 0: Z set
+0000118C                           124m         REC     D0
+00001190  10BC 000F                125          MOVE.B  #$0F,(A0)
+00001194  0810 0007                126          BTST    #7,(A0)                 33 memory operand: byte; bit 7 clear -> Z
+00001198                           127m         REC     (A0)
+0000119C  08D0 000F                128          BSET    #15,(A0)                34 memory: bit number modulo 8 (15 -> 7)
+000011A0                           129m         REC     (A0)
+000011A4  0890 0000                130          BCLR    #0,(A0)                 35
+000011A8                           131m         REC     (A0)
+000011AC                           132  * ---- TAS, Scc ----------------------------------------------------------------------------
+000011AC  10BC 0000                133          MOVE.B  #$00,(A0)
+000011B0  4AD0                     134          TAS     (A0)                    36 Z from old value; bit 7 set
+000011B2                           135m         REC     (A0)
+000011B6  4AD0                     136          TAS     (A0)                    37 N from old value
+000011B8                           137m         REC     (A0)
+000011BC  203C FFFFFF00            138          MOVE.L  #$FFFFFF00,D0
+000011C2  44FC 0004                139          MOVE    #$04,CCR
+000011C6  57C0                     140          SEQ     D0                      38 true: $FF
+000011C8                           141m         REC     D0
+000011CC  44FC 0004                142          MOVE    #$04,CCR
+000011D0  56C0                     143          SNE     D0                      39 false: $00
+000011D2                           144m         REC     D0
+000011D6  50D0                     145          ST      (A0)                    40
+000011D8  51E8 0001                146          SF      1(A0)
+000011DC                           147m         REC     (A0)
+000011E0  FFFF FFFF                148          SIMHALT
+000011E4                           149  
+00003000                           150          ORG     $3000
+00003000                           151  MEM     DS.B    64
+00003040                           152  
+00004000                           153          ORG     $4000
+00004000                           154  RESULTS DS.B    6*64
+00004180                           155  
+00004180                           156          END     START
+
+No errors detected
+No warnings generated

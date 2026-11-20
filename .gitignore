@@ -1,0 +1,17 @@
+# Downloaded reference material (original EASy68K source, official binaries,
+# third-party example programs). Much of it may not be redistributed.
+/reference/
+
+# Local toolchains (Emscripten SDK, GitHub CLI, extraction tools)
+/.toolchain/
+
+# Build outputs and generated reports
+/build/
+/engine/dist/
+dist/
+node_modules/
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+*.log

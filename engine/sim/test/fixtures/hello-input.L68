@@ -1,0 +1,33 @@
+00001000 Starting Address
+Assembler used: ASy68K Assembler v5.15.04
+Created On: 11/20/2026 12:00:00 PM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : hello-input - asks for a name and greets
+00000000                             3  * Written by : easy68k-mac project (test fixture, GPL-2.0-or-later)
+00000000                             4  * Description: The smallest program with keyboard input; used by the
+00000000                             5  *              tests of the command-line runner (test/api.test.mjs).
+00000000                             6  *-----------------------------------------------------------
+00001000                             7          ORG     $1000
+00001000  43F9 0000102C              8  START:  LEA     PROMPT,A1
+00001006  700E                       9          MOVEQ   #14,D0
+00001008  4E4F                      10          TRAP    #15             print the prompt
+0000100A  43F9 0000103B             11          LEA     NAME,A1
+00001010  7002                      12          MOVEQ   #2,D0
+00001012  4E4F                      13          TRAP    #15             read a line
+00001014  43F9 00001033             14          LEA     HELLO,A1
+0000101A  700E                      15          MOVEQ   #14,D0
+0000101C  4E4F                      16          TRAP    #15
+0000101E  43F9 0000103B             17          LEA     NAME,A1
+00001024  700D                      18          MOVEQ   #13,D0
+00001026  4E4F                      19          TRAP    #15             print the name and a line end
+00001028  FFFF FFFF                 20          SIMHALT
+0000102C                            21  
+0000102C= 4E 61 6D 65 3F 20 00      22  PROMPT  DC.B    'Name? ',0
+00001033= 48 65 6C 6C 6F 2C ...     23  HELLO   DC.B    'Hello, ',0
+0000103B                            24  NAME    DS.B    80
+0000108B                            25  
+0000108B                            26          END     START
+
+No errors detected
+No warnings generated

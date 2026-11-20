@@ -1,0 +1,172 @@
+00001000 Starting Address
+Assembler used: ASy68K Assembler v5.15.04
+Created On: 11/20/2026 12:00:00 PM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : quirks - behaviour of Sim68K that differs from a real 68000
+00000000                             3  * Written by : easy68k-mac project (test fixture, GPL-2.0-or-later)
+00000000                             4  * Description: The test puts a case number in D7 and runs.  Case n is the
+00000000                             5  *              code at $2000 + n*$40.  Each case leaves its evidence in
+00000000                             6  *              registers or in RESULTS.  test/quirks.test.mjs explains,
+00000000                             7  *              with references to the original source, what is expected.
+00000000                             8  *              Opcodes that the assembler would refuse are written DC.W.
+00000000                             9  *-----------------------------------------------------------
+00001000                            10          ORG     $1000
+00001000  4DF9 00004000             11  START:  LEA     RESULTS,A6
+00001006  ED4F                      12          LSL.W   #6,D7
+00001008  41F8 2000                 13          LEA     $2000,A0
+0000100C  4EF0 7000                 14          JMP     0(A0,D7.W)
+00001010                            15  
+00002000                            16          ORG     $2000           case 0: LEA gives a 24-bit address; abs.W is sign-extended
+00002000  43F9 12345678             17          LEA     $12345678,A1
+00002006  95CA                      18          SUBA.L  A2,A2
+00002008  47EA FFFF                 19          LEA     -1(A2),A3
+Line 20 WARNING: Forcing SHORT addressing disables range checking of extension word
+0000200C  49F8 8000                 20          LEA     $8000.W,A4
+00002010  FFFF FFFF                 21          SIMHALT
+00002040                            22          ORG     $2040           case 1: PEA pushes the same 24-bit value
+00002040  2E7C 00008000             23          MOVEA.L #$8000,A7
+00002046  4879 12345678             24          PEA     $12345678
+0000204C  2217                      25          MOVE.L  (A7),D1
+0000204E  FFFF FFFF                 26          SIMHALT
+00002080                            27          ORG     $2080           case 2: LINK A7 in supervisor mode uses the USER stack pointer as frame register
+00002080  2E7C 00008000             28          MOVEA.L #$8000,A7
+00002086  227C 00005000             29          MOVEA.L #$00005000,A1
+0000208C  4E61                      30          MOVE    A1,USP
+0000208E  4E57 FFFC                 31          LINK    A7,#-4
+00002092  220F                      32          MOVE.L  A7,D1           supervisor stack pointer afterwards
+00002094  4E6A                      33          MOVE    USP,A2          user stack pointer afterwards
+00002096  2438 7FFC                 34          MOVE.L  $7FFC,D2        what was pushed
+0000209A  FFFF FFFF                 35          SIMHALT
+000020C0                            36          ORG     $20C0           case 3: ADDQ.B / SUBQ.B to an address register act on the whole register
+000020C0  227C 000100FF             37          MOVEA.L #$000100FF,A1
+000020C6= 5209                      38          DC.W    $5209           ADDQ.B #1,A1
+000020C8  247C 00010000             39          MOVEA.L #$00010000,A2
+000020CE= 530A                      40          DC.W    $530A           SUBQ.B #1,A2
+000020D0  FFFF FFFF                 41          SIMHALT
+00002100                            42          ORG     $2100           case 4: byte operations on A7: -(A7) and (A7)+ step 2; ADDX, CMPM, ABCD step 1
+00002100  2E7C 00008000             43          MOVEA.L #$8000,A7
+00002106  1F3C 0011                 44          MOVE.B  #$11,-(A7)
+0000210A  2CCF                      45          MOVE.L  A7,(A6)+
+0000210C  101F                      46          MOVE.B  (A7)+,D0
+0000210E  2CCF                      47          MOVE.L  A7,(A6)+
+00002110  227C 00007000             48          MOVEA.L #$7000,A1
+00002116  44FC 0000                 49          MOVE    #0,CCR
+0000211A= DF09                      50          DC.W    $DF09           ADDX.B -(A1),-(A7)
+0000211C  2CCF                      51          MOVE.L  A7,(A6)+
+0000211E  2E7C 00008000             52          MOVEA.L #$8000,A7
+00002124= BF09                      53          DC.W    $BF09           CMPM.B (A1)+,(A7)+
+00002126  2CCF                      54          MOVE.L  A7,(A6)+
+00002128  2E7C 00008000             55          MOVEA.L #$8000,A7
+0000212E  44FC 0000                 56          MOVE    #0,CCR
+00002132= CF09                      57          DC.W    $CF09           ABCD -(A1),-(A7)
+00002134  2CCF                      58          MOVE.L  A7,(A6)+
+00002136  2E7C 00008000             59          MOVEA.L #$8000,A7
+0000213C  FFFF FFFF                 60          SIMHALT
+00002180                            61          ORG     $2180           case 6: MULS leaves V as it was
+00002180  7003                      62          MOVEQ   #3,D0
+00002182  44FC 0002                 63          MOVE    #$02,CCR        V set
+00002186  C1FC 0005                 64          MULS    #5,D0
+0000218A  40C1                      65          MOVE    SR,D1
+0000218C  FFFF FFFF                 66          SIMHALT
+000021C0                            67          ORG     $21C0           case 7: a branch displacement byte of $FF is -1 (not the 68020 long form)
+000021C0= 60FF                      68          DC.W    $60FF
+000021C2  FFFF FFFF                 69          SIMHALT
+00002200                            70          ORG     $2200           case 8: RTE pops six bytes and loads all sixteen SR bits
+00002200  2E7C 00008000             71          MOVEA.L #$8000,A7
+00002206  4879 00002212             72          PEA     C8BACK
+0000220C  3F3C 3FFF                 73          MOVE.W  #$3FFF,-(A7)
+00002210  4E73                      74          RTE
+00002212  40C1                      75  C8BACK  MOVE    SR,D1
+00002214  240F                      76          MOVE.L  A7,D2
+00002216  FFFF FFFF                 77          SIMHALT
+00002240                            78          ORG     $2240           case 9: ORI to CCR ORs the whole word into SR, without a privilege check
+00002240  027C DFFF                 79          ANDI    #$DFFF,SR
+00002244= 003C 2700                 80          DC.W    $003C,$2700     ORI #$2700,CCR (the high byte is not ignored)
+00002248  40C1                      81          MOVE    SR,D1
+0000224A  FFFF FFFF                 82          SIMHALT
+00002280                            83          ORG     $2280           case 10: MOVE to CCR stores all eight low bits
+00002280  303C 00FF                 84          MOVE.W  #$00FF,D0
+00002284  44C0                      85          MOVE    D0,CCR
+00002286  40C1                      86          MOVE    SR,D1
+00002288  FFFF FFFF                 87          SIMHALT
+000022C0                            88          ORG     $22C0           case 11: ASL: the V flag for large shift counts
+000022C0  7228                      89          MOVEQ   #40,D1
+000022C2  7001                      90          MOVE.L  #$00000001,D0
+000022C4  E360                      91          ASL.W   D1,D0
+000022C6  40C2                      92          MOVE    SR,D2
+000022C8  203C 00007F80             93          MOVE.L  #$00007F80,D0
+000022CE  E360                      94          ASL.W   D1,D0
+000022D0  40C3                      95          MOVE    SR,D3
+000022D2  203C 0000FF80             96          MOVE.L  #$0000FF80,D0
+000022D8  E360                      97          ASL.W   D1,D0
+000022DA  40C4                      98          MOVE    SR,D4
+000022DC  FFFF FFFF                 99          SIMHALT
+00002300                           100          ORG     $2300           case 12: MOVEM to -(An) with An in the list stores the initial An
+00002300  227C 00006000            101          MOVEA.L #$00006000,A1
+00002306  48E1 8040                102          MOVEM.L D0/A1,-(A1)
+0000230A  2238 5FFC                103          MOVE.L  $5FFC,D1
+0000230E  2409                     104          MOVE.L  A1,D2
+00002310  FFFF FFFF                105          SIMHALT
+00002340                           106          ORG     $2340           case 13: BCHG on an immediate operand is accepted
+00002340= 087C 0000 0000           107          DC.W    $087C,$0000,$0000
+00002346  40C1                     108          MOVE    SR,D1
+00002348  FFFF FFFF                109          SIMHALT
+00002380                           110          ORG     $2380           case 14: MOVEA.W with an illegal source mode adds 4 cycles before failing
+00002380= 327D                     111          DC.W    $327D
+000023C0                           112          ORG     $23C0           case 15: MOVEA.L with an illegal source mode adds 0 cycles
+000023C0= 227D                     113          DC.W    $227D
+00002400                           114          ORG     $2400           case 16: DIVS overflow leaves N, Z and C unchanged and the register intact
+00002400  203C 7FFFFFFF            115          MOVE.L  #$7FFFFFFF,D0
+00002406  44FC 000D                116          MOVE    #$0D,CCR
+0000240A  81FC 0001                117          DIVS    #1,D0
+0000240E  40C1                     118          MOVE    SR,D1
+00002410  FFFF FFFF                119          SIMHALT
+00002440                           120          ORG     $2440           case 17: CHK compares the unsigned low word with the signed bound
+00002440  203C 0000FFFF            121          MOVE.L  #$0000FFFF,D0
+00002446  41BC FFFF                122          CHK     #-1,D0
+0000244A  FFFF FFFF                123          SIMHALT
+00002480                           124          ORG     $2480           case 18: JMP keeps 24 bits of the target
+00002480= 4EF9 1200 2490           125          DC.W    $4EF9,$1200,$2490
+00002490                           126          ORG     $2490
+00002490  223C 600D600D            127          MOVE.L  #$600D600D,D1
+00002496  FFFF FFFF                128          SIMHALT
+000024C0                           129          ORG     $24C0           case 19: MOVE reads its memory destination before writing it
+000024C0  31FC 1234 3000           130          MOVE.W  #$1234,$3000
+000024C6  4E71                     131          NOP
+000024C8  FFFF FFFF                132          SIMHALT
+00002500                           133          ORG     $2500           case 20: a long access at $FFFFFE runs past the end of memory
+00002500  23FC 11223344 00FFFFFE   134          MOVE.L  #$11223344,$00FFFFFE
+0000250A  2239 00FFFFFE            135          MOVE.L  $00FFFFFE,D1
+00002510  2439 00FFFFFC            136          MOVE.L  $00FFFFFC,D2
+00002516  1638 0000                137          MOVE.B  $00000000,D3
+0000251A  FFFF FFFF                138          SIMHALT
+00002540                           139          ORG     $2540           case 21: addresses are 24 bits; the top byte is ignored
+00002540  21FC AABBCCDD 3000       140          MOVE.L  #$AABBCCDD,$3000
+00002548  227C FF003000            141          MOVEA.L #$FF003000,A1
+0000254E  2211                     142          MOVE.L  (A1),D1
+00002550  FFFF FFFF                143          SIMHALT
+00002580                           144          ORG     $2580           case 22: SIMHALT advances the PC past both words
+00002580  4E71                     145          NOP
+00002582  FFFF FFFF                146          SIMHALT
+000025C0                           147          ORG     $25C0           case 23: unknown opcode of group 7 ($71xx)
+000025C0= 7100                     148          DC.W    $7100
+00002600                           149          ORG     $2600           case 24: STOP with the trace bit set returns the trace result
+00002600  21FC 0000261C 0024       150          MOVE.L  #C24T,$24
+00002608  2E7C 00008000            151          MOVEA.L #$8000,A7
+0000260E  007C 8000                152          ORI     #$8000,SR
+00002612  4E72 2000                153          STOP    #$2000
+00002616  4E71                     154          NOP
+00002618  FFFF FFFF                155          SIMHALT
+0000261C  5284                     156  C24T    ADDQ.L  #1,D4           trace handler: count the trace exceptions
+0000261E  2CEF 0002                157          MOVE.L  2(A7),(A6)+     and log the stacked PC
+00002622  0257 7FFF                158          ANDI.W  #$7FFF,(A7)     return with tracing off
+00002626  4E73                     159          RTE
+00002628                           160  
+00004000                           161          ORG     $4000
+00004000                           162  RESULTS DS.B    64
+00004040                           163  
+00004040                           164          END     START
+
+No errors detected
+1 warning generated

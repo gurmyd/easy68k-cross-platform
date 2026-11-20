@@ -1,0 +1,5 @@
+# The original Sim68K sources and the test fixtures are bytes, not text for
+# git to normalise: Windows-1252, CR LF line ends, and (the sources) a
+# trailing Ctrl-Z.  check-patches.mjs and the tests compare them byte by byte.
+src/** -text
+test/fixtures/** -text

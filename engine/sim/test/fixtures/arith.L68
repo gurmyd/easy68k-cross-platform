@@ -1,0 +1,203 @@
+00001000 Starting Address
+Assembler used: ASy68K Assembler v5.15.04
+Created On: 11/20/2026 12:00:00 PM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : arith - arithmetic instructions and their condition codes
+00000000                             3  * Written by : easy68k-mac project (test fixture, GPL-2.0-or-later)
+00000000                             4  * Description: Each case records SR (word) and a long result at (A6)+.
+00000000                             5  *              test/instructions.test.mjs asserts the records.
+00000000                             6  *-----------------------------------------------------------
+00000000                             7  REC     MACRO                   record SR, then the long \1
+00000000                             8          MOVE    SR,(A6)+
+00000000                             9          MOVE.L  \1,(A6)+
+00000000                            10          ENDM
+00000000                            11  CLRCC   MACRO                   all condition codes off
+00000000                            12          MOVE    #0,CCR
+00000000                            13          ENDM
+00000000                            14  
+00001000                            15          ORG     $1000
+00001000  4DF9 00004000             16  START:  LEA     RESULTS,A6
+00001006  41F9 00003000             17          LEA     MEM,A0
+0000100C                            18  
+0000100C                            19  * ---- ADD ---------------------------------------------------
+0000100C  203C 7FFFFFFF             20          MOVE.L  #$7FFFFFFF,D0
+00001012  7201                      21          MOVEQ   #1,D1
+00001014  D081                      22          ADD.L   D1,D0                   1  overflow: N V
+00001016                            23m         REC     D0
+0000101A  70FF                      24          MOVE.L  #$FFFFFFFF,D0
+0000101C  D081                      25          ADD.L   D1,D0                   2  carry out: Z C X
+0000101E                            26m         REC     D0
+00001022  203C 000000FF             27          MOVE.L  #$000000FF,D0
+00001028  D001                      28          ADD.B   D1,D0                   3  byte: Z C X, upper bits kept
+0000102A                            29m         REC     D0
+0000102E  203C 00007FFF             30          MOVE.L  #$00007FFF,D0
+00001034  D041                      31          ADD.W   D1,D0                   4  word overflow: N V
+00001036                            32m         REC     D0
+0000103A  20BC 00000010             33          MOVE.L  #$00000010,(A0)
+00001040  7005                      34          MOVEQ   #5,D0
+00001042  D190                      35          ADD.L   D0,(A0)                 5  Dn + memory -> memory
+00001044                            36m         REC     (A0)
+00001048  D090                      37          ADD.L   (A0),D0                 6  memory + Dn -> Dn
+0000104A                            38m         REC     D0
+0000104E                            39  * ---- ADDA / SUBA: no flags, word source sign-extended ------
+0000104E                            40m         CLRCC
+00001052  227C 00010000             41          MOVEA.L #$00010000,A1
+00001058  D2FC FFFF                 42          ADDA.W  #$FFFF,A1               7
+0000105C                            43m         REC     A1
+00001060  93FC 00000010             44          SUBA.L  #$10,A1                 8
+00001066                            45m         REC     A1
+0000106A  92FC 8000                 46          SUBA.W  #$8000,A1               9  subtracts $FFFF8000
+0000106E                            47m         REC     A1
+00001072                            48  * ---- ADDI / SUBI / ADDQ / SUBQ -------------------------------
+00001072  203C 12345678             49          MOVE.L  #$12345678,D0
+00001078  0680 11111111             50          ADDI.L  #$11111111,D0           10
+0000107E                            51m         REC     D0
+00001082  0440 789A                 52          SUBI.W  #$789A,D0               11 word: borrow
+00001086                            53m         REC     D0
+0000108A  7000                      54          MOVEQ   #0,D0
+0000108C  5000                      55          ADDQ.B  #8,D0                   12
+0000108E                            56m         REC     D0
+00001092  5380                      57          SUBQ.L  #1,D0                   13
+00001094                            58m         REC     D0
+00001098  7000                      59          MOVEQ   #0,D0
+0000109A  5340                      60          SUBQ.W  #1,D0                   14 N C X
+0000109C                            61m         REC     D0
+000010A0                            62m         CLRCC
+000010A4  227C 00001000             63          MOVEA.L #$00001000,A1
+000010AA  5849                      64          ADDQ.W  #4,A1                   15 to An: whole register, no flags
+000010AC                            65m         REC     A1
+000010B0  5149                      66          SUBQ.W  #8,A1                   16
+000010B2                            67m         REC     A1
+000010B6                            68  * ---- SUB / NEG / NEGX ------------------------------------------
+000010B6  203C 80000000             69          MOVE.L  #$80000000,D0
+000010BC  7201                      70          MOVEQ   #1,D1
+000010BE  9081                      71          SUB.L   D1,D0                   17 overflow: V
+000010C0                            72m         REC     D0
+000010C4  7005                      73          MOVEQ   #5,D0
+000010C6  7205                      74          MOVEQ   #5,D1
+000010C8  9041                      75          SUB.W   D1,D0                   18 Z
+000010CA                            76m         REC     D0
+000010CE  7003                      77          MOVEQ   #3,D0
+000010D0  5900                      78          SUB.B   #4,D0                   19 N C X (SUBI or SUBQ, same flags)
+000010D2                            79m         REC     D0
+000010D6  7001                      80          MOVEQ   #1,D0
+000010D8  4480                      81          NEG.L   D0                      20 N C X
+000010DA                            82m         REC     D0
+000010DE  7000                      83          MOVEQ   #0,D0
+000010E0  4440                      84          NEG.W   D0                      21 Z, no carry
+000010E2                            85m         REC     D0
+000010E6  203C 00000080             86          MOVE.L  #$00000080,D0
+000010EC  4400                      87          NEG.B   D0                      22 $80: N V C X
+000010EE                            88m         REC     D0
+000010F2  44FC 0010                 89          MOVE    #$10,CCR                X set
+000010F6  7000                      90          MOVEQ   #0,D0
+000010F8  4080                      91          NEGX.L  D0                      23 0 - 0 - X = -1: N C X
+000010FA                            92m         REC     D0
+000010FE                            93  * ---- ADDX / SUBX --------------------------------------------------
+000010FE  44FC 0014                 94          MOVE    #$14,CCR                X and Z set
+00001102  7000                      95          MOVEQ   #0,D0
+00001104  7200                      96          MOVEQ   #0,D1
+00001106  D181                      97          ADDX.L  D1,D0                   24 0 + 0 + X = 1: Z cleared
+00001108                            98m         REC     D0
+0000110C  7000                      99          MOVEQ   #0,D0
+0000110E  44FC 0004                100          MOVE    #$04,CCR                Z set, X clear
+00001112  D181                     101          ADDX.L  D1,D0                   25 result 0: Z stays set
+00001114                           102m         REC     D0
+00001118  7000                     103          MOVEQ   #0,D0
+0000111A  44FC 0000                104          MOVE    #$00,CCR                Z clear
+0000111E  D181                     105          ADDX.L  D1,D0                   26 result 0: Z stays clear
+00001120                           106m         REC     D0
+00001124  44FC 0010                107          MOVE    #$10,CCR
+00001128  7005                     108          MOVEQ   #5,D0
+0000112A  7202                     109          MOVEQ   #2,D1
+0000112C  9141                     110          SUBX.W  D1,D0                   27 5 - 2 - 1 = 2
+0000112E                           111m         REC     D0
+00001132  43F9 00003010            112          LEA     MEM+16,A1               multi-precision add in memory
+00001138  45F9 00003018            113          LEA     MEM+24,A2
+0000113E  237C FFFFFFFF FFFC       114          MOVE.L  #$FFFFFFFF,-4(A1)
+00001146  257C 00000001 FFFC       115          MOVE.L  #$00000001,-4(A2)
+0000114E  44FC 0000                116          MOVE    #0,CCR
+00001152  D589                     117          ADDX.L  -(A1),-(A2)             28 -(Ay),-(Ax): FFFFFFFF + 1 = 0, carry
+00001154                           118m         REC     (A2)
+00001158                           119m         REC     A1                      29
+0000115C                           120  * ---- CMP family: only flags -----------------------------------------
+0000115C  7005                     121          MOVEQ   #5,D0
+0000115E  7207                     122          MOVEQ   #7,D1
+00001160  B081                     123          CMP.L   D1,D0                   30 5 - 7: N C (X untouched)
+00001162                           124m         REC     D0
+00001166  B280                     125          CMP.L   D0,D1                   31 7 - 5: none
+00001168                           126m         REC     D1
+0000116C  0C00 0005                127          CMPI.B  #5,D0                   32 Z
+00001170                           128m         REC     D0
+00001174  227C 00008000            129          MOVEA.L #$00008000,A1
+0000117A  B2FC 8000                130          CMPA.W  #$8000,A1               33 source sign-extended: $8000 - $FFFF8000: C
+0000117E                           131m         REC     A1
+00001182  43F9 00003020            132          LEA     MEM+32,A1
+00001188  45F9 00003024            133          LEA     MEM+36,A2
+0000118E  22BC 11112222            134          MOVE.L  #$11112222,(A1)
+00001194  24BC 11112222            135          MOVE.L  #$11112222,(A2)
+0000119A  B589                     136          CMPM.L  (A1)+,(A2)+             34 Z, both pointers advance
+0000119C                           137m         REC     A1
+000011A0                           138m         REC     A2                      35
+000011A4  203C 80000000            139          MOVE.L  #$80000000,D0
+000011AA  4A80                     140          TST.L   D0                      36 N
+000011AC                           141m         REC     D0
+000011B0  4A40                     142          TST.W   D0                      37 Z
+000011B2                           143m         REC     D0
+000011B6                           144  * ---- MULU / MULS -----------------------------------------------------
+000011B6  203C 1234FFFF            145          MOVE.L  #$1234FFFF,D0
+000011BC  C0FC FFFF                146          MULU    #$FFFF,D0               38 FFFF * FFFF = FFFE0001: N
+000011C0                           147m         REC     D0
+000011C4  203C 0000FFFF            148          MOVE.L  #$0000FFFF,D0
+000011CA  C1FC 0002                149          MULS    #$0002,D0               39 -1 * 2 = -2: N
+000011CE                           150m         REC     D0
+000011D2  7000                     151          MOVEQ   #0,D0
+000011D4  C0FC 1234                152          MULU    #$1234,D0               40 Z
+000011D8                           153m         REC     D0
+000011DC                           154  * ---- DIVU / DIVS -------------------------------------------------------
+000011DC  203C 00010005            155          MOVE.L  #$00010005,D0
+000011E2  80FC 0010                156          DIVU    #$0010,D0               41 65541 / 16 = 4096 rem 5
+000011E6                           157m         REC     D0
+000011EA  70F9                     158          MOVE.L  #-7,D0
+000011EC  81FC 0002                159          DIVS    #2,D0                   42 -7 / 2 = -3 rem -1
+000011F0                           160m         REC     D0
+000011F4  7007                     161          MOVE.L  #7,D0
+000011F6  81FC FFFE                162          DIVS    #-2,D0                  43 7 / -2 = -3 rem 1
+000011FA                           163m         REC     D0
+000011FE  203C 00100000            164          MOVE.L  #$00100000,D0
+00001204  44FC 000D                165          MOVE    #$0D,CCR                N Z C set beforehand
+00001208  80FC 0001                166          DIVU    #1,D0                   44 overflow: V set, register unchanged
+0000120C                           167m         REC     D0
+00001210                           168  * ---- BCD ------------------------------------------------------------------
+00001210  44FC 0000                169          MOVE    #0,CCR
+00001214  7019                     170          MOVEQ   #$19,D0
+00001216  7228                     171          MOVEQ   #$28,D1
+00001218  C101                     172          ABCD    D1,D0                   45 19 + 28 = 47
+0000121A                           173m         REC     D0
+0000121E  44FC 0000                174          MOVE    #0,CCR
+00001222  103C 0099                175          MOVE.B  #$99,D0
+00001226  7201                     176          MOVEQ   #$01,D1
+00001228  C101                     177          ABCD    D1,D0                   46 99 + 01 = 00 carry
+0000122A                           178m         REC     D0
+0000122E  44FC 0000                179          MOVE    #0,CCR
+00001232  7042                     180          MOVEQ   #$42,D0
+00001234  7213                     181          MOVEQ   #$13,D1
+00001236  8101                     182          SBCD    D1,D0                   47 42 - 13 = 29
+00001238                           183m         REC     D0
+0000123C  44FC 0000                184          MOVE    #0,CCR
+00001240  7025                     185          MOVEQ   #$25,D0
+00001242  4800                     186          NBCD    D0                      48 100 - 25 = 75, borrow
+00001244                           187m         REC     D0
+00001248  FFFF FFFF                188          SIMHALT
+0000124C                           189  
+00003000                           190          ORG     $3000
+00003000                           191  MEM     DS.B    64
+00003040                           192  
+00004000                           193          ORG     $4000
+00004000                           194  RESULTS DS.B    6*64
+00004180                           195  
+00004180                           196          END     START
+
+No errors detected
+No warnings generated

@@ -1,0 +1,40 @@
+00001000 Starting Address
+Assembler used: ASy68K Assembler v5.15.04
+Created On: 11/20/2026 12:00:00 PM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : debug - a small program for the debugger tests
+00000000                             3  * Written by : easy68k-mac project (test fixture, GPL-2.0-or-later)
+00000000                             4  * Description: Used by test/debug.test.mjs for PC breakpoints, the
+00000000                             5  *              listing directives, advanced breakpoints, Step Over,
+00000000                             6  *              Run To Cursor, Trace Into and the execution log.
+00000000                             7  *              The binary constant in the source (#%1010) is on purpose:
+00000000                             8  *              the original prints listing lines with fprintf.
+00000000                             9  *-----------------------------------------------------------
+00001000                            10          ORG     $1000
+00001000  7000                      11  START:  MOVEQ   #0,D0
+00001002  7203                      12          MOVEQ   #3,D1
+00001004  5280                      13  LOOP    ADDQ.L  #1,D0
+00001006  6100 0022                 14          BSR     SUB
+0000100A  23C0 00002000             15          MOVE.L  D0,COUNT
+00001010  5381                      16          SUBQ.L  #1,D1
+00001012  66F0                      17          BNE.S   LOOP
+00001014  143C 000A                 18          MOVE.B  #%1010,D2
+00001018  4EB9 0000102A             19          JSR     SUB
+0000101E                            20  *[sim68k]break
+0000101E  3639 00002004             21          MOVE.W  VALUE,D3
+00001024  4E71                      22          NOP
+00001026  FFFF FFFF                 23          SIMHALT
+0000102A                            24  
+0000102A  5285                      25  SUB     ADDQ.L  #1,D5
+0000102C  5285                      26          ADDQ.L  #1,D5
+0000102E  4E75                      27          RTS
+00001030                            28  
+00002000                            29          ORG     $2000
+00002000= 00000000                  30  COUNT   DC.L    0
+00002004= 1234                      31  VALUE   DC.W    $1234
+00002006                            32  
+00002006                            33          END     START
+
+No errors detected
+No warnings generated

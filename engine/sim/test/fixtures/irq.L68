@@ -1,0 +1,122 @@
+00001000 Starting Address
+Assembler used: ASy68K Assembler v5.15.04
+Created On: 11/20/2026 12:00:00 PM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : irq - interrupts, the interrupt mask, STOP, the Reset button
+00000000                             3  * Written by : easy68k-mac project (test fixture, GPL-2.0-or-later)
+00000000                             4  * Description: The test puts a case number in D7, enables exceptions and
+00000000                             5  *              requests interrupts while the program runs.  Each level's
+00000000                             6  *              handler counts in COUNTS+level and logs its level and the
+00000000                             7  *              stacked SR and PC.  test/interrupts.test.mjs asserts.
+00000000                             8  *-----------------------------------------------------------
+00001000                             9          ORG     $1000
+00001000  2E7C 00008000             10  START:  MOVEA.L #$00008000,A7
+00001006  4DF9 00004000             11          LEA     LOG,A6
+0000100C  21FC 0000105E 0064        12          MOVE.L  #IRQ1,$64
+00001014  21FC 00001062 0068        13          MOVE.L  #IRQ2,$68
+0000101C  21FC 00001066 006C        14          MOVE.L  #IRQ3,$6C
+00001024  21FC 0000106A 0070        15          MOVE.L  #IRQ4,$70
+0000102C  21FC 0000106E 0074        16          MOVE.L  #IRQ5,$74
+00001034  21FC 00001072 0078        17          MOVE.L  #IRQ6,$78
+0000103C  21FC 00001076 007C        18          MOVE.L  #IRQ7,$7C
+00001044  21FC 00009000 0000        19          MOVE.L  #$00009000,$00  reset vector: SSP
+0000104C  21FC 0000108E 0004        20          MOVE.L  #RESET,$04      reset vector: PC
+00001054  ED4F                      21          LSL.W   #6,D7
+00001056  41F8 2000                 22          LEA     $2000,A0
+0000105A  4EF0 7000                 23          JMP     0(A0,D7.W)
+0000105E                            24  
+0000105E  7C01                      25  IRQ1    MOVEQ   #1,D6
+00001060  6016                      26          BRA.S   IRQC
+00001062  7C02                      27  IRQ2    MOVEQ   #2,D6
+00001064  6012                      28          BRA.S   IRQC
+00001066  7C03                      29  IRQ3    MOVEQ   #3,D6
+00001068  600E                      30          BRA.S   IRQC
+0000106A  7C04                      31  IRQ4    MOVEQ   #4,D6
+0000106C  600A                      32          BRA.S   IRQC
+0000106E  7C05                      33  IRQ5    MOVEQ   #5,D6
+00001070  6006                      34          BRA.S   IRQC
+00001072  7C06                      35  IRQ6    MOVEQ   #6,D6
+00001074  6002                      36          BRA.S   IRQC
+00001076  7C07                      37  IRQ7    MOVEQ   #7,D6
+00001078  43F9 00003000             38  IRQC    LEA     COUNTS,A1
+0000107E  5231 6000                 39          ADDQ.B  #1,0(A1,D6.W)   count this level
+00001082  3CC6                      40          MOVE.W  D6,(A6)+        log: level
+00001084  40DE                      41          MOVE    SR,(A6)+        log: SR inside the handler
+00001086  3CD7                      42          MOVE.W  (A7),(A6)+      log: stacked SR
+00001088  2CEF 0002                 43          MOVE.L  2(A7),(A6)+     log: stacked PC
+0000108C  4E73                      44          RTE
+0000108E                            45  
+0000108E  33FC 5E5E 00003008        46  RESET   MOVE.W  #$5E5E,RESETMK  reached through the Reset button
+00001096  23CF 0000300A             47          MOVE.L  A7,RESETSP
+0000109C  FFFF FFFF                 48          SIMHALT
+000010A0                            49  
+00002000                            50          ORG     $2000           case 0: mask 0, spin until D5 becomes non-zero
+00002000  46FC 2000                 51          MOVE    #$2000,SR
+00002004  5284                      52  SPIN0   ADDQ.L  #1,D4
+00002006  4A85                      53          TST.L   D5
+00002008  67FA                      54          BEQ.S   SPIN0
+0000200A  FFFF FFFF                 55          SIMHALT
+00002040                            56          ORG     $2040           case 1: mask 3, spin
+00002040  46FC 2300                 57          MOVE    #$2300,SR
+00002044  5284                      58  SPIN1   ADDQ.L  #1,D4
+00002046  4A85                      59          TST.L   D5
+00002048  67FA                      60          BEQ.S   SPIN1
+0000204A  FFFF FFFF                 61          SIMHALT
+00002080                            62          ORG     $2080           case 2: STOP with mask 0, then count and halt
+00002080  4E72 2000                 63          STOP    #$2000
+00002084  5283                      64          ADDQ.L  #1,D3           first instruction after STOP
+00002086  5283                      65          ADDQ.L  #1,D3           second instruction after STOP
+00002088  FFFF FFFF                 66          SIMHALT
+000020C0                            67          ORG     $20C0           case 3: STOP with mask 5 (levels 1-5 cannot wake it)
+000020C0  4E72 2500                 68          STOP    #$2500
+000020C4  5283                      69          ADDQ.L  #1,D3
+000020C6  5283                      70          ADDQ.L  #1,D3
+000020C8  FFFF FFFF                 71          SIMHALT
+00002100                            72          ORG     $2100           case 4: auto interrupt, TRAP #15 task 32 (case 5 is not used)
+00002100  46FC 2000                 73          MOVE    #$2000,SR
+00002104  7020                      74          MOVEQ   #32,D0
+00002106  7205                      75          MOVEQ   #5,D1           enable exceptions
+00002108  4E4F                      76          TRAP    #15
+0000210A  7020                      77          MOVEQ   #32,D0
+0000210C  7206                      78          MOVEQ   #6,D1
+0000210E  143C 0082                 79          MOVE.B  #$82,D2         enable auto IRQ 2 ...
+00002112  7664                      80          MOVE.L  #100,D3         ... every 100 ms
+00002114  4E4F                      81          TRAP    #15
+00002116  0C39 0003 00003002        82  WAIT4   CMPI.B  #3,COUNTS+2     until three interrupts were taken
+0000211E  6DF6                      83          BLT.S   WAIT4
+00002120  7020                      84          MOVEQ   #32,D0
+00002122  7206                      85          MOVEQ   #6,D1
+00002124  7400                      86          MOVEQ   #0,D2           disable all auto IRQs
+00002126  4E4F                      87          TRAP    #15
+00002128  FFFF FFFF                 88          SIMHALT
+00002180                            89          ORG     $2180           case 6: mask 7 (only level 7 gets through), spin
+00002180  46FC 2700                 90          MOVE    #$2700,SR
+00002184  5284                      91  SPIN5   ADDQ.L  #1,D4
+00002186  4A85                      92          TST.L   D5
+00002188  67FA                      93          BEQ.S   SPIN5
+0000218A  FFFF FFFF                 94          SIMHALT
+000021C0                            95          ORG     $21C0           case 7: an interrupt and a TRAP #1 in the same step
+000021C0  21FC 000021D6 0084        96          MOVE.L  #TRAP1,$84
+000021C8  46FC 2000                 97          MOVE    #$2000,SR
+000021CC  4E71                      98          NOP
+000021CE  4E41                      99          TRAP    #1
+000021D0  4E71                     100          NOP
+000021D2  FFFF FFFF                101          SIMHALT
+000021D6  3CFC 7A7A                102  TRAP1   MOVE.W  #$7A7A,(A6)+    log marker
+000021DA  3CD7                     103          MOVE.W  (A7),(A6)+      stacked SR
+000021DC  2CEF 0002                104          MOVE.L  2(A7),(A6)+     stacked PC
+000021E0  FFFF FFFF                105          SIMHALT
+000021E4                           106  
+00003000                           107          ORG     $3000
+00003000= 00 00 00 00 00 00 ...    108  COUNTS  DC.B    0,0,0,0,0,0,0,0
+00003008= 0000                     109  RESETMK DC.W    0
+0000300A= 00000000                 110  RESETSP DC.L    0
+0000300E                           111  
+00004000                           112          ORG     $4000
+00004000                           113  LOG     DS.B    256
+00004100                           114  
+00004100                           115          END     START
+
+No errors detected
+No warnings generated

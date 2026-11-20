@@ -1,0 +1,156 @@
+00001000 Starting Address
+Assembler used: ASy68K Assembler v5.15.04
+Created On: 11/20/2026 12:00:00 PM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : flow - branches, subroutines, DBcc, Scc conditions, CHK, TRAPV
+00000000                             3  * Written by : easy68k-mac project (test fixture, GPL-2.0-or-later)
+00000000                             4  * Description: Results are collected in registers and in the table at
+00000000                             5  *              RESULTS; test/instructions.test.mjs asserts them.
+00000000                             6  *-----------------------------------------------------------
+00001000                             7          ORG     $1000
+00001000  4DF9 00004000              8  START:  LEA     RESULTS,A6
+00001006  2E7C 00008000              9          MOVEA.L #$8000,A7
+0000100C                            10  
+0000100C                            11  * ---- all sixteen conditions against four CCR patterns ------
+0000100C                            12  * For each CCR value the 16 Scc results are packed into a word,
+0000100C                            13  * bit n = condition n (T F HI LS CC CS NE EQ VC VS PL MI GE LT GT LE).
+0000100C  41F9 0000115A             14          LEA     CCRS,A0
+00001012  7E03                      15          MOVEQ   #3,D7
+00001014  1C18                      16  CCLOOP  MOVE.B  (A0)+,D6        CCR pattern under test
+00001016  7A00                      17          MOVEQ   #0,D5           result word
+00001018  44C6                      18          MOVE    D6,CCR
+0000101A  50C0                      19          ST      D0
+0000101C  6100 0124                 20          BSR     PACK            0  T
+00001020  44C6                      21          MOVE    D6,CCR
+00001022  51C0                      22          SF      D0
+00001024  6100 011C                 23          BSR     PACK            1  F
+00001028  44C6                      24          MOVE    D6,CCR
+0000102A  52C0                      25          SHI     D0
+0000102C  6100 0114                 26          BSR     PACK            2  HI
+00001030  44C6                      27          MOVE    D6,CCR
+00001032  53C0                      28          SLS     D0
+00001034  6100 010C                 29          BSR     PACK            3  LS
+00001038  44C6                      30          MOVE    D6,CCR
+0000103A  54C0                      31          SCC     D0
+0000103C  6100 0104                 32          BSR     PACK            4  CC
+00001040  44C6                      33          MOVE    D6,CCR
+00001042  55C0                      34          SCS     D0
+00001044  6100 00FC                 35          BSR     PACK            5  CS
+00001048  44C6                      36          MOVE    D6,CCR
+0000104A  56C0                      37          SNE     D0
+0000104C  6100 00F4                 38          BSR     PACK            6  NE
+00001050  44C6                      39          MOVE    D6,CCR
+00001052  57C0                      40          SEQ     D0
+00001054  6100 00EC                 41          BSR     PACK            7  EQ
+00001058  44C6                      42          MOVE    D6,CCR
+0000105A  58C0                      43          SVC     D0
+0000105C  6100 00E4                 44          BSR     PACK            8  VC
+00001060  44C6                      45          MOVE    D6,CCR
+00001062  59C0                      46          SVS     D0
+00001064  6100 00DC                 47          BSR     PACK            9  VS
+00001068  44C6                      48          MOVE    D6,CCR
+0000106A  5AC0                      49          SPL     D0
+0000106C  6100 00D4                 50          BSR     PACK            10 PL
+00001070  44C6                      51          MOVE    D6,CCR
+00001072  5BC0                      52          SMI     D0
+00001074  6100 00CC                 53          BSR     PACK            11 MI
+00001078  44C6                      54          MOVE    D6,CCR
+0000107A  5CC0                      55          SGE     D0
+0000107C  6100 00C4                 56          BSR     PACK            12 GE
+00001080  44C6                      57          MOVE    D6,CCR
+00001082  5DC0                      58          SLT     D0
+00001084  6100 00BC                 59          BSR     PACK            13 LT
+00001088  44C6                      60          MOVE    D6,CCR
+0000108A  5EC0                      61          SGT     D0
+0000108C  6100 00B4                 62          BSR     PACK            14 GT
+00001090  44C6                      63          MOVE    D6,CCR
+00001092  5FC0                      64          SLE     D0
+00001094  6100 00AC                 65          BSR     PACK            15 LE
+00001098  3CC5                      66          MOVE.W  D5,(A6)+        the 16 bits arrive reversed: T is bit 15, LE bit 0
+0000109A  51CF FF78                 67          DBRA    D7,CCLOOP
+0000109E                            68  
+0000109E                            69  * ---- Bcc taken / not taken, byte and word displacement --------
+0000109E  7800                      70          MOVEQ   #0,D4
+000010A0  44FC 0004                 71          MOVE    #$04,CCR
+000010A4  6702                      72          BEQ.S   B1              taken (short)
+000010A6  5244                      73          ADDQ    #1,D4           skipped
+000010A8  6602                      74  B1      BNE.S   B2              not taken
+000010AA  5444                      75          ADDQ    #2,D4
+000010AC  44FC 0004                 76  B2      MOVE    #$04,CCR
+000010B0  6700 0004                 77          BEQ.W   B3              taken (word)
+000010B4  5844                      78          ADDQ    #4,D4           skipped
+000010B6  6000 0004                 79  B3      BRA.W   B4
+000010BA  5044                      80          ADDQ    #8,D4           skipped
+000010BC  3CC4                      81  B4      MOVE.W  D4,(A6)+        expect 2
+000010BE                            82  
+000010BE                            83  * ---- DBcc ----------------------------------------------------------
+000010BE  7800                      84          MOVEQ   #0,D4
+000010C0  7604                      85          MOVEQ   #4,D3
+000010C2  5244                      86  DB1     ADDQ    #1,D4
+000010C4  51CB FFFC                 87          DBF     D3,DB1          runs 5 times, leaves D3.W = $FFFF
+000010C8  3CC4                      88          MOVE.W  D4,(A6)+        expect 5
+000010CA  3CC3                      89          MOVE.W  D3,(A6)+        expect $FFFF
+000010CC  7609                      90          MOVEQ   #9,D3
+000010CE  44FC 0004                 91          MOVE    #$04,CCR
+000010D2  57CB FFEE                 92          DBEQ    D3,DB1          condition true: no decrement, no branch
+000010D6  3CC3                      93          MOVE.W  D3,(A6)+        expect 9
+000010D8  263C 00010000             94          MOVE.L  #$00010000,D3
+000010DE  51CB 0002                 95          DBF     D3,DB2          only the low word counts: 0 -> $FFFF, falls through
+000010E2  2CC3                      96  DB2     MOVE.L  D3,(A6)+        expect $0001FFFF
+000010E4                            97  
+000010E4                            98  * ---- JSR / JMP addressing modes, RTS, RTR ---------------------------
+000010E4  7800                      99          MOVEQ   #0,D4
+000010E6  4EB9 0000114C            100          JSR     SUB1            abs.L
+000010EC  43F9 0000114C            101          LEA     SUB1,A1
+000010F2  4E91                     102          JSR     (A1)            (An)
+000010F4  4EA9 0004                103          JSR     4(A1)           d16(An): enters at SUB1+4
+000010F8  7204                     104          MOVEQ   #4,D1
+000010FA  4EB1 1000                105          JSR     0(A1,D1.W)      d8(An,Xn): SUB1+4 again
+000010FE  4EBA 004C                106          JSR     SUB1(PC)        d16(PC)
+Line 107 WARNING: Forcing SHORT addressing disables range checking of extension word
+00001102  4EB8 114C                107          JSR     SUB1.W          abs.W
+00001106  3CC4                     108          MOVE.W  D4,(A6)+        expect $0100*4 + $0001*6 = $0406
+00001108  43F9 00001112            109          LEA     J1,A1
+0000110E  4ED1                     110          JMP     (A1)
+00001110  5244                     111          ADDQ    #1,D4           skipped
+00001112  4EFA 0004                112  J1      JMP     J2(PC)
+00001116  5244                     113          ADDQ    #1,D4           skipped
+00001118  3CC4                     114  J2      MOVE.W  D4,(A6)+        expect $0406
+0000111A  2CCF                     115          MOVE.L  A7,(A6)+        stack balanced: expect $00008000
+0000111C  44FC 001F                116          MOVE    #$1F,CCR
+00001120  6100 0032                117          BSR     SUBRTR          RTR restores the CCR saved by the subroutine
+00001124  40DE                     118          MOVE    SR,(A6)+        expect $2015 (X Z C as pushed)
+00001126  4E71                     119          NOP
+00001128                           120  
+00001128                           121  * ---- CHK and TRAPV that do not trap ----------------------------------
+00001128  7005                     122          MOVEQ   #5,D0
+0000112A  44FC 0000                123          MOVE    #$00,CCR
+0000112E  41BC 000A                124          CHK     #10,D0          0 <= 5 <= 10: no exception
+00001132  40DE                     125          MOVE    SR,(A6)+        expect: N from D0 (0); Z V C inverted by this simulator: $2007
+00001134  44FC 0000                126          MOVE    #$00,CCR
+00001138  4E76                     127          TRAPV                   V clear: nothing
+0000113A  3CFC 600D                128          MOVE.W  #$600D,(A6)+
+0000113E  FFFF FFFF                129          SIMHALT
+00001142                           130  
+00001142  0240 0001                131  PACK    ANDI.W  #1,D0           D0.B is $FF or $00 -> 1 or 0
+00001146  DA45                     132          ADD.W   D5,D5
+00001148  8A40                     133          OR.W    D0,D5
+0000114A  4E75                     134          RTS
+0000114C                           135  
+0000114C  0644 0100                136  SUB1    ADDI.W  #$0100,D4       entered at SUB1: both adds; at SUB1+4: only the second
+00001150  5244                     137          ADDQ.W  #1,D4
+00001152  4E75                     138          RTS
+00001154                           139  
+00001154  3F3C 0015                140  SUBRTR  MOVE.W  #$0015,-(A7)    CCR image for RTR
+00001158  4E77                     141          RTR
+0000115A                           142  
+0000115A= 00 04 0A 09              143  CCRS    DC.B    $00,$04,$0A,$09  none; Z; N V; N C
+0000115E                           144  
+00004000                           145          ORG     $4000
+00004000                           146  RESULTS DS.B    64
+00004040                           147  
+00004040                           148          END     START
+
+No errors detected
+1 warning generated

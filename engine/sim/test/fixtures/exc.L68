@@ -1,0 +1,146 @@
+00001000 Starting Address
+Assembler used: ASy68K Assembler v5.15.04
+Created On: 11/20/2026 12:00:00 PM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : exc - one exception per run
+00000000                             3  * Written by : easy68k-mac project (test fixture, GPL-2.0-or-later)
+00000000                             4  * Description: The test puts a case number in D7 and runs.  Case n is the
+00000000                             5  *              code at $2000 + n*$40.  With exceptions disabled the
+00000000                             6  *              simulator halts with a message; with exceptions enabled
+00000000                             7  *              the vector's stub records which vector was taken and the
+00000000                             8  *              top 16 bytes of the supervisor stack in RESULTS:
+00000000                             9  *                RESULTS+0   word  vector address that was taken
+00000000                            10  *                RESULTS+2   long  supervisor stack pointer in the handler
+00000000                            11  *                RESULTS+6   16 bytes copied from that stack
+00000000                            12  *              test/exceptions.test.mjs asserts messages and frames.
+00000000                            13  *-----------------------------------------------------------
+00000000                            14  VEC     MACRO                   stub for the vector at address \1
+00000000                            15  V\1     MOVE.W  #$\1,RESULTS
+00000000                            16          BRA     COMMON
+00000000                            17          ENDM
+00000000                            18  
+00001000                            19          ORG     $1000
+00001000  2E7C 00008000             20  START:  MOVEA.L #$00008000,A7
+00001006  21FC 00001078 0008        21          MOVE.L  #V08,$08
+0000100E  21FC 00001084 000C        22          MOVE.L  #V0C,$0C
+00001016  21FC 00001090 0010        23          MOVE.L  #V10,$10
+0000101E  21FC 0000109C 0014        24          MOVE.L  #V14,$14
+00001026  21FC 000010A8 0018        25          MOVE.L  #V18,$18
+0000102E  21FC 000010B4 001C        26          MOVE.L  #V1C,$1C
+00001036  21FC 000010C0 0020        27          MOVE.L  #V20,$20
+0000103E  21FC 000010CC 0024        28          MOVE.L  #V24,$24
+00001046  21FC 000010D8 0028        29          MOVE.L  #V28,$28
+0000104E  21FC 000010E4 002C        30          MOVE.L  #V2C,$2C
+00001056  21FC 000010F0 0084        31          MOVE.L  #V84,$84        TRAP #1
+0000105E  21FC 000010FC 00BC        32          MOVE.L  #VBC,$BC        TRAP #15
+00001066  21FC 00000000 0090        33          MOVE.L  #0,$90          TRAP #4: a vector that is zero
+0000106E                            34  *                               TRAP #2 ($88) is left uninitialised ($FFFFFFFF)
+0000106E  ED4F                      35          LSL.W   #6,D7
+00001070  41F8 2000                 36          LEA     $2000,A0
+00001074  4EF0 7000                 37          JMP     0(A0,D7.W)
+00001078                            38  
+00001078                            39m         VEC     08
+00001084                            40m         VEC     0C
+00001090                            41m         VEC     10
+0000109C                            42m         VEC     14
+000010A8                            43m         VEC     18
+000010B4                            44m         VEC     1C
+000010C0                            45m         VEC     20
+000010CC                            46m         VEC     24
+000010D8                            47m         VEC     28
+000010E4                            48m         VEC     2C
+000010F0                            49m         VEC     84
+000010FC                            50m         VEC     BC
+00001108  23CF 00004002             51  COMMON  MOVE.L  A7,RESULTS+2
+0000110E  43F9 00004006             52          LEA     RESULTS+6,A1
+00001114  244F                      53          MOVEA.L A7,A2
+00001116  7207                      54          MOVEQ   #7,D1
+00001118  32DA                      55  CPY     MOVE.W  (A2)+,(A1)+
+0000111A  51C9 FFFC                 56          DBRA    D1,CPY
+0000111E  FFFF FFFF                 57          SIMHALT
+00001122                            58  
+00002000                            59          ORG     $2000           case 0: ILLEGAL
+00002000  4AFC                      60          ILLEGAL
+00002040                            61          ORG     $2040           case 1: privileged instruction in user mode
+00002040  027C DFFF                 62          ANDI    #$DFFF,SR
+00002044  46FC 2700                 63          MOVE    #$2700,SR
+00002080                            64          ORG     $2080           case 2: CHK out of bounds
+00002080  7014                      65          MOVEQ   #20,D0
+00002082  41BC 000A                 66          CHK     #10,D0
+000020C0                            67          ORG     $20C0           case 3: STOP
+000020C0  4E72 2000                 68          STOP    #$2000
+000020C4  4E71                      69          NOP
+00002100                            70          ORG     $2100           case 4: TRAP #1
+00002100  4E41                      71          TRAP    #1
+00002140                            72          ORG     $2140           case 5: TRAPV with V set
+00002140  44FC 0002                 73          MOVE    #$02,CCR
+00002144  4E76                      74          TRAPV
+00002180                            75          ORG     $2180           case 6: divide by zero
+00002180  7001                      76          MOVEQ   #1,D0
+00002182  80FC 0000                 77          DIVU    #0,D0
+000021C0                            78          ORG     $21C0           case 7: address error on a read
+000021C0  3038 3001                 79          MOVE.W  $3001,D0
+00002200                            80          ORG     $2200           case 8: address error on a write (odd stack pointer)
+00002200  2E7C 00007001             81          MOVEA.L #$00007001,A7
+00002206  6100 0002                 82          BSR     C8SUB
+0000220A  4E71                      83  C8SUB   NOP
+00002240                            84          ORG     $2240           case 9: read inside an Invalid range (bus error)
+00002240  1038 5000                 85          MOVE.B  $5000,D0
+00002280                            86          ORG     $2280           case 10: trace bit
+00002280  007C 8000                 87          ORI     #$8000,SR
+00002284  4E71                      88          NOP
+00002286  4E71                      89          NOP
+000022C0                            90          ORG     $22C0           case 11: line A
+000022C0= A123                      91          DC.W    $A123
+00002300                            92          ORG     $2300           case 12: line F that is not SIMHALT
+00002300= F123 0000                 93          DC.W    $F123,$0000
+00002340                            94          ORG     $2340           case 13: TRAP #15 with a task number nobody serves
+00002340  701A                      95          MOVEQ   #26,D0
+00002342  4E4F                      96          TRAP    #15
+00002380                            97          ORG     $2380           case 14: an opcode no table entry matches
+00002380= 4E7F                      98          DC.W    $4E7F
+000023C0                            99          ORG     $23C0           case 15: RTS with nothing on the stack
+000023C0  2E7C 01000000            100          MOVEA.L #$01000000,A7
+000023C6  4E75                     101          RTS
+00002400                           102          ORG     $2400           case 16: write into a Read-only range
+00002400  7055                     103          MOVEQ   #$55,D0
+00002402  11C0 6000                104          MOVE.B  D0,$6000
+00002406  4E71                     105          NOP
+00002440                           106          ORG     $2440           case 17: write into a ROM range is ignored
+00002440  11FC 0055 7000           107          MOVE.B  #$55,$7000
+00002446  1238 7000                108          MOVE.B  $7000,D1
+0000244A  FFFF FFFF                109          SIMHALT
+00002480                           110          ORG     $2480           case 18: TRAP #2, vector never written
+00002480  4E42                     111          TRAP    #2
+000024C0                           112          ORG     $24C0           case 19: TRAP #4, vector is zero
+000024C0  4E44                     113          TRAP    #4
+00002500                           114          ORG     $2500           case 20: exception with an odd supervisor stack pointer
+00002500  2E7C 00007001            115          MOVEA.L #$00007001,A7
+00002506  4E41                     116          TRAP    #1
+00002508  4E71                     117          NOP
+00002540                           118          ORG     $2540           case 21: SIMHALT bytes (the test turns SIMHALT off)
+00002540  FFFF FFFF                119          SIMHALT
+00002580                           120          ORG     $2580           case 22: privileged ANDI to SR in user mode
+00002580  027C DFFF                121          ANDI    #$DFFF,SR
+00002584  027C FFFF                122          ANDI    #$FFFF,SR
+000025C0                           123          ORG     $25C0           case 23: JMP to an odd address
+000025C0= 4EF9 0000 3001           124          DC.W    $4EF9,$0000,$3001
+00002600                           125          ORG     $2600           case 24: ADDI.W #imm with destination mode #imm (illegal)
+00002600= 067C 1234 5678           126          DC.W    $067C,$1234,$5678
+00002640                           127          ORG     $2640           case 25: STOP in user mode
+00002640  027C DFFF                128          ANDI    #$DFFF,SR
+00002644  4E72 2000                129          STOP    #$2000
+00002680                           130          ORG     $2680           case 26: STOP that loads an SR without the S bit
+00002680  4E72 0000                131          STOP    #$0000
+000026C0                           132          ORG     $26C0           case 27: TRAP #2 with the address-error vector uninitialised too
+000026C0  21FC FFFFFFFF 000C       133          MOVE.L  #$FFFFFFFF,$0C
+000026C8  4E42                     134          TRAP    #2
+000026CA                           135  
+00004000                           136          ORG     $4000
+00004000                           137  RESULTS DS.B    32
+00004020                           138  
+00004020                           139          END     START
+
+No errors detected
+No warnings generated
