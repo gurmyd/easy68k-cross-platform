@@ -1,0 +1,1499 @@
+{
+  "comment": "Frozen outcome of the 68000 single-step suite on the EASy68K core (tests/conformance/cpu/README.md). Counts, class names and hashes only: the suite is not redistributable. Regenerate with `node tests/conformance/cpu/run-catalogue.mjs --write-baseline` after a deliberate change of the core.",
+  "suite": {
+    "repository": "SingleStepTests/680x0",
+    "commit": "e0d5ece9670205cc84a0101081837deb446f86a3",
+    "folder": "68000/v1"
+  },
+  "files": {
+    "ABCD.json.gz": {
+      "tests": 8065,
+      "deviating": 6356,
+      "sha256": "f8d6dd886d834c83150e5df6f0c70030b6589a53bd95f8ea387dd481697d6dd5",
+      "classes": {
+        "ABCD: CCR": 5404,
+        "ABCD: CCR Dn": 12,
+        "ABCD: CCR RAM": 7,
+        "ABCD: CCR RAM SSP": 747,
+        "ABCD: CCR SSP": 3,
+        "ABCD: RAM SSP": 181,
+        "ABCD: SSP": 2
+      },
+      "fields": {
+        "D0": 3,
+        "D1": 2,
+        "D3": 2,
+        "D6": 2,
+        "D7": 3,
+        "RAM": 935,
+        "SR.C": 223,
+        "SR.N": 4051,
+        "SR.V": 4084,
+        "SR.X": 223,
+        "SR.Z": 5,
+        "SSP": 933
+      }
+    },
+    "ADD.b.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "ADD.l.json.gz": {
+      "tests": 8065,
+      "deviating": 2922,
+      "sha256": "1f9aed981ca541636c78de39a0956644bc9ab03703dc3661adb50e8a0d2982e7",
+      "classes": {
+        "ADD.l [address error]: RAM": 2922
+      },
+      "fields": {
+        "RAM": 2922
+      }
+    },
+    "ADD.w.json.gz": {
+      "tests": 8065,
+      "deviating": 2948,
+      "sha256": "70750da16bdd5d8c6dfb16e8f127368907dad27bc5c2c1f0be76f72cb5bed5ec",
+      "classes": {
+        "ADD.w [address error]: RAM": 2948
+      },
+      "fields": {
+        "RAM": 2948
+      }
+    },
+    "ADDA.l.json.gz": {
+      "tests": 8065,
+      "deviating": 2693,
+      "sha256": "89a13f1a962d1a0654928fc79b21bfd99e66f0614260d8bb9df51d4f3523e135",
+      "classes": {
+        "ADDA.l [address error]: RAM": 2693
+      },
+      "fields": {
+        "RAM": 2693
+      }
+    },
+    "ADDA.w.json.gz": {
+      "tests": 8065,
+      "deviating": 2634,
+      "sha256": "32835d7d787607471c683172f6060a03fb3d72c00bf5301cf56e9b494b1c0b07",
+      "classes": {
+        "ADDA.w [address error]: RAM": 2634
+      },
+      "fields": {
+        "RAM": 2634
+      }
+    },
+    "ADDX.b.json.gz": {
+      "tests": 8065,
+      "deviating": 950,
+      "sha256": "4e6de683124db7e4c53d2c6a206214a7e5ffae7ca055909b2532dea7f19115f6",
+      "classes": {
+        "ADDX.b: CCR RAM SSP": 620,
+        "ADDX.b: RAM SSP": 326,
+        "ADDX.b: SSP": 4
+      },
+      "fields": {
+        "RAM": 946,
+        "SR.C": 339,
+        "SR.N": 454,
+        "SR.V": 278,
+        "SR.X": 339,
+        "SR.Z": 6,
+        "SSP": 950
+      }
+    },
+    "ADDX.l.json.gz": {
+      "tests": 8065,
+      "deviating": 2593,
+      "sha256": "c1028fbbc8b8a6077d47da32cddcfe4aeb58e81db8cf2088a4a04c8d742f43de",
+      "classes": {
+        "ADDX.l [address error]: An CCR RAM": 618,
+        "ADDX.l [address error]: An CCR RAM SSP": 1901,
+        "ADDX.l [address error]: An RAM": 19,
+        "ADDX.l [address error]: An RAM SSP": 55
+      },
+      "fields": {
+        "A0": 522,
+        "A1": 555,
+        "A2": 564,
+        "A3": 570,
+        "A4": 532,
+        "A5": 577,
+        "A6": 566,
+        "RAM": 2593,
+        "SR.C": 1281,
+        "SR.N": 1320,
+        "SR.V": 1254,
+        "SR.X": 1327,
+        "SR.Z": 1330,
+        "SSP": 1956
+      }
+    },
+    "ADDX.w.json.gz": {
+      "tests": 8065,
+      "deviating": 2600,
+      "sha256": "e951a7e555346c1c99547fd75905640db0f98f08d6a594b4ddc6168106278f2f",
+      "classes": {
+        "ADDX.w [address error]: An CCR RAM": 668,
+        "ADDX.w [address error]: An CCR RAM SSP": 835,
+        "ADDX.w [address error]: An RAM": 16,
+        "ADDX.w [address error]: An RAM SSP": 25,
+        "ADDX.w [address error]: CCR RAM SSP": 1013,
+        "ADDX.w [address error]: RAM SSP": 43
+      },
+      "fields": {
+        "A0": 211,
+        "A1": 221,
+        "A2": 229,
+        "A3": 216,
+        "A4": 208,
+        "A5": 225,
+        "A6": 234,
+        "RAM": 2600,
+        "SR.C": 1313,
+        "SR.N": 1271,
+        "SR.V": 1358,
+        "SR.X": 1264,
+        "SR.Z": 1279,
+        "SSP": 1916
+      }
+    },
+    "AND.b.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "AND.l.json.gz": {
+      "tests": 8065,
+      "deviating": 3320,
+      "sha256": "c6cfcafb46246ffcdf6d1ce6279832dc881aba7e9bc6918edaa1716fe419b86b",
+      "classes": {
+        "AND.l [address error]: RAM": 3320
+      },
+      "fields": {
+        "RAM": 3320
+      }
+    },
+    "AND.w.json.gz": {
+      "tests": 8065,
+      "deviating": 3397,
+      "sha256": "51cd0e499bee1eba55f3d9529614b4a89c6e55fa23d7ddc6bd41f206500ddf53",
+      "classes": {
+        "AND.w [address error]: RAM": 3397
+      },
+      "fields": {
+        "RAM": 3397
+      }
+    },
+    "ANDItoCCR.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "ANDItoSR.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "ASL.b.json.gz": {
+      "tests": 8065,
+      "deviating": 126,
+      "sha256": "bfa979c27db6bc366f4856c4220004afcfccb01ec565edbe59c4bc86e619ca7c",
+      "classes": {
+        "ASL.b: CCR": 124,
+        "ASL.b: CCR Dn": 1,
+        "ASL.b: Dn": 1
+      },
+      "fields": {
+        "D2": 2,
+        "SR.C": 1,
+        "SR.N": 1,
+        "SR.V": 124,
+        "SR.X": 1
+      }
+    },
+    "ASL.l.json.gz": {
+      "tests": 8065,
+      "deviating": 158,
+      "sha256": "43a639ecfbbc24d723fd428bbf4b29a16e440f6c0a7f489378f1e24c5adc3365",
+      "classes": {
+        "ASL.l: CCR": 158
+      },
+      "fields": {
+        "SR.V": 158
+      }
+    },
+    "ASL.w.json.gz": {
+      "tests": 8065,
+      "deviating": 1038,
+      "sha256": "b55f80596b887a796325c1afa216564909321382850bc275c351e0d8ee0c47b8",
+      "classes": {
+        "ASL.w [address error]: RAM": 938,
+        "ASL.w: CCR": 100
+      },
+      "fields": {
+        "RAM": 938,
+        "SR.V": 100
+      }
+    },
+    "ASR.b.json.gz": {
+      "tests": 8065,
+      "deviating": 1642,
+      "sha256": "a7f80d0aa9ae04e0f6336106205dd32bec6e5c2087e68e029de0993f81f5b038",
+      "classes": {
+        "ASR.b: CCR": 1642
+      },
+      "fields": {
+        "SR.C": 1642,
+        "SR.X": 1642
+      }
+    },
+    "ASR.l.json.gz": {
+      "tests": 8065,
+      "deviating": 1031,
+      "sha256": "ea5d835d216cc01acc346c899659ed49d0488a45d643aba277babe380bcc3a64",
+      "classes": {
+        "ASR.l: CCR": 1031
+      },
+      "fields": {
+        "SR.C": 1031,
+        "SR.X": 1031
+      }
+    },
+    "ASR.w.json.gz": {
+      "tests": 8065,
+      "deviating": 1986,
+      "sha256": "32082aec61b24518ae7631d8852f0db7b623829fd23920e1a776d3e03ca00d2c",
+      "classes": {
+        "ASR.w [address error]: RAM": 923,
+        "ASR.w: CCR": 1063
+      },
+      "fields": {
+        "RAM": 923,
+        "SR.C": 1063,
+        "SR.X": 1063
+      }
+    },
+    "BCHG.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "BCLR.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "BSET.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "BSR.json.gz": {
+      "tests": 8065,
+      "deviating": 3980,
+      "sha256": "7607fcf2b523ea826aa899b8c1fd1b0d53a2689dc2981baf2dbbdc371309ae12",
+      "classes": {
+        "BSR [address error]: PC RAM SSP": 3980
+      },
+      "fields": {
+        "PC": 3980,
+        "RAM": 3980,
+        "SSP": 3980
+      }
+    },
+    "BTST.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "Bcc.json.gz": {
+      "tests": 8065,
+      "deviating": 2200,
+      "sha256": "33b8338002dd5d7ae4515f22046a144b51156ed07af2b4de642112ea6666b179",
+      "classes": {
+        "Bcc [address error]: PC RAM SSP": 2200
+      },
+      "fields": {
+        "PC": 2200,
+        "RAM": 2200,
+        "SSP": 2200
+      }
+    },
+    "CHK.json.gz": {
+      "tests": 8065,
+      "deviating": 7475,
+      "sha256": "30f5e6833699d84a266405691e9ddd8e3c08b1ebd7a1d295074cd27c7acfc7ce",
+      "classes": {
+        "CHK [CHK]: CCR RAM": 3722,
+        "CHK [address error]: RAM": 3117,
+        "CHK: CCR": 636
+      },
+      "fields": {
+        "RAM": 6839,
+        "SR.C": 2512,
+        "SR.N": 321,
+        "SR.V": 2464,
+        "SR.Z": 2456
+      }
+    },
+    "CLR.b.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "CLR.l.json.gz": {
+      "tests": 8065,
+      "deviating": 3162,
+      "sha256": "41b476e7f8367b0ee6c5850119acb52c230fc2bd1c01b564e7a311e96d93728a",
+      "classes": {
+        "CLR.l [address error]: RAM": 3162
+      },
+      "fields": {
+        "RAM": 3162
+      }
+    },
+    "CLR.w.json.gz": {
+      "tests": 8065,
+      "deviating": 3169,
+      "sha256": "e609a810eceef2ebbb9b70fb6fcba9c0ed3f68eca562b9b32abba8a81ff5b8e7",
+      "classes": {
+        "CLR.w [address error]: RAM": 3169
+      },
+      "fields": {
+        "RAM": 3169
+      }
+    },
+    "CMP.b.json.gz": {
+      "tests": 8065,
+      "deviating": 213,
+      "sha256": "55b657ae5ca5c139a23fbe346a81ed36f4bf3b965a533b55e4099b88a928c3d6",
+      "classes": {
+        "CMP.b: CCR SSP": 10,
+        "CMP.b: SSP": 203
+      },
+      "fields": {
+        "SR.C": 7,
+        "SR.N": 5,
+        "SR.V": 1,
+        "SSP": 213
+      }
+    },
+    "CMP.l.json.gz": {
+      "tests": 8065,
+      "deviating": 3031,
+      "sha256": "2f97cad595231c2c62d949d2ae884ae442335bfe464d46c8b65a2f2be685034c",
+      "classes": {
+        "CMP.l [address error]: An CCR RAM": 138,
+        "CMP.l [address error]: An CCR RAM SSP": 173,
+        "CMP.l [address error]: An RAM": 4,
+        "CMP.l [address error]: An RAM SSP": 11,
+        "CMP.l [address error]: CCR RAM": 193,
+        "CMP.l [address error]: CCR RAM SSP": 42,
+        "CMP.l [address error]: RAM": 2465,
+        "CMP.l [address error]: RAM SSP": 5
+      },
+      "fields": {
+        "A0": 38,
+        "A1": 42,
+        "A2": 49,
+        "A3": 50,
+        "A4": 53,
+        "A5": 52,
+        "A6": 42,
+        "RAM": 3031,
+        "SR.C": 292,
+        "SR.N": 286,
+        "SR.V": 290,
+        "SR.Z": 280,
+        "SSP": 231
+      }
+    },
+    "CMP.w.json.gz": {
+      "tests": 8065,
+      "deviating": 3041,
+      "sha256": "81698009069f6879f8910a50ce79b3a009a3762ac593e2ac5c22a9964d3bf2dc",
+      "classes": {
+        "CMP.w [address error]: An CCR RAM": 138,
+        "CMP.w [address error]: An CCR RAM SSP": 174,
+        "CMP.w [address error]: An RAM": 12,
+        "CMP.w [address error]: An RAM SSP": 17,
+        "CMP.w [address error]: CCR RAM": 170,
+        "CMP.w [address error]: CCR RAM SSP": 45,
+        "CMP.w [address error]: RAM": 2480,
+        "CMP.w [address error]: RAM SSP": 5
+      },
+      "fields": {
+        "A0": 54,
+        "A1": 45,
+        "A2": 58,
+        "A3": 48,
+        "A4": 46,
+        "A5": 40,
+        "A6": 50,
+        "RAM": 3041,
+        "SR.C": 278,
+        "SR.N": 267,
+        "SR.V": 276,
+        "SR.Z": 276,
+        "SSP": 241
+      }
+    },
+    "CMPA.l.json.gz": {
+      "tests": 8065,
+      "deviating": 2615,
+      "sha256": "71dbbc9c976310503ab54bd1aab558c5f65bc39335fa1e755b19e9555f2aa6be",
+      "classes": {
+        "CMPA.l [address error]: RAM": 2615
+      },
+      "fields": {
+        "RAM": 2615
+      }
+    },
+    "CMPA.w.json.gz": {
+      "tests": 8065,
+      "deviating": 2705,
+      "sha256": "7ef244ebdb8917d9f35139dd91ac6cd15147deb52ed0b8bc6fa7eebcec7a008d",
+      "classes": {
+        "CMPA.w [address error]: RAM": 2705
+      },
+      "fields": {
+        "RAM": 2705
+      }
+    },
+    "DBcc.json.gz": {
+      "tests": 8065,
+      "deviating": 1964,
+      "sha256": "ab7d0197694b09bcb7dd858d35339dd1c2d34068f7c69dcdd2368eb44c5180ae",
+      "classes": {
+        "DBcc [address error]: PC RAM SSP": 1964
+      },
+      "fields": {
+        "PC": 1964,
+        "RAM": 1964,
+        "SSP": 1964
+      }
+    },
+    "DIVS.json.gz": {
+      "tests": 8065,
+      "deviating": 4973,
+      "sha256": "288943f658f92b0edf904eb82d23475ba2433b0a68472ddc9e95c0cf1b02d677",
+      "classes": {
+        "DIVS [address error]: RAM": 3073,
+        "DIVS: CCR": 1900
+      },
+      "fields": {
+        "RAM": 3073,
+        "SR.C": 1900
+      }
+    },
+    "DIVU.json.gz": {
+      "tests": 8065,
+      "deviating": 4350,
+      "sha256": "b81ca2f36f725f6abe01aaae6dd7e663a4cb6080cfe843e66c9a01d95c18c4ea",
+      "classes": {
+        "DIVU [address error]: RAM": 3101,
+        "DIVU [zero divide]: CCR RAM": 1,
+        "DIVU: CCR": 1248
+      },
+      "fields": {
+        "RAM": 3102,
+        "SR.C": 1249,
+        "SR.N": 1,
+        "SR.Z": 1
+      }
+    },
+    "EOR.b.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "EOR.l.json.gz": {
+      "tests": 8065,
+      "deviating": 3161,
+      "sha256": "8e0e1ff6729997ead2fbd604aa98504aa2ed9b3fdcf530340e738e2f11025018",
+      "classes": {
+        "EOR.l [address error]: RAM": 3161
+      },
+      "fields": {
+        "RAM": 3161
+      }
+    },
+    "EOR.w.json.gz": {
+      "tests": 8065,
+      "deviating": 3135,
+      "sha256": "054a059aa16c775018cf1835bbf716c35e5607705556d6ff17f452743504e38d",
+      "classes": {
+        "EOR.w [address error]: RAM": 3135
+      },
+      "fields": {
+        "RAM": 3135
+      }
+    },
+    "EORItoCCR.json.gz": {
+      "tests": 8065,
+      "deviating": 8061,
+      "sha256": "1839bf8d2af36d5ac2fbb94a1c92a3bc3d673a15238c398222ded39885423d6a",
+      "classes": {
+        "EORItoCCR: SR.IPL": 28,
+        "EORItoCCR: SR.IPL SR.S": 23,
+        "EORItoCCR: SR.IPL SR.S SR.T": 21,
+        "EORItoCCR: SR.IPL SR.S SR.T SR.unused": 1713,
+        "EORItoCCR: SR.IPL SR.S SR.unused": 1821,
+        "EORItoCCR: SR.IPL SR.T": 26,
+        "EORItoCCR: SR.IPL SR.T SR.unused": 1739,
+        "EORItoCCR: SR.IPL SR.unused": 1692,
+        "EORItoCCR: SR.S": 11,
+        "EORItoCCR: SR.S SR.T": 7,
+        "EORItoCCR: SR.S SR.T SR.unused": 260,
+        "EORItoCCR: SR.S SR.unused": 226,
+        "EORItoCCR: SR.T": 2,
+        "EORItoCCR: SR.T SR.unused": 256,
+        "EORItoCCR: SR.unused": 236
+      },
+      "fields": {
+        "SR.IPL": 7063,
+        "SR.S": 4082,
+        "SR.T": 4024,
+        "SR.unused": 7943
+      }
+    },
+    "EORItoSR.json.gz": {
+      "tests": 8065,
+      "deviating": 7924,
+      "sha256": "6f0682c77c2caee13582fb63c1b687f17066650607f32f3ba536e8a44ddc76e5",
+      "classes": {
+        "EORItoSR: SR.unused": 7924
+      },
+      "fields": {
+        "SR.unused": 7924
+      }
+    },
+    "EXG.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "EXT.l.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "EXT.w.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "JMP.json.gz": {
+      "tests": 8065,
+      "deviating": 7442,
+      "sha256": "7ff591469cabdee409df32aa314a73243bb8a09aac6e5439bd0c329de57c39c1",
+      "classes": {
+        "JMP [address error]: RAM": 3806,
+        "JMP: PC": 3636
+      },
+      "fields": {
+        "PC": 3636,
+        "RAM": 3806
+      }
+    },
+    "JSR.json.gz": {
+      "tests": 8065,
+      "deviating": 7444,
+      "sha256": "25a9e561a687d476096189c804bbfd77791f1902371b21ec2f540ec9690c4d55",
+      "classes": {
+        "JSR [address error]: RAM": 3882,
+        "JSR: PC": 3562
+      },
+      "fields": {
+        "PC": 3562,
+        "RAM": 3882
+      }
+    },
+    "LEA.json.gz": {
+      "tests": 8065,
+      "deviating": 7013,
+      "sha256": "5ba5e187d5c74e397414c619bc478c4ada901cc17e4892380108dd1b8ecba212",
+      "classes": {
+        "LEA: An": 6116,
+        "LEA: SSP": 897
+      },
+      "fields": {
+        "A0": 885,
+        "A1": 871,
+        "A2": 890,
+        "A3": 867,
+        "A4": 857,
+        "A5": 860,
+        "A6": 886,
+        "SSP": 897
+      }
+    },
+    "LINK.json.gz": {
+      "tests": 8065,
+      "deviating": 1005,
+      "sha256": "c2a593b91167894a50169b0a46458a3caacc10756f3b285572fb5e66809eccf9",
+      "classes": {
+        "LINK: RAM USP": 1005
+      },
+      "fields": {
+        "RAM": 1005,
+        "USP": 1005
+      }
+    },
+    "LSL.b.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "LSL.l.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "LSL.w.json.gz": {
+      "tests": 8065,
+      "deviating": 904,
+      "sha256": "722879bdf9eb188ababcf593609edf8bb2e53dc07c9abcbe61af4057efc2ee75",
+      "classes": {
+        "LSL.w [address error]: RAM": 904
+      },
+      "fields": {
+        "RAM": 904
+      }
+    },
+    "LSR.b.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "LSR.l.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "LSR.w.json.gz": {
+      "tests": 8065,
+      "deviating": 962,
+      "sha256": "d4f9dc92e9d88d552946a581429fc1a519113d0f569ae0aa93c9886ff12ce12a",
+      "classes": {
+        "LSR.w [address error]: RAM": 962
+      },
+      "fields": {
+        "RAM": 962
+      }
+    },
+    "MOVE.b.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "MOVE.l.json.gz": {
+      "tests": 8065,
+      "deviating": 4795,
+      "sha256": "76a30361effa83f3954a1d672e5891d07936e8c35e46d8dd2f41191b3a221ea2",
+      "classes": {
+        "MOVE.l [address error]: An CCR RAM": 686,
+        "MOVE.l [address error]: An RAM": 44,
+        "MOVE.l [address error]: CCR RAM": 1244,
+        "MOVE.l [address error]: RAM": 2821
+      },
+      "fields": {
+        "A0": 106,
+        "A1": 109,
+        "A2": 94,
+        "A3": 122,
+        "A4": 96,
+        "A5": 90,
+        "A6": 113,
+        "RAM": 4795,
+        "SR.C": 1021,
+        "SR.N": 1041,
+        "SR.V": 1046,
+        "SR.Z": 1057
+      }
+    },
+    "MOVE.q.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "MOVE.w.json.gz": {
+      "tests": 8065,
+      "deviating": 4697,
+      "sha256": "006f5a729aae9de1bce80a4ff285b2c6814f13d129430bd84371b0e3335aa14a",
+      "classes": {
+        "MOVE.w [address error]: An CCR RAM": 322,
+        "MOVE.w [address error]: An RAM": 21,
+        "MOVE.w [address error]: CCR RAM": 1546,
+        "MOVE.w [address error]: RAM": 2808
+      },
+      "fields": {
+        "A0": 42,
+        "A1": 61,
+        "A2": 58,
+        "A3": 42,
+        "A4": 51,
+        "A5": 44,
+        "A6": 45,
+        "RAM": 4697,
+        "SR.C": 1034,
+        "SR.N": 995,
+        "SR.V": 985,
+        "SR.Z": 990
+      }
+    },
+    "MOVEA.l.json.gz": {
+      "tests": 8065,
+      "deviating": 2686,
+      "sha256": "37029f16478ba09ed819eb078354fcc5aaf85e442e8dcd4f5b36fffe7f227621",
+      "classes": {
+        "MOVEA.l [address error]: RAM": 2686
+      },
+      "fields": {
+        "RAM": 2686
+      }
+    },
+    "MOVEA.w.json.gz": {
+      "tests": 8065,
+      "deviating": 2743,
+      "sha256": "b2a1dcdf532992fadcbe52bb6e458c52e5038b0b7b4d9fd672dab6a565496362",
+      "classes": {
+        "MOVEA.w [address error]: RAM": 2743
+      },
+      "fields": {
+        "RAM": 2743
+      }
+    },
+    "MOVEM.l.json.gz": {
+      "tests": 8065,
+      "deviating": 3842,
+      "sha256": "df255635785587f1f68b09fc864781af264820de24b7967a2003782027e2516d",
+      "classes": {
+        "MOVEM.l [address error]: An RAM": 799,
+        "MOVEM.l [address error]: RAM": 3043
+      },
+      "fields": {
+        "A0": 87,
+        "A1": 120,
+        "A2": 119,
+        "A3": 110,
+        "A4": 119,
+        "A5": 117,
+        "A6": 127,
+        "RAM": 3842
+      }
+    },
+    "MOVEM.w.json.gz": {
+      "tests": 8065,
+      "deviating": 3784,
+      "sha256": "bd991bfe4c333b1b33a79df139596d62c3af9293da0c4d3facc688d525cdb064",
+      "classes": {
+        "MOVEM.w [address error]: An RAM": 386,
+        "MOVEM.w [address error]: RAM": 3398
+      },
+      "fields": {
+        "A0": 43,
+        "A1": 41,
+        "A2": 54,
+        "A3": 51,
+        "A4": 68,
+        "A5": 65,
+        "A6": 64,
+        "RAM": 3784
+      }
+    },
+    "MOVEP.l.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "MOVEP.w.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "MOVEfromSR.json.gz": {
+      "tests": 8065,
+      "deviating": 3048,
+      "sha256": "dd5048539012fdaca17ee91f58873d178453b4f8cfab8464ef8917595f00d5f9",
+      "classes": {
+        "MOVEfromSR [address error]: RAM": 3048
+      },
+      "fields": {
+        "RAM": 3048
+      }
+    },
+    "MOVEfromUSP.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "MOVEtoCCR.json.gz": {
+      "tests": 8065,
+      "deviating": 7451,
+      "sha256": "14522a08360750297f3824629b582d3be334d7d83adcf81ac73d52a184505db3",
+      "classes": {
+        "MOVEtoCCR [address error]: RAM": 3107,
+        "MOVEtoCCR: SR.unused": 4344
+      },
+      "fields": {
+        "RAM": 3107,
+        "SR.unused": 4344
+      }
+    },
+    "MOVEtoSR.json.gz": {
+      "tests": 8065,
+      "deviating": 7969,
+      "sha256": "db8809d9f7218098920fef84694ae82168accd813052ed02d04bf2c6d71697a6",
+      "classes": {
+        "MOVEtoSR [address error]: RAM": 3127,
+        "MOVEtoSR: SR.unused": 4842
+      },
+      "fields": {
+        "RAM": 3127,
+        "SR.unused": 4842
+      }
+    },
+    "MOVEtoUSP.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "MULS.json.gz": {
+      "tests": 8065,
+      "deviating": 5691,
+      "sha256": "5ce3bd8530cf62193b0bf2e68cf69a0a462d1a00fc6c8d50ba432505754e8819",
+      "classes": {
+        "MULS [address error]: RAM": 3122,
+        "MULS: CCR": 2569
+      },
+      "fields": {
+        "RAM": 3122,
+        "SR.V": 2569
+      }
+    },
+    "MULU.json.gz": {
+      "tests": 8065,
+      "deviating": 3073,
+      "sha256": "87ba08ba70a8fd8258e8b615a6cd61ac218346a45ba6311f75ad9f0cb85812c4",
+      "classes": {
+        "MULU [address error]: RAM": 3073
+      },
+      "fields": {
+        "RAM": 3073
+      }
+    },
+    "NBCD.json.gz": {
+      "tests": 8065,
+      "deviating": 6064,
+      "sha256": "275f4ee93028e672e34c24080a150effabddd148c6b87cebdacbe63458012ea7",
+      "classes": {
+        "NBCD: CCR": 6064
+      },
+      "fields": {
+        "SR.N": 4042,
+        "SR.V": 3968
+      }
+    },
+    "NEG.b.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "NEG.l.json.gz": {
+      "tests": 8065,
+      "deviating": 3034,
+      "sha256": "e2b6eaa17e793e0f036943f29fbc2e1c36796512ed25e9e1ae9d6e5aeef6075b",
+      "classes": {
+        "NEG.l [address error]: RAM": 3034
+      },
+      "fields": {
+        "RAM": 3034
+      }
+    },
+    "NEG.w.json.gz": {
+      "tests": 8065,
+      "deviating": 3154,
+      "sha256": "6434e9e74f3ab3eea44bfc70e4781f89d98edf5c1c770a899a5dfedfb2e715aa",
+      "classes": {
+        "NEG.w [address error]: RAM": 3154
+      },
+      "fields": {
+        "RAM": 3154
+      }
+    },
+    "NEGX.b.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "NEGX.l.json.gz": {
+      "tests": 8065,
+      "deviating": 3146,
+      "sha256": "94dc98bbdf754261a77da05dc9dd73611e090776049dca85077506a1f5d6be1b",
+      "classes": {
+        "NEGX.l [address error]: RAM": 3146
+      },
+      "fields": {
+        "RAM": 3146
+      }
+    },
+    "NEGX.w.json.gz": {
+      "tests": 8065,
+      "deviating": 3086,
+      "sha256": "de2975025f87b7a1cd83b9db1df686ea496c9e0662b612ff261efea7b81befd9",
+      "classes": {
+        "NEGX.w [address error]: RAM": 3086
+      },
+      "fields": {
+        "RAM": 3086
+      }
+    },
+    "NOP.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "NOT.b.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "NOT.l.json.gz": {
+      "tests": 8065,
+      "deviating": 3140,
+      "sha256": "d703d14976f79fa66d0e1a2b031063140db2b9064a31d0494b40155c0f848ba0",
+      "classes": {
+        "NOT.l [address error]: RAM": 3140
+      },
+      "fields": {
+        "RAM": 3140
+      }
+    },
+    "NOT.w.json.gz": {
+      "tests": 8065,
+      "deviating": 3108,
+      "sha256": "3a3fbacbbc024ddea35aecb9d9eff71ba06656a33cf90585de368ae69b75fa7e",
+      "classes": {
+        "NOT.w [address error]: RAM": 3108
+      },
+      "fields": {
+        "RAM": 3108
+      }
+    },
+    "OR.b.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "OR.l.json.gz": {
+      "tests": 8065,
+      "deviating": 3335,
+      "sha256": "733cb38264529290aed74c5b4aabc46a9f9667c51381086efe890b9ef4367274",
+      "classes": {
+        "OR.l [address error]: RAM": 3335
+      },
+      "fields": {
+        "RAM": 3335
+      }
+    },
+    "OR.w.json.gz": {
+      "tests": 8065,
+      "deviating": 3415,
+      "sha256": "a99097ed99f112bfc6a309fd436553c9add55823141fb389c96035b519dc1b40",
+      "classes": {
+        "OR.w [address error]: RAM": 3415
+      },
+      "fields": {
+        "RAM": 3415
+      }
+    },
+    "ORItoCCR.json.gz": {
+      "tests": 8065,
+      "deviating": 7999,
+      "sha256": "ae39802ed19227d1769e261ece4fdf596db7f0e71ed7c16d017ee37ce65d97e7",
+      "classes": {
+        "ORItoCCR: SR.T": 65,
+        "ORItoCCR: SR.T SR.unused": 4011,
+        "ORItoCCR: SR.unused": 3923
+      },
+      "fields": {
+        "SR.T": 4076,
+        "SR.unused": 7934
+      }
+    },
+    "ORItoSR.json.gz": {
+      "tests": 8065,
+      "deviating": 7947,
+      "sha256": "75dc7e79b493517480109edb35d2863f22377ccbf8155b485fe97fe5159f6418",
+      "classes": {
+        "ORItoSR: SR.unused": 7947
+      },
+      "fields": {
+        "SR.unused": 7947
+      }
+    },
+    "PEA.json.gz": {
+      "tests": 8065,
+      "deviating": 7022,
+      "sha256": "15c074277a57458f0203f75bde5eb9f397d926bbd933a62373a8523ff83a6c6f",
+      "classes": {
+        "PEA: RAM": 7022
+      },
+      "fields": {
+        "RAM": 7022
+      }
+    },
+    "RESET.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "ROL.b.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "ROL.l.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "ROL.w.json.gz": {
+      "tests": 8065,
+      "deviating": 991,
+      "sha256": "a4ac8fe6a7938a8f0afffa0d91c04bd687859950a8595e23c8464e280a76fa17",
+      "classes": {
+        "ROL.w [address error]: RAM": 991
+      },
+      "fields": {
+        "RAM": 991
+      }
+    },
+    "ROR.b.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "ROR.l.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "ROR.w.json.gz": {
+      "tests": 8065,
+      "deviating": 878,
+      "sha256": "335fd9d5ef6fb98ea279bcaac1696c38e4c3d34b20eb091be820743ccb2ab789",
+      "classes": {
+        "ROR.w [address error]: RAM": 878
+      },
+      "fields": {
+        "RAM": 878
+      }
+    },
+    "ROXL.b.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "ROXL.l.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "ROXL.w.json.gz": {
+      "tests": 8065,
+      "deviating": 937,
+      "sha256": "90e0a355c5ba770fc4c5b56006fc056acadf7db6153a70680fa963feb7303db2",
+      "classes": {
+        "ROXL.w [address error]: RAM": 937
+      },
+      "fields": {
+        "RAM": 937
+      }
+    },
+    "ROXR.b.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "ROXR.l.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "ROXR.w.json.gz": {
+      "tests": 8065,
+      "deviating": 893,
+      "sha256": "cde427c768d81653ec239d70334413f50cc205395bc44f6e8a4d15f7b4315bf7",
+      "classes": {
+        "ROXR.w [address error]: RAM": 893
+      },
+      "fields": {
+        "RAM": 893
+      }
+    },
+    "RTE.json.gz": {
+      "tests": 8065,
+      "deviating": 8011,
+      "sha256": "bf2bdc25873b63dcca25cc4d8ae363c11fe120dbabc9acd0e27ce8d403662978",
+      "classes": {
+        "RTE [address error]: PC RAM SR.S SR.T SR.unused SSP": 959,
+        "RTE [address error]: PC RAM SR.S SR.T SSP": 19,
+        "RTE [address error]: PC RAM SR.S SR.unused SSP": 998,
+        "RTE [address error]: PC RAM SR.S SSP": 22,
+        "RTE [address error]: PC RAM SR.T SR.unused SSP": 987,
+        "RTE [address error]: PC RAM SR.T SSP": 13,
+        "RTE [address error]: PC RAM SR.unused SSP": 1042,
+        "RTE [address error]: PC RAM SSP": 14,
+        "RTE: SR.unused": 3957
+      },
+      "fields": {
+        "PC": 4054,
+        "RAM": 4054,
+        "SR.S": 1998,
+        "SR.T": 1978,
+        "SR.unused": 7943,
+        "SSP": 4054
+      }
+    },
+    "RTR.json.gz": {
+      "tests": 8065,
+      "deviating": 7539,
+      "sha256": "d535572367c4b2d07d0e5cfbd5737b6a3202ec84979e61b7eded57abc95b3d56",
+      "classes": {
+        "RTR [address error]: PC RAM SR.unused SSP": 3547,
+        "RTR [address error]: PC RAM SSP": 480,
+        "RTR: SR.unused": 3512
+      },
+      "fields": {
+        "PC": 4027,
+        "RAM": 4027,
+        "SR.unused": 7059,
+        "SSP": 4027
+      }
+    },
+    "RTS.json.gz": {
+      "tests": 8065,
+      "deviating": 4057,
+      "sha256": "4d1cf031b98852e098d9676c92553667ccda031971900a710852cc42cad0e628",
+      "classes": {
+        "RTS [address error]: PC RAM SSP": 4057
+      },
+      "fields": {
+        "PC": 4057,
+        "RAM": 4057,
+        "SSP": 4057
+      }
+    },
+    "SBCD.json.gz": {
+      "tests": 8065,
+      "deviating": 6322,
+      "sha256": "4ff29075dba9c92637e56db1d9e5d8eb69738714532c214b3619f553b0071fea",
+      "classes": {
+        "SBCD: CCR": 5337,
+        "SBCD: CCR RAM SSP": 821,
+        "SBCD: CCR SSP": 8,
+        "SBCD: RAM SSP": 156
+      },
+      "fields": {
+        "RAM": 977,
+        "SR.C": 386,
+        "SR.N": 4103,
+        "SR.V": 4041,
+        "SR.X": 386,
+        "SR.Z": 7,
+        "SSP": 985
+      }
+    },
+    "SUB.b.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "SUB.l.json.gz": {
+      "tests": 8065,
+      "deviating": 2972,
+      "sha256": "ce04820bd5e78715213f82d5103d1bee40dbd412de1116474bb4889240548153",
+      "classes": {
+        "SUB.l [address error]: RAM": 2972
+      },
+      "fields": {
+        "RAM": 2972
+      }
+    },
+    "SUB.w.json.gz": {
+      "tests": 8065,
+      "deviating": 2944,
+      "sha256": "843a49a464c560760df2f96c1310f7e16e7d9e135df32dfe790eb462c965f8e2",
+      "classes": {
+        "SUB.w [address error]: RAM": 2944
+      },
+      "fields": {
+        "RAM": 2944
+      }
+    },
+    "SUBA.l.json.gz": {
+      "tests": 8065,
+      "deviating": 2736,
+      "sha256": "6d8b879b63649a3a0aa408f7e5328ef9cf3baff05100917ff5aaef5c3c941765",
+      "classes": {
+        "SUBA.l [address error]: RAM": 2736
+      },
+      "fields": {
+        "RAM": 2736
+      }
+    },
+    "SUBA.w.json.gz": {
+      "tests": 8065,
+      "deviating": 2679,
+      "sha256": "193f6d029a73f1514648e909e52da5c46c6265ee54b82b049c6ecc4c060f0c90",
+      "classes": {
+        "SUBA.w [address error]: RAM": 2679
+      },
+      "fields": {
+        "RAM": 2679
+      }
+    },
+    "SUBX.b.json.gz": {
+      "tests": 8065,
+      "deviating": 966,
+      "sha256": "d238564aa6a999837569cf8440d188737a451c3c20509b018fb347fcef13c261",
+      "classes": {
+        "SUBX.b: CCR RAM SSP": 636,
+        "SUBX.b: CCR SSP": 2,
+        "SUBX.b: RAM SSP": 325,
+        "SUBX.b: SSP": 3
+      },
+      "fields": {
+        "RAM": 961,
+        "SR.C": 345,
+        "SR.N": 454,
+        "SR.V": 292,
+        "SR.X": 345,
+        "SR.Z": 5,
+        "SSP": 966
+      }
+    },
+    "SUBX.l.json.gz": {
+      "tests": 8065,
+      "deviating": 2584,
+      "sha256": "82dc030629beaa654b096ea720bf33c4ee2c3548d6871414b9c17437916009f7",
+      "classes": {
+        "SUBX.l [address error]: An CCR RAM": 611,
+        "SUBX.l [address error]: An CCR RAM SSP": 1907,
+        "SUBX.l [address error]: An RAM": 14,
+        "SUBX.l [address error]: An RAM SSP": 52
+      },
+      "fields": {
+        "A0": 568,
+        "A1": 553,
+        "A2": 547,
+        "A3": 559,
+        "A4": 548,
+        "A5": 548,
+        "A6": 524,
+        "RAM": 2584,
+        "SR.C": 1281,
+        "SR.N": 1306,
+        "SR.V": 1343,
+        "SR.X": 1283,
+        "SR.Z": 1269,
+        "SSP": 1959
+      }
+    },
+    "SUBX.w.json.gz": {
+      "tests": 8065,
+      "deviating": 2678,
+      "sha256": "c91015ca9de04c6996371f1dc4a8d44a90da93901e383cfafeb2b157ab507985",
+      "classes": {
+        "SUBX.w [address error]: An CCR RAM": 595,
+        "SUBX.w [address error]: An CCR RAM SSP": 858,
+        "SUBX.w [address error]: An RAM": 23,
+        "SUBX.w [address error]: An RAM SSP": 31,
+        "SUBX.w [address error]: CCR RAM SSP": 1128,
+        "SUBX.w [address error]: RAM SSP": 43
+      },
+      "fields": {
+        "A0": 208,
+        "A1": 210,
+        "A2": 213,
+        "A3": 211,
+        "A4": 216,
+        "A5": 230,
+        "A6": 219,
+        "RAM": 2678,
+        "SR.C": 1342,
+        "SR.N": 1368,
+        "SR.V": 1319,
+        "SR.X": 1322,
+        "SR.Z": 1284,
+        "SSP": 2060
+      }
+    },
+    "SWAP.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "Scc.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "TAS.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "TRAP.json.gz": {
+      "tests": 8065,
+      "deviating": 147,
+      "sha256": "d9e9d0354342dfafedcf20611f6ba822ad78d8305fe7b788cf6c21790bc9d949",
+      "classes": {
+        "TRAP [TRAP]: Dn PC RAM SSP": 32,
+        "TRAP [TRAP]: Dn PC SSP": 3,
+        "TRAP [TRAP]: PC RAM SSP": 110,
+        "TRAP [TRAP]: PC SSP": 2
+      },
+      "fields": {
+        "D0": 28,
+        "D1": 10,
+        "PC": 147,
+        "RAM": 142,
+        "SSP": 147
+      }
+    },
+    "TRAPV.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "TST.b.json.gz": {
+      "tests": 8065,
+      "deviating": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "classes": {},
+      "fields": {}
+    },
+    "TST.l.json.gz": {
+      "tests": 8065,
+      "deviating": 3102,
+      "sha256": "bdc6c99616bb71f3fd14f3542b08012d9ab717dcc194bf58310a69e52de08da7",
+      "classes": {
+        "TST.l [address error]: RAM": 3102
+      },
+      "fields": {
+        "RAM": 3102
+      }
+    },
+    "TST.w.json.gz": {
+      "tests": 8065,
+      "deviating": 3137,
+      "sha256": "d9f5e2cabcbe0d615a5d48b00a6a0c6a55dec41fbdd896caa6bc955c63c63012",
+      "classes": {
+        "TST.w [address error]: RAM": 3137
+      },
+      "fields": {
+        "RAM": 3137
+      }
+    },
+    "UNLINK.json.gz": {
+      "tests": 8065,
+      "deviating": 991,
+      "sha256": "1f7c4ebe2fbc34fcbfad49f973fc8be25ef1cad845123ecef14a6ffe8bc0e22f",
+      "classes": {
+        "UNLINK: SSP USP": 991
+      },
+      "fields": {
+        "SSP": 991,
+        "USP": 991
+      }
+    }
+  }
+}

@@ -3,8 +3,8 @@
 // Work package SH4, acceptance. The same rules are checked once more with real key events in
 // Chromium and WebKit by check-output.mjs.
 //
-// The surface, the text screen and the run controller are written in the same wave by other
-// packages; the test bed (testing/bed.ts) brings small doubles for those three.
+// The surface, the text screen and the run controller are small doubles here (testing/bed.ts);
+// real-session.test.ts runs the same keyboard against the real three of the other packages.
 
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -258,6 +258,40 @@ describe.skipIf(!enginesBuilt)('keys while the Output panel has the keyboard (2.
   );
 
   it(
+    'rule 4 with further modifiers: Shift+Alt+Enter and Ctrl+Alt+Enter toggle full screen; Ctrl+Shift+Insert pastes nothing',
+    async () => {
+      // The original tests "Alt is held" (Shift.Contains, simIOu.cpp:436), whatever else is held.
+      const r = await rig(keyWatchProgram());
+      const driver = instantDriver();
+      outputOf(r.ctx).attachDriver(driver);
+      const { fullScreen } = outputOf(r.ctx);
+
+      expect(r.press(key('Enter', 'Enter', { altKey: true, shiftKey: true }))).toEqual({
+        kind: 'program',
+        cancelled: true,
+        then: 'fullscreen',
+      });
+      await Promise.resolve();
+      expect(fullScreen.phase).toBe('full');
+      expect(downs(r, 0x0d)).toBe(1); // the program saw the key first
+
+      expect(r.press(key('Enter', 'Enter', { altKey: true, ctrlKey: true }))).toMatchObject({ then: 'fullscreen' });
+      expect(fullScreen.phase).toBe('windowed');
+      expect(r.engine.getOption(SimOption.Fullscreen)).toBe(0);
+
+      // The paste chord cannot follow the rule in a browser: the key is a key of the program,
+      // cancelled like every other, and no text is asked for (docs/differences/SH4.md).
+      r.posted();
+      const chord = key('Insert', 'Insert', { shiftKey: true, ctrlKey: true });
+      expect(r.down(chord)).toEqual({ kind: 'program', cancelled: true, then: null });
+      r.settle();
+      expect(chord.prevented).toBe(true);
+      expect(r.posted()).toEqual([{ kind: 'keyDown', vk: 0x2d }]);
+    },
+    SLOW,
+  );
+
+  it(
     'after task 24 the eleven shortcuts reach the program and only the release chord acts',
     async () => {
       const r = await rig(keyWatchProgram({ keyCommandsOff: true }));
@@ -476,6 +510,50 @@ describe.skipIf(!enginesBuilt)('text for the keyboard tasks (3.6)', () => {
       r.press(key('a', 'KeyA'));
       r.press(key('b', 'KeyB'));
       expect(r.engine.state().pendingKey).toBe(0x62);
+    },
+    SLOW,
+  );
+
+  it(
+    'Ctrl+@ is the character 0: task 5 returns it, task 2 stores it, and it wipes a typed-ahead key',
+    async () => {
+      // Ctrl+Shift+2 on a US keyboard: Windows sends WM_CHAR 0, and the original's key-press
+      // handler treats it like every other character (simIOu.cpp:1334-1411).
+      const ctrlAt = () => key('@', 'Digit2', { ctrlKey: true, shiftKey: true });
+
+      // Task 5 reads one character per call; the 0 is one.
+      const chars = await rig(charLoopProgram());
+      chars.press(key('a', 'KeyA'));
+      expect(chars.press(ctrlAt())).toEqual({ kind: 'program', cancelled: true, then: null });
+      chars.press(key('b', 'KeyB'));
+      expect(chars.long(CHARS.count)).toBe(3);
+      expect(chars.bytes(CHARS.text, 3)).toEqual([0x61, 0x00, 0x62]);
+      expect(chars.controller.delivered.filter((entry) => entry.kind === 'keyDown')[1]).toEqual({
+        kind: 'keyDown',
+        vk: 0x32,
+        ch: 0x00,
+      });
+
+      // Task 2 stores the byte in the line, and the length counts it.
+      const lines = await rig(lineInputProgram());
+      lines.press(key('x', 'KeyX'));
+      lines.press(ctrlAt());
+      lines.press(key('y', 'KeyY'));
+      lines.press(key('Enter', 'Enter'));
+      expect(lines.long(LINES.count)).toBe(1);
+      expect(lines.long(LINES.lengths)).toBe(3);
+      expect(lines.bytes(LINES.text, 4)).toEqual([0x78, 0x00, 0x79, 0x00]);
+
+      // With no read waiting the 0 takes the one place of type-ahead: the key before it is gone.
+      const idle = await rig(keyWatchProgram());
+      idle.press(key('a', 'KeyA'));
+      expect(idle.engine.state().pendingKey).toBe(0x61);
+      idle.press(ctrlAt());
+      expect(idle.engine.state().pendingKey).toBe(0);
+      // Ctrl+2 without Shift types nothing: the key is recorded, the type-ahead stays.
+      idle.press(key('b', 'KeyB'));
+      idle.press(key('2', 'Digit2', { ctrlKey: true }));
+      expect(idle.engine.state().pendingKey).toBe(0x62);
     },
     SLOW,
   );
@@ -752,6 +830,9 @@ describe.skipIf(!enginesBuilt)('the commands of the Options and View menus', () 
 
       await commands.run('sim.options.size', 2);
       expect([r.surface.back.width, r.surface.back.height]).toEqual([1024, 768]);
+      // The session mirrors the size into the store once per frame; the Output feature does not.
+      expect(store.getState().sim.output).toMatchObject({ width: 640, height: 480 });
+      r.settle(1);
       expect(store.getState().sim.output).toMatchObject({ width: 1024, height: 768 });
       expect(checked()).toEqual([2]);
       expect(r.surface.getPixel(PICTURE.pixel.x, PICTURE.pixel.y)).toBe(0); // every size change blacks the surface
@@ -782,9 +863,11 @@ describe.skipIf(!enginesBuilt)('the commands of the Options and View menus', () 
       expect(commands.isChecked('sim.options.textWrap')).toBe(false);
       await commands.run('sim.options.textWrap');
       expect(r.text.state.textWrap).toBe(true);
+      r.settle(1); // the check mark follows the session's mirror, a frame later
       expect(commands.isChecked('sim.options.textWrap')).toBe(true);
       await commands.run('sim.options.textWrap');
       expect(r.text.state.textWrap).toBe(false);
+      r.settle(1);
       expect(commands.isChecked('sim.options.textWrap')).toBe(false);
     },
     SLOW,
@@ -870,6 +953,37 @@ describe.skipIf(!enginesBuilt)('the commands of the Options and View menus', () 
       r.settle();
       expect(fullScreen.phase).toBe('windowed');
       expect(r.engine.getOption(SimOption.Fullscreen)).toBe(0);
+    },
+    SLOW,
+  );
+
+  it(
+    "desktop app: when the system ends the window's full screen the engine's flag is cleared",
+    async () => {
+      let system: (on: boolean) => void = () => {};
+      const r = await rig(keyWatchProgram(), {
+        platform: {
+          kind: 'desktop',
+          setFullScreen: async () => true,
+          onFullScreenChange(listener) {
+            system = listener;
+            return () => {};
+          },
+        },
+      });
+      const { fullScreen } = outputOf(r.ctx);
+      outputOf(r.ctx).attachDriver(instantDriver());
+      fullScreen.toggle();
+      await Promise.resolve();
+      r.settle();
+      expect(fullScreen.phase).toBe('full');
+      expect(r.engine.getOption(SimOption.Fullscreen)).toBe(1);
+
+      system(false); // Platform.onFullScreenChange: the window's green button
+      r.settle();
+      expect(fullScreen.phase).toBe('windowed');
+      expect(r.engine.getOption(SimOption.Fullscreen)).toBe(0);
+      expect(r.ctx.store.getState().sim.output.fullScreen).toBe(false);
     },
     SLOW,
   );

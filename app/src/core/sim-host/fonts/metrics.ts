@@ -120,10 +120,19 @@ export interface OutlineAtlasInfo {
   file: string;
   face: string;
   style: FontStyle;
+  /** The point size the atlas was made for (T2's list has it). With it, the widths of a proportional
+   *  face can follow the size of the em at a point size that has no atlas. */
+  size?: number;
   /** Plain atlases: the underline as [first row, rows], in rows of the cell. It may lie below the cell. */
   underline?: readonly [number, number];
   /** Plain atlases: the strike-out line as [first row, rows]. */
   strikeOut?: readonly [number, number];
+  /**
+   * The width of the byte $7F inside a text that also has a byte of $80 or above. Windows draws it
+   * from a fallback font there, with that font's width instead of the face's advance (measured by
+   * T2; about 0.4 em).
+   */
+  delInHighString?: number;
 }
 
 /** The style of a font. If more than one flag is set the last of bold, italic, underline, strike-out
@@ -140,6 +149,15 @@ export function styleOf(font: FontSpec): FontStyle {
 export function sizeIndex(size: number): number {
   if (!(size > 0)) return 0;
   return Math.min(POINT_SIZES - 1, Math.trunc(size));
+}
+
+/**
+ * The em of a font of `size` points in pixels, as the original's fonts have it: the VCL asks
+ * Windows for a height of `-MulDiv(size, 96, 72)` pixels (96 DPI). The widths of an outline font
+ * grow in proportion to it. Size 0 lets Windows choose and has no em here.
+ */
+export function emPixels(size: number): number {
+  return Math.round((size * 96) / 72);
 }
 
 /** The entry of a name that is in the table. */
@@ -334,6 +352,17 @@ export function parseOutlineIndex(source: Bytes | string | unknown): OutlineAtla
     }
     const style = styleOfKey(entry['style']) ?? fail(`${where}: ${JSON.stringify(entry['style'])} is not a style`);
     const info: OutlineAtlasInfo = { file: entry['file'], face: entry['face'], style };
+    const size = entry['size'];
+    if (size !== undefined) {
+      if (!isCount(size) || size < 1 || size >= POINT_SIZES)
+        fail(`${where}: "size" must be a point size from 1 to 255`);
+      info.size = size;
+    }
+    const del = entry['delInHighString'];
+    if (del !== undefined && del !== null) {
+      if (!isCount(del)) fail(`${where}: "delInHighString" must be a width in pixels`);
+      info.delInHighString = del;
+    }
     const underline = line(entry['underline'], `${where}: "underline"`);
     const strikeOut = line(entry['strikeOut'], `${where}: "strikeOut"`);
     if (underline) info.underline = underline;

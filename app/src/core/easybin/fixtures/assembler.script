@@ -1,0 +1,30 @@
+# S-records written by the assembler engine: load, check memory, save back over the loaded range.
+reset
+loadsrec asm-hello.S68
+digest
+dump 001000 36
+savesrec rt-hello.S68 001000 001023 00001000 Yes
+reset
+loadsrec rt-hello.S68
+digest
+reset
+loadsrec asm-sections.S68
+digest
+dump 00FFE0 82
+dump 123454 12
+savesrec rt-sections.S68 002004 12345F 00002004 Yes
+savesrec rt-sections-part.S68 00FFE0 010030 00002004 Yes
+reset
+loadsrec rt-sections.S68
+digest
+reset
+loadsrec asm-memory.S68
+digest
+savesrec rt-memory.S68 003000 003262 00003000 Yes
+reset
+loadsrec asm-top.S68
+digest
+savesrec rt-top.S68 FFFFE0 FFFFFF 00FFFFE0 Yes
+# two loads in one session: memory and the line buffer carry over
+loadsrec asm-hello.S68
+digest

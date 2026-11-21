@@ -71,7 +71,18 @@ async function openGallery(browser, theme, viewport = { width: 1280, height: 900
 }
 
 async function scan(page, label) {
-  const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+  const analyze = () => new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+  let result;
+  try {
+    result = await analyze();
+  } catch (error) {
+    // Seen once in WebKit on a loaded machine: the injected axe script was not there yet
+    // ("window.axe.runPartial" undefined). One retry; a second failure ends the run.
+    if (!/window\.axe/.test(String(error))) throw error;
+    console.log(`        axe was not ready (${String(error).split('\n')[0]}); retrying once`);
+    await page.waitForTimeout(500);
+    result = await analyze();
+  }
   const serious = result.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
   const other = result.violations.filter((v) => !serious.includes(v));
   const describe = (list) =>
@@ -502,18 +513,23 @@ async function keyboardPass(browser, name) {
   const aw = await awkwardNames();
   a = await active(page);
   check(`${p} hidden controls: the dialog opens on its default button`, a?.inDialog && a.text === 'OK', a?.text);
+  // The last stop is a container that hands its focus to its child "Inner" (followups item 1): the
+  // dialog must count it as taken, not skip it.
+  const inner = await page.evaluate(() =>
+    window.__e68name(document.querySelector('[data-testid=awkward-handoff] button')),
+  );
   await tabLog();
   const awForward = [];
-  await press('Tab', 6, awForward);
-  const awWantForward = [aw.cancel, aw.name, aw.disable, aw.remove, aw.three, aw.ok];
+  await press('Tab', 7, awForward);
+  const awWantForward = [aw.cancel, aw.name, aw.disable, aw.remove, aw.three, inner, aw.ok];
   check(
-    `${p} hidden controls: Tab passes over the hidden button and the disabled fieldset`,
+    `${p} hidden controls: Tab passes over the hidden button and the disabled fieldset, and stops at a container that hands the focus to its child`,
     JSON.stringify(awForward) === JSON.stringify(awWantForward),
     `expected ${awWantForward.join(' > ')}; got ${awForward.join(' > ')}`,
   );
   const awBackward = [];
-  await press('Shift+Tab', 6, awBackward);
-  const awWantBackward = [aw.three, aw.remove, aw.disable, aw.name, aw.cancel, aw.ok];
+  await press('Shift+Tab', 7, awBackward);
+  const awWantBackward = [inner, aw.three, aw.remove, aw.disable, aw.name, aw.cancel, aw.ok];
   check(
     `${p} hidden controls: Shift+Tab passes over them in the reverse order`,
     JSON.stringify(awBackward) === JSON.stringify(awWantBackward),
@@ -522,18 +538,31 @@ async function keyboardPass(browser, name) {
   const awCancelled = await tabLog();
   check(
     `${p} hidden controls: each key cancelled`,
-    awCancelled.length === 12 && awCancelled.every(Boolean),
+    awCancelled.length === 14 && awCancelled.every(Boolean),
     `cancelled per key: ${awCancelled.map((c) => (c ? 'y' : 'n')).join('')}`,
   );
+  let landed;
+  // From the child, Shift+Tab goes on from its container (not back into the container).
+  await page.locator('[data-testid=awkward-handoff] button').focus();
+  await k('Shift+Tab');
+  landed = await focusName();
+  check(
+    `${p} hidden controls: Shift+Tab from the child of the hand-off container goes to the control before it`,
+    landed === aw.three,
+    `Shift+Tab went to ${landed}, expected ${aw.three}`,
+  );
+  // A focused control that is disabled: the browser may keep the focus on it, so the check takes it
+  // away (blur) and makes sure the focus is on the body before Shift+Tab (followups item 4).
   await page.locator('[role=dialog] button', { hasText: 'Disable me' }).focus();
   await k('Space');
+  await page.evaluate(() => document.activeElement?.blur());
   const afterDisable = await focusName();
   await k('Shift+Tab');
-  let landed = await focusName();
+  landed = await focusName();
   check(
-    `${p} Shift+Tab after the focused button was disabled goes to its previous neighbour`,
-    landed === aw.name,
-    `after Space the focus was on ${afterDisable}; Shift+Tab went to ${landed}, expected ${aw.name}`,
+    `${p} Shift+Tab with the focus on the body after the focused button was disabled goes to its previous neighbour`,
+    afterDisable === 'BODY' && landed === aw.name,
+    `after Space and blur the focus was on ${afterDisable} (expected BODY); Shift+Tab went to ${landed}, expected ${aw.name}`,
   );
   await page.locator('[role=dialog] button', { hasText: 'Remove me' }).focus();
   await k('Space');
@@ -574,11 +603,58 @@ async function keyboardPass(browser, name) {
     `cancelled=${plain.cancelled}, focus on ${plain.focus}, expected ${aw.three}`,
   );
   await k('Escape');
+  const layers = () => page.locator('[aria-modal=true]').count();
   check(
     `${p} hidden controls: Escape closes the dialog`,
-    (await page.locator('[aria-modal=true]').count()) === 0,
-    `${await page.locator('[aria-modal=true]').count()} modal layers open`,
+    (await layers()) === 0,
+    `${await layers()} modal layers open`,
   );
+
+  // Focus moved outside after the focused control was disabled (followups item 2): the dialog gives
+  // it back to that control, which refuses it, so it must go on to the next neighbour.
+  await page.locator('[data-testid=open-awkward]').click();
+  await page.waitForSelector('[data-testid=awkward-body]', { timeout: 5000 });
+  await page.locator('[role=dialog] button', { hasText: 'Disable me' }).focus();
+  await k('Space');
+  await page.evaluate(() => document.querySelector('[data-testid=open-modal]').focus());
+  landed = await focusName();
+  check(
+    `${p} focus moved outside after the focused button was disabled comes back to its next neighbour`,
+    landed === aw.remove,
+    `focus on ${landed}, expected ${aw.remove}`,
+  );
+  // Keys pressed with the focus on the body (followups item 3): access keys, Enter and Escape still
+  // reach the top-most modal dialog.
+  await page.evaluate(() => document.activeElement?.blur());
+  const onBody = await focusName();
+  await k('r');
+  const removeLeft = await page.locator('[role=dialog] button', { hasText: 'Remove me' }).count();
+  check(
+    `${p} with the focus on the body the access key R presses 'Remove me'`,
+    onBody === 'BODY' && removeLeft === 0,
+    `focus was on ${onBody}; ${removeLeft} 'Remove me' buttons left`,
+  );
+  await page.evaluate(() => document.activeElement?.blur());
+  const onBody2 = await focusName();
+  await k('Enter');
+  check(
+    `${p} with the focus on the body Enter presses the default button (OK)`,
+    onBody2 === 'BODY' && (await layers()) === 0,
+    `focus was on ${onBody2}; ${await layers()} modal layers open`,
+  );
+  // If Enter on the body failed, close the dialog the ordinary way so the next check still runs.
+  if ((await layers()) > 0) await page.locator('[aria-modal=true] button', { hasText: /^Cancel$/ }).click();
+  await page.locator('[data-testid=open-awkward]').click();
+  await page.waitForSelector('[data-testid=awkward-body]', { timeout: 5000 });
+  await page.evaluate(() => document.activeElement?.blur());
+  const onBody3 = await focusName();
+  await k('Escape');
+  check(
+    `${p} with the focus on the body Escape cancels the dialog`,
+    onBody3 === 'BODY' && (await layers()) === 0,
+    `focus was on ${onBody3}; ${await layers()} modal layers open`,
+  );
+  if ((await layers()) > 0) await page.locator('[aria-modal=true] button', { hasText: /^Cancel$/ }).click();
 
   // Message boxes.
   await page.locator('[data-testid=open-message-confirmation]').click();
@@ -752,6 +828,87 @@ async function keyboardPass(browser, name) {
   await k('Enter');
   check(`${p} grid Down + Enter goes to line 14`, (await output(page)).includes('Go to line 14'));
 
+  // Tree view keys (treeViewKeyAction, drawn by the gallery as a caller would).
+  const tree = page.locator('[data-testid=tree-sample]');
+  const treeFocus = () =>
+    page.evaluate(() => {
+      const el = document.activeElement;
+      return el?.getAttribute('role') === 'treeitem'
+        ? `${el.textContent.replace(/[▸▾]/g, '').trim()} ${el.getAttribute('aria-expanded') ?? '-'}`
+        : `not a tree item: ${el?.tagName}`;
+    });
+  await tree.locator('[role=treeitem][tabindex="0"]').focus();
+  const treeSteps = [];
+  for (const key of [
+    'ArrowDown',
+    'ArrowDown',
+    'ArrowRight',
+    'ArrowRight',
+    'ArrowLeft',
+    'ArrowLeft',
+    'End',
+    'ArrowLeft',
+  ]) {
+    await k(key);
+    treeSteps.push(await treeFocus());
+  }
+  const treeWant = [
+    'demo.X68 -',
+    'macros false',
+    'macros true',
+    'io.X68 -',
+    'macros true',
+    'macros false',
+    'Examples false',
+    'Examples false',
+  ];
+  check(
+    `${p} tree: Down, Right opens and enters, Left goes up and closes, End`,
+    JSON.stringify(treeSteps) === JSON.stringify(treeWant),
+    `expected ${treeWant.join(' > ')}; got ${treeSteps.join(' > ')}`,
+  );
+  await k('Home');
+  await k('ArrowDown');
+  await k('Enter');
+  check(`${p} tree: Enter on a leaf activates it`, (await output(page)).includes('Tree: open My Programs/demo.X68'));
+  check(
+    `${p} tree: one tab stop`,
+    (await tree.locator('[role=treeitem][tabindex="0"]').count()) === 1,
+    `${await tree.locator('[role=treeitem][tabindex="0"]').count()}`,
+  );
+
+  // A click into an auto-selecting masked field puts the caret where the click is and selects
+  // nothing, as the VCL does (TCustomEdit.DoEnter skips SelectAll while the left button is down);
+  // the focus from the keyboard still selects everything (checked above).
+  await page.locator('body').click({ position: { x: 2, y: 2 } });
+  const d1 = page.locator('[data-testid=reg-d0]');
+  await d1.scrollIntoViewIfNeeded();
+  const d1box = await d1.boundingBox();
+  if (d1box) await page.mouse.click(d1box.x + d1box.width / 2, d1box.y + d1box.height / 2);
+  a = await active(page);
+  check(
+    `${p} register field: a mouse click does not select the text (caret only)`,
+    a?.testid === 'reg-d0' && a.selStart === a.selEnd,
+    `${a?.testid} ${a?.selStart}-${a?.selEnd}`,
+  );
+
+  // The drawn box of a check box lets the pointer through to the input (SH7's note): a test tool's
+  // check() on the input itself works.
+  const firstBox = page.locator('#choices input[type=checkbox]:not(:disabled)').first();
+  const wasChecked = await firstBox.isChecked();
+  let boxError = '';
+  try {
+    if (wasChecked) await firstBox.uncheck({ timeout: 5000 });
+    else await firstBox.check({ timeout: 5000 });
+  } catch (error) {
+    boxError = String(error).split('\n')[0];
+  }
+  check(
+    `${p} a check box's input takes a click on its own position (Playwright check())`,
+    boxError === '' && (await firstBox.isChecked()) !== wasChecked,
+    boxError || `checked ${wasChecked} -> ${await firstBox.isChecked()}`,
+  );
+
   // Toast.
   await page.locator('[data-testid=show-toast]').click();
   const toast = await page.locator('.e68-toasts:not(.e68-toasts--inline) .e68-toast').count();
@@ -768,11 +925,12 @@ async function main() {
     configFile: join(appRoot, 'vite.config.ts'),
     root: appRoot,
     logLevel: 'warn',
-    server: { port: 5199, strictPort: false, host: '127.0.0.1' },
+    // Port 0: the system picks a free port (many checks run at once on one machine).
+    server: { port: 0, strictPort: true, host: '127.0.0.1' },
   });
   await server.listen();
   const address = server.httpServer?.address();
-  const port = typeof address === 'object' && address ? address.port : 5199;
+  const port = typeof address === 'object' && address ? address.port : 0;
   pageUrl = `http://127.0.0.1:${port}/src/ui/components/gallery/gallery.html`;
   console.log(`Gallery: ${pageUrl}\nScreenshots: ${outDir}`);
 

@@ -188,6 +188,8 @@ export class PanelInput {
 
   /** The textarea's paste event, already cancelled by the panel. */
   paste(text: string): void {
+    /** The key-down of the paste chord is waiting for this text. */
+    const chordWaiting = this.cancelPasteTimer !== null;
     this.cancelPasteTimer?.();
     this.cancelPasteTimer = null;
     if (this.cancelExpectedPaste) {
@@ -196,6 +198,10 @@ export class PanelInput {
       this.pasteByCommand(text);
       return;
     }
+    // Text pasted without the chord (the browser's own Paste command, the Edit menu of the desktop
+    // app). After TRAP #15 task 24 the original's window has no way to paste at all, so nothing is
+    // typed then; the chord itself is an ordinary key by then and never gets here.
+    if (!chordWaiting && !this.env.keyCommandsEnabled()) return;
     this.env.keyboard().paste(text);
   }
 

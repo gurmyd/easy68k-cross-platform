@@ -10,7 +10,8 @@
 //   windowed --(the program asks: task 33, D1.L = 2; no user gesture)--> waiting
 //   waiting  --(the next key or click in the panel)--------------------------> entering -> full
 //   any      --(Alt+Enter, View > Output Window, task 33 D1.L = 1, a stop)--> windowed
-//   full     --(the browser ends it: Esc, a tab switch)---------------------> windowed
+//   full     --(the browser ends it: Esc, a tab switch; in the desktop app
+//               the system does: the window's green button)-----------------> windowed
 //
 // - A browser gives full screen only inside a user gesture. A request that has none is kept as
 //   `waiting`: the panel shows `Press any key or click to enter full screen` and the next key or
@@ -22,7 +23,7 @@
 // - Whenever the flag changes on this side (the user toggles, the browser ends or refuses full
 //   screen) the engine is told, so that the engine and the panel never disagree.
 
-import type { Store } from '../../contracts';
+import type { MessageBoxRequest, Store } from '../../contracts';
 import { createStore } from '../../state/store';
 
 export type FullScreenPhase = 'windowed' | 'waiting' | 'entering' | 'full';
@@ -31,11 +32,17 @@ export type FullScreenPhase = 'windowed' | 'waiting' | 'entering' | 'full';
  *  present); the program, through the engine, which already has its flag set. */
 export type FullScreenOrigin = 'gesture' | 'command' | 'program';
 
-/** The text of the original's failure box (trap15-b §4.4) and its title. */
+/**
+ * The original's failure box (trap15-b §4.4), whole: `Application->MessageBoxA(text, "Information")`
+ * (simIOu.cpp:290). The call names no flags, which is MB_OK: one OK button and NO icon. "Information"
+ * is only the caption; the box does not have the (i) picture of an information box.
+ */
 export const FULL_SCREEN_REFUSED = {
   title: 'Information',
   text: "Sorry, this computer's configuration does not support the desired screen resolution in full screen mode.",
-} as const;
+  icon: 'none',
+  buttons: ['OK'],
+} as const satisfies MessageBoxRequest;
 
 /** Shown over the surface while a request waits for a user gesture (2.5). */
 export const FULL_SCREEN_PROMPT = 'Press any key or click to enter full screen';
@@ -126,7 +133,11 @@ export class FullScreenController {
     return true;
   }
 
-  /** The driver reports that the screen is no longer full, or has become full. */
+  /**
+   * The screen is no longer full, or has become full, as the browser's `fullscreenchange` or the
+   * desktop app's `Platform.onFullScreenChange` reports it. Only one case needs an answer: full
+   * screen ended although this side still wanted it.
+   */
   driverChanged(active: boolean): void {
     if (active || this.phase !== 'full') return;
     // Ended without the port asking (the browser's Esc, the system, a tab switch).

@@ -17,7 +17,7 @@
 // Owner: DV2.
 
 import { closeSync, fstatSync, openSync, readdirSync, readSync, statSync, unlinkSync, writeSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { IpcMain, IpcMainEvent, WebContents } from 'electron';
 import { type GrantedRoots, hostPlatform, isBytes, isCount, isShortString, realPathOf } from './security';
 import type { DiskChange } from './fs-ipc';
@@ -96,8 +96,12 @@ export function createDiskSyncHandlers({ grants, onChange }: DiskSyncDeps): Disk
             names = [];
           }
           const match = matchName(names, segment);
-          if (match === null) exists = false;
-          else chosen = match;
+          if (match !== null) chosen = match;
+          // Not listed, yet there: another name of the same entry, such as a Windows 8.3 short
+          // name ("RUNNER~1" for "runneradmin"), which a student's path may well contain. It is
+          // kept as given and the walk goes on below it; giving up here would leave every later
+          // segment in the spelling the program used (gate 1, CI on windows-latest).
+          else if (parent === null || kindOf(join(parent, segment)) === null) exists = false;
         }
         out.push(chosen);
       }

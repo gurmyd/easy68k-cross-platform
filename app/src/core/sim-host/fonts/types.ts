@@ -4,18 +4,22 @@
 //
 // Owner: W1 > SH3.
 
-import type { FontSpec } from '../../../contracts';
+import type { FontSpec, Glyph } from '../../../contracts';
 
-export type { CellMetrics, FontSpec, Glyph, GlyphProvider } from '../../../contracts';
+export type { CellMetrics, FontFileLoader, FontSpec, Glyph, GlyphProvider } from '../../../contracts';
 
 /**
  * What the port's own glyph provider knows beyond the contract's `GlyphProvider`
- * (docs/porting/errata/SH3.md, "Contract"): Windows' simulated bold and italic of the raster faces
- * make the opaque box of a text wider than the sum of its advances (tmOverhang: 1 pixel for bold,
- * half the cell height for italic). `TextScreen` asks for it when the provider has the method and
- * assumes 0 otherwise.
+ * (docs/porting/errata/SH3.md, "Contract"). In the outline faces Windows draws the byte $7F from a
+ * fallback font when the text also has a byte of $80 or above, and the byte then takes that font's
+ * width instead of its own advance. `TextScreen` asks for the glyph when the provider has the
+ * method and draws the byte's own glyph otherwise.
  */
-export interface StyleOverhang {
-  /** Pixels by which the opaque box of a text in this font reaches beyond its last advance. */
-  textOverhang(font: FontSpec): number;
+export interface FallbackGlyphs {
+  /**
+   * The glyph of $7F inside a text that has a byte of $80 or above: without ink, as wide as
+   * Windows' fallback glyph. Null for a font in which the byte keeps its own glyph (the raster
+   * faces) or whose font files do not say.
+   */
+  delInHighText(font: FontSpec): Glyph | null;
 }

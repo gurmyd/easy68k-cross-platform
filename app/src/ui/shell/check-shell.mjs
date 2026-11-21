@@ -7,15 +7,21 @@
 // (the page is told it runs on a Mac before it starts). It checks what unit tests under Node
 // cannot show:
 //
-//   - the application starts with the stub services and shows three modes, without console errors;
-//   - the menus and toolbars on screen equal the command tables, and every command without a
-//     handler is disabled;
-//   - the dispatcher cancels the chords of 2.9.3 (`defaultPrevented` on real key events);
+//   - the application starts with the real features and shows three modes, without console errors;
+//   - the menus and toolbars on screen equal the command tables exactly (captions, access keys,
+//     shortcuts, separators, check marks); a command without a handler is disabled; a command with
+//     a handler is enabled exactly when its handler says so, also after the handler's answer
+//     changes. The commands of the tables that have no handler yet are listed (a note, not a
+//     failure: 3.12.2 makes that a failure at the end of wave 2);
+//   - the dispatcher cancels the chords of 2.9.3 (`defaultPrevented` on real key events), with the
+//     real handlers held back (`commands.observeRuns`) so that no real dialog opens;
 //   - key and code pairs of other keyboards (Option chords such as key 'ø' with code 'KeyO', a
 //     QWERTZ, an AZERTY and a Russian layout, Insert on the numeric keypad) run the right
 //     commands; on Windows Ctrl+Alt+letter follows the key's label; Insert and Ctrl+Shift+. / ,
-//     run in the editor and are left to a plain text field; Ctrl+F4 is left to the browser on
-//     Windows and is Log Start on macOS;
+//     run in the editor and are left to a plain text field, with stand-in handlers and with the
+//     real editor's; Ctrl+F4 is left to the browser on Windows and is Log Start on macOS. Where a
+//     key must reach a command whatever its real handler says right now, the check puts a
+//     recorder in its place for the time of the test (`commands.override`) and restores it;
 //   - no command runs while a modal dialog is open, from a key or from a toolbar button; message
 //     boxes return the pressed button; a modal dialog of Simulator mode holds the controller;
 //   - settings: a `storage` event updates a second page; two pages that write settings in turn,
@@ -28,13 +34,21 @@
 //
 // Screenshots go to build/shell-check (git-ignored). Exit code 0 = everything passed.
 //
+// The simulator session starts the real engine (engine/dist). Without engine/dist the session's
+// "Simulator: ..." errors are expected and ignored, unless EASY68K_REQUIRE_ENGINES=1 (CI), where
+// a missing engine fails the check.
+//
+// The dev server takes a free port of its own, keeps its own Vite cache under the output folder,
+// and neither watches files nor reloads the page: other people's edits elsewhere in the tree must
+// not reload the page in the middle of a check.
+//
 // It lives here rather than in tests/ because W3 owns app/src/ui/shell and tests/e2e belongs to
 // X1; docs/requests/W3-shell-check.md asks for a CI job. The page object `window.__easy68k` that
 // the script uses exists in development builds only (main.tsx).
 
 /* global console, process, document, window, navigator, KeyboardEvent, Navigator -- the browser globals are used inside page.evaluate() callbacks, which run in the page */
 
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
@@ -57,6 +71,13 @@ mkdirSync(outDir, { recursive: true });
 const BROWSERS = { chromium, webkit };
 const browsers = browserChoice === 'all' ? ['chromium', 'webkit'] : [browserChoice];
 
+const engineDist = join(repoRoot, 'engine', 'dist');
+const enginesPresent = existsSync(join(engineDist, 'asm68k.wasm')) && existsSync(join(engineDist, 'sim68k.wasm'));
+const enginesRequired = process.env.EASY68K_REQUIRE_ENGINES === '1';
+
+/** The first page load of the dev server can take minutes on a busy machine. */
+const LOAD_TIMEOUT = 240_000;
+
 let baseUrl = '';
 let failures = 0;
 const results = [];
@@ -64,6 +85,12 @@ function check(name, ok, detail = '') {
   results.push({ name, ok, detail });
   if (!ok) failures++;
   console.log(`${ok ? '  ok  ' : '  FAIL'} ${name}${detail ? ` - ${detail}` : ''}`);
+}
+const notes = [];
+/** Something worth reading that is not a failure of the shell (it is listed again at the end). */
+function note(text) {
+  notes.push(text);
+  console.log(`  note ${text}`);
 }
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -87,16 +114,30 @@ async function newContext(browser, os, viewport = { width: 1400, height: 900 }) 
   return context;
 }
 
+/** Errors of the simulator session that only mean engine/dist is missing (see the header). */
+const isMissingEngineError = (text) =>
+  !enginesPresent &&
+  !enginesRequired &&
+  /Simulator:|sim68k|asm68k|engine\/dist|Failed to fetch dynamically/i.test(text);
+
 async function openApp(context, query = '') {
   const page = await context.newPage();
   const errors = [];
   page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text());
+    if (message.type() === 'error' && !isMissingEngineError(message.text())) errors.push(message.text());
   });
-  page.on('pageerror', (error) => errors.push(String(error)));
-  await page.goto(`${baseUrl}${query}`);
-  await page.waitForSelector('.e68-shell');
-  await page.waitForFunction(() => window.__easy68k !== undefined);
+  page.on('pageerror', (error) => {
+    if (!isMissingEngineError(String(error))) errors.push(String(error));
+  });
+  await page.goto(`${baseUrl}${query}`, { timeout: LOAD_TIMEOUT });
+  await page.waitForSelector('.e68-shell', { timeout: LOAD_TIMEOUT });
+  await page.waitForFunction(() => window.__easy68k !== undefined, null, { timeout: LOAD_TIMEOUT });
+  // The simulator session starts its engine right after start-up (errata SH8 entry 21); wait until
+  // it has (or, without engine/dist, until it has given up), so that the enabled state of the
+  // simulator's commands is the settled one.
+  await page
+    .waitForFunction(() => window.__easy68k.ctx.store.getState().sim.phase !== 'loading', null, { timeout: 60_000 })
+    .catch(() => {});
   // Record every key-down AFTER the dispatcher has seen it (same target and phase, added later).
   await page.evaluate(() => {
     window.__keys = [];
@@ -111,6 +152,18 @@ async function openApp(context, query = '') {
 }
 
 const setMode = (page, mode) => page.locator(`.e68-modeswitch [data-mode="${mode}"]`).click();
+/** Closes what a test may have left open: menus, then modal dialogs (Escape twice each). */
+async function closeOverlays(page) {
+  for (let i = 0; i < 4; i++) {
+    const open = await page.evaluate(
+      () =>
+        document.querySelectorAll('[role=menu][data-e68-menu]').length +
+        window.__easy68k.ctx.store.getState().dialogs.stack.length,
+    );
+    if (open === 0) return;
+    await page.keyboard.press('Escape');
+  }
+}
 const mode = (page) => page.evaluate(() => window.__easy68k.ctx.store.getState().mode);
 const ran = (page) => page.evaluate(() => window.__ran.slice());
 
@@ -135,14 +188,42 @@ function sendKey(page, init) {
   }, init);
 }
 
-/** Gives handlers to commands that have none yet; each records its id in window.__ran. */
-function registerRecorders(page, ids) {
+/**
+ * Puts a recorder in the place of each command's handler (real or none) until restoreRecorders:
+ * enabled, and running it records its id in window.__ran. The key tests ask which command a key
+ * reaches, whatever the real handler says right now (a Run without a loaded program is disabled).
+ */
+function installRecorders(page, ids) {
   return page.evaluate((list) => {
     const { commands } = window.__easy68k;
-    for (const id of list) {
-      if (!commands.hasHandler(id)) commands.register(id, { run: () => void window.__ran.push(id) });
-    }
+    window.__restore ??= [];
+    for (const id of list) window.__restore.push(commands.override(id, { run: () => void window.__ran.push(id) }));
   }, ids);
+}
+
+/** Ends every override of installRecorders and holdBackHandlers. */
+function restoreRecorders(page) {
+  return page.evaluate(() => {
+    for (const end of (window.__restore ?? []).splice(0)) end();
+  });
+}
+
+/**
+ * While the returned promise's function is not called, no real handler runs: every command that
+ * is about to run is recorded in window.__held and kept from running (commands.observeRuns). Keys
+ * can then be pressed without opening the real dialogs.
+ */
+async function holdBackHandlers(page) {
+  await page.evaluate(() => {
+    window.__held = [];
+    window.__stopHolding = window.__easy68k.commands.observeRuns((id) => {
+      // The mode switch runs app.mode.set: the check changes modes meanwhile.
+      if (id === 'app.mode.set') return false;
+      window.__held.push(id);
+      return true;
+    });
+  });
+  return () => page.evaluate(() => window.__stopHolding?.());
 }
 
 async function scan(page, label) {
@@ -187,117 +268,205 @@ async function structurePass(browser, name, os) {
     title,
   );
 
-  // What the tables say, resolved in the page by the application's own code.
-  const expected = await page.evaluate(async () => {
-    const { resolveMenus, resolveToolbar } = await import('/src/commands/menus.ts');
-    const { ctx, commands } = window.__easy68k;
-    const env = { os: ctx.platform.os, desktop: false, state: ctx.store.getState(), commands };
-    const strip = (caption) => caption.replace(/&(.)/g, '$1');
-    const flat = (nodes) =>
-      nodes.flatMap((node) =>
-        node.type === 'separator'
-          ? ['---']
-          : node.type === 'submenu'
-            ? [`${strip(node.caption)} >`]
-            : [
-                `${strip(node.caption)}${node.shortcut ? ` [${node.shortcut}]` : ''}${node.enabled ? '' : ' (disabled)'}`,
-              ],
-      );
-    const result = {};
-    for (const item of ['editor', 'simulator', 'easybin']) {
-      result[item] = {
-        menus: resolveMenus(item, env).map((menu) => ({ title: strip(menu.caption), items: flat(menu.items) })),
-        toolbar: resolveToolbar(item, env).flatMap((entry) =>
-          entry.type === 'button'
-            ? [`${entry.label}${entry.enabled ? '' : ' (disabled)'}`]
-            : entry.type === 'separator'
-              ? ['|']
-              : [],
-        ),
-      };
-    }
-    return result;
-  });
-
+  // Mode by mode: what the tables say, resolved in the page by the application's own code at the
+  // moment of the comparison, against what is on screen. The state can still change (the session
+  // finishing its start), so a comparison is repeated for a few seconds before it counts as failed.
+  const handlerless = new Set();
   for (const item of ['editor', 'simulator', 'easybin']) {
     await setMode(page, item);
     check(`${p} ${item} mode is shown`, (await mode(page)) === item);
     const shown = await page.locator('[data-e68-workspace]:not([hidden])').getAttribute('data-e68-workspace');
     check(`${p} ${item}: only its workspace is visible`, shown === item, `${shown}`);
 
-    // Toolbar: every button of the table, in order, with its hint as accessible name.
-    const toolbar = await page.locator('.e68-shell__toolbar').evaluate((root) =>
-      Array.from(root.querySelectorAll('button[data-command], [role=separator]'))
-        .filter((element) => element.getAttribute('data-command') !== 'app.theme.set')
-        .map((element) =>
-          element.matches('[role=separator]')
-            ? '|'
-            : `${element.getAttribute('aria-label')}${element.disabled ? ' (disabled)' : ''}`,
-        ),
-    );
+    // Toolbar: every button of the table, in order, with its hint as accessible name, enabled
+    // exactly when the command has a handler that reports it enabled.
+    let toolbar;
+    let toolbarExpected;
+    let wrongButtons;
+    for (const deadline = Date.now() + 10_000; ;) {
+      ({ toolbar, toolbarExpected, wrongButtons } = await page.evaluate(
+        async ([mode]) => {
+          const { resolveToolbar } = await import('/src/commands/menus.ts');
+          const { ctx, commands } = window.__easy68k;
+          const env = { os: ctx.platform.os, desktop: false, state: ctx.store.getState(), commands };
+          // Enabled = it has a handler and the handler says so (no handler: disabled, 3.12.2).
+          const enabled = (id) => commands.hasHandler(id) && commands.isEnabled(id);
+          const expected = resolveToolbar(mode, env).flatMap((entry) =>
+            entry.type === 'button'
+              ? [`${entry.label}${enabled(entry.id) ? '' : ' (disabled)'}`]
+              : entry.type === 'separator'
+                ? ['|']
+                : [],
+          );
+          const root = document.querySelector('.e68-shell__toolbar');
+          const buttons = Array.from(root.querySelectorAll('button[data-command], [role=separator]')).filter(
+            (element) => element.getAttribute('data-command') !== 'app.theme.set',
+          );
+          const onScreen = buttons.map((element) =>
+            element.matches('[role=separator]')
+              ? '|'
+              : `${element.getAttribute('aria-label')}${element.disabled ? ' (disabled)' : ''}`,
+          );
+          const wrong = buttons
+            .filter((element) => element.matches('button[data-command]'))
+            .filter((element) => element.disabled === enabled(element.getAttribute('data-command')))
+            .map((element) => element.getAttribute('data-command'));
+          return { toolbar: onScreen, toolbarExpected: expected, wrongButtons: wrong };
+        },
+        [item],
+      ));
+      if ((same(toolbar, toolbarExpected) && wrongButtons.length === 0) || Date.now() > deadline) break;
+      await page.waitForTimeout(200);
+    }
     check(
       `${p} ${item}: toolbar equals the table`,
-      same(toolbar, expected[item].toolbar),
-      same(toolbar, expected[item].toolbar) ? '' : JSON.stringify(toolbar),
+      same(toolbar, toolbarExpected),
+      same(toolbar, toolbarExpected) ? '' : `${JSON.stringify(toolbar)} expected ${JSON.stringify(toolbarExpected)}`,
     );
-    const enabledButtons = toolbar.filter((entry) => entry !== '|' && !entry.endsWith('(disabled)'));
     check(
-      `${p} ${item}: every toolbar command without a handler is disabled`,
-      enabledButtons.length === 0,
-      enabledButtons.join(', '),
+      `${p} ${item}: every toolbar button is enabled exactly when its command has a handler that reports it enabled`,
+      wrongButtons.length === 0,
+      wrongButtons.join(', '),
     );
 
     // Menus: open each one with the mouse and read what is on screen.
+    const expectedMenus = () =>
+      page.evaluate(
+        async ([mode]) => {
+          const { resolveMenus } = await import('/src/commands/menus.ts');
+          const { ctx, commands } = window.__easy68k;
+          const env = { os: ctx.platform.os, desktop: false, state: ctx.store.getState(), commands };
+          const enabled = (id) => commands.hasHandler(id) && commands.isEnabled(id);
+          // The caption as the kit shows it: '&&' is a literal '&', '&x' underlines x.
+          const strip = (caption) => caption.replace(/&(.)/g, '$1');
+          const without = [];
+          const flat = (nodes) =>
+            nodes.flatMap((node) => {
+              if (node.type === 'separator') return ['---'];
+              if (node.type === 'submenu') return [`${strip(node.caption)} >`];
+              if (!commands.hasHandler(node.id)) without.push(node.id);
+              const mark = node.kind === 'action' ? '' : node.checked ? ' [x]' : ' [ ]';
+              return [
+                `${strip(node.caption)}${mark}${node.shortcut ? ` [${node.shortcut}]` : ''}${enabled(node.id) ? '' : ' (disabled)'}`,
+              ];
+            });
+          const menus = resolveMenus(mode, env).map((menu) => ({
+            title: strip(menu.caption),
+            items: flat(menu.items),
+          }));
+          // Which access key each menu title shows (the letter after '&').
+          const keys = resolveMenus(mode, env).map((menu) => /&([^&])/.exec(menu.caption)?.[1] ?? '');
+          return { menus, keys, without };
+        },
+        [item],
+      );
+    const initial = await expectedMenus();
+    for (const id of initial.without) handlerless.add(id);
     const titles = await page.locator('.e68-shell__menubar [role=menuitem]').allTextContents();
     check(
       `${p} ${item}: menu bar titles`,
       same(
         titles,
-        expected[item].menus.map((menu) => menu.title),
+        initial.menus.map((menu) => menu.title),
       ),
       titles.join(', '),
     );
+    if (os !== 'mac') {
+      const underlined = await page
+        .locator('.e68-shell__menubar [role=menuitem]')
+        .evaluateAll((elements) =>
+          elements.map((element) => element.querySelector('.e68-mnemonic, u')?.textContent ?? ''),
+        );
+      check(
+        `${p} ${item}: menu titles underline their access keys`,
+        same(underlined, initial.keys),
+        `${JSON.stringify(underlined)} expected ${JSON.stringify(initial.keys)}`,
+      );
+    }
     let menusEqual = true;
     let detail = '';
-    const enabledItems = [];
-    for (const [index, menu] of expected[item].menus.entries()) {
+    for (const [index] of initial.menus.entries()) {
       await page.locator('.e68-shell__menubar [role=menuitem]').nth(index).click();
       const popup = page.locator('[role=menu][data-e68-menu]').first();
       await popup.waitFor();
-      const items = await popup.evaluate((root) =>
-        Array.from(root.children).flatMap((element) => {
-          if (element.matches('[role=separator]')) return ['---'];
-          const role = element.getAttribute('role');
-          if (!role || !role.startsWith('menuitem')) return [];
-          const caption = element.querySelector('.e68-menu__caption')?.textContent ?? element.textContent ?? '';
-          const shortcut = element.querySelector('.e68-menu__shortcut')?.textContent ?? '';
-          const submenu = element.getAttribute('aria-haspopup') === 'menu';
-          const disabled = element.getAttribute('aria-disabled') === 'true';
-          return [
-            `${caption.trim()}${submenu ? ' >' : ''}${shortcut ? ` [${shortcut.trim()}]` : ''}${disabled && !submenu ? ' (disabled)' : ''}`,
-          ];
-        }),
-      );
-      if (!same(items, menu.items)) {
-        menusEqual = false;
-        detail = `${menu.title}: ${JSON.stringify(items)} expected ${JSON.stringify(menu.items)}`;
+      let items;
+      let wanted;
+      for (const deadline = Date.now() + 5_000; ;) {
+        items = await popup.evaluate((root) =>
+          Array.from(root.children).flatMap((element) => {
+            if (element.matches('[role=separator]')) return ['---'];
+            const role = element.getAttribute('role');
+            if (!role || !role.startsWith('menuitem')) return [];
+            const caption = element.querySelector('.e68-menu__caption')?.textContent ?? element.textContent ?? '';
+            const shortcut = element.querySelector('.e68-menu__shortcut')?.textContent ?? '';
+            const submenu = element.getAttribute('aria-haspopup') === 'menu';
+            const disabled = element.getAttribute('aria-disabled') === 'true';
+            const checkable = role === 'menuitemcheckbox' || role === 'menuitemradio';
+            const mark = checkable ? (element.getAttribute('aria-checked') === 'true' ? ' [x]' : ' [ ]') : '';
+            return [
+              `${caption.trim()}${submenu ? ' >' : ''}${mark}${shortcut ? ` [${shortcut.trim()}]` : ''}${disabled && !submenu ? ' (disabled)' : ''}`,
+            ];
+          }),
+        );
+        wanted = (await expectedMenus()).menus[index]?.items ?? [];
+        if (same(items, wanted) || Date.now() > deadline) break;
+        await page.waitForTimeout(200);
       }
-      enabledItems.push(
-        ...items.filter((entry) => entry !== '---' && !entry.endsWith(' >') && !entry.endsWith('(disabled)')),
-      );
+      if (!same(items, wanted)) {
+        menusEqual = false;
+        detail = `${initial.menus[index]?.title}: ${JSON.stringify(items)} expected ${JSON.stringify(wanted)}`;
+      }
       if (index === 0 && item !== 'easybin')
         await page.screenshot({ path: join(outDir, `${name}-${os}-${item}-menu.png`) });
-      await page.keyboard.press('Escape');
-      await page.keyboard.press('Escape');
+      await closeOverlays(page);
     }
-    check(`${p} ${item}: menus on screen equal the tables`, menusEqual, detail);
     check(
-      `${p} ${item}: every menu command without a handler is disabled`,
-      enabledItems.length === 0,
-      enabledItems.join(', '),
+      `${p} ${item}: menus on screen equal the tables (captions, check marks, shortcuts, enabled exactly when the handler says so)`,
+      menusEqual,
+      detail,
     );
     await page.screenshot({ path: join(outDir, `${name}-${os}-${item}.png`) });
   }
+  if (os === 'windows') {
+    note(
+      `${name}: commands of the menus without a handler yet (${handlerless.size}): ${[...handlerless].sort().join(', ')}`,
+    );
+  }
+
+  // A command whose handler changes its answer: the toolbar and the menu follow it, once the store
+  // has told them (CommandHandler.enabled, contracts/commands.ts).
+  await setMode(page, 'editor');
+  await page.evaluate(() => {
+    window.__flag = true;
+    window.__restore ??= [];
+    window.__restore.push(
+      window.__easy68k.commands.override('ed.file.save', { run: () => {}, enabled: () => window.__flag }),
+    );
+  });
+  const saveButton = page.locator('.e68-shell__toolbar [data-command="ed.file.save"]');
+  const enabledNow = await saveButton.isEnabled();
+  await page.evaluate(() => {
+    window.__flag = false;
+    window.__easy68k.ctx.store.setState((state) => ({ ...state }));
+  });
+  await page
+    .waitForFunction(
+      () => document.querySelector('.e68-shell__toolbar [data-command="ed.file.save"]')?.disabled === true,
+      null,
+      { timeout: 5000 },
+    )
+    .catch(() => {});
+  const disabledAfter = await saveButton.isDisabled();
+  await page.locator('.e68-shell__menubar [role=menuitem]').first().click();
+  const saveItem = page.locator('[role=menu][data-e68-menu] [role^=menuitem]', { hasText: /^Save/ }).first();
+  const itemDisabled = (await saveItem.getAttribute('aria-disabled')) === 'true';
+  await closeOverlays(page);
+  await restoreRecorders(page);
+  check(
+    `${p} a handler that changes its answer: the Save button and menu item follow it`,
+    enabledNow && disabledAfter && itemDisabled,
+    `enabled=${enabledNow} then disabled=${disabledAfter}, menu item disabled=${itemDisabled}`,
+  );
 
   // Regions of 2.2 and 2.3.
   const regions = await page.evaluate(() =>
@@ -354,8 +523,9 @@ async function keyboardPass(browser, name, os) {
   const { page, errors } = await openApp(context);
   const mac = os === 'mac';
 
-  // 2.9.3: F5, F6, F7, F10 and Ctrl+O/S/P/F/G/R are cancelled, whatever the mode, also while no
-  // command has a handler. On macOS the Cmd forms too.
+  // 2.9.3: F5, F6, F7, F10 and Ctrl+O/S/P/F/G/R are cancelled, whatever the mode, whether their
+  // command is enabled or not. On macOS the Cmd forms too. The real handlers are held back, so
+  // that Ctrl+O and the others do not open their dialogs.
   const guarded = [
     'F5',
     'F6',
@@ -369,18 +539,51 @@ async function keyboardPass(browser, name, os) {
     'Control+KeyR',
   ];
   if (mac) guarded.push('Meta+KeyO', 'Meta+KeyS', 'Meta+KeyP', 'Meta+KeyF', 'Meta+KeyG');
+  const stopHolding = await holdBackHandlers(page);
   for (const item of ['editor', 'simulator', 'easybin']) {
     await setMode(page, item);
+    await page.locator(`.e68-modeswitch [data-mode="${item}"]`).focus();
     const notCancelled = [];
+    const inMode = (await mode(page)) === item;
     for (const combination of guarded) {
       if ((await pressed(page, combination)) !== true) notCancelled.push(combination);
     }
     check(
       `${p} ${item}: the chords of 2.9.3 have defaultPrevented`,
-      notCancelled.length === 0,
-      notCancelled.join(', '),
+      inMode && notCancelled.length === 0,
+      inMode ? notCancelled.join(', ') : `the mode is ${await mode(page)}`,
     );
   }
+  // F1 in EASyBIN mode is EASyBIN Help (docs/requests/B1-keys.md), on the mode switch.
+  await setMode(page, 'easybin');
+  await page.locator('.e68-modeswitch [data-mode="easybin"]').focus();
+  await page.evaluate(() => {
+    window.__held.length = 0;
+  });
+  const f1Cancelled = await pressed(page, 'F1');
+  const f1Ran = await page.evaluate(() => window.__held.slice());
+  check(
+    `${p} easybin: F1 runs EASyBIN Help`,
+    f1Cancelled === true && same(f1Ran, ['bin.help.help']),
+    `cancelled=${f1Cancelled} ran=${f1Ran.join(',')}`,
+  );
+  // In the Address field EASyBIN's own F1 handler (from before F1 was bound) may run it a second
+  // time; that is B1's to remove, so it is reported, not failed.
+  const address = page.locator('[data-e68-workspace="easybin"] input[aria-label="Address"]').first();
+  if ((await address.count()) > 0) {
+    await address.focus();
+    await page.evaluate(() => {
+      window.__held.length = 0;
+    });
+    await page.keyboard.press('F1');
+    const inField = await page.evaluate(() => window.__held.slice());
+    if (!same(inField, ['bin.help.help'])) {
+      note(`${p} F1 in EASyBIN's Address field ran ${inField.join(', ') || 'nothing'} (B1: once is right)`);
+    }
+  }
+  await stopHolding();
+  await closeOverlays(page);
+
   // Keys that are not the application's stay untouched.
   await setMode(page, 'editor');
   await page.evaluate(() => document.activeElement?.blur());
@@ -394,7 +597,7 @@ async function keyboardPass(browser, name, os) {
     (await page.evaluate(() => Array.isArray(window.__ran))) === true,
   );
 
-  // Real keys run commands once they have handlers.
+  // Real keys reach the commands of the mode. Recorders stand in for the real handlers.
   const ids = [
     'ed.file.open',
     'ed.file.save',
@@ -411,9 +614,10 @@ async function keyboardPass(browser, name, os) {
     'sim.run.logStart',
     'sim.search.find',
   ];
-  await registerRecorders(page, ids);
-  // The editor's own keys (Insert, Ctrl+Shift+. and ,): handlers enabled only while the editor
-  // has the focus, as E2's will be. A stand-in editor and a plain text field are added to the page.
+  await installRecorders(page, ids);
+  // The editor's own keys (Insert, Ctrl+Shift+. and ,): stand-ins enabled only while a stand-in
+  // editor has the focus, as E2's real handlers are while the real editor has it (tested below).
+  // A stand-in editor and a plain text field are added to the page.
   await page.evaluate((list) => {
     const field = document.createElement('input');
     field.type = 'text';
@@ -427,14 +631,16 @@ async function keyboardPass(browser, name, os) {
     const { commands } = window.__easy68k;
     const inEditor = () => Boolean(document.activeElement?.closest('[data-check-editor]'));
     for (const id of list) {
-      if (!commands.hasHandler(id)) commands.register(id, { run: () => void window.__ran.push(id), enabled: inEditor });
+      window.__restore.push(commands.override(id, { run: () => void window.__ran.push(id), enabled: inEditor }));
     }
   }, EDITOR_FOCUS_IDS);
   await setMode(page, 'editor');
+  await page.locator('.e68-modeswitch [data-mode="editor"]').focus();
   const cmd = mac ? 'Meta' : 'Control';
   await page.keyboard.press(`${cmd}+KeyS`);
   await page.keyboard.press('F9');
   await setMode(page, 'simulator');
+  await page.locator('.e68-modeswitch [data-mode="simulator"]').focus();
   await page.keyboard.press('F9');
   await page.keyboard.press('Shift+F2');
   await page.keyboard.press('Shift+F4');
@@ -582,9 +788,9 @@ async function keyboardPass(browser, name, os) {
   }
 
   // Insert and Ctrl+Shift+. / , belong to the editor control (EDITOR_FOCUS_COMMANDS). With
-  // handlers that are enabled only while the editor has the focus (the stand-in editor registered
-  // above), the keys run in the editor and reach a plain text field untouched; on a button they
-  // are cancelled as before (2.9.1 step 4).
+  // handlers that are enabled only while the editor has the focus (the stand-ins above), the keys
+  // run in the editor and reach a plain text field untouched; on a button they are cancelled as
+  // before (2.9.1 step 4).
   const editorKeys = [
     mac
       ? ['Ctrl+Shift+I', { ...none, key: 'I', code: 'KeyI', ctrlKey: true, shiftKey: true }, 'ed.edit.toggleInsert']
@@ -620,9 +826,6 @@ async function keyboardPass(browser, name, os) {
       );
     }
   }
-  await page.evaluate(() => {
-    for (const element of document.querySelectorAll('[data-check-field], [data-check-editor]')) element.remove();
-  });
 
   // Ctrl+F4 (2.9.3): the browsers of Windows and Linux keep it (it closes the tab), so the page
   // leaves it alone; a browser on macOS delivers it, and there it is the original's Log Start.
@@ -640,6 +843,47 @@ async function keyboardPass(browser, name, os) {
       : !ctrlF4Cancelled && ctrlF4Ran.length === 0,
     `cancelled=${ctrlF4Cancelled} ran=${ctrlF4Ran.join(',')}`,
   );
+  await restoreRecorders(page);
+
+  // The same editor keys with E2's real handlers and the real editor (CodeMirror): they run in
+  // the editor and are left to the plain text field. The real handlers only look on: nothing is
+  // held back, so Insert really toggles Insert / Replace (pressed twice, it ends as it began).
+  await setMode(page, 'editor');
+  const realEditor = page.locator('[data-e68-workspace="editor"] .cm-content').first();
+  if ((await realEditor.count()) === 0) {
+    check(`${p} the real editor is on screen (.cm-content)`, false, 'no .cm-content in Editor mode');
+  } else {
+    await page.evaluate(() => {
+      window.__seen = [];
+      window.__stopSeeing = window.__easy68k.commands.observeRuns((id) => void window.__seen.push(id));
+    });
+    const insertKey = mac ? 'Control+Shift+KeyI' : 'Insert';
+    for (const where of ['editor', 'field']) {
+      await (where === 'editor' ? realEditor : page.locator('[data-check-field]')).click();
+      const seen = [];
+      const cancelled = [];
+      for (const combination of [insertKey, insertKey]) {
+        await page.evaluate(() => {
+          window.__seen.length = 0;
+        });
+        cancelled.push(await pressed(page, combination));
+        seen.push(...(await page.evaluate(() => window.__seen.slice())));
+      }
+      check(
+        where === 'editor'
+          ? `${p} ${mac ? 'Ctrl+Shift+I' : 'Insert'} in the real editor runs E2's ed.edit.toggleInsert`
+          : `${p} ${mac ? 'Ctrl+Shift+I' : 'Insert'} with E2's handler is left to a plain text field`,
+        where === 'editor'
+          ? same(cancelled, [true, true]) && same(seen, ['ed.edit.toggleInsert', 'ed.edit.toggleInsert'])
+          : same(cancelled, [false, false]) && seen.length === 0,
+        `cancelled=${cancelled.join(',')} ran=${seen.join(',')}`,
+      );
+    }
+    await page.evaluate(() => window.__stopSeeing());
+  }
+  await page.evaluate(() => {
+    for (const element of document.querySelectorAll('[data-check-field], [data-check-editor]')) element.remove();
+  });
 
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   await context.close();
@@ -650,13 +894,13 @@ async function dialogPass(browser, name) {
   const p = `${name}:`;
   const context = await newContext(browser, 'windows');
   const { page, errors } = await openApp(context);
-  await registerRecorders(page, ['ed.file.save', 'sim.run.run']);
+  await installRecorders(page, ['ed.file.save', 'sim.run.run']);
   await page.locator('.e68-modeswitch [data-mode="editor"]').focus();
 
   await page.keyboard.press('Control+KeyS');
   check(`${p} Ctrl+S runs Save while no dialog is open`, same(await ran(page), ['ed.file.save']));
   const saveButton = page.locator('.e68-shell__toolbar [data-command="ed.file.save"]');
-  check(`${p} the Save button is enabled once the command has a handler`, await saveButton.isEnabled());
+  check(`${p} the Save button is enabled while its handler reports it enabled`, await saveButton.isEnabled());
   await saveButton.click();
   check(`${p} the toolbar button runs Save`, same(await ran(page), ['ed.file.save', 'ed.file.save']));
 
@@ -735,9 +979,89 @@ async function dialogPass(browser, name) {
   );
   check(`${p} Simulator mode: F9 did not run while the dialog was open`, !(await ran(page)).includes('sim.run.run'));
 
+  // A modal dialog's own code may open help (allowInModal), and the Help drawer is then drawn above
+  // the dialog's backdrop (docs/requests/H1-help-from-dialogs.md).
+  await setMode(page, 'editor');
+  await page.evaluate(() => {
+    void window.__easy68k.ctx.dialogs.messageBox({ title: 'Options', text: 'Help?', icon: 'none', buttons: ['OK'] });
+  });
+  await page.waitForSelector('[role=alertdialog][aria-modal=true]');
+  const helpRefused = await page.evaluate(async () => {
+    const { ctx } = window.__easy68k;
+    await ctx.commands.run('ed.help.help', 'options.htm');
+    return document.querySelector('.e68-shell__body > [data-e68-panel="help"]') === null;
+  });
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('ed.help.help', 'options.htm', { allowInModal: true }));
+  const helpOnTop = await page
+    .waitForFunction(
+      () => {
+        const region = document.querySelector('.e68-shell__body > [data-e68-panel="help"]');
+        if (!region) return false;
+        const box = region.getBoundingClientRect();
+        if (box.width < 20) return false;
+        const hit = document.elementFromPoint(box.left + box.width / 2, box.top + 20);
+        return hit !== null && region.contains(hit);
+      },
+      null,
+      { timeout: 15_000 },
+    )
+    .then(() => true)
+    .catch(() => false);
+  await page.screenshot({ path: join(outDir, `${name}-help-over-dialog.png`) });
+  check(
+    `${p} a modal dialog: help opens only from the dialog's own code, and the Help drawer is above the backdrop`,
+    helpRefused && helpOnTop,
+    `refused without allowInModal=${helpRefused}, drawer on top=${helpOnTop}`,
+  );
+  await closeOverlays(page);
+  await page.evaluate(async () => {
+    const { hidePanel } = await import('/src/state/panels.ts');
+    hidePanel(window.__easy68k.ctx, 'help');
+  });
+
+  // A mode's own window title (docs/requests/B1-window-title.md) and the build on the context
+  // (docs/requests/H1-build-info.md).
+  await setMode(page, 'easybin');
+  const titles = await page.evaluate(async () => {
+    const { setModeTitle } = await import('/src/state/shell.ts');
+    const { ctx } = window.__easy68k;
+    const before = document.title;
+    setModeTitle(ctx, 'easybin', '/browser/demo.S68');
+    const during = document.title;
+    setModeTitle(ctx, 'easybin', null);
+    return { before, during, after: document.title, build: ctx.build };
+  });
+  check(
+    `${p} EASyBIN's window title can show the file opened last, and New puts the fixed title back`,
+    /^EASyBIN v2\.5\.0 - unofficial port /.test(titles.before) &&
+      /^\/browser\/demo\.S68 - unofficial port /.test(titles.during) &&
+      titles.after === titles.before,
+    `${titles.before} | ${titles.during} | ${titles.after}`,
+  );
+  check(
+    `${p} the context carries the build's version and repository`,
+    typeof titles.build?.version === 'string' &&
+      titles.before.endsWith(titles.build.version) &&
+      (titles.build.repository === null || /^[^/\s]+\/[^/\s]+$/.test(titles.build.repository)),
+    JSON.stringify(titles.build),
+  );
+
   // A toast.
   await page.evaluate(() => window.__easy68k.ctx.dialogs.toast('The program is waiting for keyboard input'));
   check(`${p} a toast appears`, (await page.locator('.e68-toast').count()) === 1);
+  // One that stays until it is dismissed (docs/requests/DV1-toast-duration.md): still there after
+  // the kit's default of 8 s would have closed it, with the pointer and the focus elsewhere.
+  await page.mouse.move(5, 5);
+  await page.evaluate(() =>
+    window.__easy68k.dialogs.toast('A new version is available.', { label: 'Reload', run: () => {} }, { duration: 0 }),
+  );
+  await page.waitForTimeout(9000);
+  const toastTexts = await page.locator('.e68-toast').allInnerTexts();
+  check(
+    `${p} a toast with duration 0 stays; one without closes after the kit's default`,
+    toastTexts.length === 1 && toastTexts[0].includes('A new version is available.'),
+    JSON.stringify(toastTexts),
+  );
 
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   await context.close();
@@ -1105,6 +1429,36 @@ async function windowsPass(browser, name) {
     ),
     narrowTabs.join(', '),
   );
+  // Showing the Output panel (Run, a keyboard-input task, View > Output Window) brings its tab to
+  // the front while a tool tab is selected (SH4's finding).
+  await a.page.evaluate(async () => {
+    const { showPanel } = await import('/src/state/panels.ts');
+    showPanel(window.__easy68k.ctx, 'memory');
+  });
+  await a.page.waitForSelector('[data-e68-workspace="simulator"] [data-e68-panel="memory"]:not([hidden])');
+  await a.page.evaluate(async () => {
+    const { showPanel } = await import('/src/state/panels.ts');
+    showPanel(window.__easy68k.ctx, 'output');
+  });
+  const outputInFront = await a.page
+    .waitForFunction(
+      () => {
+        const output = document.querySelector('[data-e68-workspace="simulator"] [data-e68-panel="output"]');
+        const selected = document.querySelector('[data-e68-workspace="simulator"] [role=tab][aria-selected="true"]');
+        return output !== null && output.closest('[hidden]') === null && selected?.textContent?.trim() === 'Output'
+          ? (document.activeElement?.closest('[data-e68-panel]')?.getAttribute('data-e68-panel') ?? 'none')
+          : false;
+      },
+      null,
+      { timeout: 5000 },
+    )
+    .then((handle) => handle.jsonValue())
+    .catch(() => false);
+  check(
+    `${p} below 1100 px showing the Output panel brings its tab in front of a tool tab and focuses it`,
+    outputInFront === 'output',
+    `${outputInFront}`,
+  );
   await a.page.screenshot({ path: join(outDir, `${name}-simulator-narrow.png`) });
 
   // The lock of a closed page is free (3.8.6: "a lock that is no longer held means its window is gone").
@@ -1167,33 +1521,56 @@ async function scanPass(browser, name) {
 // --- run -------------------------------------------------------------------------------
 
 async function main() {
+  if (!enginesPresent && enginesRequired) {
+    console.error('engine/dist is missing and EASY68K_REQUIRE_ENGINES=1: the simulator session cannot start.');
+    process.exit(1);
+  }
   const server = await createServer({
     configFile: join(appRoot, 'vite.config.ts'),
     root: appRoot,
     logLevel: 'warn',
-    server: { port: 5198, strictPort: false, host: '127.0.0.1' },
+    // A cache of its own: several checks may run on one machine at the same time.
+    cacheDir: join(outDir, 'vite-cache'),
+    // Port 0: the system picks a free one. No file watching and no hot reload (see the header).
+    server: { port: 0, strictPort: false, host: '127.0.0.1', hmr: false, watch: null },
   });
   await server.listen();
   const address = server.httpServer?.address();
-  const port = typeof address === 'object' && address ? address.port : 5198;
-  baseUrl = `http://127.0.0.1:${port}/`;
+  if (typeof address !== 'object' || !address) throw new Error('The dev server has no address');
+  baseUrl = `http://127.0.0.1:${address.port}/`;
   console.log(`Application: ${baseUrl}\nScreenshots: ${outDir}`);
+  if (!enginesPresent) console.log('engine/dist is missing: the simulator session will not start (ignored).');
 
   try {
     for (const name of browsers) {
       const browser = await BROWSERS[name].launch();
       try {
+        // A pass that throws is one failure; the passes after it still run.
+        const pass = async (label, run) => {
+          try {
+            await run();
+          } catch (error) {
+            check(
+              `${name}: ${label} ran to the end`,
+              false,
+              String(error?.stack ?? error)
+                .split('\n')
+                .slice(0, 4)
+                .join(' | '),
+            );
+          }
+        };
         for (const os of ['windows', 'mac']) {
           console.log(`\n[${name}, ${os} key map]`);
-          await structurePass(browser, name, os);
-          await keyboardPass(browser, name, os);
+          await pass(`structure (${os})`, () => structurePass(browser, name, os));
+          await pass(`keyboard (${os})`, () => keyboardPass(browser, name, os));
         }
         console.log(`\n[${name}, dialogs]`);
-        await dialogPass(browser, name);
+        await pass('dialogs', () => dialogPass(browser, name));
         console.log(`\n[${name}, two pages]`);
-        await windowsPass(browser, name);
+        await pass('two pages', () => windowsPass(browser, name));
         console.log(`\n[${name}, accessibility and gallery]`);
-        await scanPass(browser, name);
+        await pass('accessibility and gallery', () => scanPass(browser, name));
       } finally {
         await browser.close();
       }
@@ -1202,6 +1579,7 @@ async function main() {
     await server.close();
   }
 
+  if (notes.length > 0) console.log(`\nNotes (not failures):\n${notes.map((text) => `  - ${text}`).join('\n')}`);
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
   process.exit(failures ? 1 : 0);

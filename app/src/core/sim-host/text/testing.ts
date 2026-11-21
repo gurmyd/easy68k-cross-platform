@@ -27,6 +27,7 @@ import { fontSetFromFiles } from '../fonts/atlas-provider';
 import type { FontSet } from '../fonts/font-set';
 import { createSyntheticFontFiles } from '../fonts/synthetic';
 import { OutputDevice } from '../io';
+import { resolveColor } from '../surface/colors';
 import { MAX_SURFACE } from '../surface/surface';
 import { TextScreen } from './text-screen';
 
@@ -119,10 +120,10 @@ export class TestSurface implements SurfaceApi {
   // -- state --
 
   setLineColor(color: number): void {
-    this.state.penColor = color & 0xffffff;
+    this.state.penColor = resolveColor(color);
   }
   setFillColor(color: number): void {
-    this.state.fillColor = color & 0xffffff;
+    this.state.fillColor = resolveColor(color);
   }
   setPenWidth(width: number): void {
     this.state.penWidth = width & 0xff;
@@ -254,6 +255,8 @@ export class TestSurface implements SurfaceApi {
     fontColor: number,
     target: 'both' | 'window',
   ): void {
+    // A text colour takes the path of pen and fill colours (trap15-b §4.6), as on the real surface.
+    fontColor = resolveColor(fontColor);
     if (target === 'window') {
       // The prompt cell: the same picture, but over the presented image instead of in the back buffer.
       const width = glyphs.reduce((sum, glyph) => sum + glyph.advance, 0);

@@ -1,0 +1,40 @@
+# Open Binary and Save Binary with 1, 2 and 4 files (docs/porting/easybin.md 12, 13).
+reset
+loadbin bin5.BIN 001000 0
+dump 001000 8
+loadbin bin5.BIN 002000 2
+dump 002000 12
+loadbin bin5.BIN 003000 4
+dump 003000 22
+loadbin bin0.BIN 004000 0
+loadbin bin0.BIN 004000 2
+loadbin bin0.BIN 004000 4
+loadbin bin5.BIN FFFFFE 0
+loadbin bin5.BIN FFFFFD 2
+loadbin bin256.BIN 005000 0
+loadbin bin70k.BIN 00F000 0
+loadbin missing.BIN 000000 0
+digest
+savebin one.BIN 001000 000005 0 Yes
+savebin two.BIN 001000 000005 2 Yes
+savebin two8.BIN 005000 000008 2 Yes
+savebin four.BIN 001000 000005 4 Yes
+savebin four8.BIN 005000 000008 4 Yes
+savebin four7.BIN 005000 000007 4 Yes
+savebin four6.BIN 005000 000006 4 Yes
+savebin four0.BIN 005000 000000 4 Yes
+savebin zero.BIN 005000 000000 0 Yes
+savebin noext 005000 000003 2 Yes
+savebin a.b.BIN 005000 000004 4 Yes
+savebin big.BIN 00F000 011170 0 Yes
+savebin bigsplit.BIN 00F000 011170 4 Yes
+savebin end.BIN FFFFF0 000010 0 Yes
+savebin end2.BIN FFFFF0 00000F 0 Yes
+savebin end3.BIN FFFFFC 000003 2 Yes
+# the replace question looks at all four names
+touch ask_1.BIN
+savebin ask.BIN 005000 000004 0 No
+savebin ask.BIN 005000 000004 0 Yes
+touch exist_3.BIN
+savebin exist.BIN 005000 000004 2 Yes
+savebin one.BIN 005000 000004 0 No

@@ -3,7 +3,7 @@ import { createInertSimSession } from '../../state/stub-services';
 import { createTestApplication, type TestApplication } from '../../state/testing';
 import { ManualScheduler, createFakeEngine, createSessionDouble, type SessionDouble } from '../memory/session-double';
 import { feature } from '.';
-import { stackModelOf } from './model';
+import { stackModelOf, stackRecentreDue } from './model';
 
 function setup(): { app: TestApplication; session: SessionDouble; engine: ReturnType<typeof createFakeEngine> } {
   const engine = createFakeEngine({ fill: 0 });
@@ -74,6 +74,35 @@ describe('Stack panel model', { timeout: 60_000 }, () => {
     engine.writeBytes(0x3fc, [0x88]);
     bumpLive(app);
     expect(model.getState().view[1]?.bytes[0]?.text).toBe('77 ');
+  });
+
+  it('with sim.repaint published, re-centres only when repaint.stack moves', () => {
+    const { app, engine } = setup();
+    const repaint = { listing: 0, breakpoints: 0, memory: 0, stack: 0 };
+    app.ctx.store.setState((state) => ({ ...state, sim: { ...state.sim, repaint } }));
+    const model = stackModelOf(app.ctx);
+    model.setRows(5);
+    model.setChoice(0);
+    engine.setRegisters({ a: [0x1234, 0, 0, 0, 0, 0, 0] });
+    model.scrollDown();
+    // viewRevision alone (a direct memory write, a listing-only repaint): no re-centre.
+    app.ctx.store.setState((state) => ({
+      ...state,
+      sim: { ...state.sim, viewRevision: state.sim.viewRevision + 1, repaint: { ...repaint, listing: 1 } },
+    }));
+    expect(model.getState().midAddr).toBe(4);
+    app.ctx.store.setState((state) => ({
+      ...state,
+      sim: { ...state.sim, viewRevision: state.sim.viewRevision + 1, repaint: { ...repaint, listing: 1, stack: 1 } },
+    }));
+    expect(model.getState().midAddr).toBe(0x1234);
+  });
+
+  it('stackRecentreDue falls back on viewRevision while sim.repaint is absent', () => {
+    const { app } = setup();
+    const sim = app.ctx.store.getState().sim;
+    expect(stackRecentreDue(sim, { ...sim, liveRevision: sim.liveRevision + 1 })).toBe(false);
+    expect(stackRecentreDue(sim, { ...sim, viewRevision: sim.viewRevision + 1 })).toBe(true);
   });
 
   it('remembers the View choice in the settings', () => {

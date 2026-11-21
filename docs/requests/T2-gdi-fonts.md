@@ -1,6 +1,6 @@
 # Requests of T2 (GDI capture, references, fonts)
 
-Status: open (for the integration gate after wave one)
+Status: item 1 applied before this gate (`/tools/fonts-src/** -text` is in `.gitattributes` since commit 539028a). Item 2 checked in gate I1 round 1: the steps match how the suites start; the GDI, twins and asm-CLI steps of `windows-oracles` now each run even when an earlier one failed. Item 3 declined: `@napi-rs/canvas` is still used by DV1's `app/src/features/pwa/icons/make-icons.mjs`.
 
 1. **`.gitattributes`: keep `tools/fonts-src/` byte-exact.** Add `/tools/fonts-src/** -text`.
    The folder holds third-party licence texts and font files whose SHA-256 is recorded in
@@ -25,3 +25,13 @@ Status: open (for the integration gate after wave one)
 
 4. **No browser check script**: T2's acceptance list names no browser; nothing to add to
    `browser-checks`.
+
+5. **Gate I1 round 2, for information (no configuration change needed).**
+   - `conformance`: `surface.test.ts` no longer fails on SH2's cases; while `surface/ellipse.ts` or
+     `surface/widepen.ts` is SH1's stub those cases are reported as skipped tests named with their
+     count ("N cases wait for SH2"), and they are compared by themselves once SH2 replaces the files.
+   - `windows-oracles`: `npm run oracle:gdi` now compares on another Windows instead of stopping, and
+     fails while the runner's Windows (10.0.26100) has no record in
+     `tests/oracle/gdi-capture/other-windows.json`. The step prints the record (also into the job
+     summary); after a person has looked at the listed differences, adding that record to the file
+     (T2's path) turns the step green and keeps it guarding against changes of the runner's Windows.

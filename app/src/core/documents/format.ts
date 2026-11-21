@@ -12,7 +12,7 @@
 //
 // What the original does is in the comments; the ground truth that these functions reproduce byte
 // for byte is the official EDIT68K v5.16.1 run under Wine (see format.test.ts and
-// ground-truth.test.ts).
+// corpus.test.ts).
 //
 // Owner: E1. Runs under Node and in browsers (core/ rules, 3.1).
 

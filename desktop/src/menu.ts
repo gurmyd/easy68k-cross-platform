@@ -187,9 +187,31 @@ export function typedChordOfInput(
 export function isRoleChord(
   input: Pick<Input, 'key' | 'code' | 'control' | 'alt' | 'shift' | 'meta'>,
   os: MenuOs,
+  roleChords: readonly string[] = Object.values(MAC_ROLE_CHORDS),
 ): boolean {
   if (os !== 'mac') return false;
-  return Object.values(MAC_ROLE_CHORDS).includes(typedChordOfInput(input) ?? chordOfInput(input));
+  return roleChords.includes(typedChordOfInput(input) ?? chordOfInput(input));
+}
+
+/**
+ * The chords of the role items a menu description actually has (MAC_ROLE_CHORDS of each). Only
+ * these may reach the macOS menu: in Editor mode Undo and Redo are command items (ed.edit.undo,
+ * ed.edit.redo), so Cmd+Z and Shift+Cmd+Z must stay with the page, or the menu would take the key
+ * and drop the click as `triggeredByAccelerator` (gate 1 review).
+ */
+export function roleChordsOf(items: readonly NativeMenuItem[]): string[] {
+  const chords = new Set<string>();
+  const walk = (list: readonly NativeMenuItem[]) => {
+    for (const item of list) {
+      if (item.items !== undefined || item.type === 'submenu') walk(item.items ?? []);
+      else if (item.role !== undefined) {
+        const chord = MAC_ROLE_CHORDS[item.role];
+        if (chord !== undefined) chords.add(chord);
+      }
+    }
+  };
+  walk(items);
+  return [...chords];
 }
 
 /** Why a menu description was refused. */
@@ -380,7 +402,7 @@ interface MenuApi {
  * bar shows the menu of the window in front.
  */
 export class NativeMenus {
-  private readonly menus = new Map<number, { description: NativeMenuItem[]; menu: Menu }>();
+  private readonly menus = new Map<number, { description: NativeMenuItem[]; menu: Menu; roleChords: string[] }>();
   private front: number | null = null;
 
   /**
@@ -403,7 +425,7 @@ export class NativeMenus {
         if (!window.isDestroyed()) this.sendCommand(window, id, arg);
       }),
     );
-    this.menus.set(window.id, { description: items, menu });
+    this.menus.set(window.id, { description: items, menu, roleChords: roleChordsOf(items) });
     if (this.os === 'mac') {
       if (this.front === null || this.front === window.id || window.isFocused()) this.show(window);
     } else {
@@ -434,6 +456,14 @@ export class NativeMenus {
 
   menu(window: BrowserWindow | number): Menu | null {
     return this.menus.get(typeof window === 'number' ? window : window.id)?.menu ?? null;
+  }
+
+  /**
+   * The chords of the role items of the window's menu (roleChordsOf), or undefined while its page
+   * has sent no menu yet (isRoleChord then uses every chord of MAC_ROLE_CHORDS).
+   */
+  roleChords(window: BrowserWindow | number): readonly string[] | undefined {
+    return this.menus.get(typeof window === 'number' ? window : window.id)?.roleChords;
   }
 }
 

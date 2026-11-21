@@ -5,6 +5,9 @@
 //     node tests/oracle/gdi-capture/run.mjs            regenerate and compare (what CI runs)
 //     node tests/oracle/gdi-capture/run.mjs --write    regenerate and update the committed files
 //     options: --only cases,spots,fonts   --all (also compare the machine-dependent outputs)
+//              --replace-references-from-other-windows (let --write replace references captured on
+//              another Windows; see "Another Windows" in README.md)
+//              --as-windows "10.0.26100 cp1252 96dpi" (judge as that Windows; to try the policy)
 //
 // What it produces (README.md next to this file has the details):
 //
@@ -19,12 +22,18 @@
 // and so are the outputs that depend on the machine's theme or font smoothing (suites marked
 // `machine` in cases.ts, the theme's system colours in spots.json) unless --all is given. A file
 // is rewritten by --write only when its content changed, so two runs leave identical files.
+//
+// Another Windows (windows-policy.ts, README.md): the committed references are the standard. On
+// the Windows they were captured on, every difference fails. On another Windows the differences
+// must be the ones other-windows.json records for that Windows; anything else fails, and --write
+// refuses to replace the references there.
 
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { buildCapture, BUILD_DIR } from './build.mjs';
+import { fingerprint, judge, mayWrite, windowsIdentity } from './windows-policy.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '..', '..', '..');
@@ -36,6 +45,11 @@ const FONTS_SRC = join(repo, 'tools', 'fonts-src');
 const args = process.argv.slice(2);
 const write = args.includes('--write');
 const all = args.includes('--all');
+const overrideWindows = args.includes('--replace-references-from-other-windows');
+const OTHER_WINDOWS = join(here, 'other-windows.json');
+// --as-windows <identity>: judge as if this machine were that Windows (to try the policy out).
+const asWindowsIndex = args.indexOf('--as-windows');
+const asWindows = asWindowsIndex >= 0 ? args[asWindowsIndex + 1] : undefined;
 const onlyIndex = args.indexOf('--only');
 const only = new Set(onlyIndex >= 0 ? (args[onlyIndex + 1] ?? '').split(',') : ['cases', 'spots', 'fonts']);
 
@@ -86,11 +100,18 @@ const withoutCapturedOn = (json) => {
 
 // ---------------------------------------------------------------------------------------------
 
-/** @type {{ path: string, bytes: Buffer | null, same: (old: Buffer, now: Buffer) => boolean, compared: boolean, note?: string }[]} */
+// Each output has a canonical form: what the comparison looks at (without capturedOn, independent
+// of compression and line ends). Two files are the same output when their canonical forms are equal.
+/** @type {{ path: string, bytes: Buffer | null, canon: (bytes: Buffer) => string, compared: boolean, note?: string }[]} */
 const artifacts = [];
-const add = (path, bytes, same, compared = true, note = undefined) =>
-  artifacts.push({ path, bytes, same, compared, note });
+const add = (path, bytes, canon, compared = true, note = undefined) =>
+  artifacts.push({ path, bytes, canon, compared, note });
 const sameBytes = (a, b) => Buffer.compare(a, b) === 0;
+const rawBytes = (b) => b.toString('base64');
+const packContent = (b) => {
+  const p = decodePack(b);
+  return JSON.stringify([p.suite, p.cases.map((c) => [c.id, c.pen, Buffer.from(c.pix).toString('base64')])]);
+};
 
 async function captureCases(exe, out) {
   let cases = generateCases();
@@ -126,20 +147,7 @@ async function captureCases(exe, out) {
     add(
       relative(repo, join(GOLDEN, `${suite}.pixpack.gz`)),
       bytes,
-      (old, now) => {
-        const a = decodePack(old);
-        const b = decodePack(now);
-        if (a.suite !== b.suite || a.cases.length !== b.cases.length) return false;
-        return a.cases.every((c, i) => {
-          const d = b.cases[i];
-          return (
-            c.id === d.id &&
-            c.pen[0] === d.pen[0] &&
-            c.pen[1] === d.pen[1] &&
-            sameBytes(Buffer.from(c.pix), Buffer.from(d.pix))
-          );
-        });
-      },
+      packContent,
       !isMachine || all,
       isMachine ? 'depends on the machine (theme or font smoothing)' : undefined,
     );
@@ -163,10 +171,8 @@ async function captureSpots(exe, out) {
     }
     return JSON.stringify(v);
   };
-  add(
-    relative(repo, join(GOLDEN, 'spots.json')),
-    Buffer.from(json.replaceAll('\r\n', '\n')),
-    (a, b) => stable(a.toString()) === stable(b.toString()),
+  add(relative(repo, join(GOLDEN, 'spots.json')), Buffer.from(json.replaceAll('\r\n', '\n')), (b) =>
+    stable(b.toString()),
   );
 }
 
@@ -203,11 +209,15 @@ async function captureFonts(exe, out) {
       blankBytes: blank === '-' ? [] : blank.split(',').map(Number),
     }),
   );
+  // A cell that no rule reproduces (result "captured"; none on the reference Windows) is kept in
+  // metrics.json with "ruleHolds": false, so that metrics.json differs from the references and the
+  // comparison reports it like any other difference.
+  const unruled = [];
   const cells = tsvRows(readFileSync(join(out, 'raster-rules.tsv'), 'utf8')).map(
     ([face, style, plainWidth, plainHeight, native, kx, ky, result, lineRows, lineExceptions]) => {
       const styleName = STYLE_NAMES[style];
-      if (result === 'captured')
-        throw new Error(`no rule reproduces ${face} ${styleName} ${plainWidth}x${plainHeight}`);
+      const captured = result === 'captured';
+      if (captured) unruled.push(`${face} ${styleName} ${plainWidth}x${plainHeight}`);
       // At native size (kx = ky = 1) the styled glyphs are also stored as an atlas of their own.
       const exactAtlas =
         kx === '1' && ky === '1'
@@ -226,9 +236,12 @@ async function captureFonts(exe, out) {
           lineExceptions === '-'
             ? {}
             : Object.fromEntries(lineExceptions.split(',').map((e) => e.split(':').map(Number))),
+        ...(captured ? { ruleHolds: false } : {}),
       };
     },
   );
+  if (unruled.length)
+    console.log(`no rule reproduces ${unruled.length} raster cells on this Windows: ${unruled.join(', ')}`);
   const metrics = {
     about:
       'Measured by tests/oracle/gdi-capture (npm run oracle:gdi) with GetTextFace and GetTextExtentPoint32 on fonts made as the VCL makes them. fonts[name][style][size] = [colWidth = TextWidth("W"), rowHeight = TextHeight("Xp"), index into faces]. raster: how every raster cell is made from the atlases (see tests/oracle/gdi-capture/README.md).',
@@ -249,20 +262,18 @@ async function captureFonts(exe, out) {
       cells,
     },
   };
-  add(
-    relative(repo, join(FONTS, 'metrics.json')),
-    Buffer.from(stringify(metrics) + '\n'),
-    (a, b) => withoutCapturedOn(a.toString()) === withoutCapturedOn(b.toString()),
+  add(relative(repo, join(FONTS, 'metrics.json')), Buffer.from(stringify(metrics) + '\n'), (b) =>
+    withoutCapturedOn(b.toString()),
   );
 
   // The raster atlases, and any committed atlas that is no longer produced.
   const produced = new Set(readdirSync(join(out, 'bitmap')));
   for (const file of produced)
-    add(relative(repo, join(FONTS, 'bitmap', file)), readFileSync(join(out, 'bitmap', file)), sameBytes);
+    add(relative(repo, join(FONTS, 'bitmap', file)), readFileSync(join(out, 'bitmap', file)), rawBytes);
   if (existsSync(join(FONTS, 'bitmap'))) {
     for (const file of readdirSync(join(FONTS, 'bitmap'))) {
       if (file.endsWith('.bin') && !produced.has(file))
-        add(relative(repo, join(FONTS, 'bitmap', file)), null, () => false);
+        add(relative(repo, join(FONTS, 'bitmap', file)), null, rawBytes);
     }
   }
 
@@ -274,10 +285,30 @@ async function captureFonts(exe, out) {
       `# capturedOn ${JSON.stringify(capturedOn)}\n# written by tests/oracle/gdi-capture/run.mjs; do not edit\n${outline}`,
     ),
     // Compared without the capturedOn line and independent of the checkout's line ends.
-    (a, b) =>
-      a.toString().replaceAll('\r\n', '\n').split('\n').slice(1).join('\n') ===
-      b.toString().replaceAll('\r\n', '\n').split('\n').slice(1).join('\n'),
+    (b) => b.toString().replaceAll('\r\n', '\n').split('\n').slice(1).join('\n'),
   );
+}
+
+/** Identity of the Windows the committed references were captured on (metrics.json), or null. */
+function referenceIdentity() {
+  const file = join(FONTS, 'metrics.json');
+  if (!existsSync(file)) return null;
+  const { capturedOn } = JSON.parse(readFileSync(file, 'utf8'));
+  return capturedOn ? windowsIdentity(capturedOn) : null;
+}
+
+function report(lines) {
+  const text = lines.join('\n');
+  writeFileSync(join(BUILD_DIR, 'run', 'report.txt'), text + '\n');
+  // On GitHub Actions the report also goes to the job summary, where the record can be copied.
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    try {
+      writeFileSync(process.env.GITHUB_STEP_SUMMARY, `### GDI capture\n\n\`\`\`\n${text}\n\`\`\`\n`, { flag: 'a' });
+    } catch {
+      // the summary is a convenience; the console has the same text
+    }
+  }
+  console.log(text);
 }
 
 async function main() {
@@ -290,19 +321,32 @@ async function main() {
   const out = join(BUILD_DIR, 'run');
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
-  console.log(`machine: ${(await exec(exe, ['info'])).trim()}`);
+  const info = (await exec(exe, ['info'])).trim();
+  console.log(`machine: ${info}`);
+  const machine = asWindows ?? windowsIdentity(JSON.parse(info));
+  const reference = referenceIdentity();
+  if (write && !mayWrite({ machine, reference, override: overrideWindows })) {
+    console.error(
+      `--write refused: the references were captured on ${reference}, this is ${machine}. The committed references ` +
+        'are the standard, and another Windows does not replace them. Compare without --write; to accept this ' +
+        "Windows' differences, record them in tests/oracle/gdi-capture/other-windows.json (README.md, " +
+        '"Another Windows"). Only to move the references to this Windows on purpose, add ' +
+        '--replace-references-from-other-windows.',
+    );
+    process.exit(1);
+  }
   if (only.has('cases')) await captureCases(exe, out);
   if (only.has('spots')) await captureSpots(exe, out);
   if (only.has('fonts')) await captureFonts(exe, out);
 
-  let differing = 0;
+  const differences = [];
   let written = 0;
   let identical = 0;
   for (const a of artifacts) {
     const file = join(repo, a.path);
     const exists = existsSync(file);
     const old = exists ? readFileSync(file) : null;
-    const same = a.bytes === null ? !exists : old !== null && a.same(old, a.bytes);
+    const same = a.bytes === null ? !exists : old !== null && a.canon(old) === a.canon(a.bytes);
     if (old !== null && a.bytes !== null && sameBytes(old, a.bytes)) identical++;
     const status = same ? 'same' : a.bytes === null ? 'no longer produced' : exists ? 'DIFFERENT' : 'missing';
     if (!same && (a.compared || write)) {
@@ -313,24 +357,26 @@ async function main() {
         written++;
         console.log(`  written   ${a.path} (${status})`);
       } else {
-        differing++;
-        console.log(`  ${status.padEnd(9)} ${a.path}`);
+        const path = a.path.replaceAll('\\', '/');
+        differences.push({ path, fingerprint: a.bytes === null ? 'removed' : fingerprint(a.canon(a.bytes)) });
+        console.log(`  ${status.padEnd(9)} ${path}`);
       }
     } else if (!same) {
       console.log(`  skipped   ${a.path}: ${status}, ${a.note ?? 'not compared'}`);
     }
   }
   const total = artifacts.length;
-  if (write) console.log(`${total} outputs, ${written} written, ${total - written} unchanged`);
-  else
-    console.log(`${total - differing} of ${total} outputs equal the committed references (${identical} byte for byte)`);
-  if (differing) {
-    console.error(
-      'The GDI capture differs from the committed references (a Windows update may have changed GDI). ' +
-        'Inspect build/gdi-capture/run and, if the change is real, run with --write and commit.',
-    );
-    process.exit(1);
+  if (write) {
+    console.log(`${total} outputs, ${written} written, ${total - written} unchanged`);
+    return;
   }
+  const records = existsSync(OTHER_WINDOWS) ? JSON.parse(readFileSync(OTHER_WINDOWS, 'utf8')) : {};
+  const verdict = judge({ machine, reference: reference ?? machine, differences, records });
+  report([
+    `${total - differences.length} of ${total} outputs equal the committed references (${identical} byte for byte)`,
+    ...verdict.lines,
+  ]);
+  if (verdict.fail) process.exit(1);
 }
 
 main().catch((error) => {

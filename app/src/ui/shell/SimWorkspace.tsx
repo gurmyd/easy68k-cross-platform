@@ -77,15 +77,28 @@ function RightColumn({ narrow }: { narrow: boolean }) {
     shallowEqual,
   );
   const activeTool = useShellState((state) => state.activeTool);
+  const outputInFront = useShellState((state) => state.outputInFront);
   const collapsed = useShellState((state) => state.outputCollapsed);
 
-  // Narrow: Output is the first tab of the group. Wide: it has its own place above the tabs.
+  // Narrow: Output is the first tab of the group, in front while it was shown last (showPanel).
+  // Wide: it has its own place above the tabs.
   const tabs: string[] = narrow ? ['output', ...tools] : tools;
-  const selected = activeTool !== null && tabs.includes(activeTool) ? activeTool : (tabs[0] ?? null);
+  const selected =
+    narrow && outputInFront
+      ? 'output'
+      : activeTool !== null && tabs.includes(activeTool)
+        ? activeTool
+        : (tabs[0] ?? null);
   const title = (id: string) =>
     app.panels.find('simulator', id)?.title ?? PANEL_TITLES[id as keyof typeof PANEL_TITLES];
   const select = (id: string) =>
-    app.shell.setState((state) => (state.activeTool === id ? state : { ...state, activeTool: id }));
+    app.shell.setState((state) => {
+      // The Output tab is chosen through outputInFront, so that the wide layout keeps its tool tab.
+      if (id === 'output') return state.outputInFront ? state : { ...state, outputInFront: true };
+      return state.activeTool === id && !state.outputInFront
+        ? state
+        : { ...state, activeTool: id, outputInFront: false };
+    });
 
   const strip = tabs.length > 0 && (
     <Tabs

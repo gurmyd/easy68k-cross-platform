@@ -2,7 +2,7 @@
 // file system and scripted dialogs.
 
 import { describe, expect, it } from 'vitest';
-import { TabType, type MessageBoxRequest, type SaveRequest } from '../../contracts';
+import { TabType, type DocumentService, type MessageBoxRequest, type SaveRequest } from '../../contracts';
 import { MemoryBackend } from '../../fs/memory-backend';
 import { createVfs } from '../../fs/vfs';
 import { createAppStore } from '../../state/store';
@@ -447,11 +447,45 @@ describe('Close (editor-ui §6.6, 1.4 note 3)', () => {
       "File modified, do you wish to save 'untitled1.x68' before closing?",
       "File modified, do you wish to save 'untitled3.x68' before closing?",
     ]);
-    expect(t.manager.list().map((doc) => doc.id)).toEqual([c.id]);
-    expect(b.id).toBeDefined();
-    t.answers.push('No');
+    // editor-ui §1.3: nothing closes when the exit is cancelled; the one answered No keeps its edits.
+    expect(t.manager.list().map((doc) => doc.id)).toEqual([a.id, b.id, c.id]);
+    expect(t.manager.text(a.id).startsWith('x')).toBe(true);
+    expect(t.manager.get(a.id)?.modified).toBe(true);
+    expect(t.manager.registry.has(a.id)).toBe(true);
+    t.answers.push('No', 'No');
     expect(await t.manager.closeAll()).toBe(true);
     expect(t.manager.list()).toEqual([]);
+    expect(t.store.getState().documents).toEqual({ items: [], activeId: null });
+  });
+
+  it('closeAll: Yes saves at once, but a later Cancel leaves the saved document open', async () => {
+    const t = setup();
+    await t.vfs.writeFile('/browser/a.X68', bytes('A\r\n'));
+    const a = (await t.manager.open('/browser/a.X68'))!;
+    t.type(a.id, '1');
+    const b = t.manager.newSource();
+    t.type(b.id, '2');
+    t.answers.push('Yes', 'Cancel');
+    expect(await t.manager.closeAll()).toBe(false);
+    expect(latin(await t.vfs.readFile('/browser/a.X68')).startsWith('1A')).toBe(true);
+    expect(t.manager.list().map((doc) => doc.id)).toEqual([a.id, b.id]);
+    expect(t.manager.get(a.id)?.modified).toBe(false);
+    expect(t.manager.get(b.id)?.modified).toBe(true);
+  });
+
+  it('closeAll: a cancelled Save As leaves every document open', async () => {
+    const t = setup();
+    const a = t.manager.newSource();
+    const b = t.manager.newSource();
+    t.type(a.id, 'x');
+    t.type(b.id, 'y');
+    t.answers.push('No', 'Yes');
+    t.saveTargets.push(null);
+    expect(await t.manager.closeAll()).toBe(false);
+    expect(t.manager.list().map((doc) => [doc.id, doc.modified])).toEqual([
+      [a.id, true],
+      [b.id, true],
+    ]);
   });
 });
 
@@ -461,6 +495,24 @@ describe('update and restore', () => {
     const doc = t.manager.newSource();
     t.manager.update(doc.id, { insertMode: false, tabSize: 8 });
     expect(t.store.getState().documents.items[0]).toMatchObject({ insertMode: false, tabSize: 8, modified: false });
+  });
+
+  it('selection reports the selected text and the caret in characters of text(id)', () => {
+    const t = setup();
+    const doc = t.manager.newSource();
+    expect(t.manager.selection(doc.id)).toEqual({ selected: '', caret: 0 });
+    t.manager.registry.dispatch(doc.id, {
+      changes: { from: 0, to: t.manager.text(doc.id).length, insert: 'AB\nMOVE.L D0' },
+    });
+    // Selected backwards: the caret is the moving end (head), here before "MOVE".
+    t.manager.registry.dispatch(doc.id, { selection: { anchor: 9, head: 3 } });
+    expect(t.manager.selection(doc.id)).toEqual({ selected: 'MOVE.L', caret: 3 });
+    expect(t.manager.text(doc.id).slice(0, 3)).toBe('AB\n');
+    expect(t.manager.selection('unknown')).toBeNull();
+    // The contract's optional members exist on the real service.
+    const service: DocumentService = t.manager;
+    expect(typeof service.update).toBe('function');
+    expect(typeof service.selection).toBe('function');
   });
 
   it('restore brings a document back as modified, renaming a clashing untitled name', async () => {

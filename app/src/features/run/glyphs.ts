@@ -7,8 +7,8 @@
 //
 // Owner: SH8.
 
-import type { Bytes, GlyphProvider } from '../../contracts';
-import { AtlasGlyphProvider, type FontFileLoader } from '../../core/sim-host/fonts/atlas-provider';
+import type { Bytes, FontFileLoader, GlyphProvider } from '../../contracts';
+import { AtlasGlyphProvider } from '../../core/sim-host/fonts/atlas-provider';
 
 /** The folder of the font files, relative to the page. */
 export const FONTS_FOLDER = 'fonts/';

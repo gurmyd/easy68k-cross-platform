@@ -1,6 +1,6 @@
 # Request from DV1: finish every production build for offline use (gate I1)
 
-Status: open.
+Status: applied in gate I1 round 1. `app/vite.config.ts` imports `pwaPlugin` and lists `pwaPlugin() as unknown as Plugin` after `cspPlugin()`. Checked: `vite build` writes `sw.js` (429 files) and the tags after the policy meta; a second run of `finish-build.mjs` on that output changes no byte; the dev server and `npm test` are unaffected.
 
 The web app works offline through a service worker whose list of files is produced from the build
 output (ARCHITECTURE.md 1.1, 7.5). The step that does it is DV1's

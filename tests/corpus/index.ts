@@ -33,7 +33,8 @@ export const SET_DIRECTORIES: Readonly<Record<CorpusSet, string>> = {
 
 /**
  * Where official outputs are kept (6.2.2): for the tracked sets in the repository, for `site`
- * outside it. A program's outputs are in `<folder>/<program id>/<option label>.L68` and `.S68`.
+ * outside it. A program's outputs are in `<folder>/<program id>/<option label>.L68` and `.S68`
+ * (`outputStem` gives the name for the files a failed run left).
  */
 export const GOLDEN_TRACKED = 'tests/conformance/asm/golden';
 export const GOLDEN_LOCAL = 'build/golden-local/asm';
@@ -50,10 +51,21 @@ export type CorpusFlag =
 export interface ExpectedRun {
   /** The assembler options that differ from a fresh installation. */
   options: Partial<AsmOptions>;
-  /** `ok`: the official program assembled the file. `failed`: the automation got no result. */
+  /**
+   * `ok`: the official program assembled the file in a clean run. `failed`: it did not - it crashed,
+   * took too long, or showed a window that a run must not show (ARCHITECTURE.md 6.2.2).
+   */
   status: 'ok' | 'failed';
   /** For `failed`: what happened (the report of the T1 acceptance). */
   reason?: string;
+  /**
+   * Only for `failed`: the official program had finished assembling when the run went wrong, and
+   * the `.L68` / `.S68` it wrote are kept (docs/porting/official-oracle.md section 4, item 7).
+   * `received`, `errors`, `warnings`, `l68`, `s68` and `golden` then describe those files, which
+   * are named `<label>.failed.L68` / `.S68` (`outputStem`) so that nobody takes them for the
+   * result of a clean run. The comparison test compares them like goldens.
+   */
+  outputsKept?: boolean;
   /**
    * SHA-256 of the text the official editor handed to its assembler. When `receivedFile` is true the
    * text differs from the editor model (`editorLoad` in tests/conformance/asm/compare.ts) and is kept
@@ -70,13 +82,26 @@ export interface ExpectedRun {
   /** True when the listing reports an undefined symbol: the hashes are of the masked forms. */
   undefinedSymbols?: boolean;
   /**
-   * True when `<label>.L68` / `<label>.S68` are in the repository (`goldenDirectory`). False: only
+   * True when the output files of the run are in the repository (`goldenDirectory`). False: only
    * the hashes are (a `site` program, or an output too large to commit); the files are then in the
    * git-ignored folder of the machine that ran the oracle.
    */
   golden: boolean;
-  /** Things the run showed that a reader should know (a stray window, a renamed status dialog). */
+  /** Things the run showed that a reader should know (a help-viewer box, a renamed status dialog). */
   notes?: string[];
+}
+
+/** Whether the run has output files of the official program: a clean run, or a failed one that left them. */
+export function hasOfficialOutput(run: Pick<ExpectedRun, 'status' | 'outputsKept'>): boolean {
+  return run.status === 'ok' || run.outputsKept === true;
+}
+
+/**
+ * The name, without extension, of the output files of a run in its golden folder: the option label
+ * for a clean run, `<label>.failed` for the files a failed run left (`outputsKept`).
+ */
+export function outputStem(label: string, run: Pick<ExpectedRun, 'status'>): string {
+  return run.status === 'ok' ? label : `${label}.failed`;
 }
 
 export interface CorpusProgram {

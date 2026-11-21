@@ -1,5 +1,7 @@
 # Request from SH8: run the browser check of the run feature in CI (gate I1)
 
+Status: applied in gate I1 round 1 (items 1 and 2; item 3 is for X2). Root script `check:run` and the step "Run check (SH8)" of `browser-checks`, group `simulator`, guarded by `needs.engines.outputs.available == 'asm sim'`.
+
 SH8's acceptance list (ARCHITECTURE.md 9.2) is written for Node: "with the real engine,
 `withFaults` and virtual time", and the unit tests under `app/src/core/run/` and
 `app/src/features/run/` cover it. Three things only a browser shows: that the simulator engine

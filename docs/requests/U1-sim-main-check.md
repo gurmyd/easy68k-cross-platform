@@ -1,5 +1,7 @@
 # Request from U1: run the browser check of the Registers, Listing and Messages panels in CI (gates)
 
+Status: applied in gate I1 round 1 (items 1 and 2; item 3 is U1's). Root script `check:sim-main` and the step "Registers, Listing and Messages check (U1)" of `browser-checks`, group `simulator`, guarded by `needs.engines.outputs.available == 'asm sim'`.
+
 U1's acceptance (ARCHITECTURE.md 9.2) includes items that only a browser can show: real typing in
 the register fields, gutter clicks and the gutter's context menu, the modeless Find dialog with
 Enter, F3 and Escape, Ctrl+F and Ctrl+G through the dispatcher, the third-visible-row scroll, and
@@ -37,3 +39,8 @@ Requests:
 3. **Integration gate I1**: once SH8's `features/run/session.ts` exists, the same checks can run on
    the real session; the script only needs `createSimSession` left at the feature's factory and a
    program loaded through `controller.open`.
+   Done by U1 in gate I1 round 1: the pass "the real application" runs on the normal application
+   (SH8's session and controller, the run feature's boxes, U2's Memory panel), in both browsers.
+   Also since then: on CI runners (`CI=true`, which GitHub Actions sets) the frame times of the
+   100,000-row listing are printed, not enforced, in both browsers; the page's own work per scroll
+   step stays a criterion. No change to the root script or `ci.yml` is needed for this.

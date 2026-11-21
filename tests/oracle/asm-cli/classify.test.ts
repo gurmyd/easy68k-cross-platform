@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalListing, canonicalSRecord } from '../../conformance/asm/compare';
+import { canonicalListing, canonicalSRecord, undefinedSymbolRanges } from '../../conformance/asm/compare';
 import { classify, hasChangedOperand, hasCliIncludeLine, listingBody } from './classify';
 
 const bytes = (text: string): Uint8Array => Uint8Array.from(Buffer.from(text, 'latin1'));
 const file = (...lines: string[]): Uint8Array => bytes(lines.join('\r\n') + '\r\n');
-const canonical = { canonicalListing, canonicalSRecord };
+const canonical = { canonicalListing, canonicalSRecord, undefinedSymbolRanges };
 
 const PORT_HEADER = ['00001000 Starting Address', 'Assembler used: EASy68K Editor/Assembler v5.16.01', 'Created On: 11/20/2026 12:00:00 PM', ''];
 // The command-line port names itself differently and prints one more empty line.
@@ -47,9 +47,14 @@ describe('classify', () => {
 
   it('accepts other object code only on a statement with an undefined symbol', () => {
     const line = (code: string): string[] => ['Line 1 ERROR: Undefined symbol', `00001000  41F9 ${code}             1      LEA X,A0`];
-    const cli = outputs(CLI_HEADER, line('004DBD16'), file('S10910004E7141F9BD166F', 'S804001000EB'));
-    const port = outputs(PORT_HEADER, line('00000000'), file('S10910004E7141F900006F', 'S804001000EB'));
+    const cli = outputs(CLI_HEADER, line('004DBD16'), file('S109100041F9004DBD1695', 'S804001000EB'));
+    const port = outputs(PORT_HEADER, line('00000000'), file('S109100041F900000000B5', 'S804001000EB'));
     expect(classify(cli, port, ['  LEA X,A0'], canonical)).toEqual({ verdict: 'explained', classes: ['undefined-symbol'] });
+    // The same listings, but an S-record byte that differs outside the statement ($1006).
+    const next = '00001006  4E71                       2      NOP';
+    const cliNext = outputs(CLI_HEADER, [...line('004DBD16'), next], file('S10B100041F9004DBD164E7100', 'S804001000EB'));
+    const portNext = outputs(PORT_HEADER, [...line('00000000'), next], file('S10B100041F9000000004E72D4', 'S804001000EB'));
+    expect(classify(cliNext, portNext, ['  LEA X,A0'], canonical).verdict).toBe('unexplained');
     const elsewhere = outputs(PORT_HEADER, [...line('00000000'), '00001006  4E72                       2      NOP']);
     const cliElsewhere = outputs(CLI_HEADER, [...line('004DBD16'), '00001006  4E71                       2      NOP']);
     expect(classify(cliElsewhere, elsewhere, ['  LEA X,A0'], canonical).verdict).toBe('unexplained');

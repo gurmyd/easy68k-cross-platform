@@ -1,6 +1,6 @@
 # Request from DV1: run the offline and Pages check in CI (gate I1)
 
-Status: open.
+Status: applied in gate I1 round 1. Root script `check:pwa` and the step "Offline, install and Pages check (DV1)" in `browser-checks`, group `simulator`, guarded by the file and by `needs.engines.outputs.available == 'asm sim'`; `build/pwa-check/` (without its `dist/`) is in the screenshot upload.
 
 DV1's acceptance (ARCHITECTURE.md 9.4) needs a real browser and a production build: a reload with
 the network off after one visit, every engine file of W4's loader, help, fonts and examples served

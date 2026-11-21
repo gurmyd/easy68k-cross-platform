@@ -16,6 +16,19 @@ import { bytesOf, TEST_ASM_OPTIONS, TEST_ASM_TIME, textOf } from './testing';
 
 const repo = (file: string) => fileURLToPath(new URL(`../../../${file}`, import.meta.url));
 const asmBuilt = existsSync(repo('engine/dist/asm68k.wasm')) && existsSync(repo('engine/dist/asm68k-loader.mjs'));
+
+/** Suites that load and compile the engines: on a loaded machine they need more than Vitest's 5 s. */
+const ENGINE_TIME = { timeout: 60_000 };
+
+/** With EASY68K_REQUIRE_ENGINES=1 (CI) a missing engine/dist fails instead of skipping. */
+it.runIf(process.env.EASY68K_REQUIRE_ENGINES === '1' && !asmBuilt)(
+  'engine/dist holds the assembler (EASY68K_REQUIRE_ENGINES=1)',
+  () => {
+    expect.fail(
+      'EASY68K_REQUIRE_ENGINES is 1 but engine/dist is incomplete: run "npm run build:engines" or "npm run fetch:engines"',
+    );
+  },
+);
 const sorted = (values: Iterable<string>) => [...values].sort();
 
 type AsmModule = Record<string, unknown>;
@@ -38,7 +51,7 @@ afterEach(() => {
 
 // ---- mirror -------------------------------------------------------------------------------------
 
-describe('mirror of engine/asm/asm68k.mjs (3.2)', () => {
+describe('mirror of engine/asm/asm68k.mjs (3.2)', ENGINE_TIME, () => {
   it('AsmOptions has exactly the keys of DEFAULT_OPTIONS', async () => {
     const { DEFAULT_OPTIONS } = (await loadAsmModule()) as { DEFAULT_OPTIONS: Record<string, unknown> };
     // TEST_ASM_OPTIONS is declared as AsmOptions, so it has every key of the interface and no other.
@@ -73,7 +86,7 @@ describe('mirror of engine/asm/asm68k.mjs (3.2)', () => {
 
 // ---- the oracle ---------------------------------------------------------------------------------
 
-describe.skipIf(!asmBuilt)('createAsmEngine with the real engine (needs engine/dist)', () => {
+describe.skipIf(!asmBuilt)('createAsmEngine with the real engine (needs engine/dist)', ENGINE_TIME, () => {
   describe('smoke.X68 against the native oracle (asy68k.exe, toolchain §4, §5)', () => {
     // The oracle's outputs for tests/oracle/asm-cli/smoke-test/smoke.X68, embedded at the end of this
     // file. The command-line oracle expands tabs as "Assembly" tabs (assembler §9.4.4).

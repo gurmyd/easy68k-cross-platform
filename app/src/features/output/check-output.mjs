@@ -4,17 +4,23 @@
 //
 // Starts the Vite dev server of app/ on a free port and drives the REAL Output panel inside the
 // real shell, with the REAL simulator engine running 68000 programs, in headless Chromium and
-// WebKit (Playwright). The drawing surface, the text screen and the run controller are written in
-// the same wave by other packages, so the page uses the small doubles of ./testing/ for those
-// three (./testing/bed.ts says what is real and what is not); everything a key or the mouse passes
-// through on its way to the program is the real code. The programs record what they observe in
-// 68000 memory (./testing/programs.ts), and the script reads it back.
+// WebKit (Playwright). The programs record what they observe in 68000 memory
+// (./testing/programs.ts), and the script reads it back. Two kinds of page:
+//
+//   the harness   ./testing/harness.html: the shell, the Output panel and the engine on the test
+//                 bed of ./testing/bed.ts, whose drawing surface, text screen and run controller
+//                 are small doubles. Here every entry that reached the engine can be read, the key
+//                 map can be chosen (Windows or macOS) and the page can pose as the desktop app.
+//                 All groups but the last use it.
+//   the app       the application itself (index.html) with its real session: the real surface,
+//                 text screen, fonts and run controller of the other packages. The group `app`
+//                 repeats the acceptance list there, with the key map of the machine it runs on.
 //
 // What it checks, once with the Windows key map and once with the macOS key map where they differ:
 //
-//   - the panel: header strip, canvas backing store = surface size at device pixel ratios 1 and
-//     2, whole-number zoom without smoothing, the prompt overlay, the text mirror, the collapse
-//     button, an accessibility scan;
+//   - the panel: header strip, canvas backing store = surface size at device pixel ratios 1, 2
+//     and 1.5, whole-number zoom without smoothing, the prompt overlay, the text mirror, the
+//     collapse button, an accessibility scan;
 //   - each rule of 2.9.4 with real key events: F9 runs and is not seen by task 19, its key-up is;
 //     F2, F4 and Shift+F2 are seen by task 19 and run nothing; Alt+Enter is seen by task 19 and by
 //     a key-down interrupt and then toggles full screen; after task 24 the eleven shortcuts reach
@@ -28,7 +34,10 @@
 //   - mouse: surface coordinates at any zoom, the shift bits, the left button's capture, no
 //     context menu;
 //   - full screen: by the user, deferred (a program asks without a gesture), refused, ended by
-//     the browser, and the window-level full screen of the desktop app.
+//     the browser, and the window-level full screen of the desktop app;
+//   - the app: all of the above that a real session takes part in - pixels and text of the real
+//     surface, keys and pastes through the real run controller, a cold start, full screen that
+//     the engine ends.
 //
 // Keys are HELD while the program is expected to see them (section 6.6): key down, wait for the
 // effect in the program's memory, key up.
@@ -42,7 +51,11 @@
 // The dev server runs without hot reload and with its own dependency cache, so that files saved
 // meanwhile cannot reload the page. Screenshots go to build/output-check (git-ignored). Prints
 // `N of M checks passed`; exit code 0 = everything passed. `--only panel,keys,text,paste,focus,
-// mouse,fullscreen` runs some groups only.
+// mouse,fullscreen,app` runs some groups only.
+//
+// Nothing here depends on the machine's speed: the script waits for what a program recorded, with
+// a time limit, and where it must leave a page alone (a user gesture has to run out) the page
+// reports on its console when it is ready.
 //
 // It lives here rather than in tests/ because SH4 owns app/src/features/output and tests/e2e
 // belongs to a later package (X2).
@@ -87,8 +100,14 @@ if (missingEngines.length > 0) {
   process.exit(required ? 1 : 0);
 }
 
-/** The harness page on the dev server (set by main). */
+/** The harness page and the application on the dev server (set by main). */
 let harnessUrl = '';
+let appUrl = '';
+/** The console line with which a page reports a full-screen phase (the text of testing/harness.tsx). */
+const FULL_SCREEN_SIGNAL = '[output-check] full screen: ';
+/** How long the real application may take to load: the dev server transforms every module on the way. */
+const APP_LOAD_MS = 180_000;
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 let failures = 0;
 const results = [];
 function check(name, ok, detail = '') {
@@ -103,18 +122,43 @@ const hex = (value) => `$${value.toString(16).toUpperCase()}`;
 
 // --- the page ---------------------------------------------------------------------------
 
+/** A new page whose console errors and full-screen reports are collected from the start. */
+async function watchedPage(context) {
+  const page = await context.newPage();
+  const errors = [];
+  const phases = [];
+  page.on('console', (message) => {
+    const text = message.text();
+    if (message.type() === 'error') errors.push(text);
+    else if (text.startsWith(FULL_SCREEN_SIGNAL)) phases.push(text.slice(FULL_SCREEN_SIGNAL.length));
+  });
+  page.on('pageerror', (error) => errors.push(String(error)));
+  return { page, errors, phases };
+}
+
+/** Every key and clipboard event of a page AFTER the page's own handlers have seen it: `window.__events`. */
+function recordEvents() {
+  window.__events = [];
+  for (const type of ['keydown', 'keyup', 'paste', 'contextmenu']) {
+    window.addEventListener(type, (event) =>
+      window.__events.push({
+        type,
+        key: event.key,
+        code: event.code,
+        repeat: event.repeat,
+        prevented: event.defaultPrevented,
+      }),
+    );
+  }
+}
+
 /**
  * Opens the harness page and mounts the shell with the Output panel on the test bed. Returns the
  * page with functions that reach into it. `os` is the key map; `desktop` makes the page behave
  * as the desktop app (Platform.setFullScreen).
  */
 async function openHarness(context, { os = 'windows', desktop = false } = {}) {
-  const page = await context.newPage();
-  const errors = [];
-  page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text());
-  });
-  page.on('pageerror', (error) => errors.push(String(error)));
+  const { page, errors, phases } = await watchedPage(context);
   await page.goto(harnessUrl);
   await page.evaluate(
     async (options) => {
@@ -133,32 +177,33 @@ async function openHarness(context, { os = 'windows', desktop = false } = {}) {
         desktop: options.desktop,
         container: document.getElementById('root'),
       });
-      // Every key and clipboard event AFTER the page's own handlers have seen it.
-      window.__events = [];
-      for (const type of ['keydown', 'keyup', 'paste', 'contextmenu']) {
-        window.addEventListener(type, (event) =>
-          window.__events.push({
-            type,
-            key: event.key,
-            code: event.code,
-            repeat: event.repeat,
-            prevented: event.defaultPrevented,
-          }),
-        );
-      }
     },
     { os, desktop },
   );
+  await page.evaluate(recordEvents);
+  await panelOnScreen(page, errors, 60000);
+  return pageTools(page, errors, phases, os);
+}
+
+/** Waits for the Output panel's canvas; says why and leaves a picture when it does not come. */
+async function panelOnScreen(page, errors, timeout) {
   try {
-    await page.waitForSelector('.e68-output__canvas', { timeout: 60000 });
+    await page.waitForSelector('.e68-output__canvas', { timeout });
   } catch {
-    // Say why, and leave a picture: a panel that failed to render shows a notice instead.
+    // A panel that failed to render shows a notice instead.
     await page.screenshot({ path: join(outDir, 'panel-did-not-appear.png') }).catch(() => {});
     const text = await page.evaluate(() => document.body.innerText.slice(0, 300)).catch(() => '');
     throw new Error(
       `The Output panel did not appear. Errors: ${errors.join(' | ') || 'none'}. Page text: ${JSON.stringify(text)}`,
     );
   }
+}
+
+/**
+ * The functions with which the passes reach into a page. The page has `window.__output` (the test
+ * bed of the harness, or the application's equivalent made by openApp) and `window.__events`.
+ */
+async function pageTools(page, errors, phases, os) {
   const consts = await page.evaluate(() => {
     const { KEYS, LINES, CHARS, MOUSE, PICTURE } = window.__output.programs;
     return { KEYS, LINES, CHARS, MOUSE, PICTURE };
@@ -167,6 +212,17 @@ async function openHarness(context, { os = 'windows', desktop = false } = {}) {
   const h = {
     page,
     errors,
+    /** The full-screen phases the page has reported on its console, oldest first. */
+    phases,
+    /**
+     * Waits until the page has reported a full-screen phase and gives the first one; undefined
+     * after the time limit. The page is not touched: asking it would be a user gesture there.
+     */
+    async firstPhase(timeout = 60000) {
+      const end = Date.now() + timeout;
+      while (phases.length === 0 && Date.now() < end) await sleep(50);
+      return phases[0];
+    },
     ...consts,
     /** Assembles and loads one of the programs of testing/programs.ts, and presses Run. */
     async start(program, options = {}) {
@@ -199,8 +255,9 @@ async function openHarness(context, { os = 'windows', desktop = false } = {}) {
           () => true,
           () => false,
         ),
-    until: (fn, arg) =>
-      page.waitForFunction(fn, arg, { timeout: 30000 }).then(
+    /** Waits until `fn(arg)` is true in the page; false after the time limit (default 30 s). */
+    until: (fn, arg, timeout = 30000) =>
+      page.waitForFunction(fn, arg, { timeout }).then(
         () => true,
         () => false,
       ),
@@ -485,16 +542,17 @@ async function presentationPass(browser, name, ratio) {
   );
   check(
     `${p} the header shows the new size`,
-    (await page.locator('.e68-output__size').innerText()) === '800x600',
+    await h.until(() => document.querySelector('.e68-output__size')?.textContent === '800x600'),
     await page.locator('.e68-output__size').innerText(),
   );
   check(
     `${p} the picture is drawn again on the new surface`,
     (await h.canvasPixel(pixel.x, pixel.y)) === rgb(pixel.color),
   );
+  // The check mark reads the store, which the session's mirror brings up to date a frame later.
   check(
     `${p} Options > Output Window Size checks 800x600`,
-    await page.evaluate(() => window.__output.ctx.commands.isChecked('sim.options.size', 1)),
+    await h.until(() => window.__output.ctx.commands.isChecked('sim.options.size', 1)),
   );
   // The menu command sets a size too (and blacks the surface).
   await page.evaluate(() => window.__output.ctx.commands.run('sim.options.size', 0));
@@ -731,6 +789,18 @@ async function keysPass(browser, name, os) {
     `${p} ${mac ? 'Option+Return' : 'Alt+Enter'} again leaves full screen`,
     (await h.until(() => window.__output.fullScreenPhase() === 'windowed')) && (await h.engineFullScreen()) === 0,
   );
+  // The original tests "Alt is held" (Shift.Contains): a further modifier does not stop the chord.
+  const withShift = await hold(page, ['Shift', 'Alt', 'Enter'], () =>
+    h.until(() => window.__output.fullScreenPhase() === 'full'),
+  );
+  const withControl = await hold(page, ['Control', 'Alt', 'Enter'], () =>
+    h.until(() => window.__output.fullScreenPhase() === 'windowed'),
+  );
+  check(
+    `${p} Shift+Alt+Enter enters full screen and Ctrl+Alt+Enter leaves it, as in the original`,
+    withShift && withControl && (await h.engineFullScreen()) === 0,
+    `${withShift ? 'entered' : 'did not enter'}, ${withControl ? 'left' : 'did not leave'}`,
+  );
   noErrors(p, h);
   await page.close();
 
@@ -863,6 +933,23 @@ async function textPass(browser, name) {
     same(await lineBytes(1, 5), [0x61, 0x62, 0x63, 0x09, 0]),
   );
 
+  // Ctrl+@ (Ctrl+Shift+2 on a US keyboard) is the character 0, which Windows really sends: the
+  // byte goes into the line and the length counts it.
+  await h.events();
+  await page.keyboard.type('x', { delay: 50 });
+  await page.keyboard.press('Control+Shift+Digit2', { delay: 50 });
+  await page.keyboard.type('y', { delay: 50 });
+  await page.keyboard.press('Enter', { delay: 60 });
+  await h.untilLong(LINES.count, 3);
+  const at = (await h.events()).find((e) => e.type === 'keydown' && e.code === 'Digit2');
+  check(
+    `${p} Ctrl+@ is the character 0: it is stored in the line of task 2, which returns the length 3`,
+    same(await lineBytes(2, 4), [0x78, 0x00, 0x79, 0x00]) &&
+      (await h.long(LINES.lengths + 2 * 4)) === 3 &&
+      at?.prevented === true,
+    `${(await lineBytes(2, 4)).map(hex).join(' ')}, length ${await h.long(LINES.lengths + 2 * 4)}, key ${JSON.stringify(at?.key)}`,
+  );
+
   // A dead-key sequence as Chromium on Windows delivers it: the dead key (no character, not
   // cancelled), then a key-down that carries the composed character.
   const deadPrevented = await h.sendKey('keydown', { key: 'Dead', code: 'Quote' });
@@ -910,11 +997,11 @@ async function textPass(browser, name) {
   await page.keyboard.insertText('ñ€');
   await page.keyboard.insertText('日'); // not in Windows-1252: nothing
   await page.keyboard.press('Enter', { delay: 60 });
-  await h.untilLong(LINES.count, 3);
+  await h.untilLong(LINES.count, 4);
   check(
     `${p} a dead-key sequence and composed characters arrive in task 2, each once`,
-    same(await lineBytes(2, 6), [0xe9, 0xe1, 0xf6, 0xf1, 0x80, 0]),
-    (await lineBytes(2, 8)).map(hex).join(' '),
+    same(await lineBytes(3, 6), [0xe9, 0xe1, 0xf6, 0xf1, 0x80, 0]),
+    (await lineBytes(3, 8)).map(hex).join(' '),
   );
 
   // Chromium only: a real composition through the browser's input-method interface.
@@ -924,11 +1011,11 @@ async function textPass(browser, name) {
     await client.send('Input.imeSetComposition', { text: 'ü', selectionStart: 1, selectionEnd: 1 });
     await client.send('Input.insertText', { text: 'ü' });
     await page.keyboard.press('Enter', { delay: 60 });
-    await h.untilLong(LINES.count, 4);
+    await h.untilLong(LINES.count, 5);
     check(
       `${p} a composition made by the browser's own input-method machinery arrives once`,
-      same(await lineBytes(3, 2), [0xfc, 0]),
-      (await lineBytes(3, 4)).map(hex).join(' '),
+      same(await lineBytes(4, 2), [0xfc, 0]),
+      (await lineBytes(4, 4)).map(hex).join(' '),
     );
   }
   await h.shot(`${name}-text.png`);
@@ -1357,6 +1444,29 @@ async function fullScreenPass(browser, name) {
   );
   await h.shot(`${name}-fullscreen-button.png`);
 
+  // TRAP #15 task 33 sets another size while full screen is on. The original then changes the
+  // display mode again (setWindowSize calls setupWindow); here the new surface is shown the same
+  // way, centred at its own largest whole-number scale, with nothing for a session to do.
+  await h.poke(h.PICTURE.resize, [1]);
+  await h.until(() => document.querySelector('.e68-output__canvas').width === 800);
+  const resizedInFullScreen = await h.until(() => {
+    const canvas = document.querySelector('.e68-output__canvas');
+    const box = canvas.getBoundingClientRect();
+    const fit = Math.max(1, Math.floor(Math.min(window.innerWidth / 800, window.innerHeight / 600)));
+    return (
+      canvas.height === 600 &&
+      box.width === 800 * fit &&
+      box.height === 600 * fit &&
+      Math.abs(box.left - (window.innerWidth - box.width) / 2) <= 0.5 &&
+      Math.abs(box.top - (window.innerHeight - box.height) / 2) <= 0.5
+    );
+  });
+  check(
+    `${p} a size set by task 33 in full screen (800x600) is shown centred at its whole-number scale`,
+    resizedInFullScreen && (await h.fullScreen()) === 'full',
+    JSON.stringify(await h.canvas()),
+  );
+
   // A dialog opened meanwhile (a program's file dialog, a message box) is on top and usable.
   await h.page.evaluate(() => {
     window.__answer = window.__output.ctx.dialogs.messageBox({
@@ -1398,7 +1508,8 @@ async function fullScreenPass(browser, name) {
   // 3. Deferred: a program asks (task 33) while no user gesture is active. Everything this
   // script does to a page counts as a user gesture there for a few seconds (the automation
   // channel says so), so the requests are made by the pages themselves, later: four pages are
-  // prepared, then left alone until their gestures have run out.
+  // prepared, then left alone until their gestures have run out and each has reported on its
+  // console that the request arrived (h.firstPhase; asking the page would be a gesture again).
   // (Browsers keep a gesture "active" for five seconds.) Starting the program is the last thing
   // done to its page; Run gives the panel the keyboard by itself.
   const GESTURE_RUNS_OUT_MS = 6500;
@@ -1414,14 +1525,14 @@ async function fullScreenPass(browser, name) {
     (ms) => setTimeout(() => window.__output.ctx.commands.run('sim.output.fullscreen', true), ms),
     GESTURE_RUNS_OUT_MS,
   ); // the /f switch
-  await new Promise((done) => setTimeout(done, GESTURE_RUNS_OUT_MS + 1500));
+  const arrivedAs = await Promise.all([a, b, c, d].map((one) => one.h.firstPhase()));
 
   ({ context, h } = a);
   const prompt = h.page.locator('.e68-output__prompt');
   check(
     `${p} a program asks without a gesture: the request waits`,
-    (await h.fullScreen()) === 'waiting' && (await h.engineFullScreen()) === 1,
-    await h.fullScreen(),
+    arrivedAs[0] === 'waiting' && (await h.fullScreen()) === 'waiting' && (await h.engineFullScreen()) === 1,
+    `the request arrived as ${arrivedAs[0]}; now ${await h.fullScreen()}`,
   );
   check(
     `${p} the panel shows "Press any key or click to enter full screen"`,
@@ -1439,7 +1550,7 @@ async function fullScreenPass(browser, name) {
 
   // ... and carried out by the next key, which the program receives as well.
   ({ context, h } = b);
-  const waitingForKey = (await h.fullScreen()) === 'waiting' && (await h.hasKeys());
+  const waitingForKey = arrivedAs[1] === 'waiting' && (await h.fullScreen()) === 'waiting' && (await h.hasKeys());
   await h.page.keyboard.down('KeyA');
   const byKey = await isFull(h);
   const keySeen = await h.untilByte(h.KEYS.downs + 0x41, 1);
@@ -1454,8 +1565,8 @@ async function fullScreenPass(browser, name) {
   ({ context, h } = c);
   check(
     `${p} the command without a gesture (the /f switch) waits as well`,
-    (await h.fullScreen()) === 'waiting',
-    await h.fullScreen(),
+    arrivedAs[2] === 'waiting' && (await h.fullScreen()) === 'waiting',
+    `the request arrived as ${arrivedAs[2]}; now ${await h.fullScreen()}`,
   );
   const box = await h.canvas();
   await h.page.mouse.click(box.left + 20, box.top + 30);
@@ -1470,7 +1581,7 @@ async function fullScreenPass(browser, name) {
 
   // ... or by the full-screen button, which then does not toggle straight back.
   ({ context, h } = d);
-  const waitingForButton = (await h.fullScreen()) === 'waiting';
+  const waitingForButton = arrivedAs[3] === 'waiting' && (await h.fullScreen()) === 'waiting';
   await h.page.locator('.e68-output__header button[aria-label^="Full Screen"]').click();
   const byButton = await isFull(h);
   await h.page.waitForTimeout(300);
@@ -1502,6 +1613,16 @@ async function fullScreenPass(browser, name) {
         "Sorry, this computer's configuration does not support the desired screen resolution in full screen mode.",
       ),
     JSON.stringify(boxText),
+  );
+  // The original's call names no flags (MB_OK): an OK button and no picture beside the text.
+  check(
+    `${p} ... with one OK button and no icon, as the original's MB_OK box`,
+    boxShown &&
+      (await h.page.locator('[role=alertdialog] .e68-messagebox__icon').count()) === 0 &&
+      same(await h.page.locator('[role=alertdialog] .e68-dialog__footer button').allInnerTexts(), ['OK']),
+    `${await h.page.locator('[role=alertdialog] .e68-messagebox__icon').count()} icon(s), buttons ${JSON.stringify(
+      await h.page.locator('[role=alertdialog] .e68-dialog__footer button').allInnerTexts(),
+    )}`,
   );
   await h.shot(`${name}-fullscreen-refused.png`);
   check(
@@ -1546,6 +1667,583 @@ async function fullScreenPass(browser, name) {
     `${p} desktop app: the program's request for windowed mode leaves`,
     (await isWindowed(h)) && same(await h.page.evaluate(() => window.__output.windowFullScreen), [true, false]),
   );
+  // The window leaves full screen by the system's own means (the green button of a Mac window):
+  // Platform.onFullScreenChange says so, and the panel and the engine's flag follow.
+  await h.page.evaluate(() => window.__output.ctx.commands.run('sim.output.fullscreen', true));
+  const fullAgain = (await isFull(h)) && (await h.until(() => window.__output.engine.getOption(11) === 1));
+  await h.page.evaluate(() => window.__output.systemFullScreen(false));
+  check(
+    `${p} desktop app: full screen ended by the system: the panel is windowed again, the engine's flag cleared`,
+    fullAgain &&
+      (await isWindowed(h)) &&
+      (await h.until(() => window.__output.engine.getOption(11) === 0)) &&
+      same(await h.page.evaluate(() => window.__output.windowFullScreen), [true, false, true]),
+    `${await h.fullScreen()}, window calls ${JSON.stringify(await h.page.evaluate(() => window.__output.windowFullScreen))}`,
+  );
+  noErrors(p, h);
+  await context.close();
+}
+
+// --- a device pixel ratio that is not a whole number --------------------------------------
+
+/** 2.5: "Device pixel ratio never changes the backing store" - also at 150 %, a common Windows setting. */
+async function fractionalRatioPass(browser, name) {
+  const ratio = 1.5;
+  const p = `${name}/ratio ${ratio}:`;
+  const context = await newContext(browser, { deviceScaleFactor: ratio });
+  const h = await openHarness(context);
+  const { page, PICTURE } = h;
+  await h.start('pictureProgram');
+  await h.untilLong(PICTURE.drawn, 1);
+  await page.locator('.e68-output__header select').selectOption('1');
+  await h.until(() => document.querySelector('.e68-output__canvas').getBoundingClientRect().width === 640);
+  const canvas = await h.canvas();
+  const rgb = (bgr) => ((bgr & 0xff) << 16) | (bgr & 0xff00) | ((bgr >> 16) & 0xff);
+  check(`${p} the page runs at device pixel ratio ${ratio}`, canvas.ratio === ratio, `${canvas.ratio}`);
+  check(
+    `${p} canvas backing size equals the surface size (640x480), shown at 640x480 CSS pixels`,
+    canvas.width === 640 && canvas.height === 480 && canvas.cssWidth === 640 && canvas.cssHeight === 480,
+    `${canvas.width}x${canvas.height} shown ${canvas.cssWidth}x${canvas.cssHeight}`,
+  );
+  check(
+    `${p} the canvas holds the pixels the program drew, unscaled`,
+    (await h.canvasPixel(PICTURE.pixel.x, PICTURE.pixel.y)) === rgb(PICTURE.pixel.color) &&
+      (await h.canvasPixel(PICTURE.pixel.x + 1, PICTURE.pixel.y)) === 0 &&
+      canvas.rendering === 'pixelated',
+  );
+  noErrors(p, h);
+  await context.close();
+}
+
+// --- the application itself: the real session ------------------------------------------------
+
+/**
+ * Opens the application (index.html) in Simulator mode and waits for its simulator engine. The
+ * page gets a `window.__output` with the members of the harness's test bed that the passes use,
+ * made from the application's own context (`window.__easy68k`, development builds only), so that
+ * pageTools() serves both kinds of page. The key map is the one of the machine this runs on.
+ */
+async function openApp(context) {
+  const { page, errors, phases } = await watchedPage(context);
+  await page.goto(appUrl, { timeout: APP_LOAD_MS });
+  await page.waitForSelector('.e68-shell', { timeout: APP_LOAD_MS });
+  await page.waitForFunction(() => window.__easy68k !== undefined, undefined, { timeout: APP_LOAD_MS });
+  await page.evaluate(async (signal) => {
+    // The same modules the application has loaded: its Output model, and the real assembler.
+    const [engine, programs, model] = await Promise.all([
+      import('/src/engine/testing.ts'),
+      import('/src/features/output/testing/programs.ts'),
+      import('/src/features/output/model.ts'),
+    ]);
+    const { ctx } = window.__easy68k;
+    const { fullScreen } = model.outputOf(ctx);
+    fullScreen.store.subscribe(() => console.info(`${signal}${fullScreen.phase}`));
+    // Always the session's current engine: a cold start replaces it.
+    const sim = () => ctx.sim.engine;
+    let loads = 0;
+    window.__output = {
+      programs,
+      ctx,
+      get engine() {
+        return sim();
+      },
+      get controller() {
+        return ctx.sim.controller;
+      },
+      get surface() {
+        return ctx.sim.surface;
+      },
+      fullScreenPhase: () => fullScreen.phase,
+      byte: (address) => sim().readByte(address),
+      long: (address) => sim().readLong(address) >>> 0,
+      bytes: (address, length) => Array.from({ length }, (_, index) => sim().readByte(address + index)),
+      string(address) {
+        let text = '';
+        for (let at = address; text.length < 4096; at++) {
+          const byte = sim().readByte(at);
+          if (byte === 0) break;
+          text += String.fromCharCode(byte);
+        }
+        return text;
+      },
+      // The engine is changed through the run controller only (section 0, rule 8).
+      poke: (address, bytes) => ctx.sim.controller.invoke((target) => target.writeBytes(address, bytes)),
+      run: () => ctx.commands.run('sim.run.run'),
+      /**
+       * Assembles a program of testing/programs.ts, puts it into the browser store and starts
+       * loading it: the first one as File > Open, every later one as the editor's Execute, which
+       * is a cold start. Gives the path; the script waits for the load.
+       */
+      async prepare(name, options) {
+        const { s68, l68 } = await engine.assembleProgram(programs[name](options));
+        const path = `/browser/output-check/${name}-${++loads}.S68`;
+        await ctx.vfs.writeFile(path, s68);
+        await ctx.vfs.writeFile(path.replace(/S68$/, 'L68'), l68);
+        if (ctx.sim.controller.phase !== 'idle') ctx.sim.controller.pause();
+        ctx.sim.controller
+          .open(path, loads === 1 ? 'open' : 'execute')
+          .catch((error) => console.error('output-check: the load failed', error));
+        return path;
+      },
+    };
+    await ctx.commands.run('app.mode.set', 'simulator');
+  }, FULL_SCREEN_SIGNAL);
+  await page.evaluate(recordEvents);
+  // The session fetches, compiles and starts the simulator engine: the phase leaves 'loading'.
+  await page.waitForFunction(
+    () => {
+      const { ctx } = window.__easy68k;
+      return ctx.store.getState().sim.phase === 'idle' && ctx.sim.engine.state().hardwareEnabled;
+    },
+    undefined,
+    { timeout: APP_LOAD_MS },
+  );
+  await panelOnScreen(page, errors, 60000);
+  const os = await page.evaluate(() => window.__easy68k.ctx.platform.os);
+  const h = await pageTools(page, errors, phases, os);
+  return Object.assign(h, {
+    os,
+    /** Loads a program of testing/programs.ts (see `prepare` above) and waits until it is loaded. */
+    async load(name, options = {}) {
+      const path = await page.evaluate(
+        ([program, programOptions]) => window.__output.prepare(program, programOptions),
+        [name, options],
+      );
+      const end = Date.now() + 60000;
+      for (;;) {
+        const loaded = await page.evaluate((file) => {
+          const state = window.__easy68k.ctx.store.getState().sim;
+          return state.phase === 'idle' && state.program?.path === file;
+        }, path);
+        if (loaded) return;
+        // The Caution question of 4.7, where the program before was still running or waiting: OK.
+        const ok = page.locator('[role=alertdialog] .e68-dialog__footer button', { hasText: 'OK' });
+        if ((await ok.count()) > 0) await ok.first().click();
+        if (Date.now() > end) throw new Error(`The program ${name} was not loaded within a minute`);
+        await sleep(100);
+      }
+    },
+    /** Presses Run with the command (as the menu does) and waits until the program executes. */
+    async run() {
+      await page.evaluate(() => window.__output.run());
+      return h.until(() => ['running', 'waitInput', 'waitDelay'].includes(window.__output.controller.phase));
+    },
+    store: () => page.evaluate(() => window.__easy68k.ctx.store.getState().sim),
+  });
+}
+
+/**
+ * The acceptance list once more in the application itself, where the drawing surface, the text
+ * screen with its fonts, the run controller and the session are the real ones of the other
+ * packages. One page per browser; every program after the first is loaded by a cold start.
+ */
+async function appPass(browser, name) {
+  const p = `${name}/app:`;
+  const context = await newContext(browser);
+  const h = await openApp(context);
+  const { page, os, PICTURE, KEYS, LINES, CHARS, MOUSE } = h;
+  const mac = os === 'mac';
+  const rgb = (bgr) => ((bgr & 0xff) << 16) | (bgr & 0xff00) | ((bgr >> 16) & 0xff);
+  const keysInPanel = () => h.until(() => document.activeElement?.matches('[data-e68-keys="program"]') === true);
+  const runButton = page.locator('.e68-shell [role=toolbar] [data-command="sim.run.run"]:visible').first();
+  const { pixel, box } = PICTURE;
+  const inside = [box.left + 10, box.top + 10];
+
+  // 1. Presentation: the real surface, the real text screen and its fonts on the canvas.
+  await h.load('pictureProgram');
+  await runButton.click(); // Run from the toolbar, a real click
+  check(`${p} Run gives the Output panel the keyboard (2.10)`, await keysInPanel());
+  await h.untilLong(PICTURE.drawn, 1);
+  await h.until(() => /640x480/.test(document.querySelector('.e68-output__size')?.textContent ?? ''));
+  let canvas = await h.canvas();
+  check(
+    `${p} canvas backing size equals the surface size (640x480); the header shows it`,
+    canvas.width === 640 &&
+      canvas.height === 480 &&
+      /Output\s+640x480\s+zoom:/.test(await page.locator('.e68-output__header').innerText()),
+    `${canvas.width}x${canvas.height}, ${JSON.stringify(await page.locator('.e68-output__header').innerText())}`,
+  );
+  const drawn = [
+    await h.canvasPixel(pixel.x, pixel.y),
+    await h.canvasPixel(...inside),
+    await h.canvasPixel(box.right + 10, box.bottom + 10),
+  ];
+  check(
+    `${p} the canvas shows what the program drew on the real surface: a red pixel, a green box, black around`,
+    same(drawn, [rgb(pixel.color), rgb(box.color), 0]),
+    drawn.map(hex).join(' '),
+  );
+  // HELLO, written with task 13: glyphs of the real font in the first text row.
+  const lit = await page.evaluate(() => {
+    const { colWidth, rowHeight } = window.__output.ctx.sim.text.state;
+    const { data } = document
+      .querySelector('.e68-output__canvas')
+      .getContext('2d')
+      .getImageData(0, 0, 5 * colWidth, rowHeight);
+    let count = 0;
+    for (let at = 0; at < data.length; at += 4)
+      if (data[at] > 0x80 && data[at + 1] > 0x80 && data[at + 2] > 0x80) count++;
+    return { count, colWidth, rowHeight };
+  });
+  check(
+    `${p} the text of the real text screen is on the canvas, drawn with the real font`,
+    lit.count >= 20,
+    `${lit.count} lit pixels in a row of five cells of ${lit.colWidth}x${lit.rowHeight}`,
+  );
+  check(
+    `${p} the text mirror holds the text of the real text screen`,
+    await h.until(
+      (text) => document.querySelector('.e68-output [role="log"]')?.textContent.includes(text),
+      PICTURE.text,
+    ),
+  );
+  await h.shot(`${name}-app-picture.png`);
+
+  // TRAP #15 task 33 and the Options menu: the size follows through the session's mirror.
+  await h.poke(PICTURE.resize, [1]);
+  await h.untilLong(PICTURE.drawn, 2);
+  await h.until(() => document.querySelector('.e68-output__canvas').width === 800);
+  const sizeShown = await h.until(() => document.querySelector('.e68-output__size')?.textContent === '800x600');
+  canvas = await h.canvas();
+  check(
+    `${p} after task 33 (800x600) the backing size, the header and the check mark of Output Window Size follow`,
+    canvas.width === 800 &&
+      canvas.height === 600 &&
+      sizeShown &&
+      (await h.until(() => window.__output.ctx.commands.isChecked('sim.options.size', 1))) &&
+      (await h.canvasPixel(pixel.x, pixel.y)) === rgb(pixel.color),
+    `${canvas.width}x${canvas.height}, ${await page.locator('.e68-output__size').innerText()}`,
+  );
+  await page.evaluate(() => window.__output.ctx.commands.run('sim.options.size', 0));
+  await h.until(() => document.querySelector('.e68-output__canvas').width === 640);
+  check(
+    `${p} Options > Output Window Size > 640x480 sets the size and blacks the surface`,
+    (await h.until(() => window.__output.ctx.commands.isChecked('sim.options.size', 0))) &&
+      (await h.canvasPixel(...inside)) === 0,
+  );
+  await page.evaluate(() => window.__output.ctx.commands.run('sim.options.textWrap'));
+  const wrapOn = await h.until(() => window.__output.ctx.commands.isChecked('sim.options.textWrap'));
+  await page.evaluate(() => window.__output.ctx.commands.run('sim.options.textWrap'));
+  check(
+    `${p} Options > Output Window Text Wrap switches the option of the real text screen, and its check mark`,
+    wrapOn && (await h.until(() => !window.__output.ctx.commands.isChecked('sim.options.textWrap'))),
+  );
+
+  // 2. A cold start (Execute) replaces the engine: the panel shows the new simulator's surface.
+  await h.load('pictureProgram');
+  const blackAfterColdStart = await h.until(() => {
+    const context2d = document.querySelector('.e68-output__canvas').getContext('2d');
+    const at = (x, y) => context2d.getImageData(x, y, 1, 1).data.slice(0, 3).join();
+    const { pixel: dot, box: rect } = window.__output.programs.PICTURE;
+    return at(dot.x, dot.y) === '0,0,0' && at(rect.left + 10, rect.top + 10) === '0,0,0';
+  });
+  await h.run();
+  await h.untilLong(PICTURE.drawn, 1);
+  check(
+    `${p} after a cold start the canvas is black, and the next run draws on it again`,
+    blackAfterColdStart &&
+      (await h.until(
+        ([x, y, wanted]) => {
+          const [r, g, b] = document
+            .querySelector('.e68-output__canvas')
+            .getContext('2d')
+            .getImageData(x, y, 1, 1).data;
+          return ((r << 16) | (g << 8) | b) === wanted;
+        },
+        [...inside, rgb(box.color)],
+      )),
+  );
+
+  // 3. Keys through the real run controller (2.9.4).
+  await h.load('keyWatchProgram', { keyDownInterrupt: true });
+  await h.run();
+  await h.until(() => window.__output.long(window.__output.programs.KEYS.rounds) > 10);
+  check(`${p} keys: Run gives the panel the keyboard`, await keysInPanel());
+  await h.poke(KEYS.watch, [0x00, 0x00, 0x73, 0x71]);
+  let seen = await hold(page, ['F2'], () => h.untilLong(KEYS.state, 0x000000ff));
+  check(
+    `${p} F2 is seen by task 19 while it is held and up again after its release`,
+    seen && (await h.untilLong(KEYS.state, 0)),
+  );
+  seen = await hold(page, ['F4'], () => h.untilLong(KEYS.state, 0x0000ff00));
+  check(
+    `${p} F4 is seen by task 19; neither key ran anything: same mode, the keyboard stays in the panel`,
+    seen &&
+      (await h.store()).phase === 'running' &&
+      (await h.hasKeys()) &&
+      (await page.evaluate(() => window.__easy68k.ctx.store.getState().mode)) === 'simulator',
+  );
+  await h.events();
+  await page.keyboard.down('F9');
+  await page.waitForTimeout(150);
+  const f9Down = await h.byte(KEYS.downs + 0x78);
+  await page.keyboard.up('F9');
+  check(
+    `${p} F9, a menu shortcut, is not seen by task 19; its key-up is; the key-down is cancelled`,
+    f9Down === 0 &&
+      (await h.untilByte(KEYS.ups + 0x78, 1)) &&
+      (await h.byte(KEYS.downs + 0x78)) === 0 &&
+      (await h.events()).find((e) => e.type === 'keydown' && e.code === 'F9')?.prevented === true,
+  );
+  // The release chord: nothing for the program, the focus moves to the next panel.
+  await page.keyboard.down('Control');
+  await page.keyboard.down('Alt');
+  await page.keyboard.down('KeyO');
+  const released = await h.until(() => document.activeElement?.matches('[data-e68-keys="program"]') !== true);
+  await page.keyboard.up('KeyO');
+  await page.keyboard.up('Alt');
+  await page.keyboard.up('Control');
+  await page.waitForTimeout(150);
+  check(
+    `${p} ${mac ? 'Ctrl+Option+O' : 'Ctrl+Alt+O'} releases the keyboard to another panel; nothing of the O key reaches the program`,
+    released &&
+      ![null, 'output'].includes(await h.activePanel()) &&
+      (await h.byte(KEYS.downs + 0x4f)) === 0 &&
+      (await h.byte(KEYS.ups + 0x4f)) === 0,
+    `focus in ${await h.activePanel()}`,
+  );
+  check(`${p} a click on the surface gives the keyboard back`, await h.clickSurface({ x: 320, y: 100 }));
+
+  // Alt+Enter: seen by task 19 and by a key-down interrupt, then full screen.
+  const interruptsBefore = await h.long(KEYS.interrupts);
+  await page.keyboard.down('Alt');
+  await page.keyboard.down('Enter');
+  const enterSeen = await h.untilByte(KEYS.downs + 0x0d, 1);
+  const full = await h.until(() => window.__output.fullScreenPhase() === 'full');
+  await page.keyboard.up('Enter');
+  await page.keyboard.up('Alt');
+  check(
+    `${p} ${mac ? 'Option+Return' : 'Alt+Enter'} is seen by task 19 and by a key-down interrupt`,
+    enterSeen &&
+      (await h.byte(KEYS.interruptDowns + 0x0d)) === 1 &&
+      (await h.long(KEYS.interrupts)) >= interruptsBefore + 2,
+    `${(await h.long(KEYS.interrupts)) - interruptsBefore} interrupts`,
+  );
+  check(
+    `${p} ... and then toggles full screen: the engine's flag and the store agree`,
+    full &&
+      (await h.engineFullScreen()) === 1 &&
+      (await h.until(() => window.__easy68k.ctx.store.getState().sim.output.fullScreen)),
+    await h.fullScreen(),
+  );
+  await h.until(() => {
+    const panel = document.querySelector('.e68-output').getBoundingClientRect();
+    return panel.width === window.innerWidth && panel.height === window.innerHeight;
+  });
+  await h.shot(`${name}-app-fullscreen.png`);
+  // Execution stops (Pause, F6, then one Trace Into, F7): the engine leaves full screen itself
+  // (sim-ui §9.2 step 9) and the panel follows.
+  await h.events();
+  await page.keyboard.press('F6', { delay: 80 });
+  const paused = await h.until(() => window.__easy68k.ctx.store.getState().sim.phase === 'idle');
+  let endedBy = 'Pause';
+  if (!(await h.until(() => window.__output.fullScreenPhase() === 'windowed', undefined, 3000))) {
+    endedBy = 'Trace Into';
+    await page.keyboard.press('F7', { delay: 80 });
+  }
+  check(`${p} F6 pauses the program and is not seen by it`, paused && (await h.byte(KEYS.downs + 0x75)) === 0);
+  check(
+    `${p} a stop in trace mode ends full screen: the panel is windowed again, flag and store cleared`,
+    (await h.until(() => window.__output.fullScreenPhase() === 'windowed')) &&
+      (await h.engineFullScreen()) === 0 &&
+      (await h.until(() => !window.__easy68k.ctx.store.getState().sim.output.fullScreen)) &&
+      (await h.until(() => document.fullscreenElement === null)),
+    `ended by ${endedBy}; now ${await h.fullScreen()}`,
+  );
+
+  // After task 24 the menu shortcuts reach the program and only the release chord acts.
+  await h.load('keyWatchProgram', { keyCommandsOff: true });
+  await h.run();
+  await h.until(() => window.__output.engine.state().keyCommandsDisabled === true);
+  await keysInPanel();
+  const afterTask24 = [];
+  for (const [keys, vk] of [
+    [['F6'], 0x75],
+    [['F9'], 0x78],
+    [['Alt', 'Enter'], 0x0d],
+  ]) {
+    if (!(await hold(page, keys, () => h.untilByte(KEYS.downs + vk, 1)))) afterTask24.push(keys.join('+'));
+  }
+  await page.waitForTimeout(150);
+  check(
+    `${p} after task 24 F6, F9 and Alt+Enter reach the program; nothing pauses, nothing goes full screen`,
+    afterTask24.length === 0 && (await h.store()).phase === 'running' && (await h.fullScreen()) === 'windowed',
+    `missed: ${afterTask24.join(', ') || 'none'}; phase ${(await h.store()).phase}; ${await h.fullScreen()}`,
+  );
+  check(`${p} ... and the store says so (AppState.sim.keyCommands)`, (await h.store()).keyCommands === false);
+
+  // 4. Text and paste through the real run controller and the real text screen.
+  await h.load('lineInputProgram');
+  await h.run();
+  await h.until(() => window.__output.controller.phase === 'waitInput');
+  check(`${p} a keyboard read gives the Output panel the keyboard`, await keysInPanel());
+  // 3.5.3: the prompt is drawn over the presented image, never into the back buffer.
+  const promptSeen = await h.until(() => {
+    const { overlay: cell, back } = window.__output.surface;
+    if (!cell || cell.width <= 0 || cell.height <= 0) return false;
+    const { data } = document
+      .querySelector('.e68-output__canvas')
+      .getContext('2d')
+      .getImageData(cell.x, cell.y, cell.width, cell.height);
+    let onCanvas = 0;
+    let inBuffer = 0;
+    for (let y = 0; y < cell.height; y++) {
+      for (let x = 0; x < cell.width; x++) {
+        if (data[(y * cell.width + x) * 4] > 0) onCanvas++;
+        if ((back.data[(cell.y + y) * back.width + cell.x + x] & 0xffffff) !== 0) inBuffer++;
+      }
+    }
+    return onCanvas > 0 && inBuffer === 0;
+  });
+  check(`${p} the input prompt of the real text screen is on the canvas but not in the back buffer`, promptSeen);
+  const line = (index) => h.string(LINES.text + index * LINES.size);
+  const lineBytes = (index, length) => h.bytes(LINES.text + index * LINES.size, length);
+  await page.keyboard.type('Hi', { delay: 60 });
+  await page.keyboard.press('Enter', { delay: 60 });
+  check(
+    `${p} typed text arrives in task 2`,
+    (await h.untilLong(LINES.count, 1)) && (await line(0)) === 'Hi',
+    await line(0),
+  );
+  for (let i = 0; i < 4; i++) {
+    await page.keyboard.down('a');
+    await page.waitForTimeout(40);
+  }
+  await page.keyboard.up('a');
+  await page.keyboard.press('Enter', { delay: 60 });
+  check(`${p} a held letter repeats`, (await h.untilLong(LINES.count, 2)) && (await line(1)) === 'aaaa', await line(1));
+  await page.keyboard.insertText('ñ€'); // composed text, as a dead key or an input method leaves it
+  await page.keyboard.press('Enter', { delay: 60 });
+  check(
+    `${p} composed characters arrive in task 2`,
+    (await h.untilLong(LINES.count, 3)) && same(await lineBytes(2, 3), [0xf1, 0x80, 0]),
+    (await lineBytes(2, 4)).map(hex).join(' '),
+  );
+  await h.pasteChord('ONE\r\nTWO');
+  const oneLine = await h.untilLong(LINES.count, 4);
+  await page.waitForTimeout(150);
+  check(
+    `${p} a two-line paste into task 2 fills one input`,
+    oneLine && (await h.long(LINES.count)) === 4 && (await line(3)) === 'ONE',
+    `${await h.long(LINES.count)} line(s), ${JSON.stringify(await line(3))}`,
+  );
+  await page.keyboard.press('Enter', { delay: 60 });
+  check(
+    `${p} of the second line only the last character survives as type-ahead`,
+    (await h.untilLong(LINES.count, 5)) && (await line(4)) === 'O',
+    JSON.stringify(await line(4)),
+  );
+  await h.pasteChord('ABC\nDEF');
+  check(
+    `${p} a paste with LF line ends terminates the line`,
+    (await h.untilLong(LINES.count, 6)) && (await line(5)) === 'ABC',
+    JSON.stringify(await line(5)),
+  );
+  await h.shot(`${name}-app-text.png`);
+
+  await h.load('charLoopProgram');
+  await h.run();
+  await h.until(() => window.__output.controller.phase === 'waitInput');
+  await keysInPanel();
+  await h.pasteChord('HELLO');
+  const two = await h.untilLong(CHARS.count, 2);
+  await page.waitForTimeout(150);
+  check(
+    `${p} pasting HELLO into a task 5 loop stores HO`,
+    two && (await h.long(CHARS.count)) === 2 && (await h.string(CHARS.text)) === 'HO',
+    `${JSON.stringify(await h.string(CHARS.text))}, ${await h.long(CHARS.count)} characters`,
+  );
+  await page.keyboard.press('Control+Shift+Digit2', { delay: 60 });
+  check(
+    `${p} Ctrl+@ reaches task 5 as the character 0`,
+    (await h.untilLong(CHARS.count, 3)) && same(await h.bytes(CHARS.text, 3), [0x48, 0x4f, 0x00]),
+    (await h.bytes(CHARS.text, 3)).map(hex).join(' '),
+  );
+
+  // 5. The mouse.
+  await h.load('mouseWatchProgram');
+  await h.run();
+  canvas = await h.canvas();
+  const scale = canvas.cssWidth / canvas.width;
+  const client = (x, y) => [canvas.left + scale * x + scale / 2, canvas.top + scale * y + scale / 2];
+  const position = (x, y) => ((y << 16) | (x & 0xffff)) >>> 0;
+  await page.mouse.move(...client(10, 20));
+  check(
+    `${p} a mouse move reports the surface pixel under the pointer`,
+    await h.untilLong(MOUSE.currentPosition, position(10, 20)),
+    hex(await h.long(MOUSE.currentPosition)),
+  );
+  await page.mouse.down();
+  const pressed = (await h.untilLong(MOUSE.down, 1)) && (await h.long(MOUSE.downPosition)) === position(10, 20);
+  await page.mouse.up();
+  check(
+    `${p} a press and its release reach task 61: Left in the "down" snapshot, no button afterwards`,
+    pressed && (await h.untilLong(MOUSE.current, 0)) && (await h.long(MOUSE.up)) === 0,
+    `${hex(await h.long(MOUSE.down))} ${hex(await h.long(MOUSE.up))} ${hex(await h.long(MOUSE.current))}`,
+  );
+  await h.events();
+  await page.mouse.click(...client(30, 40), { button: 'right', delay: 60 });
+  check(
+    `${p} a right click is reported as Right, and the context menu is suppressed`,
+    (await h.untilLong(MOUSE.down, 2)) &&
+      (await h.events()).filter((e) => e.type === 'contextmenu').every((e) => e.prevented),
+    hex(await h.long(MOUSE.down)),
+  );
+
+  // 6. Deferred full screen with the real session: the program waits until the gesture of Run has
+  // run out, then asks (task 33). The page is left alone until it reports the request.
+  await h.load('keyWatchProgram', { askFullScreen: true, askFullScreenAfter: 650 });
+  h.phases.length = 0;
+  await runButton.click();
+  const arrivedAs = await h.firstPhase();
+  const prompt = page.locator('.e68-output__prompt');
+  check(
+    `${p} a program asks for full screen without a gesture: the request waits, with the prompt`,
+    arrivedAs === 'waiting' &&
+      (await h.fullScreen()) === 'waiting' &&
+      (await prompt.count()) === 1 &&
+      (await prompt.innerText()) === 'Press any key or click to enter full screen' &&
+      (await h.engineFullScreen()) === 1,
+    `the request arrived as ${arrivedAs}; now ${await h.fullScreen()}`,
+  );
+  await h.shot(`${name}-app-waiting.png`);
+  await page.keyboard.down('KeyA');
+  const byKey = await h.until(() => window.__output.fullScreenPhase() === 'full');
+  const keySeen = await h.untilByte(KEYS.downs + 0x41, 1);
+  await page.keyboard.up('KeyA');
+  check(
+    `${p} the next key enters full screen and is delivered to the program as well`,
+    byKey && keySeen,
+    await h.fullScreen(),
+  );
+  await h.poke(KEYS.askWindowed, [1]);
+  check(
+    `${p} the program asks for windowed mode (task 33): the panel leaves full screen`,
+    (await h.until(() => window.__output.fullScreenPhase() === 'windowed')) &&
+      (await h.until(() => !window.__easy68k.ctx.store.getState().sim.output.fullScreen)),
+    await h.fullScreen(),
+  );
+
+  // 7. The narrow layout (below 1100 px, 2.3): the Output panel is a tab beside the tool panels.
+  // With another tab in front, View > Output Window brings it forward and gives it the keyboard.
+  await page.setViewportSize({ width: 1000, height: 800 });
+  const narrow = await page.evaluate(async () => {
+    const { ctx } = window.__easy68k;
+    const onScreen = () => (document.querySelector('.e68-output')?.getClientRects().length ?? 0) > 0;
+    const settled = () => new Promise((done) => setTimeout(done, 300));
+    await ctx.commands.run('sim.view.memory');
+    await settled();
+    const hiddenBehindTab = !onScreen();
+    await ctx.commands.run('sim.view.output');
+    await settled();
+    return { hiddenBehindTab, shown: onScreen() };
+  });
+  check(
+    `${p} narrow layout: with the Memory tab in front, View > Output Window brings the Output panel forward with the keyboard`,
+    narrow.hiddenBehindTab && narrow.shown && (await keysInPanel()),
+    JSON.stringify(narrow),
+  );
+  await h.shot(`${name}-app-narrow.png`);
   noErrors(p, h);
   await context.close();
 }
@@ -1556,6 +2254,7 @@ async function fullScreenPass(browser, name) {
 const PASSES = [
   ['panel', 'the panel, device pixel ratio 1', (browser, name) => presentationPass(browser, name, 1)],
   ['panel', 'the panel, device pixel ratio 2', (browser, name) => presentationPass(browser, name, 2)],
+  ['panel', 'the panel, device pixel ratio 1.5', fractionalRatioPass],
   ['panel', 'the panel: prompt, collapse, accessibility', panelPass],
   ['keys', 'keys, Windows key map', (browser, name) => keysPass(browser, name, 'windows')],
   ['keys', 'keys, macOS key map', (browser, name) => keysPass(browser, name, 'mac')],
@@ -1565,6 +2264,7 @@ const PASSES = [
   ['focus', 'focus', focusPass],
   ['mouse', 'mouse', mousePass],
   ['fullscreen', 'full screen', fullScreenPass],
+  ['app', 'the application itself, with its real session', appPass],
 ];
 /** --only panel,keys,...: run some groups only (while working on the script). */
 const only = option('--only', '') ? option('--only', '').split(',') : null;
@@ -1594,7 +2294,8 @@ async function main() {
   const address = server.httpServer?.address();
   const port = typeof address === 'object' && address ? address.port : 0;
   harnessUrl = `http://127.0.0.1:${port}/src/features/output/testing/harness.html`;
-  console.log(`Harness: ${harnessUrl}\nScreenshots: ${outDir}`);
+  appUrl = `http://127.0.0.1:${port}/`;
+  console.log(`Harness: ${harnessUrl}\nApplication: ${appUrl}\nScreenshots: ${outDir}`);
 
   try {
     for (const name of browsers) {

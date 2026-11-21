@@ -5,10 +5,10 @@
 //     node tools/desktop-dev.mjs [arguments for Electron]
 //
 // 1. Starts the Vite dev server of app/ with app/vite.config.ts (the same
-//    server as `npm run dev`, at http://127.0.0.1:5173/).
+//    server as `npm run dev`), on a free port chosen by the operating system.
 // 2. Runs the desktop workspace's `dev` script (compile desktop/src, then
 //    `electron . --dev`) with the environment variable
-//        EASY68K_DEV_SERVER_URL=http://127.0.0.1:5173/
+//        EASY68K_DEV_SERVER_URL=http://127.0.0.1:<port>/
 //    The main process (desktop/src/main.ts, DV2) loads its windows from that
 //    address when the variable is set, and from app://easy68k/index.html
 //    otherwise. Vite's hot reload then works in the desktop window.
@@ -34,7 +34,14 @@ if (!existsSync(main)) {
 }
 
 const { createServer } = await import('vite');
-const server = await createServer({ configFile: join(repo, 'app', 'vite.config.ts'), root: join(repo, 'app') });
+// Port 0: the operating system picks a free port, so that desktop:dev also starts while another dev
+// server (npm run dev, a browser check) holds 5173 (docs/requests/DV2-desktop-dev-port.md). Nothing
+// in desktop/ depends on the port; it receives the address in EASY68K_DEV_SERVER_URL.
+const server = await createServer({
+  configFile: join(repo, 'app', 'vite.config.ts'),
+  root: join(repo, 'app'),
+  server: { port: 0, strictPort: false },
+});
 await server.listen();
 const url = server.resolvedUrls?.local[0];
 if (!url) {

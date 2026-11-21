@@ -42,7 +42,14 @@ fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`.
 
 5. **When IndexedDB cannot be used.** `createStartupBackends()` returns a memory store at `/browser`
    (`UnsavedBrowserStore`, kind `browser`, label `My Programs`) when `indexedDB.open` throws, fails
-   or takes longer than 20 s. `storageProblem(backend)` returns the message, which the Files feature
+   or takes longer than 20 s (`OPEN_TIMEOUT_MS`). Start-up waits for the database at most 3 s
+   (`START_WAIT_MS`, gate I1, review defect "start-up can wait up to 20 s"): a database that has not
+   answered by then is mounted as a `PendingBrowserStore`, whose operations wait for the store that
+   opening finally gives (the real one, or the memory stand-in after the 20 s), so that the
+   application is shown at once. Meanwhile `storageProblem()` gives `My Programs is still opening:
+   the browser has not answered yet (another tab of this site may be holding the storage). Your files
+   appear here as soon as it answers; what you open or save meanwhile waits for it.`, shown as a toast
+   and in the Files panel until the store has opened or given up (then the stand-in's message). `storageProblem(backend)` returns the message, which the Files feature
    shows as a toast at start and permanently in the Files panel:
    `Files are NOT being saved: this browser does not let the page keep files (<reason>; for example
    in a private window, or when storage is blocked for this site). Everything you save is lost when
@@ -93,7 +100,41 @@ fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`.
     `<name>` / `File not found.` / `Check the file name and try again.` (title: the dialog's title).
     The specs give none, since Windows showed it.
 
+13. **Letter case of names (gate I1, review defect "Rename and Import can create names that differ
+    only in letter case").** Every store keeps the case it was given, and the Vfs resolves names
+    without regard to case (3.8.3). FS1 now treats names that differ only in case as the same name
+    everywhere it creates entries: Rename... refuses such a name unless it is the entry itself (a
+    change of case only), Import... counts a file in another spelling as existing (the replace
+    question) and writes to the stored spelling, folders of an import or a drop are merged into the
+    stored spelling, and dropped and uploaded files reuse the stored spelling
+    (`features/files/store.ts: storedSpelling`). The document does not say this; without it a
+    `.zip` exported to Windows could hold names that collide when unpacked.
+
+14. **A dropped `.S68` in Simulator mode (sim-ui §8.4, 4.7 step 2).** `RunController.open(path,
+    'drop')` asks the `Caution` question itself when a program is loaded. FS1 therefore asks it only
+    when the first dropped item is not an `.S68` (the original asks, then ignores the item); for an
+    `.S68` the copy into `/browser/Imported` is made first and the controller asks. Asking in both
+    places asked twice.
+
+15. **The desktop app (DV2 errata 1 and 4a; contract additions of gate I1).** When
+    `Platform.nativeFileDialogs` exists, FS1 registers it as the provider `native` (which replaces the
+    port's dialogs; "From this computer..." is then not offered). A file dropped on the desktop app is
+    passed to `Platform.grantDroppedFile`: a file on the disk is opened where it is (Simulator mode:
+    loaded where it is, so its listing is found beside it), a folder opens the Open dialog (title
+    `Open File`, the editor's five filters, several files) with that folder as start; a `File` the
+    main process does not know is copied as in a browser.
+
+16. **`FileDialogs.chooseFolder` (H1's request, contract addition of gate I1).** The native provider's
+    folder dialog where there is one. Without it (a browser) the port's Save dialog is shown with the
+    filter `Folder` and the suggested name `New Folder` in `startDir`; the name typed there is the
+    folder, created if it does not exist (a typed existing folder is entered, as in the Save dialog).
+
 ## Contract
+
+Status at gate I1: C1 and C2 are in the contract (`Vfs.mkdirp`, `SaveRequest.overwritePrompt`), and
+C3 as `Platform.nativeFileDialogs` and `Platform.grantDroppedFile` (W1 errata entry 11). FS1 uses
+all of them now: `makeFolder` calls `vfs.mkdirp`, `dialogs.ts` reads the contract's
+`overwritePrompt`, and the `native` provider and desktop drops are entries 15 and 16 above.
 
 C1. **`Vfs` has no `mkdirp`.** New Folder... and importing a `.zip` with empty folders need one. FS1
     calls `backend.mkdirp(rel)` of the mounted backend (`features/files/store.ts: makeFolder`). The

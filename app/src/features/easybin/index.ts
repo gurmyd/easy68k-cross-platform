@@ -1,15 +1,68 @@
-// Feature "easybin": EASyBIN mode (region id `easybin`).
+// Feature "easybin": EASyBIN mode (region id `easybin`), work package B1 (docs/porting/easybin.md).
 //
-// STUB written by W3 (wave 0): an empty feature module, so that the shell runs before this
-// feature exists (ARCHITECTURE.md 3.12.3). B1 owns this folder and replaces the body. The
-// exported names are contract (section 8, "Stubs"): app/src/features/index.ts imports
-// them by name.
+//   commands   `sim.view.easybin` and every `bin.*` (commands.ts)
+//   panels     the workspace (region `easybin`) and the mode's status bar (region `status`)
+//   dialogs    `easybin.about`
+//   init       files dropped on the window while EASyBIN mode is shown (docs/porting/easybin.md 1.4)
 //
-// A feature module may contribute command handlers (`commands`), panels (`panels`), dialogs
-// (`dialogs`) and an `init` function that runs once after every service exists.
+// The state of the mode (the 16 MB memory image, the fields) is one EasybinModel per window
+// (session.ts); it lives as long as the window and survives mode switches.
 //
 // Owner: W3 > B1.
 
-import type { FeatureModule } from '../../contracts';
+import type { AppContext, FeatureModule } from '../../contracts';
+import { EasybinAboutDialog } from './AboutDialog';
+import { ABOUT_DIALOG_ID, commands, openDropped } from './commands';
+import { EasybinStatus, EasybinWorkspace } from './EasybinWorkspace';
 
-export const feature: FeatureModule = { id: 'easybin' };
+/** True when a drag carries files (not text). */
+function carriesFiles(transfer: DataTransfer | null): boolean {
+  return transfer !== null && Array.from(transfer.types).includes('Files');
+}
+
+/**
+ * Drops while EASyBIN mode is shown. The Files feature (FS1) listens on the window in the capture
+ * phase too and does nothing in this mode; this listener, on the same target, still runs.
+ */
+function listenForDrops(ctx: AppContext): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const active = () => ctx.store.getState().mode === 'easybin' && !ctx.dialogs.isModalOpen();
+  const onDragOver = (event: DragEvent) => {
+    if (!carriesFiles(event.dataTransfer) || ctx.store.getState().mode !== 'easybin') return;
+    event.preventDefault();
+  };
+  const onDrop = (event: DragEvent) => {
+    if (!carriesFiles(event.dataTransfer) || ctx.store.getState().mode !== 'easybin') return;
+    event.preventDefault();
+    if (!active()) return;
+    const files = Array.from(event.dataTransfer?.files ?? []);
+    void (async () => {
+      const read: { name: string; data: Uint8Array }[] = [];
+      for (const file of files) {
+        try {
+          read.push({ name: file.name, data: new Uint8Array(await file.arrayBuffer()) });
+        } catch {
+          // a folder or an unreadable file: skipped, as the original skips names that do not exist
+        }
+      }
+      await openDropped(ctx, read);
+    })().catch((error: unknown) => console.error('Dropping files on EASyBIN failed:', error));
+  };
+  window.addEventListener('dragover', onDragOver, true);
+  window.addEventListener('drop', onDrop, true);
+  return () => {
+    window.removeEventListener('dragover', onDragOver, true);
+    window.removeEventListener('drop', onDrop, true);
+  };
+}
+
+export const feature: FeatureModule = {
+  id: 'easybin',
+  commands,
+  panels: [
+    { id: 'easybin', title: 'EASyBIN', mode: 'easybin', component: EasybinWorkspace },
+    { id: 'status', title: 'Status', mode: 'easybin', component: EasybinStatus },
+  ],
+  dialogs: { [ABOUT_DIALOG_ID]: EasybinAboutDialog },
+  init: (ctx) => listenForDrops(ctx),
+};

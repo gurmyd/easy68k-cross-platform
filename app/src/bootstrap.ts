@@ -38,7 +38,7 @@ import { shellCommands } from './commands/shell-commands';
 import { createSettingsService, type SettingsStorage } from './core/settings/service';
 import { FEATURES, SERVICE_FACTORIES } from './features';
 import { createVfs } from './fs/vfs';
-import type { Application, DialogComponent } from './state/context';
+import type { Application, BuildFacts, DialogComponent } from './state/context';
 import { MESSAGE_DIALOG_ID, createDialogService } from './state/dialogs';
 import { createEditorExtensionRegistry } from './state/editor-extensions';
 import { createPanelRegistry } from './state/panels';
@@ -62,8 +62,10 @@ export interface BootstrapEnv {
   locks: LockManagerLike | null;
   /** Where the keyboard dispatcher listens (the window); null = no dispatcher. */
   keyTarget: Pick<Window, 'addEventListener' | 'removeEventListener'> | null;
-  /** The port's version, for the window title (1.3.3). */
+  /** The port's version, for the window title (1.3.3) and AppContext.build. */
   version: string;
+  /** The port's GitHub repository, "owner/name" (build-info.ts); default null = not known. */
+  repository?: string | null;
   /** Default: the 24 features of features/index.ts. */
   features?: readonly FeatureModule[];
   /** Replace service factories; default: those of the features. */
@@ -79,6 +81,7 @@ const SERVICE_ORDER = 'platform, settings, store, commands, dialogs, vfs, fileDi
 
 const CONTEXT_KEYS: readonly (keyof AppContext)[] = [
   'platform',
+  'build',
   'clock',
   'scheduler',
   'settings',
@@ -127,13 +130,18 @@ const TITLES: Record<Mode, string> = {
 
 /**
  * The window title (1.3.3): the original program's title, then the port's notice. In Simulator
- * mode the title is the name of the loaded program, as in the original (sim-ui §8.2 step 8).
+ * mode the title is the name of the loaded program, as in the original (sim-ui §8.2 step 8). A
+ * title a mode's feature has set with setModeTitle (`modeTitles`, state/shell.ts) comes first:
+ * EASyBIN's opened file (docs/requests/B1-window-title.md).
  */
 export function windowTitle(
   state: Pick<AppState, 'mode'> & { sim: Pick<AppState['sim'], 'program'> },
   version: string,
+  modeTitles: Partial<Record<Mode, string>> = {},
 ): string {
-  const title = state.mode === 'simulator' && state.sim.program ? state.sim.program.title : TITLES[state.mode];
+  const title =
+    modeTitles[state.mode] ??
+    (state.mode === 'simulator' && state.sim.program ? state.sim.program.title : TITLES[state.mode]);
   return `${title} - unofficial port ${version}`;
 }
 
@@ -149,6 +157,9 @@ export function bootstrap(env: BootstrapEnv): Application {
   set('platform', platform);
   set('clock', env.clock);
   set('scheduler', env.scheduler);
+  // The port's version and repository for the About boxes (docs/requests/H1-build-info.md).
+  const build: BuildFacts = Object.freeze({ version: env.version, repository: env.repository ?? null });
+  set('build', build);
 
   const settings = createSettingsService(env.settingsStorage, (error) => onError('Settings storage', error));
   set('settings', settings);
@@ -233,7 +244,7 @@ export function bootstrap(env: BootstrapEnv): Application {
   let lastTitle = '';
   const syncWindow = () => {
     const state = store.getState();
-    const title = windowTitle(state, env.version);
+    const title = windowTitle(state, env.version, shell.getState().modeTitles);
     if (title !== lastTitle) {
       lastTitle = title;
       platform.setTitle(title);
@@ -253,6 +264,7 @@ export function bootstrap(env: BootstrapEnv): Application {
     }
   };
   disposers.push(store.subscribe(syncWindow));
+  disposers.push(shell.subscribe(syncWindow));
 
   // ---- start the features
   for (const feature of modules) {
@@ -274,6 +286,7 @@ export function bootstrap(env: BootstrapEnv): Application {
     dialogComponents,
     shell,
     menuAccess,
+    build,
     windowLock: lock.held,
     dispose() {
       if (disposed) return;

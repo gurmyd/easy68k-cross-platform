@@ -13,6 +13,8 @@
 //   canvas             shows the surface of the simulator session once per animation frame
 //                      (present.ts). Its backing store is exactly the surface; CSS scales it
 //                      (zoom.ts). Mouse events on it go to the program (core/sim-host/input/mouse.ts).
+//                      The size in the header strip and the size of the canvas on screen come
+//                      from the same look at the surface as the pixels, not from the store.
 //   hidden textarea    has the focus while the program has the keyboard; marked
 //                      `data-e68-keys="program"` so that the keyboard dispatcher steps aside and
 //                      `data-e68-panel-focus` so that the shell puts the focus here. Its events
@@ -25,7 +27,7 @@ import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 
 import { shortcutText } from '../../commands/menus';
 import { useAppContext, useAppState } from '../../state/context';
 import { hidePanel } from '../../state/panels';
-import { shallowEqual, useStoreValue } from '../../state/store';
+import { useStoreValue } from '../../state/store';
 import { IconButton, Select } from '../../ui/components';
 import { FULL_SCREEN_PROMPT } from './fullscreen';
 import { createDesktopFullScreenDriver, createWebFullScreenDriver } from './fullscreen-driver';
@@ -38,10 +40,6 @@ import { ZOOM_CHOICES, outputPlacement, outputScale, sizeText, zoomOfValue, type
 export function OutputPanel() {
   const ctx = useAppContext();
   const output = outputOf(ctx);
-  const surfaceSize = useAppState(
-    (state): Size => ({ width: state.sim.output.width, height: state.sim.output.height }),
-    shallowEqual,
-  );
   const zoom = useAppState((state) => state.settings.app.layout.outputZoom);
   const phase = useStoreValue(output.fullScreen.store, (state) => state.phase);
   const full = phase === 'full';
@@ -49,6 +47,16 @@ export function OutputPanel() {
   const viewport = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const keys = useRef<HTMLTextAreaElement>(null);
+  /**
+   * The size of the surface as the presentation loop last saw it. A program changes it without
+   * notice (TRAP #15 task 33); taking it here, in the frame that resizes the canvas's backing
+   * store, keeps the backing store and the size on screen in step. (AppState.sim.output holds the
+   * same numbers for the Options menu; the session mirrors them there, possibly a frame apart.)
+   */
+  const [surfaceSize, setSurfaceSize] = useState<Size>(() => {
+    const { width, height } = ctx.sim.surface.window ?? ctx.sim.surface.back;
+    return { width, height };
+  });
   /** The room the surface has, in CSS pixels. */
   const [available, setAvailable] = useState<Size>({ width: 0, height: 0 });
   const [hasKeys, setHasKeys] = useState(false);
@@ -87,8 +95,12 @@ export function OutputPanel() {
     let mirroredAt = Number.NEGATIVE_INFINITY;
     let mirrored: readonly string[] = [];
     const frame = () => {
-      output.sync();
-      presenter.frame(ctx.sim.surface);
+      const { surface } = ctx.sim;
+      presenter.frame(surface);
+      const { width, height } = surface.window ?? surface.back;
+      setSurfaceSize((previous) =>
+        previous.width === width && previous.height === height ? previous : { width, height },
+      );
       // The text mirror follows at most twice per second (2.11).
       const now = ctx.clock.now();
       if (now - mirroredAt < MIRROR_INTERVAL_MS) return;
@@ -105,7 +117,7 @@ export function OutputPanel() {
       stopFrames();
       stopListening();
     };
-  }, [ctx, output]);
+  }, [ctx]);
 
   // Full screen: the browser's Fullscreen API, or the window of the desktop app.
   useEffect(() => {

@@ -525,6 +525,16 @@ static int charExtent(HDC dc, const VclFont& f, unsigned char ch) {
   return s.cx;
 }
 
+static int stringExtent(HDC dc, const VclFont& f, const char* bytes, int count) {
+  HFONT hf = createVclFont(f);
+  HGDIOBJ old = SelectObject(dc, hf);
+  SIZE s = {};
+  GetTextExtentPoint32A(dc, bytes, count, &s);
+  SelectObject(dc, old);
+  DeleteObject(hf);
+  return s.cx;
+}
+
 struct RasterKey {
   std::string face;
   int style, colWidth, rowHeight;
@@ -580,7 +590,8 @@ static int runFonts(const std::string& outDir) {
   // 2. Outline faces at the atlas sizes: what make-font-atlases.mjs needs to place its substitutes.
   std::string outline =
       "# name\tstyle\tsize\tface\tcolWidth\trowHeight\tppem\ttmHeight\ttmAscent\ttmDescent\ttmInternalLeading\t"
-      "tmOverhang\tunderscorePosition\tunderscoreSize\tstrikeoutPosition\tstrikeoutSize\tadvances[256]\n";
+      "tmOverhang\tunderscorePosition\tunderscoreSize\tstrikeoutPosition\tstrikeoutSize\tadvances[256]\t"
+      "delInHighString\n";
   for (const char* name : {"Courier New", "Lucida Console", "Consolas", "Lucida Sans Typerwriter"}) {
     for (int style = 0; style < 5; style++) {
       for (int size : OUTLINE_SIZES) {
@@ -603,6 +614,9 @@ static int runFonts(const std::string& outDir) {
                                m.tm.tmInternalLeading, m.tm.tmOverhang, otm.otmsUnderscorePosition,
                                otm.otmsUnderscoreSize, otm.otmsStrikeoutPosition, otm.otmsStrikeoutSize);
         for (int ch = 0; ch < 256; ch++) line += fmt(ch ? ",%d" : "%d", charExtent(dc, f, (unsigned char)ch));
+        // $7F in a string that also has a byte of $80 or above: Windows draws it from a fallback font
+        // with a width of its own (README.md "Text strings"). Measured as TextWidth($80 $7F) - TextWidth($80).
+        line += fmt("\t%d", stringExtent(dc, f, "\x80\x7f", 2) - stringExtent(dc, f, "\x80", 1));
         outline += line + "\n";
       }
     }

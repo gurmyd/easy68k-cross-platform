@@ -3,8 +3,8 @@
 // Owner: U2. Used by the unit tests of features/memory and features/stack only.
 //
 // The session's controller does what the contract says the real one (SH8) does for these panels:
-// `pokeMemory` writes one byte at once, `invoke` runs the function at once (no engine call is ever
-// in progress here). `coldStart()` replaces `engine` with a new instance and then runs the
+// `pokeMemory` writes one byte at once and (given the application) bumps `sim.liveRevision`,
+// `invoke` runs the function at once (no engine call is ever in progress here). `coldStart()` replaces `engine` with a new instance and then runs the
 // `onEngineReplaced` listeners, as 4.7.1 step 5 says.
 //
 // The engine comes from a factory the test passes, so that this file imports no engine module
@@ -37,6 +37,15 @@ export interface SessionDouble extends SimSession {
   readonly engines: SimEngine[];
 }
 
+export interface SessionDoubleOptions {
+  /** The application whose store `pokeMemory` updates, as the real session's mirror does: it bumps
+   *  `sim.liveRevision`. Without it `pokeMemory` only writes the byte. */
+  ctx?: AppContext;
+  /** `pokeMemory` also bumps `sim.viewRevision` in the same store update, as SH8's controller does
+   *  at gate I1 (core/run/controller.ts). */
+  pokeBumpsView?: boolean;
+}
+
 /**
  * Wraps a session (normally the inert one of state/stub-services.ts, for the parts these panels
  * never touch) with a live engine, a working controller and cold starts.
@@ -45,6 +54,7 @@ export function createSessionDouble(
   base: SimSession,
   first: SimEngine,
   next: () => Promise<SimEngine> | SimEngine,
+  options: SessionDoubleOptions = {},
 ): SessionDouble {
   const engines: SimEngine[] = [first];
   const listeners = new Set<() => void>();
@@ -71,6 +81,18 @@ export function createSessionDouble(
     pokeMemory(address, value) {
       pokes.push([address, value]);
       engine.writeBytes(address, [value & 0xff]);
+      // The contract: the controller bumps `liveRevision` for a direct write itself.
+      const ctx = options.ctx;
+      if (ctx) {
+        ctx.store.setState((state) => ({
+          ...state,
+          sim: {
+            ...state.sim,
+            liveRevision: state.sim.liveRevision + 1,
+            viewRevision: state.sim.viewRevision + (options.pokeBumpsView ? 1 : 0),
+          },
+        }));
+      }
     },
   };
 

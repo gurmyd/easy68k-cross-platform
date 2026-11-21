@@ -7,12 +7,15 @@
 // (check/harness.ts), using the application's real settings service and theme. It checks what the
 // unit tests under Node cannot show: the colours and attributes the browser really draws, in both
 // themes, for the Auto preset, a stored preset, a custom preset and Disabled; list documents
-// uncoloured; settings changes reaching an open view; a line coloured as soon as it is typed; and
-// the time of a viewport pass over a 10,000-line document in the browser.
+// without marks (and, under a stored preset, on the stored background in black, textS.cpp:78);
+// settings changes reaching an open view; a line coloured as soon as it is typed; the highlighter
+// inside the real editor component (E2), including a document that changes kind and a .L68 file
+// opened through the document service; and the time of a viewport pass over a 10,000-line
+// document in the browser (best of batches, so that a loaded CI runner does not fail it).
 //
 // Screenshots go to build/E3/highlight-check (git-ignored). Exit code 0 = everything passed.
 
-/* global console, process, window, document, requestAnimationFrame, setTimeout -- browser globals inside page.evaluate() */
+/* global console, process, window, document, requestAnimationFrame, setTimeout, TextEncoder -- browser globals inside page.evaluate() */
 
 import { mkdirSync } from 'node:fs';
 import { createServer as createNetServer } from 'node:net';
@@ -100,6 +103,171 @@ async function setTheme(page, theme) {
 const styles = (page, line) => page.evaluate((n) => window.__hl.lineStyles(window.__hl.source, n), line);
 const colorOf = async (page, line, text) => (await styles(page, line)).find((m) => m[0].includes(text))?.[1];
 const content = (page, which) => page.evaluate((w) => window.__hl.contentColors(window.__hl[w]), which);
+
+/** Sets the preset as the Options dialog would (E4 stores presetStyles(n)). */
+async function setPreset(page, preset, backgroundColor = 0xffffff) {
+  await page.evaluate(
+    ({ preset, backgroundColor }) => {
+      const chosen = window.__hl.presets.presetStyles(preset);
+      window.__easy68k.ctx.settings.update((s) => ({
+        ...s,
+        editor: {
+          ...s.editor,
+          colorPreset: preset,
+          styles: chosen.styles,
+          highlightDisabled: chosen.highlightDisabled,
+          backgroundColor,
+        },
+      }));
+    },
+    { preset, backgroundColor },
+  );
+  await nextFrames(page);
+}
+
+/** Sets the kind of a document in the store, as a document that changes kind would. */
+async function setKind(page, id, kind) {
+  await page.evaluate(
+    ({ id, kind }) =>
+      window.__easy68k.ctx.store.setState((s) => ({
+        ...s,
+        documents: { ...s.documents, items: s.documents.items.map((d) => (d.id === id ? { ...d, kind } : d)) },
+      })),
+    { id, kind },
+  );
+  await nextFrames(page);
+}
+
+/**
+ * The highlighter inside the real editor component (E2's DocumentEditor): applied once per view
+ * through the editor-extension registry, the colours in both themes and under a stored preset
+ * (background, text, caret), a document that changes kind, and a real .L68 file opened through
+ * the document service.
+ */
+async function realEditor(page, p, name) {
+  await page.evaluate(() => window.__hl.showHarnessViews(false));
+  const id = await page.evaluate(() => {
+    const { ctx } = window.__easy68k;
+    return (ctx.documents.active() ?? ctx.documents.newSource()).id;
+  });
+  await page.waitForFunction((docId) => window.__hl.editorView(docId) !== null, id, { timeout: 60_000 });
+  await page.evaluate(
+    ({ docId, sample }) => {
+      const view = window.__hl.editorView(docId);
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: sample } });
+      view.focus();
+    },
+    { docId: id, sample: SAMPLE },
+  );
+  await nextFrames(page);
+  const facts = (docId = id) => page.evaluate((d) => window.__hl.editorFacts(d), docId);
+  const realColor = async (line, text) =>
+    (await page.evaluate(([d, n]) => window.__hl.lineStyles(window.__hl.editorView(d), n), [id, line])).find((m) =>
+      m[0].includes(text),
+    )?.[1];
+
+  const light = await facts();
+  check(
+    `${p} real editor: the extension is applied once per view`,
+    light?.syntaxClasses === 1,
+    light ? light.classes : 'no view',
+  );
+  check(
+    `${p} real editor, Auto light: Label purple, Comment blue, Code black on white`,
+    (await realColor(LINE.labelCode, 'START')) === rgb('#800080') &&
+      (await realColor(LINE.comment, 'Syntax')) === rgb('#0000FF') &&
+      light?.color === rgb('#000000') &&
+      light?.background === rgb('#FFFFFF') &&
+      light?.caret === rgb('#000000'),
+    JSON.stringify(light),
+  );
+  await page.screenshot({ path: join(outDir, `${name}-editor-auto-light.png`) });
+
+  await setTheme(page, 'dark');
+  const dark = await facts();
+  check(
+    `${p} real editor, Auto dark: Label #D2A8FF, text #E6EDF3 on #1B1F24, caret in the text colour`,
+    (await realColor(LINE.labelCode, 'START')) === rgb('#D2A8FF') &&
+      dark?.color === rgb('#E6EDF3') &&
+      dark?.background === rgb('#1B1F24') &&
+      dark?.caret === rgb('#E6EDF3'),
+    JSON.stringify(dark),
+  );
+  await page.screenshot({ path: join(outDir, `${name}-editor-auto-dark.png`) });
+
+  // Color1 stored (white background) while the theme is dark: the editor's own dark caret colour
+  // must not win over the stored Code colour.
+  await setPreset(page, 0);
+  const stored = await facts();
+  check(
+    `${p} real editor, Color1 in the dark theme: black text and caret on the stored white`,
+    (await realColor(LINE.labelCode, 'START')) === rgb('#800080') &&
+      stored?.color === rgb('#000000') &&
+      stored?.background === rgb('#FFFFFF') &&
+      stored?.caret === rgb('#000000'),
+    JSON.stringify(stored),
+  );
+  await page.screenshot({ path: join(outDir, `${name}-editor-color1-dark-theme.png`) });
+
+  // The document becomes a list document (store-side kind change): no marks; the stored background.
+  await setKind(page, id, 'list');
+  const asList = await facts();
+  check(
+    `${p} real editor: a document that becomes a list document loses its marks, keeps the stored background`,
+    asList?.marks === 0 &&
+      asList?.classes.includes('e68-syntax--list') &&
+      asList?.background === rgb('#FFFFFF') &&
+      asList?.color === rgb('#000000'),
+    JSON.stringify(asList),
+  );
+  await setPreset(page, 5);
+  const autoList = await facts();
+  check(
+    `${p} real editor: under Auto a list document takes nothing from the highlighter`,
+    autoList?.marks === 0 && autoList?.syntaxClasses === 0 && !autoList?.classes.includes('e68-syntax'),
+    autoList ? autoList.classes : 'no view',
+  );
+  await setKind(page, id, 'source');
+  const back = await facts();
+  check(
+    `${p} real editor: back to a source document, coloured again`,
+    back?.marks > 0 && back?.syntaxClasses === 1,
+    JSON.stringify(back),
+  );
+
+  // A real .L68 file, opened through the document service.
+  const listId = await page.evaluate(async (sample) => {
+    const { ctx } = window.__easy68k;
+    const bytes = new TextEncoder().encode(sample.split('\n').join('\r\n') + '\r\n');
+    await ctx.vfs.writeFile('/browser/hlcheck.L68', bytes);
+    const doc = await ctx.documents.open('/browser/hlcheck.L68');
+    return doc ? `${doc.id}|${doc.kind}` : null;
+  }, SAMPLE);
+  const [openedId, openedKind] = (listId ?? '|').split('|');
+  if (openedId) {
+    await page.waitForFunction((d) => window.__hl.editorView(d) !== null, openedId, { timeout: 60_000 });
+    await nextFrames(page);
+  }
+  const opened = openedId ? await facts(openedId) : null;
+  check(
+    `${p} real editor: an opened .L68 file is a list document without marks`,
+    openedKind === 'list' && opened?.marks === 0 && opened?.syntaxClasses === 0,
+    `${listId} ${JSON.stringify(opened)}`,
+  );
+  await page.screenshot({ path: join(outDir, `${name}-editor-list-dark.png`) });
+  await setPreset(page, 0, 0x00ffff);
+  const yellowList = openedId ? await facts(openedId) : null;
+  check(
+    `${p} real editor: the .L68 document under a stored preset is black on the stored yellow`,
+    yellowList?.marks === 0 && yellowList?.background === rgb('#FFFF00') && yellowList?.color === rgb('#000000'),
+    JSON.stringify(yellowList),
+  );
+  await page.screenshot({ path: join(outDir, `${name}-editor-list-yellow.png`) });
+
+  // Back to Auto in the light theme for what follows.
+  await setPreset(page, 5);
+  await setTheme(page, 'light');
+}
 
 async function runBrowser(browser, name, baseUrl) {
   const p = `${name}:`;
@@ -226,6 +394,12 @@ async function runBrowser(browser, name, baseUrl) {
       comment?.[4] === 'none',
     JSON.stringify({ label, unknown, comment }),
   );
+  const noColorList = await content(page, 'list');
+  check(
+    `${p} No Color: a list document takes the stored background and black text, no marks (textS.cpp:78)`,
+    noColorList.marks === 0 && noColorList.color === rgb('#000000') && noColorList.background === rgb('#FFFFFF'),
+    JSON.stringify(noColorList),
+  );
   await page.screenshot({ path: join(outDir, `${name}-nocolor-dark-theme.png`) });
 
   // --- Color2.
@@ -267,6 +441,12 @@ async function runBrowser(browser, name, baseUrl) {
     `${p} Custom: Directive fuchsia underlined on a yellow background`,
     directive?.[1] === rgb('#FF00FF') && directive?.[4] === 'underline' && customContent.background === rgb('#FFFF00'),
     `${JSON.stringify(directive)} on ${customContent.background}`,
+  );
+  const customList = await content(page, 'list');
+  check(
+    `${p} Custom: a list document on the yellow background, text black, no marks`,
+    customList.marks === 0 && customList.color === rgb('#000000') && customList.background === rgb('#FFFF00'),
+    JSON.stringify(customList),
   );
   await page.screenshot({ path: join(outDir, `${name}-custom.png`) });
 
@@ -323,6 +503,9 @@ async function runBrowser(browser, name, baseUrl) {
     JSON.stringify(typed),
   );
 
+  // --- The real editor component, with the extension from the registry.
+  await realEditor(page, p, name);
+
   // --- Speed: a 10,000-line document, the viewport pass (acceptance: under 5 ms).
   const timing = await page.evaluate(async () => {
     const block = [
@@ -342,12 +525,12 @@ async function runBrowser(browser, name, baseUrl) {
     const view = window.__hl.mountView(ctx, text, 'source', { left: 20, top: 440, width: 1220, height: 440 });
     view.dispatch({ effects: [], selection: { anchor: view.state.doc.line(5000).from }, scrollIntoView: true });
     await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
-    return window.__hl.timeViewport(view, 25);
+    return window.__hl.timeViewport(view, 5);
   });
   check(
     `${p} 10,000-line document: a viewport pass takes under 5 ms`,
     timing.best < 5,
-    `best ${timing.best.toFixed(3)} ms of 25 runs over ${timing.lines} lines`,
+    `best ${timing.best.toFixed(3)} ms of ${timing.runs} runs over ${timing.lines} lines`,
   );
   await page.screenshot({ path: join(outDir, `${name}-large.png`) });
 

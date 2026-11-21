@@ -11,9 +11,12 @@
 //   sim.options.size               Options > Output Window Size (argument: index into OUTPUT_SIZES)
 //   sim.options.textWrap           Options > Output Window Text Wrap
 //
-// and, from the moment the window starts, looks at the session once per frame: the surface size
-// and the text-wrap option go into AppState.sim.output for the Options menu, and the screen
-// follows the engine's full-screen flag (TRAP #15 task 33, a stop; model.ts, fullscreen.ts).
+// and, from the moment the window starts, looks at the engine's full-screen flag once per frame
+// and makes the screen follow it (TRAP #15 task 33, a stop; model.ts, fullscreen.ts).
+//
+// The Options menu reads the surface size and the text-wrap option from AppState.sim.output. The
+// session (features/run) mirrors them there once per frame, so the two commands below only act on
+// the session's parts; the check marks follow at the next frame.
 //
 // The three chords of the panel act only while its hidden textarea has the focus, where the panel
 // handles them itself (panel-input.ts); the keyboard dispatcher never runs these commands.
@@ -33,7 +36,6 @@ function setOutputSize(ctx: AppContext, index: unknown): void {
   const size = typeof index === 'number' ? OUTPUT_SIZES[index] : undefined;
   if (!size) return;
   ctx.sim.host.setWindowSize(size.width, size.height);
-  outputOf(ctx).sync();
 }
 
 /** `sim.output.paste` without its key: asks the platform for the clipboard and types it in. */
@@ -102,7 +104,6 @@ export const feature: FeatureModule = {
       run(ctx) {
         const { text } = ctx.sim;
         text.setTextWrap(!text.state.textWrap);
-        outputOf(ctx).sync();
       },
       checked: (state) => state.sim.output.textWrap,
     },
@@ -111,13 +112,13 @@ export const feature: FeatureModule = {
   init(ctx) {
     const output = outputOf(ctx);
     output.followEngine();
-    output.sync();
+    output.publishFullScreen();
     const disposers = [
-      // A program changes the surface size and asks for full screen without notice (TRAP #15 task
-      // 33), and the engine leaves full screen when execution stops: looked at once per frame.
+      // A program asks for full screen without notice (TRAP #15 task 33), and the engine leaves
+      // full screen when execution stops: looked at once per frame.
       ctx.scheduler.onFrame(() => {
         output.followEngine();
-        output.sync();
+        output.publishFullScreen();
       }),
       ctx.store.subscribe(() => {
         // A full-screen Output panel belongs to Simulator mode.
@@ -127,6 +128,9 @@ export const feature: FeatureModule = {
       }),
       // A cold start (4.7.1) gives the window a new engine (3.3.2: "full screen left").
       ctx.sim.onEngineReplaced(() => output.engineReplaced()),
+      // Desktop app: the window left full screen by the system's own means (the green button),
+      // which no event of the page reports. The panel follows, as it does in a browser (2.5).
+      ctx.platform.onFullScreenChange?.((on) => output.fullScreen.driverChanged(on)) ?? (() => {}),
     ];
     return () => {
       for (const dispose of disposers) dispose();

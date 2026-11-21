@@ -14,6 +14,7 @@ import type {
   LogServiceApi,
   OutputKeyboardApi,
   PrinterDeviceApi,
+  PrintJob,
   ProgramFilesApi,
   SoundDeviceApi,
   SurfaceApi,
@@ -83,8 +84,12 @@ export interface RunController {
   hold(): () => void;
 
   editBox(box: Box, text: string): void; // Registers panel: forwarded to the engine at once
-  pokeMemory(address: number, value: number): void; // Memory panel: direct write
-  clearCycles(): void;
+  /** Memory panel: direct write of one byte. The engine reports nothing for it, so the controller
+   *  bumps `liveRevision` itself; the Hardware, Memory and Stack panels redraw on that, the Stack
+   *  panel without re-centring (sim-ui §10.3, §11.4). Interface code that writes memory with
+   *  `invoke((engine) => engine.writeBytes(...))` bumps `liveRevision` itself. */
+  pokeMemory(address: number, value: number): void;
+  clearCycles(): void; // engine.clearCycles(), then the snapshot is refreshed (4.8)
 }
 
 export type ControllerRequest =
@@ -99,7 +104,9 @@ export type ControllerRequest =
 
 export interface SimSession {
   // one per window; created by features/run/session.ts
-  /** The current engine instance. A cold start replaces it: always read the property, never keep it. */
+  /** The current engine instance. A cold start replaces it: always read the property, never keep it.
+   *  Until the first engine exists, and between two engines, it is a stand-in that reads as a
+   *  simulator in start-up state and ignores commands; `controller.phase` is 'loading' meanwhile. */
   readonly engine: SimEngine;
   readonly host: SimHost; // one object for the life of the window, given to every instance
   readonly controller: RunController;
@@ -115,4 +122,13 @@ export interface SimSession {
   readonly glyphs: GlyphProvider;
   /** Fires after a cold start has replaced the engine and reset every part. */
   onEngineReplaced(listener: () => void): () => void;
+
+  /* ---- added at gate I1 (docs/porting/errata/W1.md, entry 11). Optional in this round: the real
+     session (features/run, SH8) has both; a stand-in session may leave them out. ---- */
+
+  /** The print jobs of TRAP #15 task 10 that have finished (PrinterDeps.submit), oldest first, for
+   *  the Printer Output dialog (features/sim-files, SH6). */
+  readonly printJobs?: readonly PrintJob[];
+  /** Fires when a print job has finished. Returns the unsubscribe function. */
+  onPrintJob?(listener: (job: PrintJob) => void): () => void;
 }

@@ -8,7 +8,7 @@
 // AppContext; code that has the context reaches it with shellStateOf(ctx). Feature code normally
 // does not need it: state/panels.ts has the functions for showing, hiding and focusing panels.
 
-import type { AppContext, Store } from '../contracts';
+import type { AppContext, Mode, Store } from '../contracts';
 import { createStore } from './store';
 
 export interface ShellState {
@@ -17,15 +17,34 @@ export interface ShellState {
   /** The Output panel is collapsed (1.4 note 35: it can be collapsed, never closed). Not persisted:
    *  it is always visible at start (2.4). */
   outputCollapsed: boolean;
+  /**
+   * Below 1100 px the Output panel is a tab of the tool group (2.3): true while that tab is to be in
+   * front, because the Output panel was shown (Run, a keyboard-input task, View > Output Window) or
+   * its tab chosen; choosing or showing a tool panel clears it. The wide layout ignores it, so
+   * showing the Output panel never changes which tool tab is in front there.
+   */
+  outputInFront: boolean;
   /** The shell moves the focus into this panel once it is rendered, then clears the request.
    *  `serial` makes two requests for the same panel distinct. */
   focusRequest: { panel: string; serial: number } | null;
   /** Web only (1.4 note 4): Exit has run; the workspace shows `You can close this tab.` */
   exited: boolean;
+  /**
+   * Window titles that a mode's feature supplies in place of the mode's fixed title (setModeTitle):
+   * EASyBIN shows the file opened last, as its original does (docs/requests/B1-window-title.md).
+   */
+  modeTitles: Partial<Record<Mode, string>>;
 }
 
 export function initialShellState(): ShellState {
-  return { activeTool: null, outputCollapsed: false, focusRequest: null, exited: false };
+  return {
+    activeTool: null,
+    outputCollapsed: false,
+    outputInFront: false,
+    focusRequest: null,
+    exited: false,
+    modeTitles: {},
+  };
 }
 
 const stores = new WeakMap<object, Store<ShellState>>();
@@ -42,6 +61,24 @@ export function shellStateOf(ctx: AppContext): Store<ShellState> {
   const store = stores.get(ctx);
   if (!store) throw new Error('This AppContext has no shell state: it was not created by bootstrap()');
   return store;
+}
+
+/**
+ * Sets the title the window shows while `mode` is in front, in place of the mode's fixed title
+ * (`EASyBIN v2.5.0`); null puts the fixed title back. The shell appends ` - unofficial port
+ * <version>` as to every title (1.3.3). EASyBIN calls it with the full path of the file opened
+ * last and with null after New (docs/porting/easybin.md 1.2). In Simulator mode the loaded
+ * program's title (AppState.sim.program) comes before the fixed title, and a title set here comes
+ * before both.
+ */
+export function setModeTitle(ctx: AppContext, mode: Mode, title: string | null): void {
+  shellStateOf(ctx).setState((state) => {
+    if ((state.modeTitles[mode] ?? null) === title) return state;
+    const modeTitles = { ...state.modeTitles };
+    if (title === null) delete modeTitles[mode];
+    else modeTitles[mode] = title;
+    return { ...state, modeTitles };
+  });
 }
 
 /** The text of the empty workspace after Exit in a browser (1.4 note 4). */

@@ -1,6 +1,8 @@
 # For W2 at the next gate: four small follow-ups on the focus of modal dialogs
 
-Status: open. Found by the independent review of the macOS repair (commits 7b5e072, 63a824a,
+Status: done (gate I1, by W2; docs/porting/errata/W2.md entries 13 and 14).
+
+Found by the independent review of the macOS repair (commits 7b5e072, 63a824a,
 71e8179; errata `docs/porting/errata/W2.md`, entries 12 and 13). None of them is met by a control
 that exists in the application today, and the second and third are older than that repair. They are
 written down here so that they are repaired before dialogs with such controls are built.

@@ -24,6 +24,9 @@ export interface ToastEntry {
   id: number;
   text: string;
   action?: { label: string; run(): void };
+  /** Milliseconds on screen, as the kit's ToastItem.duration; 0 = until dismissed or its action
+   *  runs; absent = the kit's default (docs/requests/DV1-toast-duration.md). */
+  duration?: number;
 }
 
 /** The service plus what the dialog host uses. */
@@ -83,8 +86,12 @@ export function createDialogService(deps: DialogDeps): DialogServiceStore {
       );
     },
 
-    toast(text, action) {
-      const entry: ToastEntry = action ? { id: nextToast++, text, action } : { id: nextToast++, text };
+    toast(text, action, options) {
+      const entry: ToastEntry = { id: nextToast++, text };
+      if (action) entry.action = action;
+      // A duration that is not a finite number of milliseconds >= 0 is left to the kit's default.
+      const duration = options?.duration;
+      if (typeof duration === 'number' && Number.isFinite(duration) && duration >= 0) entry.duration = duration;
       toasts.setState((list) => [...list, entry]);
     },
 

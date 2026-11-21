@@ -1,7 +1,7 @@
 // What F1 looks up in the editor, and which page each entry point of the help opens.
 // ARCHITECTURE.md 9.2 (H1), 1.4 note 10; editor-ui §15.2, §15.3; sim-ui §16.1. Owner: H1.
 
-import { INTRO_PAGE, pageForKeyword } from './keywords';
+import { INTRO_PAGE, pageForKeyword, trimControl } from './keywords';
 
 /** The editor's text around the caret, as the original's F1 handler sees it. */
 export interface EditorWordContext {
@@ -38,7 +38,7 @@ function isSpace(char: string | undefined): boolean {
  * text is never part of a word.
  */
 export function helpKeywordAt(context: EditorWordContext): string | null {
-  if (context.selected !== '') return context.selected.trim();
+  if (context.selected !== '') return trimControl(context.selected);
   const { text, caret } = context;
   const at = (index1: number): string | undefined => text[index1 - 1]; // Text[index1] of the original
   if (caret < 1 || caret > text.length) return null;

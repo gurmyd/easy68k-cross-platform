@@ -55,6 +55,12 @@ export const SUITES: readonly { readonly name: string; readonly machine: boolean
     machine: false,
     about: '10,000 rectangles, filled and unfilled, widths 0-12, cases A, B, C, trap15-b 6.3',
   },
+  {
+    name: 'pens',
+    machine: false,
+    about:
+      'every pen width 2-255: the round dot of a one-point rectangle, line and ellipse; rectangles of widths 13-255 (bars and frames), trap15-b 6.2, 6.3 (request SH1-gdi-dots)',
+  },
   { name: 'floods', machine: false, about: '1,000 flood fills on random pictures, trap15-b 6.6' },
   { name: 'modes', machine: false, about: 'the 16 raster operations on every primitive kind, trap15-b 5.4' },
   { name: 'modes-high', machine: false, about: 'drawing modes 18-255 (the exception table of trap15-b 5.4)' },
@@ -316,6 +322,48 @@ function rects(): GdiCase[] {
     ops.push({ op: r.chance(0.5) ? 'rect' : 'urect', x1, y1, x2, y2 });
     add(ops);
   }
+  return cases;
+}
+
+/**
+ * Pen widths beyond the rects and widelines suites (docs/requests/SH1-gdi-dots.md): for every width
+ * 2-255 the dot of a one-point rectangle, a zero-length line and a one-point ellipse (the line and
+ * the ellipse are SH2's parts, the rectangle SH1's); for every width 13-255 a horizontal and a
+ * vertical bar (case B) and a frame filled and unfilled (case A); the vertical bar of width 206 at
+ * two lengths.
+ */
+function pens(): GdiCase[] {
+  const cases: GdiCase[] = [];
+  const add = (ops: GdiOp[]) =>
+    cases.push({ id: `pens-${pad(cases.length)}`, suite: 'pens', width: 300, height: 300, ops });
+  for (let w = 2; w <= 255; w++) {
+    for (const op of ['rect', 'line', 'ellipse'] as const) {
+      add([
+        { op: 'width', value: w },
+        { op: 'fill', color: 0x0000ff },
+        { op, x1: 150, y1: 150, x2: 150, y2: 150 },
+      ]);
+    }
+  }
+  for (let w = 13; w <= 255; w++) {
+    const base: GdiOp[] = [
+      { op: 'width', value: w },
+      { op: 'fill', color: 0x0000ff },
+    ];
+    add([...base, { op: 'rect', x1: 60, y1: 150, x2: 240, y2: 150 }]);
+    add([...base, { op: 'rect', x1: 150, y1: 60, x2: 150, y2: 240 }]);
+    add([...base, { op: 'rect', x1: 70, y1: 80, x2: 230, y2: 220 }]);
+    add([...base, { op: 'urect', x1: 70, y1: 80, x2: 230, y2: 220 }]);
+  }
+  for (const [y1, y2] of [
+    [40, 260],
+    [100, 110],
+  ])
+    add([
+      { op: 'width', value: 206 },
+      { op: 'fill', color: 0x0000ff },
+      { op: 'rect', x1: 150, y1: y1 as number, x2: 150, y2: y2 as number },
+    ]);
   return cases;
 }
 
@@ -617,14 +665,27 @@ export const ITALIC_ITEMIZED_BYTES: readonly number[] = [0x86, 0x87, 0x88, 0x98]
 export const SECOND_PATH_BYTES: readonly number[] = [0x7f, 0x86, 0x87, 0x88, 0x98];
 export const FALLBACK_PRONE_BYTES: readonly number[] = [0x0c, 0x40, 0x80];
 /**
- * Requested sizes (points) at which a string made only of zero-width bytes, in plain, bold or italic,
- * is drawn by Windows 11 as a thin fallback-font bar instead of a filled cell (measured for sizes
- * 0-72, 80, 90, 100, 110 and 121 with $0D, $09 and $1F $1C $1D; $0D $0A filled the cell).
+ * Requested sizes (points) at which a string made only of zero-width bytes, in plain, bold or
+ * italic, may be drawn by Windows 11 as a thin fallback-font bar instead of a filled cell. Measured
+ * at every size at which the face is a raster face (Fixedsys 0-121, Courier 0-199; above that
+ * Windows substitutes Arial) with each of $09 $0A $0D $1C $1F alone: the bar sizes are the same for
+ * every byte and style. Some strings of two or more zero-width bytes fill the cell at these sizes
+ * ($0D $0A, $09 $09), others do not ($1E $0D $1F in Courier 12); all of them go to text-control
+ * here. The suite `text` holds the single byte $0D at every raster size (barSweep below), so a size
+ * missing here fails golden.test.ts.
  */
 export const ZERO_WIDTH_BAR_SIZES: Readonly<Record<string, readonly number[]>> = {
-  Fixedsys: [19, 20, 23, 24, 26, 28, 29, 35, 36, 38, 39, 42, 43, 46, 49, 52, 53, 54, 71, 100],
-  Courier: [3, 4, 6, 8, 11, 12, 13, 16, 17, 24, 27, 28, 46, 54, 56, 59, 60, 61, 62, 63, 64, 65, 66, 67, 71, 110],
+  Fixedsys: [
+    19, 20, 23, 24, 26, 28, 29, 35, 36, 38, 39, 42, 43, 46, 49, 52, 53, 54, 71, 74, 78, 82, 83, 87, 92, 96, 100, 101,
+    104,
+  ],
+  Courier: [
+    3, 4, 6, 8, 11, 12, 13, 16, 17, 24, 27, 28, 46, 54, 56, 59, 60, 61, 62, 63, 64, 65, 66, 67, 71, 74, 75, 76, 77, 78,
+    79, 82, 83, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 127, 133, 134, 135, 136, 138, 143, 144, 145,
+  ],
 };
+/** The sizes at which Windows draws the two raster faces from their raster font (metrics.json). */
+export const RASTER_SIZE_LIMIT: Readonly<Record<string, number>> = { Fixedsys: 121, Courier: 199 };
 
 /**
  * Why text-model.ts cannot reproduce a raster-face task 95 string, or null when it can. Cases for
@@ -811,6 +872,18 @@ function text(): GdiCase[] {
       { op: 'text', x: r2.int(-10, 60), y: r2.int(-10, 30), bytes },
     ]);
   }
+  // barSweep: a lone $0D at every size at which the face is raster (review round 2: the bar sizes
+  // above 72 pt had not been measured). The bar sizes land in text-control, every other size in
+  // text, where the model must fill exactly one cell.
+  for (const [name, limit] of Object.entries(RASTER_SIZE_LIMIT)) {
+    for (let size = 0; size <= limit; size++) {
+      add(40 + size, 24 + size + (size >> 2), [
+        { op: 'font', name, size, style: 0 },
+        { op: 'fill', color: 0x0000ff },
+        { op: 'text', x: 3, y: 2, bytes: [13] },
+      ]);
+    }
+  }
   return cases;
 }
 
@@ -837,6 +910,24 @@ function textOutline(glyphs: boolean): GdiCase[] {
       }
     }
   }
+  if (!glyphs) {
+    // $7F in a string with a byte of $80 or above takes the width of a fallback glyph, not its
+    // advance (review round 2; text-model.ts textExtent). At sizes that have an outline atlas.
+    for (const name of ['Courier New', 'Lucida Console', 'Consolas']) {
+      for (const size of [9, 12, 24]) {
+        for (const style of [0, 1]) {
+          add(320, 120, [
+            { op: 'bg', color: 0x336699 },
+            { op: 'font', name, size, style },
+            { op: 'fill', color: 0x0000ff },
+            { op: 'fontcolor', color: 0x0000ff },
+            { op: 'text', x: 3, y: 4, bytes: [0xe9, 0x7f] },
+            { op: 'text', x: 3, y: 60, bytes: [0x7f, 0x7f, 0x80, 0x41, 0x7f] },
+          ]);
+        }
+      }
+    }
+  }
   return cases;
 }
 
@@ -847,6 +938,7 @@ export function generateCases(): GdiCase[] {
     ...polylines(),
     ...widelines(),
     ...rects(),
+    ...pens(),
     ...floods(),
     ...modes(),
     ...modesHigh(),

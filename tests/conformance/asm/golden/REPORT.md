@@ -6,7 +6,8 @@ Oracle: official EDIT68K.exe v5.16.1 under Wine in Docker (tests/oracle/wine), w
 
 A "run" is one program assembled with one set of options. "Golden" means the `.L68` and `.S68` of
 the official program are in this folder; "hash only" means the manifest holds their SHA-256 and the
-files are not in the repository (a program of the `site` set, or an output over 512 KiB).
+files are not in the repository (a program of the `site` set, or an output over 512 KiB). "No
+result" means that the run was not a clean run of the official program.
 
 | Set | Programs | Runs | Golden | Hash only | No result |
 |---|---|---|---|---|---|
@@ -18,8 +19,9 @@ files are not in the repository (a program of the `site` set, or an output over 
 
 ## Runs without a result
 
-The automation could not get an output of the official program for these; no golden exists and
-the comparison test skips them.
+The automation could not get a clean run of the official program for these: it crashed, took
+too long, or showed a window that a run must not show. No golden exists and the comparison test
+skips them, except where the next section says that the outputs were kept.
 
 - `checklist/macro-10-expanded-line-longer-than-255-characters` (default): EDIT68K exited unexpectedly (crash?) exit code 1; wine: 01e0:err:virtual:virtual_setup_exception stack overflow 836 bytes addr 0x2c312c31 stack 0x120cbc (0x120000-0x121000-0x220000)
 - `checklist/macro-13-recursion-to-the-limit` (default): EDIT68K exited unexpectedly (crash?) exit code 1; wine: 0210:err:virtual:virtual_setup_exception stack overflow 1348 bytes addr 0x4e6659 stack 0x120abc (0x120000-0x121000-0x220000)
@@ -27,6 +29,14 @@ the comparison test skips them.
 - `github/pacman-mc68000/GAME/GFX.X68` (expand): not tried: the source has 2,438,385 bytes, and under Wine the official editor needs more than an hour to load a source above about 1 MB (official-oracle §3.2.1)
 - `richedit/s03_long_line_4000.X68` (default): Assembler Status dialog did not close on Alt+C
 - `site/games/AlienInvasion_Pucky_Protector/ALLGAMES4.1.X68` (expand): not tried: the source has 1,242,388 bytes, and under Wine the official editor needs more than an hour to load a source above about 1 MB (official-oracle §3.2.1)
+
+## Outputs kept from a failed run
+
+In these runs the official program had finished assembling (its status dialog was up) when the
+run went wrong. The `.L68` and `.S68` it had written are kept as `<label>.failed.L68` / `.S68`
+(official-oracle §4 item 7), and the comparison test compares them like goldens.
+
+None.
 
 ## Text that differs from the editor model
 
@@ -60,5 +70,6 @@ What the driver saw besides the expected windows.
 ## Undefined symbols
 
 Runs that report an undefined symbol: 122. The original encodes uninitialised memory for such a
-symbol (official-oracle §3.5), so for these runs the object code of the affected statements and the
-data of the S-records are masked before comparing; the manifest marks them `undefinedSymbols`.
+symbol (official-oracle §3.5), so for these runs the object code of the statements that report one
+is masked before comparing, in the listing and in the S-records; every other byte is compared.
+The manifest marks these runs `undefinedSymbols`.

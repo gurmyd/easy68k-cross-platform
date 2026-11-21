@@ -3,9 +3,9 @@
 # core.autocrlf says, so that Prettier's check and shell scripts behave the
 # same on Windows, macOS and Linux.
 #
-# Deliberately scoped to these folders: the engines (engine/**) and the oracle
-# under tools/oracle-official/ carry original sources and fixtures that are
-# bytes, and they declare that in their own .gitattributes files.
+# Deliberately scoped to these folders: the engines (engine/**) carry original
+# sources and fixtures that are bytes, and declare that in their own
+# .gitattributes files.
 /*.json                text eol=lf
 /*.js                  text eol=lf
 /*.md                  text eol=lf
@@ -38,6 +38,10 @@
 /tests/corpus/**       -text
 /tests/**/golden/**    -text
 /tests/oracle/asm-cli/** -text
+
+# Byte-exact test fixtures of the application (docs/porting/errata/E1.md): a
+# fixture folder holds the bytes a test reads, as a file, not as base64.
+/app/src/**/fixtures/** -text
 
 # Third-party fonts and licence texts whose SHA-256 is recorded in sources.json: bytes.
 /tools/fonts-src/**     -text

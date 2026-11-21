@@ -1,23 +1,47 @@
 {
-  "about": "Runs in which the WebAssembly assembler does not reproduce the official EDIT68K.exe v5.16.1 (see known-differences.ts). Each entry is a finding for the owner it names. The official result is in golden/<id>/<label>.L68.",
+  "about": "Runs in which the WebAssembly assembler does not reproduce the official EDIT68K.exe v5.16.1 (see known-differences.ts). Each entry is a finding for the owner it names. The official result is in golden/<id>/<label>.L68. \"ours\" is what the port produces today for each run (error and warning count, SHA-256 of the canonical .L68 and .S68): the test fails when the port produces anything else, and its message gives the new values.",
   "differences": [
     {
       "id": "checklist/dir-11-set-and-macro-lines-reached-only-in-pass-2-forwa",
       "label": "*",
       "reason": "A SET line that only pass 2 reaches (it is inside `IFNE FWD`, and FWD is defined further down): the official assembler defines the symbol in pass 2, `DC.B S` assembles to 05 and there is no error. The port reports `Undefined symbol` for the DC.B line and emits 00 (1 error instead of 0).",
-      "owner": "engine/asm (PATCHES.md P14, assembler §9.3.9)"
+      "owner": "engine/asm (PATCHES.md P14, assembler §9.3.9)",
+      "ours": {
+        "default": {
+          "errors": 1,
+          "warnings": 0,
+          "l68": "cfa4203506619fe3e7cb357e0ca2cea55ae9403acfd045de4a72647fa9989286",
+          "s68": "b0e88a76267f57327f9873220f0228e03e084530dd1566538d407e8c38bdbff9"
+        }
+      }
     },
     {
       "id": "checklist/macro-09-binary-constants-and-a-valid-printf-conversion-i",
       "label": "*",
       "reason": "A macro body line with a valid printf conversion (`DC.B '%d%s%%'`): in the official assembler the expansion ends at that line - neither the line nor the ENDM line reaches the listing, no code is emitted for it and no error is reported. The port expands the line literally (6 bytes of object code more). The original passes the line to fprintf as the format string (assembler §9.3.4), so its result depends on what the conversions read from the stack; this is what the binary did under Wine.",
-      "owner": "engine/asm (PATCHES.md P5, assembler §9.3.4)"
+      "owner": "engine/asm (PATCHES.md P5, assembler §9.3.4)",
+      "ours": {
+        "mex": {
+          "errors": 0,
+          "warnings": 0,
+          "l68": "da46539d7cb3d01a7a411690340dd528fef0fba03383f0ccadd51f2f84967af5",
+          "s68": "6f41a2f6d77aa82b4c105bccc5d4a25f9d378d18c6fbd5b09f907e427344f2d5"
+        }
+      }
     },
     {
       "id": "checklist/stc-03-missing-then-do-unknown-condition-mismatched-and",
       "label": "*",
       "reason": "`ENDI` with nothing open, followed by an `IF` without THEN: the official assembler reports `Undefined symbol` for the ENDI and lists a generated label line (`_020C002A`, a value read from an empty stack), and then assembles the IF with a correct branch (`6600 0008`) and only the `THEN expected` warning. The port reports `Invalid syntax` for the ENDI and an additional `Undefined symbol` with `BNE _00000000` for the IF (6 errors instead of 5, and every later address is 4 lower).",
-      "owner": "engine/asm (assembler §9.3.6: terminator with an empty stack)"
+      "owner": "engine/asm (assembler §9.3.6: terminator with an empty stack)",
+      "ours": {
+        "default": {
+          "errors": 6,
+          "warnings": 2,
+          "l68": "ebdf52f1b4a1a769cc1f7f149de1f1be26ba36c6f9aa1e3ac31d38185ce7a92b",
+          "s68": "f5136307fee9337ce223bd014687fd0cb5e598394ce5c5282a03edc253056d25"
+        }
+      }
     }
   ]
 }

@@ -1,0 +1,22 @@
+# Exception processing, the trace bit and interrupts with exceptions enabled (exceptions.X68).
+option exceptions 1
+load exceptions.S68 exceptions.L68
+run 60
+dump regs
+irq 3
+dump regs
+irq 7
+dump regs
+run 5000
+dump regs
+dump state
+dump mem $7F00 256
+# the same with exceptions disabled: every exception halts with a message
+option exceptions 0
+rewind
+run 100
+dump regs
+dump state
+pause
+run 100
+dump regs

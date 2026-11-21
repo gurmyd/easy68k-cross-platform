@@ -83,6 +83,10 @@ export interface Vfs {
   writeFile(path: VPath, data: Bytes): Promise<void>;
   appendFile(path: VPath, data: Bytes): Promise<void>;
   remove(path: VPath): Promise<void>;
+  /** Creates the folder and the folders above it; does nothing for a folder that exists. Runs in
+   *  the queue of its path like the three above and is reported as a 'write' of the folder.
+   *  Added at gate I1 (docs/porting/errata/W1.md, entry 11). */
+  mkdirp(path: VPath): Promise<void>;
   list(path: VPath): Promise<DirEntry[]>;
   /** Windows-style lookup of `name` relative to `dir`: '\' and '/' separate, case is ignored when no
    *  exact match exists, ".." is allowed while it stays inside the mount. null = not found or refused. */
@@ -113,7 +117,9 @@ export interface SyncFiles {
   write(path: VPath, position: number, data: Bytes): boolean; // a gap before position reads as zero bytes
   create(path: VPath): boolean; // new empty file, or truncate
   remove(path: VPath): boolean;
-  /** Resolves when every change made through this view is in storage. */
+  /** Resolves when every change made through this view is in storage. A cached view starts its
+   *  pending writes at once when this is called; it does not wait for the write-behind timer (the
+   *  run controller calls it when a program stops, 4.2). */
   settled(): Promise<void>;
   readonly unsettled: boolean; // for the unload guard
 }
@@ -148,11 +154,32 @@ export interface OpenRequest {
   multiple: boolean;
   startDir?: VPath;
 }
+/** A caller's own question for a file that exists already (SaveRequest.overwritePrompt). */
+export interface OverwritePrompt {
+  title: string; // e.g. "Alert"
+  text: string; // e.g. "File exists! OK to replace?"; asked with Yes and No
+}
 export interface SaveRequest {
   title: string;
   filters: FileFilter[];
+  /** The extension a typed name without one receives. The dialog accepts "X68", ".X68" and the
+   *  original's "*.X68" alike. */
   defaultExt: string;
   suggested?: VPath;
+  /**
+   * The question asked when the chosen file exists. Absent: the dialog's own, the editor's
+   * `File exists! OK to overwrite?` (title `Caution!`). An object: this question instead (the
+   * Memory panel's `File exists! OK to replace?`, title `Alert`). null: the dialog asks nothing,
+   * because the caller asks afterwards itself (EASyBIN). A native dialog that asks on its own
+   * (macOS) cannot be told otherwise; the port then adds no question of its own.
+   * Added at gate I1 (docs/porting/errata/W1.md, entry 11).
+   */
+  overwritePrompt?: OverwritePrompt | null;
+}
+/** A request for a folder (FileDialogs.chooseFolder). Added at gate I1. */
+export interface FolderRequest {
+  title: string;
+  startDir?: VPath;
 }
 export interface FileSourceProvider {
   id: string; // "browser", "folder", "upload", "native"
@@ -160,9 +187,19 @@ export interface FileSourceProvider {
   available(): boolean;
   open?(request: OpenRequest): Promise<VPath[] | null>;
   save?(request: SaveRequest): Promise<VPath | null>;
+  /** Added at gate I1: the provider's own folder chooser (the `native` provider of the desktop app,
+   *  from Platform.nativeFileDialogs). */
+  chooseFolder?(request: FolderRequest): Promise<VPath | null>;
 }
 export interface FileDialogs {
   open(request: OpenRequest): Promise<VPath[] | null>; // null = cancelled
-  save(request: SaveRequest): Promise<VPath | null>; // overwrite already confirmed
+  save(request: SaveRequest): Promise<VPath | null>; // overwrite already confirmed (SaveRequest.overwritePrompt)
   registerProvider(provider: FileSourceProvider): () => void;
+  /**
+   * Asks for a folder, which may be a new one (Help > Examples in the desktop app, 5.8). Resolves
+   * to the folder's path, created if it did not exist, or null when cancelled.
+   * Added at gate I1 as an optional member (docs/porting/errata/W1.md, entry 11): a caller tests
+   * for it, and FS1's service has it.
+   */
+  chooseFolder?(request: FolderRequest): Promise<VPath | null>;
 }

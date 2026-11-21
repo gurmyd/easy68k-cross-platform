@@ -32,6 +32,15 @@ export class RealClock implements RealClockApi {
 /** No frame for this long means the page is hidden, minimised or covered: a timer takes over (4.5.5). */
 export const FRAME_WATCHDOG_MS = 250;
 
+/**
+ * While the timer stands in for the display it delivers a "frame" this often: the pace of a 60 Hz
+ * display. The run controller makes up at most 50 ms of missed time per tick (MAX_CATCHUP_MS), so a
+ * slower pace would slow the program down - one tick per 250 ms to a fifth of its speed. Where the
+ * platform does not slow timers of a hidden window down (the desktop app) the program therefore
+ * keeps its speed; in a hidden browser tab the browser's own throttling decides (4.5.5).
+ */
+export const WATCHDOG_FRAME_MS = 1000 / 60;
+
 /** The timer functions a FrameScheduler uses; the default is the platform's. Tests pass their own. */
 export interface SchedulerTimers {
   setTimeout(callback: () => void, delayMs: number): unknown;
@@ -59,8 +68,9 @@ const platformFrames = (): ((callback: (now: number) => void) => void) => {
 /**
  * The scheduler of a page. `onFrame` callbacks run once per display frame. A watchdog timer,
  * re-armed by every frame, takes over whenever no frame has arrived for 250 ms and runs the
- * callbacks itself until frames return. It does not ask whether the page is visible: a minimised
- * or covered window can stop producing frames while still calling itself visible (4.5.5).
+ * callbacks itself, at the pace of a display, until frames return. It does not ask whether the
+ * page is visible: a minimised or covered window can stop producing frames while still calling
+ * itself visible (4.5.5).
  */
 export class FrameScheduler implements FrameSchedulerApi {
   private readonly callbacks = new Set<(now: number) => void>();
@@ -114,15 +124,19 @@ export class FrameScheduler implements FrameSchedulerApi {
     });
   }
 
-  private armWatchdog(): void {
+  /**
+   * Arms the watchdog: after a frame it waits FRAME_WATCHDOG_MS for the next one; once it has
+   * taken over it comes back every WATCHDOG_FRAME_MS until a frame arrives.
+   */
+  private armWatchdog(delayMs = FRAME_WATCHDOG_MS): void {
     this.disarmWatchdog();
     this.watchdog = this.timers.setTimeout(() => {
       this.watchdog = null;
       if (this.callbacks.size === 0) return;
       // The frame request stays pending; it fires again when the page gets frames.
       this.run(this.timers.now());
-      if (this.callbacks.size > 0) this.armWatchdog();
-    }, FRAME_WATCHDOG_MS);
+      if (this.callbacks.size > 0) this.armWatchdog(WATCHDOG_FRAME_MS);
+    }, delayMs);
   }
 
   private disarmWatchdog(): void {

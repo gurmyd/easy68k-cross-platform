@@ -1,5 +1,7 @@
 # Request from SH3: run the text screen's browser check in CI (gate I1)
 
+Status: applied in gate I1 round 1. Root script `check:text` and the step "Text screen check (SH3)" of `browser-checks`, group `simulator`, guarded by `needs.engines.outputs.available == 'asm sim'`.
+
 SH3's acceptance (ARCHITECTURE.md 9.2) includes "the same text gives the same pixels under Node,
 Chromium and WebKit". Unit tests run under Node without a DOM and `tests/e2e` belongs to a later
 package, so the browser half is a script in SH3's own folder, by the wave-zero convention:

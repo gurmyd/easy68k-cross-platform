@@ -25,8 +25,9 @@ function sameResolved<T>(a: T, b: T): boolean {
 function useResolveEnv(): (state: AppState) => ResolveEnv {
   const { ctx, commands } = useApplication();
   // Handlers are normally all registered before the first render; one that arrives later (a
-  // feature loaded on demand) makes the component resolve its table again.
-  const handlers = useSyncExternalStore(commands.subscribe, commands.handlerCount, commands.handlerCount);
+  // feature loaded on demand), or an override of a check, makes the component resolve its table
+  // again.
+  const handlers = useSyncExternalStore(commands.subscribe, commands.revision, commands.revision);
   return useCallback(
     (state: AppState) => ({ os: ctx.platform.os, desktop: ctx.platform.kind === 'desktop', state, commands }),
     // `handlers` is listed so that the function, and with it the selector, changes with it.

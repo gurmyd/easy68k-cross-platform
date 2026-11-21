@@ -10,8 +10,8 @@
 //
 // Owner: W3 > FS1.
 
-import type { AppContext, FeatureModule, FileDialogs, FileSourceProvider, VPath } from '../../contracts';
-import { BrowserBackend, storageProblem } from '../../fs/browser-backend';
+import type { AppContext, FeatureModule, FileDialogs, FileSourceProvider, FolderRequest, VPath } from '../../contracts';
+import { onStoreProblem, storageProblem } from '../../fs/browser-backend';
 import { panelVisible, togglePanel } from '../../state/panels';
 import { NAME_DIALOG_ID } from './actions';
 import { carriesFiles, droppedItems, hasDom, pickFiles, readFileBytes } from './browser-io';
@@ -20,8 +20,30 @@ import { handleDrop, type DropDeps } from './drop';
 import { FileDialog } from './FileDialog';
 import { FilesPanel } from './FilesPanel';
 import { NameDialog } from './NameDialog';
-import { UPLOAD_PROVIDER_ID, canTakeDroppedFolder } from './providers';
+import { EDITOR_OPEN_FILTERS } from './filters';
+import { NATIVE_PROVIDER_ID, UPLOAD_PROVIDER_ID, canTakeDroppedFolder } from './providers';
 import { IMPORTED_DIR, displayPath, importOne } from './store';
+
+/**
+ * The desktop app's native dialogs as the provider 'native', which replaces the port's dialogs
+ * (3.8.5; providers.ts). null where the platform has none (the web).
+ */
+export function createNativeProvider(ctx: AppContext): FileSourceProvider | null {
+  const native = ctx.platform.nativeFileDialogs;
+  if (!native) return null;
+  return {
+    id: NATIVE_PROVIDER_ID,
+    label: 'Native dialogs',
+    available: () => true,
+    open: (request) => native.open(request),
+    save: (request) => native.save(request),
+    // The contract passes the request (FolderRequest); a title alone is taken too.
+    chooseFolder: (arg: FolderRequest | string) => native.chooseFolder(typeof arg === 'string' ? arg : arg.title),
+  };
+}
+
+/** The title of the Open dialog a folder dropped on the desktop app shows (the editor's Open title). */
+export const DROPPED_FOLDER_TITLE = 'Open File';
 
 /** The service each window's context received, for init (one per context). */
 const services = new WeakMap<AppContext, FileDialogService>();
@@ -66,7 +88,9 @@ export function createUploadProvider(ctx: AppContext): FileSourceProvider {
  */
 export function createFileDialogs(ctx: AppContext): FileDialogs {
   const service = createFileDialogService(ctx);
-  if (hasDom()) service.registerProvider(createUploadProvider(ctx));
+  const native = createNativeProvider(ctx);
+  if (native) service.registerProvider(native);
+  else if (hasDom()) service.registerProvider(createUploadProvider(ctx));
   services.set(ctx, service);
   return service;
 }
@@ -83,6 +107,26 @@ export function dropDeps(ctx: AppContext): DropDeps {
     openDocument: (path) => ctx.documents.open(path),
     openProgram: (path) => ctx.sim.controller.open(path, 'drop'),
     folderProviders: () => (service ? service.registry.available().filter(canTakeDroppedFolder) : []),
+    ...desktopDropDeps(ctx),
+  };
+}
+
+/** The desktop app: dropped files are opened where they are on the disk (DV2 errata 4a). */
+function desktopDropDeps(ctx: AppContext): Pick<DropDeps, 'locate' | 'openFolder'> {
+  const { platform } = ctx;
+  if (!platform.grantDroppedFile) return {};
+  return {
+    locate: (item) =>
+      item.file ? (platform.grantDroppedFile?.(item.file as File) ?? Promise.resolve(null)) : Promise.resolve(null),
+    async openFolder(dir) {
+      const chosen = await ctx.fileDialogs.open({
+        title: DROPPED_FOLDER_TITLE,
+        filters: [...EDITOR_OPEN_FILTERS],
+        multiple: true,
+        startDir: dir,
+      });
+      for (const path of chosen ?? []) await ctx.documents.open(path);
+    },
   };
 }
 
@@ -118,10 +162,7 @@ function reportStoreProblems(ctx: AppContext): () => void {
   const browser = ctx.vfs.backends().find((backend) => backend.mount === 'browser');
   const problem = storageProblem(browser);
   if (problem) ctx.dialogs.toast(problem);
-  if (browser instanceof BrowserBackend) {
-    return browser.onProblem((store) => ctx.dialogs.toast(store.message));
-  }
-  return () => {};
+  return onStoreProblem(browser, (message) => ctx.dialogs.toast(message));
 }
 
 export const feature: FeatureModule = {

@@ -4,15 +4,16 @@
 // memory, the memory map); the Stack panel changes nothing in the simulator.
 //
 // Refresh moments (sim-ui §11.4, ARCHITECTURE.md 4.6):
-//   - updateDisplay() - re-centre on the selected register and redraw: `sim.viewRevision` changes
-//     (scrshow), the `View` choice changes, the panel is shown, after a cold start;
+//   - updateDisplay() - re-centre on the selected register and redraw: the engine names the Stack
+//     window in host.repaint (scrshow: `sim.repaint.stack` changes, or `sim.viewRevision` while
+//     `sim.repaint` is absent), the `View` choice changes, the panel is shown, after a cold start;
 //   - DisplayStack() - redraw without re-centring: the spin buttons and the wheel, a resize, and
 //     `sim.liveRevision` changes (a Memory-panel edit, sim-ui §11.4) unless a full-speed run is in
 //     progress (the window is not refreshed during a run).
 // Between those moments the panel shows its last paint. The engine is always read through
 // `ctx.sim.engine`, because a cold start replaces it.
 
-import type { AppContext } from '../../contracts';
+import type { AppContext, AppState } from '../../contracts';
 import { MapKind } from '../../contracts';
 import {
   DEFAULT_STACK_CHOICE,
@@ -36,6 +37,17 @@ export interface StackPanelState {
 
 type Listener = () => void;
 
+/**
+ * Whether the store says the engine named the Stack window in `host.repaint` (scrshow), which
+ * re-centres it (updateDisplay): `sim.repaint.stack` moved, or, while the session does not publish
+ * `sim.repaint` (an optional member, W1 errata entry 11), `viewRevision` moved, which moves with
+ * every repaint. A move of `liveRevision` alone (a Memory-panel edit) never re-centres.
+ */
+export function stackRecentreDue(before: AppState['sim'], now: AppState['sim']): boolean {
+  if (now.repaint !== undefined) return now.repaint.stack !== before.repaint?.stack;
+  return now.viewRevision !== before.viewRevision;
+}
+
 function validChoice(value: number): number {
   return Number.isInteger(value) && value >= 0 && value <= 8 ? value : DEFAULT_STACK_CHOICE;
 }
@@ -56,15 +68,10 @@ export class StackPanelModel {
     let last = this.ctx.store.getState().sim;
     const offStore = this.ctx.store.subscribe(() => {
       const now = this.ctx.store.getState().sim;
-      if (now.viewRevision !== last.viewRevision) {
-        last = now;
-        this.updateDisplay();
-      } else if (now.liveRevision !== last.liveRevision) {
-        last = now;
-        if (now.phase !== 'running') this.displayStack();
-      } else {
-        last = now;
-      }
+      const before = last;
+      last = now;
+      if (stackRecentreDue(before, now)) this.updateDisplay();
+      else if (now.liveRevision !== before.liveRevision && now.phase !== 'running') this.displayStack();
     });
     const offEngine = this.ctx.sim.onEngineReplaced(() => this.coldStart());
     return () => {

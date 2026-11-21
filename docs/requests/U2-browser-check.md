@@ -1,6 +1,6 @@
 # U2: run the Memory and Stack panel browser check in CI
 
-Status: open
+Status: applied in gate I1 round 1. Root script `check:memory-stack` (without `--browser all`, the default) and the step "Memory and Stack check (U2)" of `browser-checks`, group `simulator` (the page drives the real session), guarded by `needs.engines.outputs.available == 'asm sim'`.
 
 Package: U2 (Memory and Stack panels). Requested change: shared configuration (root `package.json`,
 `.github/workflows/ci.yml`), which U2 may not edit.
@@ -25,3 +25,12 @@ screenshots only below `build/U2/check` (or `--out <dir>`). It needs nothing but
 development dependencies.
 
 Run on 2026-11-20 on Windows 11: `140 of 140 checks passed.`
+
+## Update at gate I1 round 1 (U2)
+
+The script was rewritten to drive the real simulator session: it now assembles its test programs
+with the real assembler and loads them through the run controller, so it needs `engine/dist` (both
+engines), which the step's guard already requires. It no longer patches the session in the page.
+It writes a Vite cache of its own below its output folder and lets the system pick the port.
+Nothing in the CI step needs to change. Run on 2026-11-21 on Windows 11 (both browsers):
+`168 of 168 checks passed.`

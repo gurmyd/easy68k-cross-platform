@@ -64,5 +64,6 @@ export { TextField, type TextFieldProps } from './TextField';
 export { Toast, ToastStack, type ToastItem, type ToastStackProps } from './Toast';
 export { Toolbar, ToolbarSeparator, ToolbarSpacer, type ToolbarProps } from './Toolbar';
 export { Tooltip, type TooltipProps } from './Tooltip';
+export { treeViewKeyAction, type TreeKeyAction, type TreeKeyRow } from './tree';
 export { VirtualList, type VirtualListHandle, type VirtualListProps } from './VirtualList';
 export type { ScrollAlign } from './virtual';

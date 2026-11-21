@@ -30,6 +30,21 @@ export interface DocDefaults {
   tabSize: number;
 }
 
+/** The settings of an open document that can be changed after it is open (DocumentService.update).
+ *  Added at gate I1 (docs/porting/errata/W1.md, entry 11). */
+export type DocumentPatch = Partial<
+  Pick<DocumentState, 'insertMode' | 'tabType' | 'tabSize' | 'fontName' | 'fontSize'>
+>;
+
+/** The selection of a document as the editor last left it (DocumentService.selection). Offsets count
+ *  characters of `text(id)`. Added at gate I1. */
+export interface DocumentSelection {
+  /** The selected text; '' when nothing is selected. */
+  selected: string;
+  /** The caret: the number of characters before it (the end of the selection that moves). */
+  caret: number;
+}
+
 export interface DocumentService {
   list(): DocumentState[];
   active(): DocumentState | null;
@@ -42,4 +57,16 @@ export interface DocumentService {
   close(id: string): Promise<boolean>; // false = cancelled
   closeAll(): Promise<boolean>;
   activate(id: string): void;
+
+  /* ---- added at gate I1 (docs/porting/errata/W1.md, entry 11). Optional in this round: the real
+     service (core/documents, E1) has both; a stand-in may leave them out, so a caller tests first
+     (`ctx.documents.update?.(id, patch)`). ---- */
+
+  /** Changes settings of an open document: Insert/Replace (the editor), font and tabs (Editor
+   *  Options). The store's DocumentState follows; the text, `modified` and `revision` do not change.
+   *  The next Save writes the font and tab values into the trailer. */
+  update?(id: string, patch: DocumentPatch): void;
+  /** The selection and caret of a document, for F1 in the editor (editor-ui §15.3). null for an
+   *  unknown id. */
+  selection?(id: string): DocumentSelection | null;
 }

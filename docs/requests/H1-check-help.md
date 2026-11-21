@@ -1,5 +1,7 @@
 # Request from H1: run the Help browser check in CI (gates)
 
+Status: applied in gate I1 round 1. Root script `check:help` and the step "Help check (H1)" of `browser-checks`, group `interface`.
+
 H1's acceptance includes items that only a browser can show: the pages render in the sandboxed
 frame with their images, special characters display correctly in Chromium and WebKit, the
 Help drawer appears in every mode, the About boxes, Examples. Unit tests run under Node without a

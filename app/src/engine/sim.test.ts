@@ -40,6 +40,19 @@ const repo = (file: string) => fileURLToPath(new URL(`../../../${file}`, import.
 const enginesBuilt = ['asm68k.wasm', 'asm68k-loader.mjs', 'sim68k.wasm', 'sim68k-loader.mjs'].every((file) =>
   existsSync(repo(`engine/dist/${file}`)),
 );
+
+/** Suites that load and compile the engines: on a loaded machine they need more than Vitest's 5 s. */
+const ENGINE_TIME = { timeout: 60_000 };
+
+/** With EASY68K_REQUIRE_ENGINES=1 (CI) a missing engine/dist fails instead of skipping. */
+it.runIf(process.env.EASY68K_REQUIRE_ENGINES === '1' && !enginesBuilt)(
+  'engine/dist holds both engines (EASY68K_REQUIRE_ENGINES=1)',
+  () => {
+    expect.fail(
+      'EASY68K_REQUIRE_ENGINES is 1 but engine/dist is incomplete: run "npm run build:engines" or "npm run fetch:engines"',
+    );
+  },
+);
 const fixtureDir = repo('engine/sim/test/fixtures');
 const fixture = (file: string): Bytes => new Uint8Array(readFileSync(`${fixtureDir}/${file}`));
 const sorted = (values: Iterable<string>) => [...values].sort();
@@ -51,7 +64,7 @@ const loadSimModule = () =>
 
 // ---- mirror -------------------------------------------------------------------------------------
 
-describe('mirror of engine/sim/sim68k.mjs (3.2)', () => {
+describe('mirror of engine/sim/sim68k.mjs (3.2)', ENGINE_TIME, () => {
   it('SimEngine has exactly the methods and getters of Sim68k.prototype', async () => {
     const { Sim68k } = await loadSimModule();
     const theirs = Object.getOwnPropertyNames(Sim68k.prototype).filter(
@@ -169,7 +182,7 @@ function loadFixture(test: TestEngine, name: string, caseNumber?: number): void 
 const RESULTS = 0x4000; // where the io fixture stores what a test checks
 const INBUF = 0x5000;
 
-describe.skipIf(!enginesBuilt)('createSimEngine with the real engine (needs engine/dist)', () => {
+describe.skipIf(!enginesBuilt)('createSimEngine with the real engine (needs engine/dist)', ENGINE_TIME, () => {
   describe("the engine's own fixtures run to their halt", () => {
     const names = readdirSync(fixtureDir)
       .filter((file) => file.endsWith('.S68'))

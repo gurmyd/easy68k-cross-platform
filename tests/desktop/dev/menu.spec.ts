@@ -9,7 +9,7 @@
 // Owner: DV2.
 
 import { expect, test, type Page } from '@playwright/test';
-import { toElectronTemplate, type MenuSnapshot, type NativeMenuItem } from '../../../desktop/src/menu';
+import { roleChordsOf, toElectronTemplate, type MenuSnapshot, type NativeMenuItem } from '../../../desktop/src/menu';
 import {
   IS_MAC,
   launchDesktop,
@@ -131,6 +131,18 @@ for (const mode of ['editor', 'simulator', 'easybin']) {
     const editRoles = (edit?.items ?? []).map((item) => item.role).filter(Boolean);
     expect(editRoles).toEqual(expect.arrayContaining(['cut', 'copy', 'paste', 'selectAll']));
     if (mode !== 'editor') expect(edit?.role).toBe('editMenu');
+
+    // Only the chords of role items this menu has may reach the macOS menu: in the Editor, Undo
+    // and Redo are command items, so Cmd+Z and Shift+Cmd+Z stay with the page (gate 1 review).
+    const chords = await mainHook<string[] | null>(desktop.app, 'menuRoleChords', windowId);
+    expect(chords).toEqual(roleChordsOf(description));
+    if (mode === 'editor') {
+      expect(chords).not.toContain('Cmd+Z');
+      expect(chords).not.toContain('Shift+Cmd+Z');
+    } else {
+      expect(chords).toEqual(expect.arrayContaining(['Cmd+Z', 'Shift+Cmd+Z']));
+    }
+    expect(chords).toEqual(expect.arrayContaining(['Cmd+X', 'Cmd+C', 'Cmd+V', 'Cmd+A']));
   });
 }
 
@@ -378,6 +390,59 @@ test("Cmd+C and Cmd+V (Ctrl+C, Ctrl+V elsewhere) work in the Memory panel's Addr
       type: 'note',
       description: usedStandIn
         ? 'The Memory panel has no Address field yet (U2); a stand-in text field in Simulator mode was used.'
+        : 'The real Address field of the Memory panel was used.',
+    });
+  } finally {
+    await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), saved);
+    await page.evaluate(() => {
+      document.querySelector('[data-check-stand-in]')?.remove();
+      document.querySelector('[data-check-field]')?.removeAttribute('data-check-field');
+    });
+  }
+});
+
+// The keys above reach the page directly (Playwright), so they cannot show that the Edit menu's
+// role items work. This test performs those items themselves (Select All, Paste, Copy), as a
+// click on them does. On macOS the system performs role items through the first responder, which
+// a test cannot reach in a hidden window: there it stays on the manual list of 6.8.
+test("the Edit menu's role items Select All, Paste and Copy work in the Memory panel's Address field", async () => {
+  test.skip(IS_MAC, 'macOS performs role items through the first responder (manual list of 6.8)');
+  const { page, app } = desktop;
+  await setMode(page, 'simulator');
+  const saved = await app.evaluate(({ clipboard }) => clipboard.readText());
+  try {
+    const usedStandIn = await page.evaluate(async () => {
+      const { showPanel } = await import(String('/src/state/panels.ts'));
+      showPanel(window.__easy68k.ctx, 'memory');
+      await new Promise((done) => setTimeout(done, 300));
+      let field = document.querySelector<HTMLInputElement>(
+        '[data-e68-panel="memory"] input[type="text"], [data-e68-panel="memory"] input:not([type])',
+      );
+      const standIn = field === null;
+      if (!field) {
+        field = document.createElement('input');
+        field.setAttribute('data-check-stand-in', '');
+        document.body.append(field);
+      }
+      field.setAttribute('data-check-field', '');
+      field.focus();
+      return standIn;
+    });
+    const field = page.locator('[data-check-field]');
+    await field.focus();
+    const role = (name: string) => mainHook<boolean>(app, 'clickRoleItem', windowId, name);
+    await app.evaluate(({ clipboard }) => clipboard.writeText('003000'));
+    expect(await role('selectAll')).toBe(true);
+    expect(await role('paste')).toBe(true);
+    await expect(field).toHaveValue(/^0*3000$/);
+    await app.evaluate(({ clipboard }) => clipboard.writeText('nothing'));
+    expect(await role('selectAll')).toBe(true);
+    expect(await role('copy')).toBe(true);
+    await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toMatch(/3000/);
+    test.info().annotations.push({
+      type: 'note',
+      description: usedStandIn
+        ? 'The Memory panel has no Address field; a stand-in text field was used.'
         : 'The real Address field of the Memory panel was used.',
     });
   } finally {

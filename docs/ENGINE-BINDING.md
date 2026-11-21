@@ -3,7 +3,8 @@
 How the application loads the two WebAssembly engines, what each file of the binding does, every
 difference found between the engine modules and section 3.2 of `ARCHITECTURE.md`, and what was done
 about each. Owner: work package W4. State: 2026-11-20, engines as built on that day
-(`asm68k.wasm` 136,962 bytes, `sim68k.wasm` 160,409 bytes, Emscripten 7.0.0).
+(`asm68k.wasm` 136,962 bytes, `sim68k.wasm` 160,409 bytes, Emscripten 7.0.0); sections 6 and 8
+revised on 2026-11-21 at the integration gate I1, after the packages of wave one had used the binding.
 
 Contents: 1 the files - 2 how the engines are loaded - 3 where it was run - 4 differences from
 section 3.2 - 5 what the engine packages are asked to change - 6 for packages that use the binding -
@@ -240,8 +241,21 @@ the wave-0 gate, and the binding's workarounds for them were removed.
 
 - **Everyone**: `createSimEngine` and `createAsmEngine` reject with `EngineLoadError` when an engine
   cannot be loaded; show its message. `assemble()` rejects only for forbidden arguments (A2).
+- **Features** may not import `app/src/engine/` (layer rule, 3.1). `main.tsx` is the one place in
+  the application that does, and it imports the binding lazily (`import('./engine')`), so the
+  WebAssembly is fetched only when it is first needed:
+  - the assembler reaches the application as `AsmEngine` in the bootstrap options (`asm`): the first
+    `assemble()` calls `createAsmEngine()`, and a load that failed is tried again by the next one;
+  - the simulator reaches the run session as `SimEngineFactory` (`env.engines.create(host)` /
+    `env.engines.release(engine)`, `contracts/features.ts`), which forwards to `createSimEngine` and
+    `releaseSimEngine`. Every other package reads the session's engine as `ctx.sim.engine`, afresh
+    each time (a cold start replaces it), and changes it only through the run controller (ground
+    rule 8).
+  Unit tests of any layer may import `engine/testing.ts`, `engine/index.ts` and the constants of
+  `engine/sim.ts`.
 - **SH8 (run controller)**: a cold start is `releaseSimEngine(engine)` then
-  `await createSimEngine(host)`; about 6 ms in Chromium, 15 ms in WebKit (section 7). Release first:
+  `await createSimEngine(host)` (`core/run/controller.ts`, `coldStartSteps`, does exactly that, with
+  its stand-in engine in place in between); about 6 ms in Chromium, 15 ms in WebKit (section 7). Release first:
   two live instances are 128 MiB. Do not keep a reference to `engine.memory` or to anything derived
   from it across a release, and do not hold engines in `WeakRef`s inside a loop: a `WeakRef` keeps its
   target alive until the current task ends, which in Chromium made a 200-cycle loop run out of
@@ -250,8 +264,11 @@ the wave-0 gate, and the binding's workarounds for them were removed.
   (`The assembler could not start: ...`); it is shown like any other.
 - **DV1 (service worker)**: the six engine files are in `dist/assets/` and are requested at run
   time, not through the module graph: put `assets/*.mjs` and `assets/*.wasm` in the precache list.
-- **DV2 (desktop)**: section 2.4. `tests/desktop/dev` should check that both engines start under
-  `app://`; W4 could not.
+  (Done: DV1's `check-pwa.mjs` finds the six in the list and loads both engines offline.)
+- **DV2 (desktop)**: section 2.4. `tests/desktop/dev` checks that both engines start under
+  `app://` (`protocol.spec.ts`, "both engines start under app://", through the binding's chunk of
+  the production build) and that each window compiles and instantiates its own simulator
+  (`windows.spec.ts`, with `engineLoadInfo`).
 - **DV4 (`DesktopNet`)**: `createNetClient` receives `serverAddress` (S2) from the engine itself; it
   is never `undefined` when task 100 runs.
 - **Tests of any package** (`import ... from '../engine/testing'`, relative to `app/src`):
@@ -265,9 +282,26 @@ the wave-0 gate, and the binding's workarounds for them were removed.
 | `runProgram(engine, script?)` | Presses Run and serves the wait states from plain data (`keys`, `dialogs`); returns why and how the run ended. |
 | `createMemoryFiles(initial?)` | A minimal `files` part: program files in a map. Not the application's file model. |
 | `TRAP15_TOUR`, `trap15TourSource()`, `runTrap15Tour(test, program)` | A 68000 program that calls every TRAP #15 task, with the host methods each call reaches. Run against a composed host it visits 80 of the 93 host methods; `trap15.test.ts` shows the calls that reach the other 13. |
+| `TEST_ASM_OPTIONS`, `TEST_ASM_TIME` | The assembler options of a fresh installation and the fixed date `assembleProgram` uses (for a test that calls `createAsmEngine()` itself). |
+| `bytesOf(text)`, `textOf(bytes)` | One byte per character, both ways (the engines take and give bytes). |
 | `HOST_DEFAULTS`, `HOST_METHODS`, `HOST_PART_DEFAULTS` (from `../engine/sim`) | The 93 method names and their default results, whole and by part. |
+| `SIM_ENGINE_MEMBERS` (from `../engine/sim`) | The members of `SimEngine` as the binding implements them (for a stand-in that must have them all). |
+| `engineLoadInfo(name)` (from `../engine/loader`) | `{ compilations, instances }`, to check that a `.wasm` was compiled once. |
 
-`describe.skipIf(!enginesBuilt)` is the pattern for tests that need `engine/dist`.
+`testing.ts` imports nothing but the contracts and the binding, so it runs in a page too: a browser
+check can load `/src/engine/testing.ts` and `/src/engine/index.ts` from the Vite development server
+(`check-text.mjs`, `check-output.mjs`, `check-sim-main.mjs`, `check-hardware.mjs` and
+`tests/desktop/dev` do).
+
+A test file that needs `engine/dist` follows the pattern of this folder's tests:
+
+- it computes `enginesBuilt` from the four files of `engine/dist` and puts its engine tests in
+  `describe.skipIf(!enginesBuilt)(...)`;
+- it has one `it.runIf(process.env.EASY68K_REQUIRE_ENGINES === '1' && !enginesBuilt)(...)` that fails,
+  so that CI (which sets the variable) cannot pass by skipping;
+- it gives those suites an explicit time limit (`{ timeout: 60_000 }` as the suite's options, and
+  the same as the last argument of a slow `beforeAll`): loading and compiling the engines can take
+  more than Vitest's 5 s on a busy machine.
 
 ## 7. Measurements
 
@@ -300,11 +334,12 @@ R-19 holds in reserve.
 
 ## 8. Not verified
 
-- **Electron and `app://`.** Electron's binary is not installed on the machine W4 ran on, and W4 did
-  not start GUI programs. Section 2.4 lists what the protocol handler must provide.
-- **Safari, Firefox, and Chromium or WebKit on macOS and Linux.** The browser tests ran on Windows
-  only. In CI they are skipped today: the `unit` job has no browsers, and the `e2e` job, which has
-  them, does not run this file until the step of `docs/requests/W4-config.md` is added.
+- **Electron and `app://`, by W4.** W4 did not start GUI programs. DV2's `tests/desktop/dev` has run
+  both engines under `app://` since wave one (its report: "both engines start under app://",
+  passed on Windows; the CI job `desktop-dev` passed on macOS).
+- **Safari and Firefox.** Not run. Chromium and WebKit on macOS and Linux: the suite runs in the CI
+  job `browser-checks` on Ubuntu, macOS and Windows (`npm run check:engine-browsers`, step
+  "Engine binding in the browser (W4)"); W4 ran it on Windows only.
 - **A loader built on Linux.** The engine teams report that `sim68k-loader.mjs` differs by two bytes
   between a Windows and a Linux build while the `.wasm` files are identical. The binding never looks
   inside the loader, so only its hashed asset name can differ; this was not run against a Linux

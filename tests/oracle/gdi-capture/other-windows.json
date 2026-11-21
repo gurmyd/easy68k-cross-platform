@@ -1,0 +1,3 @@
+{
+  "about": "Differences of the GDI capture on Windows versions other than the one the references were captured on (README.md, 'Another Windows'). Keyed by windowsIdentity(); each record maps an output to the fingerprint of what that Windows produces. A record is added by a person after looking at the differences; npm run oracle:gdi prints it when it meets an unrecorded Windows."
+}

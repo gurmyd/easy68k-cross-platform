@@ -60,8 +60,12 @@ const FORBIDDEN: [string, string][] = [
   ['app/src/core/x.ts', "export type T = import('../state/store').Store;"],
   ['app/src/engine/sim.ts', "import x from '../../../engine/dist/sub/x.mjs';"],
   ['app/src/main.tsx', "import x from '/src/x';"],
-  // The allowances below (fs/ for two features, Playwright and Vite for one test) do not leak.
+  // The allowances below (fs/ for two features, ui/editor/ for one, Playwright and Vite for one
+  // test) do not leak.
   ['app/src/features/editor/index.ts', "import { zip } from '../../fs/zip';"],
+  ['app/src/features/find/index.ts', "import { editorUi } from '../../ui/editor/index';"],
+  ['app/src/features/files/index.ts', "export { editorUi } from '../../ui/editor';"],
+  ['app/src/core/documents/x.ts', "import { editorUi } from '../../ui/editor';"],
   ['app/src/features/filesystem/index.ts', "import { zip } from '../../fs/zip';"],
   ['app/src/features/files/index.ts', "import { pick } from '../files-fsaccess/pick';"],
   ['app/src/features/files/index.ts', "import { web } from '../../platform/web';"],
@@ -103,6 +107,9 @@ const ALLOWED: [string, string][] = [
   // features/files/ and features/files-fsaccess/ are the user-interface halves of fs/ (W3-layer-rule).
   ['app/src/features/files/export/zip-dialog.ts', "import { zip } from '../../../fs/zip';"],
   ['app/src/features/files-fsaccess/index.ts', "import { FsAccessBackend } from '../../fs/fsaccess-backend';"],
+  // features/editor/ registers the editor component of ui/editor/ (E2-layer-rule).
+  ['app/src/features/editor/index.ts', "import { editorUi } from '../../ui/editor/index';"],
+  ['app/src/features/editor/ui-link.ts', "export { editorUi } from '../../ui/editor';"],
   // The engine binding's browser suite drives Playwright and builds with Vite (W4-config).
   [
     'app/src/engine/browser.test.ts',

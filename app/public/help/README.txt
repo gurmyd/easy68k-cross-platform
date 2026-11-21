@@ -8,9 +8,13 @@ Changes made to the originals (nothing else is changed):
     declares charset=utf-8;
   - every href, src, background and Local value is spelled with the exact letter case of the file
     it names (Windows does not care, web servers do);
-  - the build files of the help project and the program icons are left out.
+  - the build files of the help project and the program icons are left out;
+  - four links get target="_blank" (excode.htm, quickStart.htm, GNU General Public License.htm,
+    Quick Reference.htm: the three web addresses and the PDF), because the frame that shows the
+    pages cannot open a PDF or another site itself.
 
-Added: Port/differences.htm (the port's list of differences, rendered from docs/DIFFERENCES.md),
+Added: EASy68KQuickRef.pdf (copied from the help project because Quick Reference.htm links to it),
+Port/differences.htm (the port's list of differences, rendered from docs/DIFFERENCES.md),
 Reference/ATTRIBUTION.txt, this file and manifest.json (the list of files and what the import
 found: rewritten references and targets that do not exist in the original).
 

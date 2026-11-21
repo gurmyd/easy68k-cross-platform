@@ -1,7 +1,7 @@
 // The test checklist of docs/porting/assembler.md section 3.9 (ARCHITECTURE.md 6.4): one test per
-// item, named after the item. An item is proved by the programs checklist/checklist.json names for
-// it: each is assembled by the WebAssembly assembler with every option set it has and compared with
-// the output of the official EDIT68K.exe v5.16.1 (tests/conformance/asm/golden/).
+// item, named after the item. An item is proved by the programs checklist.json (beside this file)
+// names for it: each is assembled by the WebAssembly assembler with every option set it has and
+// compared with the output of the official EDIT68K.exe v5.16.1 (tests/conformance/asm/golden/).
 //
 // The conformance programs no item names (further quirks, the RichEdit stress files) are compared
 // in the last group. A per-file report is written to build/reports/asm-conformance-checklist.json.
@@ -9,16 +9,16 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
-import { loadManifest, type CorpusProgram } from '../../corpus/index';
-import { asmBuilt, compareAndRecord, writeReport, type Outcome } from './harness';
-import { expectOutcome } from './known-differences';
+import { hasOfficialOutput, loadManifest, type CorpusProgram } from '../../../corpus/index';
+import { asmBuilt, compareAndRecord, enginesRequired, writeReport, type Outcome } from '../harness';
+import { expectOutcome } from '../known-differences';
 
 interface Checklist {
   sections: { title: string; items: { item: string; programs: string[] }[] }[];
 }
 
 const checklist = JSON.parse(
-  readFileSync(fileURLToPath(new URL('./checklist/checklist.json', import.meta.url)), 'utf8'),
+  readFileSync(fileURLToPath(new URL('./checklist.json', import.meta.url)), 'utf8'),
 ) as Checklist;
 const programs = loadManifest().programs.filter((program) => program.set === 'conformance');
 
@@ -45,8 +45,9 @@ function compareOnce(program: CorpusProgram, label: string): Promise<Outcome> {
   return outcome;
 }
 
+/** The runs of a program, each with whether the official program left outputs to compare with. */
 const runsOf = (program: CorpusProgram): [string, boolean][] =>
-  Object.entries(program.runs).map(([label, run]) => [label, run.status === 'ok']);
+  Object.entries(program.runs).map(([label, run]) => [label, hasOfficialOutput(run)]);
 
 async function compareProgram(program: CorpusProgram): Promise<void> {
   for (const [label, hasResult] of runsOf(program)) {
@@ -64,6 +65,13 @@ describe('the checklist names programs that exist', () => {
         for (const reference of references) expect(() => resolve(reference), `${item}: ${reference}`).not.toThrow();
       }
     }
+  });
+
+  it.runIf(enginesRequired && !asmBuilt)('engine/dist holds the assembler (EASY68K_REQUIRE_ENGINES=1)', () => {
+    expect.fail(
+      'EASY68K_REQUIRE_ENGINES is 1 but engine/dist/asm68k.wasm or asm68k-loader.mjs is missing: ' +
+        'run `npm run build:engines` first. Without the variable the checklist is skipped.',
+    );
   });
 });
 

@@ -1,4 +1,4 @@
-Status: open (for gate I1).
+Status: applied in gate I1 round 1. Root script `check:files` and the step "Files check (FS1)" of `browser-checks`, group `interface`, on Ubuntu, macOS and Windows (all three runner images have Python); screenshots `build/FS1/files-check/` uploaded on failure.
 
 # FS1: run the Files browser check in CI
 

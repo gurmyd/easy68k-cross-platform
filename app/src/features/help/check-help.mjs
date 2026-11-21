@@ -407,6 +407,11 @@ async function contextPass(browser, name) {
       '<div class="cm-line">  MOVE.L D0,D1</div><div class="cm-line"> ORG $1000</div><div class="cm-line">  FOO D0</div>';
     document.body.append(region);
   });
+  // The fake editor has no document behind it, so the document service's selection is switched off:
+  // F1 then reads the page's selection, as it does for a stand-in service without selection().
+  await page.evaluate(() => {
+    window.__easy68k.ctx.documents.selection = undefined;
+  });
   const enabled = () => page.evaluate(() => window.__easy68k.ctx.commands.isEnabled('ed.help.context'));
   check(`${p} ed.help.context is disabled while the editor does not have the focus`, !(await enabled()));
 
@@ -453,11 +458,21 @@ async function contextPass(browser, name) {
   await page.keyboard.press('F1');
   await expectPage('F1 after a blank opens the introduction', '/help/main.htm');
 
+  // The very start of the document: the original does nothing (editor-ui 15.3).
+  await page.getByRole('button', { name: 'Close Help' }).click();
+  await caretIn(0, 0);
+  await page.keyboard.press('F1');
+  await page.waitForTimeout(300);
+  check(`${p} F1 at the very start of the document does nothing`, !(await helpVisible(page)));
+
   await caretIn(2, 4); // inside FOO, which is not a keyword
   await page.keyboard.press('F1');
   await expectPage('F1 on a word that is not a keyword opens the introduction', '/help/main.htm');
 
-  await page.evaluate(() => document.getElementById('fake-editor').remove());
+  await page.evaluate(() => {
+    document.getElementById('fake-editor').remove();
+    delete window.__easy68k.ctx.documents.selection; // the real service again
+  });
   await page.locator('.e68-shell__body').click({ position: { x: 5, y: 5 } });
   await page.keyboard.press('F1');
   check(`${p} F1 with the focus elsewhere is Help > Help`, (await frameUrl(page)).endsWith('/help/main.htm'));
@@ -480,6 +495,15 @@ async function contextPass(browser, name) {
         }
       }
     });
+    // The editor follows the page's selection on the next selectionchange event: wait for it.
+    await page.waitForFunction(() => {
+      const { documents } = window.__easy68k.ctx;
+      const id = documents.active().id;
+      return documents
+        .text(id)
+        .slice(documents.selection(id).caret - 3)
+        .startsWith('SIMHALT');
+    });
     check(
       `${p} ed.help.context is enabled in the real editor`,
       await page.evaluate(() => window.__easy68k.ctx.commands.isEnabled('ed.help.context')),
@@ -490,6 +514,21 @@ async function contextPass(browser, name) {
       '/help/Directives/simhalt.htm',
     );
     await page.getByRole('button', { name: 'Close Help' }).click();
+    // The caret at the very start of the document: F1 does nothing (editor-ui 15.3).
+    await page.evaluate(() => {
+      const content = document.querySelector('[data-e68-panel="editor"] .cm-content');
+      content.focus();
+      const first = document.createTreeWalker(content.querySelector('.cm-line'), NodeFilter.SHOW_TEXT).nextNode();
+      getSelection().collapse(first ?? content.querySelector('.cm-line'), 0);
+    });
+    // The editor follows the page's selection on the next selectionchange event: wait for it.
+    await page.waitForFunction(() => {
+      const { documents } = window.__easy68k.ctx;
+      return documents.selection(documents.active().id).caret === 0;
+    });
+    await page.keyboard.press('F1');
+    await page.waitForTimeout(300);
+    check(`${p} F1 at the very start of the real editor's document does nothing`, !(await helpVisible(page)));
   } else {
     console.log('        (the application has no editor yet: the check of the real editor is skipped)');
   }

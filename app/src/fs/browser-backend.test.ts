@@ -9,9 +9,13 @@ import {
   BROWSER_DB_NAME,
   BrowserBackend,
   MAX_SEGMENTS,
+  PendingBrowserStore,
   STORE_MESSAGES,
   UnsavedBrowserStore,
+  onStorageStateChange,
+  onStoreProblem,
   openBrowserStore,
+  openStartupStore,
   storageProblem,
   type BrowserBackendDeps,
   type ChannelLike,
@@ -325,5 +329,95 @@ describe('BrowserBackend', { timeout: 60_000 }, () => {
     await backend.writeFile('own.txt', ascii('x'));
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(changes).toEqual([]);
+  });
+});
+
+/** An IndexedDB whose open() answers only after `delayMs` (a busy disk, another tab holding the store). */
+function slowFactory(real: IDBFactory, delayMs: number): IDBFactory {
+  return {
+    open(name: string, version?: number) {
+      const proxy: Record<string, unknown> & {
+        onupgradeneeded?: (e: Event) => void;
+        onsuccess?: (e: Event) => void;
+        onerror?: (e: Event) => void;
+      } = { result: undefined, error: null };
+      setTimeout(() => {
+        const request = real.open(name, version);
+        request.onupgradeneeded = (e) => {
+          proxy.result = request.result;
+          proxy.onupgradeneeded?.(e);
+        };
+        request.onsuccess = (e) => {
+          proxy.result = request.result;
+          proxy.onsuccess?.(e);
+        };
+        request.onerror = (e) => {
+          proxy.error = request.error;
+          proxy.onerror?.(e);
+        };
+      }, delayMs);
+      return proxy;
+    },
+  } as unknown as IDBFactory;
+}
+
+describe('start-up (review FS1: the page must not wait up to 20 s for a store that hangs)', { timeout: 60_000 }, () => {
+  it('a store that opens in time is mounted itself', async () => {
+    const backend = await openStartupStore({ indexedDB: new IDBFactory(), keyRange: IDBKeyRange, channel: null }, 1000);
+    expect(backend).toBeInstanceOf(BrowserBackend);
+    opened.push(backend as BrowserBackend);
+  });
+
+  it('a store that never answers: the page goes on after the short wait, then gets the stand-in', async () => {
+    const hanging = { open: () => ({}) } as unknown as IDBFactory;
+    const started = Date.now();
+    const backend = await openStartupStore({ indexedDB: hanging, keyRange: IDBKeyRange, openTimeoutMs: 2000 }, 50);
+    expect(Date.now() - started).toBeLessThan(1500);
+    expect(backend).toBeInstanceOf(PendingBrowserStore);
+    expect([backend.mount, backend.kind, backend.label]).toEqual(['browser', 'browser', 'My Programs']);
+    expect(storageProblem(backend)).toBe(STORE_MESSAGES.opening);
+    const messages: string[] = [];
+    onStoreProblem(backend, (message) => messages.push(message));
+    let changed = 0;
+    onStorageStateChange(backend, () => changed++);
+    // Operations wait for the store opening finally gives: here the stand-in, after the time limit.
+    await backend.writeFile('a.txt', ascii('kept for the session'));
+    expect(text(await backend.readFile('a.txt'))).toBe('kept for the session');
+    await (backend as PendingBrowserStore).whenReady();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect((backend as PendingBrowserStore).current).toBeInstanceOf(UnsavedBrowserStore);
+    expect(storageProblem(backend)).toContain('Files are NOT being saved');
+    expect(messages.length).toBe(1);
+    expect(messages[0]).toContain('Files are NOT being saved');
+    expect(changed).toBe(1);
+  });
+
+  it('a store that answers late: operations made meanwhile reach the real store, changes are passed on', async () => {
+    const factory = new IDBFactory();
+    const hub = channelHub();
+    const backend = await openStartupStore(
+      { indexedDB: slowFactory(factory, 150), keyRange: IDBKeyRange, channel: hub },
+      20,
+    );
+    expect(backend).toBeInstanceOf(PendingBrowserStore);
+    const vfs = createVfs();
+    vfs.mount(backend);
+    const external: string[] = [];
+    vfs.subscribe('/browser', (change) => external.push(`${change.origin} ${change.path}`));
+    const stat = backend.stat('early');
+    await vfs.writeFile('/browser/early/prog.X68', ascii('early'));
+    expect(await stat).toBeNull(); // asked before the write: answered in the order asked
+    expect((await vfs.list('/browser/early')).map((e) => e.name)).toEqual(['prog.X68']);
+    const real = await (backend as PendingBrowserStore).whenReady();
+    expect(real).toBeInstanceOf(BrowserBackend);
+    opened.push(real as BrowserBackend);
+    expect(storageProblem(backend)).toBeNull();
+    // Another window on the same database: its write is reported through the pending store.
+    const other = await openStore({ indexedDB: factory, channel: hub });
+    await other.writeFile('early/other.X68', ascii('x'));
+    await (real as BrowserBackend).idle();
+    for (let i = 0; i < 50 && external.length < 2; i++) await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(external).toContain('external /browser/early/other.X68');
+    expect(text(await vfs.readFile('/browser/early/prog.X68'))).toBe('early');
   });
 });

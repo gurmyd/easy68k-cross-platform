@@ -4,11 +4,12 @@
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { Reg, ShiftBit, SimOption } from '../../contracts';
+import { Reg, ShiftBit, SimOption, type SimEngine } from '../../contracts';
 import { createSimEngine, releaseSimEngine } from '../../engine';
 import { assembleProgram, bytesOf, createRecordingHost, textOf, type AssembledProgram } from '../../engine/testing';
 import { MemoryBackend } from '../../fs/memory-backend';
 import { createVfs } from '../../fs/vfs';
+import { subslice } from './governor';
 import { createKit, type Kit, type KitEnv, type KitOptions } from './test-kit';
 
 const ENV: KitEnv = {
@@ -36,6 +37,45 @@ const ENGINE_TEST_TIMEOUT = 60_000;
 const VK_A = 0x41;
 const VK_INSERT = 0x2d;
 
+/** The engine methods that deliver an input edge (4.3). */
+const EDGE_METHODS: ReadonlySet<string> = new Set([
+  'keyDown',
+  'keyUp',
+  'mouseDown',
+  'mouseUp',
+  'pushButton',
+  'switchClick',
+]);
+
+/**
+ * Stands in front of an engine and writes `engine.stepCount` into `steps` at every input edge that
+ * reaches it, so that a test can see how many instructions executed between two edges.
+ */
+function recordEdgeSteps(steps: number[]): (engine: SimEngine) => SimEngine {
+  return (engine) =>
+    new Proxy(engine, {
+      get(target, property) {
+        const value: unknown = Reflect.get(target, property, target);
+        if (typeof value !== 'function') return value;
+        const method = value as (...args: unknown[]) => unknown;
+        if (typeof property !== 'string' || !EDGE_METHODS.has(property)) return method.bind(target);
+        return (...args: unknown[]): unknown => {
+          steps.push(target.stepCount);
+          return method.apply(target, args);
+        };
+      },
+    });
+}
+
+/** The differences between consecutive entries. */
+const gapsOf = (steps: readonly number[]): number[] => steps.slice(1).map((step, i) => (step - steps[i]!) >>> 0);
+
+/** A small deterministic random source (a linear congruential generator), 0 <= value < 1. */
+function createRandom(seed: number): () => number {
+  let state = seed;
+  return () => (state = (state * 1103515245 + 12345) & 0x7fffffff) / 0x80000000;
+}
+
 describe.skipIf(!enginesBuilt)('the queue (needs engine/dist)', { timeout: ENGINE_TEST_TIMEOUT }, () => {
   let spin: AssembledProgram;
   let pollKey: AssembledProgram;
@@ -43,6 +83,7 @@ describe.skipIf(!enginesBuilt)('the queue (needs engine/dist)', { timeout: ENGIN
   let readLine: AssembledProgram;
   let readTwoChars: AssembledProgram;
   let lineAfterTask24: AssembledProgram;
+  let slowPoll: AssembledProgram;
   let kit: Kit;
   const start = async (options?: KitOptions) => (kit = await createKit(ENV, options));
   const register = (reg: Reg) => kit.controller.engine.getRegister(reg);
@@ -121,6 +162,30 @@ describe.skipIf(!enginesBuilt)('the queue (needs engine/dist)', { timeout: ENGIN
       '        SIMHALT',
       '        ORG     $2000',
       'BUFFER: DS.B    100',
+      '        END     START',
+    ]);
+    // Counts in D7 how often it saw the A key go down and up again (task 19), with about 250
+    // instructions of other work between two looks at the key.
+    slowPoll = await assembleProgram([
+      '        ORG     $1000',
+      'START:  MOVEQ   #0,D7',
+      'DOWN:   BSR     WORK',
+      '        MOVEQ   #$41,D1',
+      '        MOVEQ   #19,D0',
+      '        TRAP    #15',
+      '        TST.B   D1',
+      '        BEQ     DOWN',
+      'UP:     BSR     WORK',
+      '        MOVEQ   #$41,D1',
+      '        MOVEQ   #19,D0',
+      '        TRAP    #15',
+      '        TST.B   D1',
+      '        BNE     UP',
+      '        ADDQ.L  #1,D7',
+      '        BRA     DOWN',
+      'WORK:   MOVE.W  #240,D2',
+      'SPIN:   DBRA    D2,SPIN',
+      '        RTS',
       '        END     START',
     ]);
   }, LONG);
@@ -231,6 +296,109 @@ describe.skipIf(!enginesBuilt)('the queue (needs engine/dist)', { timeout: ENGIN
       ).toBe(false);
     }
     expect(calls.at(-1) === 'irq' || calls.at(-2) === 'irq').toBe(true);
+  });
+
+  it('edges that wait behind one another follow exactly one sub-slice of instructions apart', async () => {
+    // 4.3: "the next one follows subslice(ips) instructions later". The cases differ in how the
+    // sub-slices fall: at the default speed the allowance of a tick rarely ends on a sub-slice
+    // boundary, at 10,000 instructions per second a sub-slice is 20 instructions, at 100 it is one.
+    for (const [ips, frames] of [
+      [1_000_000, 4],
+      [10_000, 8],
+      [100, 8],
+    ] as const) {
+      const steps: number[] = [];
+      await start({
+        speed:
+          ips === 1_000_000
+            ? { mode: 'original', instructionsPerSecond: ips }
+            : { mode: 'custom', instructionsPerSecond: ips },
+        wrapEngine: recordEdgeSteps(steps),
+      });
+      await kit.open(spin);
+      kit.controller.run();
+      kit.time.advance(100.37); // off the frame grid: the allowance has a remainder
+      kit.controller.post({ kind: 'keyDown', vk: VK_A });
+      kit.controller.post({ kind: 'keyUp', vk: VK_A });
+      kit.controller.post({ kind: 'mouseDown', x: 1, y: 1, shift: ShiftBit.Left });
+      kit.controller.post({ kind: 'mouseUp', x: 1, y: 1, shift: 0 });
+      kit.controller.post({ kind: 'pushButton', bit: 0, down: true });
+      kit.controller.post({ kind: 'switchClick', bit: 1 });
+      for (let frame = 0; frame < frames; frame++) kit.time.advance(16.21);
+      expect(steps, `${ips} instructions per second`).toHaveLength(6);
+      expect(gapsOf(steps), `${ips} instructions per second`).toEqual(new Array<number>(5).fill(subslice(ips)));
+      kit.dispose();
+    }
+  });
+
+  it('never lets two edges reach a running program less than a sub-slice apart', async () => {
+    // Bursts of four edges posted at many different moments between two frames, so that the
+    // allowance left when an edge arrives - and with it the length of the engine call that
+    // follows - takes every size. (Counting "a run() that executed something" as a sub-slice let
+    // edges through 41 instructions apart here.)
+    const steps: number[] = [];
+    await start({ wrapEngine: recordEdgeSteps(steps) });
+    await kit.open(spin);
+    kit.controller.run();
+    kit.time.advance(100);
+    const random = createRandom(12345);
+    for (let burst = 0; burst < 300; burst++) {
+      kit.controller.post({ kind: 'keyDown', vk: VK_A });
+      kit.controller.post({ kind: 'keyUp', vk: VK_A });
+      kit.controller.post({ kind: 'keyDown', vk: VK_A + 1 });
+      kit.controller.post({ kind: 'keyUp', vk: VK_A + 1 });
+      kit.time.advance(1 + Math.floor(random() * 40));
+      kit.time.advance(0.37 * Math.floor(random() * 10));
+    }
+    kit.time.advance(100);
+    expect(steps).toHaveLength(1200);
+    expect(kit.controller.queueLength).toBe(0);
+    const gaps = gapsOf(steps);
+    expect(Math.min(...gaps)).toBe(subslice(1_000_000));
+    expect(subslice(1_000_000)).toBe(2000);
+  });
+
+  it('a program that looks at a key only every 250 instructions sees every press and release posted together', async () => {
+    await start();
+    await kit.open(slowPoll);
+    kit.controller.run();
+    kit.time.advance(50);
+    const random = createRandom(99);
+    const pairs = 300;
+    for (let pair = 0; pair < pairs; pair++) {
+      kit.controller.post({ kind: 'keyDown', vk: VK_A });
+      kit.controller.post({ kind: 'keyUp', vk: VK_A });
+      kit.time.advance(1 + Math.floor(random() * 40) + 0.37 * Math.floor(random() * 10));
+    }
+    kit.time.advance(100);
+    expect(register(Reg.D7)).toBe(pairs);
+  });
+
+  it('delivers at once the edges that wait when the program stops executing', async () => {
+    const steps: number[] = [];
+    await start({ wrapEngine: recordEdgeSteps(steps) });
+    await kit.open(spin);
+    kit.controller.run();
+    kit.time.advance(96); // the frame at 96 ms has used the allowance up: a tick right after it executes nothing
+    kit.controller.post({ kind: 'keyDown', vk: VK_A });
+    kit.controller.post({ kind: 'keyUp', vk: VK_A });
+    kit.controller.post({ kind: 'keyDown', vk: VK_A + 1 });
+    kit.time.advance(0); // one tick without a frame: the first edge, the others wait
+    expect(steps).toHaveLength(1);
+    expect(kit.controller.queueLength).toBe(2);
+    // A dialog holds the program: the original's modal loop would drain its queue, and so does the port.
+    const release = kit.controller.hold();
+    kit.time.advance(16); // the next frame
+    expect(steps).toHaveLength(3);
+    expect(gapsOf(steps)[1]).toBe(0); // nothing executed between the two that were drained
+    release();
+    // Running again: an edge delivered while the program stood still separates nothing, so the
+    // next one goes through at once, and the one after it a sub-slice later.
+    kit.controller.post({ kind: 'keyUp', vk: VK_A + 1 });
+    kit.controller.post({ kind: 'keyDown', vk: VK_A + 2 });
+    kit.time.advance(16);
+    expect(steps).toHaveLength(5);
+    expect(gapsOf(steps)[3]).toBe(2000);
   });
 
   it('two mouse-down requests at one interrupt level give two interrupts', async () => {

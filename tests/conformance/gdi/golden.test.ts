@@ -5,11 +5,11 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { COLOUR_FORMS, textUnmodelled, type GdiCase } from './cases';
+import { COLOUR_FORMS, RASTER_SIZE_LIMIT, textUnmodelled, ZERO_WIDTH_BAR_SIZES, type GdiCase } from './cases';
 import { cellOf, loadAtlas, loadMetrics, loadScalableIndex, STYLE_NAMES, FONTS_DIR } from './fonts';
 import { cases, firstDifference, hasPack, hex6, references, spots, suiteNames } from './golden';
 import { decodeAtlas } from './pix';
-import { drawTextCase, layoutText, outlineCells, textExtent } from './text-model';
+import { delOnFallback, drawTextCase, layoutText, outlineAdvance, outlineCells, textExtent } from './text-model';
 
 const T = 120_000;
 
@@ -526,6 +526,71 @@ describe('text references against the font data', () => {
       }
     }
   });
+
+  it(
+    'ZERO_WIDTH_BAR_SIZES is exact: a lone $0D at every raster size is in text unless GDI drew a bar there',
+    () => {
+      // Review round 2: the list had not been measured above 72 pt. The barSweep cases put a lone $0D
+      // at every size at which the face is raster: those at the listed sizes are in text-control and
+      // must really differ from the model there (no size listed for nothing); the others are in
+      // text, which the test above reproduces pixel for pixel (no size missing).
+      const isLoneCr = (c: GdiCase) => {
+        const t = c.ops.find((o) => o.op === 'text');
+        return c.ops.length === 3 && t?.op === 'text' && t.bytes.length === 1 && t.bytes[0] === 13 && t.x === 3;
+      };
+      const seen: Record<string, Set<number>> = { Fixedsys: new Set(), Courier: new Set() };
+      for (const suite of ['text', 'text-control'] as const) {
+        for (const r of references(suite)) {
+          if (!isLoneCr(r.case)) continue;
+          const font = r.case.ops[0] as { op: 'font'; name: string; size: number; style: number };
+          if (font.style !== 0) continue;
+          seen[font.name]?.add(font.size);
+          const listed = (ZERO_WIDTH_BAR_SIZES[font.name] ?? []).includes(font.size);
+          expect([r.case.id, font.name, font.size, suite]).toEqual([
+            r.case.id,
+            font.name,
+            font.size,
+            listed ? 'text-control' : 'text',
+          ]);
+          if (listed) {
+            const model = drawTextCase(metrics, r.case);
+            expect([r.case.id, firstDifference(r.image, model) !== null]).toEqual([r.case.id, true]);
+          }
+        }
+      }
+      for (const [name, limit] of Object.entries(RASTER_SIZE_LIMIT)) {
+        expect([name, seen[name]?.size]).toEqual([name, limit + 1]);
+        expect(cellOf(metrics, { name, size: limit, style: 0 }).kind).toBe('raster');
+        expect(cellOf(metrics, { name, size: limit + 1, style: 0 }).kind).toBe('outline');
+      }
+    },
+    T,
+  );
+
+  it(
+    'outline faces: $7F in a string with a byte of $80 or above takes delInHighString, not its advance',
+    () => {
+      // Review round 2: GDI draws that $7F from a fallback font (Courier New 9 [$E9,$7F] = 11, not 14).
+      let checked = 0;
+      for (const r of references('text-outline')) {
+        let font = { name: 'Fixedsys', size: 9, style: 0 };
+        let x = 0;
+        for (const o of r.case.ops) {
+          if (o.op === 'font') font = o;
+          if (o.op === 'text')
+            x = o.x + o.bytes.reduce((n, b) => n + (outlineAdvance(metrics, font, b, o.bytes) ?? NaN), 0);
+        }
+        const last = r.case.ops.filter((o) => o.op === 'text').at(-1);
+        if (!last || last.op !== 'text' || !delOnFallback(last.bytes) || Number.isNaN(x)) continue;
+        checked++;
+        expect([r.case.id, r.pen[0]]).toEqual([r.case.id, x]);
+        // The face's own advance would have put the pen elsewhere.
+        expect(r.pen[0]).not.toBe(last.x + last.bytes.length * cellOf(metrics, font).colWidth);
+      }
+      expect(checked).toBe(18);
+    },
+    T,
+  );
 
   it('layoutText: the 6.7 measurement, two Fixedsys bytes fill exactly 16 x 15', () => {
     const l = layoutText(metrics, { name: 'Fixedsys', size: 9, style: 0 }, [65, 66]);

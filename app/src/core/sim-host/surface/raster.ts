@@ -6,7 +6,7 @@
 
 import type { PixelBuffer, Rect } from '../../../contracts';
 import { mixIsIdentity, type Mix } from './rop';
-import { dotRows } from './tables/dots';
+import type { Dot } from './tables/dots';
 
 /** A black pixel as stored: 0xFF000000 | $00BBGGRR. */
 export const BLACK_PIXEL = 0xff000000;
@@ -63,15 +63,19 @@ export function mixBlock(
 }
 
 /**
- * Combines the round dot a pen of width `width` (2 or more) leaves at the point (x, y): what a
- * zero-length line or a one-point rectangle draws (trap15-b §6.2).
+ * Reports the rows of a wide pen's dot (tables/dots.ts) at the point (x, y), from the top row down,
+ * every pixel once.
  */
-export function mixDot(buffer: PixelBuffer, x: number, y: number, width: number, mix: Mix): void {
-  const rows = dotRows(width);
-  for (let i = 0; i < rows.length; i++) {
-    const half = rows[i] as number;
-    mixSpan(buffer, y - i, x - half, x + half, mix);
-    if (i > 0) mixSpan(buffer, y + i, x - half, x + half, mix);
+export function emitDot(dot: Dot, x: number, y: number, emit: SpanSink): void {
+  const { reach, left, right } = dot;
+  for (let i = 0; i <= 2 * reach; i++) emit(y - reach + i, x + (left[i] as number), x + (right[i] as number));
+}
+
+/** Combines a wide pen's dot (tables/dots.ts) at the point (x, y), as far as the buffer has it. */
+export function mixDot(buffer: PixelBuffer, x: number, y: number, dot: Dot, mix: Mix): void {
+  const { reach, left, right } = dot;
+  for (let i = 0; i <= 2 * reach; i++) {
+    mixSpan(buffer, y - reach + i, x + (left[i] as number), x + (right[i] as number), mix);
   }
 }
 

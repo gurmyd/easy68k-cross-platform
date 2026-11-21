@@ -479,3 +479,89 @@ describe('underline and strike-out of an outline face: the plain glyph plus the 
     expect(lines).toBe(3);
   });
 });
+
+describe('an outline face at a size without an atlas', () => {
+  const OUTLINE_NAMES = [
+    ['Courier New', 'Courier New'],
+    ['Lucida Console', 'Lucida Console'],
+    ['Consolas', 'Consolas'],
+    ['Terminal', 'Arial'],
+    ['Lucida Sans Typerwriter', 'Arial'],
+  ] as const;
+  const listed = () => parseOutlineIndex(files.get(OUTLINE_INDEX_FILE) as Bytes);
+  const atlasAdvance = (path: string, ch: number) => decodeAtlas(files.get(path) as Bytes).advances[ch] as number;
+
+  it('the list gives every atlas its point size', () => {
+    expect(new Set(listed().map((atlas) => atlas.size))).toEqual(new Set([8, 9, 10, 11, 12, 14, 16, 18, 24, 36]));
+  });
+
+  it('a size above the largest atlas is drawn from the 36 point atlas of the same face and style (errata T2 item 1.3)', () => {
+    const atlas36 = (face: string, style: FontStyle) =>
+      listed().find((atlas) => atlas.face === face && atlas.style === style && atlas.size === 36)?.file;
+    for (const [name, face] of OUTLINE_NAMES) {
+      for (const size of [37, 48, 72, 100, 255]) {
+        expect(fonts.atlasOf(font(name, size))).toBe(atlas36(face, 'plain'));
+        expect(fonts.atlasOf(font(name, size, { bold: true }))).toBe(atlas36(face, 'bold'));
+        expect(fonts.atlasOf(font(name, size, { italic: true }))).toBe(atlas36(face, 'italic'));
+        // underline and strike-out: the plain atlas plus the line of the list
+        expect(fonts.atlasOf(font(name, size, { underline: true }))).toBe(atlas36(face, 'plain'));
+        expect(fonts.atlasOf(font(name, size, { strikeOut: true }))).toBe(atlas36(face, 'plain'));
+        // the glyph has the measured cell, whatever the atlas
+        const cell = fonts.metrics(font(name, size));
+        expect(fonts.glyph(font(name, size), 0x57)).toMatchObject({ advance: cell.colWidth, height: cell.rowHeight });
+      }
+    }
+  }, 60_000);
+
+  it('a fixed-pitch face: every advance is the measured column width', () => {
+    for (const size of [5, 13, 20, 48, 100]) {
+      const request = font('Courier New', size, { bold: true });
+      const { colWidth } = fonts.metrics(request);
+      for (const ch of [0x20, 0x41, 0x69, 0x6d, 0xe9]) expect(fonts.glyph(request, ch).advance).toBe(colWidth);
+    }
+  });
+
+  it('the proportional face: "W" is as wide as the measured cell, every other letter grows with the em', () => {
+    // 100 points: an em of 133 pixels; the atlas is the one of 36 points, an em of 48 pixels.
+    const request = font('Terminal', 100);
+    const path = fonts.atlasOf(request) as string;
+    expect(listed().find((atlas) => atlas.file === path)?.size).toBe(36);
+    const { colWidth } = fonts.metrics(request);
+    expect(fonts.glyph(request, 0x57).advance).toBe(colWidth);
+    for (const ch of [0x20, 0x21, 0x27, 0x2e, 0x69, 0x6c]) {
+      const inAtlas = atlasAdvance(path, ch);
+      expect(inAtlas).not.toBe(atlasAdvance(path, 0x57)); // narrower than "W"
+      const glyph = fonts.glyph(request, ch);
+      expect(glyph.advance).toBe(Math.round((inAtlas * 133) / 48));
+      // the picture is stretched with the advance: no ink beyond it
+      expect(glyph.width).toBe(glyph.advance);
+    }
+    // not the ratio of the cells, which is what "W" alone follows
+    const cellRatio = colWidth / decodeAtlas(files.get(path) as Bytes).cellWidth;
+    expect(cellRatio).not.toBeCloseTo(133 / 48, 2);
+  });
+
+  it('the proportional face at a tiny size: an advance may shrink to nothing, as on Windows', () => {
+    // 1 point: an em of 1 pixel, from the atlas of 8 points (an em of 11 pixels).
+    const request = font('Terminal', 1);
+    const path = fonts.atlasOf(request) as string;
+    expect(listed().find((atlas) => atlas.file === path)?.size).toBe(8);
+    const advances = [0x20, 0x21, 0x69].map((ch) => [atlasAdvance(path, ch), fonts.glyph(request, ch).advance]);
+    for (const [inAtlas, fitted] of advances) expect(fitted).toBe(Math.round((inAtlas as number) / 11));
+    expect(advances.some(([, fitted]) => fitted === 0)).toBe(true);
+    // a glyph is at least one pixel wide all the same
+    expect(fonts.glyph(request, 0x69).width).toBeGreaterThanOrEqual(1);
+  });
+
+  it('a set whose list gives no point sizes: the advances grow like the cell', () => {
+    const plain = fontSetFromFiles(createSyntheticFontFiles({ layout: 'plain' }));
+    const request = font('Terminal', 100);
+    const path = plain.atlasOf(request) as string;
+    const atlas = decodeAtlas(createSyntheticFontFiles({ layout: 'plain' }).get(path) as Bytes);
+    const { colWidth } = plain.metrics(request);
+    for (const ch of [0x41, 0x69, 0x57]) {
+      const inAtlas = atlas.advances[ch] as number;
+      expect(plain.glyph(request, ch).advance).toBe(Math.max(1, Math.round((inAtlas * colWidth) / atlas.cellWidth)));
+    }
+  }, 60_000);
+});

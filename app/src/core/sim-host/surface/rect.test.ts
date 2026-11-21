@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { createBuffer } from './raster';
 import { drawRectangle } from './rect';
 import { createMix, setMix, rop } from './rop';
-import { dotRows } from './tables/dots';
+import { penDot, rectangleDot } from './tables/dots';
 import { countPixels, createRandom, picture, pixelAt, RED, WHITE } from './testing';
 
 const pen = (mode = 4, color = WHITE) => setMix(createMix(), mode, color);
@@ -43,8 +43,10 @@ function specAt(
   if (x1 === x2 && y1 === y2) {
     // Case C: nothing with width 1, the round dot otherwise.
     if (w === 1) return null;
-    const half = dotRows(w)[Math.abs(y - y1)];
-    return half !== undefined && Math.abs(x - x1) <= half ? 'pen' : null;
+    const dot = rectangleDot(w);
+    const first = dot.left[y - y1 + dot.reach];
+    const last = dot.right[y - y1 + dot.reach];
+    return first !== undefined && last !== undefined && x - x1 >= first && x - x1 <= last ? 'pen' : null;
   }
   // Case B.
   if (w === 1) {
@@ -231,6 +233,93 @@ describe('drawRectangle (trap15-b §6.3)', () => {
       '.........................................................................................###........',
     ]);
     expect(countPixels(buffer, WHITE)).toBe(1 + 5 + 9 + 21 + 21 + 37 + 45 + 61);
+  });
+
+  it('case C with pens wider than 14: the measured dots, at some widths one pixel short of the pen dot in two rows', () => {
+    // Pixel counts of GDI's one-point rectangles (capture of gate I1).
+    for (const [penWidth, count] of [
+      [15, 177],
+      [16, 189],
+      [20, 303],
+      [47, 1673],
+      [100, 7777],
+      [255, 50889],
+    ] as const) {
+      const buffer = createBuffer(260, 260);
+      drawRectangle(buffer, 130, 130, 130, 130, penWidth, pen(), fill());
+      expect(countPixels(buffer, WHITE), `pen width ${penWidth}`).toBe(count);
+      expect(countPixels(buffer, RED), `pen width ${penWidth}`).toBe(0); // a dot has no interior
+    }
+    // Width 47, the rows 23 and 22 above the point and 22 and 23 below it. A zero-length line's dot
+    // covers x-7 .. x+7 in the rows 22 above and below; the rectangle's lacks the first of those
+    // pixels above and the last below.
+    const dot = createBuffer(60, 60);
+    drawRectangle(dot, 30, 30, 30, 30, 47, pen(), null);
+    expect(picture(dot, 20, 7, 41, 9)).toEqual(['........#####........', '....##############...']);
+    expect(picture(dot, 20, 52, 41, 54)).toEqual(['...##############....', '........#####........']);
+    expect([penDot(47).left[1], penDot(47).right[45]]).toEqual([-7, 7]);
+    // In a mode other than Copy every pixel of the dot is combined once (mode 6, P | ~D).
+    const mixed = createBuffer(60, 60);
+    mixed.data.fill(0xff336699);
+    drawRectangle(mixed, 30, 30, 30, 30, 47, pen(6, 0xff8000), null);
+    expect(countPixels(mixed, 0xff9966)).toBe(1673);
+    expect(countPixels(mixed, 0x336699)).toBe(60 * 60 - 1673);
+  });
+
+  it('case B, vertical, pen width 206 only: the left half of the bar lies one row lower (measured on GDI)', () => {
+    const bar = (penWidth: number, x1: number, y1: number, x2: number, y2: number) => {
+      const buffer = createBuffer(300, 40);
+      drawRectangle(buffer, x1, y1, x2, y2, penWidth, pen(), fill());
+      return buffer;
+    };
+    // (150,10)-(150,20), a = 103, b = 102: the columns 47..149 cover the rows 11..20, the columns
+    // 150..252 the rows 10..19 (GDI: the same picture for every length and position tried).
+    const sheared = bar(206, 150, 10, 150, 20);
+    expect(countPixels(sheared, WHITE)).toBe(206 * 10);
+    for (const [x, top, bottom] of [
+      [47, 11, 20],
+      [149, 11, 20],
+      [150, 10, 19],
+      [252, 10, 19],
+    ] as const) {
+      expect(pixelAt(sheared, x, top - 1), `column ${x}`).toBe(0);
+      expect(pixelAt(sheared, x, top), `column ${x}`).toBe(WHITE);
+      expect(pixelAt(sheared, x, bottom), `column ${x}`).toBe(WHITE);
+      expect(pixelAt(sheared, x, bottom + 1), `column ${x}`).toBe(0);
+    }
+    expect(pixelAt(sheared, 46, 15)).toBe(0);
+    expect(pixelAt(sheared, 253, 15)).toBe(0);
+    // the corners given the other way round: the same picture
+    expect(bar(206, 150, 20, 150, 10).data).toEqual(sheared.data);
+    // a bar one pixel long: one row on the right, the row below it on the left
+    const short = bar(206, 150, 10, 150, 11);
+    expect(countPixels(short, WHITE)).toBe(206);
+    expect([
+      pixelAt(short, 149, 10),
+      pixelAt(short, 149, 11),
+      pixelAt(short, 150, 10),
+      pixelAt(short, 150, 11),
+    ]).toEqual([0, WHITE, WHITE, 0]);
+    // the widths next to it, and the horizontal bar of this width, are straight
+    for (const penWidth of [205, 207]) {
+      const straight = bar(penWidth, 150, 10, 150, 20);
+      const a = penWidth >> 1;
+      expect(countPixels(straight, WHITE), `pen width ${penWidth}`).toBe(penWidth * 10);
+      expect([pixelAt(straight, 150 - a, 10), pixelAt(straight, 150 - a, 20)], `pen width ${penWidth}`).toEqual([
+        WHITE,
+        0,
+      ]);
+    }
+    const flat = createBuffer(60, 240);
+    drawRectangle(flat, 10, 120, 20, 120, 206, pen(), fill());
+    expect(countPixels(flat, WHITE)).toBe(10 * 206);
+    expect([pixelAt(flat, 10, 17), pixelAt(flat, 19, 17), pixelAt(flat, 10, 222), pixelAt(flat, 19, 222)]).toEqual([
+      WHITE,
+      WHITE,
+      WHITE,
+      WHITE,
+    ]);
+    expect([pixelAt(flat, 10, 16), pixelAt(flat, 20, 120), pixelAt(flat, 10, 223)]).toEqual([0, 0, 0]);
   });
 
   it('equals the three cases pixel by pixel on 6000 random rectangles, pen widths 0-12, clipped ones included', () => {

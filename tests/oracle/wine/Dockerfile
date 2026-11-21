@@ -6,7 +6,17 @@
 # The official programs are NOT part of this image, and nothing downloaded from
 # the EASy68K site is baked in. They are mounted read-only at run time and
 # copied to a writable folder inside the container (see README.md).
-FROM debian:bookworm-slim
+#
+# The base image is pinned by digest and Wine by version, so that a build from
+# nothing runs the official programs under the Wine that produced the committed
+# results (tests/corpus/manifest.json records `wine --version`). The helpers
+# around it (Xvfb, xdotool, ImageMagick, Python) are not pinned: they take no
+# part in what the official programs compute. To move to another base or Wine,
+# change the two pins, rebuild, and run `npm run oracle:wine:asm -- --check`:
+# every run must still equal the manifest.
+FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
+
+ARG WINE_VERSION=8.0~repack-4
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
@@ -20,7 +30,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN dpkg --add-architecture i386 \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
-      wine wine32:i386 \
+      "wine=${WINE_VERSION}" "wine32:i386=${WINE_VERSION}" \
       xvfb xauth xdotool x11-utils imagemagick \
       python3 procps psmisc ca-certificates fonts-liberation \
  && rm -rf /var/lib/apt/lists/*

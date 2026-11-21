@@ -9,10 +9,13 @@
 //       style applied to the enlarged glyph (bold one pixel wider, italic sheared, underline and
 //       strike-out as rows). The result is Windows' glyph pixel for pixel;
 //     * any other face from the atlas whose cell is nearest to the measured cell, resampled to it
-//       when the sizes differ; an underline or strike-out without an atlas of its own is the plain
-//       glyph plus the line that `scalable/index.json` gives.
+//       when the sizes differ (a size above the largest atlas uses the largest one); an underline
+//       or strike-out without an atlas of its own is the plain glyph plus the line that
+//       `scalable/index.json` gives. In a proportional face the width of a letter follows the em.
 // - `textOverhang(font)` is how far the opaque box of a text reaches beyond its last character in
 //   that font (Windows' simulated bold and italic of the raster faces).
+// - `delInHighText(font)` is what the byte $7F is in a text that has a byte of $80 or above
+//   (Windows takes it from a fallback font in the outline faces).
 //
 // Nothing here loads files; fonts/atlas-provider.ts does that and then builds a FontSet.
 //
@@ -21,6 +24,7 @@
 import type { CellMetrics, FontSpec, Glyph, GlyphProvider } from '../../../contracts';
 import { trimGlyph, type FontAtlas } from './atlas';
 import {
+  emPixels,
   FONT_STYLES,
   metricEntry,
   sizeIndex,
@@ -32,7 +36,7 @@ import {
   type RasterCell,
 } from './metrics';
 import { areaAverage, repeatPixels } from './resample';
-import type { StyleOverhang } from './types';
+import type { FallbackGlyphs } from './types';
 
 /** The cell of the default font, Fixedsys 9 at 96 DPI (trap15-a §3.2). Used while no table is loaded. */
 export const DEFAULT_CELL: Readonly<CellMetrics> = { colWidth: 8, rowHeight: 15 };
@@ -54,6 +58,10 @@ export interface AtlasFile {
   style?: FontStyle;
   /** Bytes to draw empty whatever the atlas holds (T2's `blankBytes`). */
   blankBytes?: readonly number[];
+  /** The point size the atlas was made for, when the font set's list says it. */
+  size?: number;
+  /** Width of $7F in a text that has a byte of $80 or above (T2's `delInHighString`). */
+  delInHighString?: number;
   /** A plain outline atlas: the underline and the strike-out line as [first row, rows] of its cell. */
   underline?: readonly [number, number];
   strikeOut?: readonly [number, number];
@@ -99,6 +107,9 @@ interface LoadedAtlas {
   /** A raster face: two-colour glyphs that Windows enlarges by whole factors only. */
   raster: boolean;
   blank: ReadonlySet<number> | null;
+  /** Point size the atlas was made for, if known. */
+  size?: number;
+  delInHighString?: number;
   underline?: readonly [number, number];
   strikeOut?: readonly [number, number];
 }
@@ -109,6 +120,8 @@ interface ResolvedFont {
   overhang: number;
   /** Path of the atlas the glyphs come from, or null. */
   source: string | null;
+  /** The glyph of $7F in a text with a byte of $80 or above, when it is not the byte's own glyph. */
+  delInHighText: Glyph | null;
   make(ch: number): Glyph;
   glyphs: (Glyph | undefined)[];
 }
@@ -117,7 +130,7 @@ interface ResolvedFont {
  *  for rebuilding glyphs; it never gets a different result. */
 const RESOLVED_FONTS_KEPT = 24;
 
-export class FontSet implements GlyphProvider, StyleOverhang {
+export class FontSet implements GlyphProvider, FallbackGlyphs {
   readonly ready: Promise<void> = Promise.resolve();
   /** What could not be used, in words: atlases that name no face of the table, and the like. */
   readonly problems: string[] = [];
@@ -167,6 +180,8 @@ export class FontSet implements GlyphProvider, StyleOverhang {
         atlas: file.atlas,
         raster: false,
         blank: file.blankBytes && file.blankBytes.length > 0 ? new Set(file.blankBytes) : null,
+        ...(file.size !== undefined ? { size: file.size } : {}),
+        ...(file.delInHighString !== undefined ? { delInHighString: file.delInHighString } : {}),
         ...(file.underline ? { underline: file.underline } : {}),
         ...(file.strikeOut ? { strikeOut: file.strikeOut } : {}),
       };
@@ -213,6 +228,10 @@ export class FontSet implements GlyphProvider, StyleOverhang {
     return this.resolve(font).overhang;
   }
 
+  delInHighText(font: FontSpec): Glyph | null {
+    return this.resolve(font).delInHighText;
+  }
+
   /** The path of the atlas a font's glyphs come from, or null when the set has none for its face.
    *  For tests and for diagnosis. */
   atlasOf(font: FontSpec): string | null {
@@ -254,10 +273,24 @@ export class FontSet implements GlyphProvider, StyleOverhang {
       // cell, also for the bytes an atlas stores empty. A stored atlas of the cell serves when the
       // native one is not there.
       if (rule && native) {
-        return { cell, overhang, source: native.path, glyphs: [], make: (ch) => ruledGlyph(native, rule, style, ch) };
+        return {
+          cell,
+          overhang,
+          source: native.path,
+          delInHighText: null,
+          glyphs: [],
+          make: (ch) => ruledGlyph(native, rule, style, ch),
+        };
       }
       if (rule && stored) {
-        return { cell, overhang, source: stored.path, glyphs: [], make: (ch) => atlasGlyph(stored, ch) };
+        return {
+          cell,
+          overhang,
+          source: stored.path,
+          delInHighText: null,
+          glyphs: [],
+          make: (ch) => atlasGlyph(stored, ch),
+        };
       }
     }
 
@@ -273,17 +306,31 @@ export class FontSet implements GlyphProvider, StyleOverhang {
         height: cell.rowHeight,
         coverage: new Uint8Array(cell.colWidth * cell.rowHeight),
       };
-      return { cell, overhang: 0, source: null, glyphs: [], make: () => empty };
+      return { cell, overhang: 0, source: null, delInHighText: null, glyphs: [], make: () => empty };
     }
     const line = styled || (style !== 'underline' && style !== 'strikeOut') ? undefined : source[style];
     const scaledLine = line && scaleLine(line, cell.rowHeight, source.atlas.cellHeight);
+    // How much larger the em of the requested size is than the em the atlas was drawn for.
+    const emRatio = source.size !== undefined && size > 0 ? emPixels(size) / emPixels(source.size) : undefined;
+    // $7F from Windows' fallback font: its width is measured for the atlas, and grows with the size
+    // like the width of a letter. The glyph itself is not known (it is another font's): no ink.
+    let delInHighText: Glyph | null = null;
+    if (source.delInHighString !== undefined) {
+      const sameCell = source.atlas.cellWidth === cell.colWidth && source.atlas.cellHeight === cell.rowHeight;
+      const ratio = sameCell ? 1 : (emRatio ?? cell.colWidth / source.atlas.cellWidth);
+      const advance = Math.round(source.delInHighString * ratio);
+      const width = Math.max(1, advance);
+      const blank: Glyph = { advance, width, height: cell.rowHeight, coverage: new Uint8Array(width * cell.rowHeight) };
+      delInHighText = scaledLine ? withLine(blank, scaledLine) : blank;
+    }
     return {
       cell,
       overhang: 0,
       source: source.path,
+      delInHighText,
       glyphs: [],
       make: (ch) => {
-        const glyph = fittedGlyph(source, cell, ch);
+        const glyph = fittedGlyph(source, cell, ch, emRatio);
         return scaledLine ? withLine(glyph, scaledLine) : glyph;
       },
     };
@@ -347,10 +394,20 @@ function atlasGlyph(source: LoadedAtlas, ch: number): Glyph {
   return trimGlyph(coverage, atlas.glyphWidth, atlas.cellHeight, advance);
 }
 
-/** The glyph of the nearest atlas brought to the measured cell (3.5.1): unchanged when the cells are
- *  equal, by whole-number pixel repetition for a raster face when the factors are whole, by area
- *  averaging otherwise. */
-function fittedGlyph(source: LoadedAtlas, cell: CellMetrics, ch: number): Glyph {
+/**
+ * The glyph of the nearest atlas brought to the measured cell (3.5.1): unchanged when the cells are
+ * equal, by whole-number pixel repetition for a raster face when the factors are whole, by area
+ * averaging otherwise.
+ *
+ * Area averaging and the advance. An advance as wide as the atlas cell becomes as wide as the
+ * measured cell: that is every glyph of a fixed-pitch face, and the "W" of a proportional one,
+ * whose width at every size is what the metric table holds. Any other advance belongs to a letter
+ * of the proportional face; Windows was not asked for it at this size, so it is estimated: it grows
+ * with the em (`emRatio`, known when the font set's list gives the atlas its point size), as the
+ * advances of an outline font do. Without `emRatio` it grows like the cell. The picture of a glyph
+ * is stretched with its advance.
+ */
+function fittedGlyph(source: LoadedAtlas, cell: CellMetrics, ch: number, emRatio?: number): Glyph {
   const { atlas, raster } = source;
   const { cellWidth, cellHeight, glyphWidth } = atlas;
   const { colWidth, rowHeight } = cell;
@@ -362,15 +419,16 @@ function fittedGlyph(source: LoadedAtlas, cell: CellMetrics, ch: number): Glyph 
     const ky = rowHeight / cellHeight;
     return trimGlyph(repeatPixels(coverage, glyphWidth, cellHeight, kx, ky), glyphWidth * kx, rowHeight, advance * kx);
   }
-  // Area averaging. A fixed-pitch glyph (advance = cell width) gets exactly the measured column width.
-  const scale = (pixels: number) => Math.max(1, Math.round((pixels * colWidth) / cellWidth));
-  const width = scale(glyphWidth);
-  return trimGlyph(
-    areaAverage(coverage, glyphWidth, cellHeight, width, rowHeight),
-    width,
-    rowHeight,
-    advance === 0 ? 0 : scale(advance),
-  );
+  const cellRatio = colWidth / cellWidth;
+  let fitted = 0;
+  if (advance === cellWidth || (advance > 0 && emRatio === undefined)) {
+    fitted = Math.max(1, Math.round(advance * cellRatio));
+  } else if (advance > 0) {
+    fitted = Math.round(advance * (emRatio as number)); // may be 0 at a tiny size, as on Windows
+  }
+  const stretch = fitted > 0 ? fitted / advance : cellRatio;
+  const width = Math.max(1, Math.round(glyphWidth * stretch));
+  return trimGlyph(areaAverage(coverage, glyphWidth, cellHeight, width, rowHeight), width, rowHeight, fitted);
 }
 
 /**

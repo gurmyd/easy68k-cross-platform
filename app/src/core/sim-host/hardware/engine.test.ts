@@ -5,6 +5,7 @@
 // The run controller, SoftTimer and VirtualTime are SH8's and are written at the same time as this
 // package; these tests use the small stand-ins of ./testing.ts, built from the contracts and the rules
 // of ARCHITECTURE.md 4.3 and 4.5.3, so that they keep passing when the real controller is joined.
+// session.test.ts runs the timer, queue and display scenarios on SH8's real parts.
 
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

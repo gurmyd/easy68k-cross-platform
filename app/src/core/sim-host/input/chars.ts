@@ -10,7 +10,8 @@
 //   Enter, Backspace, Esc              $0D, $08, $1B
 //   Ctrl + letter                      $01 .. $1A (Ctrl+H is a backspace, Ctrl+I is $09, Ctrl+M is Enter)
 //   Ctrl + Enter, Ctrl + Backspace     $0A, $7F
-//   Ctrl + [  \  ]  ^  _               $1B .. $1F, and Ctrl + Space is a space (the US layout's control column)
+//   Ctrl + @  [  \  ]  ^  _            $00, $1B .. $1F, and Ctrl + Space is a space (the US layout's control
+//                                      columns; Ctrl + @ really is a WM_CHAR with the value 0)
 //   Ctrl + anything else               none
 //   Alt + key                          none: Windows sends WM_SYSCHAR, which the form's key-press handler never sees
 //   Ctrl + Alt + key (AltGr)           the character AltGr types (`@`, the euro sign), none for a plain letter or digit
@@ -23,8 +24,18 @@ import { byteForCodePoint, encode } from '../../codec/cp1252';
 
 export type { KeyLike } from '../../../contracts';
 
-/** What Ctrl types with a key that is not a letter (the control column of the US layout). */
+/**
+ * What Ctrl types with a key that is not a letter: the two control columns of the US layout of
+ * Windows, by the character the key types (`ToUnicodeEx` on Windows 11 gives exactly these and
+ * nothing for every other key, docs/porting/errata/SH4.md entry 10).
+ *
+ * Ctrl + `@` (Ctrl+Shift+2) is the character 0. It is a character like any other for the program:
+ * TRAP #15 task 5 returns 0, task 2 stores the byte, and outside a read it replaces the one key
+ * of type-ahead (`FormKeyPress`, simIOu.cpp:1334-1411). So 0 is an answer here and "no character"
+ * is null, never a falsy test.
+ */
 const CONTROL_CHARACTERS: Readonly<Record<string, number>> = {
+  '@': 0x00,
   '[': 0x1b,
   '\\': 0x1c,
   ']': 0x1d,
@@ -52,7 +63,8 @@ function letterOf(ev: Pick<KeyLike, 'key' | 'code'>): string | null {
 
 /** The WM_CHAR byte for a key-down, or null when Windows would send none (trap15-a §3.9):
  *  printable -> its Windows-1252 byte (null if not representable); Enter 13; Backspace 8; Esc 27;
- *  Ctrl+letter 1..26; Ctrl+Enter 10; Ctrl+Backspace 127; arrows, function keys, modifiers -> null. */
+ *  Ctrl+letter 1..26; Ctrl+Enter 10; Ctrl+Backspace 127; arrows, function keys, modifiers -> null.
+ *  The byte can be 0 (Ctrl + `@`): compare the answer with null. */
 export function charFromKey(ev: KeyLike): number | null {
   // A chord with the Windows key (Command on a Mac) types nothing.
   if (ev.metaKey) return null;

@@ -38,6 +38,7 @@ export function editorHasFocus(active: unknown = globalThis.document?.activeElem
 export function wordContextFrom(
   selection: SelectionLike,
   lineTextBefore: (node: NodeLike, offset: number) => string,
+  isFirstLine: (line: ElementLike) => boolean = () => false,
 ): EditorWordContext | null {
   const selected = selection.toString();
   if (!selection.isCollapsed && selected !== '') return { selected, text: '', caret: 0 };
@@ -48,8 +49,21 @@ export function wordContextFrom(
   if (!line) return null;
   const before = lineTextBefore(node, selection.anchorOffset);
   const full = line.textContent ?? '';
+  // The very start of the document has no "\n" before it: the original's lookup fails there and F1
+  // does nothing (editor-ui §15.3). That holds only on the document's first line.
+  if (before === '' && isFirstLine(line)) return { selected: '', text: `${full}\n`, caret: 0 };
   // The line between line ends; a caret at the start of a line has "\n" before it.
   return { selected: '', text: `\n${full}\n`, caret: before.length + 1 };
+}
+
+/**
+ * True when `line` is the document's first line: it has no line before it in the editor's content
+ * and the editor is scrolled to the top (CodeMirror draws only the lines near the viewport).
+ */
+function isFirstDocumentLine(line: Element): boolean {
+  if (line.previousElementSibling !== null) return false;
+  const scroller = line.closest('.cm-scroller');
+  return scroller === null || scroller.scrollTop === 0;
 }
 
 /** The context of the page's current selection, or null when the selection is not in the editor. */
@@ -59,13 +73,17 @@ export function readEditorWordContext(): EditorWordContext | null {
   if (!doc || !selection || selection.rangeCount === 0 || selection.anchorNode === null) return null;
   if (panelOf(selection.anchorNode.parentElement) !== 'editor' && panelOf(selection.anchorNode) !== 'editor')
     return null;
-  return wordContextFrom(selection as unknown as SelectionLike, (node, offset) => {
-    const element = (node.nodeType === 1 ? node : node.parentElement) as unknown as Element | null;
-    const line = element?.closest('.cm-line') ?? element?.closest('p, div, pre');
-    if (!line) return '';
-    const range = doc.createRange();
-    range.selectNodeContents(line);
-    range.setEnd(node as unknown as Node, offset);
-    return range.toString();
-  });
+  return wordContextFrom(
+    selection as unknown as SelectionLike,
+    (node, offset) => {
+      const element = (node.nodeType === 1 ? node : node.parentElement) as unknown as Element | null;
+      const line = element?.closest('.cm-line') ?? element?.closest('p, div, pre');
+      if (!line) return '';
+      const range = doc.createRange();
+      range.selectNodeContents(line);
+      range.setEnd(node as unknown as Node, offset);
+      return range.toString();
+    },
+    (line) => isFirstDocumentLine(line as unknown as Element),
+  );
 }

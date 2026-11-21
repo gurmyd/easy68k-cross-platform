@@ -134,6 +134,24 @@ describe('copying the examples', { timeout: 60_000 }, () => {
     expect(JSON.stringify(stack[0]!.props)).toContain('HTTP 404');
   });
 
+  it('desktop: asks with the folder chooser when the file dialogs have one', async () => {
+    const asked: string[] = [];
+    const dialogs: FileDialogs = {
+      save: async () => null,
+      open: async () => null,
+      chooseFolder: async (request) => (asked.push(request.title), '/browser/Picked'),
+      registerProvider: () => () => {},
+    };
+    const app = createTestApplication({
+      features: [feature],
+      platform: createFakePlatform({ kind: 'desktop' }),
+      services: { createFileDialogs: () => dialogs },
+    });
+    await showExamples(app.ctx, publicFetch);
+    expect(asked).toEqual(['Copy the Examples to']);
+    expect((await app.ctx.vfs.list('/browser/Picked')).length).toBe(16);
+  });
+
   it('desktop: copies into the chosen folder and shows the Open dialog there', async () => {
     const saves: SaveRequest[] = [];
     const opens: OpenRequest[] = [];

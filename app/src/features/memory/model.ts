@@ -12,7 +12,8 @@
 // `controller.invoke(engine => engine.setOption(SimOption.MemLive, ...))`.
 //
 // Refresh moments (4.6, sim-ui §10.4):
-//   - `sim.viewRevision` changes (scrshow: a stop, a trace step);
+//   - the engine names the Memory window in host.repaint (scrshow: a stop, a trace step): the
+//     store's `sim.repaint.memory` changes, or `sim.viewRevision` while `sim.repaint` is absent;
 //   - `sim.liveRevision` changes (memory changed: a Memory-panel edit, a live write);
 //   - the panel's own navigation, editing, Copy and Fill;
 //   - with Live checked: once per display frame, if a visible byte differs from what is shown.
@@ -21,7 +22,8 @@
 // Between those moments the panel shows the bytes of its last paint, so that during a full-speed
 // run without Live it is static, as the original's window is.
 //
-// After an edit the model bumps `sim.liveRevision` ("memory / hardware changed", 3.12.1), which is
+// After a typed byte the controller bumps `sim.liveRevision` ("memory / hardware changed", 3.12.1);
+// after Copy and Fill, which write through `controller.invoke`, the model bumps it itself. That is
 // how the Stack panel learns that it must redraw without re-centring (sim-ui §11.4) - see
 // docs/porting/errata/U2.md, "Contract".
 
@@ -61,6 +63,9 @@ import {
 export const BLANK_ADDRESS = '000000';
 export const BLANK_BYTES = '00000000';
 
+/** The question of Save for a file that exists (Memory1.cpp:646, MB_YESNO). */
+export const OVERWRITE_PROMPT = { title: 'Alert', text: 'File exists! OK to replace?' } as const;
+
 /** The Address field persists to `SimSettings.memoryAddress` this long after its last change. */
 export const PERSIST_DELAY_MS = 500;
 
@@ -83,8 +88,17 @@ export interface MemoryPanelState {
 
 type Listener = () => void;
 
-const sameRevisions = (a: AppState['sim'], b: AppState['sim']) =>
-  a.viewRevision === b.viewRevision && a.liveRevision === b.liveRevision;
+/**
+ * Whether the store says the Memory panel must re-read its rows: `liveRevision` moved ("memory
+ * changed"), or the engine named the Memory window in `host.repaint` - `sim.repaint.memory` moved,
+ * or, while the session does not publish `sim.repaint` (an optional member, W1 errata entry 11),
+ * `viewRevision` moved, which moves with every repaint.
+ */
+export function memoryRepaintDue(before: AppState['sim'], now: AppState['sim']): boolean {
+  if (now.liveRevision !== before.liveRevision) return true;
+  if (now.repaint !== undefined) return now.repaint.memory !== before.repaint?.memory;
+  return now.viewRevision !== before.viewRevision;
+}
 
 export class MemoryPanelModel {
   private state: MemoryPanelState;
@@ -118,9 +132,9 @@ export class MemoryPanelModel {
     let last = this.ctx.store.getState().sim;
     const offStore = this.ctx.store.subscribe(() => {
       const now = this.ctx.store.getState().sim;
-      if (sameRevisions(now, last)) return;
+      const due = memoryRepaintDue(last, now);
       last = now;
-      this.repaint();
+      if (due) this.repaint();
     });
     const offEngine = this.ctx.sim.onEngineReplaced(() => this.coldStart());
     return () => {
@@ -266,14 +280,19 @@ export class MemoryPanelModel {
     const memory = this.ctx.sim.engine.memory;
     const result = typeChar(this.state.address, cell, code, (a) => memory[a] ?? 0);
     if (result.kind === 'beep') return false;
+    // The controller bumps `liveRevision` for a direct write itself (RunController.pokeMemory), so
+    // the Hardware and Stack panels redraw; the panel repaints its own rows at once in any case.
     this.ctx.sim.controller.pokeMemory(result.address, result.value);
     this.place(result.next);
-    this.announceMemoryChange();
     this.repaint();
     return true;
   }
 
-  /** Tells the other panels that memory changed (the Stack panel redraws, sim-ui §10.3). */
+  /**
+   * Tells the other panels that memory changed (the Stack panel redraws, sim-ui §10.3) after a
+   * write through `controller.invoke`: the contract (RunController.pokeMemory) leaves that bump to
+   * the interface code that writes.
+   */
   private announceMemoryChange(): void {
     this.ctx.store.setState((state) => ({ ...state, sim: { ...state.sim, liveRevision: state.sim.liveRevision + 1 } }));
   }
@@ -350,11 +369,13 @@ export class MemoryPanelModel {
       return;
     }
     // The original's TSaveDialog: no title of its own (Windows shows "Save As"), no filter,
-    // default extension "bin". The file dialogs of 3.8.5 ask the overwrite question themselves.
+    // default extension "bin". For an existing file the original asks its own question
+    // (Memory1.cpp:646); the file dialog asks it in its place (SaveRequest.overwritePrompt).
     const path = await this.ctx.fileDialogs.save({
       title: 'Save As',
       filters: [{ label: 'All Files (*.*)', patterns: ['*.*'] }],
       defaultExt: 'bin',
+      overwritePrompt: OVERWRITE_PROMPT,
     });
     if (path === null) return;
     try {

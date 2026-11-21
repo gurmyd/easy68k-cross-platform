@@ -6,7 +6,7 @@
 // 640 x 480.
 
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { FontSource, FontTarget, type FontSpec, type Glyph, type Rect } from '../../../contracts';
+import { FontSource, FontTarget, type FontSpec, type Glyph, type GlyphProvider, type Rect } from '../../../contracts';
 import { AtlasGlyphProvider } from '../fonts/atlas-provider';
 import { createSyntheticFontFiles, memoryFontLoader } from '../fonts/synthetic';
 import { blend, bytesOf, createTextRig, rowText, syntheticFonts, type TextRig } from './testing';
@@ -615,20 +615,33 @@ describe('drawText (task 95, trap15-b §6.7)', () => {
     expect(rig.surface.state.backPen).toEqual({ x: 18, y: 100 });
   });
 
-  it('with underline or strike-out a zero-width byte that is not at the end does not count in the extent', () => {
+  it('the pen: zero-width bytes count in the extent unless the text has a byte of $80 or above; the style plays no part', () => {
+    const penMove = (bytes: number[], y: number) => {
+      rig.text.drawText(Uint8Array.from(bytes), 10, y);
+      expect(rig.surface.state.backPen.y).toBe(y);
+      return rig.surface.state.backPen.x - 10;
+    };
+    // plain, italic, underline, strike-out: every advance is 8
     for (const [bits, y] of [
-      [4, 20],
-      [8, 60],
+      [0, 20],
+      [2, 60],
+      [4, 100],
+      [8, 140],
     ] as const) {
       rig.text.setFontProperties(WHITE, bits);
-      rig.text.drawText(Uint8Array.from([0x41, 9, 0x42]), 10, y);
-      expect(rig.surface.state.backPen).toEqual({ x: 26, y }); // two cells, not three
-      rig.text.drawText(Uint8Array.from([0x41, 0x42, 9, 10]), 10, y);
-      expect(rig.surface.state.backPen).toEqual({ x: 42, y }); // trailing ones count
+      expect(penMove([0x41, 9, 0x42], y)).toBe(24); // three advances for two letters
+      expect(penMove([0x41, 0x42, 9, 10], y)).toBe(32);
+      expect(penMove([0x1c, 0x39], y)).toBe(16);
+      expect(penMove([0x41, 0x7f, 13], y)).toBe(24); // $7F is not a byte of $80 or above
+      // with a byte of $80 or above the zero-width bytes count nothing, wherever they stand
+      expect(penMove([0x41, 13, 0xe9], y)).toBe(16);
+      expect(penMove([0x1c, 0xaa, 0x1d, 0x1d], y)).toBe(8);
+      expect(penMove([0x41, 10, 0xfc, 0x42, 13, 10], y)).toBe(24);
+      expect(penMove([0xe9, 0xc4, 0xfc], y)).toBe(24); // no zero-width byte: nothing to leave out
     }
-    rig.text.setFontProperties(WHITE, 0);
-    rig.text.drawText(Uint8Array.from([0x41, 9, 0x42]), 10, 100);
-    expect(rig.surface.state.backPen).toEqual({ x: 34, y: 100 });
+    // a single zero-width byte is a text of one byte and counts, with or without a high byte around
+    rig.text.setFontProperties(WHITE, 4);
+    expect(penMove([13], 180)).toBe(8);
   });
 
   it('an empty text draws nothing and still moves the pen', () => {
@@ -703,13 +716,39 @@ describe('task 21: setFontProperties', () => {
     }
   });
 
-  it('the colour is D1.L as $00BBGGRR; the port uses the low 24 bits', () => {
+  it('the colour is D1.L as $00BBGGRR', () => {
     rig.text.setFontProperties(0x00123456, 0);
     expect(rig.text.state.fontColor).toBe(0x123456);
-    rig.text.setFontProperties(0xff0000ff | 0, 0);
-    expect(rig.text.state.fontColor).toBe(0x0000ff);
     print('A');
-    expectChar(0, 0, 'A', RED);
+    expectChar(0, 0, 'A', 0x123456);
+  });
+
+  // Measured on Windows with the calls the original makes (docs/porting/errata/SH3.md entry 17):
+  // text takes the colour rule of pens and fills (trap15-b §4.6).
+  it.each([
+    ['$01000005: entry 5 of the stock palette', 0x01000005, 0x800080],
+    ['$0100000D: entry 13', 0x0100000d, 0x0000ff],
+    ['$01000014: an entry from 20 on is black', 0x01000014, 0x000000],
+    ['$0100FF05: the low 16 bits select the entry', 0x0100ff05, 0x000000],
+    ['$7F000007: any odd top byte is a palette entry', 0x7f000007, 0xc0c0c0],
+    ['$02336699: an even top byte is plain RGB', 0x02336699, 0x336699],
+    ['$80000005: system colour 5, white', 0x80000005, 0xffffff],
+    ['$8000000F: system colour 15', 0x8000000f, 0xf0f0f0],
+    ['$FF336699: bit 31 with an index above 30 is black', 0xff336699, 0x000000],
+  ])('a colour with a top byte that is not zero - %s', (_name, given, drawn) => {
+    rig.surface.setFillColor(BLUE);
+    rig.text.setFontProperties(given | 0, 0); // a signed number, as a 68000 register value may arrive
+    expect(rig.text.state.fontColor).toBe(given); // kept as given, unsigned
+    print('A');
+    expectChar(0, 0, 'A', drawn, BLUE);
+    rig.text.drawText(bytesOf('B'), 100, 100);
+    expectGlyphAt(100, 100, glyphOf('B'), drawn, BLUE);
+    // the prompt (its first tick outside an input task draws the underscore) and the Options colour
+    // take the same path
+    rig.text.promptTick();
+    expect(rig.surface.overlay?.pixels).toContain((0xff000000 | drawn) >>> 0);
+    rig.text.setOptionsFont(DEFAULT_OPTIONS_FONT, given);
+    expect(rig.text.state).toMatchObject({ optionsFontColor: given, fontColor: given });
   });
 
   it('font numbers 1-7 select the names as the original spells them, with the size byte', () => {
@@ -876,20 +915,71 @@ describe('the opaque box of a bold or italic raster font (measured: tests/oracle
     expect(boxWidth(100, 214)).toBe(24 + 7);
   });
 
-  it('italic: no overhang when the text has a zero-width byte or $7F in it (and is two bytes or more)', () => {
+  /** Draws a text at (100, y) and returns the width of its box, measured in the bottom row of the cell. */
+  const boxOf = (bytes: number[], y: number) => {
+    rig.text.drawText(Uint8Array.from(bytes), 100, y);
+    return boxWidth(100, y + rig.text.state.rowHeight - 1);
+  };
+
+  it('italic: no overhang when two or more bytes are drawn and the text has a zero-width byte, or $7F beside another byte', () => {
     rig.surface.setFillColor(BLUE);
     rig.text.setFontProperties(WHITE, 2);
-    rig.text.drawText(Uint8Array.from([0x4c, 9, 0x4c]), 100, 20); // L, HT, L
-    expect(boxWidth(100, 34)).toBe(16);
-    rig.text.drawText(Uint8Array.from([0x4c, 0x7f]), 100, 60);
-    expect(boxWidth(100, 74)).toBe(16);
-    // a trailing zero-width byte does not count for this
-    rig.text.drawText(Uint8Array.from([0x4c, 0x4c, 13, 10]), 100, 100);
-    expect(boxWidth(100, 114)).toBe(16 + 7);
+    expect(boxOf([0x4c, 9, 0x4c], 20)).toBe(16); // L, HT, L
+    expect(boxOf([0x4c, 0x4c, 13, 10], 50)).toBe(16); // a trailing zero-width byte counts for this as well
+    expect(boxOf([0x1c, 0x4c, 0x1f, 0x4c], 80)).toBe(16);
+    expect(boxOf([0x4c, 0x7f], 110)).toBe(16);
+    expect(boxOf([0x4c, 0x7f, 0x4c], 140)).toBe(24);
+    // the overhang stays when only one byte is drawn, and when $7F is the only byte there is
+    expect(boxOf([0x4c, 13], 170)).toBe(8 + 7);
+    expect(boxOf([0x1c, 0x39], 200)).toBe(8 + 7);
+    expect(boxOf([0x7f, 0x7f], 230)).toBe(16 + 7);
     // bold keeps its pixel in every case
     rig.text.setFontProperties(WHITE, 1);
-    rig.text.drawText(Uint8Array.from([0x4c, 9, 0x4c]), 100, 140);
-    expect(boxWidth(100, 154)).toBe(18 + 1);
+    expect(boxOf([0x4c, 9, 0x4c], 260)).toBe(18 + 1);
+    expect(boxOf([0x4c, 0x7f], 290)).toBe(18 + 1);
+  });
+
+  it('a text of zero-width bytes only fills the cell of its first byte plus the overhang', () => {
+    rig.surface.setFillColor(BLUE);
+    rig.text.setFontProperties(WHITE, 1); // bold: cells of 9, overhang 1
+    expect(boxOf([10], 20)).toBe(9 + 1);
+    expect(boxOf([13, 13, 30, 31], 50)).toBe(9 + 1);
+    expect(rig.surface.state.backPen).toEqual({ x: 100 + 4 * 9, y: 50 }); // the pen moves by all four
+    rig.text.setFontProperties(WHITE, 2); // italic: overhang 7
+    expect(boxOf([13, 10], 80)).toBe(8 + 7);
+    expect(boxOf([13], 110)).toBe(8 + 7);
+    rig.text.setFontProperties(WHITE, 0);
+    expect(boxOf([13, 10], 140)).toBe(8);
+  });
+
+  it('italic, overhang left out: the first glyph keeps its own where it reaches past the advances (a narrow, tall font)', () => {
+    // Fixedsys at 72 points is such a font on Windows (cell 40 x 90, overhang 44): "A", CR, "B" fills
+    // 84 pixels, not 80. Here: cells of 4 x 21 with an overhang of 10.
+    const blank = (advance: number): Glyph => ({
+      advance,
+      width: advance,
+      height: 21,
+      coverage: new Uint8Array(advance * 21),
+    });
+    const tall: GlyphProvider = {
+      ready: Promise.resolve(),
+      metrics: () => ({ colWidth: 4, rowHeight: 21 }),
+      glyph: () => blank(4),
+      textOverhang: (font) => (font.italic ? 10 : 0),
+    };
+    const narrow = createTextRig({ glyphs: tall });
+    const width = (bytes: number[], y: number) => {
+      narrow.text.drawText(Uint8Array.from(bytes), 100, y);
+      let run = 0;
+      while (narrow.surface.pixel(100 + run, y + 20) !== BLACK) run++;
+      return run;
+    };
+    narrow.surface.setFillColor(BLUE);
+    narrow.text.setFontProperties(WHITE, 2);
+    expect(width([0x41, 0x42], 20)).toBe(8 + 10); // nothing left out
+    expect(width([0x41, 13, 0x42], 50)).toBe(4 + 10); // first advance + overhang beats the 8 of the advances
+    expect(width([0x41, 13, 0x42, 0x43, 0x44], 80)).toBe(16); // four advances beat it
+    expect(width([0x41, 0x7f], 110)).toBe(4 + 10);
   });
 
   it('the prompt cell has the overhang too; an outline font and a plain raster font have none', () => {

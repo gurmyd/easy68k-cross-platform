@@ -1,0 +1,296 @@
+/* The EASyBIN workspace (EasybinWorkspace.tsx). Owner: B1.
+ *
+ * Byte colours (docs/porting/easybin.md 5.2): file 0 = text, file 1 = olive, file 2 = green (--c-ok),
+ * file 3 = blue (--c-accent), outside the binary range = muted, past the end of memory = --c-danger.
+ * Olive has no design token; its two values below meet the 4.5:1 text contrast of 2.8 on
+ * --c-surface (5.6:1 light, 7.2:1 dark).
+ */
+
+.e68-easybin {
+  --e68-easybin-olive: #6b6b00;
+
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+
+:root[data-theme='dark'] .e68-easybin {
+  --e68-easybin-olive: #b5ae3e;
+}
+
+.e68-easybin__top {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-panel);
+}
+
+.e68-easybin__group {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  min-width: 0;
+  margin: 0;
+  padding: var(--sp-1) var(--sp-3) var(--sp-2);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-md);
+}
+
+.e68-easybin__group--radio {
+  padding-top: var(--sp-2);
+}
+
+.e68-easybin__legend {
+  padding: 0;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  white-space: pre;
+}
+
+.e68-easybin__grid {
+  display: grid;
+  gap: var(--sp-1);
+  justify-items: end;
+}
+
+.e68-easybin__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 24px;
+}
+
+.e68-easybin__label {
+  font-size: var(--fs-md);
+  white-space: pre;
+}
+
+.e68-easybin__value,
+.e68-easybin__digits {
+  min-width: 9ch;
+  font-family: var(--font-mono);
+  font-size: var(--fs-md);
+  text-align: left;
+}
+
+.e68-easybin__zero {
+  color: var(--c-text-muted);
+}
+
+.e68-easybin__digits {
+  display: inline-flex;
+  gap: 1ch;
+  font-weight: 700;
+}
+
+.e68-easybin__digit[hidden] {
+  display: inline;
+  visibility: hidden;
+}
+
+.e68-easybin__groupbutton {
+  align-self: flex-end;
+}
+
+.e68-easybin__strip {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-4);
+  padding: var(--sp-1) var(--sp-3);
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-panel);
+}
+
+.e68-easybin__cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.e68-easybin__main {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.e68-easybin__view {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: auto;
+}
+
+.e68-easybin__addressline {
+  display: flex;
+  flex: none;
+  align-items: center;
+  padding: var(--sp-1) var(--sp-1) 0;
+}
+
+.e68-easybin__header {
+  flex: none;
+  padding: var(--sp-1) var(--sp-1) 0;
+  color: var(--c-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-md);
+  line-height: 1.2;
+  white-space: pre;
+}
+
+.e68-easybin__rows {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 var(--sp-1);
+  font-family: var(--font-mono);
+  font-size: var(--fs-md);
+  line-height: 1.2;
+  white-space: pre;
+  cursor: text;
+  outline: none;
+}
+
+.e68-easybin__rows:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--c-accent);
+}
+
+.e68-easybin__row {
+  width: max-content;
+}
+
+.e68-easybin__row[data-invalid='true'] .e68-easybin__addr {
+  color: var(--c-danger);
+}
+
+.e68-easybin__byte--gray {
+  color: var(--c-text-muted);
+}
+
+.e68-easybin__byte--file0 {
+  color: var(--c-text);
+}
+
+.e68-easybin__byte--file1 {
+  color: var(--e68-easybin-olive);
+}
+
+.e68-easybin__byte--file2 {
+  color: var(--c-ok);
+}
+
+.e68-easybin__byte--file3 {
+  color: var(--c-accent);
+}
+
+.e68-easybin__byte--invalid {
+  color: var(--c-danger);
+}
+
+.e68-easybin__measure {
+  position: absolute;
+  top: 0;
+  left: var(--sp-1);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* The original's one-cell frame cursor, blinking at 500 ms; shown while the rows have the focus. */
+.e68-easybin__cursor {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid var(--c-text);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.e68-easybin__rows:focus .e68-easybin__cursor {
+  visibility: visible;
+  animation: e68-easybin-blink 1s steps(1, end) infinite;
+}
+
+@keyframes e68-easybin-blink {
+  50% {
+    border-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .e68-easybin__rows:focus .e68-easybin__cursor {
+    animation: none;
+  }
+}
+
+.e68-easybin__status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.e68-easybin__side {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-1);
+  border-left: 1px solid var(--c-border);
+  background: var(--c-panel);
+}
+
+.e68-easybin__sidelabel {
+  margin-top: var(--sp-2);
+  color: var(--c-text-muted);
+  font-size: var(--fs-sm);
+}
+
+/* The About box. */
+.e68-easybin-about {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-4);
+}
+
+.e68-easybin-about p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.e68-easybin-about__title {
+  font-weight: 700;
+}
+
+.e68-easybin-about__web {
+  color: var(--c-ok);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+.e68-easybin-about__rule {
+  width: 100%;
+  margin: var(--sp-1) 0;
+  border: 0;
+  border-top: 1px solid var(--c-border);
+}
+
+.e68-easybin-about__muted {
+  color: var(--c-text-muted);
+}

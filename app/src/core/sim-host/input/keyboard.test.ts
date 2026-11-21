@@ -82,6 +82,24 @@ describe('key-down', () => {
     ]);
   });
 
+  it('Ctrl+@ posts the character 0 with its key; Ctrl+2 posts the key alone', () => {
+    const { keyboard, take } = setup();
+    keyboard.keydown(ev('@', 'Digit2', { ctrlKey: true, shiftKey: true }), false);
+    keyboard.keydown(ev('2', 'Digit2', { ctrlKey: true }), false);
+    expect(take()).toEqual([
+      { kind: 'keyDown', vk: 0x32, ch: 0x00 },
+      { kind: 'keyDown', vk: 0x32 },
+    ]);
+    // The same on a Mac keyboard, and with a key the table does not know: the character alone.
+    const mac = setup('mac');
+    mac.keyboard.keydown(ev('@', 'Digit2', { ctrlKey: true, shiftKey: true }), false);
+    mac.keyboard.keydown(ev('@', 'IntlBackslash', { ctrlKey: true }), false);
+    expect(mac.take()).toEqual([
+      { kind: 'keyDown', vk: 0x32, ch: 0x00 },
+      { kind: 'char', ch: 0x00 },
+    ]);
+  });
+
   it('auto-repeat posts the entry again, as Windows repeats both messages', () => {
     const { keyboard, take } = setup();
     keyboard.keydown(ev('x', 'KeyX'), false);

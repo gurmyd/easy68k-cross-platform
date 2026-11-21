@@ -11,15 +11,19 @@ import {
   Reg,
   SimOption,
   type AppContext,
+  type DesktopDeviceSources,
+  type LogServiceApi,
   type MessageBoxRequest,
   type ProgramFilesApi,
   type SimSessionEnv,
+  type StartupArgs,
 } from '../../contracts';
 import { VirtualTime } from '../../core/run/clock';
 import { BLANK_GLYPHS } from '../../core/run/headless';
 import { createDeviceDoubles, partOf, type DeviceDoubles } from '../../core/run/test-kit';
 import { createSimEngine, releaseSimEngine } from '../../engine';
 import { assembleProgram, bytesOf, type AssembledProgram } from '../../engine/testing';
+import { MemoryBackend } from '../../fs/memory-backend';
 import { MemorySyncFiles } from '../../fs/sync/memory';
 import { windowTitle } from '../../bootstrap';
 import { MESSAGE_DIALOG_ID } from '../../state/dialogs';
@@ -28,7 +32,16 @@ import { shellStateOf } from '../../state/shell';
 import { createFakePlatform, createTestApplication, type TestApplication } from '../../state/testing';
 import { beepWav } from './beep';
 import { feature } from './index';
-import { CAUTION_TEXT, CAUTION_TITLE, INPUT_TOAST, createSimSession, runSessionOf, type RunSession } from './session';
+import {
+  CAUTION_TEXT,
+  CAUTION_TITLE,
+  INPUT_TOAST,
+  JOURNAL_KEY,
+  createSimSession,
+  runSessionOf,
+  type RunSession,
+  type SessionPage,
+} from './session';
 
 const dist = (file: string) => fileURLToPath(new URL(`../../../../engine/dist/${file}`, import.meta.url));
 const enginesBuilt = ['asm68k.wasm', 'asm68k-loader.mjs', 'sim68k.wasm', 'sim68k-loader.mjs'].every((file) =>
@@ -57,6 +70,37 @@ const ENGINES: SimSessionEnv = {
   createCachedSyncFiles: () => new MemorySyncFiles(),
 };
 
+const NO_ARGS: StartupArgs = { file: null, run: false, fullScreen: false, exceptions: false, bitField: false };
+
+/** A page as the session sees it: the listeners it added, and a storage in memory. */
+function createFakePage() {
+  const listeners = new Map<string, Set<() => void>>();
+  const stored = new Map<string, string>();
+  const page: SessionPage = {
+    addEventListener(type, listener) {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type)?.add(listener);
+    },
+    removeEventListener(type, listener) {
+      listeners.get(type)?.delete(listener);
+    },
+    localStorage: {
+      getItem: (key) => stored.get(key) ?? null,
+      setItem: (key, value) => void stored.set(key, value),
+      removeItem: (key) => void stored.delete(key),
+    },
+  };
+  return {
+    page,
+    stored,
+    /** The page fires an event. */
+    fire(type: string) {
+      for (const listener of [...(listeners.get(type) ?? [])]) listener();
+    },
+    listening: (type: string) => listeners.get(type)?.size ?? 0,
+  };
+}
+
 describe.skipIf(!enginesBuilt)(
   'the run feature in an application (needs engine/dist)',
   { timeout: ENGINE_TEST_TIMEOUT },
@@ -69,12 +113,20 @@ describe.skipIf(!enginesBuilt)(
 
     /** An application with this feature, the real engine, and doubles for the devices. */
     async function start(
-      options: { platform?: ReturnType<typeof createFakePlatform>; files?: Partial<ProgramFilesApi> } = {},
+      options: {
+        platform?: ReturnType<typeof createFakePlatform>;
+        files?: Partial<ProgramFilesApi>;
+        log?: Partial<LogServiceApi>;
+        page?: SessionPage;
+        /** Read whenever the session asks whether bytes are not in storage yet. */
+        unsaved?: { files: boolean; log: boolean };
+      } = {},
     ) {
       time = new VirtualTime();
       let ctxOfApp: AppContext | null = null;
       // The files double answers task 58 as the real part does: the dialog, then the reply.
-      const files = partOf<ProgramFilesApi>({
+      const { unsaved } = options;
+      const fileMethods: Partial<ProgramFilesApi> = {
         resetToStartup: () => {},
         exit: async () => {},
         setCurrentDir: async () => {},
@@ -88,6 +140,7 @@ describe.skipIf(!enginesBuilt)(
         fileSeek: () => -1,
         fileClose: () => false,
         fileRemove: () => false,
+        unsaved: false,
         fileDialog(mode) {
           const ctx = ctxOfApp as AppContext;
           void ctx.dialogs.open<{ mode: number }, string | null>('sim.fileDialog', { mode }).then((path) =>
@@ -99,8 +152,20 @@ describe.skipIf(!enginesBuilt)(
           );
         },
         ...options.files,
-      });
-      doubles = createDeviceDoubles({ files });
+      };
+      if (unsaved) Object.defineProperty(fileMethods, 'unsaved', { get: () => unsaved.files });
+      doubles = createDeviceDoubles({ files: partOf<ProgramFilesApi>(fileMethods) });
+      if (options.log || unsaved) {
+        const logMethods: Partial<LogServiceApi> = {
+          resetToStartup: () => {},
+          exit: async () => {},
+          flush: async () => {},
+          unsaved: false,
+          ...options.log,
+        };
+        if (unsaved) Object.defineProperty(logMethods, 'unsaved', { get: () => unsaved.log });
+        doubles.parts.log = partOf<LogServiceApi>(logMethods);
+      }
       app = createTestApplication({
         clock: time,
         scheduler: time,
@@ -108,7 +173,12 @@ describe.skipIf(!enginesBuilt)(
         ...(options.platform ? { platform: options.platform } : {}),
         features: [feature, { id: 'test', dialogs: { 'sim.fileDialog': () => null } }],
         services: {
-          createSimSession: (ctx, env) => createSimSession(ctx, env, { parts: doubles.parts, glyphs: BLANK_GLYPHS }),
+          createSimSession: (ctx, env) =>
+            createSimSession(ctx, env, {
+              parts: doubles.parts,
+              glyphs: BLANK_GLYPHS,
+              ...(options.page ? { page: options.page } : {}),
+            }),
         },
       });
       ctxOfApp = app.ctx;
@@ -643,38 +713,103 @@ describe.skipIf(!enginesBuilt)(
       expect(shellStateOf(app.ctx).getState().exited).toBe(false);
     });
 
-    it('opens an .S68 named at start-up in Simulator mode and applies the switches', async () => {
+    /**
+     * An application started with arguments. The files of `existing` are in the browser store
+     * before the application starts, as a file named on a command line is. `fullScreen` records
+     * the arguments the full-screen command of the Output panel was run with.
+     */
+    async function launch(
+      args: Partial<StartupArgs>,
+      existing: Record<string, Uint8Array> = {},
+      kind: 'web' | 'desktop' = 'web',
+    ) {
       time = new VirtualTime();
       doubles = createDeviceDoubles();
-      const platform = createFakePlatform({
-        startupArgs: () => ({
-          file: `${DIR}/halting.S68`,
-          run: true,
-          fullScreen: false,
-          exceptions: true,
-          bitField: false,
-        }),
-      });
+      const backend = new MemoryBackend({ mount: 'browser', kind: 'memory', label: 'My Programs' });
+      await backend.mkdirp('demo');
+      for (const [name, bytes] of Object.entries(existing)) await backend.writeFile(`demo/${name}`, bytes);
+      const fullScreen: unknown[] = [];
       app = createTestApplication({
         clock: time,
         scheduler: time,
         session: ENGINES,
-        platform,
-        features: [feature],
+        backends: [backend],
+        platform: createFakePlatform({ kind, startupArgs: () => ({ ...NO_ARGS, ...args }) }),
+        features: [
+          feature,
+          { id: 'test', commands: { 'sim.output.fullscreen': { run: (_ctx, arg) => void fullScreen.push(arg) } } },
+        ],
         services: {
           createSimSession: (ctx, env) => createSimSession(ctx, env, { parts: doubles.parts, glyphs: BLANK_GLYPHS }),
         },
       });
-      await app.ctx.vfs.writeFile(`${DIR}/halting.S68`, programs.halting.s68);
-      // The feature's init has asked for the file; let the engine start and the load finish.
-      for (let i = 0; i < 20 && sim().program === null; i++) await settle();
+      session = runSessionOf(app.ctx.sim) as RunSession;
+      // The feature's init has looked at the arguments; the engine starts, a named program loads.
+      await session.start();
+      for (let i = 0; i < 20; i++) await settle();
+      return { fullScreen };
+    }
+
+    it('opens an .S68 named at start-up in Simulator mode and applies the switches', async () => {
+      const { fullScreen } = await launch(
+        { file: `${DIR}/halting.S68`, run: true, fullScreen: true, exceptions: true },
+        { 'halting.S68': programs.halting.s68 },
+      );
       expect(app.ctx.store.getState().mode).toBe('simulator');
       expect(sim().program?.path).toBe(`${DIR}/halting.S68`);
       expect(app.ctx.settings.get().sim.exceptions).toBe(true); // /e
+      expect(app.ctx.settings.get().sim.bitField).toBe(false);
+      expect(fullScreen).toEqual([true]); // /f: full screen on, not a toggle
       time.advance(16);
       expect(sim().halted).toBe(true); // /r
       expect(app.ctx.sim.engine.getRegister(Reg.D5)).toBe(7);
       expect(INPUT_TOAST).toBe('The program is waiting for keyboard input');
+    });
+
+    it('processes the switches when argument 1 names no file (sim-ui §8.1); the mode stays', async () => {
+      // The desktop app reports a first argument that names no existing file as `file: null`.
+      const { fullScreen } = await launch(
+        { file: null, run: true, fullScreen: true, exceptions: true, bitField: true },
+        {},
+        'desktop',
+      );
+      expect(app.ctx.store.getState().mode).toBe('editor'); // 5.7: "Otherwise a new document"
+      expect(sim().program).toBeNull();
+      expect(app.ctx.settings.get().sim).toMatchObject({ exceptions: true, bitField: true }); // /e /b
+      expect(app.ctx.sim.engine.getOption(SimOption.Exceptions)).toBe(1);
+      expect(app.ctx.sim.engine.getOption(SimOption.BitField)).toBe(1);
+      expect(fullScreen).toEqual([true]); // /f
+      // /r: Run with nothing loaded. Memory is all $FF, the SIMHALT pattern, so it halts at once
+      // (sim-ui §3.6), and the commands are busy as after any halt.
+      time.advance(16);
+      expect(sim()).toMatchObject({ phase: 'idle', halted: true, menuState: 1 });
+      expect(boxes()).toEqual([]); // nothing is reported
+    });
+
+    it('processes the switches when argument 1 is a file of another kind, which the editor opens', async () => {
+      await launch({ file: `${DIR}/notes.X68`, exceptions: true }, { 'notes.X68': bytesOf('* notes\r\n') });
+      expect(app.ctx.store.getState().mode).toBe('editor');
+      expect(sim().program).toBeNull();
+      expect(app.ctx.settings.get().sim).toMatchObject({ exceptions: true, bitField: false });
+      expect(sim()).toMatchObject({ phase: 'idle', halted: false }); // no /r: nothing ran
+      expect(app.ctx.sim.engine.stepCount).toBe(0);
+    });
+
+    it('ignores an .S68 named at start-up that does not exist, and still processes the switches', async () => {
+      await launch({ file: `${DIR}/missing.S68`, bitField: true });
+      expect(app.ctx.store.getState().mode).toBe('editor'); // 5.7: only a file that exists changes the mode
+      expect(sim().program).toBeNull();
+      expect(sim().messageLines).toEqual([]); // "silently ignored (no error message)"
+      expect(app.ctx.settings.get().sim).toMatchObject({ exceptions: false, bitField: true });
+    });
+
+    it('leaves the simulator as it started when there is neither a program nor a switch', async () => {
+      const { fullScreen } = await launch({ file: `${DIR}/notes.X68` }, { 'notes.X68': bytesOf('* notes\r\n') });
+      expect(app.ctx.store.getState().mode).toBe('editor');
+      expect(sim()).toMatchObject({ phase: 'idle', program: null, halted: false, menuState: 0 });
+      expect(app.ctx.settings.get().sim).toMatchObject({ exceptions: false, bitField: false });
+      expect(fullScreen).toEqual([]);
+      expect(app.ctx.sim.engine.stepCount).toBe(0);
     });
 
     it('an .S68 opened from the system: Simulator mode, a simulator started afresh, loaded and not run', async () => {
@@ -699,6 +834,236 @@ describe.skipIf(!enginesBuilt)(
       time.advance(100);
       expect(app.ctx.sim.engine.getRegister(Reg.D5)).toBe(0); // loaded, not started
       expect(boxes()).toEqual([]); // no question for a file association (4.7 step 2)
+    });
+
+    it('shows a box the engine raises outside a run: Breakpoint Limit Reached! at the 101st breakpoint', async () => {
+      await start();
+      await open('counter');
+      // What the gutter of the Listing panel does for each click (features/sim-main).
+      for (let i = 0; i < 100; i++) app.ctx.sim.controller.invoke((engine) => engine.setBreakpoint(0x1000 + 2 * i));
+      await settle();
+      expect(boxes()).toEqual([]);
+      expect(sim().breakpoints).toHaveLength(100);
+      app.ctx.sim.controller.invoke((engine) => engine.setBreakpoint(0x2000));
+      await settle();
+      expect(boxes().map((box) => box.request)).toEqual([
+        { title: 'Error', text: 'Breakpoint Limit Reached!', icon: 'none', buttons: ['OK'] },
+      ]);
+      expect(sim().breakpoints).toHaveLength(100);
+      await answer('OK');
+      expect(boxes()).toEqual([]);
+      expect(app.ctx.sim.controller.alerts).toEqual([]);
+      expect(app.ctx.sim.engine.state().alertOpen).toBe(false);
+    });
+
+    it('mirrors the repaints by panel, and memory changes of both writers of liveRevision', async () => {
+      await start();
+      await open('counter');
+      expect(sim().repaint).toEqual(session.controller.repaintCounts);
+      const before = sim();
+      // A PC breakpoint repaints the listing: the Stack panel's counter stands still.
+      app.ctx.sim.controller.invoke((engine) => engine.setBreakpoint(0x1002));
+      expect(sim().viewRevision).toBe(before.viewRevision + 1);
+      expect(sim().repaint).toEqual({ ...before.repaint, listing: (before.repaint?.listing ?? 0) + 1 });
+
+      // The Memory panel types a byte: pokeMemory counts one change and no repaint ...
+      app.ctx.sim.controller.pokeMemory(0x2000, 0x55);
+      expect(sim().liveRevision).toBe(before.liveRevision + 1);
+      expect(sim().viewRevision).toBe(before.viewRevision + 1);
+      // ... and interface code that writes memory itself bumps the store's counter (Copy, Fill).
+      const bump = () =>
+        app.ctx.store.setState((state) => ({
+          ...state,
+          sim: { ...state.sim, liveRevision: state.sim.liveRevision + 1 },
+        }));
+      bump();
+      expect(sim().liveRevision).toBe(before.liveRevision + 2);
+      // The session's next looks at the simulator do not take that back.
+      time.advance(48);
+      session.sync();
+      expect(sim().liveRevision).toBe(before.liveRevision + 2);
+      app.ctx.sim.controller.pokeMemory(0x2001, 0x66);
+      bump();
+      time.advance(16);
+      expect(sim().liveRevision).toBe(before.liveRevision + 4);
+    });
+
+    it('page events: losing the focus makes the next Run revalidate the files; closing the page writes them out', async () => {
+      const fake = createFakePage();
+      const calls: string[] = [];
+      await start({
+        page: fake.page,
+        files: {
+          markStale: () => void calls.push('markStale'),
+          revalidateIfStale: async () => void calls.push('revalidateIfStale'),
+          exitNow: () => void calls.push('exitNow'),
+        },
+        log: { exit: async () => void calls.push('log.exit') },
+      });
+      expect([fake.listening('blur'), fake.listening('pagehide')]).toEqual([1, 1]);
+      await open('counter');
+      calls.length = 0;
+
+      // The window had the focus elsewhere: files may have changed behind a cached view (3.8.4).
+      fake.fire('blur');
+      expect(calls).toEqual(['markStale']);
+      await app.ctx.commands.run('sim.run.run');
+      expect(calls).toEqual(['markStale', 'revalidateIfStale']);
+      await settle();
+      expect(sim().phase).toBe('running');
+      // Only once: without another blur the next Run asks nothing.
+      await app.ctx.commands.run('sim.run.pause');
+      await app.ctx.commands.run('sim.run.run');
+      await settle();
+      expect(calls).toEqual(['markStale', 'revalidateIfStale']);
+
+      // The page is closing without notice: commit what can be committed, journal the rest.
+      calls.length = 0;
+      fake.fire('pagehide');
+      expect(calls).toEqual(['exitNow', 'log.exit']);
+
+      // The session ends with the window: it listens no more.
+      app.dispose();
+      expect([fake.listening('blur'), fake.listening('pagehide')]).toEqual([0, 0]);
+    });
+
+    it('keeps the journal of the program files in the storage of the page, under one key', async () => {
+      const fake = createFakePage();
+      await start({ page: fake.page });
+      const { journal } = session.ui;
+      expect(journal.read()).toBeNull();
+      journal.write('{"pending":[1,2,3]}');
+      expect([...fake.stored]).toEqual([[JOURNAL_KEY, '{"pending":[1,2,3]}']]);
+      expect(JOURNAL_KEY).toBe('easy68k.sim.journal.v1');
+      expect(journal.read()).toBe('{"pending":[1,2,3]}');
+      journal.write(null);
+      expect(fake.stored.size).toBe(0);
+      expect(journal.read()).toBeNull();
+    });
+
+    it('a page that refuses storage loses the journal, nothing else', async () => {
+      const refuse = (): never => {
+        throw new DOMException('The operation is insecure.', 'SecurityError');
+      };
+      const errors: unknown[][] = [];
+      const consoleError = console.error;
+      console.error = (...args: unknown[]) => void errors.push(args);
+      try {
+        await start({ page: { localStorage: { getItem: refuse, setItem: refuse, removeItem: refuse } } });
+        const { journal } = session.ui;
+        expect(journal.read()).toBeNull();
+        expect(() => journal.write('x')).not.toThrow();
+        expect(() => journal.write(null)).not.toThrow();
+        expect(errors.map((args) => args[0])).toEqual([
+          'Simulator: the program-files journal could not be written:',
+          'Simulator: the program-files journal could not be written:',
+        ]);
+        // A page without storage at all (and without events, as under Node) is no error either.
+        app.dispose();
+        errors.length = 0;
+        await start({ page: {} });
+        expect(session.ui.journal.read()).toBeNull();
+        session.ui.journal.write('x');
+        expect(errors).toEqual([]);
+      } finally {
+        console.error = consoleError;
+      }
+    });
+
+    it('applies the journal of the program files before the first engine exists', async () => {
+      const order: string[] = [];
+      time = new VirtualTime();
+      doubles = createDeviceDoubles();
+      doubles.parts.files = partOf<ProgramFilesApi>({
+        resetToStartup: () => void order.push('files.resetToStartup'),
+        exit: async () => {},
+        setCurrentDir: async () => {},
+        unsaved: false,
+        async recoverJournal() {
+          order.push('recoverJournal starts');
+          await settle();
+          order.push('recoverJournal ends');
+        },
+      });
+      app = createTestApplication({
+        clock: time,
+        scheduler: time,
+        session: {
+          ...ENGINES,
+          engines: {
+            create(host) {
+              order.push('engine.create');
+              return createSimEngine(host);
+            },
+            release: releaseSimEngine,
+          },
+        },
+        features: [feature],
+        services: {
+          createSimSession: (ctx, env) => createSimSession(ctx, env, { parts: doubles.parts, glyphs: BLANK_GLYPHS }),
+        },
+      });
+      session = runSessionOf(app.ctx.sim) as RunSession;
+      // A load asked for at once (a program named on the command line) waits for the same start.
+      await app.ctx.vfs.writeFile(`${DIR}/halting.S68`, programs.halting.s68);
+      await app.ctx.sim.controller.open(`${DIR}/halting.S68`, 'open');
+      expect(order).toEqual(['recoverJournal starts', 'recoverJournal ends', 'files.resetToStartup', 'engine.create']);
+      expect(sim().program?.path).toBe(`${DIR}/halting.S68`);
+    });
+
+    it('asks for the "leave?" question while bytes of the program files or of a log are not in storage', async () => {
+      const asked: [boolean, string | undefined][] = [];
+      const platform = createFakePlatform({ confirmBeforeUnload: (needed, who) => void asked.push([needed, who]) });
+      const unsaved = { files: false, log: false };
+      await start({ platform, unsaved });
+      time.advance(32);
+      expect(asked).toEqual([]); // nothing to guard, nothing asked: the documents' guard is not touched
+      unsaved.files = true;
+      time.advance(16); // the session looks once per frame
+      expect(asked).toEqual([[true, 'simulator']]);
+      unsaved.log = true;
+      unsaved.files = false;
+      time.advance(32);
+      expect(asked).toEqual([[true, 'simulator']]); // still needed: no second call
+      unsaved.log = false;
+      time.advance(16);
+      expect(asked).toEqual([
+        [true, 'simulator'],
+        [false, 'simulator'],
+      ]);
+      // A session that ends while it needs the question withdraws it.
+      unsaved.files = true;
+      time.advance(16);
+      app.dispose();
+      expect(asked.at(-1)).toEqual([false, 'simulator']);
+      expect(asked).toHaveLength(4);
+    });
+
+    it("tells the desktop app's serial and network devices where the port map and the memory are", async () => {
+      const bound: DesktopDeviceSources[] = [];
+      const platform = createFakePlatform({
+        kind: 'desktop',
+        bindDeviceSources: (sources) => void bound.push(sources),
+      });
+      await start({ platform });
+      expect(bound).toHaveLength(1); // once, when the session is made
+      const sources = bound[0] as Required<DesktopDeviceSources>;
+      expect(sources.portMap()).toEqual({});
+      app.ctx.settings.update((settings) => ({
+        ...settings,
+        app: { ...settings.app, serialPortMap: { COM4: '/dev/tty.usbserial-1' } },
+      }));
+      expect(sources.portMap()).toEqual({ COM4: '/dev/tty.usbserial-1' });
+      // The 68000 memory is read at each use: a cold start gives the window another engine.
+      await open('counter');
+      // (Identity of the underlying buffer: `engine.memory` is a new view at every read.)
+      const first = sources.memory().buffer;
+      expect(first === app.ctx.sim.engine.memory.buffer).toBe(true);
+      expect(sources.memory()[0x1000]).toBe(0x70); // MOVEQ #0,D0
+      await open('halting', 'execute');
+      expect(sources.memory().buffer === app.ctx.sim.engine.memory.buffer).toBe(true);
+      expect(sources.memory().buffer === first).toBe(false);
+      expect(sources.memory()[0x1001]).toBe(0x07); // MOVEQ #7,D5
     });
   },
 );

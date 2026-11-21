@@ -3,13 +3,17 @@
 // STUB written by SH1 (wave 1). SH2 replaces the body with GDI's shape (flattened Bezier quarters,
 // with captured tables for small boxes; acceptance in 6.5.2) and owns this file from then on. The
 // Surface calls `rasterEllipse` and nothing else; its signature is what SH2 keeps.
+// (The comparison with the GDI capture, tests/conformance/gdi/surface.test.ts, looks for the words
+// "STUB written by SH1" at the start of a comment line of this file: while they are there, the
+// cases with ellipses wait instead of failing. SH2 removes the line together with the stub.)
 //
 // What this stub draws: a plain, mathematically ideal ellipse inscribed in the box. GDI's ellipse is
 // NOT that (it is a polygon, and about one size in eight is not even symmetric), so the pixels here
 // are right in shape and position but, beyond the smallest circles, not pixel for pixel. What the
 // stub does get right, because trap15-b §6.4 states it exactly:
 //   - the shape touches all four sides of the box x1..x2 by y1..y2 (both corners included);
-//   - a box of one point draws nothing with a one-pixel pen and the pen's round dot with a wider one;
+//   - a box of one point draws nothing with a one-pixel pen and the pen's round dot with a wider one
+//     (`penDot` of tables/dots.ts: measured for every pen width, so this part is GDI's already);
 //   - a box one pixel wide or high draws a straight run of pen pixels;
 //   - a 2 x 2 box draws only the two pixels of its left column;
 //   - outline and interior do not overlap and each of their pixels is reported once.
@@ -22,8 +26,8 @@
 // Owner: SH1 > SH2.
 
 import type { Rect } from '../../../contracts';
-import type { SpanSink } from './raster';
-import { dotRows } from './tables/dots';
+import { emitDot, type SpanSink } from './raster';
+import { penDot } from './tables/dots';
 
 /** An ideal ellipse inscribed in the box left..right by top..bottom (all four included). */
 class Inscribed {
@@ -94,14 +98,8 @@ export function rasterEllipse(
   const rows = y2 - y1 + 1;
 
   if (columns === 1 && rows === 1) {
-    if (penWidth > 1) {
-      const dot = dotRows(penWidth);
-      for (let i = 0; i < dot.length; i++) {
-        const half = dot[i] as number;
-        outline(y1 - i, x1 - half, x1 + half);
-        if (i > 0) outline(y1 + i, x1 - half, x1 + half);
-      }
-    }
+    // GDI draws the same dot here as for a zero-length line (measured for every pen width).
+    if (penWidth > 1) emitDot(penDot(penWidth), x1, y1, outline);
     return;
   }
 

@@ -9,6 +9,10 @@ import { defineConfig, type Plugin } from 'vite';
 import { writeBuildInfo } from '../tools/build-info.mjs';
 // @ts-expect-error -- plain JavaScript module without type declarations
 import { cspPlugin } from '../tools/vite-csp-plugin.mjs';
+// Typed by pwa-build.d.mts. The step that makes every production build work offline: the manifest
+// and service-worker tags in index.html and sw.js with the list of files (DV1, 7.5;
+// docs/requests/DV1-vite-plugin.md). It runs after easy68k-csp, at the end of the build only.
+import { pwaPlugin } from './src/features/pwa/build/pwa-build.mjs';
 
 const appDir = fileURLToPath(new URL('.', import.meta.url));
 const engineDist = fileURLToPath(new URL('../engine/dist/', import.meta.url));
@@ -38,7 +42,8 @@ export default defineConfig({
   // overrides it (for example "/easy68k-mac/").
   base: process.env.EASY68K_BASE ?? './',
   publicDir: 'public',
-  plugins: [react(), buildInfoPlugin(), cspPlugin() as Plugin],
+  // pwaPlugin is typed loosely (features/ may not import vite), hence the cast, as for cspPlugin.
+  plugins: [react(), buildInfoPlugin(), cspPlugin() as Plugin, pwaPlugin() as unknown as Plugin],
   build: {
     outDir: 'dist',
     emptyOutDir: true,

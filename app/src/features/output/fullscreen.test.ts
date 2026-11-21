@@ -264,4 +264,10 @@ describe('texts', () => {
       "Sorry, this computer's configuration does not support the desired screen resolution in full screen mode.",
     );
   });
+
+  it("the failure box is the original's MB_OK box: an OK button and no icon", () => {
+    // `Application->MessageBoxA(text, "Information")` passes no flags (simIOu.cpp:290).
+    expect(FULL_SCREEN_REFUSED.icon).toBe('none');
+    expect(FULL_SCREEN_REFUSED.buttons).toEqual(['OK']);
+  });
 });

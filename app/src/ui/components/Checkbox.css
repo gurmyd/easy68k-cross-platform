@@ -32,6 +32,9 @@
   border-radius: var(--r-sm);
   background: var(--c-surface);
   color: var(--c-on-accent);
+  /* The drawing lies over the invisible input: let pointer events through to it, so a click (and
+     a test tool's hit test, e.g. Playwright's locator.check()) reaches the input itself. */
+  pointer-events: none;
   transition:
     background-color var(--motion-fast) ease,
     border-color var(--motion-fast) ease;

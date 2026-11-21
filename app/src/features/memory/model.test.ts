@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SimOption, type FileDialogs, type VPath } from '../../contracts';
+import { SimOption, type FileDialogs, type SaveRequest, type VPath } from '../../contracts';
 import { createInertSimSession } from '../../state/stub-services';
 import { createTestApplication, type TestApplication } from '../../state/testing';
 import { feature as stackFeature } from '../stack';
@@ -20,17 +20,20 @@ interface Setup {
   session: SessionDouble;
   scheduler: ManualScheduler;
   saved: VPath[];
+  requests: SaveRequest[];
   engine: ReturnType<typeof createFakeEngine>;
 }
 
-function setup(options: { savePath?: VPath | null } = {}): Setup {
+function setup(options: { savePath?: VPath | null; pokeBumpsView?: boolean } = {}): Setup {
   const scheduler = new ManualScheduler();
   const engine = createFakeEngine();
   const saved: VPath[] = [];
+  const requests: SaveRequest[] = [];
   let session!: SessionDouble;
   const fileDialogs: FileDialogs = {
     open: async () => null,
-    save: async () => {
+    save: async (request) => {
+      requests.push(request);
       const path = options.savePath === undefined ? '/browser/memory.bin' : options.savePath;
       if (path) saved.push(path);
       return path;
@@ -42,13 +45,16 @@ function setup(options: { savePath?: VPath | null } = {}): Setup {
     scheduler,
     services: {
       createSimSession: (ctx) => {
-        session = createSessionDouble(createInertSimSession(ctx), engine, () => createFakeEngine({ fill: 0x00 }));
+        session = createSessionDouble(createInertSimSession(ctx), engine, () => createFakeEngine({ fill: 0x00 }), {
+          ctx,
+          pokeBumpsView: options.pokeBumpsView ?? false,
+        });
         return session;
       },
       createFileDialogs: () => fileDialogs,
     },
   });
-  return { app, session, scheduler, saved, engine };
+  return { app, session, scheduler, saved, requests, engine };
 }
 
 const rowTexts = (app: TestApplication) =>
@@ -233,13 +239,18 @@ describe('Memory panel model', { timeout: 60_000 }, () => {
   });
 
   it('Save: writes From through To to the chosen file; "Invalid memory range." for a bad range', async () => {
-    const { app, engine, saved } = setup();
+    const { app, engine, saved, requests } = setup();
     const model = memoryModelOf(app.ctx);
     engine.writeBytes(0x500, [9, 8, 7, 6]);
     model.setFrom('000500');
     model.setTo('000503');
     await model.save();
     expect(saved).toEqual(['/browser/memory.bin']);
+    // The original's own question for an existing file (Memory1.cpp:646), asked by the dialog.
+    expect(requests[0]).toMatchObject({
+      defaultExt: 'bin',
+      overwritePrompt: { title: 'Alert', text: 'File exists! OK to replace?' },
+    });
     expect([...(await app.ctx.vfs.readFile('/browser/memory.bin'))]).toEqual([9, 8, 7, 6]);
 
     model.setTo('0004FF');
@@ -276,6 +287,57 @@ describe('Memory panel model', { timeout: 60_000 }, () => {
     expect(model.getState().view[0]?.hex[0]).toBe('FF ');
     app.ctx.store.setState((state) => ({ ...state, sim: { ...state.sim, viewRevision: state.sim.viewRevision + 1 } }));
     expect(model.getState().view[0]?.hex[0]).toBe('42 ');
+  });
+
+  it('with sim.repaint published, repaints when repaint.memory or liveRevision moves, not at other repaints', () => {
+    const { app, engine } = setup();
+    const repaint = { listing: 0, breakpoints: 0, memory: 0, stack: 0 };
+    app.ctx.store.setState((state) => ({ ...state, sim: { ...state.sim, repaint } }));
+    const model = memoryModelOf(app.ctx);
+    model.setRows(1);
+    model.setAddress(0x6000);
+    const paints = model.getState().paints;
+    // A repaint that names only the listing (a breakpoint set from the gutter).
+    app.ctx.store.setState((state) => ({
+      ...state,
+      sim: { ...state.sim, viewRevision: state.sim.viewRevision + 1, repaint: { ...repaint, listing: 1 } },
+    }));
+    expect(model.getState().paints).toBe(paints);
+    engine.writeBytes(0x6000, [0x42]);
+    app.ctx.store.setState((state) => ({
+      ...state,
+      sim: { ...state.sim, viewRevision: state.sim.viewRevision + 1, repaint: { ...repaint, listing: 1, memory: 1 } },
+    }));
+    expect(model.getState().view[0]?.hex[0]).toBe('42 ');
+    engine.writeBytes(0x6000, [0x43]);
+    app.ctx.store.setState((state) => ({ ...state, sim: { ...state.sim, liveRevision: state.sim.liveRevision + 1 } }));
+    expect(model.getState().view[0]?.hex[0]).toBe('43 ');
+  });
+
+  it('a typed byte redraws a scrolled Stack panel without re-centring it (sim-ui §11.4)', () => {
+    // As the real session does at gate I1: pokeMemory bumps viewRevision and liveRevision at once,
+    // and the store carries `sim.repaint` (the engine named no panel for a direct write).
+    const { app, engine } = setup({ pokeBumpsView: true });
+    app.ctx.store.setState((state) => ({
+      ...state,
+      sim: { ...state.sim, repaint: { listing: 0, breakpoints: 0, memory: 0, stack: 0 } },
+    }));
+    engine.setRegisters({ ssp: 0x8000, a7: 0x8000 });
+    const stack = stackModelOf(app.ctx);
+    stack.setRows(5);
+    stack.shown();
+    stack.scrollUp();
+    stack.scrollUp();
+    stack.scrollUp();
+    expect(stack.getState().midAddr).toBe(0x7ff4);
+    const memory = memoryModelOf(app.ctx);
+    memory.setRows(2);
+    memory.setAddress(0x7ff0);
+    memory.place({ row: 0, col: HEX_LEFT + 3 * 4 }); // byte $7FF4
+    expect(memory.typeKey('1', { ctrl: false, alt: false, meta: false })).toBe(true);
+    expect(engine.memory[0x7ff4]).toBe(0x1f);
+    expect(stack.getState().midAddr).toBe(0x7ff4);
+    expect(stack.getState().view[2]?.bytes[0]?.text).toBe('1F ');
   });
 
   it('Live: sets SimOption.MemLive and repaints changed rows once per frame, also at address 0', () => {

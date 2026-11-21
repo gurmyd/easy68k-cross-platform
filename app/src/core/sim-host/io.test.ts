@@ -208,7 +208,7 @@ describe('OutputDevice', () => {
       expect(SIZE_LIMIT_MESSAGE).toBe('Output window size limited to 4096 x 4096');
     });
 
-    it('works without the message callback, which the contract does not have', () => {
+    it('works without the message callback, which is optional in the contract', () => {
       const rig = createTextRig();
       const device = new OutputDevice({
         surface: rig.surface,
@@ -218,6 +218,21 @@ describe('OutputDevice', () => {
         setFullScreen: () => {},
       });
       expect(() => device.setWindowSize(65535, 65535)).not.toThrow();
+      expect(device.getWindowSize()).toEqual([MAX_SURFACE, MAX_SURFACE]);
+    });
+
+    it('does not ask the Output panel to lay itself out again: only setupWindow reaches the full-screen callback', () => {
+      // The original's setWindowSize ends with setupWindow() (simIOu.cpp:226), which re-applies
+      // the window or full-screen layout. In the port the panel lays the surface out from its size
+      // on every frame, and the full-screen flag is the engine's, not this class's: a size change
+      // must not send a remembered value of it (docs/porting/errata/SH3.md entry 24).
+      const rig = createTextRig();
+      rig.device.setupWindow(true);
+      rig.device.setWindowSize(800, 600);
+      rig.device.setWindowSize(0, 0);
+      rig.device.setWindowSize(65535, 65535);
+      expect(rig.fullScreen).toEqual([true]);
+      expect(rig.calls).toMatchObject({ ioShow: 0, bringToFront: 0 });
     });
   });
 });

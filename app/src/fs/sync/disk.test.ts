@@ -2,7 +2,8 @@
 // fs-ipc.ts) and real temporary folders, under plain Node: the bridge is a direct function call
 // instead of IPC. The same view inside Electron is tested by tests/desktop/dev (6.7).
 
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, chmodSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -34,6 +35,17 @@ function viewFor(grants: GrantedRoots): DiskSyncFiles {
 }
 
 const text = (s: string) => new TextEncoder().encode(s);
+
+/** The 8.3 short form of an existing Windows path (cmd's %~s), or null if cmd cannot say. */
+function shortPathOf(path: string): string | null {
+  const result = spawnSync('cmd.exe', ['/d', '/s', '/c', `"for %I in ("${path}") do @echo %~sI"`], {
+    encoding: 'utf8',
+    windowsVerbatimArguments: true,
+    timeout: 30_000,
+  });
+  const out = result.status === 0 ? result.stdout.trim() : '';
+  return out === '' ? null : out;
+}
 
 describe('DiskSyncFiles passes the SyncFiles contract on real folders', () => {
   for (const c of SYNC_FILES_CONTRACT_CASES) {
@@ -99,6 +111,68 @@ describe('DiskSyncFiles', () => {
     expect(view.create(inSub)).toBe(true);
     expect(view.create(view.resolve(vdir, 'Sub') as string)).toBe(false); // a folder is not a file
   });
+
+  // Gate 1: on GitHub's Windows runner the temporary folder is C:\Users\RUNNER~1\..., an 8.3
+  // short name that no folder listing contains. resolve() gave up at that segment and returned
+  // the rest in the program's spelling. A student's folder can have a short name as well.
+  it.skipIf(process.platform !== 'win32')(
+    'keeps the stored spelling below a folder named by its 8.3 short name (Windows)',
+    async (context) => {
+      const grants = new GrantedRoots();
+      const dir = emptyFolder(grants);
+      const longDir = join(dir, 'A Long Folder Name');
+      mkdirSync(longDir);
+      const short = shortPathOf(longDir);
+      if (short === null || short.toLowerCase() === longDir.toLowerCase()) {
+        context.skip('this volume makes no 8.3 short names (fsutil 8dot3name)');
+        return;
+      }
+      writeFileSync(join(longDir, 'Data.Txt'), 'hello');
+      mkdirSync(join(longDir, 'Sub'));
+      const view = viewFor(grants);
+      const vshort = vpathOfRealPath(short) as string;
+      expect(vshort).toMatch(/~\d/);
+      const stored = view.resolve(vshort, 'DATA.TXT') as string;
+      expect(stored).toBe(`${vshort}/Data.Txt`);
+      expect(view.stat(stored)).toEqual({ size: 5, readOnly: false });
+      expect(view.resolve(vshort, 'sub\\NEW.TXT')).toBe(`${vshort}/Sub/NEW.TXT`);
+    },
+    60_000,
+  );
+
+  // The same branch on macOS and Linux: a folder that may be entered but not listed (mode 0o311).
+  it.skipIf(process.platform === 'win32')(
+    'keeps the stored spelling below a folder it may enter but not list (macOS, Linux)',
+    async (context) => {
+      const grants = new GrantedRoots();
+      const dir = emptyFolder(grants);
+      const hidden = join(dir, 'Hidden');
+      mkdirSync(join(hidden, 'Inner'), { recursive: true });
+      writeFileSync(join(hidden, 'Inner', 'Data.Txt'), 'hello');
+      chmodSync(hidden, 0o311);
+      try {
+        let listable = true;
+        try {
+          readdirSync(hidden);
+        } catch {
+          listable = false;
+        }
+        if (listable) {
+          context.skip('this user can list any folder (root)');
+          return;
+        }
+        const view = viewFor(grants);
+        const vdir = vpathOfRealPath(dir) as string;
+        // "Hidden" itself is listed in its parent; "Inner" is not listable, so it keeps the
+        // spelling given, and the walk still finds the stored spelling of the file below it.
+        expect(view.resolve(vdir, 'Hidden/Inner/inner2/x')).toBe(`${vdir}/Hidden/Inner/inner2/x`);
+        expect(view.resolve(vdir, 'hidden/Inner/DATA.TXT')).toBe(`${vdir}/Hidden/Inner/Data.Txt`);
+      } finally {
+        chmodSync(hidden, 0o755);
+      }
+    },
+    60_000,
+  );
 
   it('reports read-only files and cannot write them', async () => {
     const grants = new GrantedRoots();

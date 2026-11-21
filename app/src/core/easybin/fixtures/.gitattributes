@@ -1,0 +1,5 @@
+# The EASyBIN fixtures are bytes: S-records with CR LF line ends (some with a lone CR, LF only,
+# a Ctrl-Z or a zero byte on purpose), binary files and the oracle's transcripts. The tests compare
+# them byte for byte with what the original and the assembler engine write, so git must never
+# convert their line ends (the root /app/** rule would turn CR LF into LF). Owner: B1.
+* -text

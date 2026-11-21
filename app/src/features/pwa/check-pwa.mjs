@@ -19,15 +19,19 @@
 //   - a new deployment (the fixture changed): `A new version is available.` appears in both open
 //     pages and nothing reloads by itself; `Reload` in one page loads the new version there, while
 //     the other page keeps the files of its own version; once it is closed the old cache goes;
+//   - installation: the manifest has a name, a start URL, standalone display and PNG icons of 192
+//     and 512 pixels; in Chromium, the browser's own parse of the linked manifest (DevTools
+//     protocol, Page.getAppManifest) has no critical error, standalone display and every icon -
+//     the install prompt itself cannot be driven by Playwright;
 //   - no Content Security Policy violation and no console error anywhere.
 //
-// A browser without service workers (Playwright's WebKit on Windows has none) runs the checks that
-// need no worker and reports the others as skipped - on Windows only. On macOS and Linux a missing
-// worker is a failure, so the CI job runs the whole check in WebKit there.
+// A browser build without service workers runs the checks that need no worker and reports the
+// others as skipped - on Windows only, where some WebKit builds have lacked them (the one of
+// Playwright 1.65 has them). On macOS and Linux a missing worker is a failure.
 //
 // Screenshots go to <out> (default build/pwa-check, git-ignored). Exit code 0 = no check failed.
 
-/* global console, document, window, navigator, caches, fetch, setTimeout, URL, WebAssembly, TextEncoder -- the browser globals are used inside page.evaluate() callbacks, which run in the page */
+/* global console, document, window, navigator, caches, fetch, setTimeout, URL, WebAssembly, TextEncoder, MutationObserver -- the browser globals are used inside page.evaluate() callbacks, which run in the page */
 
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -194,6 +198,40 @@ async function openPage(context, url, errors) {
   return page;
 }
 
+/**
+ * What a web app manifest lacks of the installation criteria that do not depend on the browser
+ * (name, start URL, standalone display, PNG icons of 192 and 512 pixels).
+ */
+function installCriteriaMissing(manifest) {
+  const missing = [];
+  if (!manifest.name && !manifest.short_name) missing.push('name');
+  if (!manifest.start_url) missing.push('start_url');
+  if (!['standalone', 'fullscreen', 'minimal-ui'].includes(manifest.display))
+    missing.push(`display ${manifest.display}`);
+  const sizes = new Set(
+    (manifest.icons ?? [])
+      .filter((icon) => icon.type === 'image/png' && (icon.purpose ?? 'any').split(/\s+/).includes('any'))
+      .flatMap((icon) => String(icon.sizes ?? '').split(/\s+/)),
+  );
+  for (const size of ['192x192', '512x512']) if (!sizes.has(size)) missing.push(`PNG icon ${size}`);
+  return missing;
+}
+
+/** Sets window.__dv1NoticeSeen once a toast with the given text appears in the page. */
+function watchNotice(text) {
+  window.__dv1NoticeSeen = false;
+  const look = () => {
+    const found = [...document.querySelectorAll('.e68-toast')].some((toast) => toast.textContent?.includes(text));
+    if (found) window.__dv1NoticeSeen = true;
+    return found;
+  };
+  if (look()) return;
+  const observer = new MutationObserver(() => {
+    if (look()) observer.disconnect();
+  });
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+}
+
 const violations = (page) => page.evaluate(() => window.__dv1Violations ?? []);
 
 /** Waits until the registration has an active worker in the state 'activated'. */
@@ -313,6 +351,8 @@ async function browserPass(name, serve, siteA, siteB) {
       icons.length >= 4 && icons.every((line) => / 200 image\//.test(line)),
       icons.join(', '),
     );
+    const missing = installCriteriaMissing(manifest);
+    check(`${p} the manifest has what installation needs`, missing.length === 0, missing.join('; '));
 
     const hasWorkers = await page1.evaluate(() => 'serviceWorker' in navigator);
     if (!hasWorkers) {
@@ -420,6 +460,30 @@ async function browserPass(name, serve, siteA, siteB) {
     await context.setOffline(false);
     serve.state.down = false;
 
+    // ---- installation: the manifest as Chromium itself parsed it (DevTools protocol). The install
+    // prompt cannot be driven, and Page.getInstallabilityErrors answers [] in headless Chromium
+    // even for a page without a manifest, so it proves nothing and is not used.
+    if (name === 'chromium') {
+      const cdp = await context.newCDPSession(page1);
+      const parsed = await cdp.send('Page.getAppManifest').catch((error) => ({ error: String(error) }));
+      const manifestErrors = (parsed.errors ?? []).filter((item) => item.critical);
+      const seen = parsed.manifest ?? {};
+      const iconCount = Array.isArray(seen.icons) ? seen.icons.length : 0;
+      check(
+        `${p} Chromium parses the linked manifest without critical errors, standalone, with its icons`,
+        !parsed.error &&
+          parsed.url === manifestHref &&
+          manifestErrors.length === 0 &&
+          seen.display === 'kStandalone' &&
+          iconCount === manifest.icons.length &&
+          seen.startUrl === base,
+        parsed.error ??
+          `url ${parsed.url}, display ${seen.display}, start ${seen.startUrl}, ${iconCount} icons` +
+            `${manifestErrors.length ? `, errors: ${manifestErrors.map((item) => item.message).join('; ')}` : ''}`,
+      );
+      await cdp.detach();
+    }
+
     // ---- a new deployment
     const page2 = await openPage(context, base, errors);
     await page1.evaluate(() => {
@@ -428,19 +492,30 @@ async function browserPass(name, serve, siteA, siteB) {
     await page2.evaluate(() => {
       window.__dv1Marker = 'page2';
     });
+    // A toast closes by itself after 8 s unless the pointer is on it (DialogService.toast has no
+    // lasting form yet, docs/requests/DV1-toast-duration.md). On a slow machine that is shorter than
+    // the steps below, so each page records the notice's appearance itself, and the pointer is put
+    // on page 1's notice as soon as it is there, which keeps it open until Reload is pressed.
+    for (const page of [page1, page2]) await page.evaluate(watchNotice, NOTICE);
     serve.state.root = siteB.dir;
     await page1.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.update());
     const noticeIn = (page) =>
       page
-        .locator('.e68-toast', { hasText: NOTICE })
-        .first()
-        .waitFor({ timeout: 60_000 })
+        .waitForFunction(() => window.__dv1NoticeSeen === true, undefined, { timeout: 90_000 })
         .then(
           () => true,
           () => false,
         );
-    check(`${p} update: page 1 shows "${NOTICE}"`, await noticeIn(page1));
-    check(`${p} update: page 2 shows it too`, await noticeIn(page2));
+    const notice1 = page1.locator('.e68-toast', { hasText: NOTICE }).first();
+    const [seen1, seen2] = await Promise.all([
+      noticeIn(page1).then(async (seen) => {
+        if (seen) await notice1.hover({ timeout: 10_000 }).catch(() => {});
+        return seen;
+      }),
+      noticeIn(page2),
+    ]);
+    check(`${p} update: page 1 shows "${NOTICE}"`, seen1);
+    check(`${p} update: page 2 shows it too`, seen2);
     await page1.waitForTimeout(1000); // the toast's entry animation
     await page1.screenshot({ path: join(outDir, `${name}-update-notice.png`) });
     await page1.waitForTimeout(5000);
@@ -450,7 +525,7 @@ async function browserPass(name, serve, siteA, siteB) {
     check(`${p} update: until Reload, page 1 keeps version A`, stillA.text.endsWith('version A\n'));
 
     const reloaded = page1.waitForEvent('load', { timeout: 60_000 });
-    await page1.locator('.e68-toast', { hasText: NOTICE }).first().getByRole('button', { name: 'Reload' }).click();
+    await notice1.getByRole('button', { name: 'Reload' }).click({ timeout: 30_000 });
     await reloaded;
     await page1.waitForSelector('.e68-shell', { timeout: 60_000 });
     const afterReload = await fetchText(page1, `${base}${FIXTURE_URL}`);
@@ -462,7 +537,7 @@ async function browserPass(name, serve, siteA, siteB) {
     check(
       `${p} update: page 2 is not reloaded and keeps the files of version A`,
       (await page2.evaluate(() => window.__dv1Marker)) === 'page2' && page2After.text.endsWith('version A\n'),
-      page2After.text.slice(-12).trim(),
+      page2After.text.trim().split('\n').pop(),
     );
     await page2.close();
     // A page is forgotten 10 s after it was recorded at the earliest (CLIENT_GRACE_MS in sw.ts).

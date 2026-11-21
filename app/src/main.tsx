@@ -130,6 +130,7 @@ async function start(container: HTMLElement): Promise<void> {
     locks: 'locks' in navigator ? navigator.locks : null,
     keyTarget: window,
     version: buildInfo.version,
+    repository: buildInfo.repository,
   });
   if (import.meta.env.DEV) window.__easy68k = app;
 

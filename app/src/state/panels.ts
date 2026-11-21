@@ -57,11 +57,16 @@ export function panelVisible(ctx: AppContext, id: string): boolean {
 export function showPanel(ctx: AppContext, id: string, options: { focus?: boolean } = {}): void {
   const shell = shellStateOf(ctx);
   if (id === 'output') {
-    shell.setState((state) => (state.outputCollapsed ? { ...state, outputCollapsed: false } : state));
+    // Below 1100 px the Output panel is a tab of the tool group: it comes to the front (2.3).
+    shell.setState((state) =>
+      state.outputCollapsed || !state.outputInFront ? { ...state, outputCollapsed: false, outputInFront: true } : state,
+    );
   } else {
     ctx.settings.update((settings) => withPanelVisible(settings, id, true));
     if ((TOOL_PANELS as readonly string[]).includes(id)) {
-      shell.setState((state) => (state.activeTool === id ? state : { ...state, activeTool: id }));
+      shell.setState((state) =>
+        state.activeTool === id && !state.outputInFront ? state : { ...state, activeTool: id, outputInFront: false },
+      );
     }
   }
   if (options.focus !== false) focusPanel(ctx, id);
@@ -122,7 +127,11 @@ export function panelOf(element: unknown): string | null {
 export function focusNextPanel(ctx: AppContext, activeElement: unknown = globalThis.document?.activeElement): string {
   const next = nextPanelInCycle(panelOf(activeElement), (id) => panelVisible(ctx, id));
   if ((TOOL_PANELS as readonly string[]).includes(next)) {
-    shellStateOf(ctx).setState((state) => (state.activeTool === next ? state : { ...state, activeTool: next }));
+    shellStateOf(ctx).setState((state) =>
+      state.activeTool === next && !state.outputInFront ? state : { ...state, activeTool: next, outputInFront: false },
+    );
+  } else if (next === 'output') {
+    shellStateOf(ctx).setState((state) => (state.outputInFront ? state : { ...state, outputInFront: true }));
   }
   focusPanel(ctx, next);
   return next;

@@ -4,16 +4,20 @@
 //
 // What is real: the engine, the Output feature (panel, commands, start-up code), the Output
 // keyboard and mouse, the shell with its keyboard dispatcher, the command registry, the stores.
-// What is a test double, because its owner writes it in the same wave (section 9.2): the drawing
-// surface (PixelSurface), the text screen and output device (TextGrid) and the run controller
-// (MiniController). The host callbacks that concern the panel are wired as the real session wires
-// them:
+// What is a test double: the drawing surface (PixelSurface), the text screen and output device
+// (TextGrid) and the run controller (MiniController). They are small, need no fonts and no files,
+// and let a test read every entry that reached the engine; the real three of the other packages
+// are checked with the real application by the `app` group of check-output.mjs. The bed does for
+// the panel what the real session (features/run/session.ts) does:
 //
 //   host.ioShow()             showPanel(ctx, 'output', { focus: false })
 //   host.ioBringToFront()     focusPanel(ctx, 'output')
 //   host.keyCommands(on)      AppState.sim.keyCommands = on
 //   host.setupWindow(on)      nothing: the Output feature follows the engine's own full-screen
 //                             flag (model.ts), whatever a session does with this call
+//   once per frame            AppState.sim.output.width, height and textWrap follow the surface
+//                             and the text screen (the session's mirror, which the Options menu
+//                             and the panel's header read)
 //
 // The commands of other packages whose shortcuts act in the Output panel (2.9.4 rule 2) get
 // handlers here that only record that they ran; `sim.run.run` and `sim.run.pause` also do it.
@@ -278,6 +282,17 @@ export async function createOutputBed(env: BedEnv, options: BedOptions = {}): Pr
     },
   });
   late.ctx = app.ctx;
+  // The session's mirror of the Output window's size and text-wrap option (see the header).
+  const mirrorOutput = (): void =>
+    app.ctx.store.setState((state) => {
+      const { output } = state.sim;
+      const { width, height } = surface.back;
+      const { textWrap } = text.state;
+      if (output.width === width && output.height === height && output.textWrap === textWrap) return state;
+      return { ...state, sim: { ...state.sim, output: { ...output, width, height, textWrap } } };
+    });
+  mirrorOutput();
+  const stopMirror = scheduler.onFrame(mirrorOutput);
   // The engine's start-up state: key commands on (it said so before the application existed).
   main.keyCommands(!engine.state().keyCommandsDisabled);
   await app.ctx.commands.run('app.mode.set', 'simulator');
@@ -313,6 +328,7 @@ export async function createOutputBed(env: BedEnv, options: BedOptions = {}): Pr
     },
     poke: (address, bytes) => engine.writeBytes(address, bytes),
     dispose() {
+      stopMirror();
       controller.stop();
       app.dispose();
     },

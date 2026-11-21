@@ -14,7 +14,10 @@
 import type {
   CommandId,
   DesktopDeviceBridge,
+  DesktopDeviceSources,
+  DroppedEntry,
   FileSystemBackend,
+  NativeFileDialogs,
   NativeMenuItem,
   OpenRequest,
   Platform,
@@ -50,6 +53,7 @@ export const DESKTOP_BRIDGE_KEYS = [
   'pasteIntoFocus',
   'quit',
   'setFullScreen',
+  'onFullScreenChange',
   'print',
   'showOpenDialog',
   'showSaveDialog',
@@ -75,6 +79,7 @@ export interface DesktopBridge {
   pasteIntoFocus(): void;
   quit(): void;
   setFullScreen(on: boolean): Promise<unknown>;
+  onFullScreenChange(listener: (on: boolean) => void): () => void;
   print(html: string, title: string): Promise<unknown>;
   showOpenDialog(request: OpenRequest): Promise<unknown>;
   showSaveDialog(request: SaveRequest): Promise<unknown>;
@@ -93,27 +98,10 @@ export interface DesktopStartup {
   testMode: boolean;
 }
 
-/** Native file dialogs of the desktop app (3.8.5). The folder of a chosen file becomes a granted root. */
-export interface NativeFileDialogs {
-  open(request: OpenRequest): Promise<VPath[] | null>;
-  save(request: SaveRequest): Promise<VPath | null>;
-  /** A folder (Help > Examples, 5.8; a dropped folder as the start of the open dialog, 3.8.5). */
-  chooseFolder(title: string): Promise<VPath | null>;
-}
-
-/** A file or folder dropped on the window, as the main process names it (DesktopPlatform.grantDroppedFile). */
-export interface DroppedEntry {
-  path: VPath;
-  kind: 'file' | 'dir';
-}
-
-/** Sources the device parts read on every call (3.3.4); the simulator session binds them. */
-export interface DeviceSources {
-  /** AppSettings.serialPortMap */
-  portMap?: () => Readonly<Record<string, string>>;
-  /** engine.memory */
-  memory?: () => Uint8Array;
-}
+// The desktop members' types are contract since gate I1 (contracts/platform.ts, W1 errata 11).
+export type { DesktopDeviceSources, DroppedEntry, NativeFileDialogs } from '../contracts';
+/** Sources the device parts read on every call (3.3.4); the contract's DesktopDeviceSources. */
+export type DeviceSources = DesktopDeviceSources;
 
 export interface DesktopPlatform extends Platform {
   readonly kind: 'desktop';
@@ -132,6 +120,7 @@ export interface DesktopPlatform extends Platform {
   /** Tells DesktopSerial and DesktopNet where the port map and the 68000 memory are. */
   bindDeviceSources(sources: DeviceSources): void;
   readonly testMode: boolean;
+  onFullScreenChange(listener: (on: boolean) => void): () => void;
 }
 
 function isStartupArgs(value: unknown): value is StartupArgs {
@@ -195,6 +184,11 @@ export async function createDesktopPlatformWith({ bridge, win }: DesktopPlatform
     event.preventDefault();
     event.returnValue = '';
   };
+  /**
+   * The parties that need the "leave?" question now (Platform.confirmBeforeUnload(needed, who):
+   * the documents, the simulator's files and log). A call without a name is one unnamed party.
+   */
+  const needing = new Set<string>();
   let guarding = false;
 
   return {
@@ -232,17 +226,28 @@ export async function createDesktopPlatformWith({ bridge, win }: DesktopPlatform
       bridge.showHelp(page);
       return true;
     },
-    confirmBeforeUnload(needed) {
+    confirmBeforeUnload(needed, who) {
       // The main process turns the page's request into a native question (will-prevent-unload).
-      if (needed === guarding) return;
-      guarding = needed;
-      if (needed) win.addEventListener('beforeunload', onBeforeUnload);
+      // The question stays on while any party needs it: the documents saying "no longer" must not
+      // switch it off while the simulator still has bytes to write.
+      const party = who ?? '';
+      if (needed) needing.add(party);
+      else needing.delete(party);
+      const next = needing.size > 0;
+      if (next === guarding) return;
+      guarding = next;
+      if (next) win.addEventListener('beforeunload', onBeforeUnload);
       else win.removeEventListener('beforeunload', onBeforeUnload);
     },
     newWindow() {
       bridge.newWindow();
     },
     setFullScreen: async (on) => (await bridge.setFullScreen(on)) === true,
+    onFullScreenChange(listener) {
+      return bridge.onFullScreenChange((on) => {
+        if (typeof on === 'boolean') listener(on);
+      });
+    },
     pasteIntoFocus: () => bridge.pasteIntoFocus(),
     quit() {
       bridge.quit();

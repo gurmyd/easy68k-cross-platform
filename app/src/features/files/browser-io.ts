@@ -129,12 +129,13 @@ export function droppedItems(dataTransfer: DataTransfer): DroppedItem[] {
         isFolder,
         read: () => (file && !isFolder ? readFileBytes(file) : Promise.reject(new Error('not a readable file'))),
         handle,
+        file,
       });
     }
     return out;
   }
   for (const file of Array.from(dataTransfer.files)) {
-    out.push({ name: file.name, isFolder: false, read: () => readFileBytes(file), handle: null });
+    out.push({ name: file.name, isFolder: false, read: () => readFileBytes(file), handle: null, file });
   }
   return out;
 }

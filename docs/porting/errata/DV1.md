@@ -49,6 +49,11 @@ code changes; the cache is named `easy68k-v-<version>`.
 - Remaining mix: a help page opened in an iframe by a page of the old version after the new version
   took over is a navigation and is answered by the new version (a navigation request carries no
   client id of the page that contains the frame). Help pages change rarely; noted, not solved.
+  Gate I1 review: accepted. Routing by the `Referer` was considered and rejected: the old and the
+  new page have the same URL (`index.html`), so the referrer cannot tell their versions apart in
+  exactly the case where the mix happens (both open). A real fix needs the help panel (H1) to put a
+  version marker into the frame's URL, which the page does not know today; not worth it for static
+  pages that change rarely.
 
 ## 4. Requests the worker leaves to the network
 
@@ -67,6 +72,9 @@ the shipped `.wav` examples; the Output panel plays programs' sounds from `blob:
 missed, so `features/pwa` shows it again every hour while a new version waits (and at every start
 of a page while one waits). Proposal for W1/W3: `toast(text, action?, options?: { duration?: number
 })`, `ToastEntry.duration` passed to `ToastStack`; `features/pwa` would then pass `duration: 0`.
+Filed at gate I1 as `docs/requests/DV1-toast-duration.md`. Until it is applied, `check-pwa.mjs`
+records the notice's appearance in each page and keeps the pointer on it, so a slow machine does
+not lose the notice before the check presses `Reload`.
 
 ## 6. Not done: file handlers of the installed app (5.7)
 
@@ -88,6 +96,9 @@ launch queue would open an empty window for every double-clicked file. Left for 
   read`; the deploy job has `pages: write` and `id-token: write` (7.4).
 - It refuses to deploy unless `engines.yml` reports both engines: the previous deployment stays
   online rather than being replaced by a site that cannot assemble.
+- Trying the build step by hand in Git Bash on Windows needs `MSYS_NO_PATHCONV=1`: MSYS rewrites
+  `EASY68K_BASE=/easy68k-mac/` into `C:/Program Files/Git/easy68k-mac/` otherwise (noted in the
+  header of `pages.yml`; `check-pwa.mjs` passes the variable itself and is not affected).
 - Actions pinned by commit like ci.yml: `actions/configure-pages` v6.0.0
   (`45bfe0192ca1faeb007ade9deae92b16b8254a0d`), `actions/upload-pages-artifact` v5.0.0
   (`fc324d3547104276b827a68afc52ff2a11cc49c9`), `actions/deploy-pages` v5.0.1
@@ -101,3 +112,14 @@ dual in-line package with "68K" in seven-segment figures, on the accent colour o
 drawn from rectangles and polygons only (`features/pwa/icons/icon-art.mjs`). Nothing is taken from
 the original's icon. `make-icons.mjs` writes the two SVG files and renders the PNG files (32, 180,
 192, 512, maskable 512) with `@napi-rs/canvas`.
+
+## 9. Installation criteria in the browser check (gate I1)
+
+The install prompt cannot be driven by Playwright. Since gate I1, `check-pwa.mjs` checks in both
+browsers that the served manifest has a name, a start URL, standalone display and PNG icons of 192
+and 512 pixels, and in Chromium asks the browser itself through the DevTools protocol:
+`Page.getAppManifest` must report the linked manifest's URL, no critical parse error, standalone
+display, the start URL of the site and every icon. `Page.getInstallabilityErrors` is not used: in
+Playwright's headless Chromium (159.0.8154.6) it answers `[]` even for a page with no manifest at
+all (tried with a scratch page), so it proves nothing. WebKit has no such interface; Safari's "Add
+to Dock" and Chromium's real install prompt were not tried.

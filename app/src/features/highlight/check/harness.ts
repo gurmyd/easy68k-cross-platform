@@ -2,14 +2,17 @@
 //
 // Loaded by the check script inside the development build of the application with
 // `await import('/src/features/highlight/check/harness.ts')`. It mounts bare CodeMirror views with
-// the highlighter's extension and the running application's settings, so that the check does not
-// depend on the editor component (E2) being finished. Nothing in the application imports it.
+// the highlighter's extension and the running application's settings (for exact per-preset
+// colours independent of the editor component's own styles), and reads the views of the real
+// editor component (E2's DocumentEditor, reached through the development hook `e68View`).
+// Nothing in the application imports it.
 
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { TabType, type AppContext, type DocumentState } from '../../../contracts';
 import { buildHighlightDecorations } from '../decorations';
 import { createHighlightEnvironment, highlightExtension } from '../extension';
+import { measureBest } from '../timing';
 
 let counter = 0;
 
@@ -89,16 +92,60 @@ export function contentColors(view: EditorView): { color: string; background: st
   };
 }
 
-/** Best time in ms of `runs` passes over the view's visible ranges. */
-export function timeViewport(view: EditorView, runs: number): { best: number; lines: number } {
-  let best = Infinity;
+/**
+ * Best time in ms of passes over the view's visible ranges: batches of 25 until one run is under
+ * `target` ms (a loaded CI runner may deschedule a whole batch), at most 20 batches or 10 s.
+ */
+export function timeViewport(view: EditorView, target: number): { best: number; runs: number; lines: number } {
   const options = { bitField: true };
-  for (let run = 0; run < runs; run++) {
-    const start = performance.now();
-    buildHighlightDecorations(view.state.doc, view.visibleRanges, options);
-    best = Math.min(best, performance.now() - start);
-  }
+  const { best, runs } = measureBest(() => buildHighlightDecorations(view.state.doc, view.visibleRanges, options), {
+    target,
+  });
   const first = view.state.doc.lineAt(view.visibleRanges[0]?.from ?? 0).number;
   const last = view.state.doc.lineAt(view.visibleRanges.at(-1)?.to ?? 0).number;
-  return { best, lines: last - first + 1 };
+  return { best, runs, lines: last - first + 1 };
+}
+
+/** The view of the real editor component (E2's DocumentEditor) that shows document `id`. */
+export function editorView(id: string): EditorView | null {
+  const host = document.querySelector<HTMLElement & { e68View?: EditorView }>(
+    `.e68-editor__view[data-e68-document="${CSS.escape(id)}"]`,
+  );
+  return host?.e68View ?? null;
+}
+
+/** What the check reads from a view of the real editor. */
+export function editorFacts(id: string): {
+  found: boolean;
+  syntaxClasses: number;
+  classes: string;
+  marks: number;
+  color: string;
+  background: string;
+  gutterBackground: string;
+  caret: string;
+} | null {
+  const view = editorView(id);
+  if (!view) return null;
+  const classes = view.dom.className;
+  const content = getComputedStyle(view.contentDOM);
+  const gutters = view.dom.querySelector('.cm-gutters');
+  const cursor = view.dom.querySelector('.cm-cursorLayer .cm-cursor');
+  return {
+    found: true,
+    syntaxClasses: classes.split(/\s+/).filter((c) => c === 'e68-syntax').length,
+    classes,
+    marks: view.contentDOM.querySelectorAll('[class*="e68-syntax__"]').length,
+    color: content.color,
+    background: getComputedStyle(view.scrollDOM).backgroundColor,
+    gutterBackground: gutters ? getComputedStyle(gutters).backgroundColor : '',
+    caret: cursor ? getComputedStyle(cursor).borderLeftColor : '',
+  };
+}
+
+/** Hides or shows the bare views this harness mounted (so screenshots show the real editor). */
+export function showHarnessViews(visible: boolean): void {
+  for (const element of document.querySelectorAll<HTMLElement>('[data-highlight-check]')) {
+    element.style.display = visible ? '' : 'none';
+  }
 }

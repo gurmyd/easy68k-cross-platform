@@ -134,4 +134,74 @@ describe('CommandRegistry', () => {
     registry.register('ed.file.open', { run: () => {} });
     expect(listener).toHaveBeenCalledTimes(1);
   });
+
+  it('runs while a modal dialog is open only when the dialog itself asks (allowInModal)', async () => {
+    const { registry } = setup({ modal: () => true });
+    const run = vi.fn();
+    registry.register('ed.help.help', { run });
+    await registry.run('ed.help.help', 'options.htm');
+    expect(run).not.toHaveBeenCalled();
+    await registry.run('ed.help.help', 'options.htm', { allowInModal: true });
+    expect(run).toHaveBeenCalledOnce();
+    // A disabled command stays disabled.
+    registry.register('ed.help.context', { run, enabled: () => false });
+    await registry.run('ed.help.context', undefined, { allowInModal: true });
+    expect(run).toHaveBeenCalledOnce();
+  });
+
+  it('override (checks only) replaces a handler until it ends, nests, and changes the revision', async () => {
+    const { registry } = setup();
+    const real = vi.fn();
+    registry.register('ed.file.save', { run: real, enabled: () => false });
+    const listener = vi.fn();
+    registry.subscribe(listener);
+    const before = registry.revision();
+    const first = vi.fn();
+    const endFirst = registry.override('ed.file.save', { run: first });
+    expect(registry.isEnabled('ed.file.save')).toBe(true);
+    await registry.run('ed.file.save');
+    const second = vi.fn();
+    const endSecond = registry.override('ed.file.save', { run: second, enabled: () => true });
+    await registry.run('ed.file.save');
+    endSecond();
+    endSecond(); // ending twice does nothing
+    await registry.run('ed.file.save');
+    endFirst();
+    expect([first.mock.calls.length, second.mock.calls.length, real.mock.calls.length]).toEqual([2, 1, 0]);
+    expect(registry.isEnabled('ed.file.save')).toBe(false); // the registered handler again
+    expect(registry.revision()).toBe(before + 4);
+    expect(listener).toHaveBeenCalledTimes(4);
+    // A command without a handler gets one for the time of the override; the count of handlers stays.
+    const end = registry.override('ed.file.new', { run: () => {} });
+    expect([registry.hasHandler('ed.file.new'), registry.handlerCount()]).toEqual([true, 1]);
+    end();
+    expect(registry.hasHandler('ed.file.new')).toBe(false);
+    // A registration still refuses a second handler, whatever overrides exist.
+    expect(() => registry.register('ed.file.save', { run: () => {} })).toThrow(/already has a handler/);
+  });
+
+  it('observeRuns (checks only) sees commands that run and can keep their handler from running', async () => {
+    let modal = false;
+    const { registry } = setup({ modal: () => modal });
+    const run = vi.fn();
+    registry.register('ed.file.save', { run });
+    registry.register('ed.file.open', { run: () => {}, enabled: () => false });
+    const seen: [string, unknown][] = [];
+    const stop = registry.observeRuns((id, arg) => {
+      seen.push([id, arg]);
+      return true;
+    });
+    await registry.run('ed.file.save', 7);
+    await registry.run('ed.file.open'); // disabled: not about to run
+    await registry.run('ed.file.new'); // no handler
+    modal = true;
+    await registry.run('ed.file.save'); // a modal dialog is open
+    modal = false;
+    expect(seen).toEqual([['ed.file.save', 7]]);
+    expect(run).not.toHaveBeenCalled();
+    stop();
+    registry.observeRuns(() => undefined); // an observer that only looks
+    await registry.run('ed.file.save');
+    expect(run).toHaveBeenCalledTimes(1);
+  });
 });

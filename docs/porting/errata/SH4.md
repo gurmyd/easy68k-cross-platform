@@ -24,7 +24,8 @@ conventions that other packages build against.
   `controller.invoke((engine) => engine.setOption(SimOption.Fullscreen, on))`; until the flag is
   seen to have that value (the controller may queue the call), the engine's answer is not acted on.
 - `AppState.sim.output.fullScreen`: the Output feature writes it from its own state ("full screen
-  is on, or on its way") at every change and once per frame, and never reads it. SH8's session
+  is on, or on its way") at every change and once per frame (`OutputModel.publishFullScreen`), and
+  never reads it. SH8's session
   writes the same member when the engine asks (`host.setupWindow`) and at a cold start (its
   erratum C6). The two agree: the engine's flag changes in exactly those calls, and the feature
   follows the flag within a frame and writes the same value. Readers of the store (the box
@@ -40,10 +41,19 @@ conventions that other packages build against.
 
 - Says: nothing about who writes them. The check mark of `Output Window Size` "follows the real
   size", also a size set by task 33, which no host callback reports to the interface.
-- Does: the Output feature copies `ctx.sim.surface.back.width / height` and
-  `ctx.sim.text.state.textWrap` into the store once per frame and after its own commands
-  (`OutputModel.sync`). SH8's session writes the same three values from the same objects; the two
-  cannot disagree.
+- Does, since gate I1: **the session (SH8) is the one writer.** It mirrors
+  `surface.back.width / height` and `text.state.textWrap` into the store once per frame
+  (`features/run/session.ts`). The Output feature reads them there for the check marks of
+  `Output Window Size` and `Output Window Text Wrap` and writes none of them; its two commands
+  act on the session's parts (`host.setWindowSize`, `text.setTextWrap`) and the check marks follow
+  at the next frame. Before the gate the feature wrote the same three values itself
+  (`OutputModel.sync`), because the session did not exist yet.
+- The panel itself does not wait for the mirror: the size in its header strip and the size of the
+  canvas on screen come from the surface, in the same frame callback that resizes the canvas's
+  backing store (`OutputPanel.tsx`). So the backing store and its size on screen always change
+  together, whichever of the session's and the panel's frame callbacks runs first.
+- A composition without SH8's session has to mirror the three values itself: the test bed of
+  `features/output/testing/bed.ts` does, once per frame.
 
 ### 3. The zero-delay timer of a paste chord is the panel's (3.6, `KeyboardDeps`)
 
@@ -61,8 +71,11 @@ conventions that other packages build against.
 - Desktop app (for DV2): there the paste of Cmd+V comes back from the application's Edit menu
   through the main process, after the key-down has been handled by the page. The panel therefore
   waits `PASTE_WAIT_MS.desktop` = 150 ms instead of 0 before it sends the key alone. **Not run
-  under Electron by SH4**; `tests/desktop/dev` should paste `HELLO` into a task 5 loop and expect
-  `HO`. If the paste arrives later than that, the text still arrives, as typed characters.
+  under Electron by SH4** (only DV2 starts Electron on the build machine, and the path exists on
+  macOS only); `tests/desktop/dev` should paste `HELLO` into a task 5 loop and expect `HO`. If
+  the paste arrives later than that, the text still arrives, as typed characters. The assumption
+  that the page sees the key-down of Cmd+V before the Edit menu acts on it is the same one DV2's
+  menu handling rests on (its errata, R-20); entry 21 says how a person or DV2 can settle both.
 
 ### 4. `core/sim-host/input/mouse.ts` (3.6; W1 erratum 6)
 
@@ -74,16 +87,20 @@ conventions that other packages build against.
   (`outputOf(ctx).mouse`) and posts to `ctx.sim.controller.post`; it resets it when the session
   reports a new engine (`onEngineReplaced`). Nothing has to change in the contracts.
 
-### 5. No notice when the desktop window leaves full screen (3.13, 2.5)
+### 5. Notice when the desktop window leaves full screen (3.13, 2.5)
 
 - Says: 2.5, "Full screen ends without the port asking ...: the panel sees `fullscreenchange`".
   In the desktop app the window is full screen, not the page (`Platform.setFullScreen`), and
-  `Platform` has no event for it.
-- Does: the desktop driver cannot notice that the user left full screen with the system's own
-  means (the green button, Ctrl+Cmd+F). The panel then still covers the window; Alt+Enter or
-  `View > Output Window` puts both back in step.
-- For W1 and DV2: `Platform.onFullScreenChange(listener: (on: boolean) => void): () => void`; the
-  Output feature would call `fullScreen.driverChanged(on)`.
+  `Platform` had no event for it.
+- Gate I1: W1 added `Platform.onFullScreenChange?(listener: (on: boolean) => void): () => void`
+  (its erratum 11.1). The Output feature listens from the window's start
+  (`features/output/index.ts`) and calls `fullScreen.driverChanged(on)`: when the system ends full
+  screen (the green button, Ctrl+Cmd+F) the panel is windowed again and the engine's flag is
+  cleared, as in a browser. A notice while the panel is not full screen means nothing to it.
+- Open, for DV2: `platform/desktop.ts` has to implement the member (W1 erratum 11.5). Until it
+  does, the behaviour is the old one: the panel still covers the window, and Alt+Enter or
+  `View > Output Window` puts both back in step. Checked here with a platform double only
+  (`panel.test.tsx`, `engine.test.ts`, `check-output.mjs`).
 
 ## Design
 
@@ -150,7 +167,8 @@ Ctrl+Backspace. The function also has to answer for everything else; it follows 
 
 | Key | Answer | Why |
 |---|---|---|
-| Ctrl + `[`, `\`, `]`, `^`, `_` | `$1B`-`$1F` | the control column of the US layout (Notepad shows them) |
+| Ctrl + `@` (Ctrl+Shift+2 on a US keyboard) | `$00` | the Shift+Ctrl column of the US layout. A character like any other for the program: task 5 returns 0, task 2 stores the byte, outside a read it replaces the key of type-ahead (`simIOu.cpp:1334-1411`). Added at gate I1; the review found that it was missing |
+| Ctrl + `[`, `\`, `]`, `^`, `_` | `$1B`-`$1F` | the control columns of the US layout |
 | Ctrl + Space | `$20` | same table |
 | Ctrl + any other key that types something (digits, punctuation) | none | Windows sends no WM_CHAR |
 | Alt + key (without Ctrl) | none | Windows sends WM_SYSCHAR, which the form's `OnKeyPress` never sees; Alt+Enter must not put `$0D` into a pending read |
@@ -161,8 +179,19 @@ Ctrl+Backspace. The function also has to answer for everything else; it follows 
 
 On macOS Option types characters, as AltGr does. `OutputKeyboard` therefore asks `charFromKey`
 without the Alt flag when Option is held with a key that types a character (Option+G is `$A9`),
-and with it for named keys (Option+Return, the full-screen chord, types nothing). None of this is
-verified on real Windows; trap15-a §12 already lists the VCL's key handling as UNVERIFIED.
+and with it for named keys (Option+Return, the full-screen chord, types nothing).
+
+Verified at gate I1 as far as Windows itself goes: `ToUnicodeEx`, the translation that
+`TranslateMessage` uses to make WM_CHAR, was asked on Windows 11 with the US layout (a read-only
+call; no key was pressed and no layout loaded). It gives one character for Ctrl+Shift+2 (`$00`),
+Ctrl+Shift+6 (`$1E`), Ctrl+Shift+- (`$1F`), Ctrl+[ (`$1B`), Ctrl+\ (`$1C`), Ctrl+] (`$1D`),
+Ctrl+Space (`$20`), Ctrl+A (`$01`), Ctrl+H (`$08`), Ctrl+Z (`$1A`), Ctrl+Shift+A (`$01`),
+Ctrl+Enter (`$0A`), Ctrl+Backspace (`$7F`), Enter, Backspace, Esc and Tab, and none for Ctrl+2,
+Ctrl+6, Ctrl+-, Ctrl+1, Ctrl+;, Ctrl+/, Ctrl+Shift+[ and Ctrl+Tab. `charFromKey` answers the same
+for every one of them (`chars.test.ts`). Still UNVERIFIED, as trap15-a §12 says of the VCL's key
+handling in general: that the VCL hands a WM_CHAR with the value 0 to the form's `OnKeyPress`.
+The VCL's `TWinControl.DoKeyPress` calls the handler before it looks at the character, so it
+should; the port follows that reading (section 0 rule 1: when in doubt, reproduce).
 
 ### 11. NumLock comes from the event's `key` (3.6)
 
@@ -232,10 +261,104 @@ The original's loop is `for (i = 0; inBuf[i]; i++)` over a buffer that `GetTextB
   the real shell with the real Output panel and the real engine in headless Chromium and WebKit.
   `app/src/features/output/testing/` holds doubles for exactly the three parts that other packages
   own (`PixelSurface`, `TextGrid`, `MiniController`) and the 68000 programs. The same test bed
-  runs under Node in `engine.test.ts`. `docs/requests/SH4-output-check.md` asks for the CI step.
+  runs under Node in `engine.test.ts`. `docs/requests/SH4-output-check.md` asked for the CI step
+  (applied at gate I1).
+- Since gate I1 the doubles are no longer the whole story: `real-session.test.ts` runs the
+  panel's keyboard, mouse, presenter and text mirror against the real run controller, surface and
+  text screen under Node (`core/run/headless.ts`), and the group `app` of `check-output.mjs`
+  repeats the acceptance list in the application itself (`index.html`, its real session, the real
+  fonts) in both browsers. The doubles stay for what only they can show: every entry that reached
+  the engine, both key maps on one machine, and the desktop app's platform.
 - What the script cannot do with real keys, and does with events made in the page: a dead key
   (`key: 'Dead'`), keys during a composition, and the clipboard's content for a paste (the
   machine's clipboard is not written to). A real composition is driven through Chromium's own
   input-method interface; WebKit has none in Playwright.
 - Everything the script does to a page counts as a user gesture there for five seconds, so the
   "program asks without a gesture" checks let the program wait 6.5 s (task 23) before it asks.
+  The script does not sleep through that time and hope: the page reports each change of the
+  full-screen phase on its console, and the script waits for that line without touching the page.
+
+## Gate I1, round 1
+
+What the review of SH4 left open, what the neighbours' real parts changed, and what SH4 answered
+to the notes addressed to it. Entries 2, 5, 10 and 16 above were brought up to date in place.
+
+### 17. The refusal box has no icon (2.5, 2.7)
+
+- Says: 2.5 gives the text and the title `Information`; 2.7 asks for "the original's title, text,
+  icon class and buttons".
+- Found by the review: the port showed the (i) picture of an information box. The original's call
+  is `Application->MessageBoxA(text, "Information")` (`simIOu.cpp:290`), which names no flags:
+  MB_OK, one OK button and no icon. "Information" is only the caption.
+- Does: `FULL_SCREEN_REFUSED` (`features/output/fullscreen.ts`) is the whole request, with
+  `icon: 'none'` and `buttons: ['OK']`.
+
+### 18. The I/O window's chords with further modifiers held (2.9.4)
+
+- Says: rule 4 names "Alt+Enter", "Shift+Insert" and "Ctrl+Tab".
+- Found by the review: the original tests `Shift.Contains(...)` (`simIOu.cpp:434-439`), so
+  Shift+Alt+Enter, Ctrl+Alt+Enter, Ctrl+Shift+Tab and Ctrl+Shift+Insert act there too.
+  `commands/output-keys.ts` (W3) matches the exact chords, and the panel follows its answer.
+- Does: nothing in SH4's files. `docs/requests/SH4-output-chords.md` asked W3 for the original's
+  rule for Alt+Enter and Ctrl+Tab, and explained why the paste chord has to stay exact: a browser
+  fires `paste` for its own paste chord only (run in Chromium and WebKit: no event for
+  Ctrl+Shift+Insert or Alt+Shift+Insert). W3 applied it in the same round (its erratum 29):
+  Alt+Enter and, in the desktop app, Ctrl+Tab act with any further modifiers held. SH4's tests pin
+  the answers the panel relies on (`panel.test.tsx`, `engine.test.ts`, the `keys` group of
+  `check-output.mjs`). The paste chord with further modifiers is a row of
+  `docs/differences/SH4.md`, marked **program**.
+
+### 19. Text pasted without the chord after task 24 (2.9.4, 3.6)
+
+- Says: "After task 24 none of the three acts." A paste event can also reach the hidden textarea
+  without the chord: the browser's own Paste command, the Edit menu of the desktop app.
+- Does: such a paste is typed in as characters while key commands are enabled (entry 3) and is
+  dropped after task 24, because the original's window has no way to paste then
+  (`PanelInput.paste`).
+
+### 20. Notes of the other packages, answered
+
+- **SH8, "do not write `sim.output.width / height / textWrap`"**: done, entry 2. `fullScreen` is
+  shared as SH8's note and entry 1 describe; with the real session the two writers were seen to
+  agree in every case the `app` group of the check runs through (Alt+Enter, a stop in trace mode,
+  a program's request that waits, a program's request for windowed mode).
+- **SH3's review, "`OutputDevice.setWindowSize` does not call `setupWindow` as the original
+  does ... or call `deps.setFullScreen` with the current state if the Output panel needs it"**:
+  the panel does not need it. It reads the surface size every frame and scales and centres
+  whatever it finds, also in full screen; `check-output.mjs` sets 800x600 with task 33 while full
+  screen is on and finds the new surface centred at its own whole-number scale.
+- **SH1, "present from `surface.window ?? surface.back` ... `takeDirty()` already includes the
+  overlay cell's old and new place"** and **SH3, "the overlay cell can be wider than a character
+  cell"**: the presenter does the first, relies on neither the second nor a cell size (it takes
+  the overlay's own rectangle), and was run against the real surface and the real prompt: the
+  prompt is on the canvas and not in the back buffer (`app` group), the picture survives a resize
+  and a cold start (`real-session.test.ts`, `app` group).
+- **SH7, "start Vite with `hmr: false, watch: null`"**: the script always did.
+- **W1, `Platform.onFullScreenChange`**: used, entry 5.
+- **SH4's own note to W3 about the narrow layout** (below 1100 px `showPanel(ctx, 'output')` did
+  not bring the Output tab forward): the shell repaired it in this round (`outputInFront`), and
+  the `app` group now checks it with the Memory tab in front.
+
+### 21. What only a person, or DV2 on a Mac, can still settle (6.8)
+
+Two acceptance items of 9.2 are met as far as a headless browser can show and stay "partly" for
+that reason; a third point concerns the desktop app. For `docs/MANUAL-TEST-MAC.md` (DOC1), with
+the programs of `app/src/features/output/testing/programs.ts` or any program that reads a line
+with task 2:
+
+1. **A dead-key sequence and a composed character arrive in task 2.** On a keyboard layout with
+   dead keys (US-International on Windows; any Mac layout with Option+E): in the Output panel,
+   at a task 2 prompt, type the accent key and then `e`, then Option+E and `a` on a Mac, then a
+   character of an input method. Expected: one `é`, one `á`, the composed character once, each
+   echoed once; nothing doubled, nothing lost. Automated so far: the same event sequences made in
+   the page, and one real composition through Chromium's input-method interface.
+2. **A held letter repeats.** Hold `a` at the same prompt for two seconds. Expected: the letter
+   repeats at the system's repeat rate, and on a Mac no accent menu appears. Automated so far:
+   key-downs marked as repeats by the test driver; the system's own repeat needs a real key.
+3. **Paste in the desktop app on macOS.** At a task 5 loop (`charLoopProgram`), copy `HELLO` and
+   press Cmd+V. Expected: the program stores `HO` (the first character ends the read, the last
+   one is left as type-ahead), and task 19 saw the V key once. If it stores `HELLO`, the paste
+   event arrived more than `PASTE_WAIT_MS.desktop` (150 ms) after the key-down, or the page never
+   saw the key-down; the number, or the fact, goes back to SH4. DV2 can automate the same in
+   `tests/desktop/dev` by pressing Cmd+V and then calling the Edit menu's Paste item (or
+   `webContents.paste()`) from the main process, which is the real path.

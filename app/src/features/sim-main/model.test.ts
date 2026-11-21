@@ -6,7 +6,9 @@
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { Box, Reg, type AppContext, type RunSnapshot, type SimSession } from '../../contracts';
+import { Box, Reg, type AppContext, type FeatureModule, type RunSnapshot, type SimSession } from '../../contracts';
+import { feature as memoryFeature } from '../memory/index';
+import { memoryModelOf } from '../memory/model';
 import { assembleProgram, createTestEngine, type AssembledProgram, type TestEngine } from '../../engine/testing';
 import { encode } from '../../core/codec/cp1252';
 import { ListingView } from '../../core/listing/view';
@@ -59,11 +61,11 @@ afterEach(() => {
 });
 
 /** An application with this feature on a session double over a real engine, program loaded. */
-async function realBench(load = true): Promise<Bench> {
+async function realBench(load = true, others: FeatureModule[] = []): Promise<Bench> {
   const engines: TestEngine[] = [await createTestEngine()];
   let session: SessionDouble | null = null;
   const app = createTestApplication({
-    features: [feature],
+    features: [feature, ...others],
     services: {
       createSimSession: (ctx) => {
         session = createSessionDouble(ctx, engines[0] as TestEngine, async () => {
@@ -190,7 +192,7 @@ describe.skipIf(!enginesBuilt)('with the real engine (needs engine/dist)', () =>
     expect(model.view.getState().boxes[Box.PC]).toBe('00001000');
   }, 60_000);
 
-  it('the selection follows the engine after Trace Into, and keeps the user row when the highlight did not move', async () => {
+  it('the selection follows the engine after Trace Into, also back from a clicked row when the PC row did not change', async () => {
     const bench = await realBench();
     const { model, session } = bench;
     session.controller.traceInto();
@@ -199,9 +201,23 @@ describe.skipIf(!enginesBuilt)('with the real engine (needs engine/dist)', () =>
     const bra = rowOf(bench, 'BRA.S');
     expect(selected(bench)).toBe(bra);
     model.selectRow(4); // the user clicks a row
+    const serial = model.view.getState().scroll?.serial ?? 0;
     session.controller.traceInto(); // BRA.S LOOP: the highlight stays on the same row
     expect(session.controller.snapshot.highlight).toBe(bra);
-    expect(selected(bench)).toBe(4);
+    // highlight() runs at every scrshow(): the PC row is selected again (sim-ui §6.4).
+    expect(selected(bench)).toBe(bra);
+    expect(model.view.getState().scroll).toEqual({ row: bra, serial: serial + 1 });
+  }, 60_000);
+
+  it('Clear Cycles is no scrshow(): a clicked row stays selected', async () => {
+    const bench = await realBench();
+    const { model, session } = bench;
+    session.controller.traceInto();
+    model.selectRow(1);
+    const serial = model.view.getState().scroll?.serial ?? 0;
+    model.clearCycles();
+    expect(selected(bench)).toBe(1);
+    expect(model.view.getState().scroll?.serial ?? 0).toBe(serial);
   }, 60_000);
 
   it('gutter: a click toggles the breakpoint of an instruction row; other rows and the header do nothing', async () => {
@@ -286,16 +302,21 @@ describe.skipIf(!enginesBuilt)('with the real engine (needs engine/dist)', () =>
     expect(model.view.getState().changed[Box.D3]).toBe(false);
   }, 60_000);
 
-  it('double-click on an address register copies it to the Memory panel and shows that panel', async () => {
-    const bench = await realBench();
+  it('double-click on an address register runs sim.view.memory with its text (the Memory feature)', async () => {
+    const bench = await realBench(true, [memoryFeature]);
     const { model, ctx } = bench;
-    model.editRegister(Box.A2, '00003000');
+    await ctx.commands.run('app.mode.set', 'simulator');
+    model.editRegister(Box.A2, '00FF3004');
     model.copyToMemory(Box.A2);
-    expect(ctx.settings.get().sim.memoryAddress).toBe(0x3000);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // U2's rules: masked to 24 bits, rounded down to 16; the panel is shown and takes the focus.
+    expect(memoryModelOf(ctx).getState().address).toBe(0xff3000);
     expect(shellStateOf(ctx).getState().activeTool).toBe('memory');
     expect(shellStateOf(ctx).getState().focusRequest?.panel).toBe('memory');
+    model.editRegister(Box.D0, '00005000');
     model.copyToMemory(Box.D0); // data registers have no handler
-    expect(ctx.settings.get().sim.memoryAddress).toBe(0x3000);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(memoryModelOf(ctx).getState().address).toBe(0xff3000);
   }, 60_000);
 
   it('Find: hits are selected and scrolled to, searches continue, no wrap; Go to PC afterwards', async () => {
@@ -406,20 +427,34 @@ function scriptedBench(rows: string[]) {
     app,
     ctx: app.ctx,
     model: simMainOf(app.ctx),
-    refresh(highlight: number) {
-      snapshot = { ...snapshot, highlight, revision: snapshot.revision + 1 };
+    /**
+     * A snapshot refresh as after a scrshow(): the engine's row, and the PC field, by default the
+     * address of that row (highlight() found it); `pc` gives another PC text (no row matches).
+     */
+    refresh(highlight: number, options: { pc?: string; halted?: boolean } = {}) {
+      const pc = options.pc ?? (rows[highlight] ?? '').slice(0, 8);
+      const boxes = snapshot.boxes.slice();
+      boxes[Box.PC] = pc;
+      snapshot = {
+        ...snapshot,
+        boxes,
+        highlight,
+        halted: options.halted ?? false,
+        revision: snapshot.revision + 1,
+      };
       for (const listener of [...listeners]) listener();
     },
   };
 }
 
-describe('the selection rule of 3.11.4 (scripted snapshots)', () => {
+describe('the selection rule of highlight() (scripted snapshots)', () => {
   const rows = ['00001000 Starting Address', 'h', 'h'];
   for (let index = 0; index < 200; index++) {
     rows.push(`${(0x1000 + index * 2).toString(16).toUpperCase().padStart(8, '0')}  4E71    ${index + 1}   NOP`);
   }
+  rows.push('00001190                    201  DATA:'); // row 203: a label row, not an instruction row
 
-  it('a highlight that differs from the previous one takes the selection and asks for the scroll', () => {
+  it('a matching highlight takes the selection and asks for the scroll', () => {
     const bench = scriptedBench(rows);
     bench.refresh(10);
     expect(selected(bench)).toBe(10);
@@ -429,14 +464,33 @@ describe('the selection rule of 3.11.4 (scripted snapshots)', () => {
     expect(bench.model.view.getState().scroll?.row).toBe(150);
   });
 
-  it('the same highlight again leaves the user selection, and asks for no scroll', () => {
+  it('the same matching highlight again takes the selection back from a clicked row (scrshow re-runs highlight)', () => {
     const bench = scriptedBench(rows);
     bench.refresh(10);
     bench.model.selectRow(40);
-    const serial = bench.model.view.getState().scroll?.serial;
+    const serial = bench.model.view.getState().scroll?.serial ?? 0;
     bench.refresh(10);
+    expect(selected(bench)).toBe(10);
+    expect(bench.model.view.getState().scroll).toEqual({ row: 10, serial: serial + 1 });
+  });
+
+  it('no row matches the PC: the selection stays, and is still scrolled into view', () => {
+    const bench = scriptedBench(rows);
+    bench.refresh(10);
+    bench.model.selectRow(40);
+    const serial = bench.model.view.getState().scroll?.serial ?? 0;
+    bench.refresh(10, { pc: '00009000' }); // the engine keeps its last row when nothing matched
     expect(selected(bench)).toBe(40);
-    expect(bench.model.view.getState().scroll?.serial).toBe(serial);
+    expect(bench.model.view.getState().scroll).toEqual({ row: 40, serial: serial + 1 });
+  });
+
+  it('a non-instruction row matches only when the program has halted', () => {
+    const bench = scriptedBench(rows);
+    bench.refresh(10);
+    bench.refresh(203);
+    expect(selected(bench)).toBe(10);
+    bench.refresh(203, { halted: true });
+    expect(selected(bench)).toBe(203);
   });
 
   it('a refresh without a new revision does nothing', () => {

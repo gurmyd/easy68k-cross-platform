@@ -256,4 +256,33 @@ test('a help page loads under app:// and in the help window', async () => {
   await desktop.page.evaluate(() => window.easy68kDesktop?.showHelp('../index.html'));
   await desktop.page.waitForTimeout(500);
   expect(await mainHook<string | null>(desktop.app, 'helpWindowUrl', id)).not.toContain('index.html');
+
+  // Links with target="_blank" (H1 errata 10): the Quick Reference PDF and other files of the help
+  // folder open in the help window; allow-listed web addresses go to the system browser (after a
+  // question, not asked here); anything else is refused.
+  const pdf = filesBelow('help').find((file) => /\.pdf$/i.test(file));
+  if (pdf) {
+    const pdfUrl = `app://easy68k/${pdf.split('/').map(encodeURIComponent).join('/')}`;
+    const loaded = desktop.app.evaluate(
+      ({ BrowserWindow }, target) =>
+        new Promise<string>((done) => {
+          const help = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('/help/'));
+          if (!help) return done('no help window');
+          help.webContents.once('did-fail-load', (_event, code, text) => done(`failed ${code} ${text}`));
+          help.webContents.once('did-finish-load', () => done(`loaded ${help.webContents.getURL()}`));
+          setTimeout(() => done('timeout'), 20_000);
+          void target;
+        }),
+      pdfUrl,
+    );
+    expect(await mainHook<string | null>(desktop.app, 'openFromHelp', id, pdfUrl)).toBe('help');
+    expect(await loaded).toBe(`loaded ${pdfUrl}`);
+    expect(await mainHook<string | null>(desktop.app, 'helpWindowUrl', id)).toBe(pdfUrl);
+  } else {
+    test.info().annotations.push({ type: 'note', description: 'the build has no PDF below help/' });
+  }
+  expect(await mainHook<string | null>(desktop.app, 'openFromHelp', id, 'https://github.com/x')).toBe('external');
+  expect(await mainHook<string | null>(desktop.app, 'openFromHelp', id, 'https://example.com/')).toBe('deny');
+  expect(await mainHook<string | null>(desktop.app, 'openFromHelp', id, 'app://easy68k/index.html')).toBe('deny');
+  expect(await mainHook<string | null>(desktop.app, 'openFromHelp', id, 'file:///etc/passwd')).toBe('deny');
 });

@@ -19,7 +19,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { canonicalListing, canonicalSRecord, editorLoad } from '../../conformance/asm/compare.ts';
+import { canonicalListing, canonicalSRecord, editorLoad, undefinedSymbolRanges } from '../../conformance/asm/compare.ts';
 import { REPO, SET_DIRECTORIES, readProgram } from '../../corpus/index.ts';
 import { planPrograms } from '../wine/asm/regenerate.mjs';
 import { CORPUS_OPTION_SETS } from '../wine/asm/settings.ts';
@@ -114,7 +114,11 @@ async function main() {
       const cli = assembleWithCli(directory, mainName, options);
       // The command-line port always lists with Assembly tabs (assembler §8.2).
       const ours = await assemble(mainName, files, { ...options, tabType: 'assembly' }, new Date(2026, 10, 20, 12, 0, 0));
-      const verdict = classify(cli, { listing: ours.listing, sRecord: ours.sRecord }, sources, { canonicalListing, canonicalSRecord });
+      const verdict = classify(cli, { listing: ours.listing, sRecord: ours.sRecord }, sources, {
+        canonicalListing,
+        canonicalSRecord,
+        undefinedSymbolRanges,
+      });
       results.push({ id: program.id, label, ...verdict });
       if (verdict.verdict === 'unexplained') console.log(`UNEXPLAINED ${program.id} (${label})\n${verdict.detail}`);
     }

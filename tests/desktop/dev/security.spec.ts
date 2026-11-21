@@ -103,6 +103,27 @@ test('the page started the application with the desktop platform', async () => {
   }
 });
 
+// DV1 (features/pwa): no service worker is registered when the platform is the desktop app (7.4).
+test('no service worker is registered in the desktop app', async () => {
+  const facts = await desktop.page.evaluate(async () => {
+    if (!('serviceWorker' in navigator))
+      return { registrations: 0, controlled: false, why: 'no navigator.serviceWorker' };
+    let registrations = 0;
+    let why = 'getRegistrations() answered';
+    try {
+      registrations = (await navigator.serviceWorker.getRegistrations()).length;
+    } catch (error) {
+      // app:// is not a scheme service workers are allowed for (protocol.ts privileges), so the
+      // browser refuses even to list them: none can exist.
+      why = `getRegistrations() refused: ${String(error)}`;
+    }
+    return { registrations, controlled: navigator.serviceWorker.controller !== null, why };
+  });
+  expect(facts.registrations).toBe(0);
+  expect(facts.controlled).toBe(false);
+  test.info().annotations.push({ type: 'note', description: facts.why });
+});
+
 test('every permission request of the page is denied', async () => {
   const results = await desktop.page.evaluate(async () => {
     const outcome = async (run: () => Promise<unknown>) => {

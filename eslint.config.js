@@ -11,7 +11,8 @@
 //   fs/                 contracts/, core/paths, core/codec
 //   features/<x>/       contracts/, core/, state/, commands/, ui/components/;
 //                       never another feature by path; features/files/ and
-//                       features/files-fsaccess/ also fs/
+//                       features/files-fsaccess/ also fs/; features/editor/
+//                       also ui/editor/
 //   ui/shell/           features only through features/index.ts
 //   everywhere in app/src: npm packages only from the closed runtime list of 3.1
 //
@@ -59,6 +60,8 @@ const TEST_FILE_PACKAGES = {
 };
 /** Features that are the user-interface halves of their own fs/ backends and may import fs/ (W3-layer-rule). */
 const FS_FEATURES = ['files', 'files-fsaccess'];
+/** The feature that registers the editor component of ui/editor/ and alone may import it (E2-layer-rule). */
+const EDITOR_FEATURES = ['editor'];
 
 /** `name` is `pkg` or a subpath of it. */
 const isPackage = (name, pkg) => name === pkg || name.startsWith(`${pkg}/`);
@@ -95,6 +98,7 @@ function layerOf(file) {
           'commands',
           'ui/components',
           ...(FS_FEATURES.includes(second) ? ['fs'] : []),
+          ...(EDITOR_FEATURES.includes(second) ? ['ui/editor'] : []),
         ],
         packages: RUNTIME_PACKAGES,
         feature: true,
@@ -224,7 +228,6 @@ export default defineConfig(
       '.toolchain/**',
       'build/**',
       'engine/**',
-      'tools/oracle-official/**',
       'app/public/**',
       'app/src/build-info.ts',
       'desktop/release/**',

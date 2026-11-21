@@ -155,4 +155,19 @@ describe('createWebPlatform', () => {
     platform.confirmBeforeUnload(false);
     expect(guards.size).toBe(0);
   });
+
+  it('confirmBeforeUnload keeps the guard while any named party needs it', () => {
+    const { win, listeners } = fakeWindow();
+    const platform = createWebPlatform(win);
+    platform.confirmBeforeUnload(true, 'documents');
+    platform.confirmBeforeUnload(true, 'simulator');
+    const guards = listeners.get('beforeunload') ?? new Set();
+    expect(guards.size).toBe(1);
+    platform.confirmBeforeUnload(false, 'documents');
+    expect(guards.size).toBe(1);
+    platform.confirmBeforeUnload(false); // the unnamed party never asked: changes nothing
+    expect(guards.size).toBe(1);
+    platform.confirmBeforeUnload(false, 'simulator');
+    expect(guards.size).toBe(0);
+  });
 });

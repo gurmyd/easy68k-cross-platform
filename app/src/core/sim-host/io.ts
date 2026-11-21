@@ -1,7 +1,8 @@
 // The I/O window as the engine sees it (ARCHITECTURE.md 3.3.1): OutputDevice composes TextScreen and
 // Surface into the `text` and `graphics` host parts. It has no state of its own; a method either
 // belongs to the text screen, to the surface, to both (a size change), or to the Output panel
-// (show, bring to front, full screen), which reaches it through the three callbacks.
+// (show, bring to front, full screen), which it reaches through three callbacks. A fourth callback
+// writes one line to the simulator message area.
 //
 // Owner: W1 > SH3.
 
@@ -17,17 +18,8 @@ export const MIN_HEIGHT = 480;
 /** Message for a size request above the port's limit (ARCHITECTURE.md 2.5). */
 export const SIZE_LIMIT_MESSAGE = `Output window size limited to ${MAX_SURFACE} x ${MAX_SURFACE}`;
 
-/**
- * What OutputDevice can use beyond the contract's `OutputDeviceDeps`. Optional, so that a caller
- * that passes exactly the contract's object keeps working (docs/porting/errata/SH3.md, "Contract").
- */
-export interface OutputDeviceExtras {
-  /** One line for the simulator message area: the size-limit message of 2.5. */
-  message?: (text: string) => void;
-}
-
 export class OutputDevice implements OutputDeviceApi {
-  constructor(private readonly deps: OutputDeviceDeps & OutputDeviceExtras) {}
+  constructor(private readonly deps: OutputDeviceDeps) {}
 
   /* ---- HostIoText: the text screen ---- */
 
@@ -81,6 +73,13 @@ export class OutputDevice implements OutputDeviceApi {
    * whole surface and measures the text grid again; the cursor and the shadow array stay as they
    * are. The surface clamps each side to at least 640 x 480 and to the port's maximum; a request
    * above the maximum is reported in the message area.
+   *
+   * Two calls at the end of the original's function have no counterpart here: `setupWindow()`,
+   * which lays the window out again (in full screen it switches the display to the new size), and
+   * `Form1->WindowSizeChecked()`, which sets the radio marks of the size menu. The Output panel
+   * lays the surface out from its size on every frame, in a window and in full screen, and the
+   * menu marks follow the size the same way. The full-screen flag is the engine's; this class
+   * only passes it on in `setupWindow` and must not repeat an old value of it here.
    */
   setWindowSize(width: number, height: number): void {
     const { surface, text } = this.deps;

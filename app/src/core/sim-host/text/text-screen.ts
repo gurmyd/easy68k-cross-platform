@@ -25,7 +25,7 @@ import {
   type TextState,
 } from '../../../contracts';
 import { styleOf } from '../fonts/metrics';
-import type { StyleOverhang } from '../fonts/types';
+import type { FallbackGlyphs } from '../fonts/types';
 
 export type { TextScreenDeps, TextState } from '../../../contracts';
 
@@ -78,11 +78,19 @@ export class TextScreen implements TextScreenApi {
   private wrapping = false;
   /**
    * Windows' simulated bold and italic of the raster faces make the opaque box of a text wider than
-   * its advances (by 1 pixel and by half the cell height). The box is the sum of the advances the
-   * surface is given, so the extra width travels as one more glyph without ink. Null for a font
-   * without such an overhang.
+   * its advances: by 1 pixel and by half the cell height. 0 for every other font.
+   */
+  private overhang = 0;
+  /**
+   * The box is the sum of the advances the surface is given, so the overhang travels as one more
+   * glyph without ink. Null for a font without an overhang.
    */
   private overhangGlyph: Glyph | null = null;
+  /**
+   * What the byte $7F is in a text that also has a byte of $80 or above, in a font in which Windows
+   * draws it from a fallback font there (the outline faces). Null: the byte's own glyph.
+   */
+  private delInHighText: Glyph | null = null;
 
   constructor(private readonly deps: TextScreenDeps) {
     this.state = {
@@ -326,54 +334,91 @@ export class TextScreen implements TextScreenApi {
   /**
    * drawText (simIOu.cpp:906-916, trap15-b §6.7): task 95, text at a pixel position. Nothing is
    * stored in the shadow array and the cursor does not move. The original hands the bytes to
-   * Windows as one text; what Windows does with it was measured (tests/oracle/gdi-capture):
-   * - inside a text of two or more bytes the zero-width bytes paint nothing and take no room; a
-   *   text of such bytes only fills one cell;
-   * - the opaque box is as wide as the advances of the drawn bytes, plus the style overhang of a
-   *   bold or italic raster font; the italic overhang is left out when the text, without its
-   *   trailing zero-width bytes, has two or more bytes and one of them is zero-width or $7F;
-   * - the pen moves by the text extent, which counts every byte - except that with underline or
-   *   strike-out a zero-width byte that is not among the trailing ones counts nothing.
+   * Windows as one text; `layout` says what Windows does with it.
    */
   drawText(text: Bytes, x: number, y: number): void {
-    const { glyphs, surface } = this.deps;
-    const s = this.state;
-    const inText = text.length >= 2;
-    let core = text.length; // length without the trailing zero-width bytes
-    while (core > 1 && ZERO_WIDTH_BYTES.has(text[core - 1] as number)) core--;
-    const lined = s.font.underline || s.font.strikeOut;
+    const { glyphs, extent } = this.layout(text);
+    this.deps.surface.textOut(x, y, glyphs, extent, this.state.fontColor, 'both');
+  }
 
-    const printed: Glyph[] = [];
-    let extent = 0;
-    let onlyZeroWidth = text.length > 0;
-    let italicCut = false;
+  /**
+   * What Windows' TextOut makes of a text in the font in use: the glyphs to paint, whose advances
+   * together are the width of the opaque box, and how far the pen moves. The rules were measured
+   * on Windows (tests/oracle/gdi-capture/README.md, "Text strings"; docs/porting/errata/T2.md
+   * section 2) and are what the GDI text references of tests/conformance/gdi hold this class to:
+   *
+   * - Drawn bytes. Inside a text of two or more bytes the zero-width bytes paint nothing and take
+   *   no room; every other byte is drawn where the advances of the drawn bytes before it end.
+   * - Pen. It moves by the advances of all bytes, the zero-width ones included - except that they
+   *   count nothing when the text also has a byte of $80 or above. The style plays no part.
+   * - Opaque box. As wide as the advances of the drawn bytes plus the style overhang of the font
+   *   (bold and italic of the raster faces). A text of zero-width bytes only fills the cell of its
+   *   first byte plus that overhang.
+   * - Italic overhang left out. When two or more bytes are drawn and the text has a zero-width
+   *   byte, or has $7F and a drawn byte other than $7F, only the first glyph keeps its overhang:
+   *   the box is the wider of the advances and the first advance plus the overhang.
+   * - $7F in an outline face. In a text that has a byte of $80 or above Windows draws it from a
+   *   fallback font; it then has that font's width, in the box and for the pen.
+   *
+   * The box travels as glyph advances (the surface fills exactly those), so what it has beyond the
+   * drawn glyphs is one more glyph without ink.
+   */
+  private layout(text: Bytes): { glyphs: Glyph[]; extent: number } {
+    const provider = this.deps.glyphs;
+    const font = this.state.font;
+    const inText = text.length >= 2;
+    let zeroWidth = 0;
+    let del = 0;
+    let high = false;
     for (let i = 0; i < text.length; i++) {
       const byte = text[i] as number;
-      const glyph = glyphs.glyph(s.font, byte);
-      const zeroWidth = ZERO_WIDTH_BYTES.has(byte);
-      if (!zeroWidth) onlyZeroWidth = false;
-      if (i < core && (zeroWidth || byte === DEL)) italicCut = true;
-      const skipped = inText && zeroWidth;
-      if (!(skipped && lined && i < core)) extent += glyph.advance;
-      if (!skipped) printed.push(glyph);
+      if (ZERO_WIDTH_BYTES.has(byte)) zeroWidth++;
+      else if (byte === DEL) del++;
+      else if (byte >= 0x80) high = true;
     }
-    if (onlyZeroWidth) {
-      if (inText) {
-        const first = glyphs.glyph(s.font, text[0] as number);
-        printed.push(emptyGlyph(first.advance, first.height));
+
+    const fallbackDel = high ? this.delInHighText : null;
+    const glyphs: Glyph[] = [];
+    let extent = 0;
+    let advances = 0; // of the drawn bytes
+    for (let i = 0; i < text.length; i++) {
+      const byte = text[i] as number;
+      const glyph = byte === DEL && fallbackDel ? fallbackDel : provider.glyph(font, byte);
+      const skipped = inText && ZERO_WIDTH_BYTES.has(byte);
+      if (!(skipped && high)) extent += glyph.advance;
+      if (skipped) continue;
+      glyphs.push(glyph);
+      advances += glyph.advance;
+    }
+    if (text.length === 0) return { glyphs, extent };
+
+    let box = advances + this.overhang;
+    if (zeroWidth === text.length) {
+      // Zero-width bytes only: one cell, as high as the first byte's glyph.
+      const first = provider.glyph(font, text[0] as number);
+      box = first.advance + this.overhang;
+      if (glyphs.length === 0) {
+        glyphs.push(emptyGlyph(box, first.height));
+        return { glyphs, extent };
       }
-    } else if (this.overhangGlyph && !(core >= 2 && italicCut && styleOf(s.font) === 'italic')) {
-      printed.push(this.overhangGlyph);
+    } else if (
+      this.overhang > 0 &&
+      styleOf(font) === 'italic' &&
+      glyphs.length >= 2 &&
+      (zeroWidth > 0 || (del > 0 && del < glyphs.length))
+    ) {
+      box = Math.max(advances, (glyphs[0] as Glyph).advance + this.overhang);
     }
-    surface.textOut(x, y, printed, extent, s.fontColor, 'both');
+    if (box > advances) glyphs.push(emptyGlyph(box - advances, this.state.rowHeight));
+    return { glyphs, extent };
   }
 
   // ---- fonts and sizes ----------------------------------------------------------------------------
 
   /**
-   * setFontProperties (simIOu.cpp:935-994, trap15-a task 21). color = D1.L, style = D2.L: bits 0-3
-   * bold, italic, underline, strike-out; high word = font number (high byte) and point size (low
-   * byte), or 0.
+   * setFontProperties (simIOu.cpp:935-994, trap15-a task 21). color = D1.L, kept as given (see
+   * `textColor`); style = D2.L: bits 0-3 bold, italic, underline, strike-out; high word = font
+   * number (high byte) and point size (low byte), or 0.
    */
   setFontProperties(color: number, style: number): void {
     const s = this.state;
@@ -417,9 +462,11 @@ export class TextScreen implements TextScreenApi {
     s.colWidth = Math.max(1, Math.trunc(cell.colWidth));
     s.textRows = Math.min(Math.trunc(this.canHeight / s.rowHeight), MAX_ROWS);
     s.textCols = Math.min(Math.trunc(this.canWidth / s.colWidth), MAX_COLS);
-    // The contract's GlyphProvider does not know the style overhang; the port's own provider does.
-    const overhang = (this.deps.glyphs as Partial<StyleOverhang>).textOverhang?.(s.font) ?? 0;
-    this.overhangGlyph = overhang > 0 ? emptyGlyph(overhang, s.rowHeight) : null;
+    // A provider without `textOverhang` (it is optional in the contract) has no overhang.
+    this.overhang = Math.max(0, this.deps.glyphs.textOverhang?.(s.font) ?? 0);
+    this.overhangGlyph = this.overhang > 0 ? emptyGlyph(this.overhang, s.rowHeight) : null;
+    // The contract's GlyphProvider does not have this; the port's own provider does.
+    this.delInHighText = (this.deps.glyphs as Partial<FallbackGlyphs>).delInHighText?.(s.font) ?? null;
   }
 
   setTextWrap(on: boolean): void {
@@ -552,12 +599,12 @@ export class TextScreen implements TextScreenApi {
     this.textOutChar(this.state.colWidth * this.state.col, ch, 'window');
   }
 
-  /** A TextOut of one character at (x, textY): its glyph, and the style overhang in the opaque box
-   *  (a text of one zero-width byte has none; see drawText). The pen moves by the advance. */
+  /** A TextOut of one character at (x, textY): `layout` for a text of one byte, which is its glyph
+   *  and the style overhang in the opaque box, whatever the byte. The pen moves by the advance. */
   private textOutChar(x: number, ch: number, target: 'both' | 'window'): void {
     const s = this.state;
     const glyph = this.deps.glyphs.glyph(s.font, ch);
-    const glyphs = this.overhangGlyph && !ZERO_WIDTH_BYTES.has(ch) ? [glyph, this.overhangGlyph] : [glyph];
+    const glyphs = this.overhangGlyph ? [glyph, this.overhangGlyph] : [glyph];
     this.deps.surface.textOut(x, s.textY, glyphs, glyph.advance, s.fontColor, target);
   }
 
@@ -582,7 +629,13 @@ export class TextScreen implements TextScreenApi {
   }
 }
 
-/** A text colour as the surface takes it. trap15-a task 21: the port uses the low 24 bits ($00BBGGRR). */
+/**
+ * A text colour as the state keeps it: the 32 bits the program (task 21, D1.L) or the Options dialog
+ * gave, unsigned. The original stores the value in the font of its canvas, and the VCL and Windows
+ * give a top byte that is not zero the meaning it has for pens and fills (trap15-b §4.6: a system
+ * colour, a palette entry). The surface applies that rule when it draws (`SurfaceApi.textOut`), so
+ * nothing is cut off here. Measured on Windows: docs/porting/errata/SH3.md entry 17.
+ */
 function textColor(color: number): number {
-  return color & 0x00ffffff;
+  return color >>> 0;
 }

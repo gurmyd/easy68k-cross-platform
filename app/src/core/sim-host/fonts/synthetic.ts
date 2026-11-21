@@ -466,7 +466,9 @@ function listedFiles(outlineSizes: readonly number[]): Map<string, Bytes> {
           // T2 names the files after the face with `_` for a space.
           const file = `${SCALABLE_FOLDER}/${face.name.replace(/ /g, '_')}-${height}${suffix ? `-${suffix}` : ''}.bin`;
           atlases.set(file, encodeAtlas(drawAtlas(face, width, height, style)));
-          const entry: OutlineAtlasInfo = { file, face: face.name, style };
+          // $7F from a fallback font: about 0.4 em wide, one more in bold (as T2 measured it).
+          const delInHighString = Math.max(1, Math.round(em(size) * 0.4)) + (style === 'bold' ? 1 : 0);
+          const entry: OutlineAtlasInfo = { file, face: face.name, style, size, delInHighString };
           if (style === 'plain') {
             // Windows draws the underline of some outline fonts below the cell; the set does so at 9 points.
             const rows = height >= 28 ? 2 : 1;

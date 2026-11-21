@@ -2,12 +2,14 @@
 // panel's actions with their questions and messages, and a drop.
 
 import { describe, expect, it } from 'vitest';
-import type { Bytes, DialogInstance, MessageBoxRequest } from '../../contracts';
+import type { Bytes, DialogInstance, MessageBoxRequest, OpenRequest, Platform } from '../../contracts';
 import { writeZip } from '../../fs/zip';
-import { createTestApplication, type TestApplication } from '../../state/testing';
+import { createFakePlatform, createTestApplication, type TestApplication } from '../../state/testing';
 import { deletePath, exportPath, importInto, newFolder, renamePath } from './actions';
 import { handleDrop } from './drop';
-import { createFileDialogs, dropDeps, feature } from './index';
+import { DROPPED_FOLDER_TITLE, createFileDialogs, dropDeps, feature } from './index';
+import type { FileDialogService } from './dialogs';
+import { EDITOR_OPEN_FILTERS } from './filters';
 
 const ascii = (text: string): Bytes => Uint8Array.from(text, (c) => c.charCodeAt(0));
 const text = (bytes: Bytes): string => String.fromCharCode(...bytes);
@@ -122,6 +124,83 @@ describe('feature "files"', { timeout: 60_000 }, () => {
     expect(opened).toEqual(['/browser/Imported/b.X68', '/browser/Imported/a.X68']);
     expect(text(await application.ctx.vfs.readFile('/browser/Imported/a.X68'))).toBe('a');
     await tick();
+    application.dispose();
+  });
+
+  it("the desktop app: its native dialogs replace the port's, and choose folders (DV2 errata 1; H1)", async () => {
+    const calls: string[] = [];
+    const platform = createFakePlatform({
+      kind: 'desktop',
+      nativeFileDialogs: {
+        open: async (request) => (calls.push(`open ${request.title}`), ['/disk/C/a.X68']),
+        save: async (request) => (calls.push(`save ${request.title}`), '/disk/C/b.X68'),
+        chooseFolder: async (title) => (calls.push(`folder ${title}`), '/disk/C/Examples'),
+      },
+    } as Partial<Platform>);
+    const application = createTestApplication({ features: [feature], services: { createFileDialogs }, platform });
+    const dialogs = application.ctx.fileDialogs as FileDialogService;
+    expect(await dialogs.open({ title: 'Open File', filters: [], multiple: false })).toEqual(['/disk/C/a.X68']);
+    expect(await dialogs.save({ title: 'Save As', filters: [], defaultExt: '.X68' })).toBe('/disk/C/b.X68');
+    expect(await dialogs.chooseFolder({ title: 'Copy the Examples to' })).toBe('/disk/C/Examples');
+    expect(calls).toEqual(['open Open File', 'save Save As', 'folder Copy the Examples to']);
+    // No port dialog was opened, and "From this computer..." is not offered there.
+    expect(application.ctx.store.getState().dialogs.stack).toEqual([]);
+    expect(dialogs.registry.get('upload')).toBeUndefined();
+    application.dispose();
+  });
+
+  it('the desktop app: a dropped file is opened where it is, a dropped folder starts the Open dialog (DV2 4a)', async () => {
+    const requests: OpenRequest[] = [];
+    const granted: unknown[] = [];
+    const disk = new File(['x'], 'a.X68');
+    const folder = new File([], 'work');
+    const platform = createFakePlatform({
+      kind: 'desktop',
+      nativeFileDialogs: {
+        open: async (request) => (requests.push(request), ['/disk/C/work/one.X68', '/disk/C/work/two.X68']),
+        save: async () => null,
+        chooseFolder: async () => null,
+      },
+      grantDroppedFile: async (file: File) => {
+        granted.push(file);
+        if (file === disk) return { path: '/disk/C/a.X68', kind: 'file' };
+        if (file === folder) return { path: '/disk/C/work', kind: 'dir' };
+        return null;
+      },
+    } as Partial<Platform>);
+    const application = createTestApplication({ features: [feature], services: { createFileDialogs }, platform });
+    const opened: string[] = [];
+    application.ctx.documents.open = async (path) => {
+      opened.push(path);
+      return null;
+    };
+    await handleDrop(
+      [
+        { name: 'a.X68', isFolder: false, read: async () => ascii('x'), handle: null, file: disk },
+        { name: 'work', isFolder: true, read: () => Promise.reject(new Error('folder')), handle: null, file: folder },
+      ],
+      dropDeps(application.ctx),
+    );
+    expect(granted).toEqual([disk, folder]);
+    expect(opened).toEqual(['/disk/C/a.X68', '/disk/C/work/one.X68', '/disk/C/work/two.X68']);
+    expect(requests).toEqual([
+      { title: DROPPED_FOLDER_TITLE, filters: [...EDITOR_OPEN_FILTERS], multiple: true, startDir: '/disk/C/work' },
+    ]);
+    expect(await application.ctx.vfs.stat('/browser/Imported')).toBeNull(); // nothing was copied
+    application.dispose();
+  });
+
+  it('in a browser, chooseFolder uses the Save dialog and creates the folder typed there', async () => {
+    const application = app();
+    const dialogs = application.ctx.fileDialogs as FileDialogService;
+    await application.ctx.vfs.mkdirp('/browser/work');
+    const seen = answer(application, ['/browser/work/Examples']);
+    expect(await dialogs.chooseFolder({ title: 'Copy the Examples to', startDir: '/browser/work' })).toBe(
+      '/browser/work/Examples',
+    );
+    expect(seen[0]?.id).toBe('file.save');
+    expect((seen[0]?.props as { initialName: string }).initialName).toBe('New Folder');
+    expect((await application.ctx.vfs.stat('/browser/work/Examples'))?.kind).toBe('dir');
     application.dispose();
   });
 });

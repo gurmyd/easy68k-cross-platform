@@ -15,6 +15,9 @@
 //   --check          change nothing; compare the results with tests/corpus/manifest.json and exit 1
 //                    when a hash, a count or a status differs
 //   --report         only rewrite golden/REPORT.md from the manifest (no Docker needed)
+//   --rehash         only recompute the hashes of the manifest from the stored official outputs
+//                    (golden/ and build/golden-local/), after a change of the canonical forms of
+//                    compare.ts (no Docker needed; exit 1 when a stored output is missing)
 //   --image NAME     Docker image (default easy68k-oracle-wine, from `npm run oracle:wine:build`)
 //   --official DIR   the unpacked official distribution (default reference/official-extracted, or
 //                    $EASY68K_OFFICIAL_DIR; see ../common/fetch-official.mjs)
@@ -34,6 +37,11 @@
 //   4. rewrites tests/corpus/manifest.json and tests/conformance/asm/golden/REPORT.md, which
 //      names every run the automation could not complete and why.
 //
+// A run in which the official editor shows a window it must not show (anything but its
+// help-viewer message boxes, see asm_batch.py) is a failed run, like a crash. When the editor had
+// finished assembling by then, the files it wrote are kept as `<label>.failed.L68` / `.S68`.
+// The exit status is 1 when a run that had a result in the manifest has none now.
+//
 // The official programs run only inside the container. Nothing of them is copied to the host.
 
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -45,6 +53,7 @@ import {
   canonicalSRecord,
   editorLoad,
   listingCounts,
+  undefinedSymbolRanges,
 } from '../../../conformance/asm/compare.ts';
 import {
   GOLDEN_TRACKED,
@@ -52,7 +61,9 @@ import {
   REPO,
   SET_DIRECTORIES,
   goldenDirectory,
+  hasOfficialOutput,
   loadManifest,
+  outputStem,
   sha256Hex,
   sourceFlags,
   sourcePath,
@@ -62,6 +73,7 @@ import {
   assertImageCurrent,
   assertOfficialFolder,
   bind,
+  docker,
   runContainer,
   wineVersion,
 } from '../common/docker.mjs';
@@ -304,54 +316,54 @@ function findOutput(directory, extension) {
 }
 
 /**
+ * Why a record of asm_batch.py is not the record of a clean run, or null when it is one.
+ * A record that lists an unexpected window is never clean, whatever status it carries: the
+ * driver ends such a run itself, and a driver that only dismissed the window (as the first
+ * version did) must not pass here either (ARCHITECTURE.md 6.2.2).
+ */
+export function failureOf(record) {
+  if (!record) return 'the container wrote no result for this run';
+  if (record.status !== 'ok') return record.error ?? 'unknown';
+  const stray = record.stray_windows ?? [];
+  if (stray.length > 0) return `unexpected window "${stray[0].title}" was dismissed by the driver`;
+  return null;
+}
+
+/**
  * What the manifest records for one run, from the record of asm_batch.py and the files it left.
  * Returns the entry and the files to keep ({ listing, sRecord, received } as bytes or null).
+ *
+ * A failed run keeps its outputs when the editor had finished assembling - its status dialog was
+ * up, so the record has `status_title` - and a file is there with something in it (a crash during
+ * assembly leaves two empty files). Such an entry has `outputsKept` and the hashes of those files.
  */
 export function ingestRun({ options, record, source }) {
-  if (!record) {
+  const reason = failureOf(record);
+  const nonEmpty = (bytes) => (bytes && bytes.length > 0 ? bytes : null);
+  const assembled = reason === null || typeof record?.status_title === 'string';
+  const found = (extension) => (assembled ? findOutput(record.outDirectory, extension) : null);
+  const listing = reason === null ? found('.l68') : nonEmpty(found('.l68'));
+  const sRecord = reason === null ? found('.s68') : nonEmpty(found('.s68'));
+  if (reason !== null && listing === null && sRecord === null) {
     return {
-      run: {
-        options,
-        status: 'failed',
-        reason: 'the container wrote no result for this run',
-        errors: null,
-        warnings: null,
-        l68: null,
-        s68: null,
-        golden: false,
-      },
+      run: { options, status: 'failed', reason, errors: null, warnings: null, l68: null, s68: null, golden: false },
       files: {},
     };
   }
-  if (record.status !== 'ok') {
-    return {
-      run: {
-        options,
-        status: 'failed',
-        reason: record.error ?? 'unknown',
-        errors: null,
-        warnings: null,
-        l68: null,
-        s68: null,
-        golden: false,
-      },
-      files: {},
-    };
-  }
-  const listing = findOutput(record.outDirectory, '.l68');
-  const sRecord = findOutput(record.outDirectory, '.s68');
-  const received = findOutput(record.outDirectory, '.received.txt') ?? new Uint8Array();
+  const received = found('.received.txt') ?? new Uint8Array();
   const hashes = canonicalHashes({ listing, sRecord });
   const counts = listing ? listingCounts(listing) : { errors: null, warnings: null };
   const modelText = editorLoad(source).text;
   const receivedDiffers = Buffer.compare(Buffer.from(modelText), Buffer.from(received)) !== 0;
   const notes = [];
   if (record.warning) notes.push(record.warning);
-  for (const stray of record.stray_windows ?? []) notes.push(`unexpected window "${stray.title}" was dismissed`);
+  for (const box of record.help_boxes ?? []) {
+    notes.push(`help-viewer message box dismissed ${box.when === 'exit' ? 'at exit' : 'at start-up'}`);
+  }
   if (record.exit && record.exit !== 'clean') notes.push(`the editor was ${record.exit}`);
   const run = {
     options,
-    status: 'ok',
+    ...(reason === null ? { status: 'ok' } : { status: 'failed', reason, outputsKept: true }),
     received: sha256Hex(received),
     ...(receivedDiffers ? { receivedFile: true } : {}),
     errors: counts.errors,
@@ -376,39 +388,84 @@ function writeIfChanged(path, bytes, canonical) {
   return true;
 }
 
+/** The extensions of the files a run may have in its golden folder. */
+const OUTPUT_EXTENSIONS = ['L68', 'S68', 'received.txt'];
+
 /**
  * Stores the outputs of one run and completes its manifest entry (`golden`). Tracked sets go to the
  * repository unless a file is too large; `site` and oversized files go to build/golden-local/.
+ * The files of a failed run that left outputs are stored the same way under `<label>.failed.*`.
  * Returns the number of files written.
  */
 export function storeRun(program, label, run, files) {
   const tracked = goldenDirectory(program, true);
   const local = goldenDirectory(program, false);
-  const stale = (directory) => {
-    for (const extension of ['L68', 'S68', 'received.txt'])
-      rmSync(join(directory, `${label}.${extension}`), { force: true });
+  const stem = outputStem(label, run);
+  const removeStale = (keep) => {
+    for (const name of [label, `${label}.failed`]) {
+      if (name === keep) continue;
+      for (const extension of OUTPUT_EXTENSIONS) rmSync(join(tracked, `${name}.${extension}`), { force: true });
+    }
   };
-  if (run.status !== 'ok') {
-    stale(tracked);
+  if (!hasOfficialOutput(run)) {
+    removeStale(null);
     return 0;
   }
   const tooLarge = [files.listing, files.sRecord].some((bytes) => bytes && bytes.length > MAX_GOLDEN_BYTES);
   run.golden = program.set !== 'site' && !tooLarge;
   const directory = run.golden ? tracked : local;
-  if (!run.golden) stale(tracked);
+  removeStale(run.golden ? stem : null);
   let written = 0;
   const identity = (bytes) => bytes;
   // With undefined symbols the stored object code is uninitialised memory of that run: a file is
   // replaced only when it changed in something that is compared.
+  const masked = files.listing ? undefinedSymbolRanges(files.listing) : [];
   const put = (extension, bytes, canonical) => {
-    const path = join(directory, `${label}.${extension}`);
+    const path = join(directory, `${stem}.${extension}`);
     if (bytes) written += writeIfChanged(path, bytes, canonical) ? 1 : 0;
     else rmSync(path, { force: true });
   };
   put('L68', files.listing, canonicalListing);
-  put('S68', files.sRecord, (bytes) => canonicalSRecord(bytes, run.undefinedSymbols === true));
+  put('S68', files.sRecord, (bytes) => canonicalSRecord(bytes, masked));
   put('received.txt', files.received, identity);
   return written;
+}
+
+/**
+ * `--rehash`: the hashes of every run again, from the stored official outputs, after a change of
+ * the canonical forms. `readOutput(program, label, run, extension)` returns the bytes of a stored
+ * file or null. Changes `manifest` in place and returns what happened to each run that has
+ * outputs: `{ unchanged, changed, missing }`, the last two as lists of `<id> (<label>)`.
+ */
+export function rehashManifest(manifest, readOutput) {
+  const result = { unchanged: 0, changed: [], missing: [] };
+  for (const program of manifest.programs) {
+    for (const [label, run] of Object.entries(program.runs)) {
+      if (!hasOfficialOutput(run)) continue;
+      const name = `${program.id} (${label})`;
+      const listing = run.l68 === null ? null : readOutput(program, label, run, 'L68');
+      const sRecord = run.s68 === null ? null : readOutput(program, label, run, 'S68');
+      if ((run.l68 !== null && listing === null) || (run.s68 !== null && sRecord === null)) {
+        result.missing.push(name);
+        continue;
+      }
+      const hashes = canonicalHashes({ listing, sRecord });
+      if (hashes.l68 === run.l68 && hashes.s68 === run.s68) {
+        result.unchanged++;
+        continue;
+      }
+      run.l68 = hashes.l68;
+      run.s68 = hashes.s68;
+      result.changed.push(name);
+    }
+  }
+  return result;
+}
+
+/** The stored output file of a run: in the repository when the run is `golden`, else in build/golden-local/. */
+function readStoredOutput(program, label, run, extension) {
+  const path = join(goldenDirectory(program, run.golden), `${outputStem(label, run)}.${extension}`);
+  return existsSync(path) ? new Uint8Array(readFileSync(path)) : null;
 }
 
 // --- 4. the manifest and the report ----------------------------------------------------------------
@@ -457,7 +514,8 @@ export function renderReport(manifest) {
     '',
     'A "run" is one program assembled with one set of options. "Golden" means the `.L68` and `.S68` of',
     'the official program are in this folder; "hash only" means the manifest holds their SHA-256 and the',
-    'files are not in the repository (a program of the `site` set, or an output over 512 KiB).',
+    'files are not in the repository (a program of the `site` set, or an output over 512 KiB). "No',
+    'result" means that the run was not a clean run of the official program.',
     '',
     '| Set | Programs | Runs | Golden | Hash only | No result |',
     '|---|---|---|---|---|---|',
@@ -491,12 +549,27 @@ export function renderReport(manifest) {
   section(
     'Runs without a result',
     [
-      'The automation could not get an output of the official program for these; no golden exists and',
-      'the comparison test skips them.',
+      'The automation could not get a clean run of the official program for these: it crashed, took',
+      'too long, or showed a window that a run must not show. No golden exists and the comparison test',
+      'skips them, except where the next section says that the outputs were kept.',
     ],
     runs
       .filter(({ run }) => run.status !== 'ok')
       .map(({ program, label, run }) => `- \`${program.id}\` (${label}): ${run.reason}`),
+  );
+  section(
+    'Outputs kept from a failed run',
+    [
+      'In these runs the official program had finished assembling (its status dialog was up) when the',
+      'run went wrong. The `.L68` and `.S68` it had written are kept as `<label>.failed.L68` / `.S68`',
+      '(official-oracle §4 item 7), and the comparison test compares them like goldens.',
+    ],
+    runs
+      .filter(({ run }) => run.status !== 'ok' && run.outputsKept)
+      .map(
+        ({ program, label, run }) =>
+          `- \`${program.id}\` (${label}): ${plural(run.errors ?? 0, 'error')}, ${plural(run.warnings ?? 0, 'warning')}; ${run.golden ? 'in this folder' : 'hash only'}`,
+      ),
   );
   section(
     'Text that differs from the editor model',
@@ -527,8 +600,9 @@ export function renderReport(manifest) {
     '## Undefined symbols',
     '',
     `Runs that report an undefined symbol: ${undefinedRuns}. The original encodes uninitialised memory for such a`,
-    'symbol (official-oracle §3.5), so for these runs the object code of the affected statements and the',
-    'data of the S-records are masked before comparing; the manifest marks them `undefinedSymbols`.',
+    'symbol (official-oracle §3.5), so for these runs the object code of the statements that report one',
+    'is masked before comparing, in the listing and in the S-records; every other byte is compared.',
+    'The manifest marks these runs `undefinedSymbols`.',
     '',
   );
   return lines.join('\n');
@@ -537,6 +611,17 @@ export function renderReport(manifest) {
 function writeJson(path, value) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(value, null, 1)}\n`);
+}
+
+/**
+ * Throws unless the driver inside the image passes its own test of the window rule
+ * (`asm_batch.py --self-test`): which windows it dismisses and which fail a run.
+ */
+export function assertDriverSelfTest(image) {
+  const result = docker(['run', '--rm', '--entrypoint', 'python3', image, '/oracle/asm_batch.py', '--self-test']);
+  if (result.status !== 0) {
+    throw new Error(`the driver in ${image} fails its self-test:\n${result.stdout}${result.stderr}`);
+  }
 }
 
 // --- the command line ------------------------------------------------------------------------------
@@ -550,6 +635,7 @@ function parseArguments(argv) {
     large: false,
     check: false,
     report: false,
+    rehash: false,
     image: DEFAULT_IMAGE,
     official: resolve(process.env.EASY68K_OFFICIAL_DIR ?? join(REPO, 'reference', 'official-extracted')),
     file: null,
@@ -570,6 +656,7 @@ function parseArguments(argv) {
     else if (argument === '--large') options.large = true;
     else if (argument === '--check') options.check = true;
     else if (argument === '--report') options.report = true;
+    else if (argument === '--rehash') options.rehash = true;
     else if (argument === '--image') options.image = value();
     else if (argument === '--official') options.official = resolve(value());
     else if (argument === '--file') options.file = resolve(value());
@@ -611,8 +698,9 @@ async function runOneFile(options) {
   if (existsSync(record.outDirectory)) cpSync(record.outDirectory, out, { recursive: true });
   const { outDirectory: _ignored, ...shown } = record;
   console.log(JSON.stringify(shown, null, 1));
-  console.log(record.status === 'ok' ? `outputs: ${out}` : `FAILED: ${record.error}`);
-  return record.status === 'ok' ? 0 : 1;
+  const failure = failureOf(record);
+  console.log(failure === null ? `outputs: ${out}` : `FAILED: ${failure}\nwhat the editor left: ${out}`);
+  return failure === null ? 0 : 1;
 }
 
 async function main() {
@@ -622,8 +710,26 @@ async function main() {
     console.log(`${relative(REPO, REPORT_PATH)} written`);
     return 0;
   }
+  if (options.rehash) {
+    const manifest = loadManifest();
+    const result = rehashManifest(manifest, readStoredOutput);
+    writeJson(MANIFEST_PATH, manifest);
+    writeFileSync(REPORT_PATH, renderReport(manifest));
+    console.log(
+      `hashes from the stored official outputs: ${plural(result.changed.length, 'run')} changed, ${result.unchanged} unchanged; ${relative(REPO, MANIFEST_PATH)} written`,
+    );
+    if (result.missing.length > 0) {
+      console.log(
+        `${plural(result.missing.length, 'run')} left as they are, because their outputs are not on this machine (run them through the official program instead):`,
+      );
+      for (const name of result.missing.slice(0, 40)) console.log(`  ${name}`);
+      if (result.missing.length > 40) console.log(`  ... and ${result.missing.length - 40} more`);
+    }
+    return result.missing.length > 0 ? 1 : 0;
+  }
   assertOfficialFolder(options.official);
   assertImageCurrent(options.image, WINE_DIRECTORY);
+  assertDriverSelfTest(options.image);
   if (options.file) return runOneFile(options);
 
   const planned = planPrograms(options.sets).filter(
@@ -684,6 +790,7 @@ async function main() {
   const manifest = existsSync(MANIFEST_PATH) ? loadManifest() : emptyManifest();
   const previous = new Map(manifest.programs.map((program) => [program.id, program]));
   const differences = [];
+  const lost = []; // runs that had a result in the manifest and have none now
   let ok = 0;
   let failed = 0;
   let written = 0;
@@ -718,6 +825,7 @@ async function main() {
         : ingestRun({ options: runOptions, record: records.get(id), source });
       if (run.status === 'ok') ok++;
       else failed++;
+      if (recorded?.status === 'ok' && run.status !== 'ok') lost.push(`${program.id} (${label}): ${run.reason}`);
       const changed = runDifferences(before?.runs[label], run);
       if (changed.length > 0) differences.push(`${program.id} (${label}): ${changed.join('; ')}`);
       if (options.check) run.golden = before?.runs[label]?.golden ?? false;
@@ -733,6 +841,16 @@ async function main() {
     if (differences.length > 40) console.log(`  ... and ${differences.length - 40} more`);
   } else {
     console.log('every run equals the manifest');
+  }
+  if (lost.length > 0) {
+    console.log(
+      `${plural(lost.length, 'run')} had a result in the manifest and ${lost.length === 1 ? 'has' : 'have'} none now:`,
+    );
+    for (const line of lost) console.log(`  ${line}`);
+  }
+  const imageWine = wineVersion(options.image);
+  if (manifest.oracle.wine && manifest.oracle.wine !== imageWine) {
+    console.log(`note: the manifest was made with ${manifest.oracle.wine}, this image has ${imageWine}`);
   }
   if (options.check) return differences.length > 0 ? 1 : 0;
 
@@ -750,7 +868,7 @@ async function main() {
     version: 1,
     oracle: {
       program: 'official EDIT68K.exe v5.16.1 under Wine in Docker (tests/oracle/wine)',
-      wine: wineVersion(options.image),
+      wine: imageWine,
       generated:
         differences.length > 0 || !manifest.oracle.generated
           ? new Date().toISOString().slice(0, 10)
@@ -763,7 +881,8 @@ async function main() {
   console.log(
     `${plural(written, 'output file')} written; ${relative(REPO, MANIFEST_PATH)} and ${relative(REPO, REPORT_PATH)} updated`,
   );
-  return 0;
+  // Everything is written, so that the change can be looked at; but a lost result is an error.
+  return lost.length > 0 ? 1 : 0;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

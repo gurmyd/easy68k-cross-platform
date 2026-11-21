@@ -1,0 +1,17 @@
+# Save S-Record ranges and the replace question (docs/porting/easybin.md 11).
+reset
+loadbin bin70k.BIN 00F000 0
+fill 000000 00004F 5A
+savesrec small.S68 000000 000050 00001234 Yes
+savesrec cross.S68 00FFC0 010041 00FFC0 Yes
+savesrec empty.S68 001000 001000 00000000 Yes
+savesrec backwards.S68 001001 001000 00000000 Yes
+savesrec big.S68 00F000 020000 FFFFFFFF Yes
+savesrec small.S68 000000 000010 00000000 No
+savesrec small.S68 000000 000010 00000000 Yes
+savesrec odd.S68 000001 000022 ABCDEF12 Yes
+reset
+loadsrec big.S68
+digest
+loadsrec cross.S68
+loadsrec empty.S68

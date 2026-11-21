@@ -234,18 +234,32 @@ export const UNREACHABLE_CONTEXTS: readonly (readonly [context: string, page: st
 const BY_KEYWORD: ReadonlyMap<string, string> = (() => {
   const map = new Map<string, string>();
   for (const [keyword, , page] of KEYWORDS) {
-    const key = keyword.toLowerCase();
+    const key = asciiLower(keyword);
     if (!map.has(key)) map.set(key, page); // the first match wins, as in the original's loop
   }
   return map;
 })();
 
+/** The case fold of the C library's strcmpi in the "C" locale: only A-Z change (not U+212A and the like). */
+export function asciiLower(text: string): string {
+  return text.replace(/[A-Z]/g, (letter) => String.fromCharCode(letter.charCodeAt(0) + 32));
+}
+
+/** Delphi's Trim: removes the characters up to and including the space (code <= U+0020), nothing else. */
+export function trimControl(text: string): string {
+  let start = 0;
+  let end = text.length;
+  while (start < end && text.charCodeAt(start) <= 0x20) start++;
+  while (end > start && text.charCodeAt(end - 1) <= 0x20) end--;
+  return text.slice(start, end);
+}
+
 /** The page for a word: a case-insensitive exact match of the table, else the introduction. */
 export function pageForKeyword(word: string): string {
-  return BY_KEYWORD.get(word.toLowerCase()) ?? INTRO_PAGE;
+  return BY_KEYWORD.get(asciiLower(word)) ?? INTRO_PAGE;
 }
 
 /** True if the word is in the table. */
 export function isKeyword(word: string): boolean {
-  return BY_KEYWORD.has(word.toLowerCase());
+  return BY_KEYWORD.has(asciiLower(word));
 }

@@ -89,6 +89,9 @@ export function Shell() {
   const ctx = useAppContext();
   const mode = useAppState((state) => state.mode);
   const exited = useShellState((state) => state.exited);
+  // While a modal dialog is open the Help drawer stays above its backdrop (shell.css), so that the
+  // dialog's Help button and F1 show their page (docs/requests/H1-help-from-dialogs.md).
+  const modal = useAppState((state) => state.dialogs.stack.some((dialog) => dialog.modal));
   useTheme();
   usePanelFocus();
 
@@ -108,7 +111,13 @@ export function Shell() {
   }
 
   return (
-    <div className="e68-shell" data-mode={mode} data-os={os} data-platform={kind}>
+    <div
+      className="e68-shell"
+      data-mode={mode}
+      data-os={os}
+      data-platform={kind}
+      data-modal={modal ? 'true' : undefined}
+    >
       <header className="e68-shell__header">
         <div className="e68-shell__menurow">
           {ownMenuBar && <ShellMenuBar mode={mode} />}

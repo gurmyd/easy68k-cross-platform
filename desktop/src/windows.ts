@@ -10,7 +10,7 @@
 //
 // Test runs (tests/desktop/dev) set EASY68K_DESKTOP_TEST_WINDOWS: `hidden` creates every window
 // without ever showing it, `inactive` shows it far off-screen without taking the focus. Nothing
-// else sets it; without it windows are shown normally.
+// else sets it; without it windows are shown normally. A packaged app ignores it (main.ts).
 //
 // Owner: DV2.
 
@@ -26,15 +26,16 @@ import {
 import type { StartupArgs } from './associations';
 import type { NativeMenus, MenuOs } from './menu';
 import { isRoleChord } from './menu';
-import { APP_WEB_PREFERENCES, CONTENT_WEB_PREFERENCES, isAllowedExternalUrl, isAppUrl } from './security';
+import {
+  APP_WEB_PREFERENCES,
+  CONTENT_WEB_PREFERENCES,
+  helpLinkAction,
+  isAllowedExternalUrl,
+  isAppUrl,
+} from './security';
 
+/** How test runs want their windows (see the top of this file; security.ts developmentOverrides). */
 export type TestWindowMode = 'hidden' | 'inactive' | null;
-
-/** How test runs want their windows (see the top of this file). */
-export function testWindowMode(env: NodeJS.ProcessEnv = process.env): TestWindowMode {
-  const value = env['EASY68K_DESKTOP_TEST_WINDOWS'];
-  return value === 'hidden' || value === 'inactive' ? value : null;
-}
 
 interface AppWindowEntry {
   window: BrowserWindow;
@@ -55,6 +56,8 @@ export interface AppWindowsOptions {
   testWindows: TestWindowMode;
   /** A window's page has loaded (deliver files that arrived early). */
   onLoaded?: (window: BrowserWindow) => void;
+  /** A window entered or left full screen, by the page's request or the system's own means. */
+  onFullScreenChange?: (window: BrowserWindow, on: boolean) => void;
 }
 
 /** Applies the navigation and window-open guards of 7.6 to any web contents. */
@@ -102,8 +105,9 @@ export class AppWindows {
     guardWebContents(window.webContents, (url) => isAppUrl(url, options.origin));
     window.webContents.on('before-input-event', (_event, input) => {
       if (input.type !== 'keyDown') return;
-      // Only the role chords reach the menu; every command chord is the page's (7.6, menu.ts).
-      window.webContents.setIgnoreMenuShortcuts(!isRoleChord(input, options.os));
+      // Only the chords of the role items this window's menu has reach the menu; every command
+      // chord is the page's (7.6, menu.ts).
+      window.webContents.setIgnoreMenuShortcuts(!isRoleChord(input, options.os, options.menus.roleChords(id)));
     });
     window.webContents.on('will-prevent-unload', (event) => {
       // The page asks before closing (Platform.confirmBeforeUnload): a program's unsaved output
@@ -122,6 +126,8 @@ export class AppWindows {
       entry.loaded = true;
       options.onLoaded?.(window);
     });
+    window.on('enter-full-screen', () => options.onFullScreenChange?.(window, true));
+    window.on('leave-full-screen', () => options.onFullScreenChange?.(window, false));
     window.on('focus', () => {
       this.lastFocused = id;
       options.menus.show(window);
@@ -228,15 +234,12 @@ export class AppWindows {
       created.webContents.on('will-navigate', (event, target) => {
         if (target.startsWith(helpBase) || !isAllowedExternalUrl(target)) return;
         event.preventDefault();
-        const choice = dialog.showMessageBoxSync(created, {
-          type: 'question',
-          buttons: ['Open', 'Cancel'],
-          defaultId: 0,
-          cancelId: 1,
-          message: 'Open this page in your web browser?',
-          detail: target,
-        });
-        if (choice === 0) void shell.openExternal(target);
+        askToOpenExternal(created, target);
+      });
+      // Links with target="_blank" (H1 errata 10): replaces the handler guardWebContents set.
+      created.webContents.setWindowOpenHandler(({ url: target }) => {
+        this.openFromHelp(created, target);
+        return { action: 'deny' };
       });
       created.once('ready-to-show', () => {
         if (test === 'hidden') return;
@@ -253,11 +256,40 @@ export class AppWindows {
     return true;
   }
 
+  /**
+   * A link of a help window asked for a new window (security.ts helpLinkAction): a file of the
+   * help folder (another page, the Quick Reference PDF) is shown in the help window itself, an
+   * allow-listed web address goes to the system browser after the user confirms. Returns what
+   * was done.
+   */
+  openFromHelp(help: BrowserWindow, target: string): 'help' | 'external' | 'deny' {
+    const action = helpLinkAction(target, `${this.options.origin}/help/`);
+    if (action === 'help' && !help.isDestroyed()) void help.loadURL(target);
+    else if (action === 'external') askToOpenExternal(help, target);
+    return action;
+  }
+
   /** The help window of `owner`, for the tests. */
   helpWindowOf(owner: BrowserWindow): BrowserWindow | null {
     const help = this.entries.get(owner.id)?.help ?? null;
     return help && !help.isDestroyed() ? help : null;
   }
+}
+
+/** Asks whether to open an allow-listed address of a help page in the system browser (7.6). */
+function askToOpenExternal(owner: BrowserWindow, target: string): void {
+  void dialog
+    .showMessageBox(owner, {
+      type: 'question',
+      buttons: ['Open', 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+      message: 'Open this page in your web browser?',
+      detail: target,
+    })
+    .then(({ response }) => {
+      if (response === 0 && isAllowedExternalUrl(target)) void shell.openExternal(target);
+    });
 }
 
 /** A page name of the help folder: relative, no '..', an optional #anchor. */

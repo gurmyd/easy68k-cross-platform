@@ -83,6 +83,46 @@ export function isAllowedExternalUrl(url: unknown): url is string {
   return (parsed.protocol === 'https:' || parsed.protocol === 'http:') && EXTERNAL_HOSTS.includes(parsed.hostname);
 }
 
+// ---- Development and test switches -------------------------------------------------------------
+
+/** The environment variables through which development and the tests steer the main process. */
+export interface DevelopmentOverrides {
+  /** EASY68K_APP_DIST: another production build of app/ to serve under app://. */
+  appDist: string | undefined;
+  /** EASY68K_DEV_SERVER_URL: load the page from the Vite dev server of `npm run desktop:dev`. */
+  devServerUrl: string | undefined;
+  /** EASY68K_DESKTOP_TEST_WINDOWS: hidden or off-screen windows, and the main-process test hooks. */
+  testWindows: 'hidden' | 'inactive' | null;
+}
+
+/**
+ * The development and test switches in force. A packaged app (`app.isPackaged`) honours none of
+ * them: whoever controls its environment could otherwise make app:// serve another folder, load
+ * the page from another server, or install the test hooks in the main process (gate 1 review).
+ * Started from the repository (development, tests) they work as described in main.ts.
+ */
+export function developmentOverrides(env: NodeJS.ProcessEnv, packaged: boolean): DevelopmentOverrides {
+  if (packaged) return { appDist: undefined, devServerUrl: undefined, testWindows: null };
+  const windows = env['EASY68K_DESKTOP_TEST_WINDOWS'];
+  return {
+    appDist: env['EASY68K_APP_DIST'] || undefined,
+    devServerUrl: env['EASY68K_DEV_SERVER_URL'] || undefined,
+    testWindows: windows === 'hidden' || windows === 'inactive' ? windows : null,
+  };
+}
+
+/**
+ * What a help window does with a link that asks for a new window (`target="_blank"`, which the
+ * help import adds to the links to the web and to the Quick Reference PDF; H1 errata 10): a file
+ * of the help folder is shown in the help window itself, an allow-listed web address goes to the
+ * system browser after the user confirms (as a followed link does), anything else is refused.
+ */
+export function helpLinkAction(url: unknown, helpBase: string): 'help' | 'external' | 'deny' {
+  if (typeof url !== 'string') return 'deny';
+  if (url.startsWith(helpBase) && !url.slice(helpBase.length).split(/[/?#]/).includes('..')) return 'help';
+  return isAllowedExternalUrl(url) ? 'external' : 'deny';
+}
+
 // ---- Where the page comes from -----------------------------------------------------------------
 
 /** The scheme and host the windows load (7.6). */

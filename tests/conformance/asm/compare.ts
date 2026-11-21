@@ -7,11 +7,13 @@
 //   1. the date line (`Created On:`), which carries the clock of the run;
 //   2. the object code of a statement with an undefined symbol: the original encodes uninitialised
 //      memory there (official-oracle §3.5), the port a zero;
-//   3. the listing text and the S-record data that follow from 2.
+//   3. what follows from 2: the object-code field of that statement in the listing, and the bytes
+//      of that statement in the S-records.
 //
 // `canonicalListing` and `canonicalSRecord` do exactly that and nothing else. For a program without
 // an undefined symbol the canonical S-record is the file itself and the canonical listing differs
-// from the file only in the date line.
+// from the file only in the date line. For a program with one, every byte outside the statements
+// that report it is still compared.
 //
 // The module also holds the model of what the editor hands to its assembler (`editorLoad`), which
 // the oracle run checks against the text it captured from the official editor.
@@ -88,8 +90,16 @@ const MESSAGE = /^Line \d+ (?:ERROR|WARNING): /;
 const UNDEFINED_SYMBOL = /^Line \d+ ERROR: Undefined symbol$/;
 /** A continuation line of a statement's object code: no address, no source text. */
 const CONTINUATION = /^ {10}[0-9A-F]/;
-/** Columns of the object-code field of a listing line (after the address and two blanks). */
-const OBJECT_FIELD: readonly [number, number] = [10, 36];
+/**
+ * Columns of the object-code field of a listing line: after the address and its two-character
+ * separator, up to the line number. The original prints the address and the code as one field of
+ * 32 characters and the line number in the six columns after it (LISTING.CPP:129, 159-161).
+ */
+const OBJECT_FIELD: readonly [number, number] = [10, 32];
+/** A listing line that starts with the location counter (`00001000  ` or, for data, `00001000= `). */
+const ADDRESS = /^([0-9A-F]{8})[ =] /;
+/** The first line of the listing trailer; the lines of the program end above it. */
+const ERROR_COUNT = /^(?:No errors detected|\d+ errors? detected)$/;
 
 /**
  * The time of the `Created On:` line as a local time, or null when the listing has none or the
@@ -147,14 +157,41 @@ function maskObjectField(line: string): string {
 }
 
 /**
+ * The statements of a listing that report an undefined symbol: for each, the indices of the
+ * listing lines that show its object code, the source line first.
+ *
+ * The original prints the message directly above the LAST listing line of the statement: the
+ * source line itself, or, when the object code continues on further lines ("Constants Expanded"),
+ * the last continuation line; then the lines above the message up to and including the source line
+ * belong to the statement too.
+ */
+function undefinedStatements(lines: readonly string[]): number[][] {
+  const statements: number[][] = [];
+  for (let index = 0; index < lines.length; index++) {
+    if (!UNDEFINED_SYMBOL.test(lines[index] ?? '')) continue;
+    // The first line below the block of messages this one is part of.
+    let below = index + 1;
+    while (below < lines.length && MESSAGE.test(lines[below] ?? '')) below++;
+    if (below >= lines.length) continue;
+    const statement = [below];
+    if (CONTINUATION.test(lines[below] ?? '')) {
+      // Upwards: skip the message block, then the continuation lines, then the source line.
+      let above = index - 1;
+      while (above >= 0 && MESSAGE.test(lines[above] ?? '')) above--;
+      while (above >= 0 && CONTINUATION.test(lines[above] ?? '')) statement.unshift(above--);
+      if (above >= 0) statement.unshift(above);
+    }
+    statements.push(statement);
+  }
+  return statements;
+}
+
+/**
  * The listing with everything removed that the original does not reproduce:
  *
  * - the date line becomes `Created On: <date>`;
- * - for every `Undefined symbol` message, the hexadecimal digits of the object-code field of the
- *   statement it belongs to become `#`. The original prints the message directly above the LAST
- *   listing line of the statement: the source line itself, or, when the object code continues on
- *   further lines ("Constants Expanded"), the last continuation line; then the lines above the
- *   message up to and including the source line belong to the statement too;
+ * - for every statement with an `Undefined symbol` message, the hexadecimal digits of its
+ *   object-code field become `#`, on every listing line of the statement;
  * - in the symbol table of such a listing, the value of an entry whose name cannot be a label
  *   (it does not start with a letter, `.`, `_` or `$`) becomes `#`: the original creates such an
  *   entry from a failed operand and leaves its value uninitialised.
@@ -162,27 +199,9 @@ function maskObjectField(line: string): string {
 export function canonicalListing(listing: Uint8Array): Uint8Array {
   const lines = decode(listing).split('\r\n');
   if (lines[DATE_LINE]?.startsWith('Created On: ')) lines[DATE_LINE] = DATE_MASK;
-  let undefinedSeen = false;
-  for (let index = 0; index < lines.length; index++) {
-    if (!UNDEFINED_SYMBOL.test(lines[index] ?? '')) continue;
-    undefinedSeen = true;
-    // The first line below the block of messages this one is part of.
-    let below = index + 1;
-    while (below < lines.length && MESSAGE.test(lines[below] ?? '')) below++;
-    if (below >= lines.length) continue;
-    const wasContinuation = CONTINUATION.test(lines[below] ?? '');
-    lines[below] = maskObjectField(lines[below] ?? '');
-    if (!wasContinuation) continue;
-    // Upwards: skip the message block, then the continuation lines, then the source line.
-    let above = index - 1;
-    while (above >= 0 && MESSAGE.test(lines[above] ?? '')) above--;
-    while (above >= 0 && CONTINUATION.test(lines[above] ?? '')) {
-      lines[above] = maskObjectField(lines[above] ?? '');
-      above--;
-    }
-    if (above >= 0) lines[above] = maskObjectField(lines[above] ?? '');
-  }
-  if (undefinedSeen) {
+  const statements = undefinedStatements(lines);
+  for (const index of statements.flat()) lines[index] = maskObjectField(lines[index] ?? '');
+  if (lines.some((line) => UNDEFINED_SYMBOL.test(line))) {
     const table = lines.indexOf('SYMBOL TABLE INFORMATION');
     for (let index = table < 0 ? lines.length : table + 3; index < lines.length; index++) {
       const entry = /^(\S+)(\s+)([0-9A-F]+)$/.exec(lines[index] ?? '');
@@ -192,23 +211,69 @@ export function canonicalListing(listing: Uint8Array): Uint8Array {
   return encode(lines.join('\r\n'));
 }
 
+/** Memory addresses `from` (included) to `to` (not included). */
+export type AddressRange = readonly [from: number, to: number];
+
+const addressOf = (line: string | undefined): number | null => {
+  const match = ADDRESS.exec(line ?? '');
+  return match ? Number.parseInt(match[1] as string, 16) : null;
+};
+
 /**
- * The S-record file as it can be compared. Without undefined symbols it is the file itself. With
- * them (`undefinedSymbols`, from the listing of the same run) the data and the checksum of every
- * S1, S2 and S3 record become `#`: type, length and address still have to agree, so the layout of
- * the program is compared, but not the bytes, some of which are uninitialised memory in the
- * original.
+ * Where the statements with an undefined symbol put their object code, read off the listing: these
+ * are the only bytes of the S-records that are not compared.
+ *
+ * A statement's bytes start at the address of its listing line and end where the next listing line
+ * starts. That covers code the listing does not show (`...` without "Constants Expanded", the body
+ * of a macro call that is not expanded). When no line follows, or the next one is at a lower
+ * address (an `ORG` backwards), the statement has the bytes its object-code field shows.
  */
-export function canonicalSRecord(sRecord: Uint8Array, undefinedSymbols: boolean): Uint8Array {
-  if (!undefinedSymbols) return sRecord;
+export function undefinedSymbolRanges(listing: Uint8Array): AddressRange[] {
+  const lines = decode(listing).split('\r\n');
+  const trailer = lines.findIndex((line) => ERROR_COUNT.test(line));
+  const end = trailer < 0 ? lines.length : trailer;
+  const ranges: AddressRange[] = [];
+  for (const statement of undefinedStatements(lines)) {
+    const from = addressOf(lines[statement[0] as number]);
+    if (from === null) continue;
+    let to: number | null = null;
+    for (let index = (statement.at(-1) as number) + 1; index < end && to === null; index++) {
+      to = addressOf(lines[index]);
+    }
+    if (to === null || to < from) {
+      const [left, right] = OBJECT_FIELD;
+      const shown = statement.map((index) => (lines[index] ?? '').slice(left, right)).join('');
+      to = from + (shown.match(/[0-9A-F#]/g)?.length ?? 0) / 2;
+    }
+    if (to > from) ranges.push([from, to]);
+  }
+  return ranges;
+}
+
+/**
+ * The S-record file as it can be compared: the file itself, except that the data bytes of the S1,
+ * S2 and S3 records at the addresses of `masked` (`undefinedSymbolRanges` of the listing of the
+ * same run) become `##`, and so does the checksum of a record that holds such a byte. Type,
+ * length and address of every record and every other byte are compared.
+ */
+export function canonicalSRecord(sRecord: Uint8Array, masked: readonly AddressRange[]): Uint8Array {
+  if (masked.length === 0) return sRecord;
+  const isMasked = (address: number): boolean => masked.some(([from, to]) => address >= from && address < to);
   const addressDigits: Record<string, number> = { S1: 4, S2: 6, S3: 8 };
   const lines = decode(sRecord)
     .split('\r\n')
     .map((line) => {
       const digits = addressDigits[line.slice(0, 2)];
-      if (digits === undefined) return line;
-      const head = 4 + digits; // type, length, address
-      return line.slice(0, head) + maskHex(line.slice(head));
+      const head = 4 + (digits ?? 0); // type, length, address
+      // A record that is not well formed is left alone, so it is compared as it is.
+      if (digits === undefined || !/^[0-9A-F]*$/.test(line.slice(2)) || (line.length - head) % 2 !== 0) return line;
+      const start = Number.parseInt(line.slice(4, head), 16);
+      const data = line.slice(head, -2);
+      let out = '';
+      for (let offset = 0; offset < data.length; offset += 2) {
+        out += isMasked(start + offset / 2) ? '##' : data.slice(offset, offset + 2);
+      }
+      return out === data ? line : `${line.slice(0, head)}${out}##`;
     });
   return encode(lines.join('\r\n'));
 }
@@ -271,9 +336,13 @@ export function compareOutputs(expected: Outputs, actual: Outputs, limit = 5): V
   const undefinedSymbols =
     (expected.listing !== null && hasUndefinedSymbols(expected.listing)) ||
     (actual.listing !== null && hasUndefinedSymbols(actual.listing));
+  // The statements of either side: when the two listings agree, they name the same bytes.
+  const masked = [expected.listing, actual.listing].flatMap((listing) =>
+    listing === null ? [] : undefinedSymbolRanges(listing),
+  );
   const canonL = (bytes: Uint8Array | null): Uint8Array | null => (bytes === null ? null : canonicalListing(bytes));
   const canonS = (bytes: Uint8Array | null): Uint8Array | null =>
-    bytes === null ? null : canonicalSRecord(bytes, undefinedSymbols);
+    bytes === null ? null : canonicalSRecord(bytes, masked);
   const listing = compareText(canonL(expected.listing), canonL(actual.listing), limit);
   const sRecord = compareText(canonS(expected.sRecord), canonS(actual.sRecord), limit);
   return { equal: listing.equal && sRecord.equal, undefinedSymbols, listing, sRecord };
@@ -286,9 +355,10 @@ export function canonicalHashes(outputs: Outputs): {
   undefinedSymbols: boolean;
 } {
   const undefinedSymbols = outputs.listing !== null && hasUndefinedSymbols(outputs.listing);
+  const masked = outputs.listing === null ? [] : undefinedSymbolRanges(outputs.listing);
   return {
     l68: outputs.listing === null ? null : sha256Hex(canonicalListing(outputs.listing)),
-    s68: outputs.sRecord === null ? null : sha256Hex(canonicalSRecord(outputs.sRecord, undefinedSymbols)),
+    s68: outputs.sRecord === null ? null : sha256Hex(canonicalSRecord(outputs.sRecord, masked)),
     undefinedSymbols,
   };
 }

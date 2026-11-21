@@ -1,0 +1,78 @@
+# S-record files the original reads in its own way (docs/porting/easybin.md 10.3).
+reset
+loadsrec bad-checksum.S68
+digest
+reset
+loadsrec bad-type4.S68
+digest
+reset
+loadsrec bad-first.S68
+digest
+reset
+loadsrec bad-address.S68
+digest
+reset
+loadsrec over-s3.S68
+digest
+reset
+loadsrec over-s2.S68
+digest
+dump FFFFFC 4
+reset
+loadsrec s5.S68
+dump 002000 8
+reset
+loadsrec blank-line.S68
+digest
+reset
+loadsrec lf-only.S68
+digest
+reset
+loadsrec no-final-newline.S68
+digest
+reset
+loadsrec ctrlz.S68
+digest
+reset
+loadsrec long-line.S68
+digest
+reset
+loadsrec only-s0-s8.S68
+digest
+reset
+loadsrec s0-text.S68
+digest
+reset
+loadsrec lone-cr.S68
+digest
+reset
+loadsrec spaces.S68
+digest
+dump 003900 4
+reset
+loadsrec sign.S68
+digest
+reset
+loadsrec zero-byte.S68
+digest
+reset
+loadsrec after-s7.S68
+digest
+reset
+loadsrec short-lines.S68
+digest
+reset
+loadsrec lowercase.S68
+digest
+reset
+loadsrec gaps.S68
+digest
+reset
+loadsrec non-srec.BIN
+loadsrec bin256.BIN
+loadsrec missing.S68
+# no reset: the line buffer keeps the long line's bytes for the short lines of the next file
+reset
+loadsrec long-line.S68
+loadsrec short-lines.S68
+digest

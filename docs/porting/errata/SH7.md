@@ -69,3 +69,22 @@ needed.
   time. With checks only once per 16 ms frame a 500 ms timer fires every 512 ms (a late timer
   schedules `now + interval`, 4.5.3), i.e. 19 ticks in 10 s; that is the frame resolution 4.5.3
   accepts, not a defect of the model.
+
+  Gate I1: the scenarios now also run on SH8's real parts
+  (`core/sim-host/hardware/session.test.ts`, on `core/run/headless.ts`: the real run controller,
+  `TimerSet`/`SoftTimer` and `VirtualTime`). There a 500 ms timer gives 19 handled interrupts in
+  10 s (ticks at 512, 1024 ... ms), none after Pause; the test accepts 19 or 20. A Windows timer
+  keeps its period (the next tick is due one interval after the previous due time, not after the
+  late check), so the original gives 20 in 10 s; a program that counts interrupts can see the
+  difference. Keeping the period in `SoftTimer.check` (`due += period`, skipping whole periods that
+  were missed, so a late timer still fires once) would give 20; that is SH8's file and a change to
+  the wording of 4.5.3, so it is left to SH8 and the gate.
+
+## 7. The browser check runs on the application's real session (gate I1)
+
+- Was: part 2 of `check-hardware.mjs` swapped the parts of the shell's inert session for the real
+  engine and the stand-in controller. The real session of SH8 (`features/run/session.ts`) has
+  read-only parts, so the swap threw.
+- Does: part 2 uses `ctx.sim` as the application built it, loads programs with File > Open
+  (`ctx.sim.controller.open`) from the browser store, and writes memory through
+  `controller.invoke`. Every step waits for the state it expects instead of a number of frames.

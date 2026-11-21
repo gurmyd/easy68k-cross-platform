@@ -15,6 +15,7 @@ import {
   createRandom,
   drawFixedScene,
   drawShapeScene,
+  drawWideRectangleScene,
   FIXED_SCENE_HASH,
   GREEN,
   hashPixels,
@@ -24,6 +25,7 @@ import {
   RED,
   UNDERSCORE_GLYPH,
   WHITE,
+  WIDE_RECTANGLE_SCENE_HASH,
 } from './testing';
 
 const STARTUP_STATE = {
@@ -1256,6 +1258,47 @@ describe('block operations of the text screen', () => {
     surface.copyRect({ left: 0, top: 0, right: 20, bottom: 20 }, { left: -40, top: -40, right: -20, bottom: -20 });
   });
 
+  it('copies exactly the pixels GDI copied in the measured cases: a pixel whose source is off the bitmap keeps its value', () => {
+    // Measured at gate I1 on a 24 x 16 memory bitmap (errata SH1 entry 6): StretchBlt of equal sizes,
+    // which is what the VCL's CopyRect calls, and BitBlt, on a screen-compatible bitmap and on a DIB
+    // section - all four alike. Each row: destination corner, source corner, size, then the block of
+    // pixels that took their source's value (left, top, right, bottom, exclusive); every other pixel
+    // of the bitmap kept its own.
+    type Block = readonly [left: number, top: number, right: number, bottom: number];
+    const measured: readonly (readonly [string, number, number, number, number, number, number, Block | null])[] = [
+      ['scroll up, source past the bottom', 4, 4, 4, 8, 12, 12, [4, 4, 16, 12]],
+      ['scroll down, destination past the bottom', 4, 8, 4, 4, 12, 12, [4, 8, 16, 16]],
+      ['scroll left, source past the right edge', 8, 4, 12, 4, 16, 8, [8, 4, 20, 12]],
+      ['scroll right, destination past the right edge', 12, 4, 8, 4, 16, 8, [12, 4, 24, 12]],
+      ['scroll up, past the bottom and the right edge', 12, 8, 12, 12, 20, 12, [12, 8, 24, 12]],
+      ['source completely below the bitmap', 4, 4, 4, 20, 8, 4, null],
+      ['source at negative coordinates', 2, 2, -3, -2, 10, 6, [5, 4, 12, 8]],
+      ['inside, overlapping, up', 4, 2, 4, 6, 12, 8, [4, 2, 16, 10]],
+      ['inside, overlapping, down', 4, 6, 4, 2, 12, 8, [4, 6, 16, 14]],
+    ];
+    for (const [name, dx, dy, sx, sy, width, height, copied] of measured) {
+      const surface = new Surface(24, 16);
+      const random = createRandom(10);
+      for (let i = 0; i < surface.back.data.length; i++) surface.back.data[i] = 0xff000000 + random.int(0, 0xffffff);
+      const before = surface.back.data.slice();
+      surface.takeDirty();
+      surface.copyRect(
+        { left: dx, top: dy, right: dx + width, bottom: dy + height },
+        { left: sx, top: sy, right: sx + width, bottom: sy + height },
+      );
+      const [left, top, right, bottom] = copied ?? [0, 0, 0, 0];
+      for (let y = 0; y < 16; y++) {
+        for (let x = 0; x < 24; x++) {
+          const taken = x >= left && y >= top && x < right && y < bottom;
+          const expected = taken ? before[(y - dy + sy) * 24 + x - dx + sx] : before[y * 24 + x];
+          if (surface.back.data[y * 24 + x] !== expected) expect.fail(`${name}: pixel (${x},${y})`);
+        }
+      }
+      // and the screen is told about exactly that block
+      expect(surface.takeDirty(), name).toEqual(copied ? { left, top, right, bottom } : null);
+    }
+  });
+
   it('while double buffering the block operations change the back buffer only', () => {
     const surface = surfaceOf(GREEN);
     surface.setDrawingMode(17);
@@ -1323,6 +1366,14 @@ describe('a fixed scene', () => {
     drawFixedScene(surface);
     // check-surface.mjs expects the same hash from Chromium and WebKit
     expect(hashPixels(surface.back)).toBe(FIXED_SCENE_HASH);
+  });
+
+  it('the scene of rectangles with every pen width 2-255 has the pixels GDI gave it', () => {
+    // At gate I1 the calls of this scene were also given to Windows GDI (the capture program of
+    // tests/oracle/gdi-capture): its picture and this one were equal in all 307,200 pixels.
+    const surface = new Surface(640, 480);
+    drawWideRectangleScene(surface);
+    expect(hashPixels(surface.back)).toBe(WIDE_RECTANGLE_SCENE_HASH);
   });
 
   it('the scene of ellipses and wide lines is repeatable too', () => {

@@ -71,6 +71,12 @@ export function syntaxVariables(
   return variables;
 }
 
+/** Custom properties as the text of an inline style, in a canonical order. */
+const styleText = (variables: Record<string, string>): string =>
+  Object.entries(variables)
+    .map(([name, value]) => `${name}: ${value}`)
+    .join('; ');
+
 /**
  * The inline style that carries the stored colours, or null for Auto (the theme's values apply).
  * The text is canonical, so equal settings give equal strings.
@@ -79,7 +85,22 @@ export function storedColorsStyle(
   editor: Pick<EditorSettings, 'colorPreset' | 'styles' | 'backgroundColor'>,
 ): string | null {
   if (isAutoPreset(editor)) return null;
-  return Object.entries(syntaxVariables(editor.styles, editor.backgroundColor))
-    .map(([name, value]) => `${name}: ${value}`)
-    .join('; ');
+  return styleText(syntaxVariables(editor.styles, editor.backgroundColor));
+}
+
+/** The text colour of a list document under a stored preset: the RichEdit default (clWindowText). */
+export const LIST_TEXT_COLOR = 0x000000;
+
+/**
+ * The inline style of a list document (.L68, .S68), or null for Auto. The original sets the stored
+ * background on every edit window (`SourceText->Color = backColor`, textS.cpp:78, editorOptions.cpp:148),
+ * list windows included, and leaves their text in the default black: no syntax colours, no
+ * attributes. Under Auto a list document keeps the theme's editor colours.
+ */
+export function listColorsStyle(editor: Pick<EditorSettings, 'colorPreset' | 'backgroundColor'>): string | null {
+  if (isAutoPreset(editor)) return null;
+  return styleText({
+    [syntaxVariable('code')]: colorRefToHex(LIST_TEXT_COLOR),
+    [syntaxVariable('background')]: colorRefToHex(editor.backgroundColor),
+  });
 }

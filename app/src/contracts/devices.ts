@@ -22,6 +22,8 @@
 //   DesktopSerial    core/sim-host/serial/desktop.ts           W1 > DV4
 //   DesktopNet       core/sim-host/net/desktop.ts              W1 > DV4
 //   CachedSyncFiles  fs/sync/cached.ts (Api: SyncFiles)        W1 > SH6
+//   AtlasGlyphProvider  core/sim-host/fonts/atlas-provider.ts (Api: GlyphProvider;
+//                       constructor(load: FontFileLoader))     SH3, no W1 stub
 //   SimUiBridge, SoftTimer, RealClock, FrameScheduler, VirtualTime: core/run/ (SH8, no W1 stub;
 //     see docs/porting/errata/W1.md)
 //
@@ -114,7 +116,8 @@ export interface OverlayCell {
   pixels: Uint32Array;
 }
 
-/** Surface (constructor(width: number, height: number)). */
+/** Surface (constructor(width: number, height: number)). The constructor takes any size from 1 x 1
+ *  to the surface's maximum; the 640 x 480 minimum is applied by `resize` only. */
 export interface SurfaceApi {
   readonly back: PixelBuffer; // always drawn
   /** Image on screen while double buffering is on; null while it is off (the screen shows `back`). */
@@ -141,9 +144,17 @@ export interface SurfaceApi {
 
   /* block operations used by TextScreen */
   fillBlack(rect: Rect): void;
-  copyRect(dest: Rect, source: Rect): void; // overlapping copies behave like GDI BitBlt
+  /** Overlapping copies behave like GDI BitBlt. Never scales: rectangles of different size copy
+   *  the size they have in common. Pixels outside the surface are neither read nor written. */
+  copyRect(dest: Rect, source: Rect): void;
   /** TextOut: opaque cell in the fill colour, glyph in fontColor, then pen := (x + extent, y).
-   *  target 'both' = back buffer and (unless double buffering) window; 'window' = overlay only. */
+   *  target 'both' = back buffer and (unless double buffering) window; 'window' = overlay only.
+   *  The cell is as wide as the advances of `glyphs` together and as high as the tallest glyph;
+   *  `extent` only moves the pen. The caller leaves zero-width bytes out of `glyphs`, passes one
+   *  blank glyph for a text that has only such bytes, and appends an ink-less glyph as wide as
+   *  GlyphProvider.textOverhang for a simulated bold or italic face. No glyphs: nothing is painted
+   *  and the pen still moves. `fontColor` may be raw or resolved: the colour rule of trap15-b §4.6
+   *  is applied inside and changes no resolved colour. */
   textOut(
     x: number,
     y: number,
@@ -156,7 +167,9 @@ export interface SurfaceApi {
   resetToStartup(): void; // 3.3.2: 640x480, black, pens at (0,0), default state
 
   /* presentation */
-  /** Region of the on-screen image changed since the last call, or null. Clears the record. */
+  /** Region of the on-screen image changed since the last call, or null. Clears the record. One
+   *  bounding box inside the surface; it also covers every place where `overlay` appeared, changed
+   *  or went away, so presenting the region and then drawing `overlay` is always right. */
   takeDirty(): Rect | null;
   readonly overlay: OverlayCell | null; // prompt cell drawn over the presented image
 }
@@ -187,7 +200,21 @@ export interface GlyphProvider {
   readonly ready: Promise<void>;
   metrics(font: FontSpec): CellMetrics;
   glyph(font: FontSpec, ch: number): Glyph; // ch = one Windows-1252 byte
+  /**
+   * Pixels by which the opaque box of a text in this font reaches beyond its last advance: Windows'
+   * simulated bold (1) and italic (half the cell height) of the raster faces, 0 otherwise. Added at
+   * gate I1 as an optional member (docs/porting/errata/W1.md, entry 11): a provider without it has
+   * no overhang.
+   */
+  textOverhang?(font: FontSpec): number;
 }
+/**
+ * Reads one file below app/public/fonts/ for the glyph provider of the application
+ * (`new AtlasGlyphProvider(load)`, core/sim-host/fonts/atlas-provider.ts, SH3): "metrics.json",
+ * "scalable/index.json", "bitmap/Fixedsys-15.bin" ... null = no such file. The composition root
+ * supplies it (a fetch relative to the page), because core/ may not fetch. Added at gate I1.
+ */
+export type FontFileLoader = (path: string) => Promise<Bytes | null>;
 
 /* ------------------------------------------------------------------ text screen (3.5.2) */
 
@@ -212,10 +239,14 @@ export interface TextState {
 export interface TextScreenDeps {
   surface: SurfaceApi;
   glyphs: GlyphProvider;
-  scheduler: Scheduler; // 500 ms prompt timer
+  /** The 500 ms prompt timer: TextScreen runs it itself with setTimer and calls promptTick(). The
+   *  run controller does not tick the prompt. */
+  scheduler: Scheduler;
   outputLog: (data: Bytes) => void; // LogService.outputWrite; no-op unless the output log is active
   beep: () => void;
-  show: () => void; // make the Output panel visible
+  /** Make the Output panel visible. Called for every character written, so it must be cheap and
+   *  must do nothing, and move no focus, while the panel is visible. */
+  show: () => void;
 }
 /** TextScreen (constructor(deps: TextScreenDeps)). */
 export interface TextScreenApi {
@@ -259,6 +290,9 @@ export interface OutputDeviceDeps {
   bringToFront: () => void;
   /** setupWindow(fullScreen): enter or leave full screen (2.5). */
   setFullScreen: (on: boolean) => void;
+  /** One line for the simulator message area: `Output window size limited to 4096 x 4096` (2.5).
+   *  Added at gate I1 as an optional member; without it the message is not shown. */
+  message?: (text: string) => void;
 }
 /** OutputDevice (constructor(deps: OutputDeviceDeps)): the `text` and `graphics` parts. */
 export type OutputDeviceApi = HostIoText & HostIoGraphics;
@@ -464,7 +498,10 @@ export interface PrinterDeviceApi extends HostPrinter {
 
 /** ListingView (constructor(engine: () => SimEngine)). */
 export interface ListingViewApi {
-  refresh(): void; // re-read all rows (after load, close, cold start, RepaintBit.Listing)
+  /** Re-reads all rows. The run controller calls it after a load, a close and a cold start: the
+   *  rows change at no other time. RepaintBit.Listing alone (every trace step, every breakpoint
+   *  toggle) redraws the panel and does not call it. `rows` is a new array after every call. */
+  refresh(): void;
   readonly rows: readonly string[]; // Windows-1252 decoded, no line ends
   isInstruction(row: number): boolean; // sim-ui §6.2
   addressOf(row: number): number | null; // first 8 characters as hex

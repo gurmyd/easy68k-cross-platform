@@ -4,6 +4,8 @@ import { panelVisible } from '../../state/panels';
 import { createFakePlatform, createTestApplication } from '../../state/testing';
 import { checkForUpdate } from './AboutDialog';
 import { HelpController, helpControllerOf, type FetchLike } from './controller';
+import { editorHelpPage, helpKeywordAt } from '../../core/help/context';
+import { isKeyword, pageForKeyword } from '../../core/help/keywords';
 import { feature } from './index';
 import { wordContextFrom, type ElementLike, type NodeLike, type SelectionLike } from './editor-context';
 
@@ -90,6 +92,37 @@ describe('the help feature in an application', { timeout: 60_000 }, () => {
       await Promise.resolve();
       expect(app.ctx.store.getState().dialogs.stack.map((dialog) => dialog.id)).toEqual([id]);
     }
+  });
+});
+
+describe('F1 with the document service selection', () => {
+  const withSelection = (text: string, selected: string, caret: number) => {
+    const app = createTestApplication({ features: [feature] });
+    // The context object is keyed by identity in the shell state, so the service is changed in place.
+    const documents = app.ctx.documents;
+    documents.active = () => ({ id: 'd1' }) as never;
+    documents.text = () => text;
+    documents.selection = () => ({ selected, caret });
+    const run = feature.commands!['ed.help.context']!.run;
+    return { app, press: () => run(app.ctx, undefined) };
+  };
+
+  it('opens the page of the word at the caret, read from the real text', async () => {
+    const { app, press } = withSelection('  MOVE.L D0,D1\n', '', 5);
+    await press();
+    expect(helpControllerOf(app.ctx).getState().current.page).toBe('Reference/68ks4d.htm');
+  });
+
+  it('does nothing at offset 0 of the document', async () => {
+    const { app, press } = withSelection('MOVE.L D0,D1\n', '', 0);
+    await press();
+    expect(panelVisible(app.ctx, 'help')).toBe(false);
+  });
+
+  it('opens the introduction at offset 0 of a later line', async () => {
+    const { app, press } = withSelection('ORG $1000\nMOVE.L D0,D1\n', '', 10);
+    await press();
+    expect(helpControllerOf(app.ctx).getState().current.page).toBe('main.htm');
   });
 });
 
@@ -273,6 +306,31 @@ describe('the editor context adapter', () => {
       text: '\n  MOVE.L D0\n',
       caret: 5,
     });
+  });
+
+  it('puts no line end before the caret at the very start of the document', () => {
+    const node: NodeLike = { textContent: 'MOVE.L D0', nodeType: 3, parentElement: line('MOVE.L D0') };
+    const context = wordContextFrom(
+      selection({ node, anchorOffset: 0 }),
+      () => '',
+      () => true,
+    );
+    expect(context).toEqual({ selected: '', text: 'MOVE.L D0\n', caret: 0 });
+    expect(editorHelpPage(context!)).toBeNull();
+    // On any other line the same caret position sees a line end and opens the introduction.
+    const other = wordContextFrom(
+      selection({ node, anchorOffset: 0 }),
+      () => '',
+      () => false,
+    );
+    expect(editorHelpPage(other!)).toBe('main.htm');
+  });
+
+  it('matches keywords like strcmpi and trims like Trim', () => {
+    expect(isKeyword('\u212Aill')).toBe(false); // the Kelvin sign is not K
+    expect(pageForKeyword('MOVE')).toBe(pageForKeyword('move'));
+    expect(helpKeywordAt({ selected: '\u00A0MOVE\u00A0', text: '', caret: 0 })).toBe('\u00A0MOVE\u00A0');
+    expect(helpKeywordAt({ selected: '\t MOVE \n', text: '', caret: 0 })).toBe('MOVE');
   });
 
   it('gives nothing outside a line', () => {

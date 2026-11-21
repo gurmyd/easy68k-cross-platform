@@ -52,6 +52,7 @@ function fakeBridge(
     pasteIntoFocus: record('pasteIntoFocus'),
     quit: record('quit'),
     setFullScreen: async (on) => record('setFullScreen', true)(on),
+    onFullScreenChange: subscribe('fullScreenChange') as DesktopBridge['onFullScreenChange'],
     print: async (...args) => record('print')(...args),
     showOpenDialog: async () => ['/disk/Users/me/demo/a.X68'],
     showSaveDialog: async () => '/disk/Users/me/demo/b.X68',
@@ -195,6 +196,42 @@ describe('createDesktopPlatform', () => {
     expect(listeners.get('beforeunload')?.size).toBe(1);
     platform.confirmBeforeUnload(false);
     expect(listeners.get('beforeunload')?.size).toBe(0);
+  });
+
+  // Gate I1: Platform.confirmBeforeUnload(needed, who?) (W1 errata 11). Several parties need the
+  // question; it stays on while any of them does.
+  it('confirmBeforeUnload keeps the guard while any named party needs it', async () => {
+    const { win, listeners } = fakeWin();
+    const platform = await createDesktopPlatformWith({ bridge: fakeBridge().bridge, win });
+    const guards = () => listeners.get('beforeunload')?.size ?? 0;
+    platform.confirmBeforeUnload(true, 'documents');
+    platform.confirmBeforeUnload(true, 'simulator');
+    expect(guards()).toBe(1);
+    platform.confirmBeforeUnload(false, 'documents');
+    expect(guards()).toBe(1); // the simulator still has bytes to write
+    platform.confirmBeforeUnload(false);
+    expect(guards()).toBe(1); // the unnamed party never asked
+    platform.confirmBeforeUnload(false, 'simulator');
+    expect(guards()).toBe(0);
+    platform.confirmBeforeUnload(true);
+    platform.confirmBeforeUnload(true, 'documents');
+    platform.confirmBeforeUnload(false);
+    expect(guards()).toBe(1);
+    platform.confirmBeforeUnload(false, 'documents');
+    expect(guards()).toBe(0);
+  });
+
+  it('reports full-screen changes the main process sends (Platform.onFullScreenChange)', async () => {
+    const { bridge, rec } = fakeBridge();
+    const platform = await createDesktopPlatformWith({ bridge, win: fakeWin().win });
+    const seen: boolean[] = [];
+    const stop = platform.onFullScreenChange((on) => seen.push(on));
+    rec.emit['fullScreenChange']!(true);
+    rec.emit['fullScreenChange']!('yes');
+    rec.emit['fullScreenChange']!(false);
+    expect(seen).toEqual([true, false]);
+    stop();
+    expect(rec.emit['fullScreenChange']).toBeUndefined();
   });
 
   it('native file dialogs return VPaths of /disk or null', async () => {

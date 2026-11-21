@@ -24,6 +24,7 @@ const live = (overrides: Partial<SimLiveState> = {}): SimLiveState => ({
   logging: false,
   regsRevision: 0,
   viewRevision: 0,
+  repaint: { listing: 0, breakpoints: 0, memory: 0, stack: 0 },
   liveRevision: 0,
   messageLines: [],
   breakpoints: [],
@@ -33,7 +34,10 @@ const live = (overrides: Partial<SimLiveState> = {}): SimLiveState => ({
 
 describe('mirrorSim', () => {
   it('returns the same object when the simulator says nothing new', () => {
-    const sim = sim0();
+    // The store starts without the per-panel repaint counters (an optional member); the first
+    // mirror adds them, and from then on equal values are no news.
+    const sim = mirrorSim(sim0(), live());
+    expect(sim.repaint).toEqual({ listing: 0, breakpoints: 0, memory: 0, stack: 0 });
     expect(mirrorSim(sim, live())).toBe(sim);
     // Equal values in new objects are not news either.
     const program = { path: '/browser/a.S68', title: 'a.S68', hasListing: true };
@@ -57,6 +61,7 @@ describe('mirrorSim', () => {
         logging: true,
         regsRevision: 3,
         viewRevision: 4,
+        repaint: { listing: 4, breakpoints: 1, memory: 3, stack: 2 },
         liveRevision: 5,
         messageLines: ['one', 'two'],
         breakpoints: [0x1000, 0x1004],
@@ -78,7 +83,20 @@ describe('mirrorSim', () => {
       messageLines: ['one', 'two'],
       breakpoints: [0x1000, 0x1004],
       output: { width: 800, height: 600, fullScreen: true, textWrap: true },
+      repaint: { listing: 4, breakpoints: 1, memory: 3, stack: 2 },
     });
+  });
+
+  it('carries the repaint counters by panel and keeps the object while they stand still', () => {
+    const counts = { listing: 1, breakpoints: 0, memory: 1, stack: 1 };
+    const first = mirrorSim(sim0(), live({ viewRevision: 1, repaint: counts }));
+    expect(first.repaint).toEqual(counts);
+    expect(first.repaint).not.toBe(counts); // the store never shares an object with the simulator
+    const second = mirrorSim(first, live({ viewRevision: 1, repaint: { ...counts }, regsRevision: 1 }));
+    expect(second.repaint).toBe(first.repaint);
+    // A breakpoint toggle names the listing and the Break Points panel, not the Stack panel.
+    const third = mirrorSim(second, live({ viewRevision: 2, repaint: { ...counts, listing: 2, breakpoints: 1 } }));
+    expect(third.repaint).toEqual({ listing: 2, breakpoints: 1, memory: 1, stack: 1 });
   });
 
   it('leaves the listing selection to the Listing panel', () => {

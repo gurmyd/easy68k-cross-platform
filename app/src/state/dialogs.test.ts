@@ -187,4 +187,16 @@ describe('toasts', () => {
     // Toasts never block commands.
     expect(service.isModalOpen()).toBe(false);
   });
+
+  it('carry a duration when one is asked for; 0 stays (docs/requests/DV1-toast-duration.md)', () => {
+    const { service } = setup();
+    service.toast('A new version is available.', { label: 'Reload', run: () => {} }, { duration: 0 });
+    service.toast('Saved', undefined, { duration: 3000 });
+    service.toast('Plain');
+    service.toast('Broken', undefined, { duration: Number.NaN });
+    const list = service.toasts.getState();
+    expect(list.map((toast) => toast.duration)).toEqual([0, 3000, undefined, undefined]);
+    expect(list.map((toast) => 'duration' in toast)).toEqual([true, true, false, false]);
+    expect(list[1]?.action).toBeUndefined();
+  });
 });

@@ -1,3 +1,5 @@
+Status: accepted at gate I1 (contracts engineer, W1). `contracts/fs.ts` now has `FolderRequest { title; startDir? }`, the optional `FileDialogs.chooseFolder?(request: FolderRequest): Promise<VPath | null>` and, for providers, `FileSourceProvider.chooseFolder?(request: FolderRequest)`; `contracts/platform.ts` has `NativeFileDialogs` (`open`, `save`, `chooseFolder(title: string)`) as the optional `Platform.nativeFileDialogs`. These signatures are final for this round. FS1 implements `FileDialogs.chooseFolder` and wraps the native dialogs in the `native` provider; H1 calls `ctx.fileDialogs.chooseFolder?.(...)` and keeps its `save` fallback while the member is absent. Details: `docs/porting/errata/W1.md`, entry 11.
+
 # Request from H1: a folder chooser in the file dialogs (W1 contract; FS1, DV2)
 
 `Help > Examples...` in the desktop app "asks for a folder, copies the examples there and shows the

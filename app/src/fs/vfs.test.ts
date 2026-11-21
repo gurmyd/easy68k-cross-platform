@@ -50,6 +50,54 @@ describe('mounting', () => {
   });
 });
 
+describe('mkdirp (gate I1)', () => {
+  it('creates the folder and the folders above it, and may be repeated', async () => {
+    const { vfs, backend } = await vfsWith({});
+    await vfs.mkdirp('/memory/a/b/c');
+    await vfs.mkdirp('/memory/a/b/c');
+    await vfs.mkdirp('/memory/a');
+    expect((await vfs.stat('/memory/a/b/c'))?.kind).toBe('dir');
+    expect(await vfs.list('/memory/a/b/c')).toEqual([]);
+    expect(await backend.list('a')).toEqual([{ name: 'b', kind: 'dir' }]);
+  });
+
+  it('is reported as one write of the folder asked for, also when it existed', async () => {
+    const { vfs } = await vfsWith({});
+    const seen: VfsChange[] = [];
+    const below: VfsChange[] = [];
+    vfs.subscribe('/', (c) => seen.push(c));
+    vfs.subscribe('/memory/x', (c) => below.push(c));
+    await vfs.mkdirp('/memory/x/y');
+    await vfs.mkdirp('/memory/x/y');
+    await vfs.mkdirp('/memory/other');
+    expect(seen).toEqual([
+      { path: '/memory/x/y', kind: 'write', origin: 'local' },
+      { path: '/memory/x/y', kind: 'write', origin: 'local' },
+      { path: '/memory/other', kind: 'write', origin: 'local' },
+    ]);
+    expect(below).toHaveLength(2);
+  });
+
+  it('fails like the backend and then reports nothing', async () => {
+    const { vfs } = await vfsWith({ 'd/f.txt': 'x' });
+    const seen: VfsChange[] = [];
+    vfs.subscribe('/', (c) => seen.push(c));
+    await expect(vfs.mkdirp('/memory/d/f.txt/sub')).rejects.toMatchObject({ code: 'not-directory' });
+    await expect(vfs.mkdirp('/memory/d/f.txt')).rejects.toMatchObject({ code: 'not-directory' });
+    await expect(vfs.mkdirp('memory/d')).rejects.toMatchObject({ code: 'invalid-path' });
+    await expect(vfs.mkdirp('/memory/../d')).rejects.toMatchObject({ code: 'invalid-path' });
+    await expect(vfs.mkdirp('/nothing/d')).rejects.toMatchObject({ code: 'not-found' });
+    expect(seen).toEqual([]);
+    expect(str(await vfs.readFile('/memory/d/f.txt'))).toBe('x');
+  });
+
+  it('the root of a mount exists already', async () => {
+    const { vfs } = await vfsWith({});
+    await vfs.mkdirp('/memory');
+    expect((await vfs.stat('/memory'))?.kind).toBe('dir');
+  });
+});
+
 describe('fsError', () => {
   it('carries the code', () => {
     const error = fsError('read-only', 'no');
@@ -132,6 +180,10 @@ class SlowBackend extends MemoryBackend {
     await this.wait();
     return super.remove(rel);
   }
+  override async mkdirp(rel: string): Promise<void> {
+    await this.wait();
+    return super.mkdirp(rel);
+  }
 }
 
 describe('per-path ordering', () => {
@@ -162,6 +214,21 @@ describe('per-path ordering', () => {
     ];
     await Promise.all(ops);
     expect(str(await backend.readFile('log.txt'))).toBe('D');
+  });
+
+  it('mkdirp waits its turn among the writes and removes of its path', async () => {
+    const backend = new SlowBackend();
+    backend.delays = [30, 0, 15, 0]; // unordered, the mkdirp would run before the file is removed
+    const vfs = createVfs();
+    vfs.mount(backend);
+    const order: string[] = [];
+    await Promise.all([
+      vfs.writeFile('/memory/name', text('a file first')).then(() => order.push('write')),
+      vfs.remove('/memory/name').then(() => order.push('remove')),
+      vfs.mkdirp('/memory/name').then(() => order.push('mkdirp')),
+      vfs.stat('/memory/name').then((stat) => order.push(`stat:${stat?.kind}`)),
+    ]);
+    expect(order).toEqual(['write', 'remove', 'mkdirp', 'stat:dir']);
   });
 
   it('paths that differ only in case share one queue', async () => {

@@ -1,10 +1,10 @@
-// The EASyBIN menu bar (ARCHITECTURE.md 1.3.8). First version by W3; owner from wave 2 on: B1.
+// The EASyBIN menu bar (ARCHITECTURE.md 1.3.8; docs/porting/easybin.md section 2). First version by
+// W3; owner from wave 2 on: B1.
 //
-// No porting specification exists for EASyBIN yet (B1 writes docs/porting/easybin.md first). This
-// table is the File menu of section 1.3.8 with the captions, separators and order of the original
-// form (reference/src-easybin/EASyBINv2.5.0/Form1u.dfm): New | Open S-Record, Open Binary |
-// Save S-Record, Save Binary | Exit; and the original's Help menu (EASyBIN Help, About EASyBIN)
-// followed by the two items the port adds to every Help menu (section 1.5).
+// The original's two menus with the captions, separators and order of its form (Form1u.dfm,
+// MainMenu1): File = New | Open S-Record, Open Binary | Save S-Record, Save Binary | Exit; Help =
+// EASyBIN Help, About EASyBIN, followed by the two items the port adds to every Help menu (section
+// 1.5). Captions and shortcuts are in specs.ts and tables/keys.ts (W3): Ctrl+O, Ctrl+B, Ctrl+R, Ctrl+S.
 
 import { command, separator, type MenuTable } from './types';
 

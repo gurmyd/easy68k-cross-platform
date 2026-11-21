@@ -3,6 +3,9 @@
 // STUB written by SH1 (wave 1). SH2 replaces the body with GDI's stroke (round caps from the dot
 // table, validated against T2's captures) and owns this file from then on. The Surface calls
 // `strokeWideLine` and nothing else; its signature is what SH2 keeps.
+// (The comparison with the GDI capture, tests/conformance/gdi/surface.test.ts, looks for the words
+// "STUB written by SH1" at the start of a comment line of this file: while they are there, the
+// cases with wide lines wait instead of failing. SH2 removes the line together with the stub.)
 //
 // What this stub draws: the BAND WITHOUT CAPS.
 //   - A wide stroke centred on coordinate c covers c - a .. c + b, with a = floor(w / 2) and
@@ -11,7 +14,8 @@
 //     horizontal run in every row for a steep one.
 //   - GDI adds a round cap at each end and, for even widths, leaves out one corner pixel of the band
 //     at the start; both are missing here.
-//   - A line of length zero draws the pen's round dot (tables/dots.ts), which is what GDI draws.
+//   - A line of length zero draws the pen's round dot (`penDot` of tables/dots.ts), which is what
+//     GDI draws for every pen width (measured, 2-255).
 //
 // What the caller does, and this file does not: clipping (runs may leave the surface in x; rows
 // outside `clip` may be skipped but need not be), the drawing mode, and the extra end-point pixel
@@ -21,8 +25,8 @@
 
 import type { Rect } from '../../../contracts';
 import { isXMajor, walkLine } from './line';
-import type { SpanSink } from './raster';
-import { dotRows } from './tables/dots';
+import { emitDot, type SpanSink } from './raster';
+import { penDot } from './tables/dots';
 
 /**
  * Reports the pixels of the stroke from (x1, y1) to (x2, y2) with a pen `width` pixels wide
@@ -45,12 +49,7 @@ export function strokeWideLine(
   const b = (width - 1) >> 1;
 
   if (x1 === x2 && y1 === y2) {
-    const rows = dotRows(width);
-    for (let i = 0; i < rows.length; i++) {
-      const half = rows[i] as number;
-      emit(y1 - i, x1 - half, x1 + half);
-      if (i > 0) emit(y1 + i, x1 - half, x1 + half);
-    }
+    emitDot(penDot(width), x1, y1, emit);
     return;
   }
 

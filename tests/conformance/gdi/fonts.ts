@@ -56,6 +56,8 @@ export interface ScalableEntry {
   glyphWidth: number;
   underline?: [number, number];
   strikeOut?: [number, number];
+  /** Width of $7F in a string that has a byte of $80 or above (a fallback glyph; text-model.ts). */
+  delInHighString?: number;
 }
 
 export function loadMetrics(): Metrics {
@@ -64,6 +66,26 @@ export function loadMetrics(): Metrics {
 
 export function loadScalableIndex(): ScalableEntry[] {
   return (JSON.parse(readFileSync(FONTS_DIR + 'scalable/index.json', 'utf8')) as { atlases: ScalableEntry[] }).atlases;
+}
+
+let scalableIndex: ScalableEntry[] | undefined;
+
+/**
+ * The outline atlas entry of an outline-face request, found by face, style and cell as the port's
+ * provider finds it (underline and strike-out use the plain atlas), or undefined at a size that has
+ * no atlas.
+ */
+export function outlineEntry(metrics: Metrics, font: FontRequest): ScalableEntry | undefined {
+  const base = font.style >= 3 ? { ...font, style: 0 } : font;
+  const cell = cellOf(metrics, base);
+  scalableIndex ??= loadScalableIndex();
+  return scalableIndex.find(
+    (e) =>
+      e.face === cell.face &&
+      e.style === STYLE_NAMES[base.style] &&
+      e.cellWidth === cell.colWidth &&
+      e.cellHeight === cell.rowHeight,
+  );
 }
 
 const atlasCache = new Map<string, Atlas>();

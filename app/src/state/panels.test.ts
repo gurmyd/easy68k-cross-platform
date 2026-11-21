@@ -102,6 +102,23 @@ describe('show, hide, focus', () => {
     expect(app.shell.getState().focusRequest).toBeNull();
   });
 
+  it('showing the Output panel puts its tab in front below 1100 px and keeps the tool tab (SH4)', () => {
+    const app = createTestApplication();
+    showPanel(app.ctx, 'memory', { focus: false });
+    expect(app.shell.getState()).toMatchObject({ activeTool: 'memory', outputInFront: false });
+    showPanel(app.ctx, 'output');
+    // The wide layout keeps Memory in front of the tools; the narrow one shows the Output tab.
+    expect(app.shell.getState()).toMatchObject({ activeTool: 'memory', outputInFront: true });
+    expect(app.shell.getState().focusRequest?.panel).toBe('output');
+    showPanel(app.ctx, 'memory', { focus: false });
+    expect(app.shell.getState()).toMatchObject({ activeTool: 'memory', outputInFront: false });
+    const inside = (id: string) => ({ closest: () => ({ getAttribute: () => id }) });
+    expect(focusNextPanel(app.ctx, inside('listing'))).toBe('output');
+    expect(app.shell.getState().outputInFront).toBe(true);
+    expect(focusNextPanel(app.ctx, inside('output'))).toBe('memory');
+    expect(app.shell.getState().outputInFront).toBe(false);
+  });
+
   it('hidePanel hides a tool panel; the Output panel only collapses, and that is not stored', () => {
     const app = createTestApplication();
     showPanel(app.ctx, 'stack');

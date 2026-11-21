@@ -11,7 +11,7 @@
 // Components never import a service from another feature; they take it from the context (3.1).
 
 import { createContext, useContext, type ComponentType, type ReactNode } from 'react';
-import type { AppContext, AppState, DialogProps, Store } from '../contracts';
+import type { AppContext, AppState, BuildFacts, DialogProps, Store } from '../contracts';
 import type { CommandRegistryStore } from '../commands/registry';
 import type { DialogServiceStore } from './dialogs';
 import type { PanelRegistry } from './panels';
@@ -20,6 +20,9 @@ import { useStoreValue } from './store';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dialogs of every props and result type (3.12.3)
 export type DialogComponent = ComponentType<DialogProps<any, any>>;
+
+/** What the build tells about the port (Application.build, AppContext.build): the contract's type. */
+export type { BuildFacts };
 
 /** Everything bootstrap() creates for one window. */
 export interface Application {
@@ -34,6 +37,11 @@ export interface Application {
   readonly shell: Store<ShellState>;
   /** Alt+letter (Windows, Linux): the menu bar puts its "open the menu with this access key" here. */
   readonly menuAccess: { open: ((letter: string) => boolean) | null };
+  /**
+   * The port's version and GitHub repository ("owner/name", null when unknown), from the build
+   * (app/src/build-info.ts). Also on the context as `ctx.build` (docs/requests/H1-build-info.md).
+   */
+  readonly build: BuildFacts;
   /** Resolves true once this window holds its Web Lock (3.8.6); false where locks do not exist. */
   readonly windowLock: Promise<boolean>;
   /** Ends the window: listeners removed, the window lock released, feature disposers called. */

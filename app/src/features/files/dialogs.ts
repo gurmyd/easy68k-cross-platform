@@ -12,7 +12,7 @@
 // already confirmed"): an existing file gives `File exists! OK to overwrite?` (title `Caution!`,
 // Yes / No), and No abandons the save, as in the original (editor-ui §6.4). A request may carry
 // its own question in `overwritePrompt` (the Memory panel's `File exists! OK to replace?`, title
-// `Alert`), or null for none (docs/porting/errata/FS1.md, Contract).
+// `Alert`), or null for none (contract SaveRequest.overwritePrompt, added at gate I1).
 //
 // This file holds the service and the decisions of the dialogs' buttons as plain functions, so
 // that they are tested under Node; FileDialog.tsx draws them.
@@ -24,6 +24,7 @@ import type {
   DialogService,
   FileDialogs,
   FileFilter,
+  FolderRequest,
   OpenRequest,
   SaveRequest,
   Vfs,
@@ -32,17 +33,10 @@ import type {
 import { basename, dirname, isVPath, resolveLexically, splitVPath } from '../../core/paths/winpath';
 import { OVERWRITE_TEXT, OVERWRITE_TITLE, applyDefaultExtension, invalidNameReason, matchesFilter } from './filters';
 import { NATIVE_PROVIDER_ID, createProviderRegistry, type ProviderRegistry } from './providers';
-import { chooseStartDir, locationOf } from './store';
+import { chooseStartDir, locationOf, makeFolder } from './store';
 
 export const OPEN_DIALOG_ID = 'file.open';
 export const SAVE_DIALOG_ID = 'file.save';
-
-/** An overwrite question of the request's own (see the header); null = ask nothing. */
-export interface OverwritePrompt {
-  title: string;
-  text: string;
-}
-export type SaveRequestWithPrompt = SaveRequest & { overwritePrompt?: OverwritePrompt | null };
 
 /** What the dialog components receive. */
 export interface OpenDialogProps {
@@ -53,7 +47,7 @@ export interface OpenDialogProps {
 }
 export interface SaveDialogProps {
   kind: 'save';
-  request: SaveRequestWithPrompt;
+  request: SaveRequest;
   startDir: VPath | null;
   /** The suggested file name (from request.suggested). */
   initialName: string;
@@ -64,6 +58,12 @@ export type FileDialogProps = OpenDialogProps | SaveDialogProps;
 /** The file dialogs plus what the Files feature itself uses. */
 export interface FileDialogService extends FileDialogs {
   readonly registry: ProviderRegistry;
+  /**
+   * A folder (Help > Examples... in the desktop app, 5.8; FileDialogs.chooseFolder). The native
+   * provider's folder dialog where there is one; elsewhere the port's Save dialog, whose typed name
+   * is the folder, created if it does not exist. null = cancelled.
+   */
+  chooseFolder(request: FolderRequest): Promise<VPath | null>;
   /** The folder the last dialog ended in (the next one starts there). */
   lastDir(): VPath | null;
 }
@@ -106,6 +106,35 @@ export function createFileDialogService(ctx: AppContext, registry = createProvid
       if (!result) return null;
       last = dirname(result);
       return result;
+    },
+
+    async chooseFolder(request) {
+      const nativeProvider = native();
+      if (nativeProvider?.chooseFolder) {
+        // FS1's own native provider (index.ts) takes the request or its title alike.
+        const choose = nativeProvider.chooseFolder as (arg: FolderRequest | string) => Promise<VPath | null>;
+        return choose.call(nativeProvider, request);
+      }
+      const chosen = await this.save({
+        title: request.title,
+        filters: [{ label: 'Folder', patterns: ['*'] }],
+        defaultExt: '',
+        ...(request.startDir ? { suggested: `${request.startDir}/New Folder` } : {}),
+        overwritePrompt: null,
+      });
+      if (chosen === null) return null;
+      const stat = await ctx.vfs.stat(chosen).catch(() => null);
+      if (stat?.kind === 'file') {
+        await ctx.dialogs.messageBox({
+          title: request.title,
+          text: `"${basename(chosen)}" is a file, not a folder.`,
+          icon: 'error',
+          buttons: ['OK'],
+        });
+        return null;
+      }
+      if (stat === null) await makeFolder(ctx.vfs, chosen);
+      return chosen;
     },
   };
 }
@@ -163,7 +192,7 @@ export async function decideSave(
   dir: VPath,
   typed: string,
   filterIndex: number,
-  request: SaveRequestWithPrompt,
+  request: SaveRequest,
 ): Promise<DialogStep> {
   const raw = typed.trim().replace(/^"(.*)"$/, '$1');
   if (raw === '') return { kind: 'nothing' };

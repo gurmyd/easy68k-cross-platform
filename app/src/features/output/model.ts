@@ -8,9 +8,10 @@
 //     execution stops, the panel sets it when the user toggles. followEngine() makes the screen
 //     follow it, whoever changed it;
 //   - the mouse translator (core/sim-host/input/mouse.ts), posting to the run controller;
-//   - the mirror of the Output window's state in AppState.sim.output: the surface size and the
-//     text-wrap option, which the Options menu shows (the check mark of Output Window Size
-//     "follows the real size"), and whether full screen is on.
+//   - this feature's share of AppState.sim.output: `fullScreen`. The session (features/run, SH8)
+//     mirrors the surface size and the text-wrap option there once per frame and writes
+//     `fullScreen` when the engine asks; this feature writes `fullScreen` when the user toggles,
+//     when the browser refuses or ends full screen, and while a request waits for a gesture.
 
 import { SimOption, type AppContext, type AppState } from '../../contracts';
 import { OutputMouse } from '../../core/sim-host/input/mouse';
@@ -32,9 +33,9 @@ export interface OutputModel {
   /** A key-down or click in the panel: audio may start, a waiting full-screen request is carried
    *  out. True if full screen was entered by it. */
   gesture(): boolean;
-  /** Brings AppState.sim.output up to date: the surface size, the text-wrap option, and whether
-   *  full screen is on (or on its way). Writes nothing when nothing changed. */
-  sync(): void;
+  /** Writes AppState.sim.output.fullScreen: full screen is on, or on its way. (The other members
+   *  of sim.output are the session's.) Writes nothing when nothing changed. */
+  publishFullScreen(): void;
   /** Looks at the engine's full-screen flag and enters or leaves full screen if it has changed
    *  (task 33, a stop in trace mode, a halt). Called once per frame. */
   followEngine(): void;
@@ -46,11 +47,10 @@ export interface OutputModel {
 
 const models = new WeakMap<object, OutputModel>();
 
-function withOutput(state: AppState, change: Partial<AppState['sim']['output']>): AppState {
-  const output = state.sim.output;
-  const keys = Object.keys(change) as (keyof typeof change)[];
-  if (keys.every((key) => output[key] === change[key])) return state;
-  return { ...state, sim: { ...state.sim, output: { ...output, ...change } } };
+function withFullScreen(state: AppState, fullScreen: boolean): AppState {
+  const { output } = state.sim;
+  if (output.fullScreen === fullScreen) return state;
+  return { ...state, sim: { ...state.sim, output: { ...output, fullScreen } } };
 }
 
 function createOutputModel(ctx: AppContext): OutputModel {
@@ -79,14 +79,8 @@ function createOutputModel(ctx: AppContext): OutputModel {
       ctx.sim.controller.invoke((engine) => engine.setOption(SimOption.Fullscreen, on));
       if (engineFlag() === on) awaited = null;
     },
-    publish: (on) => ctx.store.setState((state) => withOutput(state, { fullScreen: on })),
-    refused: () =>
-      void ctx.dialogs.messageBox({
-        title: FULL_SCREEN_REFUSED.title,
-        text: FULL_SCREEN_REFUSED.text,
-        icon: 'information',
-        buttons: ['OK'],
-      }),
+    publish: (on) => ctx.store.setState((state) => withFullScreen(state, on)),
+    refused: () => void ctx.dialogs.messageBox({ ...FULL_SCREEN_REFUSED, buttons: [...FULL_SCREEN_REFUSED.buttons] }),
     // A full-screen Output panel is the only thing on screen: it is shown and gets the keyboard.
     entered: () => showPanel(ctx, 'output'),
   });
@@ -124,10 +118,8 @@ function createOutputModel(ctx: AppContext): OutputModel {
       ctx.devices.audio.resume(); // 3.7: any key in the Output panel unlocks audio
       return fullScreen.gesture();
     },
-    sync() {
-      const { width, height } = ctx.sim.surface.back;
-      const { textWrap } = ctx.sim.text.state;
-      ctx.store.setState((state) => withOutput(state, { width, height, textWrap, fullScreen: fullScreen.wanted }));
+    publishFullScreen() {
+      ctx.store.setState((state) => withFullScreen(state, fullScreen.wanted));
     },
     followEngine() {
       const flag = engineFlag();
@@ -142,7 +134,7 @@ function createOutputModel(ctx: AppContext): OutputModel {
       awaited = null;
       fullScreen.set(false, 'program'); // the new engine's flag is off (3.3.2)
       model.mouse.resetToStartup();
-      model.sync();
+      model.publishFullScreen();
     },
     readClipboard() {
       const clipboard = (globalThis as { navigator?: Navigator }).navigator?.clipboard;

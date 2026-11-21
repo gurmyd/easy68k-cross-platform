@@ -249,6 +249,7 @@ export function createDeviceDoubles(overrides: Partial<SessionPartOverrides> = {
       resetToStartup: reset('log'),
       exit: async () => void resets.push('log.exit'),
       flush: async () => {},
+      unsaved: false,
     }),
     files: partOf<ProgramFilesApi>({
       resetToStartup: reset('files'),
@@ -256,6 +257,7 @@ export function createDeviceDoubles(overrides: Partial<SessionPartOverrides> = {
       setCurrentDir: async () => {},
       revalidateIfStale: async () => {},
       recoverJournal: async () => {},
+      unsaved: false,
       fileOpen: () => 0,
       fileRead: () => null,
       fileWrite: () => -1,

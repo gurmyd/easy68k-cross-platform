@@ -1,6 +1,6 @@
 // Tests of the document file format (ARCHITECTURE.md 3.9.2, 3.9.3, 5.1, 5.2; editor-ui §6.3, §6.4,
-// §20.2). The ten official examples are tracked fixtures; the whole ground-truth set is in
-// ground-truth.test.ts.
+// §20.2). The ten official examples are tracked fixtures; the whole corpus (the official
+// editor's received text, by SHA-256) is checked in corpus.test.ts.
 
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';

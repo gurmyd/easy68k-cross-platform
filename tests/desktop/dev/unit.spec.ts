@@ -23,6 +23,7 @@ import {
   isRoleChord,
   MenuDescriptionError,
   NativeMenus,
+  roleChordsOf,
   toElectronAccelerator,
   toElectronTemplate,
   typedChordOfInput,
@@ -34,6 +35,7 @@ import { APP_SCHEME_PRIVILEGES, CONTENT_TYPES, parseRange, resolveAppRequest } f
 import {
   APP_WEB_PREFERENCES,
   CONTENT_SECURITY_POLICY,
+  developmentOverrides,
   GrantedRoots,
   isAllowedExternalUrl,
   realPathOf,
@@ -52,6 +54,25 @@ test.describe('security.ts', () => {
       CONTENT_SECURITY_POLICY: string;
     };
     expect(CONTENT_SECURITY_POLICY).toBe(plugin.CONTENT_SECURITY_POLICY);
+  });
+
+  test('a packaged app honours none of the development and test variables', () => {
+    const env = {
+      EASY68K_APP_DIST: '/somewhere/else',
+      EASY68K_DEV_SERVER_URL: 'http://127.0.0.1:5173/',
+      EASY68K_DESKTOP_TEST_WINDOWS: 'hidden',
+    };
+    expect(developmentOverrides(env, true)).toEqual({ appDist: undefined, devServerUrl: undefined, testWindows: null });
+    expect(developmentOverrides(env, false)).toEqual({
+      appDist: '/somewhere/else',
+      devServerUrl: 'http://127.0.0.1:5173/',
+      testWindows: 'hidden',
+    });
+    expect(developmentOverrides({ EASY68K_DESKTOP_TEST_WINDOWS: 'visible', EASY68K_APP_DIST: '' }, false)).toEqual({
+      appDist: undefined,
+      devServerUrl: undefined,
+      testWindows: null,
+    });
   });
 
   test('the web preferences are those of 7.6', () => {
@@ -320,6 +341,56 @@ test.describe('menu.ts', () => {
     // A non-Latin layout (Russian "с" on KeyC): macOS goes by position.
     expect(isRoleChord(input('с', 'KeyC', { meta: true }), 'mac')).toBe(true);
     expect(isRoleChord(input('c', 'KeyJ', { meta: true }), 'windows')).toBe(false);
+  });
+
+  test('only the chords of the role items the menu has reach it (Editor: Undo and Redo are commands)', () => {
+    const meta = (key: string, shift = false) => ({
+      key,
+      code: `Key${key.toUpperCase()}`,
+      control: false,
+      alt: false,
+      shift,
+      meta: true,
+    });
+    // The Editor's Edit menu (app/src/commands/native-menu.ts): Undo and Redo are command items,
+    // Cut, Copy, Paste and Select All role items; the application and Window menus add theirs.
+    const editor: NativeMenuItem[] = [
+      { label: 'EASy68K', role: 'appMenu', items: [{ role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }] },
+      {
+        label: 'Edit',
+        items: [
+          { id: 'ed.edit.undo', label: 'Undo', accelerator: 'Cmd+Z' },
+          { id: 'ed.edit.redo', label: 'Redo', accelerator: 'Shift+Cmd+Z' },
+          { role: 'cut' },
+          { role: 'copy' },
+          { role: 'paste' },
+          { role: 'selectAll' },
+        ],
+      },
+      { label: 'Window', role: 'window', items: [{ role: 'minimize' }, { role: 'zoom' }] },
+    ];
+    const chords = roleChordsOf(editor);
+    expect([...chords].sort()).toEqual(['Alt+Cmd+H', 'Cmd+A', 'Cmd+C', 'Cmd+H', 'Cmd+M', 'Cmd+V', 'Cmd+X'].sort());
+    expect(isRoleChord(meta('z'), 'mac', chords)).toBe(false);
+    expect(isRoleChord(meta('Z', true), 'mac', chords)).toBe(false);
+    expect(isRoleChord(meta('c'), 'mac', chords)).toBe(true);
+    // The Simulator's standard Edit menu has the undo and redo roles: there Cmd+Z goes to the menu.
+    const simulator: NativeMenuItem[] = [
+      { label: 'Edit', role: 'editMenu', items: [{ role: 'undo' }, { role: 'redo' }, { role: 'copy' }] },
+    ];
+    expect(isRoleChord(meta('z'), 'mac', roleChordsOf(simulator))).toBe(true);
+    expect(isRoleChord(meta('Z', true), 'mac', roleChordsOf(simulator))).toBe(true);
+    expect(isRoleChord(meta('v'), 'mac', roleChordsOf(simulator))).toBe(false);
+
+    // NativeMenus keeps the chords of each window's own menu.
+    const api = { buildFromTemplate: () => ({}) as Electron.Menu, setApplicationMenu: () => {} };
+    const menus = new NativeMenus(api, 'mac', () => {});
+    const fakeWindow = { id: 7, isFocused: () => true, isDestroyed: () => false } as unknown as Electron.BrowserWindow;
+    expect(menus.roleChords(7)).toBeUndefined();
+    menus.set(fakeWindow, editor);
+    expect(menus.roleChords(7)).toEqual(chords);
+    menus.forget(7);
+    expect(menus.roleChords(7)).toBeUndefined();
   });
 
   test('macOS with no window left: the bar gets a menu whose New Window opens one', () => {

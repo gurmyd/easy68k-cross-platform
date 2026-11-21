@@ -11,7 +11,9 @@ import {
   REPO,
   SET_DIRECTORIES,
   goldenDirectory,
+  hasOfficialOutput,
   loadManifest,
+  outputStem,
   programAvailable,
   readProgram,
   sha256Hex,
@@ -74,12 +76,13 @@ describe('tests/corpus/manifest.json', () => {
       expect(Object.keys(program.runs).length, program.id).toBeGreaterThan(0);
       for (const [label, run] of Object.entries(program.runs)) {
         const name = `${program.id} (${label})`;
-        if (run.status === 'ok') {
+        if (run.status !== 'ok') expect(run.reason, name).toBeTruthy();
+        else expect(run.outputsKept, name).toBeUndefined();
+        if (hasOfficialOutput(run)) {
           expect(run.l68 !== null || run.s68 !== null, name).toBe(true);
           expect(run.received, name).toMatch(/^[0-9a-f]{64}$/);
         } else {
-          expect(run.reason, name).toBeTruthy();
-          expect(run.golden, name).toBe(false);
+          expect({ l68: run.l68, s68: run.s68, golden: run.golden }, name).toEqual({ l68: null, s68: null, golden: false });
         }
       }
     }
@@ -99,8 +102,9 @@ describe('tests/conformance/asm/golden', () => {
     for (const program of tracked) {
       for (const [label, run] of Object.entries(program.runs)) {
         if (!run.golden) continue;
+        expect(hasOfficialOutput(run), `${program.id} (${label})`).toBe(true);
         const directory = goldenDirectory(program);
-        const path = (extension: string): string => join(directory, `${label}.${extension}`);
+        const path = (extension: string): string => join(directory, `${outputStem(label, run)}.${extension}`);
         const listing = run.l68 === null ? null : read(path('L68'));
         const sRecord = run.s68 === null ? null : read(path('S68'));
         const hashes = canonicalHashes({ listing, sRecord });
@@ -115,9 +119,10 @@ describe('tests/conformance/asm/golden', () => {
     for (const program of tracked) {
       for (const [label, run] of Object.entries(program.runs)) {
         if (!run.golden) continue;
-        if (run.l68 !== null) expected.add(`${program.id}/${label}.L68`);
-        if (run.s68 !== null) expected.add(`${program.id}/${label}.S68`);
-        if (run.receivedFile) expected.add(`${program.id}/${label}.received.txt`);
+        const stem = outputStem(label, run);
+        if (run.l68 !== null) expected.add(`${program.id}/${stem}.L68`);
+        if (run.s68 !== null) expected.add(`${program.id}/${stem}.S68`);
+        if (run.receivedFile) expected.add(`${program.id}/${stem}.received.txt`);
       }
     }
     expect(filesBelow(join(REPO, GOLDEN_TRACKED)).filter((name) => !expected.has(name))).toEqual([]);

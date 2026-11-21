@@ -13,17 +13,30 @@
 //   - a task 23 delay of 50 units takes half a second of real time;
 //   - the governor executes about a million instructions per second at the default setting, and
 //     far more at Maximum;
-//   - the boxes of the simulator (Run To Cursor without a row, the Caution question) and the
-//     Execution Speed dialog appear and work, and the dialog passes an accessibility scan;
+//   - the boxes of the simulator (Run To Cursor without a row, the Caution question, a box the
+//     engine raises) and the Execution Speed dialog appear and work, and the dialog passes an
+//     accessibility scan;
+//   - the Open dialog holds a running program while it is open (4.4.5);
+//   - the page's own events reach the program files (the window loses the focus, the page is
+//     closed) and the journal of the program files is kept in the page's storage (3.8.4);
 //   - Execute (a cold start) replaces the engine, several times in a row;
-//   - Exit shows `You can close this tab.`
+//   - Exit shows `You can close this tab.`;
+//   - a program named in the URL is loaded and started, and the switches of the URL act without
+//     one (5.7; sim-ui §8.1);
+//   - a page that gets no display frames at all still runs its program and keeps delays exact
+//     (4.5.5).
 //
 // Screenshots go to build/SH8/run-check (git-ignored). Exit code 0 = everything passed. The page
 // object `window.__easy68k` that the script uses exists in development builds only (main.tsx).
 //
-// Needs engine/dist (both engines): the test programs are assembled by the real assembler.
+// Needs engine/dist (both engines): the test programs are assembled by the real assembler. Without
+// it the script says so and does nothing; with EASY68K_REQUIRE_ENGINES=1 (CI) that is a failure.
+//
+// Nothing here depends on the operating system, and no check fails merely because the machine is
+// slow or busy: every wait is for a state, and the three figures that are times or rates are
+// measured several times, the best run counting.
 
-/* global console, process, document, window, performance, setTimeout -- the browser globals are used inside page.evaluate() callbacks, which run in the page */
+/* global console, process, document, window, performance, setTimeout, Event -- the browser globals are used inside page.evaluate() callbacks, which run in the page */
 
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -95,11 +108,15 @@ const SOURCES = {
   ],
 };
 
-async function assemblePrograms() {
+/** True if both engines are built (engine/dist is not in the repository). */
+function enginesBuilt() {
   const dist = join(repoRoot, 'engine', 'dist');
-  if (!existsSync(join(dist, 'asm68k.wasm')) || !existsSync(join(dist, 'sim68k.wasm'))) {
-    throw new Error('engine/dist is missing: run `npm run build:engines` or `npm run fetch:engines` first.');
-  }
+  return ['asm68k.wasm', 'asm68k-loader.mjs', 'sim68k.wasm', 'sim68k-loader.mjs'].every((file) =>
+    existsSync(join(dist, file)),
+  );
+}
+
+async function assemblePrograms() {
   const { assemble } = await import(pathToFileURL(join(repoRoot, 'engine', 'asm', 'asm68k.mjs')).href);
   const programs = {};
   for (const [name, lines] of Object.entries(SOURCES)) {
@@ -116,8 +133,14 @@ async function assemblePrograms() {
 
 // --- helpers ------------------------------------------------------------------------------
 
-async function openApp(browser, query = '') {
-  const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, reducedMotion: 'reduce' });
+const newContext = (browser) => browser.newContext({ viewport: { width: 1400, height: 900 }, reducedMotion: 'reduce' });
+
+/**
+ * Opens the application in a new page of `context` and waits until it has started. `polling` is
+ * for a page without display frames, where Playwright's waits, which follow the frames by
+ * default, must look by timer instead (milliseconds).
+ */
+async function openPage(context, query = '', polling = undefined) {
   const page = await context.newPage();
   const errors = [];
   page.on('console', (message) => {
@@ -125,27 +148,36 @@ async function openApp(browser, query = '') {
   });
   page.on('pageerror', (error) => errors.push(String(error)));
   await page.goto(`${baseUrl}${query}`, { timeout: LOAD_TIMEOUT });
-  await page.waitForSelector('.e68-shell', { timeout: LOAD_TIMEOUT });
-  await page.waitForFunction(() => window.__easy68k !== undefined, undefined, { timeout: LOAD_TIMEOUT });
+  await page.waitForFunction(
+    () => window.__easy68k !== undefined && document.querySelector('.e68-shell') !== null,
+    undefined,
+    waitOptions(LOAD_TIMEOUT, polling),
+  );
   return { context, page, errors };
 }
 
+/** The application in a browser context of its own. */
+const openApp = async (browser, query = '') => openPage(await newContext(browser), query);
+
 /** The dev server transforms every module at the first request; on a busy machine that takes a while. */
 const LOAD_TIMEOUT = 180_000;
+/** For something the interface shows in answer to an action. Generous: the machine may be busy. */
+const UI_TIMEOUT = 30_000;
+const waitOptions = (timeout, polling) => (polling === undefined ? { timeout } : { timeout, polling });
 
 const sim = (page) => page.evaluate(() => window.__easy68k.ctx.store.getState().sim);
 const statusText = (page) =>
   page.evaluate(() => [...document.querySelectorAll('[data-e68-status]')].map((cell) => cell.textContent).join(' | '));
-const waitForPhase = (page, phase, timeout = 15000) =>
+const waitForPhase = (page, phase, timeout = UI_TIMEOUT) =>
   page.waitForFunction((wanted) => window.__easy68k.ctx.store.getState().sim.phase === wanted, phase, { timeout });
-const waitForHalt = (page, timeout = 15000) =>
+const waitForHalt = (page, timeout = UI_TIMEOUT, polling = undefined) =>
   page.waitForFunction(
     () => {
       const state = window.__easy68k.ctx.store.getState().sim;
       return state.phase === 'idle' && state.halted;
     },
     undefined,
-    { timeout },
+    waitOptions(timeout, polling),
   );
 const register = (page, reg) => page.evaluate((n) => window.__easy68k.ctx.sim.engine.getRegister(n), reg);
 const D0 = 0;
@@ -153,7 +185,7 @@ const D6 = 6;
 const D7 = 7;
 
 /** Writes the test programs into the browser store of the page and switches to Simulator mode. */
-async function prepare(page, programs) {
+async function prepare(page, programs, polling = undefined) {
   await page.evaluate(async (files) => {
     const { ctx } = window.__easy68k;
     for (const [name, program] of Object.entries(files)) {
@@ -169,7 +201,7 @@ async function prepare(page, programs) {
       return ctx.store.getState().sim.phase === 'idle' && ctx.sim.engine.state().hardwareEnabled;
     },
     undefined,
-    { timeout: 30000 },
+    waitOptions(LOAD_TIMEOUT, polling),
   );
 }
 
@@ -190,6 +222,24 @@ async function pressInMainWindow(page, key) {
     regions.find((region) => region.closest('[hidden]') === null)?.focus({ preventScroll: true });
   });
   await page.keyboard.press(key);
+}
+
+/**
+ * Runs the delay program to its halt and returns what its own clock (task 8) says the 50-unit
+ * delay took, in hundredths of a second: up to `attempts` runs, ending at the first that is exact
+ * (50, or 51 when the delay straddled one more tick of the clock).
+ */
+async function measureDelay(page, run, polling = undefined, attempts = 5) {
+  const delays = [];
+  for (let i = 0; i < attempts; i++) {
+    await load(page, 'delay');
+    await run();
+    await waitForHalt(page, UI_TIMEOUT, polling);
+    // The time of day wraps at midnight (8,640,000 hundredths).
+    delays.push(((await register(page, D6)) - (await register(page, D7)) + 8_640_000) % 8_640_000);
+    if (delays.at(-1) >= 50 && delays.at(-1) <= 51) break;
+  }
+  return delays;
 }
 
 /** The button of a command in the toolbar of the mode in front. */
@@ -324,17 +374,24 @@ async function runPass(browser, name, programs) {
   );
   await pressInMainWindow(page, 'F9');
   await waitForPhase(page, 'running');
-  const fast = await page.evaluate(async () => {
-    const { engine } = window.__easy68k.ctx.sim;
-    const t0 = performance.now();
-    const s0 = engine.stepCount;
-    await new Promise((r) => setTimeout(r, 500));
-    return ((engine.stepCount - s0) >>> 0) / ((performance.now() - t0) / 1000);
-  });
+  // Three measurements of half a second, the best counts. What is asked is "far more than the
+  // default speed"; how much more depends on the machine.
+  const fastRuns = [];
+  for (let i = 0; i < 3; i++) {
+    fastRuns.push(
+      await page.evaluate(async () => {
+        const { engine } = window.__easy68k.ctx.sim;
+        const t0 = performance.now();
+        const s0 = engine.stepCount;
+        await new Promise((r) => setTimeout(r, 500));
+        return ((engine.stepCount - s0) >>> 0) / ((performance.now() - t0) / 1000);
+      }),
+    );
+  }
   check(
-    `${p} F9 runs; at Maximum the program executes several million instructions per second`,
-    fast > 3e6,
-    Math.round(fast).toLocaleString('en-US'),
+    `${p} F9 runs; at Maximum the program executes far more than a million instructions per second (best of three)`,
+    Math.max(...fastRuns) > 2.5e6,
+    fastRuns.map((rate) => Math.round(rate).toLocaleString('en-US')).join(', '),
   );
   check(
     `${p} the status bar shows the speed setting`,
@@ -354,9 +411,10 @@ async function runPass(browser, name, programs) {
         window.requestAnimationFrame(tick);
       }),
   );
+  // At most half of each frame goes to the engine (4.2), so the display keeps most of its frames.
   check(
     `${p} the page keeps its frames while the program runs at Maximum`,
-    frames > 20,
+    frames > 15,
     `${Math.round(frames)} frames per second`,
   );
   await pressInMainWindow(page, 'F6');
@@ -368,19 +426,12 @@ async function runPass(browser, name, programs) {
     })),
   );
 
-  // --- a delay in real time, to the halt. Three runs, the best counts: a late timer of a busy
-  //     machine can only make the delay longer.
-  const delays = [];
-  for (let i = 0; i < 3; i++) {
-    await load(page, 'delay');
-    await pressInMainWindow(page, 'F9');
-    await waitForHalt(page);
-    delays.push((await register(page, D6)) - (await register(page, D7)));
-  }
-  const shortest = Math.min(...delays);
+  // --- a delay in real time, to the halt. A late timer of a busy machine can only make the delay
+  //     longer, never shorter: up to five runs, the best counts, and none may be too short.
+  const delays = await measureDelay(page, () => pressInMainWindow(page, 'F9'));
   check(
-    `${p} a task 23 delay of 50 units takes half a second, by the program's own clock (best of three)`,
-    shortest >= 50 && shortest <= 51,
+    `${p} a task 23 delay of 50 units takes half a second, by the program's own clock (best of up to five)`,
+    delays.every((delay) => delay >= 50) && Math.min(...delays) <= 51,
     `${delays.join(', ')} hundredths of a second`,
   );
   const halted = await page.evaluate(() =>
@@ -404,7 +455,7 @@ async function runPass(browser, name, programs) {
     void ctx.commands.run('sim.run.runToCursor');
   });
   const box = page.locator('[role=alertdialog]');
-  await box.waitFor({ timeout: 5000 });
+  await box.waitFor({ timeout: UI_TIMEOUT });
   const boxText = await box.innerText();
   check(
     `${p} Run To Cursor without a row shows the original's box`,
@@ -422,7 +473,7 @@ async function runPass(browser, name, programs) {
 
   // --- the Caution question of Close
   await page.evaluate(() => void window.__easy68k.ctx.commands.run('sim.file.close'));
-  await box.waitFor({ timeout: 5000 });
+  await box.waitFor({ timeout: UI_TIMEOUT });
   const caution = await box.innerText();
   check(
     `${p} Close asks the Caution question`,
@@ -437,10 +488,86 @@ async function runPass(browser, name, programs) {
     (await page.evaluate(() => window.__easy68k.ctx.sim.engine.listingLineCount)) > 0,
   );
 
+  // --- the Open dialog holds a running program (4.4.5): the original's modal dialog runs its
+  //     message loop inside the run loop's own, so the program stands still while it is open.
+  await load(page, 'counter');
+  await pressInMainWindow(page, 'F9');
+  await waitForPhase(page, 'running');
+  await pressInMainWindow(page, 'Control+O'); // a chord of File > Open on every platform
+  await page.waitForFunction(() => window.__easy68k.ctx.dialogs.isModalOpen(), undefined, { timeout: UI_TIMEOUT });
+  const whileOpen = await page.evaluate(async () => {
+    const { ctx } = window.__easy68k;
+    const before = ctx.sim.engine.stepCount;
+    await new Promise((r) => setTimeout(r, 300));
+    return {
+      dialog: ctx.store.getState().dialogs.stack.at(-1)?.id,
+      held: ctx.sim.controller.held,
+      phase: ctx.sim.controller.phase,
+      executed: (ctx.sim.engine.stepCount - before) >>> 0,
+    };
+  });
+  check(
+    `${p} File > Open while a program runs: the dialog holds the program, nothing executes`,
+    whileOpen.held && whileOpen.phase === 'running' && whileOpen.executed === 0,
+    JSON.stringify(whileOpen),
+  );
+  await page.screenshot({ path: join(outDir, `${name}-open-dialog.png`) });
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !window.__easy68k.ctx.dialogs.isModalOpen(), undefined, { timeout: UI_TIMEOUT });
+  const afterCancel = await page.evaluate(async () => {
+    const { ctx } = window.__easy68k;
+    const before = ctx.sim.engine.stepCount;
+    // Until it has executed again, or a generous limit has passed.
+    for (let i = 0; i < 100 && ctx.sim.engine.stepCount === before; i++) await new Promise((r) => setTimeout(r, 50));
+    return {
+      held: ctx.sim.controller.held,
+      program: ctx.sim.controller.program?.path,
+      executed: (ctx.sim.engine.stepCount - before) >>> 0,
+    };
+  });
+  check(
+    `${p} Escape closes the dialog, the program is kept and goes on`,
+    !afterCancel.held && afterCancel.program === '/browser/check/counter.S68' && afterCancel.executed > 0,
+    JSON.stringify(afterCancel),
+  );
+  await pressInMainWindow(page, 'F6');
+  await waitForPhase(page, 'idle');
+
+  // --- a box the engine raises outside a run (4.4.4): the 101st PC breakpoint, set as the gutter
+  //     of the listing sets it. (The next File > Open clears the breakpoints again.)
+  const breakpoints = await page.evaluate(() => {
+    const { sim } = window.__easy68k.ctx;
+    for (let i = 0; i < 101; i++) sim.controller.invoke((engine) => engine.setBreakpoint(0x2000 + 2 * i));
+    return sim.engine.breakpoints().length;
+  });
+  await box.waitFor({ timeout: UI_TIMEOUT });
+  const limitText = await box.innerText();
+  check(
+    `${p} the 101st breakpoint shows the engine's box Breakpoint Limit Reached!`,
+    breakpoints === 100 && limitText.includes('Breakpoint Limit Reached!') && limitText.includes('Error'),
+    `${breakpoints} breakpoints; ${limitText.replace(/\s+/g, ' ')}`,
+  );
+  await page.screenshot({ path: join(outDir, `${name}-breakpoint-limit-box.png`) });
+  await box.getByRole('button', { name: 'OK' }).click();
+  await box.waitFor({ state: 'detached' });
+  const afterBox = await page.evaluate(() => {
+    const { sim } = window.__easy68k.ctx;
+    return {
+      alerts: sim.controller.alerts.length,
+      engineBox: sim.engine.state().alertOpen,
+      phase: sim.controller.phase,
+    };
+  });
+  check(
+    `${p} OK closes it for the engine too`,
+    afterBox.alerts === 0 && !afterBox.engineBox && afterBox.phase === 'idle',
+    JSON.stringify(afterBox),
+  );
+
   // --- the Execution Speed dialog
   await page.evaluate(() => void window.__easy68k.ctx.commands.run('sim.options.speed'));
   const dialog = page.getByRole('dialog', { name: 'Execution Speed' });
-  await dialog.waitFor({ timeout: 5000 });
+  await dialog.waitFor({ timeout: UI_TIMEOUT });
   await page.screenshot({ path: join(outDir, `${name}-speed-dialog.png`) });
   const scan = await new AxeBuilder({ page })
     .include('[role=dialog]')
@@ -474,7 +601,7 @@ async function runPass(browser, name, programs) {
     await statusText(page),
   );
   await page.evaluate(() => void window.__easy68k.ctx.commands.run('sim.options.speed'));
-  await dialog.waitFor({ timeout: 5000 });
+  await dialog.waitFor({ timeout: UI_TIMEOUT });
   await dialog.locator('label').filter({ hasText: 'Maximum' }).click();
   await page.keyboard.press('Escape');
   await dialog.waitFor({ state: 'detached' });
@@ -533,6 +660,74 @@ async function runPass(browser, name, programs) {
   await page.screenshot({ path: join(outDir, `${name}-dark.png`) });
   await page.evaluate(() => window.__easy68k.ctx.commands.run('app.theme.set', 'light'));
 
+  // --- the page's own events reach the program files (3.8.4). The calls are counted in front of
+  //     the real parts, which run as they are.
+  const pageEvents = await page.evaluate(async () => {
+    const { ctx } = window.__easy68k;
+    const { files, log, controller } = ctx.sim;
+    const calls = [];
+    const watch = (object, method) => {
+      const original = object[method];
+      object[method] = function (...args) {
+        calls.push(method);
+        return original.apply(this, args);
+      };
+      return () => {
+        object[method] = original;
+      };
+    };
+    const unwatch = [
+      watch(files, 'markStale'),
+      watch(files, 'revalidateIfStale'),
+      watch(files, 'exitNow'),
+      watch(log, 'exit'),
+    ];
+    // The window loses the focus: files may have changed behind a cached view. The next Run
+    // revalidates them before the engine gets the command.
+    window.dispatchEvent(new Event('blur'));
+    const afterBlur = [...calls];
+    controller.run();
+    for (let i = 0; i < 200 && controller.phase === 'loading'; i++) await new Promise((r) => setTimeout(r, 10));
+    const afterRun = [...calls];
+    const ran = controller.phase !== 'idle' || ctx.sim.engine.stepCount > 0;
+    controller.pause();
+    // The page is closing without notice.
+    calls.length = 0;
+    window.dispatchEvent(new Event('pagehide'));
+    const afterHide = [...calls];
+    for (const undo of unwatch) undo();
+    return { afterBlur, afterRun, ran, afterHide };
+  });
+  check(
+    `${p} the window loses the focus: the program files are marked stale and the next Run revalidates them`,
+    JSON.stringify(pageEvents.afterBlur) === '["markStale"]' &&
+      JSON.stringify(pageEvents.afterRun) === '["markStale","revalidateIfStale"]' &&
+      pageEvents.ran,
+    JSON.stringify(pageEvents),
+  );
+  check(
+    `${p} the page is closed: the program files and the log are written out at once`,
+    JSON.stringify(pageEvents.afterHide) === '["exitNow","exit"]',
+    JSON.stringify(pageEvents.afterHide),
+  );
+  const journal = await page.evaluate(() => {
+    const key = 'easy68k.sim.journal.v1';
+    const { journal: store } = window.__easy68k.ctx.sim.ui;
+    const kept = window.localStorage.getItem(key);
+    store.write('{"check":true}');
+    const stored = window.localStorage.getItem(key);
+    const read = store.read();
+    store.write(null);
+    const removed = window.localStorage.getItem(key);
+    if (kept !== null) window.localStorage.setItem(key, kept);
+    return { stored, read, removed };
+  });
+  check(
+    `${p} the journal of the program files is kept in the page's storage and removed when it is empty`,
+    journal.stored === '{"check":true}' && journal.read === '{"check":true}' && journal.removed === null,
+    JSON.stringify(journal),
+  );
+
   // --- Exit
   await page.evaluate(() => window.__easy68k.ctx.commands.run('sim.file.exit'));
   const exitText = await page
@@ -548,6 +743,44 @@ async function runPass(browser, name, programs) {
 /** A program named in the URL is loaded in Simulator mode and started by run=1 (5.7). */
 async function startupPass(browser, name, programs) {
   const p = `${name}:`;
+
+  // The switches act without a program too (sim-ui §8.1: "still processed when argument 1 was not
+  // a loadable file"). The file named here does not exist: nothing is loaded and nothing is said,
+  // the mode stays, the two options are set, and Run halts at once on memory full of $FF.
+  const bare = await openApp(browser, '?open=/browser/check/none.S68&run=1&exceptions=1&bitfield=1');
+  await bare.page
+    .waitForFunction(
+      () => {
+        const { ctx } = window.__easy68k;
+        return ctx.settings.get().sim.bitField && ctx.store.getState().sim.halted;
+      },
+      undefined,
+      { timeout: LOAD_TIMEOUT },
+    )
+    .catch(() => {});
+  const bareState = await bare.page.evaluate(() => {
+    const { ctx } = window.__easy68k;
+    const { mode, sim } = ctx.store.getState();
+    const { exceptions, bitField } = ctx.settings.get().sim;
+    return { mode, program: sim.program, messages: sim.messageLines, halted: sim.halted, exceptions, bitField };
+  });
+  check(
+    `${p} ?open=<no such file>&run=1&exceptions=1&bitfield=1: Editor mode stays, the options are set, Run halts at once`,
+    bareState.mode === 'editor' &&
+      bareState.program === null &&
+      bareState.messages.length === 0 &&
+      bareState.halted &&
+      bareState.exceptions &&
+      bareState.bitField,
+    JSON.stringify(bareState),
+  );
+  check(
+    `${p} switches alone: no console or page errors`,
+    bare.errors.length === 0,
+    bare.errors.slice(0, 3).join(' | '),
+  );
+  await bare.context.close();
+
   // A first page puts the program into the browser store; a second page of the same browser
   // context is then opened with the start-up arguments. That needs a store that outlives a page:
   // with the memory backend that stands in until the real one exists there is nothing to show.
@@ -563,15 +796,8 @@ async function startupPass(browser, name, programs) {
   }
   await first.page.close();
 
-  const page = await first.context.newPage();
-  const errors = [];
-  page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text());
-  });
-  page.on('pageerror', (error) => errors.push(String(error)));
-  await page.goto(`${baseUrl}?open=/browser/check/delay.S68&run=1`, { timeout: LOAD_TIMEOUT });
-  await page.waitForFunction(() => window.__easy68k !== undefined, undefined, { timeout: LOAD_TIMEOUT });
-  await waitForHalt(page, 30000).catch(() => {});
+  const { page, errors } = await openPage(first.context, '?open=/browser/check/delay.S68&run=1');
+  await waitForHalt(page, LOAD_TIMEOUT).catch(() => {});
   const state = await page.evaluate(() => ({
     mode: window.__easy68k.ctx.store.getState().mode,
     sim: window.__easy68k.ctx.store.getState().sim,
@@ -585,9 +811,65 @@ async function startupPass(browser, name, programs) {
   await first.context.close();
 }
 
+/**
+ * A page that gets no display frames: a hidden tab, a minimised or covered window (4.5.5). Here
+ * requestAnimationFrame never calls back. The scheduler's watchdog then delivers the "frames"
+ * from a timer, so the program keeps running, and a delay keeps exact time because its end has a
+ * timer of its own. How fast the program runs meanwhile is reported, not judged: unused time is
+ * made up only to 50 ms per tick (MAX_CATCHUP_MS), so it depends on how often the watchdog ticks.
+ * (A real hidden tab is slower still: there the browser also slows the timers down.)
+ */
+async function noFramesPass(browser, name, programs) {
+  const p = `${name}:`;
+  const polling = 100;
+  const context = await newContext(browser);
+  await context.addInitScript(() => {
+    let handle = 0;
+    window.requestAnimationFrame = () => ++handle;
+    window.cancelAnimationFrame = () => {};
+  });
+  const { page, errors } = await openPage(context, '', polling);
+  await prepare(page, programs, polling);
+  const run = () => page.evaluate(() => window.__easy68k.ctx.commands.run('sim.run.run'));
+
+  const delays = await measureDelay(page, run, polling);
+  check(
+    `${p} without display frames a task 23 delay of 50 units still takes half a second (best of up to five)`,
+    delays.every((delay) => delay >= 50) && Math.min(...delays) <= 51,
+    `${delays.join(', ')} hundredths of a second`,
+  );
+
+  await load(page, 'counter');
+  await run();
+  const rate = await page.evaluate(async () => {
+    const { engine } = window.__easy68k.ctx.sim;
+    const t0 = performance.now();
+    const s0 = engine.stepCount;
+    await new Promise((r) => setTimeout(r, 2000));
+    return ((engine.stepCount - s0) >>> 0) / ((performance.now() - t0) / 1000);
+  });
+  check(
+    `${p} without display frames the program keeps running`,
+    rate > 0,
+    `${Math.round(rate).toLocaleString('en-US')} instructions per second (1,000,000 with frames)`,
+  );
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('sim.run.pause'));
+  check(`${p} no frames: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await context.close();
+}
+
 // --- run ----------------------------------------------------------------------------------------
 
 async function main() {
+  if (!enginesBuilt()) {
+    const required = process.env.EASY68K_REQUIRE_ENGINES === '1';
+    console.log(
+      `engine/dist is incomplete: run \`npm run build:engines\` or \`npm run fetch:engines\` first. ${
+        required ? 'EASY68K_REQUIRE_ENGINES is 1: that is a failure.' : 'Nothing was checked.'
+      }`,
+    );
+    process.exit(required ? 1 : 0);
+  }
   const programs = await assemblePrograms();
   const server = await createServer({
     configFile: join(appRoot, 'vite.config.ts'),
@@ -612,6 +894,7 @@ async function main() {
         for (const [title, pass] of [
           ['run', runPass],
           ['start-up arguments', startupPass],
+          ['no display frames', noFramesPass],
         ]) {
           console.log(`\n[${name}, ${title}]`);
           try {

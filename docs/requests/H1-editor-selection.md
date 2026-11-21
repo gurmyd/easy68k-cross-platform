@@ -1,3 +1,5 @@
+Status: accepted as asked at gate I1 (contracts engineer, W1). `contracts/documents.ts` has `DocumentSelection { selected; caret }` and the optional `DocumentService.selection?(id): DocumentSelection | null`. E1 implements it in `DocumentManager` from the document's `EditorState` (the main selection: `selected` = its text, `caret` = its head); H1 calls `ctx.documents.selection?.(id)` and keeps `readEditorWordContext` only as the fallback while the member is absent. Details: `docs/porting/errata/W1.md`, entry 11.
+
 # Request from H1: the editor's selection and caret (W1 contracts; E2)
 
 F1 in the editor looks up the selected text, or the word at the caret (editor-ui §15.3).

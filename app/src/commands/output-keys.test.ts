@@ -195,6 +195,35 @@ describe("rule 4: everything else is the program's", () => {
     expect(ask(fixture(WINDOWS_US, 'Ctrl+Tab'), { desktop: false })).toEqual({ kind: 'program', then: null });
   });
 
+  it('like the original (Shift.Contains), other modifiers may be held with Alt+Enter and Ctrl+Tab (errata W3 entry 29)', () => {
+    expect(ask(key('Enter', { altKey: true, ctrlKey: true }))).toEqual({ kind: 'program', then: 'fullscreen' });
+    expect(ask(key('Enter', { altKey: true, shiftKey: true }))).toEqual({ kind: 'program', then: 'fullscreen' });
+    expect(ask(key('Tab', { ctrlKey: true, shiftKey: true }), { desktop: true })).toEqual({
+      kind: 'program',
+      then: 'nextPanel',
+    });
+    expect(ask(key('Tab', { ctrlKey: true, shiftKey: true }), { desktop: false })).toEqual({
+      kind: 'program',
+      then: null,
+    });
+    // The paste chord stays exact: a browser fires `paste` for its own chord only (SH4-output-chords).
+    expect(ask(key('Insert', { shiftKey: true, ctrlKey: true }))).toEqual({ kind: 'program', then: null });
+    expect(ask(key('Insert', { shiftKey: true, altKey: true }))).toEqual({ kind: 'program', then: null });
+    const off = { keyCommands: false, desktop: true };
+    expect(ask(key('Enter', { altKey: true, ctrlKey: true }), off)).toEqual({ kind: 'program', then: null });
+    expect(ask(key('Tab', { ctrlKey: true, shiftKey: true }), off)).toEqual({ kind: 'program', then: null });
+    // The original tests Ctrl+Tab first, then Alt+Enter, then Shift+Insert.
+    expect(ask(key('Tab', { ctrlKey: true, altKey: true }), { desktop: true })).toEqual({
+      kind: 'program',
+      then: 'nextPanel',
+    });
+    expect(ask(key('Enter', { altKey: true }), { os: 'mac' })).toEqual({ kind: 'program', then: 'fullscreen' });
+    // Without the named modifier nothing acts; macOS's Cmd+V is exact.
+    expect(ask(key('Insert', { ctrlKey: true }))).toEqual({ kind: 'program', then: null });
+    expect(ask(key('Enter', { ctrlKey: true }))).toEqual({ kind: 'program', then: null });
+    expect(ask(key('v', { metaKey: true, shiftKey: true }), { os: 'mac' })).toEqual({ kind: 'program', then: null });
+  });
+
   it('after task 24 none of the three acts; the keys are only delivered', () => {
     const off = { keyCommands: false, desktop: true };
     expect(ask(fixture(WINDOWS_US, 'Alt+Enter'), off)).toEqual({ kind: 'program', then: null });

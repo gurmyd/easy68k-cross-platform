@@ -14,10 +14,14 @@ export interface Outputs {
   sRecord: Uint8Array | null;
 }
 
-/** The two canonical forms of tests/conformance/asm/compare.ts, passed in by the caller. */
+/** Memory addresses `from` (included) to `to` (not included), as in tests/conformance/asm/compare.ts. */
+type AddressRange = readonly [from: number, to: number];
+
+/** The canonical forms of tests/conformance/asm/compare.ts, passed in by the caller. */
 export interface Canonical {
   canonicalListing(listing: Uint8Array): Uint8Array;
-  canonicalSRecord(sRecord: Uint8Array, undefinedSymbols: boolean): Uint8Array;
+  undefinedSymbolRanges(listing: Uint8Array): AddressRange[];
+  canonicalSRecord(sRecord: Uint8Array, masked: readonly AddressRange[]): Uint8Array;
 }
 
 export type DifferenceClass =
@@ -119,7 +123,9 @@ export function classify(cli: Outputs, port: Outputs, sources: string[], canonic
   }
   if (portBody.some((line) => /^Line \d+ ERROR: Undefined symbol$/.test(line))) {
     const mask = (body: string[]): string[] => decode(canonical.canonicalListing(encode(body.join('\r\n')))).split('\r\n');
-    const maskRecords = (records: string[]): string[] => decode(canonical.canonicalSRecord(encode(records.join('\r\n')), true)).split('\r\n');
+    // Only the bytes of the statements that report the undefined symbol, in either listing.
+    const masked = [...canonical.undefinedSymbolRanges(cli.listing), ...canonical.undefinedSymbolRanges(port.listing)];
+    const maskRecords = (records: string[]): string[] => decode(canonical.canonicalSRecord(encode(records.join('\r\n')), masked)).split('\r\n');
     cliBody = mask(cliBody);
     portBody = mask(portBody);
     cliRecords = maskRecords(cliRecords);

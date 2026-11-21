@@ -1,0 +1,155 @@
+> reset
+> loadsrec bad-checksum.S68
+message "S Record loaded successfully.\n\nS0 description record contains:\nS0 = TEST\n"
+result 1 start=00001000 end=00001002 length=00000003
+> digest
+digest 6126C1F4 3
+> reset
+> loadsrec bad-type4.S68
+message "Invalid data on line 3\n3: S40510100405D1\n\n\nOpen stopped."
+result 0 start=00000000 end=00000000 length=00000000
+> digest
+digest 6126C1F4 3
+> reset
+> loadsrec bad-first.S68
+message "Invalid data on line 1\n1: XYZ012345\n\n\nOpen stopped."
+result 0 start=00000000 end=00000000 length=00000000
+> digest
+digest 811C9DC5 0
+> reset
+> loadsrec bad-address.S68
+message "S Record loaded successfully.\n\nS0 description record contains:\nS0 = TEST\n"
+result 1 start=00000001 end=00001001 length=00001001
+> digest
+digest 632563A6 5
+> reset
+> loadsrec over-s3.S68
+message "ERROR, Address exceeds $FFFFFF\nInvalid data on line 2\n2: S30801000000010203F0\n\n\nOpen stopped."
+result 0 start=00000000 end=00000000 length=00000000
+> digest
+digest 811C9DC5 0
+> reset
+> loadsrec over-s2.S68
+message "ERROR, Address exceeds $FFFFFF\nInvalid data on line 2\n2: S208FFFFFEA1A2A3A471\n\n\nOpen stopped."
+result 0 start=00000000 end=00000000 length=00000000
+> digest
+digest F5F993FD 2
+> dump FFFFFC 4
+dump FF FF A1 A2
+> reset
+> loadsrec s5.S68
+message "S Record loaded successfully.\n\nS0 description record contains:\nS0 = TEST\n"
+result 1 start=00002000 end=00002005 length=00000006
+> dump 002000 8
+dump 01 02 03 04 00 01 FF FF
+> reset
+> loadsrec blank-line.S68
+message "Invalid data on line 5\n5:    \n\n\nOpen stopped."
+result 0 start=00000000 end=00000000 length=00000000
+> digest
+digest 893D473F 3
+> reset
+> loadsrec lf-only.S68
+message "S Record loaded successfully.\n\nS0 description record contains:\nS0 = TEST\n"
+result 1 start=00003000 end=0000300F length=00000010
+> digest
+digest A4EED0B5 16
+> reset
+> loadsrec no-final-newline.S68
+message "S Record loaded successfully.\n\nS0 description record contains:\nS0 = TEST\n"
+result 1 start=00003100 end=00003201 length=00000102
+> digest
+digest 62A90033 5
+> reset
+> loadsrec ctrlz.S68
+message "S Record loaded successfully.\n\nS0 description record contains:\nS0 = TEST\n"
+result 1 start=00003300 end=00003301 length=00000002
+> digest
+digest 5743CFD3 2
+> reset
+> loadsrec long-line.S68
+message "S Record loaded successfully.\n\nS0 description record contains:\nS0 = TEST\n"
+result 1 start=0000F000 end=0000F44A length=0000044B
+> digest
+digest 43C5811B 293
+> reset
+> loadsrec only-s0-s8.S68
+message "S Record loaded successfully.\n\nS0 description record contains:\nS0 = TEST\n"
+result 1 start=FFFFFFFF end=00000000 length=00000002
+> digest
+digest 811C9DC5 0
+> reset
+> loadsrec s0-text.S68
+message "S Record loaded successfully.\n\nS0 description record contains:\nS0 = A.~.. B\nS0 = C\nS0 = C\n"
+result 1 start=00003600 end=00003600 length=00000001
+> digest
+digest 32CB4526 1
+> reset
+> loadsrec lone-cr.S68
+message "S Record loaded successfully.\n\nS0 description record contains:\nS0 = TEST.\n"
+result 1 start=FFFFFFFF end=00000000 length=00000002
+> digest
+digest 811C9DC5 0
+> reset
+> loadsrec spaces.S68
+message "S Record loaded successfully.\n\nS0 description record contains:\nS0 = TEST\n"
+result 1 start=00003900 end=00003A00 length=00000101
+> digest
+digest 403BC2B5 5
+> dump 003900 4
+dump 01 02 BE BE
+> reset
+> loadsrec sign.S68
+message "ERROR, Address exceeds $FFFFFF\nInvalid data on line 2\n2: S107-0010A0B0C0D0\n\n\nOpen stopped."
+result 0 start=00000000 end=00000000 length=00000000
+> digest
+digest 811C9DC5 0
+> reset
+> loadsrec zero-byte.S68
+message "S Record loaded successfully.\n\nS0 description record contains:\nS0 = TEST\n"
+result 1 start=00003B00 end=00003B05 length=00000006
+> digest
+digest E9A9FB27 6
+> reset
+> loadsrec after-s7.S68
+message "S Record loaded successfully.\n\nS0 description record contains:\nS0 = TEST\n"
+result 1 start=00003D00 end=00003D00 length=00000001
+> digest
+digest 03958ED5 1
+> reset
+> loadsrec short-lines.S68
+message "Invalid data on line 4\n4: S\n\n\nOpen stopped."
+result 0 start=00000000 end=00000000 length=00000000
+> digest
+digest 66DCBB67 41
+> reset
+> loadsrec lowercase.S68
+message "Invalid data on line 1\n1: s1071000010203E5\n\n\nOpen stopped."
+result 0 start=00000000 end=00000000 length=00000000
+> digest
+digest 811C9DC5 0
+> reset
+> loadsrec gaps.S68
+message "S Record loaded successfully.\n\nS0 description record contains:\nS0 = TEST\n"
+result 1 start=00003FF0 end=00004100 length=00000111
+> digest
+digest 7A216BC3 3
+> reset
+> loadsrec non-srec.BIN
+message "Invalid data on line 1\n1: NqNu\n\nOpen stopped."
+result 0 start=00000000 end=00000000 length=00000000
+> loadsrec bin256.BIN
+message "Invalid data on line 1\n1: \n\nOpen stopped."
+result 0 start=00000000 end=00000000 length=00000000
+> loadsrec missing.S68
+message "error: cannot open file missing.S68"
+result 0 start=00000000 end=00000000 length=00000000
+> reset
+> loadsrec long-line.S68
+message "S Record loaded successfully.\n\nS0 description record contains:\nS0 = TEST\n"
+result 1 start=0000F000 end=0000F44A length=0000044B
+> loadsrec short-lines.S68
+message "Invalid data on line 4\n4: S\n\n\nOpen stopped."
+result 0 start=0000F000 end=0000F44A length=0000044B
+> digest
+digest 622DFABD 334

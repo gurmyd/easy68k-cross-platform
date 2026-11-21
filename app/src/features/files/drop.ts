@@ -10,8 +10,14 @@
 // Simulator mode (sim-ui §8.4): if a program has been loaded, `The current debug environment will
 // be lost, click OK to continue.` (title `Caution`, OK / Cancel) comes first, whatever was dropped.
 // On OK only the first dropped file counts, and only if its name ends in .S68 (any case); it is
-// loaded with RunController.open(path, 'drop'). A dropped .L68 with the same base name is copied
-// along, so that the listing appears (docs/differences/FS1.md).
+// loaded with RunController.open(path, 'drop'). For an .S68 the controller asks that question
+// itself (ARCHITECTURE.md 4.7 step 2), so this file asks it only when something else was dropped,
+// which is then ignored. A dropped .L68 with the same base name is copied along, so that the
+// listing appears (docs/differences/FS1.md).
+//
+// The desktop app (docs/porting/errata/DV2.md 4a): deps.locate names a dropped file's real place on
+// /disk (DesktopPlatform.grantDroppedFile). A file found there is opened where it is, not copied; a
+// dropped folder becomes the start folder of the Open dialog (3.8.5, deps.openFolder).
 //
 // A dropped folder is never opened as a document: a provider that takes dropped folders (FS2's
 // "Open this folder?") is offered it; elsewhere a toast says `Drop files, not folders. Use
@@ -35,6 +41,14 @@ export interface DroppedItem {
   read(): Promise<Bytes>;
   /** The item's FileSystemHandle where the browser gives one (Chromium), else null. */
   handle: Promise<unknown> | null;
+  /** The dropped File itself (for DropDeps.locate), when the drop gave one. */
+  file?: unknown;
+}
+
+/** Where a dropped item really is (the desktop app's disk). */
+export interface LocatedItem {
+  path: VPath;
+  kind: 'file' | 'dir';
 }
 
 export interface DropDeps {
@@ -48,6 +62,19 @@ export interface DropDeps {
   openDocument(path: VPath): Promise<unknown>;
   openProgram(path: VPath): Promise<void>;
   folderProviders(): DroppedFolderProvider[];
+  /** The desktop app: the item's place on /disk, or null (then it is copied as in a browser). */
+  locate?(item: DroppedItem): Promise<LocatedItem | null>;
+  /** The desktop app: shows the Open dialog in a dropped folder and opens what is chosen. */
+  openFolder?(dir: VPath): Promise<void>;
+}
+
+async function locate(item: DroppedItem, deps: DropDeps): Promise<LocatedItem | null> {
+  if (!deps.locate) return null;
+  try {
+    return await deps.locate(item);
+  } catch {
+    return null;
+  }
 }
 
 export interface DropOutcome {
@@ -75,37 +102,43 @@ export async function handleDrop(items: readonly DroppedItem[], deps: DropDeps):
   if (items.length === 0) return outcome;
 
   if (deps.mode === 'simulator') {
-    if (deps.programLoaded) {
-      const answer = await deps.messageBox({
-        title: DROP_CAUTION_TITLE,
-        text: DROP_CAUTION_TEXT,
-        icon: 'none',
-        buttons: ['OK', 'Cancel'],
-      });
-      if (answer !== 'OK') return outcome;
-    }
     const first = items[0] as DroppedItem;
     if (first.isFolder || foldCase(first.name).slice(-4) !== '.S68') {
+      // The original asks even when what was dropped is no program, and then ignores it.
+      if (deps.programLoaded) {
+        await deps.messageBox({
+          title: DROP_CAUTION_TITLE,
+          text: DROP_CAUTION_TEXT,
+          icon: 'none',
+          buttons: ['OK', 'Cancel'],
+        });
+      }
       outcome.skipped.push(first.name);
       return outcome;
     }
     let path: VPath;
-    try {
-      path = await deps.importFile(first.name, await first.read());
-    } catch {
-      outcome.skipped.push(first.name);
-      return outcome;
-    }
-    // The listing beside it, if it was dropped too.
-    const listingName = foldCase(changeFileExt(first.name, '.L68'));
-    const listing = items.find((item, i) => i > 0 && !item.isFolder && foldCase(item.name) === listingName);
-    if (listing) {
+    const located = await locate(first, deps);
+    if (located?.kind === 'file') {
+      path = located.path; // the listing beside it is found there by the controller
+    } else {
       try {
-        await deps.importFile(listing.name, await listing.read());
+        path = await deps.importFile(first.name, await first.read());
       } catch {
-        // the program still runs without its listing
+        outcome.skipped.push(first.name);
+        return outcome;
+      }
+      // The listing beside it, if it was dropped too.
+      const listingName = foldCase(changeFileExt(first.name, '.L68'));
+      const listing = items.find((item, i) => i > 0 && !item.isFolder && foldCase(item.name) === listingName);
+      if (listing) {
+        try {
+          await deps.importFile(listing.name, await listing.read());
+        } catch {
+          // the program still runs without its listing
+        }
       }
     }
+    // RunController.open asks the Caution question itself when a program is loaded (4.7 step 2).
     await deps.openProgram(path);
     outcome.opened.push(path);
     return outcome;
@@ -114,6 +147,21 @@ export async function handleDrop(items: readonly DroppedItem[], deps: DropDeps):
   if (deps.mode !== 'editor') return outcome;
   let toldAboutFolders = false;
   for (const item of items) {
+    const located = await locate(item, deps);
+    if (located?.kind === 'dir' && deps.openFolder) {
+      await deps.openFolder(located.path);
+      outcome.folders = 'taken';
+      continue;
+    }
+    if (located?.kind === 'file') {
+      try {
+        await deps.openDocument(located.path);
+        outcome.opened.push(located.path);
+      } catch {
+        outcome.skipped.push(item.name);
+      }
+      continue;
+    }
     if (item.isFolder) {
       if (await offerFolder(item, deps)) {
         outcome.folders = 'taken';

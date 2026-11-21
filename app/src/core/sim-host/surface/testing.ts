@@ -149,6 +149,38 @@ export function drawFixedScene(surface: SurfaceApi): void {
 }
 
 /**
+ * The hash (`hashPixels`) of the back buffer after `drawWideRectangleScene` on a new 640 x 480
+ * surface. Checked like FIXED_SCENE_HASH, under Node and in both browsers.
+ */
+export const WIDE_RECTANGLE_SCENE_HASH = '226c4d60';
+
+/**
+ * Draws rectangles with every pen width 2-255: for each width a one-point rectangle (the pen's
+ * round dot, tables/dots.ts), a horizontal and a vertical bar, and a frame, partly off the surface.
+ * All of it is SH1's and measured on GDI. Everything is drawn in the modes XOR and NOT XOR, which
+ * lose nothing: a single wrong pixel of any of the shapes changes the hash, however much is drawn
+ * over it afterwards.
+ */
+export function drawWideRectangleScene(surface: SurfaceApi): void {
+  const random = createRandom(255);
+  const point = (): [number, number] => [random.int(-20, 660), random.int(-20, 500)];
+  for (let width = 2; width <= 255; width++) {
+    surface.setPenWidth(width);
+    surface.setLineColor(random.int(0, 0xffffff));
+    surface.setFillColor(random.int(0, 0xffffff));
+    surface.setDrawingMode(random.pick([14, 15]));
+    let [x, y] = point();
+    surface.rectangle(x, y, x, y);
+    [x, y] = point();
+    surface.unfilledRectangle(x, y, x + random.int(1, 60), y);
+    [x, y] = point();
+    surface.unfilledRectangle(x, y, x, y + random.int(1, 60));
+    [x, y] = point();
+    surface.rectangle(x, y, x + random.int(1, 300), y + random.int(1, 300));
+  }
+}
+
+/**
  * Draws a scene of ellipses and wide lines of every pen width, in several drawing modes. Their
  * pixels are SH2's (ellipse.ts, widepen.ts), so this scene has no fixed hash; it serves to compare
  * one environment with another.

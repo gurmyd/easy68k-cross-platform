@@ -15,18 +15,22 @@ import type { Glyph } from '../../../app/src/contracts';
 import { Surface } from '../../../app/src/core/sim-host/surface/surface';
 import type { GdiCase } from './cases';
 import { cellOf, loadMetrics, rasterGlyph, type FontRequest, type Metrics, type TestGlyph } from './fonts';
-import { layoutText, type Picture } from './text-model';
+import { layoutText, outlineAdvance, type GlyphOf, type Picture } from './text-model';
 
-export type GlyphSource = (metrics: Metrics, font: FontRequest, byte: number) => TestGlyph;
+export type GlyphSource = GlyphOf;
 
-/** Outline faces: blank glyphs with Windows' cell (the glyph pixels are not compared, 6.5.3). */
-export const blankOutlineGlyph: GlyphSource = (metrics, font) => {
+/**
+ * Outline faces: blank glyphs with Windows' cell (the glyph pixels are not compared, 6.5.3); $7F in
+ * a string with a byte of $80 or above is as wide as Windows' fallback glyph (text-model.ts).
+ */
+export const blankOutlineGlyph: GlyphSource = (metrics: Metrics, font: FontRequest, byte, bytes): TestGlyph => {
   const cell = cellOf(metrics, font);
+  const advance = outlineAdvance(metrics, font, byte, bytes) ?? cell.colWidth;
   return {
-    advance: cell.colWidth,
-    width: cell.colWidth,
+    advance,
+    width: advance,
     height: cell.rowHeight,
-    coverage: new Uint8Array(cell.colWidth * cell.rowHeight),
+    coverage: new Uint8Array(advance * cell.rowHeight),
   };
 };
 
@@ -129,19 +133,4 @@ export function surfaceDraws(): boolean {
   const s = new Surface(4, 4);
   s.drawPixel(1, 1);
   return ((s.back.data[5] as number) & 0xffffff) !== 0;
-}
-
-/** Whether the Surface draws wide pens yet (SH2, wave 2): a width-5 dot has 21 pixels (trap15-b 6.2). */
-export function surfaceDrawsWidePens(): boolean {
-  const s = new Surface(16, 16);
-  s.setPenWidth(5);
-  s.line(8, 8, 8, 8);
-  return s.back.data.filter((p) => (p & 0xffffff) !== 0).length === 21;
-}
-
-/** Whether the Surface draws ellipses yet (SH2, wave 2). */
-export function surfaceDrawsEllipses(): boolean {
-  const s = new Surface(16, 16);
-  s.ellipse(2, 2, 12, 12);
-  return s.back.data.some((p) => (p & 0xffffff) !== 0);
 }

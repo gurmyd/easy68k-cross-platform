@@ -56,23 +56,43 @@ export interface DevServer {
   close(): Promise<void>;
 }
 
-/** A Vite development server of app/ on a free port. */
+/**
+ * A Vite development server of app/ on a free port. It has a dependency cache of its own: with the
+ * shared one (app/node_modules/.vite), another dev server of the same tree that optimises its
+ * dependencies anew rewrites the files this one serves, and the page reloads in the middle of a
+ * test ("Execution context was destroyed"; seen in gate 1 with many dev servers on one machine).
+ */
 export async function startDevServer(): Promise<DevServer> {
   const { createServer } = await import('vite');
+  const cacheDir = mkdtempSync(join(tmpdir(), 'easy68k-desktop-vite-'));
   const server = await createServer({
     configFile: join(REPO, 'app', 'vite.config.ts'),
     root: join(REPO, 'app'),
+    cacheDir,
     logLevel: 'warn',
     // No file watching: other work in the same tree must not reload the page under a test.
     server: { host: '127.0.0.1', port: 0, strictPort: false, watch: null },
   });
-  await server.listen();
+  try {
+    await server.listen();
+  } catch (error) {
+    await server.close();
+    removeQuietly(cacheDir);
+    throw error;
+  }
   const url = server.resolvedUrls?.local[0];
   if (!url) {
     await server.close();
+    removeQuietly(cacheDir);
     throw new Error('the Vite dev server reported no address');
   }
-  return { url, close: () => server.close() };
+  return {
+    url,
+    close: async () => {
+      await server.close();
+      removeQuietly(cacheDir);
+    },
+  };
 }
 
 export interface LaunchOptions {
@@ -208,6 +228,8 @@ const TEST_MODULES = [
   '/src/state/panels.ts',
   '/src/engine/index.ts',
   '/src/engine/loader.ts',
+  '/src/engine/testing.ts',
+  '/src/features/output/testing/programs.ts',
 ];
 
 /**

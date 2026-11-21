@@ -1,0 +1,469 @@
+// Browser check of work package E1 (documents): what the unit tests under Node can reach only
+// through fakes (ARCHITECTURE.md 3.9, 3.9.4, 3.8.5, 1.3.3; editor-ui §1.3, §6, §20.2). Owner: E1.
+//
+//   node app/src/features/documents/check-documents.mjs [--browser chromium|webkit|all] [--out <dir>]
+//
+// Starts the Vite dev server of app/ on a free port and drives the real application in headless
+// Chromium and WebKit (Playwright), with the real document service, editor, file dialogs, drop
+// handling and browser store:
+//
+//   - the application starts with one document `untitled1.x68` holding the template;
+//   - text typed in the editor reaches the document: Modified is set, and Save As writes the typed
+//     text with the trailer and clears Modified; DocumentService.selection follows the editor's
+//     caret and selection;
+//   - Save As onto an existing name asks `File exists! OK to overwrite?` (title `Caution!`); No
+//     leaves the document unnamed and the file as it was, Yes writes it;
+//   - two files dropped on the window open as two documents, in the order of the drop;
+//   - Exit with two modified documents: No for the first and Cancel for the second leaves both open,
+//     the first still with its edits (editor-ui §1.3);
+//   - the unload guard: closing the page while a document is modified raises the browser's
+//     "leave site?" question; with nothing modified it does not;
+//   - drafts in the browser's real IndexedDB under the real Web Locks: a second window does not
+//     offer the drafts of a window that is still open; after that window is gone (closed without
+//     its unload handlers, as in a crash) a new window offers them with the exact text, Escape does
+//     not dismiss the offer, and Restore brings the document back, modified, with its text;
+//   - an accessibility scan (axe-core) of the drafts offer and the close prompt;
+//   - no console errors.
+//
+// Screenshots go to build/E1/documents-check (git-ignored). Exit code 0 = everything passed.
+// The page object `window.__easy68k` exists in development builds only (main.tsx).
+
+/* global console, process, window, document, indexedDB, navigator, setTimeout, DataTransfer, DragEvent, File, Navigator, TextEncoder */
+
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { createServer as createNetServer } from 'node:net';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { AxeBuilder } from '@axe-core/playwright';
+import { chromium, webkit } from '@playwright/test';
+import { createServer } from 'vite';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const appRoot = resolve(here, '../../..');
+const repoRoot = resolve(appRoot, '..');
+
+const args = process.argv.slice(2);
+const option = (name, fallback) => {
+  const index = args.indexOf(name);
+  return index >= 0 && args[index + 1] ? args[index + 1] : fallback;
+};
+const browserChoice = option('--browser', 'all');
+const outDir = resolve(option('--out', join(repoRoot, 'build', 'E1', 'documents-check')));
+mkdirSync(outDir, { recursive: true });
+
+const BROWSERS = { chromium, webkit };
+const browsers = browserChoice === 'all' ? ['chromium', 'webkit'] : [browserChoice];
+
+let baseUrl = '';
+let failures = 0;
+const results = [];
+function check(name, ok, detail = '') {
+  detail = String(detail).slice(0, 300);
+  results.push({ name, ok, detail });
+  if (!ok) failures++;
+  console.log(`${ok ? '  ok  ' : '  FAIL'} ${name}${detail ? ` - ${detail}` : ''}`);
+}
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+function freePort() {
+  return new Promise((resolvePort, reject) => {
+    const server = createNetServer();
+    server.unref();
+    server.on('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address();
+      server.close(() => resolvePort(port));
+    });
+  });
+}
+
+/** The Windows key map on every machine, so that the result does not depend on the runner. */
+function pretendWindows() {
+  Object.defineProperty(Navigator.prototype, 'platform', { get: () => 'Win32' });
+  Object.defineProperty(Navigator.prototype, 'userAgentData', { get: () => undefined });
+}
+
+async function newContext(browser) {
+  const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, reducedMotion: 'reduce' });
+  await context.addInitScript(pretendWindows);
+  return context;
+}
+
+async function openApp(context) {
+  const page = await context.newPage();
+  page.setDefaultTimeout(60_000);
+  page.setDefaultNavigationTimeout(180_000);
+  const errors = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  page.on('pageerror', (error) => errors.push(String(error)));
+  await page.goto(baseUrl);
+  await page.waitForSelector('.e68-shell');
+  await page.waitForFunction(() => window.__easy68k !== undefined);
+  return { page, errors };
+}
+
+/** The documents as the store shows them: [name, modified, path]. */
+const documentsOf = (page) =>
+  page.evaluate(() =>
+    window.__easy68k.ctx.store.getState().documents.items.map((doc) => [doc.name, doc.modified, doc.path]),
+  );
+const activeText = (page) =>
+  page.evaluate(() => {
+    const { documents } = window.__easy68k.ctx;
+    const active = documents.active();
+    return active ? documents.text(active.id) : null;
+  });
+const readFile = (page, path) =>
+  page.evaluate(
+    async (p) => Array.from(await window.__easy68k.ctx.vfs.readFile(p), (b) => String.fromCharCode(b)).join(''),
+    path,
+  );
+const writeFile = (page, path, text) =>
+  page.evaluate(([p, t]) => window.__easy68k.ctx.vfs.writeFile(p, new TextEncoder().encode(t)), [path, text]);
+
+/** Types into the editor of the active document (the real editor component, E2). */
+async function typeInEditor(page, text) {
+  const content = page.locator('[data-e68-panel="editor"] .cm-content').first();
+  await content.click();
+  await page.keyboard.press('Control+Home');
+  await page.keyboard.type(text);
+}
+
+/** Starts a command without waiting for it (it may open dialogs). */
+const startCommand = (page, id) =>
+  page.evaluate((commandId) => {
+    window.__commandDone = false;
+    void window.__easy68k.ctx.commands.run(commandId).finally(() => {
+      window.__commandDone = true;
+    });
+  }, id);
+const commandDone = (page) => page.waitForFunction(() => window.__commandDone === true);
+
+const messageBox = (page) => page.locator('[role=alertdialog]').last();
+
+async function scan(page, label) {
+  const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+  const serious = result.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
+  check(
+    `axe ${label}: no serious finding`,
+    serious.length === 0,
+    serious.map((v) => `${v.id} (${v.nodes.length}): ${v.nodes[0]?.target.join(' ')}`).join('; '),
+  );
+}
+
+// ---- passes -------------------------------------------------------------------------------------
+
+/** Start-up, typing, Save As with the overwrite question, drop, Exit with Cancel, unload guard. */
+async function documentsPass(browser, name) {
+  const p = `${name}:`;
+  const context = await newContext(browser);
+  const { page, errors } = await openApp(context);
+
+  const start = await documentsOf(page);
+  check(`${p} start: one document untitled1.x68, not modified`, same(start, [['untitled1.x68', false, null]]));
+  const template = await activeText(page);
+  check(`${p} start: the document holds the template`, typeof template === 'string' && template.length > 100);
+
+  // Typing reaches the document.
+  await typeInEditor(page, 'ABC');
+  await page.waitForFunction(() => window.__easy68k.ctx.documents.active()?.modified === true).catch(() => {});
+  check(`${p} typing in the editor sets Modified`, (await documentsOf(page))[0]?.[1] === true);
+  check(`${p} typing in the editor changes the document's text`, (await activeText(page))?.startsWith('ABC') === true);
+
+  // DocumentService.selection follows the editor's caret and selection (F1, editor-ui §15.3).
+  const selectionOf = () =>
+    page.evaluate(() => {
+      const { documents } = window.__easy68k.ctx;
+      return documents.selection(documents.active().id);
+    });
+  check(
+    `${p} selection: the caret after typing`,
+    same(await selectionOf(), { selected: '', caret: 3 }),
+    JSON.stringify(await selectionOf()),
+  );
+  await page.keyboard.press('Shift+Home');
+  check(
+    `${p} selection: Shift+Home selects the typed text, caret at 0`,
+    same(await selectionOf(), { selected: 'ABC', caret: 0 }),
+    JSON.stringify(await selectionOf()),
+  );
+  await page.keyboard.press('End');
+
+  // Save As onto an existing name: the real Save As dialog asks before overwriting.
+  await writeFile(page, '/browser/existing.X68', 'OLD\r\n');
+  await startCommand(page, 'ed.file.saveAs');
+  const dialog = page.locator('[role=dialog][aria-modal=true]').last();
+  await dialog.getByLabel('File name:').waitFor();
+  await dialog.getByLabel('File name:').fill('existing');
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  const box = messageBox(page);
+  await box.waitFor();
+  const boxText = (await box.innerText()).replace(/\s+/g, ' ');
+  check(
+    `${p} Save As onto an existing name asks "File exists! OK to overwrite?" (Caution!)`,
+    boxText.includes('Caution!') && boxText.includes('File exists! OK to overwrite?'),
+    boxText,
+  );
+  await page.screenshot({ path: join(outDir, `${name}-save-as-overwrite.png`) });
+  await box.getByRole('button', { name: 'No' }).click();
+  await commandDone(page);
+  check(`${p} Save As, No: the file is unchanged`, (await readFile(page, '/browser/existing.X68')) === 'OLD\r\n');
+  check(
+    `${p} Save As, No: the document keeps its name and stays modified`,
+    same((await documentsOf(page))[0], ['untitled1.x68', true, null]),
+  );
+
+  await startCommand(page, 'ed.file.saveAs');
+  await dialog.getByLabel('File name:').waitFor();
+  await dialog.getByLabel('File name:').fill('existing');
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await box.waitFor();
+  await box.getByRole('button', { name: 'Yes' }).click();
+  await commandDone(page);
+  const saved = await readFile(page, '/browser/existing.X68');
+  check(
+    `${p} Save As, Yes: the typed text and the trailer are written with CR LF`,
+    saved.startsWith('ABC') &&
+      saved.endsWith('\r\n*~Font name~Courier New~\r\n*~Font size~10~\r\n*~Tab type~1~\r\n*~Tab size~4~\r\n') &&
+      !/[^\r]\n/.test(saved),
+    JSON.stringify(saved.slice(-90)),
+  );
+  check(
+    `${p} Save As, Yes: the document is existing.X68 and not modified`,
+    same((await documentsOf(page))[0], ['existing.X68', false, '/browser/existing.X68']),
+    JSON.stringify(await documentsOf(page)),
+  );
+
+  // Two files dropped on the window open as two documents, in the order of the drop.
+  await page.evaluate(() => {
+    const dt = new DataTransfer();
+    dt.items.add(new File(['ZETA\r\n'], 'zeta.X68', { type: 'text/plain' }));
+    dt.items.add(new File(['ALPHA\r\n'], 'alpha.X68', { type: 'text/plain' }));
+    const target = document.querySelector('[data-e68-panel="editor"]') ?? document.body;
+    target.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    target.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+  });
+  await page
+    .waitForFunction(() => window.__easy68k.ctx.store.getState().documents.items.length === 3, null, {
+      timeout: 15_000,
+    })
+    .catch(() => {});
+  const afterDrop = await documentsOf(page);
+  check(
+    `${p} drop of two files: both open, in the order of the drop`,
+    same(
+      afterDrop.slice(1).map(([docName]) => docName),
+      ['zeta.X68', 'alpha.X68'],
+    ),
+    JSON.stringify(afterDrop),
+  );
+  check(`${p} drop: the last dropped file is the active document`, (await activeText(page)) === 'ALPHA\n');
+  await page.screenshot({ path: join(outDir, `${name}-after-drop.png`) });
+
+  // Exit: No for the first modified document, Cancel for the second: nothing closes.
+  await page.evaluate(() => {
+    const { documents } = window.__easy68k.ctx;
+    for (const doc of documents.list().slice(1))
+      documents.registry.dispatch(doc.id, { changes: { from: 0, insert: '*' } });
+  });
+  await startCommand(page, 'ed.file.exit');
+  await box.waitFor();
+  const firstPrompt = (await box.innerText()).replace(/\s+/g, ' ');
+  check(
+    `${p} Exit: the close prompt names the first modified document`,
+    firstPrompt.includes("File modified, do you wish to save 'zeta.X68' before closing?"),
+    firstPrompt,
+  );
+  await page.screenshot({ path: join(outDir, `${name}-exit-prompt.png`) });
+  await scan(page, `${name} close prompt`);
+  await box.getByRole('button', { name: 'No' }).click();
+  await page.waitForFunction(() => document.querySelector('[role=alertdialog]')?.textContent?.includes('alpha.X68'));
+  await messageBox(page).getByRole('button', { name: 'Cancel' }).click();
+  await commandDone(page);
+  const afterExit = await documentsOf(page);
+  check(
+    `${p} Exit, No then Cancel: every document stays open, the first with its edits`,
+    same(afterExit, [
+      ['existing.X68', false, '/browser/existing.X68'],
+      ['zeta.X68', true, '/browser/Imported/zeta.X68'],
+      ['alpha.X68', true, '/browser/Imported/alpha.X68'],
+    ]),
+    JSON.stringify(afterExit),
+  );
+  check(
+    `${p} Exit cancelled: the exit screen is not shown`,
+    (await page.getByText('You can close this tab.').count()) === 0,
+  );
+
+  // Unload guard: modified documents -> the browser asks; nothing modified -> it does not.
+  let asked = 0;
+  page.on('dialog', (d) => {
+    if (d.type() === 'beforeunload') asked++;
+    void d.dismiss().catch(() => {});
+  });
+  await page.close({ runBeforeUnload: true });
+  for (let i = 0; i < 100 && asked === 0; i++) await new Promise((r) => setTimeout(r, 100));
+  check(
+    `${p} unload guard: closing with modified documents raises "leave site?"`,
+    asked === 1 && !page.isClosed(),
+    `asked ${asked}`,
+  );
+  // Undo the edits (back to the saved text clears Modified) and close again.
+  await page.evaluate(() => {
+    const { documents } = window.__easy68k.ctx;
+    for (const doc of documents.list().slice(1)) documents.registry.dispatch(doc.id, { changes: { from: 0, to: 1 } });
+  });
+  const unmodified = (await documentsOf(page)).every(([, modified]) => !modified);
+  check(`${p} undoing to the saved text clears Modified`, unmodified);
+  check(`${p} no console errors`, errors.length === 0, errors.join(' | '));
+  const closing = page.waitForEvent('close', { timeout: 15_000 }).then(
+    () => true,
+    () => page.isClosed(),
+  );
+  await page.close({ runBeforeUnload: true });
+  const closed = await closing;
+  check(
+    `${p} unload guard: with nothing modified the page closes without a question`,
+    closed && asked === 1,
+    `asked ${asked}`,
+  );
+  await context.close();
+}
+
+/** Drafts in the real IndexedDB under the real Web Locks (3.9.4). */
+async function draftsPass(browser, name) {
+  const p = `${name}:`;
+  const context = await newContext(browser);
+  const first = await openApp(context);
+  await typeInEditor(first.page, 'DRAFT ');
+  // The draft is written two seconds after the last change.
+  const draftCount = () =>
+    first.page.evaluate(
+      () =>
+        new Promise((resolveCount) => {
+          const open = indexedDB.open('easy68k.drafts', 1);
+          open.onsuccess = () => {
+            const db = open.result;
+            if (!db.objectStoreNames.contains('drafts')) return resolveCount(0);
+            const req = db.transaction('drafts', 'readonly').objectStore('drafts').count();
+            req.onsuccess = () => {
+              resolveCount(req.result);
+              db.close();
+            };
+            req.onerror = () => resolveCount(-1);
+          };
+          open.onerror = () => resolveCount(-1);
+        }),
+    );
+  let count = 0;
+  for (let i = 0; i < 60 && count < 1; i++) {
+    await first.page.waitForTimeout(500);
+    count = await draftCount();
+  }
+  check(`${p} drafts: a modified document is written to IndexedDB easy68k.drafts`, count === 1, `records ${count}`);
+
+  // A second window while the first is alive: no offer.
+  const second = await openApp(context);
+  await second.page.waitForTimeout(3000);
+  await second.page.evaluate(() => navigator.locks.request('easy68k.drafts.offer', () => {}));
+  check(
+    `${p} drafts: a second window does not offer the drafts of a window that is still open`,
+    (await second.page.getByText('Unsaved changes from your last session').count()) === 0,
+  );
+  check(`${p} drafts: no console errors in the second window`, second.errors.length === 0, second.errors.join(' | '));
+  await second.page.close({ runBeforeUnload: false });
+
+  // The first window goes away without its unload handlers (as in a crash).
+  check(`${p} drafts: no console errors in the first window`, first.errors.length === 0, first.errors.join(' | '));
+  await first.page.close({ runBeforeUnload: false });
+
+  const third = await openApp(context);
+  const offer = third.page.locator('[role=alertdialog]', { hasText: 'Unsaved changes' });
+  const shown = await offer
+    .waitFor({ timeout: 30_000 })
+    .then(() => true)
+    .catch(() => false);
+  check(`${p} drafts: a new window offers the drafts of the window that is gone`, shown);
+  if (shown) {
+    const text = (await offer.innerText()).replace(/\s+/g, ' ');
+    check(
+      `${p} drafts: the offer's title and text`,
+      text.includes('EASy68K') && text.includes('Unsaved changes from your last session were found for untitled1.x68.'),
+      text,
+    );
+    check(
+      `${p} drafts: the buttons Restore and Discard`,
+      (await offer.getByRole('button', { name: 'Restore' }).count()) === 1 &&
+        (await offer.getByRole('button', { name: 'Discard' }).count()) === 1,
+    );
+    await third.page.screenshot({ path: join(outDir, `${name}-drafts-offer.png`) });
+    await scan(third.page, `${name} drafts offer`);
+    await third.page.keyboard.press('Escape');
+    await third.page.waitForTimeout(300);
+    check(`${p} drafts: Escape does not dismiss the offer`, (await offer.count()) === 1);
+    await offer.getByRole('button', { name: 'Restore' }).click();
+    await third.page
+      .waitForFunction(() => window.__easy68k.ctx.store.getState().documents.items.length === 2)
+      .catch(() => {});
+    const docs = await documentsOf(third.page);
+    const restoredText = await activeText(third.page);
+    check(
+      `${p} drafts: Restore brings the document back, modified, under a free untitled name`,
+      same(docs, [
+        ['untitled1.x68', false, null],
+        ['untitled2.x68', true, null],
+      ]),
+      JSON.stringify(docs),
+    );
+    check(`${p} drafts: the restored document has the typed text`, restoredText?.startsWith('DRAFT ') === true);
+    await third.page.screenshot({ path: join(outDir, `${name}-drafts-restored.png`) });
+  }
+  check(`${p} drafts: no console errors in the new window`, third.errors.length === 0, third.errors.join(' | '));
+  await third.page.close({ runBeforeUnload: false });
+  await context.close();
+}
+
+async function main() {
+  const port = await freePort();
+  const server = await createServer({
+    configFile: join(appRoot, 'vite.config.ts'),
+    root: appRoot,
+    logLevel: 'warn',
+    // No hot reload: other packages' files change while this runs, and a reload would reset the pages.
+    server: { port, strictPort: false, host: '127.0.0.1', hmr: false, watch: { ignored: ['**/*'] } },
+  });
+  await server.listen();
+  const address = server.httpServer?.address();
+  baseUrl = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : port}/`;
+  console.log(`Application: ${baseUrl}\nScreenshots: ${outDir}`);
+  try {
+    for (const name of browsers) {
+      const browser = await BROWSERS[name].launch();
+      try {
+        for (const [label, pass] of [
+          ['documents', documentsPass],
+          ['drafts', draftsPass],
+        ]) {
+          console.log(`\n[${name}, ${label}]`);
+          try {
+            await pass(browser, name);
+          } catch (error) {
+            check(`${name}: the ${label} pass ran to the end`, false, String(error?.stack ?? error).slice(0, 400));
+          }
+        }
+      } finally {
+        await browser.close();
+      }
+    }
+  } finally {
+    await server.close();
+  }
+  writeFileSync(join(outDir, 'results.json'), JSON.stringify(results, null, 2));
+  const passed = results.filter((r) => r.ok).length;
+  console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
+  process.exit(failures ? 1 : 0);
+}
+
+await main();

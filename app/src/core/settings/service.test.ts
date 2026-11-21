@@ -7,14 +7,18 @@ import type { Settings } from '../../contracts';
 import { DEFAULT_SETTINGS } from './defaults';
 import {
   MemorySettingsStorage,
+  OUTSIDE_MARK,
+  OUTSIDE_WRITER_PREFIX,
   SETTINGS_KEY,
   SETTING_CHOICES,
   STAMPS_KEY,
+  alignOutsideStamps,
   changedPaths,
   compareStamps,
   createSettingsService,
   mergeStamped,
   mergeWithDefaults,
+  outsideWriter,
   parseSettings,
   settingPaths,
   type SettingsStorage,
@@ -838,6 +842,108 @@ describe('a document without stamps, written while windows are open (errata W3 e
     const stored = parseSettings(storage.text).settings;
     expect([stored.editor.fontSize, stored.sim.bitField]).toEqual([17, true]);
     expect(b.get().editor.fontSize).toBe(17);
+  });
+
+  // docs/requests/W3-settings-followups.md, item 1 (errata W3 entry 28).
+  it('a window that receives it late does not undo a change made after another window took it in', () => {
+    const storage = new LateStorage();
+    const clock = testClock(1_000);
+    const a = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'a' });
+    const b = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'b' });
+    const outside = storage.window();
+    a.update(setFontSize(16));
+    storage.deliverAll();
+    clock.advance(1_000); // 2000: something else writes the font size 21
+    outside.write(JSON.stringify({ version: 1, editor: { fontSize: 21 }, app: { theme: 'dark' } }));
+    clock.advance(10); // 2010: window B receives it
+    storage.deliverOne(1);
+    expect(b.get().editor.fontSize).toBe(21);
+    clock.advance(10); // 2020: the person sets 30 in B
+    b.update(setFontSize(30));
+    clock.advance(10); // 2030: window A receives the outside document, and then B's write
+    storage.deliverOne(0);
+    expect(a.get().editor.fontSize).toBe(21);
+    storage.deliverOne(0);
+    expect(a.get().editor.fontSize).toBe(30);
+    storage.deliverAll();
+    expect(parseSettings(storage.text).settings.editor.fontSize).toBe(30);
+    for (const service of [a, b]) {
+      expect(service.get().editor.fontSize).toBe(30);
+      expect(service.get().app.theme).toBe('dark');
+    }
+  });
+
+  it('the same holds when the late window is the page in which the document was written', () => {
+    const storage = new LateStorage();
+    const clock = testClock(1_000);
+    const own = storage.window();
+    const a = createSettingsService(own, undefined, { now: clock.now, writerId: 'a' });
+    const b = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'b' });
+    a.update(setFontSize(16));
+    storage.deliverAll();
+    clock.advance(1_000);
+    own.write(JSON.stringify({ version: 1, editor: { fontSize: 21 } })); // page a's developer tools
+    clock.advance(10);
+    storage.deliverOne(1); // b receives it
+    clock.advance(10);
+    b.update(setFontSize(30));
+    clock.advance(10);
+    a.update(setBitField(true)); // a reads its own copy, which still holds the outside document
+    expect(a.get().editor.fontSize).toBe(21);
+    storage.deliverAll();
+    expect(parseSettings(storage.text).settings.editor.fontSize).toBe(30);
+    expect(parseSettings(storage.text).settings.sim.bitField).toBe(true);
+    for (const service of [a, b]) {
+      expect(service.get().editor.fontSize).toBe(30);
+      expect(service.get().sim.bitField).toBe(true);
+    }
+  });
+
+  it('three windows: the third learns the earlier time from the mark after the settings changed again', () => {
+    const storage = new LateStorage();
+    const clock = testClock(1_000);
+    const services = ['a', 'b', 'c'].map((id) =>
+      createSettingsService(storage.window(), undefined, { now: clock.now, writerId: id }),
+    );
+    const [a, b, c] = services as [SettingsStore, SettingsStore, SettingsStore];
+    const outside = storage.window();
+    clock.advance(1_000);
+    outside.write(JSON.stringify({ version: 1, editor: { fontSize: 21 } }));
+    clock.advance(10);
+    storage.deliverOne(1); // b has it
+    clock.advance(10);
+    b.update(setFontSize(30)); // b's write no longer stamps the font size with the outside writer
+    clock.advance(10);
+    storage.deliverOne(2); // c receives the outside document late
+    storage.deliverOne(2); // and then b's write, which carries the mark
+    storage.deliverAll();
+    for (const service of [a, b, c]) expect(service.get().editor.fontSize).toBe(30);
+    expect(parseSettings(storage.text).settings.editor.fontSize).toBe(30);
+  });
+
+  it('alignOutsideStamps moves the stamps of one outside writer back to its earliest time', () => {
+    const writer = outsideWriter('{"version":1}');
+    expect(writer).toBe(outsideWriter('{"version":1}'));
+    expect(writer).not.toBe(outsideWriter('{"version":2}'));
+    expect(writer.startsWith(OUTSIDE_WRITER_PREFIX)).toBe(true);
+    const mine = new Map<string, Stamp>([
+      ['editor.fontSize', [30, writer]],
+      ['sim.bitField', [25, 'm']],
+    ]);
+    const theirs = new Map<string, Stamp>([[OUTSIDE_MARK, [10, writer]]]);
+    const [alignedMine, alignedTheirs] = alignOutsideStamps(mine, theirs);
+    expect(alignedMine.get('editor.fontSize')).toEqual([10, writer]);
+    expect(alignedMine.get('sim.bitField')).toEqual([25, 'm']);
+    expect(alignedTheirs).toBe(theirs);
+    const plain = new Map<string, Stamp>([['a', [1, 'x']]]);
+    expect(alignOutsideStamps(plain, plain)).toEqual([plain, plain]);
+    // The mark is bookkeeping: merging it never writes a setting called "~outside".
+    const { merged } = mergeStamped(
+      { document: { a: 1 }, stamps: new Map<string, Stamp>([[OUTSIDE_MARK, [5, writer]]]) },
+      { document: { a: 2 }, stamps: new Map() },
+    );
+    expect(merged.document).toEqual({ a: 2 });
+    expect(merged.stamps.get(OUTSIDE_MARK)).toEqual([5, writer]);
   });
 
   it('this port always writes the stamp table, empty before any change', () => {

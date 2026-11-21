@@ -127,6 +127,104 @@ describe('the feature module', () => {
     app.dispose();
   });
 
+  it("a refused request shows the original's box: caption Information, NO icon, one OK button", async () => {
+    // simIOu.cpp:290 is `Application->MessageBoxA(text, "Information")`: no flags, so MB_OK
+    // without a picture. The (i) of an information box would be the port's invention.
+    const app = createTestApplication({ features: [feature] });
+    const output = outputOf(app.ctx);
+    const boxes = () => app.ctx.store.getState().dialogs.stack;
+    const expected = {
+      id: 'message',
+      modal: true,
+      props: {
+        title: 'Information',
+        text: "Sorry, this computer's configuration does not support the desired screen resolution in full screen mode.",
+        icon: 'none',
+        buttons: ['OK'],
+      },
+    };
+
+    // The browser rejects the request although a gesture was present.
+    output.attachDriver({
+      available: () => true,
+      gestureActive: () => true,
+      enter: async () => false,
+      leave: async () => {},
+    });
+    output.fullScreen.toggle();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(boxes()).toHaveLength(1);
+    expect(boxes()[0]).toMatchObject(expected);
+    expect(output.fullScreen.phase).toBe('windowed');
+    app.dialogs.close(boxes()[0]?.key ?? -1, 'OK');
+
+    // The page may not go full screen at all (embedded without permission): the box comes at once.
+    output.attachDriver({
+      available: () => false,
+      gestureActive: () => true,
+      enter: async () => true,
+      leave: async () => {},
+    });
+    output.fullScreen.toggle();
+    expect(boxes()).toHaveLength(1);
+    expect(boxes()[0]).toMatchObject(expected);
+    app.dispose();
+  });
+
+  it('desktop app: the window leaves full screen by the system itself and the panel follows', async () => {
+    // Platform.onFullScreenChange (added at gate I1): the green button of the window, for example.
+    let system: ((on: boolean) => void) | null = null;
+    let listening = false;
+    const windowCalls: boolean[] = [];
+    const app = createTestApplication({
+      features: [feature],
+      platform: createFakePlatform({
+        kind: 'desktop',
+        setFullScreen: async (on) => {
+          windowCalls.push(on);
+          return true;
+        },
+        onFullScreenChange(listener) {
+          system = listener;
+          listening = true;
+          return () => {
+            listening = false;
+          };
+        },
+      }),
+    });
+    const output = outputOf(app.ctx);
+    const notify = (on: boolean) => (system as ((on: boolean) => void) | null)?.(on);
+    expect(listening).toBe(true); // from the window's start, whether or not the panel is on screen
+    output.attachDriver({
+      available: () => true,
+      gestureActive: () => true,
+      enter: () => app.ctx.platform.setFullScreen?.(true) ?? Promise.resolve(false),
+      leave: async () => void (await app.ctx.platform.setFullScreen?.(false)),
+    });
+
+    // A notice while the panel is windowed means nothing to it (the user's own full-screen window).
+    notify(true);
+    notify(false);
+    expect(output.fullScreen.phase).toBe('windowed');
+
+    output.fullScreen.toggle();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(output.fullScreen.phase).toBe('full');
+    notify(true); // the system confirms what the port asked for
+    expect(output.fullScreen.phase).toBe('full');
+
+    notify(false); // the user left with the green button
+    expect(output.fullScreen.phase).toBe('windowed');
+    expect(app.ctx.store.getState().sim.output.fullScreen).toBe(false);
+    expect(windowCalls).toEqual([true]); // the window has left already: it is not asked again
+
+    app.dispose();
+    expect(listening).toBe(false);
+  });
+
   it('View > Output Window expands a collapsed panel and asks for the focus', async () => {
     const app = createTestApplication({ features: [feature] });
     shellStateOf(app.ctx).setState((state) => ({ ...state, outputCollapsed: true }));
@@ -262,6 +360,33 @@ describe('the three chords of the panel', () => {
       kind: 'program',
       then: 'nextPanel',
     });
+  });
+
+  it("further modifiers: Alt+Enter and Ctrl+Tab still act, as the original's Shift.Contains; paste is exact", () => {
+    // simIOu.cpp:434-439 tests "Ctrl is held", "Alt is held", "Shift is held", first match wins.
+    const windows = { ...env, os: 'windows' as const };
+    const desktop = { ...windows, desktop: true };
+    const fullscreen = { kind: 'program', then: 'fullscreen' };
+    const nothing = { kind: 'program', then: null };
+    expect(outputPanelKeyAction(event('Enter', 'Enter', { altKey: true, shiftKey: true }), windows)).toEqual(
+      fullscreen,
+    );
+    expect(outputPanelKeyAction(event('Enter', 'Enter', { altKey: true, ctrlKey: true }), windows)).toEqual(fullscreen);
+    expect(outputPanelKeyAction(event('Enter', 'NumpadEnter', { altKey: true }), windows)).toEqual(fullscreen);
+    expect(outputPanelKeyAction(event('Tab', 'Tab', { ctrlKey: true, shiftKey: true }), desktop)).toEqual({
+      kind: 'program',
+      then: 'nextPanel',
+    });
+    expect(outputPanelKeyAction(event('Tab', 'Tab', { ctrlKey: true, shiftKey: true }), windows)).toEqual(nothing);
+    // A browser fires `paste` for its own chord only, so the paste chord cannot follow that rule.
+    expect(outputPanelKeyAction(event('Insert', 'Insert', { shiftKey: true, ctrlKey: true }), windows)).toEqual(
+      nothing,
+    );
+    expect(outputPanelKeyAction(event('Insert', 'Insert', { shiftKey: true, altKey: true }), windows)).toEqual(nothing);
+    // After task 24 none of them acts.
+    const off = { ...desktop, keyCommandsEnabled: false };
+    expect(outputPanelKeyAction(event('Enter', 'Enter', { altKey: true, shiftKey: true }), off)).toEqual(nothing);
+    expect(outputPanelKeyAction(event('Tab', 'Tab', { ctrlKey: true, shiftKey: true }), off)).toEqual(nothing);
   });
 
   it('macOS: Option+Return, Cmd+V, Ctrl+Option+O', () => {

@@ -1,6 +1,6 @@
 # Request of DV2: `npm run desktop:dev` on a free port
 
-Status: open
+Status: applied in gate I1 round 1. `tools/desktop-dev.mjs` creates the server with `server: { port: 0, strictPort: false }` and still passes `resolvedUrls.local[0]`; the optional upload is applied too (`desktop-dev-results`: `build/desktop-dev/test-results/` and `report/`, on failure). Electron itself was not started on the shared machine; the server part was run (two servers at once got two free ports and served index.html).
 
 **File:** `tools/desktop-dev.mjs` (W0 > gates).
 

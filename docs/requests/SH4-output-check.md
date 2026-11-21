@@ -1,5 +1,7 @@
 # Request from SH4: run the Output panel's browser check in CI (gate I1)
 
+Status: applied in gate I1 round 1 (items 1 and 2; item 3 is for X2). Root script `check:output` and the step "Output panel check (SH4)" of `browser-checks`, group `simulator`; it runs also without engine-dist, since the script skips (or, with EASY68K_REQUIRE_ENGINES=1, fails) by itself.
+
 SH4's acceptance (ARCHITECTURE.md 9.2) asks for tests "with the real engine and the real panel in
 Chromium and WebKit": each rule of 2.9.4, dead keys and composition, key repeat, paste, the canvas
 backing size at device pixel ratios 1 and 2, and deferred, refused and externally ended full
@@ -57,3 +59,17 @@ Requested:
    against the production build; the doubles of `features/output/testing/` are then not needed.
 
 Nothing else is requested: no dependency, no configuration change.
+
+## Since gate I1, round 1 (nothing new is requested)
+
+The script has one more group, `app`: after the harness groups it opens the application itself
+(`index.html` on the same dev server) and repeats the acceptance list with the real session - the
+real drawing surface, text screen, fonts and run controller - one page per browser, every program
+after the first loaded by a cold start. It needs nothing more than before for that: `engine/dist`,
+as `check:run` and `check:sim-main` do (the dev server writes `app/src/build-info.ts` itself when
+it starts). Other changes of the round: the deferred full-screen checks no longer sleep a fixed time (the page
+reports on its console when a request arrived), a pass at device pixel ratio 1.5, Ctrl+@, the
+refusal box without an icon, the chords with further modifiers, the desktop app's full screen
+ended by the system. On the SH4 machine (Windows 11, busy with the other packages of the gate):
+525 of 525 checks pass in both browsers; two whole runs took 176 s and 274 s. The root script and
+the CI step stay as they are.

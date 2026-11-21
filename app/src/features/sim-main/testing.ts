@@ -1,9 +1,11 @@
 // Test support: a small simulator session over a real engine, for the tests of this feature and for
 // its browser check. Never imported by the application.
 //
-// The real session and run controller are SH8's (features/run/session.ts, core/run/), written at
-// the same time as this feature. This double follows the SimSession and RunController contracts
-// (3.11.2) and the refresh rules of 4.6 closely enough for the panels of the main window:
+// The real session and run controller are SH8's (features/run/session.ts, core/run/); the
+// application uses them, and real-session.test.ts and the browser check's "real application" pass
+// test this feature on them. This double stays for the tests that drive the panels without the rest
+// of Simulator mode. It follows the SimSession and RunController contracts (3.11.2) and the refresh
+// rules of 4.6 closely enough for the panels of the main window:
 //
 //   - every engine call is followed by afterEngineCall(): the host calls recorded since the last
 //     one are examined; registersShown() refreshes the snapshot (twenty boxText() values, cycles,

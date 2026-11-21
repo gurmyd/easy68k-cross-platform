@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import type { AppContext, VPath } from '../../contracts';
 import { splitVPath } from '../../core/paths/winpath';
-import { storageProblem } from '../../fs/browser-backend';
+import { onStorageStateChange, storageProblem } from '../../fs/browser-backend';
 import { useAppContext } from '../../state/context';
 import { ContextMenu, Icon, IconButton, Menu, Toolbar, type MenuEntry } from '../../ui/components';
 import { deletePath, exportPath, folderFor, importInto, newFolder, renamePath } from './actions';
@@ -52,6 +52,8 @@ export function FilesPanel() {
   }, [ctx]);
 
   const browser = ctx.vfs.backends().find((backend) => backend.mount === 'browser');
+  // A store still opening at start says so until it has opened or given up.
+  useEffect(() => onStorageStateChange(browser, () => setVersion((v) => v + 1)), [browser]);
   const problem = storageProblem(browser);
   const rows = model?.rows() ?? [];
   const selected = model?.selectedRow() ?? null;

@@ -18,14 +18,16 @@
 //  4. program   Every other key: post it to the program. Then, only while key commands are
 //               enabled, `then` names one of the I/O window's own three commands:
 //               'fullscreen' (Alt+Enter), 'paste' (Shift+Insert; Cmd+V on macOS), 'nextPanel'
-//               (Ctrl+Tab, desktop app only).
+//               (Ctrl+Tab, desktop app only). As in the original, other modifiers may be held
+//               with Alt+Enter and Ctrl+Tab (Ctrl+Alt+Enter, Ctrl+Shift+Tab); the paste chord
+//               is exact, because a browser pastes only on its own chord.
 //
 // The chords the port added elsewhere (F2, F4, Shift+F<n>) are not active here: they are keys of
 // the program (rules K3 and K5 of section 1.3). Which events to cancel is the panel's business
 // (the list at the end of 2.9.4), because it depends on composition and on the paste chord.
 
 import type { CommandRegistry } from '../contracts';
-import { chordOf, type KeyEventLike, type Os } from './chords';
+import { chordOf, splitChord, type KeyEventLike, type Os } from './chords';
 import type { KnownCommandId } from './ids';
 import { COMMAND_SPECS } from './specs';
 import { SUPPRESSED_BY_TASK_24 } from './tables/keys';
@@ -97,10 +99,17 @@ export function outputPanelKeyAction(event: KeyEventLike, env: OutputKeyEnv): Ou
   // 3. Plain Tab and Shift+Tab.
   if (chord === 'Tab' || chord === 'Shift+Tab') return { kind: 'tab' };
 
-  // 4. Everything else goes to the program; the I/O window's own commands follow.
+  // 4. Everything else goes to the program; the I/O window's own commands follow. The original
+  //    tests its three keys with Shift.Contains (simIOu.cpp, FormKeyDown): the named modifier must
+  //    be held, others may be held too, first match in the order Ctrl+Tab, Alt+Enter,
+  //    Shift+Insert. Ctrl+Tab and Alt+Enter follow that here (Ctrl+Shift+Tab, Ctrl+Alt+Enter).
+  //    The paste chord stays exact: the panel pastes by leaving the key-down to the browser, which
+  //    fires `paste` only for its own chord, not for Ctrl+Shift+Insert (errata W3 entry 29,
+  //    docs/requests/SH4-output-chords.md). macOS's Cmd+V is the port's own and exact too.
   if (!env.keyCommandsEnabled) return { kind: 'program', then: null };
-  if (chordsOf('sim.output.fullscreen', env.os).includes(chord)) return { kind: 'program', then: 'fullscreen' };
+  const name = splitChord(chord).key;
+  if (env.desktop && name === 'Tab' && event.ctrlKey) return { kind: 'program', then: 'nextPanel' };
+  if (name === 'Enter' && event.altKey) return { kind: 'program', then: 'fullscreen' };
   if (chordsOf('sim.output.paste', env.os).includes(chord)) return { kind: 'program', then: 'paste' };
-  if (env.desktop && chord === 'Ctrl+Tab') return { kind: 'program', then: 'nextPanel' };
   return { kind: 'program', then: null };
 }

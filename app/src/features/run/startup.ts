@@ -4,11 +4,19 @@
 //   web URL                ?open=<VPath> plus run=1, fullscreen=1, exceptions=1, bitfield=1
 //   file association       an .S68 opened from the system (the desktop app's open-file event)
 //
-// A first argument that names an `.S68` file (any letter case) belongs to the simulator: the
-// application switches to Simulator mode and loads it like the original's command-line file, then
-// applies the switches. As in the original, the switches are applied even when that file cannot
-// be loaded, and they are not looked at when the first argument is anything else (another file is
-// the editor's business, features/documents).
+// The port's one command line stands for the two programs of the original, and the simulator's
+// part of it follows SIM68K.exe (sim-ui §8.1):
+//
+//   - Argument 1 is a file name. If it names an existing `.S68` file (any letter case), the
+//     application switches to Simulator mode and loads it, and the load applies the switches.
+//   - Any other argument 1 - another kind of file, a file that does not exist, none at all - is
+//     nothing to the simulator. It is ignored without a message and the mode is not changed (5.7:
+//     another existing file is opened by the editor, features/documents; otherwise the editor shows
+//     a new document). The desktop app reports a file that does not exist as `file: null`.
+//   - "Switches are still processed when argument 1 was not a loadable file": `/e` and `/b` set
+//     the two options (and, as every settings change in the port, are stored at once), `/f` runs the
+//     full-screen command of the Output panel, `/r` runs the Run command. Run with nothing loaded
+//     halts at once, as in the original: memory is all `$FF`, which is the SIMHALT pattern.
 //
 // Owner: SH8.
 
@@ -35,6 +43,11 @@ export function startupPath(file: string, kind: AppContext['platform']['kind']):
   return isVPath(name) ? name : null;
 }
 
+/** True if the command line has at least one of the simulator's switches. */
+export function hasSwitches(args: StartupArgs): boolean {
+  return args.run || args.fullScreen || args.exceptions || args.bitField;
+}
+
 async function isFile(ctx: AppContext, path: VPath): Promise<boolean> {
   try {
     return (await ctx.vfs.stat(path))?.kind === 'file';
@@ -43,26 +56,35 @@ async function isFile(ctx: AppContext, path: VPath): Promise<boolean> {
   }
 }
 
-/** The switches without a loaded file (sim-ui §8.1: "still processed when argument 1 was not a loadable file"). */
+/** The program the simulator loads at start: argument 1 if it names an existing `.S68` file, else null. */
+async function startupProgram(ctx: AppContext, args: StartupArgs): Promise<VPath | null> {
+  if (args.file === null || !isSRecordName(args.file)) return null;
+  const path = startupPath(args.file, ctx.platform.kind);
+  return path !== null && (await isFile(ctx, path)) ? path : null;
+}
+
+/**
+ * The switches when no program was loaded (sim-ui §8.1), in the original's order: the two options
+ * and full screen at once, Run last (the original runs when its window is first activated).
+ */
 function applySwitches(ctx: AppContext, args: StartupArgs): void {
   const { controller } = ctx.sim;
   if (args.exceptions) controller.invoke((engine) => engine.setOption(SimOption.Exceptions, true));
   if (args.bitField) controller.invoke((engine) => engine.setOption(SimOption.BitField, true));
-  if (args.fullScreen) void ctx.commands.run('sim.output.fullscreen');
+  if (args.fullScreen) void ctx.commands.run('sim.output.fullscreen', true);
   if (args.run) controller.run();
 }
 
 /** Acts on the arguments this window was started with. */
 export async function openStartupFile(ctx: AppContext): Promise<void> {
   const args = ctx.platform.startupArgs();
-  if (args.file === null || !isSRecordName(args.file)) return;
-  await ctx.commands.run('app.mode.set', 'simulator');
-  const path = startupPath(args.file, ctx.platform.kind);
-  if (path !== null && (await isFile(ctx, path))) {
+  const program = await startupProgram(ctx, args);
+  if (program !== null) {
+    await ctx.commands.run('app.mode.set', 'simulator');
     // The load applies /e and /b, and after it /f and /r (4.7 steps 9 and 10).
-    await ctx.sim.controller.open(path, 'commandLine');
-  } else {
-    // Nothing is loaded and nothing is reported, as in the original; the simulator still starts.
+    await ctx.sim.controller.open(program, 'commandLine');
+  } else if (hasSwitches(args)) {
+    // Nothing is loaded and nothing is reported. The switches need the engine: wait for its start.
     await ctx.sim.controller.coldStart();
     applySwitches(ctx, args);
   }

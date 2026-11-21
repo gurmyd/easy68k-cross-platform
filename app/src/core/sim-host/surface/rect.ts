@@ -11,7 +11,8 @@
 //   B  exactly one side has length zero. Pen width 1: a straight run of pixels with both ends.
 //      Wider: a flat-ended bar that leaves out its far end, x1 .. x2-1 by y1-a .. y1+b (or the same
 //      turned by 90 degrees). No interior.
-//   C  one point. Pen width 1: nothing at all. Wider: the round dot of the pen.
+//   C  one point. Pen width 1: nothing at all. Wider: the round dot of the pen, as a rectangle
+//      draws it (`rectangleDot` of tables/dots.ts).
 //
 // The outline is drawn with the pen and the interior with the fill, each pixel exactly once, which
 // is what makes the XOR-type modes come out right. There is ONE EXCEPTION, found by the GDI capture
@@ -19,11 +20,26 @@
 // (or width) along the run and back again, so the two end pixels are combined once and every pixel
 // between them TWICE. In Copy mode that shows nothing. In mode 14 only the two ends are drawn.
 //
+// Measured against GDI for every pen width 0-255 (the committed references have the widths 0-12;
+// the rest was captured at gate I1, docs/porting/errata/SH1.md entry 14). The rules above hold for
+// all of them, with one oddity of GDI's own arithmetic that is reproduced below: the vertical bar
+// of a pen exactly 206 pixels wide is not straight (SHEARED_BAR_WIDTH).
+//
 // Owner: SH1.
 
 import type { PixelBuffer } from '../../../contracts';
 import { mixTwice, type Mix } from './rop';
 import { mixBlock, mixDot, mixPixel } from './raster';
+import { rectangleDot } from './tables/dots';
+
+/**
+ * The one pen width at which GDI's vertical bar (case B) is sheared: its left half, the columns
+ * left of x1, lies one row lower than its right half. The left half covers the rows y1+1 .. y2,
+ * the right half y1 .. y2-1 as at every other width. Horizontal bars of this width are straight,
+ * and so are the vertical bars of the other 253 wide pens. Measured on GDI; why it does this is
+ * not known (presumably a rounding step in the way it widens the pen).
+ */
+const SHEARED_BAR_WIDTH = 206;
 
 /**
  * Draws the rectangle with the corners (x1, y1) and (x2, y2), in any order, into the buffer.
@@ -66,7 +82,7 @@ export function drawRectangle(
     if (fill) mixBlock(buffer, innerLeft, innerTop, innerRight, innerBottom, fill);
   } else if (x1 === x2 && y1 === y2) {
     // Case C.
-    if (w > 1) mixDot(buffer, x1, y1, w, pen);
+    if (w > 1) mixDot(buffer, x1, y1, rectangleDot(w), pen);
   } else if (w === 1) {
     // Case B, pen width 1: the run from one corner to the other; there and back between the ends.
     mixPixel(buffer, x1, y1, pen);
@@ -77,6 +93,10 @@ export function drawRectangle(
   } else if (y1 === y2) {
     // Case B, wide pen, horizontal: the far end (x2) is left out.
     mixBlock(buffer, x1, y1 - a, x2 - 1, y1 + b, pen);
+  } else if (w === SHEARED_BAR_WIDTH) {
+    // Case B, vertical, the one sheared width: the left half one row lower than the right half.
+    mixBlock(buffer, x1 - a, y1 + 1, x1 - 1, y2, pen);
+    mixBlock(buffer, x1, y1, x1 + b, y2 - 1, pen);
   } else {
     // Case B, wide pen, vertical: the far end (y2) is left out.
     mixBlock(buffer, x1 - a, y1, x1 + b, y2 - 1, pen);

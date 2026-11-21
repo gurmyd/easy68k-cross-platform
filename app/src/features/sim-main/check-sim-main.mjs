@@ -3,10 +3,12 @@
 //   node app/src/features/sim-main/check-sim-main.mjs [--browser chromium|webkit|all] [--out <dir>]
 //
 // Starts the Vite dev server of app/ on a free port and drives headless Chromium and WebKit
-// (Playwright). The page first starts the normal application; the script then replaces it by an
-// application with this feature on the session double of testing.ts over the REAL simulator
-// engine (the run controller and session of SH8 are written at the same time as this feature), in
-// the real shell (app/src/App.tsx). It checks what unit tests under Node cannot show:
+// (Playwright). Most passes start the normal application and then replace it by an application
+// with this feature on the session double of testing.ts over the REAL simulator engine, in the real
+// shell (app/src/App.tsx), so that the panels can be driven without the rest of Simulator mode. One
+// pass (realAppPass) uses the normal application as it is: SH8's real session and run controller,
+// the run feature's message boxes and U2's Memory panel. The script checks what unit tests under
+// Node cannot show:
 //
 //   - the three panels render in the Simulator workspace: twenty register fields, the flag caption,
 //     the listing with its heading, gutter dots and PC marker, the message lines;
@@ -14,8 +16,12 @@
 //     field types a 0, a double-click on a row sets the PC field, gutter clicks toggle breakpoints
 //     (the engine's table follows), the gutter's context menu clears them all;
 //   - Search > Find... by Ctrl+F: the modeless dialog, Enter and F3, Escape; Ctrl+G;
+//   - on the real parts: load, gutter and Run to a breakpoint, the PC row selected again at every
+//     trace step, the double-click on A0 opening the Memory panel, the box `Breakpoint Limit
+//     Reached!` at the 101st breakpoint, Close emptying the listing;
 //   - the third-visible-row scroll of 3.11.4 and the scrolling of a 100,000-row listing (frame
-//     times while scrolling by script and by mouse wheel; the best of three runs counts);
+//     times while scrolling by script and by mouse wheel; the best of three runs counts; printed
+//     only on CI runners, CI=true, or with --report-frame-times);
 //   - both themes (screenshots) and an accessibility scan (axe-core, WCAG 2.0/2.1 A and AA) of the
 //     Simulator workspace;
 //   - no console errors.
@@ -25,7 +31,7 @@
 /* global console, process, document, window, performance, requestAnimationFrame, getComputedStyle, TextEncoder, Event -- page.evaluate() callbacks run in the page */
 
 import { mkdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium, webkit } from '@playwright/test';
@@ -42,7 +48,9 @@ const option = (name, fallback) => {
 };
 const browserChoice = option('--browser', 'all');
 const outDir = resolve(option('--out', join(repoRoot, 'build', 'U1', 'sim-main-check')));
-if (!outDir.startsWith(join(repoRoot, 'build'))) {
+// path.relative, not a string prefix: Windows paths differ in drive-letter case ("c:\" / "C:\").
+const fromBuild = relative(join(repoRoot, 'build'), outDir);
+if (fromBuild.startsWith('..') || isAbsolute(fromBuild)) {
   console.error(`--out must be below ${join(repoRoot, 'build')}`);
   process.exit(2);
 }
@@ -50,6 +58,15 @@ mkdirSync(outDir, { recursive: true });
 
 const BROWSERS = { chromium, webkit };
 const browsers = browserChoice === 'all' ? ['chromium', 'webkit'] : [browserChoice];
+
+/**
+ * Frame times depend on the machine: on CI runners (CI=true; shared, often software rendering) and
+ * with --report-frame-times they are printed, not enforced. The page's own work per scroll step is
+ * enforced everywhere.
+ */
+const REPORT_FRAME_TIMES_ONLY = process.env.CI === 'true' || args.includes('--report-frame-times');
+/** The dev server transforms every module at the first request; on a slow runner that takes a while. */
+const LOAD_TIMEOUT = 180_000;
 
 let baseUrl = '';
 let failures = 0;
@@ -83,9 +100,9 @@ async function openPage(browser, theme) {
   });
   page.on('pageerror', (error) => errors.push(String(error)));
   page.on('crash', () => errors.push('the page crashed'));
-  await page.goto(baseUrl);
-  await page.waitForSelector('.e68-shell');
-  await page.waitForFunction(() => window.__easy68k !== undefined);
+  await page.goto(baseUrl, { timeout: LOAD_TIMEOUT });
+  await page.waitForSelector('.e68-shell', { timeout: LOAD_TIMEOUT });
+  await page.waitForFunction(() => window.__easy68k !== undefined, undefined, { timeout: LOAD_TIMEOUT });
   // Replace the application by one with this feature on the session double over the real engine.
   await page.evaluate(
     async ({ theme: themeName, source }) => {
@@ -127,8 +144,10 @@ async function openPage(browser, theme) {
     },
     { theme, source: SOURCE },
   );
-  await page.waitForFunction((value) => document.documentElement.getAttribute('data-theme') === value, theme);
-  await page.waitForSelector('.e68-listing__row');
+  await page.waitForFunction((value) => document.documentElement.getAttribute('data-theme') === value, theme, {
+    timeout: LOAD_TIMEOUT,
+  });
+  await page.waitForSelector('.e68-listing__row', { timeout: LOAD_TIMEOUT });
   return { context, page, errors };
 }
 
@@ -379,7 +398,24 @@ async function bigListingPass(browser, name) {
     const address = (0x1000 + (row - 3) * 2).toString(16).toUpperCase().padStart(8, '0');
     simMainOf(app.ctx).editRegister(18, address);
   }, target);
-  await page.waitForTimeout(100);
+  // The scroll is applied in a layout effect after React has rendered the new selection.
+  await page
+    .waitForFunction(
+      (row) => {
+        const list = document.querySelector('.e68-listing__list');
+        const first = document.querySelector('.e68-listing__row');
+        return (
+          window.__u1.app.ctx.store.getState().sim.selectedRow === row &&
+          list !== null &&
+          first !== null &&
+          list.scrollTop > 0
+        );
+      },
+      target,
+      { timeout: 10_000 },
+    )
+    .catch(() => {});
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
   const position = await page.evaluate(() => {
     const list = document.querySelector('.e68-listing__list');
     const rowHeight = document.querySelector('.e68-listing__row').getBoundingClientRect().height;
@@ -480,7 +516,7 @@ async function bigListingPass(browser, name) {
     );
     const ok = best.busy.p95 < 50 || best.busy.p95 - best.quiet.p95 < 34;
     const detail = `scrolling ${fmt(best.busy)}; idle ${fmt(best.quiet)}`;
-    if (name === 'chromium') {
+    if (name === 'chromium' && !REPORT_FRAME_TIMES_ONLY) {
       check(
         `${p} scrolling 100,000 rows at ${label}: frames under 50 ms or at most 34 ms over idle (best run)`,
         ok,
@@ -490,8 +526,10 @@ async function bigListingPass(browser, name) {
       // Playwright's WebKit build for Windows: on the busy development machine its scrolling frames
       // took 60-100 ms while the page's own work per step stayed at about 1 ms (measured above), and
       // switching off the gutter's sticky position or the row containment made no difference. The
-      // frame figures are reported; the page's own work is the criterion in this browser.
-      console.log(`        ${ok ? 'within' : 'NOT within'} the Chromium limit (reported only for ${name}): ${detail}`);
+      // frame figures are reported; the page's own work is the criterion in this browser. On CI
+      // runners (shared machines, software rendering) the same holds for Chromium.
+      const why = REPORT_FRAME_TIMES_ONLY ? 'reported only on CI runners' : `reported only for ${name}`;
+      console.log(`        ${ok ? 'within' : 'NOT within'} the Chromium limit (${why}): ${detail}`);
     }
   }
 
@@ -520,6 +558,204 @@ async function bigListingPass(browser, name) {
   await context.close();
 }
 
+/**
+ * The real application (bootstrap, SH8's session and run controller, the run feature's boxes, U2's
+ * Memory panel): the panels on the real parts, as gate I1 asked (build/gate1/U1.json).
+ */
+async function realAppPass(browser, name) {
+  const p = `${name}/real application:`;
+  const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, reducedMotion: 'reduce' });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  page.on('pageerror', (error) => errors.push(String(error)));
+  page.on('crash', () => errors.push('the page crashed'));
+  await page.goto(baseUrl, { timeout: LOAD_TIMEOUT });
+  await page.waitForSelector('.e68-shell', { timeout: LOAD_TIMEOUT });
+  await page.waitForFunction(() => window.__easy68k !== undefined, undefined, { timeout: LOAD_TIMEOUT });
+
+  // Assemble the programs in the page, store them, switch to Simulator mode, wait for the engine.
+  await page.evaluate(
+    async ({ source }) => {
+      const { ctx } = window.__easy68k;
+      const engineTesting = await import('/src/engine/testing.ts');
+      const nops = ['    ORG $1000', 'START:'];
+      for (let index = 0; index < 101; index++) nops.push('    NOP');
+      nops.push('    SIMHALT', '    END START');
+      const programs = {
+        demo: await engineTesting.assembleProgram(source),
+        nops: await engineTesting.assembleProgram(nops),
+      };
+      for (const [file, program] of Object.entries(programs)) {
+        await ctx.vfs.writeFile(`/browser/u1check/${file}.S68`, program.s68);
+        await ctx.vfs.writeFile(`/browser/u1check/${file}.L68`, program.l68);
+      }
+      window.__u1real = { simMainOf: (await import('/src/features/sim-main/model.ts')).simMainOf };
+      await ctx.commands.run('app.mode.set', 'simulator');
+    },
+    { source: SOURCE },
+  );
+  await page.waitForFunction(
+    () => {
+      const { ctx } = window.__easy68k;
+      return ctx.store.getState().sim.phase === 'idle' && ctx.sim.engine.state().hardwareEnabled;
+    },
+    undefined,
+    { timeout: LOAD_TIMEOUT },
+  );
+  const open = (file) =>
+    page.evaluate((path) => window.__easy68k.ctx.sim.controller.open(path, 'open'), `/browser/u1check/${file}.S68`);
+  const run = (id) => page.evaluate((command) => window.__easy68k.ctx.commands.run(command), id);
+  const real = () =>
+    page.evaluate(() => {
+      const { ctx } = window.__easy68k;
+      return {
+        selected: ctx.store.getState().sim.selectedRow,
+        storeBreakpoints: ctx.store.getState().sim.breakpoints,
+        breakpoints: ctx.sim.engine.breakpoints(),
+        rows: ctx.sim.listing.rows.length,
+        pc: ctx.sim.controller.snapshot.boxes[18],
+      };
+    });
+
+  await open('demo');
+  await page.waitForSelector('.e68-listing__row', { timeout: 30_000 });
+  const moveRow = await rowIndex(page, 'MOVE.L #5,D1');
+  let s = await real();
+  check(
+    `${p} a load shows the listing with the start row selected and marked`,
+    s.selected === moveRow &&
+      (await page.locator(`.e68-listing__row[data-row="${moveRow}"]`).getAttribute('aria-selected')) === 'true' &&
+      (await page.locator(`.e68-listing__row[data-row="${moveRow}"] .e68-listing__pc`).count()) === 1,
+    JSON.stringify(s),
+  );
+  check(`${p} the PC field shows the start address`, (await field(page, 18).inputValue()) === '00001000');
+  check(
+    `${p} the message area shows the load messages`,
+    (await page.locator('.e68-messages').innerText()).includes('.S68 file read successful'),
+  );
+
+  // Gutter on the real controller: the engine and the store's mirror follow.
+  const addRow = rowLocator(page, 'ADD.L D0,D1');
+  await addRow.locator('.e68-listing__gutter').click();
+  s = await real();
+  check(
+    `${p} a gutter click sets the breakpoint in the engine and in AppState.sim.breakpoints`,
+    JSON.stringify(s.breakpoints) === '[4098]' &&
+      JSON.stringify(s.storeBreakpoints) === '[4098]' &&
+      (await addRow.getAttribute('data-bp')) === 'on',
+    JSON.stringify(s),
+  );
+  await run('sim.run.run');
+  await page.waitForFunction(() => window.__easy68k.ctx.store.getState().sim.phase === 'idle', undefined, {
+    timeout: 15_000,
+  });
+  s = await real();
+  const addIndex = await rowIndex(page, 'ADD.L D0,D1');
+  check(
+    `${p} Run stops at the breakpoint and the listing selects its row`,
+    s.pc === '00001002' && s.selected === addIndex,
+    JSON.stringify(s),
+  );
+  await addRow.locator('.e68-listing__gutter').click();
+
+  // highlight() at every stop: a clicked row gives way to the PC row, even when it did not change.
+  await run('sim.run.traceInto'); // ADD.L
+  await run('sim.run.traceInto'); // MOVEA.L
+  const braRow = await rowIndex(page, 'BRA.S LOOP');
+  await rowLocator(page, 'MOVE.L #5,D1').locator('.e68-listing__text').click();
+  check(`${p} a click selects a row`, (await real()).selected === moveRow);
+  await run('sim.run.traceInto'); // BRA.S LOOP
+  await run('sim.run.traceInto'); // BRA.S LOOP again
+  await rowLocator(page, 'MOVE.L #5,D1').locator('.e68-listing__text').click();
+  await run('sim.run.traceInto'); // the PC row is the same row as before
+  s = await real();
+  check(
+    `${p} after a trace step the PC row is selected again, also when it is the same row`,
+    s.selected === braRow &&
+      (await page.locator(`.e68-listing__row[data-row="${braRow}"]`).getAttribute('aria-selected')) === 'true',
+    JSON.stringify(s),
+  );
+
+  // Double-click on A0 (now $2000): U2's Memory panel shows that address.
+  await field(page, 8).dblclick();
+  const memoryRow = page.locator('[data-e68-panel="memory"] .e68-memory__row:not(.e68-memory__measure)').first();
+  const memoryText = await memoryRow
+    .waitFor({ timeout: 10_000 })
+    .then(() => memoryRow.innerText())
+    .catch((error) => `no Memory panel row: ${error.message.split('\n')[0]}`);
+  check(
+    `${p} a double-click on A0 shows the Memory panel at that address`,
+    memoryText.startsWith('00002000:'),
+    memoryText,
+  );
+  await page.screenshot({ path: join(outDir, `${name}-real-traced.png`) });
+
+  // The 101st breakpoint: the run feature draws the engine's box.
+  await open('nops');
+  await page.waitForFunction(() => window.__easy68k.ctx.sim.listing.rows.length > 100, undefined, {
+    timeout: 15_000,
+  });
+  const last = await page.evaluate(() => {
+    const { ctx } = window.__easy68k;
+    const model = window.__u1real.simMainOf(ctx);
+    const rows = ctx.sim.listing.rows
+      .map((_text, row) => row)
+      .filter((row) => row > 2 && ctx.sim.listing.isInstruction(row));
+    for (const row of rows.slice(0, 100)) model.toggleBreakpoint(row);
+    return rows[100];
+  });
+  await page.evaluate((row) => {
+    const list = document.querySelector('[data-e68-panel="listing"] .e68-listing__list');
+    const height = document.querySelector('.e68-listing__row').getBoundingClientRect().height;
+    list.scrollTop = Math.max(0, row * height - list.clientHeight / 2);
+  }, last);
+  const lastGutter = page.locator(`.e68-listing__row[data-row="${last}"] .e68-listing__gutter`);
+  await lastGutter.waitFor({ timeout: 10_000 });
+  await lastGutter.click();
+  const box = page.getByRole('alertdialog').filter({ hasText: 'Breakpoint Limit Reached!' });
+  const shown = await box
+    .waitFor({ timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
+  check(`${p} the 101st breakpoint shows the box "Breakpoint Limit Reached!"`, shown);
+  if (shown) {
+    check(
+      `${p} the box has the title Error and an OK button`,
+      (await box.getByText('Error', { exact: true }).count()) > 0 &&
+        (await box.getByRole('button', { name: 'OK' }).count()) === 1,
+    );
+    await page.screenshot({ path: join(outDir, `${name}-real-breakpoint-limit.png`) });
+    await box.getByRole('button', { name: 'OK' }).click();
+    await box.waitFor({ state: 'detached', timeout: 10_000 }).catch(() => {});
+  }
+  s = await real();
+  check(`${p} the table stays at 100 breakpoints`, s.breakpoints.length === 100, String(s.breakpoints.length));
+  const dots = await page.locator('.e68-listing__dot--on').count();
+  check(`${p} the visible rows show their breakpoints`, dots > 0, String(dots));
+
+  // File > Close: the Caution question, then an empty listing and no selection.
+  const closing = run('sim.file.close');
+  const caution = page.getByRole('alertdialog').filter({ has: page.getByRole('button', { name: 'Cancel' }) });
+  await caution.waitFor({ timeout: 10_000 });
+  await caution.getByRole('button', { name: 'OK' }).click();
+  await closing;
+  await page.waitForFunction(() => window.__easy68k.ctx.sim.listing.rows.length === 0, undefined, {
+    timeout: 15_000,
+  });
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+  s = await real();
+  check(
+    `${p} Close empties the listing and clears the selection`,
+    s.rows === 0 && s.selected === -1 && (await page.locator('.e68-listing__row').count()) === 0,
+    JSON.stringify(s),
+  );
+  check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await context.close();
+}
+
 // --- run -------------------------------------------------------------------------------
 
 async function main() {
@@ -544,6 +780,8 @@ async function main() {
           console.log(`\n[${name}, ${theme}]`);
           await interactionPass(browser, name, theme);
         }
+        console.log(`\n[${name}, the real application]`);
+        await realAppPass(browser, name);
         console.log(`\n[${name}, 100,000 rows]`);
         await bigListingPass(browser, name);
       } catch (error) {

@@ -102,6 +102,11 @@ export function createWebPlatform(win: Window = window): Platform {
     event.preventDefault();
     event.returnValue = '';
   };
+  /**
+   * The parties that need the "leave?" question now (Platform.confirmBeforeUnload: the documents,
+   * the simulator's files and log). A call without a name speaks for one unnamed party.
+   */
+  const needing = new Set<string>();
   let guarding = false;
 
   return {
@@ -127,10 +132,14 @@ export function createWebPlatform(win: Window = window): Platform {
       if (isAllowedExternalUrl(url)) win.open(url, '_blank', 'noopener,noreferrer');
     },
     showHelp: () => false,
-    confirmBeforeUnload(needed) {
-      if (needed === guarding) return;
-      guarding = needed;
-      if (needed) win.addEventListener('beforeunload', onBeforeUnload);
+    confirmBeforeUnload(needed: boolean, who?: string) {
+      const party = who ?? '';
+      if (needed) needing.add(party);
+      else needing.delete(party);
+      const next = needing.size > 0;
+      if (next === guarding) return;
+      guarding = next;
+      if (next) win.addEventListener('beforeunload', onBeforeUnload);
       else win.removeEventListener('beforeunload', onBeforeUnload);
     },
     newWindow() {

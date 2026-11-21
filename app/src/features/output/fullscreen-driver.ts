@@ -69,7 +69,11 @@ export function createWebFullScreenDriver(doc: Document, onChange: (active: bool
   };
 }
 
-/** The desktop app's driver: the window goes full screen; no user gesture is needed. */
+/**
+ * The desktop app's driver: the window goes full screen; no user gesture is needed. That the
+ * window left full screen by the system's own means arrives through `Platform.onFullScreenChange`,
+ * which the feature listens to from its start (index.ts).
+ */
 export function createDesktopFullScreenDriver(setFullScreen: (on: boolean) => Promise<boolean>): FullScreenDriver {
   return {
     available: () => true,

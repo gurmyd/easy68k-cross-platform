@@ -2,7 +2,7 @@
 // ARCHITECTURE.md 1.3.2, 1.3.4, 1.5, 9.2 (H1); docs/porting/errata/W3.md entries 8 and 24.
 
 import type { AppContext, CommandHandler, CommandId, FileFilter } from '../../contracts';
-import { ENTRY_PAGES, editorHelpPage, simulatorHelpPage } from '../../core/help';
+import { ENTRY_PAGES, editorHelpPage, simulatorHelpPage, type EditorWordContext } from '../../core/help';
 import { panelOf, showPanel } from '../../state/panels';
 import { applicationBase } from './controller';
 import { copyExamples, examplesFolderExists, loadExampleList, WEB_EXAMPLES_DIR, type ExampleFetch } from './examples';
@@ -32,13 +32,15 @@ export async function showExamples(ctx: AppContext, fetchFn: ExampleFetch = brow
       ctx.dialogs.toast(`The examples are in ${WEB_EXAMPLES_DIR} (Files panel).`);
       return;
     }
-    // Desktop: the folder is chosen with the save dialog, as the contracts have no folder chooser
-    // (errata H1, "Contract"); the name typed there is the folder to create.
-    const chosen = await ctx.fileDialogs.save({
-      title: 'Copy the Examples to (folder name)',
-      filters: [{ label: 'Folder', patterns: ['*'] }],
-      defaultExt: '',
-    });
+    // Desktop: a folder chooser (FileDialogs.chooseFolder, added at gate I1). A file dialogs object
+    // without one (a stand-in) falls back to the save dialog, where the name typed is the folder.
+    const chosen = ctx.fileDialogs.chooseFolder
+      ? await ctx.fileDialogs.chooseFolder({ title: 'Copy the Examples to' })
+      : await ctx.fileDialogs.save({
+          title: 'Copy the Examples to (folder name)',
+          filters: [{ label: 'Folder', patterns: ['*'] }],
+          defaultExt: '',
+        });
     if (chosen === null) return;
     await copyExamples(ctx.vfs, chosen, await loadExampleList(base, fetchFn), base, fetchFn);
     const files = await ctx.fileDialogs.open({
@@ -59,6 +61,17 @@ export async function showExamples(ctx: AppContext, fetchFn: ExampleFetch = brow
   }
 }
 
+/**
+ * The word context from the document service (DocumentService.selection, added at gate I1), or null
+ * when the service has no such member or no document: the caller then reads the page's selection.
+ */
+function documentWordContext(ctx: AppContext): EditorWordContext | null {
+  const active = ctx.documents.active();
+  const selection = active ? ctx.documents.selection?.(active.id) : null;
+  if (!active || !selection) return null;
+  return { selected: selection.selected, text: ctx.documents.text(active.id), caret: selection.caret };
+}
+
 /** An optional page given by the caller: "Help" opens it instead of the introduction. */
 function requestedPage(arg: unknown): string | null {
   return typeof arg === 'string' ? arg : null;
@@ -71,7 +84,7 @@ export const commands: Record<CommandId, CommandHandler> = {
     // key goes on to `ed.help.help` (W3 errata, entry 8).
     enabled: () => editorHasFocus(),
     run: (ctx) => {
-      const context = readEditorWordContext();
+      const context = documentWordContext(ctx) ?? readEditorWordContext();
       if (context === null) return openHelp(ctx);
       const page = editorHelpPage(context);
       if (page !== null) openHelp(ctx, page); // null: the caret is at the very start; the original does nothing

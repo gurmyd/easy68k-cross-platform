@@ -20,6 +20,7 @@ import {
   renameEntry,
   runImport,
   sortEntries,
+  storedSpelling,
 } from './store';
 
 const ascii = (text: string): Bytes => Uint8Array.from(text, (c) => c.charCodeAt(0));
@@ -193,3 +194,75 @@ describe('renameEntry', { timeout: 60_000 }, () => {
     await expect(renameEntry(vfs, '/browser/Work/PROG.X68', 'old.L68')).rejects.toThrow('already exists');
   });
 });
+
+// Review FS1, open defect 1: names that differ only in letter case are the same name (Windows).
+describe('names that differ only in letter case', { timeout: 60_000 }, () => {
+  async function names(vfs: Vfs, dir: string): Promise<string[]> {
+    return (await vfs.list(dir)).map((e) => e.name);
+  }
+
+  for (const kind of ['memory', 'browser'] as const) {
+    it(`${kind} store: rename refuses a name that exists in another spelling`, async () => {
+      const vfs = kind === 'browser' ? await browserVfs() : memoryVfs();
+      await vfs.writeFile('/browser/d/prog.x68', ascii('prog'));
+      await vfs.writeFile('/browser/d/other.x68', ascii('other'));
+      await expect(renameEntry(vfs, '/browser/d/other.x68', 'PROG.X68')).rejects.toThrow('"PROG.X68" already exists.');
+      expect((await names(vfs, '/browser/d')).sort()).toEqual(['other.x68', 'prog.x68']);
+      expect(text(await vfs.readFile('/browser/d/prog.x68'))).toBe('prog');
+      // Folders too: D -> d2 while D2 exists.
+      await vfs.writeFile('/browser/D/a.txt', ascii('a'));
+      await vfs.writeFile('/browser/D2/b.txt', ascii('b'));
+      await expect(renameEntry(vfs, '/browser/D', 'd2')).rejects.toThrow('already exists');
+      expect(await names(vfs, '/browser/D2')).toEqual(['b.txt']);
+      // A change of letter case of the entry itself is still allowed.
+      expect(await renameEntry(vfs, '/browser/d/prog.x68', 'Prog.X68')).toBe('/browser/d/Prog.X68');
+      expect((await names(vfs, '/browser/d')).sort()).toEqual(['Prog.X68', 'other.x68']);
+    });
+
+    it(`${kind} store: import asks before replacing a file in another spelling and keeps the stored one`, async () => {
+      const vfs = kind === 'browser' ? await browserVfs() : memoryVfs();
+      await vfs.writeFile('/browser/d/prog.x68', ascii('old'));
+      await vfs.writeFile('/browser/d/Inc/macros.x68', ascii('old'));
+      const items = [
+        { rel: 'Prog.X68', read: async () => ascii('new') },
+        { rel: 'INC/MACROS.X68', read: async () => ascii('new') },
+        { rel: 'inc/extra.x68', read: async () => ascii('extra') },
+        { rel: 'New/a.x68', read: async () => ascii('a') },
+        { rel: 'NEW/b.x68', read: async () => ascii('b') },
+      ];
+      const plan = await planImport(vfs, '/browser/d', items);
+      expect(plan.conflicts.map((c) => c.rel)).toEqual(['Prog.X68', 'INC/MACROS.X68']);
+      const kept = await runImport(vfs, plan, () => false);
+      expect(kept.skipped.map((s) => s.rel)).toEqual(['Prog.X68', 'INC/MACROS.X68']);
+      expect(text(await vfs.readFile('/browser/d/prog.x68'))).toBe('old');
+      const replaced = await runImport(vfs, plan, () => true);
+      expect(replaced.written).toContain('/browser/d/prog.x68');
+      expect(replaced.written).toContain('/browser/d/Inc/macros.x68');
+      expect(replaced.written).toContain('/browser/d/Inc/extra.x68');
+      expect(text(await vfs.readFile('/browser/d/prog.x68'))).toBe('new');
+      // One spelling per name: no third spelling of prog, one Inc folder, one New folder.
+      expect((await names(vfs, '/browser/d')).sort()).toEqual(['Inc', 'New', 'prog.x68']);
+      expect((await names(vfs, '/browser/d/Inc')).sort()).toEqual(['extra.x68', 'macros.x68']);
+      expect((await names(vfs, '/browser/d/New')).sort()).toEqual(['a.x68', 'b.x68']);
+    });
+
+    it(`${kind} store: importOne and storedSpelling use the stored spelling of every part`, async () => {
+      const vfs = kind === 'browser' ? await browserVfs() : memoryVfs();
+      await vfs.writeFile('/browser/imported/Prog.x68', ascii('v1'));
+      expect(await storedSpelling(vfs, '/browser/Imported/PROG.X68')).toBe('/browser/imported/Prog.x68');
+      expect(await storedSpelling(vfs, '/browser/IMPORTED/new/x.X68')).toBe('/browser/imported/new/x.X68');
+      expect(await storedSpelling(vfs, '/browser')).toBe('/browser');
+      const path = await importOne(vfs, '/browser/Imported', 'prog.X68', ascii('v2'), async () => true);
+      expect(path).toBe('/browser/imported/Prog.x68');
+      expect(await names(vfs, '/browser')).toEqual(['imported']);
+      expect(await names(vfs, '/browser/imported')).toEqual(['Prog.x68']);
+      expect(text(await vfs.readFile(path))).toBe('v2');
+    });
+  }
+});
+
+function memoryVfs(): Vfs {
+  const vfs = createVfs();
+  vfs.mount(new MemoryBackend({ mount: 'browser', kind: 'browser', label: 'My Programs' }));
+  return vfs;
+}

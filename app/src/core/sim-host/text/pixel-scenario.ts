@@ -1,22 +1,27 @@
 // "The same text gives the same pixels under Node, Chromium and WebKit" (SH3 acceptance,
 // ARCHITECTURE.md 9.2; 3.5.1: text pixels come from data files only).
 //
-// Two scenarios draw a screen full of text with the synthetic fonts on the test surface and return
-// its pixels and their hash:
+// Two scenarios draw a screen full of text and return its pixels and their hash:
 // - `runDirectScenario` calls the text screen directly;
 // - `runEngineScenario` runs the 68000 program `PIXEL_PROGRAM` on the real simulator engine, whose
 //   text and graphics host parts are the real OutputDevice.
 //
-// pixel-scenario.test.ts runs both under Node and compares the hashes with `EXPECTED_HASHES`;
-// check-text.mjs runs both in Chromium and WebKit and compares them with the Node run.
+// Each draws on the parts it is given. By default those are the synthetic fonts on the test
+// surface: pixel-scenario.test.ts runs both that way under Node and compares the hashes with
+// `EXPECTED_HASHES`, and check-text.mjs runs both in Chromium and WebKit and compares them with the
+// Node run. check-text.mjs also runs both on `realParts`: the real drawing surface with the fonts
+// of app/public/fonts, loaded as the application loads them.
 //
 // The engine helpers are passed in (core/ may not import engine/, 3.1). Never imported by the
 // application.
 //
 // Owner: SH3.
 
-import type { Bytes, SimEngine, SimHostParts } from '../../../contracts';
-import { bytesOf, createTextRig, hashPixels, rowText, type TextRig } from './testing';
+import type { Bytes, GlyphProvider, SimEngine, SimHostParts, SurfaceApi } from '../../../contracts';
+import { OutputDevice } from '../io';
+import { Surface } from '../surface/surface';
+import { bytesOf, createTextRig, hashPixels, ManualScheduler, rowText } from './testing';
+import { TextScreen } from './text-screen';
 
 export { hashPixels } from './testing';
 
@@ -42,7 +47,38 @@ export interface ScenarioResult {
   state: { row: number; col: number; textCols: number; textRows: number; colWidth: number; rowHeight: number };
 }
 
-function resultOf(rig: TextRig): ScenarioResult {
+/** What a scenario draws on: a text screen and its output device over a surface, and the scheduler of the prompt. */
+export interface ScenarioParts {
+  surface: SurfaceApi;
+  scheduler: ManualScheduler;
+  text: TextScreen;
+  /** The `text` and `graphics` host parts over `text` and `surface`. */
+  device: OutputDevice;
+}
+
+/** The parts as the application composes them: the real drawing surface, 640 x 480, and the given fonts. */
+export function realParts(glyphs: GlyphProvider): ScenarioParts {
+  const surface = new Surface(640, 480);
+  const scheduler = new ManualScheduler();
+  const text = new TextScreen({
+    surface,
+    glyphs,
+    scheduler,
+    outputLog: () => {},
+    beep: () => {},
+    show: () => {},
+  });
+  const device = new OutputDevice({
+    surface,
+    text,
+    show: () => {},
+    bringToFront: () => {},
+    setFullScreen: () => {},
+  });
+  return { surface, scheduler, text, device };
+}
+
+function resultOf(rig: ScenarioParts): ScenarioResult {
   const { back, overlay } = rig.surface;
   const screen = back.data.slice();
   if (overlay) {
@@ -75,8 +111,7 @@ const NAVY = 0x800000;
 const BLACK = 0x000000;
 
 /** A screen of text drawn by calling the text screen directly. */
-export function runDirectScenario(): ScenarioResult {
-  const rig = createTextRig();
+export function runDirectScenario(rig: ScenarioParts = createTextRig()): ScenarioResult {
   const { text, surface, scheduler } = rig;
   const say = (line: string) => text.textOut(bytesOf(line));
 
@@ -269,8 +304,11 @@ export interface EngineHelpers {
 }
 
 /** Runs `PIXEL_PROGRAM` (as assembled: `s68`) on the real engine with the real output device. */
-export async function runEngineScenario(helpers: EngineHelpers, s68: Bytes): Promise<ScenarioResult> {
-  const rig = createTextRig();
+export async function runEngineScenario(
+  helpers: EngineHelpers,
+  s68: Bytes,
+  rig: ScenarioParts = createTextRig(),
+): Promise<ScenarioResult> {
   const test = await helpers.createTestEngine({ text: rig.device, graphics: rig.device });
   try {
     test.engine.load(s68, null, { name: 'pixels.S68' });

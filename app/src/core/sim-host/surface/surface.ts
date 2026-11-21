@@ -306,7 +306,8 @@ export class Surface implements SurfaceApi {
    * Copies the pixels of `source` to `dest`, as GDI's BitBlt does within one bitmap: the result is
    * what it would be if the source were read completely first, however the two overlap. The two
    * rectangles are meant to have one size (the smaller one counts if they do not). A pixel whose
-   * source or destination lies outside the surface is left as it is.
+   * source or destination lies outside the surface is left as it is, which is what GDI does
+   * (measured: a task 25 rectangle may reach far past the surface).
    */
   copyRect(dest: Rect, source: Rect): void {
     this.beforeDrawing();

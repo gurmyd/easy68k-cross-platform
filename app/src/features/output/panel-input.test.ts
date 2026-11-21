@@ -243,6 +243,29 @@ describe('the paste chord', () => {
   });
 });
 
+describe("text pasted without the chord (the browser's own Paste command)", () => {
+  it('goes to the keyboard, which types it in', () => {
+    const { input, take } = setup();
+    input.paste('abc');
+    expect(take()).toEqual(['paste "abc"']);
+  });
+
+  it('after task 24 nothing is pasted: the original has no paste then', () => {
+    const { input, take, state, fire } = setup();
+    state.keyCommands = false;
+    input.paste('abc');
+    expect(take()).toEqual([]);
+
+    // A chord whose key-down was taken while key commands were still on keeps its text.
+    state.keyCommands = true;
+    input.keydown(key('Insert', 'Insert', { shiftKey: true }));
+    state.keyCommands = false;
+    input.paste('late');
+    fire();
+    expect(take()).toEqual(['down Insert (paste chord)', 'paste "late"']);
+  });
+});
+
 describe('the paste command (no key behind it)', () => {
   it('delivers the text as the chord does: key down with the text, key up', () => {
     const windows = setup();

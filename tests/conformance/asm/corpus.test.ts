@@ -7,7 +7,7 @@
 // skipped otherwise. A per-file report is written to build/reports/asm-conformance-corpus.json.
 
 import { afterAll, describe, expect, it } from 'vitest';
-import { loadManifest, programAvailable, type CorpusSet } from '../../corpus/index';
+import { hasOfficialOutput, loadManifest, programAvailable, type CorpusSet } from '../../corpus/index';
 import { asmBuilt, compareAndRecord, enginesRequired, writeReport } from './harness';
 import { expectOutcome } from './known-differences';
 
@@ -39,7 +39,7 @@ describe.skipIf(!asmBuilt)('the WebAssembly assembler against the official EASy6
       for (const program of manifest.programs.filter((candidate) => candidate.set === set)) {
         for (const [label, run] of Object.entries(program.runs)) {
           const name = `${program.id} (${label})`;
-          if (run.status !== 'ok') {
+          if (!hasOfficialOutput(run)) {
             it.skip(`${name} - no result of the official program: ${run.reason ?? 'unknown'}`, () => {});
             continue;
           }

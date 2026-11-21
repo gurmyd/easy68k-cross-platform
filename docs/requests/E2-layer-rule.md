@@ -1,5 +1,7 @@
 # Request from E2: let `features/editor/` import `ui/editor/`; add `check-editor.mjs` to CI (gates)
 
+Status: applied in gate I1 round 1. Item 1: `eslint.config.js` lets `features/editor/` import `ui/editor/` (EDITOR_FEATURES, like FS_FEATURES); `tests/lint/import-rules.test.ts` has fixtures that `features/editor/` may and `features/find/`, `features/files/` and `core/` may not. E2 may now replace the body of `features/editor/ui-link.ts`. Item 2: root script `check:editor` and a step in `browser-checks`, group `interface`.
+
 Background: `docs/porting/errata/E2.md`, entry 1.
 
 ## 1. `eslint.config.js`, the layer rule (gate)

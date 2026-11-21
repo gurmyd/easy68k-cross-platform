@@ -384,7 +384,26 @@ export function readWindowsMetrics(text) {
   for (const line of text.split(/\r?\n/)) {
     if (!line || line.startsWith('#')) continue;
     const f = line.split('\t');
-    const [name, style, size, face, colWidth, rowHeight, ppem, , ascent, , , , uPos, uSize, sPos, sSize, advances] = f;
+    const [
+      name,
+      style,
+      size,
+      face,
+      colWidth,
+      rowHeight,
+      ppem,
+      ,
+      ascent,
+      ,
+      ,
+      ,
+      uPos,
+      uSize,
+      sPos,
+      sSize,
+      advances,
+      del,
+    ] = f;
     map.set(`${name}|${style}|${size}`, {
       face,
       colWidth: Number(colWidth),
@@ -394,6 +413,8 @@ export function readWindowsMetrics(text) {
       underline: [Number(uPos), Number(uSize)],
       strikeOut: [Number(sPos), Number(sSize)],
       advances: advances.split(',').map(Number),
+      // Width of $7F in a string with a byte of $80 or above (a fallback glyph; absent in old files).
+      delInHighString: del === undefined || del === '' ? null : Number(del),
     });
   }
   return map;
@@ -565,6 +586,7 @@ export function generate() {
           glyphWidth: atlas.glyphWidth,
           source: file.split('/').pop() + (synth ? ' (slanted)' : ''),
         };
+        if (win.delInHighString !== null) entry.delInHighString = win.delInHighString;
         if (style === 'plain') {
           // Underline and strike-out: rows [top, top + height) of the cell, across each glyph's advance.
           for (const line of ['underline', 'strikeOut']) {

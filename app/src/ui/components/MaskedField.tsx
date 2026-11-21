@@ -31,6 +31,7 @@ import {
   type FocusEvent,
   type InputHTMLAttributes,
   type KeyboardEvent,
+  type MouseEvent,
   type Ref,
 } from 'react';
 import '../../styles/components.css';
@@ -55,7 +56,11 @@ export interface MaskedFieldProps extends MaskedConfig, InputProps {
   labelPosition?: 'left' | 'top';
   /** A read-only decoration before the digits: '00' (the unused address byte), '$'. */
   prefix?: string;
-  /** Select the whole text when the field gets the focus (the VCL default; the registers except SR). */
+  /**
+   * Select the whole text when the field gets the focus (the VCL default; the registers except SR).
+   * As in the VCL (TCustomEdit.DoEnter skips SelectAll while the left button is down), not when the
+   * focus comes from a press of the primary mouse button: the caret goes where the click put it.
+   */
   autoSelect?: boolean;
   inputRef?: Ref<HTMLInputElement>;
 }
@@ -80,6 +85,7 @@ export function MaskedField({
   readOnly,
   onKeyDown,
   onFocus,
+  onMouseDown,
   ...rest
 }: MaskedFieldProps) {
   const config: MaskedConfig = { kind, width, invalidKey, backspace, maxSelection } as MaskedConfig;
@@ -87,6 +93,8 @@ export function MaskedField({
   const inputId = id ?? generatedId;
   const ref = useRef<HTMLInputElement | null>(null);
   const pending = useRef<{ start: number; end: number } | null>(null);
+  // True from a press of the primary mouse button on the input until it is released (autoSelect).
+  const pressing = useRef(false);
   const text = value.length === width ? value : normalizeText(value, config);
   // Latest values for the native listener.
   const latest = useRef({ text, config, onChange, onReject, disabled, readOnly });
@@ -248,9 +256,19 @@ export function MaskedField({
         data-e68-mnemonic={label ? (parseMnemonic(label).key ?? undefined) : undefined}
         style={{ width: `calc(${width}ch + 2 * var(--sp-2))` }}
         onKeyDown={handleKeyDown}
+        onMouseDown={(event: MouseEvent<HTMLInputElement>) => {
+          onMouseDown?.(event);
+          if (event.button !== 0) return;
+          pressing.current = true;
+          const release = () => {
+            pressing.current = false;
+            window.removeEventListener('mouseup', release, true);
+          };
+          window.addEventListener('mouseup', release, true);
+        }}
         onFocus={(event: FocusEvent<HTMLInputElement>) => {
           onFocus?.(event);
-          if (autoSelect) event.currentTarget.select();
+          if (autoSelect && !pressing.current) event.currentTarget.select();
         }}
         onPaste={(event: ClipboardEvent<HTMLInputElement>) => {
           event.preventDefault();

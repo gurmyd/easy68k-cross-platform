@@ -20,10 +20,9 @@
 // The engine is always read as ctx.sim.engine at the moment of use: a cold start replaces it.
 // Every call that changes the engine goes through the run controller (section 0, rule 8).
 
-import { Box, type AppContext, type Store } from '../../contracts';
+import { Box, SimOption, type AppContext, type Store } from '../../contracts';
 import { FIRST_BODY_ROW, upperAscii } from '../../core/listing/view';
 import { createStore } from '../../state/store';
-import { showPanel } from '../../state/panels';
 import { ListingFinder, type FindOutcome } from './find-model';
 import { cyclesText } from './selection';
 
@@ -79,10 +78,11 @@ export class SimMainModel {
 
   private serial = 0;
   private seenRevision: number | null = null;
-  private seenHighlight: number | null = null;
   private seenRows: readonly string[] | null = null;
   private seenViewRevision: number | null = null;
   private previousBoxes: readonly string[] | null = null;
+  /** True while a snapshot refresh that is not a scrshow() is taken over (Clear Cycles). */
+  private highlightBlocked = false;
 
   constructor(private readonly ctx: AppContext) {
     const snapshot = ctx.sim.controller.snapshot;
@@ -120,8 +120,8 @@ export class SimMainModel {
   /* ---------------------------------------------------------------- following the simulator */
 
   /**
-   * Takes over what changed: a refreshed snapshot (register texts, cycles, the highlight rule of
-   * 3.11.4), replaced listing rows, and the breakpoints after a repaint. Cheap when nothing did.
+   * Takes over what changed: a refreshed snapshot (register texts, cycles, the selection rule of
+   * highlight()), replaced listing rows, and the breakpoints after a repaint. Cheap when nothing did.
    */
   sync(): void {
     const { controller, listing } = this.ctx.sim;
@@ -143,21 +143,68 @@ export class SimMainModel {
     if (rowsReplaced) next = { ...next, rows };
     if (rowsReplaced || repainted) next = { ...next, breakpoints: this.readBreakpoints() };
 
-    // Selection (3.11.4): after a refresh, a highlight that moved takes the selection; new rows
-    // (a load, a close, a cold start) always start from the engine's row.
-    const engineMoved = refreshed && snapshot.highlight !== this.seenHighlight;
-    const select = rowsReplaced || engineMoved;
-    if (select && snapshot.highlight >= 0) {
-      next = { ...next, scroll: { row: snapshot.highlight, serial: ++this.serial } };
+    // Selection: the original's highlight() at the end of every scrshow() (sim-ui §6.4; errata
+    // U1.md entry 1). When the PC field matches a row, that row becomes the selection, also when it
+    // is the row it was before and the user has clicked another one since; when no row matches,
+    // the selection stays. Either way the selection is then scrolled into view if it is off screen.
+    // New rows (a load, a close, a cold start) always start from the engine's row.
+    let select: number | null = null;
+    let reveal = false;
+    if (rowsReplaced) {
+      select = snapshot.highlight;
+      reveal = true;
+    } else if (refreshed && !this.highlightBlocked && this.highlightRan()) {
+      if (this.highlightMatches(snapshot.highlight, snapshot.boxes[Box.PC] ?? '', snapshot.halted)) {
+        select = snapshot.highlight;
+      }
+      reveal = true;
+    }
+    const revealRow = select ?? this.selectedRow;
+    if (reveal && revealRow >= 0) {
+      next = { ...next, scroll: { row: revealRow, serial: ++this.serial } };
     }
 
     // Mark everything as seen first: the store change below calls sync() again at once.
     this.seenRevision = snapshot.revision;
-    this.seenHighlight = snapshot.highlight;
     this.seenRows = rows;
     this.seenViewRevision = viewRevision;
-    if (select) this.setSelected(snapshot.highlight);
+    if (select !== null) this.setSelected(select);
     if (next !== this.view.getState()) this.view.setState(() => next);
+  }
+
+  /**
+   * Whether the engine ran highlight() in the scrshow() that refreshed the snapshot. It skips it
+   * during an Auto Trace step with `Disable display update` checked (STARTSIM.CPP:170), and then
+   * the listing does not follow the PC (sim-ui §4.2, §6.4).
+   *
+   * The engine's `autoTraceInProgress` is true only inside a tick, so after the call the Auto
+   * Trace timer stands for it. One stop differs (errata U1.md entry 1): a step that halts or hits a
+   * breakpoint during such an Auto Trace switches the timer off before its scrshow(), so the
+   * original skips highlight() there while the port lets the listing follow.
+   */
+  private highlightRan(): boolean {
+    const { controller, engine } = this.ctx.sim;
+    if (controller.phase === 'loading') return true; // nothing reads the engine during a load (4.7)
+    try {
+      const flags = engine.state();
+      const autoTracing = flags.autoTraceTimer || flags.autoTraceInProgress;
+      return !(autoTracing && engine.getOption(SimOption.DisableDisplay) !== 0);
+    } catch {
+      return true;
+    }
+  }
+
+  /**
+   * The match test of highlight() (SIM68Ku.cpp:785-807) applied to the row the engine selected:
+   * true when that row's first 8 characters, upper-cased, equal the PC field and it is an
+   * instruction row or the program has halted. The engine keeps its last row when nothing
+   * matched, so this tells whether highlight() found the PC this time.
+   */
+  private highlightMatches(row: number, pcText: string, halted: boolean): boolean {
+    const listing = this.ctx.sim.listing;
+    const text = listing.rows[row];
+    if (row < FIRST_BODY_ROW || text === undefined) return false;
+    return upperAscii(text).slice(0, 8) === pcText && (halted || listing.isInstruction(row));
   }
 
   private readBreakpoints(): ReadonlySet<number> {
@@ -203,12 +250,9 @@ export class SimMainModel {
    * view (sim-ui §6.4: "the same scroll rule runs even when the selection did not change").
    */
   followPC(): void {
-    const engine = this.ctx.sim.engine;
+    const { engine, controller } = this.ctx.sim;
     const row = engine.listingHighlight;
-    const text = this.view.getState().rows[row];
-    if (row >= FIRST_BODY_ROW && text !== undefined && upperAscii(text).slice(0, 8) === engine.boxText(Box.PC)) {
-      this.setSelected(row);
-    }
+    if (this.highlightMatches(row, engine.boxText(Box.PC), controller.snapshot.halted)) this.setSelected(row);
     this.requestScroll(this.selectedRow);
   }
 
@@ -270,23 +314,29 @@ export class SimMainModel {
     if (box === Box.PC) this.followPC();
   }
 
-  /** Double-click on an address register (sim-ui §4.4): its text goes to the Memory panel. */
+  /**
+   * Double-click on an address register (sim-ui §4.4, regDblClick): its text goes to the Memory
+   * panel's Address field and that panel is shown. The Memory feature (U2) does both, and applies
+   * its own Address-field rules, for `sim.view.memory` with the field's text as the argument.
+   */
   copyToMemory(box: Box): void {
     if (!ADDRESS_BOXES.has(box)) return;
     const text = this.view.getState().boxes[box] ?? '';
     if (!/^[0-9A-Fa-f]{1,8}$/.test(text)) return;
-    const address = Number.parseInt(text, 16) >>> 0;
-    this.ctx.settings.update((settings) =>
-      settings.sim.memoryAddress === address
-        ? settings
-        : { ...settings, sim: { ...settings.sim, memoryAddress: address } },
-    );
-    showPanel(this.ctx, 'memory');
+    void this.ctx.commands.run('sim.view.memory', text);
   }
 
   /** The `Clear Cycles` button (sim-ui §5): works at any time and shows `0`. */
   clearCycles(): void {
-    this.ctx.sim.controller.clearCycles();
+    // The controller refreshes its snapshot for the new count, but this is no scrshow(): the
+    // original's ClearCyclesClick does not run highlight(), so the selection must not move.
+    this.highlightBlocked = true;
+    try {
+      this.ctx.sim.controller.clearCycles();
+      this.sync();
+    } finally {
+      this.highlightBlocked = false;
+    }
     this.view.setState((view) => ({ ...view, cycles: cyclesText(0n) }));
   }
 

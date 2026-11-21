@@ -14,7 +14,7 @@ import type { CommandHandler, CommandId, CommandRegistry } from './commands';
 import type { AudioBackend, Clock, Scheduler } from './devices';
 import type { DocumentService, DocumentState } from './documents';
 import type { AsmEngine, SimEngine } from './engine';
-import type { CachedSyncFilesDeps, FileDialogs, SyncFiles, Vfs } from './fs';
+import type { CachedSyncFilesDeps, FileDialogs, SyncFiles, Vfs, VPath } from './fs';
 import type { SimHost } from './host';
 import type { Platform } from './platform';
 import type { SimSession } from './run';
@@ -23,6 +23,18 @@ import type { AppState, Mode, Store } from './store';
 
 /** @codemirror/state's `Extension`, structurally: `{ extension: Extension } | readonly Extension[]`. */
 export type Extension = { extension: Extension } | readonly Extension[];
+
+/**
+ * What the build tells about the port, from app/src/build-info.ts (7.5; 10.2 O-14: nothing about
+ * the repository is hard-coded). Features may not import that file (3.1); they read
+ * `AppContext.build`. Added at gate I1 (docs/porting/errata/W1.md, entry 11).
+ */
+export interface BuildFacts {
+  /** Semantic version of the port (root package.json). */
+  readonly version: string;
+  /** GitHub repository as "owner/name", or null when it is not known. */
+  readonly repository: string | null;
+}
 
 export interface AppContext {
   store: Store<AppState>;
@@ -42,6 +54,10 @@ export interface AppContext {
   /** Editor extensions contributed by other features (highlighting, markers). The editor component
    *  applies every registered source to every document view. Extension is @codemirror/state's type. */
   editorExtensions: { register(source: (doc: DocumentState) => Extension): () => void };
+  /** The port's version and repository, for the About boxes and the update check (1.4 note 11).
+   *  Added at gate I1 as an optional member: the bootstrap fills it; a context built by hand in a
+   *  test may leave it out. */
+  readonly build?: BuildFacts;
 }
 export interface PanelSpec {
   id: string;
@@ -116,11 +132,44 @@ export interface MessageBoxRequest {
   icon: 'none' | 'information' | 'confirmation' | 'warning' | 'error';
   buttons: ('OK' | 'Cancel' | 'Yes' | 'No' | 'Replace' | 'Append')[];
 }
+/** Options of DialogService.toast. Added at gate I1 (docs/porting/errata/W1.md, entry 11). */
+export interface ToastOptions {
+  /** How long the toast stays, in milliseconds. 0 = until it is dismissed or its action is used.
+   *  Absent = the component kit's default (8 s, longer while it has the pointer or the focus). */
+  duration?: number;
+}
 export interface DialogService {
   /** holdsProgram: hold the run controller while the dialog is open (4.4.5). Default: true for a
    *  modal dialog opened while the mode is 'simulator', false otherwise. */
   open<P, R>(id: string, props: P, options?: { modal?: boolean; holdsProgram?: boolean }): Promise<R>;
   messageBox(request: MessageBoxRequest, options?: { holdsProgram?: boolean }): Promise<string>; // resolves to the button caption
-  toast(text: string, action?: { label: string; run(): void }): void;
+  toast(text: string, action?: { label: string; run(): void }, options?: ToastOptions): void;
   isModalOpen(): boolean;
 }
+
+/* ------------------------------------------------------------------ dialogs one package opens for another (2.7) */
+// The simulator session (SH8) opens two dialogs that other packages draw, because the callbacks
+// that need them (ProgramFilesDeps.showFileDialog, LogDeps.askFileExists) are the session's to
+// supply and a feature may not import another feature. Both sides compile against these props and
+// results. Added at gate I1 (docs/porting/errata/W1.md, entry 11). A dialog id that nobody has
+// registered counts as Cancel.
+
+/** Props of the dialog `sim.fileDialog` (features/sim-files, SH6): TRAP #15 task 58. */
+export interface SimFileDialogProps {
+  /** 0 = Open, 1 = Save (trap15-a task 58). */
+  mode: number;
+  title: string;
+  /** The program's filter string, "description|pattern|...". */
+  filter: string;
+  initialName: string;
+}
+/** Result of `sim.fileDialog`: the chosen file, or null for Cancel. */
+export type SimFileDialogResult = VPath | null;
+
+/** Props of the dialog `sim.logFileExists` (features/log, U4): a log file exists already (sim-ui §13). */
+export interface LogFileExistsProps {
+  kind: 'exec' | 'output';
+  fileName: string;
+}
+/** Result of `sim.logFileExists`. */
+export type LogFileExistsResult = 'Replace' | 'Append' | 'Cancel';

@@ -1,6 +1,6 @@
 # For W3 at the next gate: two small follow-ups on settings shared by several windows
 
-Status: open. Found by the independent review of the repair of settings lost between two windows
+Status: done at gate I1 (W3). Item 1: an outside document is stamped with a writer derived from its text and a mark that travels with every write; windows that took it in agree on the earliest time (`alignOutsideStamps`, errata W3.md entry 28; four new tests in `service.test.ts`, three of which fail without the change). Item 2: entry 26's two sentences are marked superseded, and the proposed texts for 3.8.6 rule 2 and 3.10 mention documents without stamps and the delayed write-back. Found by the independent review of the repair of settings lost between two windows
 (commits 1e086f7 and 46dfe79; errata `docs/porting/errata/W3.md`, entries 26 and 27).
 
 1. **A change made after an outside document arrived can be undone by a window that hears of that

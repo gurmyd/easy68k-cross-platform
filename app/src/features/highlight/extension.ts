@@ -1,8 +1,10 @@
 // The highlighter's CodeMirror extension for one document view (ARCHITECTURE.md 1.4 note 19, 2.8;
 // editor-ui §9). Owner: E3.
 //
-// - Only source documents are highlighted; list documents (.L68, .S68) get nothing, not even the
-//   colours (2.4). The kind is read live from the store, so a document that changes kind follows.
+// - Only source documents are highlighted; list documents (.L68, .S68) get no marks (2.4). Under a
+//   stored preset they take the stored background with black text, as every window of the original
+//   does (textS.cpp:78); under Auto they keep the theme's editor colours. The kind is read live from
+//   the store, so a document that changes kind follows.
 // - Lines are coloured at once on every change (no 400 ms delay), for the lines CodeMirror shows.
 // - Settings changes (preset, colours, attributes, background, Disabled, the bit-field option)
 //   apply to every open view at once, as the original's Editor Options OK does.
@@ -11,7 +13,7 @@ import { StateEffect, StateField, type Extension, type Text } from '@codemirror/
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view';
 import type { AppContext, DocumentState, EditorSettings } from '../../contracts';
 import { AUTO_DARK, AUTO_LIGHT, SYNTAX_ELEMENTS } from '../../core/highlight';
-import { storedColorsStyle, syntaxClass, syntaxVariable, syntaxVariables } from './colors';
+import { listColorsStyle, storedColorsStyle, syntaxClass, syntaxVariable, syntaxVariables } from './colors';
 import { buildHighlightDecorations, type DocRange } from './decorations';
 
 /** What one view needs to know to draw its document. */
@@ -22,7 +24,10 @@ export interface HighlightConfig {
   disabled: boolean;
   /** The assembler option "Assemble Bit Field Instructions". */
   bitField: boolean;
-  /** Inline style with the stored colours, or null for the Auto preset. */
+  /**
+   * Inline style with the stored colours, or null for the Auto preset. For a list document only the
+   * stored background and the default black text (listColorsStyle).
+   */
   colors: string | null;
 }
 
@@ -34,11 +39,12 @@ export interface HighlightEnvironment {
 }
 
 export function configFrom(editor: EditorSettings, kind: DocumentState['kind']): HighlightConfig {
+  const source = kind === 'source';
   return {
-    source: kind === 'source',
+    source,
     disabled: editor.highlightDisabled,
     bitField: editor.assembleBitField,
-    colors: storedColorsStyle(editor),
+    colors: source ? storedColorsStyle(editor) : listColorsStyle(editor),
   };
 }
 
@@ -83,9 +89,12 @@ export function decorationsFor(config: HighlightConfig, doc: Text, ranges: reado
   return buildHighlightDecorations(doc, ranges, config);
 }
 
-/** The classes and the inline style the editor element takes. */
+/**
+ * The classes and the inline style the editor element takes. A list document takes nothing under
+ * Auto, and only the stored background with black text under a stored preset (`e68-syntax--list`).
+ */
 export function editorAttributesFor(config: HighlightConfig): Record<string, string> {
-  if (!config.source) return {};
+  if (!config.source) return config.colors ? { class: 'e68-syntax e68-syntax--list', style: config.colors } : {};
   const attributes: Record<string, string> = {
     class: config.disabled ? 'e68-syntax e68-syntax--disabled' : 'e68-syntax',
   };
@@ -123,7 +132,9 @@ export const highlightTheme = EditorView.theme({
   ':root[data-theme="dark"] &.e68-syntax': cssVariables(AUTO_DARK),
   '&.e68-syntax .cm-scroller, &.e68-syntax .cm-content': { backgroundColor: background },
   '&.e68-syntax .cm-content': { color: codeColor, caretColor: codeColor },
-  '&.e68-syntax .cm-cursor, &.e68-syntax .cm-dropCursor': { borderLeftColor: codeColor },
+  // One step more specific than the editor component's own cursor rule, which would otherwise win
+  // by stylesheet order and draw a light-theme caret on a stored dark background (or the reverse).
+  '&.e68-syntax .cm-cursorLayer .cm-cursor, &.e68-syntax .cm-dropCursor': { borderLeftColor: codeColor },
   ...markRules,
 });
 

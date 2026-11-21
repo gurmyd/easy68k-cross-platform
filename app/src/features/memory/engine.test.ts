@@ -1,5 +1,7 @@
 // The Memory and Stack panels on the real simulator engine (engine/dist), through a session
 // double that follows the SimSession contract, including a cold start that replaces the engine.
+// (Features may not import the real session of features/run; check-memory-stack.mjs drives the
+// panels on the real session in a browser.)
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -48,11 +50,16 @@ describe('Memory and Stack panels on the real engine', () => {
       scheduler: new ManualScheduler(),
       services: {
         createSimSession: (ctx) => {
-          session = createSessionDouble(createInertSimSession(ctx), first.engine, async () => {
-            const next = await createTestEngine();
-            engines.push(next);
-            return next.engine;
-          });
+          session = createSessionDouble(
+            createInertSimSession(ctx),
+            first.engine,
+            async () => {
+              const next = await createTestEngine();
+              engines.push(next);
+              return next.engine;
+            },
+            { ctx, pokeBumpsView: true },
+          );
           return session;
         },
       },

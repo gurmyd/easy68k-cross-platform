@@ -1,5 +1,7 @@
 # Request from W2: route `?gallery` to the component gallery (for W3, `app/src/main.tsx`)
 
+Status: done (W3 added the route to `app/src/main.tsx`; docs/porting/errata/W3.md).
+
 ARCHITECTURE.md 9.1 gives W2 "a gallery page at `?gallery`". The entry point that would show it,
 `app/src/main.tsx`, belongs to W3 (W0 erratum 4), so W2 cannot add the route itself
 (docs/porting/errata/W2.md, entry 4).

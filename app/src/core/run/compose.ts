@@ -235,6 +235,8 @@ export function composeSession(env: SessionEnv): ComposedSession {
       show: () => ui.inputStarted(),
       bringToFront: () => ui.bringOutputToFront(),
       setFullScreen: (on) => ui.setFullScreen(on),
+      // `Output window size limited to 4096 x 4096` (2.5) goes to the simulator message area.
+      message,
     });
   const keyboard: OutputKeyboardApi = parts.keyboard ?? new OutputKeyboard({ post, os: env.os });
   const files: ProgramFilesApi =
@@ -294,6 +296,9 @@ export function composeSession(env: SessionEnv): ComposedSession {
     log,
     listing,
     lifecycle: {
+      // Bytes an abrupt close of the page left in the journal reach the files before any program
+      // can look at them (3.8.4).
+      recover: () => files.recoverJournal(),
       // The old simulator exits as the original's process does (4.7.1 step 1).
       async exit() {
         await log.exit();

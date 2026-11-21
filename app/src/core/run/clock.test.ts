@@ -1,7 +1,14 @@
 // RealClock, FrameScheduler and VirtualTime (ARCHITECTURE.md 3.11.1, 4.5.5).
 
 import { describe, expect, it } from 'vitest';
-import { FRAME_WATCHDOG_MS, FrameScheduler, RealClock, VirtualTime, type SchedulerTimers } from './clock';
+import {
+  FRAME_WATCHDOG_MS,
+  FrameScheduler,
+  RealClock,
+  VirtualTime,
+  WATCHDOG_FRAME_MS,
+  type SchedulerTimers,
+} from './clock';
 
 describe('RealClock', () => {
   it('is monotonic and tells the local time', () => {
@@ -155,6 +162,7 @@ function manual() {
       callback?.(now);
     },
     hasFrameRequest: () => frame !== null,
+    now: () => now,
     /** Moves the time and runs the timers that become due. */
     advance(ms: number) {
       const target = now + ms;
@@ -207,15 +215,40 @@ describe('FrameScheduler', () => {
     expect(seen).toEqual([]);
     m.advance(1);
     expect(seen).toEqual([250]);
-    m.advance(500);
-    expect(seen).toEqual([250, 500, 750]);
-    // Frames return: each one re-arms the watchdog, which then stays quiet.
+    // Having taken over, it stands in for the display: a "frame" 60 times per second.
+    m.advance(1001); // a second, and a little for the rounding of sixty sixtieths
+    expect(seen).toHaveLength(1 + 60);
+    const gaps = seen.slice(1).map((time, i) => time - seen[i]!);
+    expect(Math.max(...gaps)).toBeCloseTo(WATCHDOG_FRAME_MS, 6);
+    expect(Math.min(...gaps)).toBeCloseTo(WATCHDOG_FRAME_MS, 6);
+    // Frames return: each one re-arms the watchdog, which then stays quiet for 250 ms again.
+    m.frame();
+    const before = seen.length;
+    const resumed = m.now();
     for (let i = 0; i < 30; i++) {
       m.advance(16);
       m.frame();
     }
-    expect(seen).toHaveLength(3 + 30);
-    expect(seen.slice(3).every((t, i) => t === 750 + 16 * (i + 1))).toBe(true);
+    expect(seen).toHaveLength(before + 30);
+    expect(seen.slice(before).every((t, i) => t === resumed + 16 * (i + 1))).toBe(true);
+    m.advance(FRAME_WATCHDOG_MS - 1);
+    expect(seen).toHaveLength(before + 30);
+    m.advance(1);
+    expect(seen).toHaveLength(before + 31);
+  });
+
+  it('keeps a program at its speed while the watchdog stands in for the display (4.5.5)', () => {
+    // The run controller grants at most 50 ms of missed time per tick (MAX_CATCHUP_MS): the
+    // watchdog's ticks must therefore come closer together than that, or the program slows down.
+    const m = manual();
+    const scheduler = new FrameScheduler(m.frameSource, m.source);
+    const seen: number[] = [];
+    scheduler.onFrame((now) => seen.push(now));
+    m.advance(FRAME_WATCHDOG_MS + 2000);
+    const granted = seen.slice(1).reduce((sum, time, i) => sum + Math.min(time - seen[i]!, 50), 0);
+    expect(granted).toBeGreaterThan(2000 - 2 * WATCHDOG_FRAME_MS); // the two seconds, to a frame
+    // One tick per 250 ms, as the watchdog's first tick comes, would grant a fifth of that.
+    expect((2000 / FRAME_WATCHDOG_MS) * 50).toBe(400);
   });
 
   it('stops the watchdog when the last callback is removed', () => {

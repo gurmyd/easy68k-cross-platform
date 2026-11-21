@@ -99,6 +99,14 @@ body {
   min-height: 0;
 }
 
+/* A modal dialog's Help button and F1 open the Help drawer (editor-ui §15.2): while a modal dialog
+   is open the drawer is drawn above its backdrop, so the page can be read next to the dialog. The
+   dialog keeps the keyboard focus (docs/requests/H1-help-from-dialogs.md). */
+.e68-shell[data-modal='true'] .e68-shell__body > [data-e68-panel='help'] {
+  position: relative;
+  z-index: calc(var(--z-modal) + 1);
+}
+
 .e68-shell__workspaces {
   display: flex;
   flex: 1 1 0;

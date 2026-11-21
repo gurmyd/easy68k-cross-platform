@@ -3,7 +3,8 @@
 // focus trap, message-box answers.
 
 import { describe, expect, it } from 'vitest';
-import { isImeKey, trapOrder, trapStep } from './focus';
+import { treeViewKeyAction, type TreeKeyRow } from './tree';
+import { holdsFocus, indexHolding, isDialogBodyKey, isImeKey, restoreOrder, trapOrder, trapStep } from './focus';
 import { menuKeyAction, type MenuEntry, type MenuKeyEvent } from './menu-model';
 import { messageBoxEscapeResult } from './MessageBox';
 import { findMnemonic, findTypeahead, mnemonicKeyOf, parseMnemonic, stripMnemonic } from './mnemonic';
@@ -332,6 +333,98 @@ describe('focus trap: elements that refuse the focus, and input methods', () => 
   });
 });
 
+// A tiny stand-in for DOM nodes: a node contains itself and its descendants.
+interface FakeNode {
+  name: string;
+  parent: FakeNode | null;
+  contains(other: unknown): boolean;
+}
+function fakeNode(name: string, parent: FakeNode | null = null): FakeNode {
+  const node: FakeNode = {
+    name,
+    parent,
+    contains(other: unknown) {
+      for (let at = other as FakeNode | null; at; at = at.parent) if (at === node) return true;
+      return false;
+    },
+  };
+  return node;
+}
+
+describe('modal dialog focus follow-ups (docs/requests/W2-dialog-focus-followups.md)', () => {
+  it('item 1: a container that handed the focus to its child holds it', () => {
+    const container = fakeNode('container');
+    const child = fakeNode('child', container);
+    const other = fakeNode('other');
+    expect(holdsFocus(container, container)).toBe(true);
+    expect(holdsFocus(container, child)).toBe(true);
+    expect(holdsFocus(container, other)).toBe(false);
+    expect(holdsFocus(null, child)).toBe(false);
+    expect(holdsFocus(container, null)).toBe(false);
+  });
+
+  it('item 1: the child counts as its container in the list, so Tab moves on past it', () => {
+    const before = fakeNode('before');
+    const container = fakeNode('container');
+    const child = fakeNode('child', container);
+    const after = fakeNode('after');
+    const list = [before, container, after];
+    expect(indexHolding(list, child)).toBe(1);
+    expect(indexHolding(list, container)).toBe(1);
+    expect(indexHolding(list, fakeNode('elsewhere'))).toBe(-1);
+    // Tab from the child goes to 'after', Shift+Tab to 'before' (not back into the container).
+    expect(trapStep(list.length, indexHolding(list, child), false)).toBe(2);
+    expect(trapStep(list.length, indexHolding(list, child), true)).toBe(0);
+  });
+
+  it('item 1: of nested list elements the innermost one holding the node wins', () => {
+    const outer = fakeNode('outer');
+    const inner = fakeNode('inner', outer);
+    const leaf = fakeNode('leaf', inner);
+    expect(indexHolding([outer, inner], leaf)).toBe(1);
+    expect(indexHolding([outer, inner], outer)).toBe(0);
+  });
+
+  it('item 2: when the lost control refuses the focus, its next neighbour, then on, wrapping', () => {
+    // Lost control had two list elements before it (it is no longer in the list): try 2 first.
+    expect(restoreOrder(5, 2)).toEqual([2, 3, 4, 0, 1]);
+    // It was the last: wrap to the first.
+    expect(restoreOrder(5, 5)).toEqual([0, 1, 2, 3, 4]);
+    // No known place: the first control first.
+    expect(restoreOrder(3, 0)).toEqual([0, 1, 2]);
+    expect(restoreOrder(0, 0)).toEqual([]);
+    // A neighbour that refuses too is passed over.
+    const refuses = new Set([2]);
+    expect(restoreOrder(5, 2).find((index) => !refuses.has(index))).toBe(3);
+  });
+
+  it('item 3: Escape, Enter and access keys pressed on the body go to the dialog; chords do not', () => {
+    const key = (
+      k: string,
+      code: string,
+      mods: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean }> = {},
+    ) => ({
+      key: k,
+      code,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      ...mods,
+    });
+    expect(isDialogBodyKey(key('Escape', 'Escape'))).toBe(true);
+    expect(isDialogBodyKey(key('Enter', 'Enter'))).toBe(true);
+    expect(isDialogBodyKey(key('Enter', 'Enter', { ctrlKey: true }))).toBe(false);
+    expect(isDialogBodyKey(key('r', 'KeyR'))).toBe(true);
+    expect(isDialogBodyKey(key('®', 'KeyR', { altKey: true }))).toBe(true);
+    expect(isDialogBodyKey(key('7', 'Digit7'))).toBe(true);
+    expect(isDialogBodyKey(key('r', 'KeyR', { ctrlKey: true }))).toBe(false);
+    expect(isDialogBodyKey(key('r', 'KeyR', { metaKey: true }))).toBe(false);
+    expect(isDialogBodyKey(key('F5', 'F5'))).toBe(false);
+    expect(isDialogBodyKey(key('ArrowDown', 'ArrowDown'))).toBe(false);
+    expect(isDialogBodyKey(key('Tab', 'Tab'))).toBe(false);
+  });
+});
+
 describe('message box answers to Escape (a Windows message box)', () => {
   it('Cancel when there is one, OK when it is the only button, otherwise none', () => {
     expect(messageBoxEscapeResult(['OK'])).toBe('OK');
@@ -339,5 +432,56 @@ describe('message box answers to Escape (a Windows message box)', () => {
     expect(messageBoxEscapeResult(['Yes', 'No', 'Cancel'])).toBe('Cancel');
     expect(messageBoxEscapeResult(['Yes', 'No'])).toBeNull();
     expect(messageBoxEscapeResult(['Replace', 'Append', 'Cancel'])).toBe('Cancel');
+  });
+});
+
+describe('tree view keys (treeViewKeyAction)', () => {
+  // A (open parent) > a1 (leaf), a2 (closed parent); B (leaf at top level).
+  const rows: TreeKeyRow[] = [
+    { depth: 1, expandable: true, expanded: true },
+    { depth: 2, expandable: false, expanded: false },
+    { depth: 2, expandable: true, expanded: false },
+    { depth: 1, expandable: false, expanded: false },
+  ];
+
+  it('Up, Down, Home and End move without wrapping', () => {
+    expect(treeViewKeyAction(rows, 1, 'ArrowDown')).toEqual({ kind: 'move', index: 2 });
+    expect(treeViewKeyAction(rows, 3, 'ArrowDown')).toEqual({ kind: 'move', index: 3 });
+    expect(treeViewKeyAction(rows, 0, 'ArrowUp')).toEqual({ kind: 'move', index: 0 });
+    expect(treeViewKeyAction(rows, 2, 'Home')).toEqual({ kind: 'move', index: 0 });
+    expect(treeViewKeyAction(rows, 0, 'End')).toEqual({ kind: 'move', index: 3 });
+  });
+
+  it('Right opens a closed parent, goes into an open one, and does nothing on a leaf', () => {
+    expect(treeViewKeyAction(rows, 2, 'ArrowRight')).toEqual({ kind: 'toggle', index: 2, open: true });
+    expect(treeViewKeyAction(rows, 0, 'ArrowRight')).toEqual({ kind: 'move', index: 1 });
+    expect(treeViewKeyAction(rows, 1, 'ArrowRight')).toBeNull();
+    // An open parent without visible children (an empty folder): nothing.
+    expect(treeViewKeyAction([{ depth: 0, expandable: true, expanded: true }], 0, 'ArrowRight')).toBeNull();
+  });
+
+  it('Left closes an open parent, else goes to the parent, and does nothing at the top', () => {
+    expect(treeViewKeyAction(rows, 0, 'ArrowLeft')).toEqual({ kind: 'toggle', index: 0, open: false });
+    expect(treeViewKeyAction(rows, 2, 'ArrowLeft')).toEqual({ kind: 'move', index: 0 });
+    expect(treeViewKeyAction(rows, 1, 'ArrowLeft')).toEqual({ kind: 'move', index: 0 });
+    expect(treeViewKeyAction(rows, 3, 'ArrowLeft')).toBeNull();
+  });
+
+  it('Enter and Space activate leaves and toggle parents, unless the row says it activates', () => {
+    expect(treeViewKeyAction(rows, 1, 'Enter')).toEqual({ kind: 'activate', index: 1 });
+    expect(treeViewKeyAction(rows, 0, ' ')).toEqual({ kind: 'toggle', index: 0, open: false });
+    expect(treeViewKeyAction(rows, 2, 'Enter')).toEqual({ kind: 'toggle', index: 2, open: true });
+    const book: TreeKeyRow[] = [{ depth: 0, expandable: true, expanded: false, activates: true }];
+    expect(treeViewKeyAction(book, 0, 'Enter')).toEqual({ kind: 'activate', index: 0 });
+  });
+
+  it('with no row focused, Down, Up, Home and Right go to the first row; other keys do nothing', () => {
+    expect(treeViewKeyAction(rows, -1, 'ArrowDown')).toEqual({ kind: 'move', index: 0 });
+    expect(treeViewKeyAction(rows, -1, 'ArrowUp')).toEqual({ kind: 'move', index: 0 });
+    expect(treeViewKeyAction(rows, -1, 'ArrowRight')).toEqual({ kind: 'move', index: 0 });
+    expect(treeViewKeyAction(rows, -1, 'ArrowLeft')).toBeNull();
+    expect(treeViewKeyAction(rows, -1, 'Enter')).toBeNull();
+    expect(treeViewKeyAction(rows, 0, 'a')).toBeNull();
+    expect(treeViewKeyAction([], 0, 'ArrowDown')).toBeNull();
   });
 });

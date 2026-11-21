@@ -10,8 +10,9 @@
 //   runSlice()        executes instructions in sub-slices, as many as the speed setting allows
 //                     (governor.ts) and the frame's time budget permits.
 //   the queue         keys, mouse events, interrupt requests and other engine calls of host parts
-//                     are delivered BETWEEN instructions, in order; while the program executes, at
-//                     most one input edge per sub-slice, so that a program that polls sees each.
+//                     are delivered BETWEEN instructions, in order; while the program executes, two
+//                     input edges are a whole sub-slice of instructions apart, so that a program
+//                     that polls sees each.
 //   wait states       input, delay (task 23, in real time), the task 58 dialog, message boxes.
 //   loads             open, reload, close, cold start: phase 'loading' from beginning to end, during
 //                     which nothing else reaches the engine.
@@ -28,6 +29,7 @@
 
 import {
   Box,
+  RepaintBit,
   RunStatus,
   SimOption,
   type Clock,
@@ -66,8 +68,14 @@ export interface CommandLineSwitches {
   bitField: boolean; // /b
 }
 
-/** What a cold start and a stop ask of the host parts (4.7.1, 4.2). */
+/** What the start, a cold start and a stop ask of the host parts (4.7.1, 4.2). */
 export interface SessionLifecycle {
+  /**
+   * Before the first engine exists: what the last session of this window left behind is put in
+   * place (3.8.4: the journal of program-file bytes that an abrupt close could not write out).
+   * Every load waits for the start, so no program can see its files before this has finished.
+   */
+  recover?(): Promise<void>;
   /**
    * 4.7.1 step 1, the old simulator exits as the original's process does: the log stops without a
    * message box, the program's files receive their pending bytes, an open print job is closed,
@@ -177,6 +185,20 @@ const DELAY_TIMER_MAX_MS = 1000;
 /** One unit of TRAP #15 task 23 (4.4.2). */
 const DELAY_UNIT_MS = 10;
 
+/**
+ * How often the engine has named each panel in `host.repaint(what)` (4.6, `RepaintBit`). A panel
+ * re-reads its data, and the Stack panel re-centres, when its own counter moves.
+ */
+export interface RepaintCounts {
+  readonly listing: number;
+  readonly breakpoints: number;
+  readonly memory: number;
+  readonly stack: number;
+}
+
+/** Every panel a RepaintBit names. */
+const ALL_PANELS = RepaintBit.Listing | RepaintBit.Breakpoints | RepaintBit.Memory | RepaintBit.Stack;
+
 /** The governor's figures, for tests and for the performance package. */
 export interface GovernorReading {
   allowance: number;
@@ -202,6 +224,7 @@ export class SimRunController implements RunController {
   private readonly replacedListeners = new Set<() => void>();
 
   private viewRev = 0;
+  private repaints: RepaintCounts = { listing: 0, breakpoints: 0, memory: 0, stack: 0 };
   private liveRev = 0;
   private livePending = false;
   private dirty = false;
@@ -230,8 +253,12 @@ export class SimRunController implements RunController {
   private lastOpcode = 0xffff;
   /** Instructions the last `runEngine` executed. */
   private executed = 0;
-  /** An input edge reached the executing program and no instruction has run since (4.3). */
-  private edgeDelivered = false;
+  /**
+   * Instructions the program has yet to execute before the next input edge may reach it (4.3):
+   * `subslice(ips)` when an edge is delivered to the executing program, counted down by what the
+   * engine executes. 0 = the next edge may be delivered at once.
+   */
+  private edgeGap = 0;
   private recovering = false;
   private disposed = false;
   private startup: Promise<void> | null = null;
@@ -264,7 +291,14 @@ export class SimRunController implements RunController {
   get viewRevision(): number {
     return this.viewRev;
   }
-  /** Bumped at most once per frame when memory or the hardware display changed (4.6). */
+  /** The same news by panel. A new object whenever a counter has moved. */
+  get repaintCounts(): RepaintCounts {
+    return this.repaints;
+  }
+  /**
+   * Bumped when memory changed without a repaint of the engine: at most once per frame while the
+   * program writes with `SimOption.MemLive` on, and at once by `pokeMemory` (4.6).
+   */
   get liveRevision(): number {
     return this.liveRev;
   }
@@ -300,7 +334,9 @@ export class SimRunController implements RunController {
   start(): Promise<void> {
     if (!this.startup) {
       this.cancelFrames = this.deps.scheduler.onFrame(() => this.tick(true));
-      this.startup = this.coldStartSteps()
+      const { lifecycle } = this.deps;
+      this.startup = this.attempt('apply what the last session left behind', async () => lifecycle.recover?.())
+        .then(() => this.coldStartSteps())
         .catch((error: unknown) => this.deps.ui.report('The simulator could not be started', error))
         .then(() => this.finishLoading());
     }
@@ -483,6 +519,7 @@ export class SimRunController implements RunController {
     this.cancelDelayTimer?.();
     this.cancelDelayTimer = null;
     this.queue.length = 0;
+    this.edgeGap = 0;
     const old = this.current;
     const wasLive = this.live;
     this.current = createStartupEngine();
@@ -551,8 +588,7 @@ export class SimRunController implements RunController {
       halted: false,
       revision: this.snapshotNow.revision + 1,
     };
-    this.viewRev++;
-    this.dirty = true;
+    this.repainted(ALL_PANELS);
     this.deps.listing.refresh();
     this.notifyReplaced();
   }
@@ -702,8 +738,10 @@ export class SimRunController implements RunController {
     if (this.phaseNow === 'loading') return;
     this.guard(() => {
       this.call((engine) => engine.writeBytes(address, [value & 0xff]));
-      // The engine reports nothing for a direct write: the panels that show memory re-read it.
-      this.viewRev++;
+      // The engine reports nothing for a direct write. The original then updates the Hardware
+      // window, redraws the Stack window WITHOUT re-centring it and repaints the Memory window
+      // (sim-ui §10.3, §11.4): that is `liveRevision`. A repaint (`viewRevision`) would re-centre
+      // a Stack panel the user has scrolled.
       this.liveRev++;
       this.dirty = true;
     });
@@ -875,7 +913,7 @@ export class SimRunController implements RunController {
     const start = clock.now();
     try {
       while (this.phaseNow === 'running' && this.canRun() && governor.allowance >= 1 && clock.now() - start < budget) {
-        const status = this.runEngine(governor.next(speed));
+        const status = this.runEngine(this.untilNextEdge(governor.next(speed)));
         governor.spend(this.executed);
         this.handleStatus(status); // leaves the phase 'running' only for RunStatus.Running
         this.deliverQueue();
@@ -894,8 +932,17 @@ export class SimRunController implements RunController {
       this.executed = stepsBetween(before, engine.stepCount);
       return result;
     }, true);
-    if (this.executed > 0) this.edgeDelivered = false; // the next input edge may follow
+    this.edgeGap = Math.max(0, this.edgeGap - this.executed); // at 0 the next input edge may follow
     return status;
+  }
+
+  /**
+   * The length of the next engine call. While an input edge waits for its turn the call ends where
+   * the edge is due, so that the edge follows the one before it after exactly `subslice(ips)`
+   * instructions (4.3), whatever the allowance left of the sub-slices in between.
+   */
+  private untilNextEdge(instructions: number): number {
+    return this.edgeGap > 0 && this.queue.length > 0 ? Math.min(instructions, this.edgeGap) : instructions;
   }
 
   /**
@@ -1012,21 +1059,31 @@ export class SimRunController implements RunController {
   /* ================================================================== the queue (4.3) */
 
   /**
-   * Delivers the queue in order. While the program is executing, an input edge is delivered only
-   * when a sub-slice has run since the last one, so that a key press and its release, or two
-   * clicks, are always separated by executed instructions as they are in the original, which looks
-   * at its message queue after every instruction. In every other state all of it is delivered at
-   * once, as the original's own pump would.
+   * Delivers the queue in order. The original looks at its message queue after every instruction,
+   * so a key press and its release, or two clicks, are always separated by executed instructions.
+   * While the program is executing, the port therefore lets an input edge through only when
+   * `subslice(ips)` instructions have executed since the edge before it (`edgeGap`); entries behind
+   * a waiting edge wait with it. In every other state the program executes nothing and all of the
+   * queue is delivered at once, as the original's own pump would.
    */
   private deliverQueue(): void {
     while (this.queue.length > 0 && this.phaseNow !== 'loading') {
       const entry = this.queue[0] as QueueEntry;
       const edge = INPUT_EDGES.has(entry.kind);
-      if (edge && this.edgeDelivered && this.executing()) return; // it follows a sub-slice later
+      const spacing = edge ? subslice(instructionsPerSecond(this.deps.speed())) : 0;
+      if (edge && this.executing()) {
+        // Never more than a sub-slice at the speed in force now: the setting may have changed.
+        this.edgeGap = Math.min(this.edgeGap, spacing);
+        if (this.edgeGap > 0) return; // it follows when the program has executed that much
+      }
       this.queue.shift();
+      // Counted from before the entry is applied: what the entry itself makes the program execute
+      // (a key that completes a keyboard read) is part of the distance to the next edge.
+      if (edge) this.edgeGap = spacing;
       this.apply(entry);
       this.wakeIfRunMode();
-      if (edge) this.edgeDelivered = this.executing();
+      // An edge that met a program that is not executing separates nothing.
+      if (edge && !this.executing()) this.edgeGap = 0;
     }
   }
 
@@ -1179,10 +1236,8 @@ export class SimRunController implements RunController {
   private afterEngineCall(): void {
     const { bridge } = this.deps;
     if (bridge.takeRegistersShown()) this.refreshSnapshot();
-    if (bridge.takeRepaint() !== 0) {
-      this.viewRev++;
-      this.dirty = true;
-    }
+    const repaint = bridge.takeRepaint();
+    if (repaint !== 0) this.repainted(repaint);
     if (bridge.takeLive()) this.livePending = true;
     const boxes = bridge.takeAlerts();
     if (boxes.length > 0) {
@@ -1196,6 +1251,20 @@ export class SimRunController implements RunController {
     } catch (error) {
       this.deps.ui.report('An effect of a simulator call failed', error);
     }
+  }
+
+  /** The panels named by `bits` (RepaintBit) must re-read their data (4.6). */
+  private repainted(bits: number): void {
+    const { listing, breakpoints, memory, stack } = this.repaints;
+    const count = (counter: number, bit: number): number => ((bits & bit) !== 0 ? counter + 1 : counter);
+    this.repaints = {
+      listing: count(listing, RepaintBit.Listing),
+      breakpoints: count(breakpoints, RepaintBit.Breakpoints),
+      memory: count(memory, RepaintBit.Memory),
+      stack: count(stack, RepaintBit.Stack),
+    };
+    this.viewRev++;
+    this.dirty = true;
   }
 
   /** Copies what the register display shows out of the engine (4.6). */

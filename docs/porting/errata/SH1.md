@@ -9,6 +9,10 @@ T2's GDI captures arrived while this package was being finished. Entry 13 has th
 comparison (every case of SH1's part equal), entry 1 the one rule of trap15-b it corrected, and
 entry 10 what still rests on something that was not measured.
 
+At the integration gate I1 the open points of the review were measured on Windows GDI as well:
+every pen width up to 255 (entry 14, which adds a table of round dots and one oddity of GDI) and
+block copies that reach past the bitmap (entry 6).
+
 ## 1. trap15-b §6.3: a one-pixel rectangle run is drawn there and back (found by the GDI capture)
 
 - Says: "The outline uses the pen colour through the drawing mode; the interior uses the fill
@@ -92,8 +96,18 @@ entry 10 what still rests on something that was not measured.
     `copyRect` copies the size the two rectangles have in common and never scales.
   - Task 25 accepts a text rectangle that reaches past the surface (up to 255 columns and 127
     rows). `copyRect` moves the pixels that exist at both the source and the destination and
-    leaves every other pixel as it is. What GDI puts at destination pixels whose source lies
-    outside the bitmap is **not verified**; see entry 10.
+    leaves every other pixel as it is.
+- **Measured at gate I1**, and it is what GDI does. On a 24 x 16 memory bitmap, each pixel with a
+  colour of its own, `StretchBlt` of equal sizes (the VCL's `CopyRect`) and `BitBlt` were called
+  from the bitmap to itself in nine arrangements: a scroll in each of the four directions with the
+  rectangle reaching past the bottom or the right edge, past both, a source completely outside, a
+  source at negative coordinates, and two overlapping copies inside. On a screen-compatible bitmap
+  and on a 32-bit DIB section, with both functions, the result was the same: a destination pixel
+  whose source lies inside the bitmap takes that pixel's old value (also when the two rectangles
+  overlap); a destination pixel whose source lies outside the bitmap **keeps its value**; nothing
+  outside the destination rectangle changes. `StretchBlt` with `BLACKNESS` (what `fillBlack`
+  stands for) blackens the whole destination rectangle inside the bitmap. The nine arrangements
+  are a test in `surface.test.ts`. Scaling copies were not measured; nothing asks for them.
 - `fillBlack` and `copyRect` change `back`, and the screen unless double buffering is on, exactly
   like the drawing methods (simIOu.cpp:1021-1025, 1122-1132).
 
@@ -133,18 +147,19 @@ entry 10 what still rests on something that was not measured.
 ## 10. What rests on something other than a measurement
 
 None of these was chosen silently; each is the simplest reading of what the specs give. Rows a and b
-were open when the code was written and have since been confirmed by T2's capture; they stay in the
-list to say where the values came from.
+were open when the code was written and have since been confirmed by T2's capture; rows c and d
+were measured at gate I1. They stay in the list to say where the values came from. Rows e and f
+are what is still not measured.
 
 | # | Where | What the code does | Basis |
 |---|---|---|---|
 | a | `colors.ts`, system colours 0-30 except 5, 8 and 15 | the colours Windows 10 and 11 ship with (the values under `HKCU\Control Panel\Colors`; index 25, which is not a system colour, is black) | 3.4 rule 1 says "others as captured by T2". **Confirmed**: equal to the 256 values of `GetSysColor` in `tests/conformance/gdi/golden/spots.json` (0-30 as in the table, everything above black), and the 28 cases of the suite `colors-system` are equal. They are the colours of the capture machine's theme, which is the Windows 11 default |
 | b | `tables/dots.ts`, pen widths 10-14 | the rows of a regular twelve-sided polygon inscribed in the circle of diameter `w`, one side at the top | trap15-b §6.2 gives only pixel counts (69, 89, 101, 129, 145) and diameters. That polygon reproduces the measured dots of the widths 4, 5, 7, 8, 9 pixel for pixel and gives the measured count and diameter of 10-14 (a circle gives the wrong count for 11, 12 and 13; polygons with 8 or 16 sides fail too). Widths 3 and 6 do not follow it, so it is not GDI's rule. **Confirmed** pixel for pixel: every one-point rectangle of the widths 2-12 (872 cases) and every zero-length line of the widths 2-14 (248 cases) of the capture is equal |
-| c | `tables/dots.ts`, pen widths 15-255 | the pixels whose centre lies strictly inside the circle of diameter `w` | nothing was measured; the capture stops at 14 |
-| d | `copyRect`, source or destination outside the surface | such pixels are left unchanged | not measured (entry 6) |
-| e | `floodFill` in a mode other than Copy | the mode is applied, always | trap15-b §5.4: the original depends on what was drawn just before (item V4, open); the spec's PORT rule is "apply the current mode" |
+| c | `tables/dots.ts`, pen widths 15-255 | the measured dot of each width, from a table | first version: the pixels inside the circle of diameter `w`, unmeasured. **Measured at gate I1** (entry 14): that disc is GDI's dot only at the widths 15 and 24; the table now holds every width 2-255 |
+| d | `copyRect`, source or destination outside the surface | such pixels are left unchanged | **Measured at gate I1** (entry 6): GDI does the same |
+| e | `floodFill` in a mode other than Copy | the mode is applied, always | trap15-b §5.4: the original depends on what was drawn just before (item V4, open); the spec's PORT rule is "apply the current mode". Only a run of SIM68K.exe itself can settle it: GDI alone does what the port does |
 | f | `textOut`, coverage 1-254 | per-channel blend, rounded to nearest (entry 4) | substitute outline fonts; not compared (6.5.3) |
-| g | `ellipse.ts`, `widepen.ts` | stubs: an ideal ellipse (radii a quarter pixel short of half the box, which happens to give GDI's circles of 3-9 pixels) and the band without caps | 9.2: SH2 replaces both. Wide-pen ellipses: the ring between the ellipse of the box grown by the pen and of the box shrunk by it |
+| g | `ellipse.ts`, `widepen.ts` | stubs: an ideal ellipse (radii a quarter pixel short of half the box, which happens to give GDI's circles of 3-9 pixels) and the band without caps. Their one-point cases (a zero-length line, a one-point ellipse) draw the measured pen dot and are GDI's at every pen width | 9.2: SH2 replaces both. Wide-pen ellipses: the ring between the ellipse of the box grown by the pen and of the box shrunk by it |
 
 ## 11. Notes on trap15-b for SH2 and DOC1
 
@@ -159,25 +174,39 @@ list to say where the values came from.
   `$005270B4 + 2 * value`, GDI's low-byte rule, back through the first sixteen words). It equals
   the table of the spec entry for entry; the regenerated array is in `rop.test.ts`. The entries of
   16 and 17 are both mode 1 in the binary, and unreachable.
+- §6.2, the dots (gate I1, entry 14): `tables/dots.ts` now has two functions in place of
+  `dotRows`. `penDot(width)` is the dot of a zero-length line and of a one-point ellipse, for
+  every pen width 2-255, as rows `left[i] .. right[i]` around the point; `rectangleDot(width)` is
+  the one-point rectangle's. `emitDot` in `raster.ts` reports a dot as runs. The dots are not
+  symmetric at 35 widths (20 is the first), so nothing may mirror them.
 
 ## 12. Acceptance: "a 1920x1200 flood fill takes under 30 ms" - which picture (9.2)
 
-- Says only that. Measured, best of several runs, on the build machine while fourteen other
-  packages were building (so the single runs vary by a factor of three):
+- Says only that. Measured, best of several runs, on the build machine while the other packages
+  were building or being repaired (so the single runs vary by a factor of three). Node: at the end
+  of wave 1. Browsers: the first row at the end of wave 1; the ragged pictures at gate I1, the
+  better of two runs of `check-surface.mjs` (the first row took 3.5 ms in Chromium and 3.0 ms in
+  WebKit in that run). In the other run, with the machine busier, the ragged pictures took 11.0,
+  31.1, 29.5 and 39.5 ms in Chromium and 10.0, 60.0, 37.0 and 26.0 ms in WebKit.
 
 | Picture (1920 x 1200) | Node 24 | Chromium | WebKit |
 |---|---|---|---|
 | empty surface, filled completely | 3.3 ms | 3.4 ms | 3.0 ms |
-| 40-pixel cells, walls with one gap each | 9.2 ms | | |
-| 10 % random pixels | 29.9 ms | | |
-| every second pixel of every second row set | 33.8 ms | | |
-| vertical one-pixel stripes | 30.3 ms | | |
+| 40-pixel cells, walls with one gap each | 9.2 ms | 9.9 ms | 6.0 ms |
+| 10 % random pixels | 29.9 ms | 26.9 ms | 20.0 ms |
+| every second pixel of every second row set | 33.8 ms | 24.4 ms | 17.0 ms |
+| vertical one-pixel stripes | 30.3 ms | 25.6 ms | 20.0 ms |
+
+  (In the browsers the stripes have one gap each, alternately at the top and at the bottom, so
+  that one fill reaches every second column: 1,152,960 pixels painted.)
 
 - The criterion is read as the fill of a whole surface (first row), which the unit test and
-  `check-surface.mjs` assert. The three ragged pictures are at the limit; at 640 x 480 they take a
-  seventh of the time. The tests take the best of several runs and, so that a busy machine does not
-  fail them, accept instead a time below eight plain passes over the same number of pixels
-  measured at the same moment.
+  `check-surface.mjs` assert. The three ragged pictures are near the limit, under it on a quiet
+  machine and above it on a busy one; at 640 x 480 they take a seventh of the time. The tests take
+  the best of several runs and, so that a busy or slow machine does not fail them, accept instead
+  a time below eight plain passes over the same number of pixels measured at the same moment.
+  `check-surface.mjs` prints the times of the four ragged pictures in each browser for
+  information and asserts nothing about them.
 
 ## 13. The comparison with T2's GDI capture (6.5.1; the clause "when T2's references are available")
 
@@ -216,3 +245,106 @@ Two notes for T2 and for gate I1 on `tests/conformance/gdi/surface.test.ts`, whi
   has exactly two pixels (§6.4, N = 10; the stub has four).
 - It counts rectangles of a pen 2 or more wide among SH2's cases. They are SH1's (3.4 rule 5), they
   are all equal now, and in the SH1 group they would be guarded from now on.
+
+At gate I1, T2 took both up in its own way: its test now counts rectangles of every pen width as
+SH1's, and it tells a stub by the comment line `// STUB written by SH1` that `ellipse.ts` and
+`widepen.ts` carry: while a file has that line, the cases that need it are reported as waiting
+for SH2 and not compared. Both stubs say so in their headers; whoever replaces a stub removes the
+line.
+
+**Run again at gate I1** (2026-11-21, after T2 recaptured the text suites and after the changes of
+entry 14), every case of every committed suite, with the same replay and comparison:
+
+| Suite | SH1's cases equal | Of them with wide-pen rectangles | Wide lines (SH2, stub) | Ellipses (SH2, stub) |
+|---|---|---|---|---|
+| `lines` | 10,000 of 10,000 | | | |
+| `polylines` | 244 of 244 | 2 of 2 | 3 of 56 | |
+| `rects` | 10,000 of 10,000 | 8,457 of 8,457 | | |
+| `floods` | 1,000 of 1,000 | | | |
+| `modes` | 336 of 336 | 48 of 48 | 9 of 48 | 51 of 96 |
+| `modes-high` | 238 of 238 | | | |
+| `pixels` | 500 of 500 | | | |
+| `colors` | 49 of 49 | | | |
+| `clip` | 203 of 203 | 30 of 30 | 13 of 17 | 91 of 123 |
+| `widelines` | | | 667 of 2,000 | |
+| `text` (task 95 in the raster faces: cells, glyphs, pen) | 1,881 of 1,881 | | | |
+| `text-outline` (outline faces: cells and pen) | 180 of 180 | | | |
+| all of the above | 24,631 of 24,631 | 8,537 of 8,537 | 692 of 2,121 | 142 of 219 |
+
+120 further cases of `text-outline` have no cells to compare (T2's `outlineCells` returns none).
+The suites T2 marks as depending on the machine: `colors-system` 28 of 28 on this machine;
+`text-control` 44 of 171, and none of the 127 differences is the surface's: every one of its
+strings is one T2's text model does not cover (`textUnmodelled()`: a byte Windows draws from a
+fallback font, an undefined Windows-1252 byte, italic itemization, the thin bar of zero-width
+bytes), so the glyphs and the extent the replay hands to `textOut` are not Windows' there;
+`text-outline-glyphs` (75 cases) holds glyph pixels of the outline faces, which 6.5.3 does not
+compare, and the replay has no glyphs for it.
+
+## 14. Pen widths above those of the references: every width 2-255 measured on GDI (gate I1)
+
+- Says: 6.5.1 has rectangles with the pen widths 0-12 and wide lines with 2-14, and trap15-b §6.2
+  gives the round dots of the widths 2-14. A pen width is a byte, so a program can ask for any
+  width up to 255, and rectangles of every width are SH1's (3.4 rule 5). The review left the dots
+  of the widths 15-255 open (entry 10, row c: a plain disc, unmeasured).
+- Measured on 2026-11-21 on Windows 11 (10.0.26300) with T2's capture program
+  (`tests/oracle/gdi-capture/capture.cpp`, built as `build/gdi-capture/gdi-capture.exe`), which SH1
+  ran on case lists of its own, in the text form of `serializeCases`. Lists, pictures and the
+  comparison are scratch files under `build/SH1/capture/` and are not committed.
+
+| What GDI drew | Cases | Equal before | Equal now |
+|---|---|---|---|
+| one-point rectangles (tasks 87, 90), widths 2-255: at three positions, filled and unfilled, and in mode 6 on a coloured background | 1,270 | the widths 2-15 and 24 only | all |
+| zero-length lines (task 84; task 86 then 85), widths 2-255, at two positions | 762 | the widths 2-15 and 24 only | all |
+| one-point ellipses (tasks 88, 91), widths 2-255 | 508 | the widths 2-15 and 24 only | all |
+| dots cut off by the edge of the surface, widths 15, 16, 31, 64, 100, 255 | 6 | 2 | all |
+| rectangles, cases A and B, every width 2-255: bars of six lengths in both directions, with the corners in either order, and four kinds of frame | 4,572 | all but the 7 vertical bars of width 206 | all |
+| random rectangles, all three cases, widths 13-255 on a 420 x 360 surface (1,500) and widths 2-255 reaching past a 200 x 160 surface in ten drawing modes (6,000) | 7,500 | of the first 1,500: 1,498 | all |
+| vertical bars of the widths 205, 206 and 207 at seven places, in three modes | 126 | | all |
+| lines of a one-pixel pen (4,000) and rectangles with the pen widths 0, 1, 2, 3, 7, 12, 100, 206 and 255 (2,000), with coordinates from the whole signed 16-bit range, on a 64 x 48 surface; pictures and pen positions | 6,000 | | all |
+| the scene `drawWideRectangleScene` of `surface/testing.ts`: 1,016 rectangles on one 640 x 480 picture, every width 2-255, modes XOR and NOT XOR | 1 | | all 307,200 pixels |
+
+  What the capture showed, and what the code does now:
+
+  1. **The dots are not discs.** A pen of width `w` gives a dot of `2k + 1` rows and columns,
+     `k = floor((w - 1) / 2)`, centred on the point, each row one unbroken run - but its outline
+     is that of a polygon GDI makes of the pen. Of the widths 15-255, the pixels inside the circle
+     of diameter `w` are GDI's dot at 15 and 24 only; at 16 the dot has 189 pixels, the disc 193. At 35 widths (20 is the first) the dot is not even symmetric: single rows end one
+     pixel early on one side. `tables/dots.ts` now holds the measured dot of every width 2-255.
+  2. **A one-point rectangle is not always the pen's dot.** A zero-length line and a one-point
+     ellipse draw the same dot at every width. The one-point rectangle draws that dot too, except
+     at 15 widths (47, 151, 157, 163, 199, 201, 221, 223, 225, 227, 243, 245, 247, 249, 251),
+     where it lacks one pixel at one end of a row near the top and, at eleven of them, one pixel at
+     the other end of the matching row near the bottom (26 pixels in all 254 dots). Hence
+     `penDot(width)` and `rectangleDot(width)`.
+  3. **The vertical bar of a pen exactly 206 wide is sheared** (case B of trap15-b §6.3). Its left
+     half, the columns `x1 - 103 .. x1 - 1`, covers the rows `y1 + 1 .. y2`; its right half, the
+     columns `x1 .. x1 + 102`, the rows `y1 .. y2 - 1`, as the whole bar does at every other width.
+     The same for every length and position tried, in the modes 4, 6 and 14, and for either order
+     of the corners. Horizontal bars of width 206 are straight, and so are the vertical bars of the other
+     253 widths. `rect.ts` reproduces it (`SHEARED_BAR_WIDTH`).
+  4. Everything else is as trap15-b §6.3 has it, at every pen width: the square-cornered frame of
+     case A with its interior, the flat bar of case B without its far end, every pixel combined
+     once.
+
+- Proposed text for trap15-b §6.2: "The dot of a pen of width `w >= 2` has `2 * floor((w - 1) / 2)
+  + 1` rows and columns. Its shape is a polygon's, not a circle's, and was captured for every
+  width 2-255 (`app/src/core/sim-host/surface/tables/dots.ts`). A zero-length line and a one-point
+  ellipse draw it; a one-point rectangle draws it less one or two pixels at 15 widths."
+- Proposed text for §6.3, case B: "... Wider: a flat-ended bar that leaves out its far end. With a
+  pen exactly 206 wide the left half of a vertical bar lies one row lower than the right half."
+- What still guards nothing but itself: the committed references stop at width 12 (rectangles) and
+  14 (lines), so until T2 adds cases (`docs/requests/SH1-gdi-dots.md`) the table is held by the
+  unit tests only: a checksum and the pixel total of the captured dots (`tables/dots.test.ts`),
+  drawn examples, and the hash of the scene of the last table row, which is the hash of the
+  picture GDI drew (`WIDE_RECTANGLE_SCENE_HASH`, checked under Node and in both browsers).
+- Measured on one machine. Whether another Windows gives the same dots at the large widths will
+  show when the cases run in CI's `windows-oracles` job.
+
+## 15. Interface inside the surface folder: `dotRows` is gone (for SH2)
+
+- Was: `dotRows(width)` in `tables/dots.ts`, the half-widths of a dot's rows from the centre
+  outwards, which assumed a symmetric dot.
+- Is: `penDot(width)` and `rectangleDot(width)`, each a `Dot` (`reach`, `left[]`, `right[]`: row
+  `y - reach + i` covers `x + left[i] .. x + right[i]`), and `emitDot(dot, x, y, emit)` and
+  `mixDot(buffer, x, y, dot, mix)` in `raster.ts`. The stubs `widepen.ts` and `ellipse.ts` use
+  `penDot` for their one-point cases. Nothing outside `surface/` used `dotRows`.

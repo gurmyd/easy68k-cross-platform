@@ -24,6 +24,19 @@ const enginesBuilt = ['asm68k.wasm', 'asm68k-loader.mjs', 'sim68k.wasm', 'sim68k
   existsSync(repo(`engine/dist/${file}`)),
 );
 
+/** Suites that load and compile the engines: on a loaded machine they need more than Vitest's 5 s. */
+const ENGINE_TIME = { timeout: 60_000 };
+
+/** With EASY68K_REQUIRE_ENGINES=1 (CI) a missing engine/dist fails instead of skipping. */
+it.runIf(process.env.EASY68K_REQUIRE_ENGINES === '1' && !enginesBuilt)(
+  'engine/dist holds both engines (EASY68K_REQUIRE_ENGINES=1)',
+  () => {
+    expect.fail(
+      'EASY68K_REQUIRE_ENGINES is 1 but engine/dist is incomplete: run "npm run build:engines" or "npm run fetch:engines"',
+    );
+  },
+);
+
 describe('createRecordingHost', () => {
   it('has the 93 methods; each records its call and returns the default of the engine', () => {
     const recording = createRecordingHost();
@@ -100,7 +113,7 @@ function noops(defaults: Record<string, unknown>, skip: string[] = []): Record<s
   );
 }
 
-describe('withFaults', () => {
+describe('withFaults', ENGINE_TIME, () => {
   /** A stand-in engine: enough of SimEngine to see what reaches it. */
   function fakeEngine() {
     const seen: string[] = [];
@@ -181,7 +194,7 @@ describe('withFaults', () => {
   });
 });
 
-describe.skipIf(!enginesBuilt)('with the real engines (needs engine/dist)', () => {
+describe.skipIf(!enginesBuilt)('with the real engines (needs engine/dist)', ENGINE_TIME, () => {
   it('createTestEngine: the real engine on a recording host, start-up calls included', async () => {
     const test = await createTestEngine();
     expect(test.calls.length).toBeGreaterThan(20);

@@ -1,0 +1,28 @@
+# Text output, keyboard input, time, delay, files and the file dialog (io.X68).
+file input.txt input.txt
+time 4321098
+keys "typed line\r-77\rZ"
+dialog accept "C:\\chosen\\file.txt"
+load io.S68 io.L68
+run 100000
+dump regs
+dump state
+dump boxes
+dump mem $1000 1024
+dump files
+# the same program single-stepped with the execution log of type 3 (registers and memory)
+file input.txt input.txt
+keys "second\r12\rq"
+dialog cancel
+option elog 3
+option logmemfrom $1100
+option logmembytes 48
+logdialog
+rewind
+logstart "11/20/2026 1:07:46 PM"
+trace 400
+logstop
+dump log
+dump regs
+dump crc 0 16777216
+dump files

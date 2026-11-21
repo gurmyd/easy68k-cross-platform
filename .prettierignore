@@ -1,9 +1,8 @@
 # Prettier also skips everything in .gitignore.
 
-# Not ours to format: the engines, the oracle of the official binaries, the
-# reference material, and the documents (prose is formatted by hand).
+# Not ours to format: the engines, the reference material, and the documents
+# (prose is formatted by hand).
 /engine/
-/tools/oracle-official/
 /reference/
 /docs/
 /README.md

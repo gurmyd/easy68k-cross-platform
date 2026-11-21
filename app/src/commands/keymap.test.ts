@@ -245,6 +245,17 @@ describe('step 3: a bound, enabled command runs and the event is cancelled', () 
     expect(onFrame.send(win('F1')).outcome).toEqual({ kind: 'run', command: 'ed.help.help' });
   });
 
+  it('F1 in EASyBIN mode runs EASyBIN Help (docs/requests/B1-keys.md)', () => {
+    for (const os of ['windows', 'mac'] as const) {
+      const app = harness({ mode: 'easybin', os });
+      // F1 is the same key-down on both key maps.
+      expect(app.send(win('F1')).outcome, os).toEqual({
+        kind: 'run',
+        command: 'bin.help.help',
+      });
+    }
+  });
+
   it('a command of another mode is not bound', () => {
     const app = harness({ mode: 'easybin' });
     expect(app.send(win('F9')).outcome).toEqual({ kind: 'none' });
@@ -652,7 +663,7 @@ describe('buildBindings', () => {
   it("binds every chord of every command of the platform, except the Output panel's own", () => {
     const bindings = buildBindings('windows', true);
     expect(bindings.get('Ctrl+O')).toEqual(['ed.file.open', 'sim.file.open', 'bin.file.openSrec']);
-    expect(bindings.get('F1')).toEqual(['ed.help.context', 'ed.help.help', 'sim.help.context']);
+    expect(bindings.get('F1')).toEqual(['ed.help.context', 'ed.help.help', 'sim.help.context', 'bin.help.help']);
     expect(bindings.has('Alt+Enter')).toBe(false);
     expect(bindings.has('Ctrl+Alt+O')).toBe(false);
     for (const [chord, ids] of bindings) {

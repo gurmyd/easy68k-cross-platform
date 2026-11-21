@@ -5,7 +5,16 @@
 // Owner: FS1.
 
 import type { Bytes, DirEntry, FileSystemBackend, Vfs, VPath } from '../../contracts';
-import { basename, childPath, dirname, isVPath, isWithin, joinVPath, splitVPath } from '../../core/paths/winpath';
+import {
+  basename,
+  childPath,
+  dirname,
+  isVPath,
+  isWithin,
+  joinVPath,
+  matchName,
+  splitVPath,
+} from '../../core/paths/winpath';
 import { looksLikeZip, readZip, writeZip, type ZipInput, type ZipSkipped } from '../../fs/zip';
 
 /** The folder "From this computer..." and dropped files are copied into (3.8.1). */
@@ -62,12 +71,12 @@ export async function chooseStartDir(
   return locations(vfs)[0]?.root ?? null;
 }
 
-/** Creates a folder and its parents. The Vfs has no mkdirp (docs/porting/errata/FS1.md, Contract). */
+/**
+ * Creates a folder and its parents (Vfs.mkdirp, added at gate I1 for FS1's Contract C1: it runs in
+ * the queue of its path and is reported to the Vfs subscribers as a 'write' of the folder).
+ */
 export async function makeFolder(vfs: Vfs, path: VPath): Promise<void> {
-  const { mount, rel } = splitVPath(path);
-  const backend = vfs.backends().find((b) => b.mount === mount);
-  if (!backend) throw new Error(`nothing is mounted at /${mount}`);
-  await backend.mkdirp(rel);
+  await vfs.mkdirp(path);
 }
 
 /** Folders first, then files; each without regard to letter case (as Explorer sorts). */
@@ -100,6 +109,36 @@ export async function listTree(vfs: Vfs, dir: VPath): Promise<TreeItem[]> {
   return out;
 }
 
+/**
+ * The path as the store already spells it. Names are matched without regard to letter case, as on
+ * Windows, so that the port never makes two entries whose names differ only in case (a .zip of
+ * them could not be unpacked on Windows, and a program's file lookup would find either). Every
+ * part of `path` that exists is replaced by its stored spelling (the exact one if there is one);
+ * the parts below the first missing one keep the given spelling.
+ */
+export async function storedSpelling(vfs: Vfs, path: VPath): Promise<VPath> {
+  const { mount, rel } = splitVPath(path);
+  const segments = rel === '' ? [] : rel.split('/');
+  let current = joinVPath(mount, '');
+  let i = 0;
+  for (; i < segments.length; i++) {
+    let entries: DirEntry[];
+    try {
+      entries = await vfs.list(current);
+    } catch {
+      break; // not a folder, or not there
+    }
+    const isLast = i === segments.length - 1;
+    const match = matchName(
+      entries.filter((entry) => isLast || entry.kind === 'dir').map((entry) => entry.name),
+      segments[i] as string,
+    );
+    if (match === null) break;
+    current = childPath(current, match);
+  }
+  return i < segments.length ? childPath(current, ...segments.slice(i)) : current;
+}
+
 /** True if something exists at the path. */
 export async function exists(vfs: Vfs, path: VPath): Promise<boolean> {
   try {
@@ -115,18 +154,22 @@ export async function exists(vfs: Vfs, path: VPath): Promise<boolean> {
  * the original in place.
  */
 export async function renameEntry(vfs: Vfs, from: VPath, newName: string): Promise<VPath> {
-  const to = childPath(dirname(from), newName);
+  const parent = dirname(from);
+  const to = childPath(parent, newName);
   if (to === from) return to;
-  const target = await vfs.stat(to);
-  // A change of letter case only is allowed (the stores keep case); anything else must be new.
-  if (target !== null && to.toLowerCase() !== from.toLowerCase()) throw new Error(`"${newName}" already exists.`);
+  // Names are compared without regard to letter case (storedSpelling): an entry whose name differs
+  // from the new one only in case is "already there", unless it is the entry being renamed.
+  const existing = await vfs.resolve(parent, newName);
+  if (existing !== null && existing !== from) throw new Error(`"${newName}" already exists.`);
+  const caseOnly = existing === from;
   const stat = await vfs.stat(from);
   if (!stat) throw new Error(`"${basename(from)}" no longer exists.`);
   if (stat.kind === 'file') {
     const data = await vfs.readFile(from);
-    if (target !== null) {
-      // Case-only rename: through a temporary name, so the store never holds both spellings.
-      const temp = childPath(dirname(from), `${newName}.renaming-${Date.now()}`);
+    if (caseOnly) {
+      // A change of letter case only: through a temporary name, so that the store never holds
+      // both spellings and a store that ignores case (a disk) does not lose the file.
+      const temp = childPath(parent, `${newName}.renaming-${Date.now()}`);
       await vfs.writeFile(temp, data);
       await vfs.remove(from);
       await vfs.writeFile(to, data);
@@ -139,7 +182,7 @@ export async function renameEntry(vfs: Vfs, from: VPath, newName: string): Promi
   }
   if (isWithin(to, from)) throw new Error('A folder cannot be moved into itself.');
   const items = await listTree(vfs, from);
-  const staging = target !== null ? childPath(dirname(from), `${newName}.renaming-${Date.now()}`) : to;
+  const staging = caseOnly ? childPath(parent, `${newName}.renaming-${Date.now()}`) : to;
   await makeFolder(vfs, staging);
   for (const item of items) {
     const source = childPath(from, ...item.rel.split('/'));
@@ -196,7 +239,8 @@ export async function planImport(vfs: Vfs, dir: VPath, items: readonly ImportIte
     }
     plan.items.push(item);
     if (!item.rel.endsWith('/')) {
-      const stat = await vfs.stat(target).catch(() => null);
+      // An existing file whose name differs only in letter case is the same file (storedSpelling).
+      const stat = await vfs.stat(await storedSpelling(vfs, target)).catch(() => null);
       if (stat !== null) plan.conflicts.push(item);
     }
   }
@@ -215,8 +259,9 @@ export async function runImport(
   const result: ImportResult = { written: [], skipped: [] };
   const conflicts = new Set(plan.conflicts);
   for (const item of plan.items) {
-    const target = targetOf(plan.dir, item.rel) as VPath;
     try {
+      // Resolved now, not when planned: an earlier item may have made a folder in another spelling.
+      const target = await storedSpelling(vfs, targetOf(plan.dir, item.rel) as VPath);
       if (item.rel.endsWith('/')) {
         await makeFolder(vfs, target);
         continue;
@@ -266,11 +311,11 @@ export async function importOne(
   data: Bytes,
   replace: (path: VPath) => Promise<boolean>,
 ): Promise<VPath> {
-  const target = childPath(dir, name);
-  const existing = await vfs.resolve(dir, name);
-  if (existing !== null) {
-    const stat = await vfs.stat(existing);
-    if (stat?.kind === 'file') {
+  const target = await storedSpelling(vfs, childPath(dir, name));
+  const stat = await vfs.stat(target).catch(() => null);
+  if (stat !== null) {
+    const existing = target;
+    if (stat.kind === 'file') {
       const old = await vfs.readFile(existing);
       const same = old.length === data.length && old.every((b, i) => b === data[i]);
       if (same) return existing;

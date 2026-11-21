@@ -31,7 +31,9 @@
 // createStartupBackends(platform) is what main.tsx mounts at start. Where IndexedDB cannot be
 // opened (some private windows, storage blocked for the site) it returns a memory store at
 // "/browser" instead, which storageProblem() identifies, so that the Files panel can say plainly
-// that nothing is being kept.
+// that nothing is being kept. Start-up waits at most START_WAIT_MS for the database; a store that
+// has not answered by then is mounted as a PendingBrowserStore, whose operations wait for it (up to
+// OPEN_TIMEOUT_MS, after which it becomes the memory stand-in), so the application is shown at once.
 //
 // Owner: FS1.
 
@@ -47,6 +49,11 @@ export const BROWSER_STORE_LABEL = 'My Programs';
 export const MAX_SEGMENTS = 256;
 /** How long opening the database may take before the port gives up and keeps files in memory. */
 export const OPEN_TIMEOUT_MS = 20_000;
+/**
+ * How long start-up waits for the database before the application is shown anyway. A store that
+ * answers later is mounted as a PendingBrowserStore, whose operations wait for it.
+ */
+export const START_WAIT_MS = 3_000;
 
 /** The texts the port shows when the store cannot keep a file. */
 export const STORE_MESSAGES = {
@@ -58,6 +65,9 @@ export const STORE_MESSAGES = {
     `The browser could not save "${rel}" (${detail}). Nothing that was saved before has been lost. ` +
     'Use Export... in the Files panel to keep a copy on this computer.',
   closed: 'The browser closed the file store (site data may have been cleared). Reload the page to continue.',
+  opening:
+    'My Programs is still opening: the browser has not answered yet (another tab of this site may be ' +
+    'holding the storage). Your files appear here as soon as it answers; what you open or save meanwhile waits for it.',
   unavailable: (detail: string) =>
     'Files are NOT being saved: this browser does not let the page keep files ' +
     `(${detail.replace(/\.$/, '')}; for example in a private window, or when storage is blocked for this site). ` +
@@ -870,9 +880,151 @@ export class UnsavedBrowserStore extends MemoryBackend {
   }
 }
 
-/** The message to show when the backend mounted at /browser keeps nothing; null when all is well. */
+/**
+ * The browser store while the database has not answered yet (START_WAIT_MS passed at start-up).
+ * Every operation waits for the store that opening finally gives - the real BrowserBackend, or
+ * the UnsavedBrowserStore when opening fails or times out (OPEN_TIMEOUT_MS) - and then goes to it.
+ * Listeners of external changes and problems are passed on to that store.
+ */
+export class PendingBrowserStore implements FileSystemBackend {
+  readonly mount = 'browser';
+  readonly kind = 'browser' as const;
+  readonly label: string;
+  private target: FileSystemBackend | null = null;
+  private readonly ready: Promise<FileSystemBackend>;
+  private readonly changeListeners = new Set<(change: BackendChange) => void>();
+  private readonly problemListeners = new Set<(problem: StoreProblem) => void>();
+  private readonly settledListeners = new Set<() => void>();
+
+  /** `opening` must not reject (openBrowserStore never does). */
+  constructor(opening: Promise<FileSystemBackend>, label = BROWSER_STORE_LABEL) {
+    this.label = label;
+    this.ready = opening.then((backend) => {
+      this.target = backend;
+      backend.onExternalChange?.((change) => {
+        for (const listener of [...this.changeListeners]) listener(change);
+      });
+      if (backend instanceof BrowserBackend) {
+        backend.onProblem((problem) => {
+          for (const listener of [...this.problemListeners]) listener(problem);
+        });
+      }
+      for (const listener of [...this.settledListeners]) {
+        try {
+          listener();
+        } catch (error) {
+          queueMicrotask(() => {
+            throw error;
+          });
+        }
+      }
+      this.settledListeners.clear();
+      return backend;
+    });
+  }
+
+  /** The store opening gave, or null while it has not answered. */
+  get current(): FileSystemBackend | null {
+    return this.target;
+  }
+
+  /** Resolves with the store opening gave. */
+  whenReady(): Promise<FileSystemBackend> {
+    return this.ready;
+  }
+
+  /** Called once when opening has given its store (at once if it already has). */
+  onSettled(listener: () => void): () => void {
+    if (this.target) {
+      queueMicrotask(listener);
+      return () => {};
+    }
+    this.settledListeners.add(listener);
+    return () => {
+      this.settledListeners.delete(listener);
+    };
+  }
+
+  async stat(rel: string): Promise<FileStat | null> {
+    return (await this.ready).stat(rel);
+  }
+  async readFile(rel: string): Promise<Bytes> {
+    return (await this.ready).readFile(rel);
+  }
+  async writeFile(rel: string, data: Bytes): Promise<void> {
+    return (await this.ready).writeFile(rel, data);
+  }
+  async appendFile(rel: string, data: Bytes): Promise<void> {
+    return (await this.ready).appendFile(rel, data);
+  }
+  async remove(rel: string): Promise<void> {
+    return (await this.ready).remove(rel);
+  }
+  async list(rel: string): Promise<DirEntry[]> {
+    return (await this.ready).list(rel);
+  }
+  async mkdirp(rel: string): Promise<void> {
+    return (await this.ready).mkdirp(rel);
+  }
+
+  onExternalChange(listener: (change: BackendChange) => void): () => void {
+    this.changeListeners.add(listener);
+    return () => {
+      this.changeListeners.delete(listener);
+    };
+  }
+
+  /** As BrowserBackend.onProblem, once the real store is there. */
+  onProblem(listener: (problem: StoreProblem) => void): () => void {
+    this.problemListeners.add(listener);
+    return () => {
+      this.problemListeners.delete(listener);
+    };
+  }
+}
+
+/**
+ * The message to show about the backend mounted at /browser: that it keeps nothing, or that it is
+ * still opening; null when all is well.
+ */
 export function storageProblem(backend: FileSystemBackend | undefined): string | null {
+  if (backend instanceof PendingBrowserStore) {
+    const current = backend.current;
+    return current === null ? STORE_MESSAGES.opening : storageProblem(current);
+  }
   return backend instanceof UnsavedBrowserStore ? backend.problem : null;
+}
+
+/**
+ * Tells `listener` when storageProblem(backend) may have changed (a pending store has opened or
+ * given up). Returns the function that stops listening.
+ */
+export function onStorageStateChange(backend: FileSystemBackend | undefined, listener: () => void): () => void {
+  return backend instanceof PendingBrowserStore ? backend.onSettled(listener) : () => {};
+}
+
+/**
+ * Tells `listener` the messages the user must see about the store: a write the browser refused
+ * (BrowserBackend.onProblem), and, for a store that was still opening at start, that it gave up
+ * and keeps nothing. Returns the function that stops listening.
+ */
+export function onStoreProblem(
+  backend: FileSystemBackend | undefined,
+  listener: (message: string) => void,
+): () => void {
+  if (backend instanceof BrowserBackend) return backend.onProblem((problem) => listener(problem.message));
+  if (backend instanceof PendingBrowserStore) {
+    const stopProblems = backend.onProblem((problem) => listener(problem.message));
+    const stopSettled = backend.onSettled(() => {
+      const problem = storageProblem(backend);
+      if (problem) listener(problem);
+    });
+    return () => {
+      stopProblems();
+      stopSettled();
+    };
+  }
+  return () => {};
 }
 
 /** Opens the browser store, or the memory stand-in when that fails (3.8.1). */
@@ -888,19 +1040,40 @@ export async function openBrowserStore(deps: BrowserBackendDeps = {}): Promise<F
 }
 
 /**
+ * The browser store for start-up: the store itself when it opens within `startWaitMs`, otherwise a
+ * PendingBrowserStore, so that the application is shown without waiting up to OPEN_TIMEOUT_MS for
+ * a database that does not answer (another tab holding a version change, a busy disk).
+ */
+export async function openStartupStore(
+  deps: BrowserBackendDeps = {},
+  startWaitMs: number = START_WAIT_MS,
+): Promise<FileSystemBackend> {
+  const opening = openBrowserStore(deps);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const waited = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), startWaitMs);
+  });
+  const first = await Promise.race([opening, waited]);
+  clearTimeout(timer);
+  return first ?? new PendingBrowserStore(opening, deps.label ?? BROWSER_STORE_LABEL);
+}
+
+/**
  * The backends main.tsx mounts at start (docs/porting/errata/W3.md): the browser store, in the
  * browser and in the desktop app alike. Also asks the browser to keep the site's storage when it
  * runs short of space (navigator.storage.persist), because students keep coursework here.
  */
 export async function createStartupBackends(_platform: Platform): Promise<FileSystemBackend[]> {
-  const backend = await openBrowserStore();
-  if (backend instanceof BrowserBackend) {
+  const backend = await openStartupStore();
+  const real = backend instanceof PendingBrowserStore ? backend.whenReady() : Promise.resolve(backend);
+  void real.then((store) => {
+    if (!(store instanceof BrowserBackend)) return;
     try {
       const storage = (globalThis.navigator as Navigator | undefined)?.storage;
       if (storage?.persist) void storage.persist().catch(() => {});
     } catch {
       // not available: the store works without it
     }
-  }
+  });
   return [backend];
 }

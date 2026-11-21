@@ -33,6 +33,7 @@ import { TextField } from '../TextField';
 import { ToastStack, type ToastItem } from '../Toast';
 import { Toolbar, ToolbarSeparator, ToolbarSpacer } from '../Toolbar';
 import { Tooltip } from '../Tooltip';
+import { treeViewKeyAction } from '../tree';
 import { VirtualList, type VirtualListHandle } from '../VirtualList';
 import './gallery.css';
 import {
@@ -1054,6 +1055,86 @@ function dumpRow(row: number): string {
   return `${base.toString(16).toUpperCase().padStart(8, '0')}: ${hex} ${ascii}`;
 }
 
+interface TreeSampleNode {
+  name: string;
+  children?: TreeSampleNode[];
+}
+
+const TREE_SAMPLE: TreeSampleNode[] = [
+  {
+    name: 'My Programs',
+    children: [{ name: 'demo.X68' }, { name: 'macros', children: [{ name: 'io.X68' }, { name: 'math.X68' }] }],
+  },
+  { name: 'Examples', children: [{ name: 'hello.X68' }] },
+];
+
+/** A tree drawn by the caller (role=tree, roving tabindex) with the kit's treeViewKeyAction. */
+function TreeSample({ report }: { report: Report }) {
+  const [open, setOpen] = useState<Set<string>>(() => new Set(['My Programs']));
+  const [focusKey, setFocusKey] = useState('My Programs');
+  const items = useRef(new Map<string, HTMLElement>());
+  const rows: { key: string; name: string; depth: number; expandable: boolean; expanded: boolean }[] = [];
+  const walk = (nodes: TreeSampleNode[], depth: number, parent: string) => {
+    for (const node of nodes) {
+      const key = parent ? `${parent}/${node.name}` : node.name;
+      const expanded = open.has(key);
+      rows.push({ key, name: node.name, depth, expandable: Boolean(node.children), expanded });
+      if (node.children && expanded) walk(node.children, depth + 1, key);
+    }
+  };
+  walk(TREE_SAMPLE, 1, '');
+  const stop = rows.some((row) => row.key === focusKey) ? focusKey : (rows[0]?.key ?? '');
+  return (
+    <ul role="tree" aria-label="Files" className="e68-gallery__tree" data-testid="tree-sample">
+      {rows.map((row, index) => (
+        <li key={row.key} role="none">
+          <div
+            ref={(element) => {
+              if (element) items.current.set(row.key, element);
+              else items.current.delete(row.key);
+            }}
+            role="treeitem"
+            aria-level={row.depth}
+            aria-expanded={row.expandable ? row.expanded : undefined}
+            aria-selected={row.key === stop}
+            tabIndex={row.key === stop ? 0 : -1}
+            className="e68-gallery__treeitem"
+            style={{ paddingInlineStart: `calc(${row.depth - 1} * var(--sp-4) + var(--sp-1))` }}
+            onFocus={() => setFocusKey(row.key)}
+            onClick={() => setFocusKey(row.key)}
+            onKeyDown={(event) => {
+              if (event.ctrlKey || event.altKey || event.metaKey) return;
+              const action = treeViewKeyAction(rows, index, event.key);
+              if (!action) return;
+              event.preventDefault();
+              const target = rows[action.index];
+              if (!target) return;
+              if (action.kind === 'move') {
+                setFocusKey(target.key);
+                items.current.get(target.key)?.focus();
+              } else if (action.kind === 'toggle') {
+                setOpen((now) => {
+                  const next = new Set(now);
+                  if (action.open) next.add(target.key);
+                  else next.delete(target.key);
+                  return next;
+                });
+              } else {
+                report(`Tree: open ${target.key}`);
+              }
+            }}
+          >
+            <span className="e68-gallery__twisty" aria-hidden="true">
+              {row.expandable ? (row.expanded ? '▾' : '▸') : ''}
+            </span>
+            {row.name}
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function ListsSection({ report }: { report: Report }) {
   const [element, setElement] = useState<string | null>('Comment');
   const [messageRow, setMessageRow] = useState(0);
@@ -1099,6 +1180,9 @@ function ListsSection({ report }: { report: Report }) {
             rows={6}
             onActivate={(v) => report(`ListBox: ${v} activated`)}
           />
+        </Specimen>
+        <Specimen label="treeViewKeyAction: a tree view's keys (the caller draws the rows)">
+          <TreeSample report={report} />
         </Specimen>
         <Specimen label="DataGrid: the editor's message list (2.2); Enter or double-click">
           <DataGrid
@@ -1390,6 +1474,23 @@ function DialogsSection({ report }: { report: Report }) {
               <Button caption="&Remove me" onClick={() => setAwkward((a) => ({ ...a, removed: true }))} />
             )}
             <Button caption="&Three" onClick={() => undefined} />
+            {/* A control that hands its focus to a child (a tabindex 0 container that focuses a
+                tabindex -1 child): Tab must count it as taken, not skip it (followups item 1). */}
+            <div
+              role="group"
+              aria-label="Hand-off"
+              tabIndex={0}
+              data-testid="awkward-handoff"
+              onFocus={(event) => {
+                if (event.target === event.currentTarget) {
+                  event.currentTarget.querySelector<HTMLElement>('button')?.focus();
+                }
+              }}
+            >
+              <button type="button" tabIndex={-1}>
+                Inner
+              </button>
+            </div>
           </div>
         </Dialog>
       )}

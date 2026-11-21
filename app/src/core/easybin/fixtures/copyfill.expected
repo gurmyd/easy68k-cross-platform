@@ -1,0 +1,41 @@
+> reset
+> loadbin bin256.BIN 001000 0
+result 256
+> copy 001000 001001 000010
+repaint
+> dump 001000 20
+dump 00 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F 11 12 13
+> copy 001010 001008 000010
+repaint
+> dump 001000 32
+dump 00 00 01 02 03 04 05 06 0F 11 12 13 14 15 16 17 18 19 1A 1B 1C 1D 1E 1F 18 19 1A 1B 1C 1D 1E 1F
+> copy 001000 001000 000010
+message "Invalid copy range"
+> copy 001000 002000 000000
+message "Invalid copy range"
+> copy 001000 FFFFF8 000010
+message "Invalid copy range"
+> dump FFFFF0 16
+dump FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF
+> copy FFFFF8 000100 000010
+message "Invalid copy range"
+> dump 000100 16
+dump FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF
+> copy FFFFF0 FFFFF8 000008
+repaint
+> dump FFFFF0 16
+dump FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF
+> fill 002000 00200F 00
+repaint
+> dump 001FFE 20
+dump FF FF 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 FF FF
+> fill 003000 002000 11
+repaint
+> fill FFFFF0 FFFFFF 77
+repaint
+> dump FFFFF0 16
+dump 77 77 77 77 77 77 77 77 77 77 77 77 77 77 77 77
+> fill 000000 000000 1
+repaint
+> digest
+digest 014E827C 288

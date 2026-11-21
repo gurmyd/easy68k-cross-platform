@@ -20,6 +20,9 @@ export interface AppState {
   documents: { items: DocumentState[]; activeId: string | null };
   messages: Record<string, EditorMessage[]>; // key = document id
   assemble: Record<string, AssembleSummary>; // key = document id; last result
+  /** Writers of `sim` (docs/porting/errata/W1.md, entry 11): the simulator session (SH8,
+   *  features/run/mirror.ts) writes every member except `selectedRow`, which is the Listing
+   *  panel's (3.11.4). `output.fullScreen` has a second writer, the Output panel (see below). */
   sim: {
     program: ProgramInfo | null;
     phase: SimPhase;
@@ -33,8 +36,20 @@ export interface AppState {
     liveRevision: number; // bump at most once per frame: memory / hardware changed
     selectedRow: number; // listing selection ("cursor"), -1 = none
     messageLines: string[];
-    breakpoints: number[];
+    breakpoints: number[]; // engine.breakpoints(), mirrored by the session
+    /** width, height: the size of the surface's back buffer; textWrap: TextState.textWrap; all three
+     *  mirrored by the session once per frame (the Output panel writes the same values right after
+     *  its own commands). fullScreen: "full screen is on, or asked for". The session writes it when
+     *  the engine asks (host.setupWindow) and at a cold start (false); the Output panel writes it
+     *  when the user toggles full screen or the browser ends it (2.5). */
     output: { width: number; height: number; fullScreen: boolean; textWrap: boolean };
+    /**
+     * How often the engine has named each panel in host.repaint(what) (4.6, RepaintBit): a panel
+     * re-reads its data, and the Stack panel re-centres, when its own counter moves.
+     * `viewRevision` still moves with every one of them. Added at gate I1 as an optional member
+     * (docs/porting/errata/W1.md, entry 11): while it is absent a panel falls back on `viewRevision`.
+     */
+    repaint?: { listing: number; breakpoints: number; memory: number; stack: number };
   };
   dialogs: { stack: DialogInstance[] };
   settings: Settings; // mirror of SettingsService

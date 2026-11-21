@@ -24,6 +24,7 @@ const CHANNELS = {
   openFiles: 'e68:open-files',
   window: 'e68:window',
   fullScreen: 'e68:full-screen',
+  fullScreenChange: 'e68:full-screen-change',
   print: 'e68:print',
   dialog: 'e68:dialog',
   drop: 'e68:drop',
@@ -68,6 +69,8 @@ const bridge = {
   pasteIntoFocus: (): void => ipcRenderer.send(CHANNELS.window, 'paste'),
   quit: (): void => ipcRenderer.send(CHANNELS.window, 'quit'),
   setFullScreen: (on: boolean): Promise<unknown> => ipcRenderer.invoke(CHANNELS.fullScreen, on),
+  /** The window entered (true) or left (false) full screen, by any means (the green button too). */
+  onFullScreenChange: (listener: Listener): (() => void) => subscribe(CHANNELS.fullScreenChange, listener as never),
   print: (html: string, title: string): Promise<unknown> => ipcRenderer.invoke(CHANNELS.print, html, title),
 
   /** Native file dialogs; the folders of chosen files become granted roots (3.8.5, 7.6). */

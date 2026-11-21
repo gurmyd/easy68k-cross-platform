@@ -13,6 +13,9 @@
 // installs `globalThis.__easy68kDesktopTest`, through which tests/desktop/dev inspects the main
 // process (granted roots, the menus, the windows).
 //
+// A packaged app (app.isPackaged) honours none of these three variables (security.ts
+// developmentOverrides): it always serves its own copy of app/dist and installs no test hooks.
+//
 // Owner: DV2.
 
 import { existsSync } from 'node:fs';
@@ -53,7 +56,9 @@ import {
 import { APP_SCHEME_PRIVILEGES, registerAppProtocol } from './protocol';
 import {
   APP_INDEX_URL,
+  developmentOverrides,
   GrantedRoots,
+  helpLinkAction,
   isAllowedExternalUrl,
   isShortString,
   pageOrigin,
@@ -61,11 +66,12 @@ import {
   vpathOfRealPath,
 } from './security';
 import { registerSyncIpc } from './sync-ipc';
-import { AppWindows, denyAllPermissions, printDocument, testWindowMode } from './windows';
+import { AppWindows, denyAllPermissions, printDocument } from './windows';
 
 const STARTUP_CHANNEL = 'e68:startup';
 const WINDOW_CHANNEL = 'e68:window';
 const FULL_SCREEN_CHANNEL = 'e68:full-screen';
+const FULL_SCREEN_CHANGE_CHANNEL = 'e68:full-screen-change';
 const PRINT_CHANNEL = 'e68:print';
 const DIALOG_CHANNEL = 'e68:dialog';
 const DROP_CHANNEL = 'e68:drop';
@@ -76,13 +82,15 @@ const DROP_CHANNEL = 'e68:drop';
 protocol.registerSchemesAsPrivileged([APP_SCHEME_PRIVILEGES]);
 
 const os: MenuOs = process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'windows' : 'linux';
-const devServerUrl = process.env['EASY68K_DEV_SERVER_URL'] || undefined;
-const testWindows = testWindowMode();
+// The three development and test variables; a packaged app ignores them (security.ts).
+const overrides = developmentOverrides(process.env, app.isPackaged);
+const devServerUrl = overrides.devServerUrl;
+const testWindows = overrides.testWindows;
 const origin = pageOrigin(devServerUrl);
 
-/** The built web app: EASY68K_APP_DIST, the packaged copy, or the repository's app/dist. */
+/** The built web app: EASY68K_APP_DIST (not packaged), the packaged copy, or the repository's app/dist. */
 function appDistDir(): string {
-  const override = process.env['EASY68K_APP_DIST'];
+  const override = overrides.appDist;
   if (override) return resolve(override);
   if (app.isPackaged) {
     // Next to the archive (extraResources) or inside it (files), whichever DV3's packaging uses.
@@ -323,6 +331,44 @@ function installTestHooks(): void {
       item.click({ triggeredByAccelerator: true } as never);
       return true;
     },
+    /** The chords that may reach the macOS menu from this window (menu.ts roleChordsOf). */
+    menuRoleChords: (id: number) => menus.roleChords(id) ?? null,
+    /**
+     * Performs a role item of a window's menu (the first with `role`) as Electron does for a click
+     * on Windows and Linux: the role's method on that window's web contents (copy, paste, ...).
+     * On macOS the system performs role items through the first responder instead, which a hidden
+     * window does not have; false there, and when the menu has no such item.
+     */
+    clickRoleItem: (id: number, role: string) => {
+      const window = BrowserWindow.fromId(id);
+      const menu = menus.menu(id);
+      if (!window || !menu || os === 'mac') return false;
+      const find = (items: Electron.MenuItem[]): Electron.MenuItem | null => {
+        for (const item of items) {
+          if (item.role?.toLowerCase() === role.toLowerCase() && !item.submenu) return item;
+          const inner = item.submenu ? find(item.submenu.items) : null;
+          if (inner) return inner;
+        }
+        return null;
+      };
+      const item = find(menu.items);
+      if (!item) return false;
+      (item.click as unknown as (event: unknown, window: BrowserWindow, contents: WebContents) => void)(
+        { triggeredByAccelerator: false },
+        window,
+        window.webContents,
+      );
+      return true;
+    },
+    /** A target="_blank" link of the help window of `id` asks for `url` (windows.ts openFromHelp). */
+    openFromHelp: (id: number, url: string) => {
+      const owner = BrowserWindow.fromId(id);
+      const help = owner ? windows?.helpWindowOf(owner) : null;
+      if (!help || !windows) return null;
+      // An allow-listed web address would show a question; the tests ask only for its verdict.
+      const action = helpLinkAction(url, `${origin}/help/`);
+      return action === 'external' ? action : windows.openFromHelp(help, url);
+    },
     helpWindowUrl: (id: number) => {
       const owner = BrowserWindow.fromId(id);
       const help = owner ? windows?.helpWindowOf(owner) : null;
@@ -351,6 +397,11 @@ async function start(): Promise<void> {
     menus,
     testWindows,
     onLoaded: () => launch.flush(),
+    // Platform.onFullScreenChange: the green button or the system's own shortcut, which no
+    // fullscreenchange event of the page reports (2.5).
+    onFullScreenChange: (window, on) => {
+      if (!window.isDestroyed()) window.webContents.send(FULL_SCREEN_CHANGE_CHANNEL, on);
+    },
   });
 
   const commandLine = parseCommandLine(process.argv, {

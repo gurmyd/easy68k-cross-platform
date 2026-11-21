@@ -25,19 +25,20 @@
 //
 // Owner: SH3.
 
-import type { Bytes, CellMetrics, FontSpec, Glyph, GlyphProvider } from '../../../contracts';
+import type { Bytes, CellMetrics, FontFileLoader, FontSpec, Glyph, GlyphProvider } from '../../../contracts';
 import { decodeAtlas } from './atlas';
 import { atlasPath, BITMAP_FOLDER, DEFAULT_CELL, FontSet, SCALABLE_FOLDER, type AtlasFile } from './font-set';
 import { FONT_STYLES, parseMetricTable, parseOutlineIndex, POINT_SIZES, type MetricTable } from './metrics';
-import type { StyleOverhang } from './types';
+import type { FallbackGlyphs } from './types';
 
 /** Name of the metric table below the fonts folder. */
 export const METRICS_FILE = 'metrics.json';
 /** Name of the list of outline atlases below the fonts folder. */
 export const OUTLINE_INDEX_FILE = `${SCALABLE_FOLDER}/index.json`;
 
-/** Reads one file below the fonts folder (`app/public/fonts/`); resolves to null when there is no such file. */
-export type FontFileLoader = (path: string) => Promise<Bytes | null>;
+/** Reads one file below the fonts folder (`app/public/fonts/`); resolves to null when there is no such
+ *  file. Declared in the contracts, because the composition root supplies it. */
+export type { FontFileLoader } from '../../../contracts';
 
 /** The raster faces of 3.5.1, for a metric table that does not say which faces are raster faces. */
 export const RASTER_FACES: readonly string[] = ['Fixedsys', 'Courier'];
@@ -109,8 +110,11 @@ function atlasEntries(
     for (const path of expectedAtlasPaths(table, 'raster')) entries.push({ entry: { path }, listed: false });
   }
   if (outlineIndex) {
-    for (const { file, face, style, underline, strikeOut } of parseOutlineIndex(outlineIndex)) {
+    for (const info of parseOutlineIndex(outlineIndex)) {
+      const { file, face, style, size, underline, strikeOut } = info;
       const entry: AtlasEntry = { path: file, face, style };
+      if (size !== undefined) entry.size = size;
+      if (info.delInHighString !== undefined) entry.delInHighString = info.delInHighString;
       if (underline) entry.underline = underline;
       if (strikeOut) entry.strikeOut = strikeOut;
       entries.push({ entry, listed: true });
@@ -164,7 +168,7 @@ export function fontSetFromFiles(files: ReadonlyMap<string, Bytes>, options: Atl
   );
 }
 
-export class AtlasGlyphProvider implements GlyphProvider, StyleOverhang {
+export class AtlasGlyphProvider implements GlyphProvider, FallbackGlyphs {
   readonly ready: Promise<void>;
   /** The loaded fonts; null until `ready` has resolved, and for good when loading failed. */
   private fonts: FontSet | null = null;
@@ -225,6 +229,10 @@ export class AtlasGlyphProvider implements GlyphProvider, StyleOverhang {
 
   textOverhang(font: FontSpec): number {
     return this.fonts ? this.fonts.textOverhang(font) : 0;
+  }
+
+  delInHighText(font: FontSpec): Glyph | null {
+    return this.fonts ? this.fonts.delInHighText(font) : null;
   }
 
   /** The path of the atlas a font's glyphs come from, or null. For tests and for diagnosis. */

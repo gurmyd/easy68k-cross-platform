@@ -117,27 +117,30 @@ describe('Simulator mode', () => {
     expect(outcome.skipped).toEqual(['prog.X68']);
   });
 
-  it('asks "The current debug environment will be lost" when a program is loaded; Cancel stops', async () => {
+  it('asks "The current debug environment will be lost" when a program is loaded and no .S68 was dropped', async () => {
     const { d, log, boxes } = deps({
       mode: 'simulator',
       programLoaded: true,
       messageBox: async (request) => {
         boxes.push(request);
-        return 'Cancel';
+        return 'OK';
       },
     });
-    await handleDrop([file('prog.S68')], d);
+    const outcome = await handleDrop([file('notes.txt')], d);
     expect(boxes).toEqual([{ title: 'Caution', text: DROP_CAUTION_TEXT, icon: 'none', buttons: ['OK', 'Cancel'] }]);
     expect(DROP_CAUTION_TEXT).toBe('The current debug environment will be lost, click OK to continue.');
+    expect(log).toEqual([]); // OK or Cancel, nothing is loaded
+    expect(outcome.skipped).toEqual(['notes.txt']);
+    await handleDrop([folder('demo')], d);
+    expect(boxes.length).toBe(2);
     expect(log).toEqual([]);
   });
 
-  it('the question comes whatever was dropped, as in the original; OK loads', async () => {
+  it('an .S68 goes to RunController.open(path, "drop"), which asks the Caution question itself (4.7)', async () => {
+    // SH8's controller asks when a program is loaded; asking here too would ask twice.
     const { d, log, boxes } = deps({ mode: 'simulator', programLoaded: true });
-    await handleDrop([file('notes.txt')], d);
-    expect(boxes.length).toBe(1);
-    expect(log).toEqual([]);
     await handleDrop([file('prog.S68')], d);
+    expect(boxes).toEqual([]);
     expect(log).toEqual(['import prog.S68 8', 'load /browser/Imported/prog.S68']);
   });
 
@@ -149,6 +152,47 @@ describe('Simulator mode', () => {
     await handleDrop([folder('demo.S68')], other.d);
     await handleDrop([unreadable('prog.S68')], other.d);
     expect(other.log).toEqual([]);
+  });
+});
+
+describe('the desktop app (DV2 errata 4a: grantDroppedFile)', () => {
+  const located = (map: Record<string, { path: VPath; kind: 'file' | 'dir' } | null>) => async (item: DroppedItem) =>
+    map[item.name] ?? null;
+
+  it('Editor mode: a file on the disk is opened where it is; a folder opens the Open dialog there', async () => {
+    const { d, log } = deps({
+      locate: located({
+        'a.X68': { path: '/disk/C/work/a.X68', kind: 'file' },
+        work: { path: '/disk/C/work', kind: 'dir' },
+      }),
+      openFolder: async (dir) => {
+        log.push(`dialog ${dir}`);
+      },
+    });
+    const outcome = await handleDrop([file('a.X68'), folder('work'), file('made.X68')], d);
+    expect(log).toEqual([
+      'open /disk/C/work/a.X68',
+      'dialog /disk/C/work',
+      // A File the page made itself has no place on the disk: copied as in a browser.
+      'import made.X68 8',
+      'open /browser/Imported/made.X68',
+    ]);
+    expect(outcome.folders).toBe('taken');
+  });
+
+  it('Simulator mode: a dropped .S68 on the disk is loaded where it is (its listing is found beside it)', async () => {
+    const { d, log } = deps({
+      mode: 'simulator',
+      locate: located({ 'prog.S68': { path: '/disk/C/work/prog.S68', kind: 'file' } }),
+    });
+    await handleDrop([file('prog.S68'), file('prog.L68')], d);
+    expect(log).toEqual(['load /disk/C/work/prog.S68']);
+  });
+
+  it('a failing lookup falls back to the copy', async () => {
+    const { d, log } = deps({ locate: () => Promise.reject(new Error('bridge gone')) });
+    await handleDrop([file('a.X68')], d);
+    expect(log).toEqual(['import a.X68 5', 'open /browser/Imported/a.X68']);
   });
 });
 

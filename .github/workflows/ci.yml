@@ -9,9 +9,25 @@
 #   job / step                 runs when this exists
 #   conformance                tests/conformance/*/vitest.config.ts or tests/parity/vitest.config.ts
 #   e2e                        tests/e2e/**/*.spec.ts or tests/a11y/**/*.spec.ts
-#   browser-checks: gallery    app/src/ui/components/gallery/check-gallery.mjs (npm run check:gallery, W2)
-#   browser-checks: shell      app/src/ui/shell/check-shell.mjs     (npm run check:shell, W3)
-#   browser-checks: engine     app/src/engine/browser.test.ts       (npm run check:engine-browsers, W4)
+#   browser-checks: one step per browser check script, each guarded by its file
+#     (the table of `checks` in the plan step; npm run check:<name>):
+#       gallery       app/src/ui/components/gallery/check-gallery.mjs   W2
+#       shell         app/src/ui/shell/check-shell.mjs                   W3
+#       editor        app/src/ui/editor/check-editor.mjs                 E2
+#       highlight     app/src/features/highlight/check-highlight.mjs     E3
+#       files         app/src/features/files/check-files.mjs             FS1
+#       documents     app/src/features/documents/check-documents.mjs     E1
+#       help          app/src/features/help/check-help.mjs               H1
+#       surface       app/src/core/sim-host/surface/check-surface.mjs    SH1
+#       easybin       app/src/features/easybin/check-easybin.mjs         B1
+#       memory-stack  app/src/features/memory/check-memory-stack.mjs     U2
+#       engine        app/src/engine/browser.test.ts (check:engine-browsers) W4
+#       text          app/src/core/sim-host/text/check-text.mjs          SH3
+#       output        app/src/features/output/check-output.mjs           SH4
+#       hardware      app/src/features/hardware/check-hardware.mjs       SH7
+#       run           app/src/features/run/check-run.mjs                 SH8
+#       sim-main      app/src/features/sim-main/check-sim-main.mjs       U1
+#       pwa           app/src/features/pwa/check-pwa.mjs                 DV1
 #   windows-oracles: GDI       tests/oracle/gdi-capture/run.mjs     (npm run oracle:gdi, T2)
 #   windows-oracles: twins     tests/oracle/native-twin/run.mjs     (npm run oracle:twins, T4)
 #   windows-oracles: asm CLI   tests/oracle/asm-cli/run.mjs         (T1)
@@ -75,7 +91,21 @@ jobs:
       e2e: ${{ steps.guards.outputs.e2e }}
       gallery: ${{ steps.guards.outputs.gallery }}
       shell: ${{ steps.guards.outputs.shell }}
+      editor: ${{ steps.guards.outputs.editor }}
+      highlight: ${{ steps.guards.outputs.highlight }}
+      files: ${{ steps.guards.outputs.files }}
+      documents: ${{ steps.guards.outputs.documents }}
+      help: ${{ steps.guards.outputs.help }}
+      surface: ${{ steps.guards.outputs.surface }}
+      easybin: ${{ steps.guards.outputs.easybin }}
+      memory_stack: ${{ steps.guards.outputs.memory_stack }}
       engine_browsers: ${{ steps.guards.outputs.engine_browsers }}
+      text: ${{ steps.guards.outputs.text }}
+      output: ${{ steps.guards.outputs.output }}
+      hardware: ${{ steps.guards.outputs.hardware }}
+      run: ${{ steps.guards.outputs.run }}
+      sim_main: ${{ steps.guards.outputs.sim_main }}
+      pwa: ${{ steps.guards.outputs.pwa }}
       browser_checks: ${{ steps.guards.outputs.browser_checks }}
       gdi: ${{ steps.guards.outputs.gdi }}
       twins: ${{ steps.guards.outputs.twins }}
@@ -104,11 +134,35 @@ jobs:
           conformance=$(flag has tests/conformance -mindepth 2 -maxdepth 2 -name vitest.config.ts)
           [ -f tests/parity/vitest.config.ts ] && conformance=true
           e2e=$(flag has tests/e2e tests/a11y -name '*.spec.ts')
-          gallery=$(flag test -f app/src/ui/components/gallery/check-gallery.mjs)
-          shell=$(flag test -f app/src/ui/shell/check-shell.mjs)
-          engine_browsers=$(flag test -f app/src/engine/browser.test.ts)
+          # The browser checks: output name and the file whose existence turns its step on.
+          checks='
+            gallery         app/src/ui/components/gallery/check-gallery.mjs
+            shell           app/src/ui/shell/check-shell.mjs
+            editor          app/src/ui/editor/check-editor.mjs
+            highlight       app/src/features/highlight/check-highlight.mjs
+            files           app/src/features/files/check-files.mjs
+            documents       app/src/features/documents/check-documents.mjs
+            help           app/src/features/help/check-help.mjs
+            surface         app/src/core/sim-host/surface/check-surface.mjs
+            easybin         app/src/features/easybin/check-easybin.mjs
+            memory_stack    app/src/features/memory/check-memory-stack.mjs
+            engine_browsers app/src/engine/browser.test.ts
+            text            app/src/core/sim-host/text/check-text.mjs
+            output          app/src/features/output/check-output.mjs
+            hardware        app/src/features/hardware/check-hardware.mjs
+            run             app/src/features/run/check-run.mjs
+            sim_main        app/src/features/sim-main/check-sim-main.mjs
+            pwa             app/src/features/pwa/check-pwa.mjs
+          '
+          check_names=""
           browser_checks=false
-          for g in "$gallery" "$shell" "$engine_browsers"; do [ "$g" = true ] && browser_checks=true; done
+          while read -r name file; do
+            [ -n "$name" ] || continue
+            value=$(flag test -f "$file")
+            eval "$name=\$value"
+            check_names="$check_names $name"
+            [ "$value" = true ] && browser_checks=true
+          done <<< "$checks"
           gdi=$(flag test -f tests/oracle/gdi-capture/run.mjs)
           twins=$(flag test -f tests/oracle/native-twin/run.mjs)
           asm_cli=$(flag test -f tests/oracle/asm-cli/run.mjs)
@@ -133,15 +187,14 @@ jobs:
           # The weekly schedule runs the engine comparison only (7.3, 7.4).
           if [ "$EVENT" = schedule ]; then
             conformance=false; e2e=false; gdi=false; twins=false; asm_cli=false; desktop_dev=false
-            gallery=false; shell=false; engine_browsers=false; browser_checks=false
+            for name in $check_names; do eval "$name=false"; done
+            browser_checks=false
           fi
 
           {
             echo "conformance=$conformance"
             echo "e2e=$e2e"
-            echo "gallery=$gallery"
-            echo "shell=$shell"
-            echo "engine_browsers=$engine_browsers"
+            for name in $check_names; do eval "echo \"$name=\$$name\""; done
             echo "browser_checks=$browser_checks"
             echo "gdi=$gdi"
             echo "twins=$twins"
@@ -154,7 +207,7 @@ jobs:
             echo "### Job guards"
             echo "| guard | runs |"
             echo "|---|---|"
-            for name in conformance e2e gallery shell engine_browsers browser_checks gdi twins asm_cli engines_weekly windows_oracles desktop_dev; do
+            for name in conformance e2e $check_names browser_checks gdi twins asm_cli engines_weekly windows_oracles desktop_dev; do
               eval "value=\$$name"
               echo "| $name | $value |"
             done
@@ -334,19 +387,32 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  # The browser checks that exist before the end-to-end suites do: W2's gallery
-  # check, W3's shell check (both against the Vite dev server; no build, no
-  # engines) and W4's engine binding suite (its own build; needs engine-dist),
-  # in Chromium and WebKit on the three systems. EASY68K_REQUIRE_BROWSERS=1: a
-  # browser that is not installed is a failure, not a skip.
+  # The browser checks that exist before the end-to-end suites do: one script
+  # per package (check-<name>.mjs, the convention of check-shell.mjs), each
+  # against the Vite dev server on a free port or, for check:pwa, against its
+  # own production build, in Chromium and WebKit on the three systems.
+  # EASY68K_REQUIRE_BROWSERS=1: a browser that is not installed is a failure,
+  # not a skip. EASY68K_REQUIRE_ENGINES=1 when engine-dist holds both engines.
+  #
+  # The checks take too long for one runner, so the matrix splits them in two
+  # groups: `interface` (the editor side, the shell, Help, EASyBIN; no engine
+  # needed) and `simulator` (the checks that load the engines). A step that
+  # needs both engines is skipped when engine-dist does not hold them.
+  # Measured at gate I1 (Windows 11 PC under heavy load, both browsers, one
+  # check at a time per queue): interface about 16 minutes (gallery 73 s,
+  # shell 189, editor 159, highlight 23, files 136 or more, documents 25, help
+  # 176, surface 13, easybin 196), simulator about 14 minutes (engine 44, pwa 67, text 10,
+  # output 227, hardware 49, run 66, sim-main 298, memory-stack 66): about 30
+  # minutes together, more than one runner should take.
   browser-checks:
-    name: browser-checks (${{ matrix.os }})
+    name: browser-checks (${{ matrix.os }}, ${{ matrix.group }})
     needs: [plan, engines]
     if: needs.plan.outputs.browser_checks == 'true'
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+        group: [interface, simulator]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     env:
@@ -389,32 +455,95 @@ jobs:
       - name: Install the system libraries for Chromium and WebKit
         if: steps.browsers.outputs.cache-hit == 'true' && runner.os == 'Linux'
         run: npx playwright install-deps chromium webkit
-      # Each check runs even when an earlier one failed, so that one run shows all three.
+      # Each check runs even when an earlier one failed, so that one run shows all of them.
+      # Group `interface`:
       - name: Gallery check (W2)
-        if: ${{ !cancelled() && needs.plan.outputs.gallery == 'true' }}
+        if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.gallery == 'true' }}
         run: npm run check:gallery
       - name: Shell check (W3)
-        if: ${{ !cancelled() && needs.plan.outputs.shell == 'true' }}
+        if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.shell == 'true' }}
         run: npm run check:shell
+      - name: Editor check (E2)
+        if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.editor == 'true' }}
+        run: npm run check:editor
+      - name: Syntax highlighting check (E3)
+        if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.highlight == 'true' }}
+        run: npm run check:highlight
+      # check:files proves an exported archive with the system's own tool: Python's zipfile,
+      # unzip or bsdtar, whichever the runner has (all three runners have Python).
+      - name: Files check (FS1)
+        if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.files == 'true' }}
+        run: npm run check:files
+      - name: Documents check (E1)
+        if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.documents == 'true' }}
+        run: npm run check:documents
+      - name: Help check (H1)
+        if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.help == 'true' }}
+        run: npm run check:help
+      - name: Drawing surface check (SH1)
+        if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.surface == 'true' }}
+        run: npm run check:surface
+      - name: EASyBIN check (B1)
+        if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.easybin == 'true' }}
+        run: npm run check:easybin
+      # Group `simulator`:
       - name: Engine binding in the browser (W4)
-        if: ${{ !cancelled() && needs.plan.outputs.engine_browsers == 'true' && needs.engines.outputs.available == 'asm sim' }}
+        if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.engine_browsers == 'true' && needs.engines.outputs.available == 'asm sim' }}
         run: npm run check:engine-browsers
       - name: Upload the engine binding's memory figures
-        if: ${{ !cancelled() && needs.plan.outputs.engine_browsers == 'true' && needs.engines.outputs.available == 'asm sim' }}
+        if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.engine_browsers == 'true' && needs.engines.outputs.available == 'asm sim' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: engine-binding-browsers-${{ matrix.os }}
           path: build/reports/engine-binding-browsers.json
           if-no-files-found: warn
           retention-days: 90
-      - name: Upload the screenshots of the gallery and shell checks
+      - name: Offline, install and Pages check (DV1)
+        if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.pwa == 'true' && needs.engines.outputs.available == 'asm sim' }}
+        run: npm run check:pwa
+      - name: Text screen check (SH3)
+        if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.text == 'true' && needs.engines.outputs.available == 'asm sim' }}
+        run: npm run check:text
+      # check:output and check:hardware skip their engine parts by themselves when
+      # engine/dist is missing (and fail then when EASY68K_REQUIRE_ENGINES=1).
+      - name: Output panel check (SH4)
+        if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.output == 'true' }}
+        run: npm run check:output
+      - name: Hardware panel check (SH7)
+        if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.hardware == 'true' }}
+        run: npm run check:hardware
+      - name: Run check (SH8)
+        if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.run == 'true' && needs.engines.outputs.available == 'asm sim' }}
+        run: npm run check:run
+      - name: Registers, Listing and Messages check (U1)
+        if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.sim_main == 'true' && needs.engines.outputs.available == 'asm sim' }}
+        run: npm run check:sim-main
+      - name: Memory and Stack check (U2)
+        if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.memory_stack == 'true' && needs.engines.outputs.available == 'asm sim' }}
+        run: npm run check:memory-stack
+      - name: Upload the screenshots of the browser checks
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: browser-checks-screenshots-${{ matrix.os }}
+          name: browser-checks-screenshots-${{ matrix.os }}-${{ matrix.group }}
           path: |
             build/gallery-check/
             build/shell-check/
+            build/E2/editor-check/
+            build/E3/highlight-check/
+            build/FS1/files-check/
+            build/E1/documents-check/
+            build/help-check/
+            build/surface-check/
+            build/B1/check/
+            build/pwa-check/
+            !build/pwa-check/dist/
+            build/text-check/
+            build/output-check/
+            build/SH7/hardware-check/
+            build/SH8/run-check/
+            build/U1/sim-main-check/
+            build/U2/check/
           if-no-files-found: ignore
           retention-days: 14
 
@@ -446,14 +575,47 @@ jobs:
           name: engine-dist
           path: engine/dist
 
+      # The three oracles are independent: each runs even when an earlier one failed.
       - name: GDI capture, regenerate and compare (T2)
-        if: needs.plan.outputs.gdi == 'true'
+        if: ${{ !cancelled() && needs.plan.outputs.gdi == 'true' }}
         run: npm run oracle:gdi
+      # The 68000 single-step suite (about 200 MB) is cached by the hash of its manifest.
+      # fetch-suite.mjs checks every cached file again (size, git SHA-1, SHA-256) and downloads
+      # only what is missing or wrong, so a stale or partial cache cannot pass. The cache is saved
+      # here, after a complete fetch, and not at the end of the job, so that it is kept even when
+      # another oracle step fails.
+      - name: Restore the 68000 single-step suite (T4)
+        id: singlestep
+        if: ${{ !cancelled() && needs.plan.outputs.twins == 'true' }}
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/singlestep
+          key: singlestep-${{ hashFiles('tests/conformance/cpu/suite.json') }}
+      - name: Fetch and verify the 68000 single-step suite (T4)
+        id: singlestep-fetch
+        if: ${{ !cancelled() && needs.plan.outputs.twins == 'true' }}
+        run: node tests/conformance/cpu/fetch-suite.mjs --quiet
+      - name: Save the 68000 single-step suite (T4)
+        if: ${{ !cancelled() && needs.plan.outputs.twins == 'true' && steps.singlestep.outputs.cache-hit != 'true' && steps.singlestep-fetch.outcome == 'success' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/singlestep
+          key: singlestep-${{ hashFiles('tests/conformance/cpu/suite.json') }}
       - name: Native twins (T4)
-        if: needs.plan.outputs.twins == 'true'
+        if: ${{ !cancelled() && needs.plan.outputs.twins == 'true' }}
         run: npm run oracle:twins
+      - name: Upload the native-twin report (T4)
+        if: ${{ !cancelled() && needs.plan.outputs.twins == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-twin-report
+          path: |
+            build/native-twin/report.md
+            build/native-twin/work/sim/runs/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Command-line assembler oracle (T1)
-        if: needs.plan.outputs.asm_cli == 'true'
+        if: ${{ !cancelled() && needs.plan.outputs.asm_cli == 'true' }}
         run: node tests/oracle/asm-cli/run.mjs
 
       # Weekly: build the engines on Windows and compare the .wasm files with
@@ -528,3 +690,14 @@ jobs:
         run: npm run build
       - name: Desktop development-build tests (6.7)
         run: npm run desktop:test -- dev
+      # tests/desktop/dev/playwright.config.ts writes its results and report below build/desktop-dev.
+      - name: Upload the desktop test results
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-dev-results
+          path: |
+            build/desktop-dev/test-results/
+            build/desktop-dev/report/
+          if-no-files-found: ignore
+          retention-days: 14

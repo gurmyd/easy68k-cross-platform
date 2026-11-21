@@ -26,6 +26,19 @@ const enginesBuilt = ['asm68k.wasm', 'asm68k-loader.mjs', 'sim68k.wasm', 'sim68k
   existsSync(dist(file)),
 );
 
+/** Suites that load and compile the engines: on a loaded machine they need more than Vitest's 5 s. */
+const ENGINE_TIME = { timeout: 60_000 };
+
+/** With EASY68K_REQUIRE_ENGINES=1 (CI) a missing engine/dist fails instead of skipping. */
+it.runIf(process.env.EASY68K_REQUIRE_ENGINES === '1' && !enginesBuilt)(
+  'engine/dist holds both engines (EASY68K_REQUIRE_ENGINES=1)',
+  () => {
+    expect.fail(
+      'EASY68K_REQUIRE_ENGINES is 1 but engine/dist is incomplete: run "npm run build:engines" or "npm run fetch:engines"',
+    );
+  },
+);
+
 /** The task numbers that have a `case` in the original's TRAP() (trap15-a §1.2, trap15-b §2.1). */
 const TASK_INVENTORY = [
   ...range(0, 25),
@@ -56,7 +69,7 @@ describe('TRAP15_TOUR', () => {
   });
 });
 
-describe.skipIf(!enginesBuilt)('the tour on the real engine (needs engine/dist)', () => {
+describe.skipIf(!enginesBuilt)('the tour on the real engine (needs engine/dist)', ENGINE_TIME, () => {
   let program: AssembledProgram;
   let tour: TourResult;
   let memory: Uint8Array;
@@ -69,7 +82,7 @@ describe.skipIf(!enginesBuilt)('the tour on the real engine (needs engine/dist)'
     tour = runTrap15Tour(test, program);
     memory = test.engine.memory.slice(0x5000, 0x5200);
     test.release();
-  });
+  }, 120_000);
 
   it('runs to its end through every wait state', () => {
     expect(tour.report).toMatchObject({ reason: 'stopped', halted: true });

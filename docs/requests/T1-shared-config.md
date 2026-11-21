@@ -1,6 +1,6 @@
 # T1: requests for shared configuration
 
-Status: open (for integration gate I1).
+Status: item 1 applied in gate I1 round 1 (`.prettierignore`, `eslint.config.js`, `.editorconfig`, the comment in `.gitattributes`; the ignore of `tests/oracle/asm-cli/run-asy68k.mjs` is kept). Item 2 is for DOC1 and the spec authors. Item 3: `ci.yml` needs no change for T1; adding `windows-latest` to `conformance` is declined for now: the job also runs T2's GDI and T4's CPU suites, which have not been proven on Windows in CI, and Windows already runs the byte comparisons of `windows-oracles`; a later gate may add it.
 
 T1 moved the Wine oracle from `tools/oracle-official/` to `tests/oracle/wine/` (section 8) and
 deleted the old folder. Nothing below blocks T1's work: every check passes today. The requests

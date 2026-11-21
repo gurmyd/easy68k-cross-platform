@@ -8,13 +8,15 @@
 //     await vfs.resolve('/memory/demo', 'PROG.x68');   // '/memory/demo/prog.X68'
 //
 // Rules:
-// - writeFile, appendFile and remove of one path run one at a time, in call order (whatever the
-//   backend does with concurrent requests). stat and readFile of that path wait for the mutations
-//   requested before them, so a read sees every write that was called before it. Paths are the
-//   same path for this rule when they differ only in letter case.
+// - writeFile, appendFile, remove and mkdirp of one path run one at a time, in call order (whatever
+//   the backend does with concurrent requests). stat and readFile of that path wait for the
+//   mutations requested before them, so a read sees every write that was called before it. Paths
+//   are the same path for this rule when they differ only in letter case.
 // - Every successful mutation is reported to the subscribers whose prefix contains the path, with
 //   origin 'local'; changes a backend reports through onExternalChange are reported with origin
-//   'external'. Prefixes are compared with exact letter case.
+//   'external'. Prefixes are compared with exact letter case. mkdirp is reported as one 'write' of
+//   the folder it was asked for (not of the parents it created on the way), also when the folder
+//   existed already.
 // - Failures reject with an FsError (fsError(), isFsError()).
 //
 // Owner: W1.
@@ -123,6 +125,11 @@ class VirtualFileSystem implements Vfs {
 
   remove(path: VPath): Promise<void> {
     return this.mutate(path, 'remove', (backend, rel) => backend.remove(rel));
+  }
+
+  mkdirp(path: VPath): Promise<void> {
+    // The root of a mount always exists; a backend is never asked to create it.
+    return this.mutate(path, 'write', (backend, rel) => (rel === '' ? Promise.resolve() : backend.mkdirp(rel)));
   }
 
   async list(path: VPath): Promise<DirEntry[]> {

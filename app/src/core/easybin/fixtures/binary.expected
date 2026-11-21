@@ -1,0 +1,104 @@
+> reset
+> loadbin bin5.BIN 001000 0
+result 5
+> dump 001000 8
+dump 01 02 03 04 05 FF FF FF
+> loadbin bin5.BIN 002000 2
+result 11
+> dump 002000 12
+dump 01 FF 02 FF 03 FF 04 FF 05 FF FF FF
+> loadbin bin5.BIN 003000 4
+result 23
+> dump 003000 22
+dump 01 FF FF FF 02 FF FF FF 03 FF FF FF 04 FF FF FF 05 FF FF FF FF FF
+> loadbin bin0.BIN 004000 0
+result 0
+> loadbin bin0.BIN 004000 2
+result 1
+> loadbin bin0.BIN 004000 4
+result 3
+> loadbin bin5.BIN FFFFFE 0
+result 1
+> loadbin bin5.BIN FFFFFD 2
+result 3
+> loadbin bin256.BIN 005000 0
+result 256
+> loadbin bin70k.BIN 00F000 0
+result 70000
+> loadbin missing.BIN 000000 0
+message "Error openning missing.BIN"
+result 0
+> digest
+digest F1032100 69999
+> savebin one.BIN 001000 000005 0 Yes
+written one.BIN 5 BFE534E8 0102030405
+> savebin two.BIN 001000 000005 2 Yes
+written two_0.BIN 3 78D1ABC8 010305
+written two_1.BIN 3 897500C4 0204FF
+> savebin two8.BIN 005000 000008 2 Yes
+written two8_0.BIN 4 3BBEAE4D 00020406
+written two8_1.BIN 4 011176DD 01030507
+> savebin four.BIN 001000 000005 4 Yes
+written four_0.BIN 2 E87418AB 0105
+written four_1.BIN 2 D27C44CE 02FF
+written four_2.BIN 1 060C5EB2 03
+written four_3.BIN 1 010C56D3 04
+> savebin four8.BIN 005000 000008 4 Yes
+written four8_0.BIN 2 0D769181 0004
+written four8_1.BIN 2 E87418AB 0105
+written four8_2.BIN 2 5B7B8979 0206
+written four8_3.BIN 2 3A7916EF 0307
+> savebin four7.BIN 005000 000007 4 Yes
+written four7_0.BIN 2 0D769181 0004
+written four7_1.BIN 2 E87418AB 0105
+written four7_2.BIN 2 5B7B8979 0206
+written four7_3.BIN 2 3A7916EF 0307
+> savebin four6.BIN 005000 000006 4 Yes
+written four6_0.BIN 2 0D769181 0004
+written four6_1.BIN 2 E87418AB 0105
+written four6_2.BIN 2 5B7B8979 0206
+written four6_3.BIN 1 060C5EB2 03
+> savebin four0.BIN 005000 000000 4 Yes
+written four0_0.BIN 0 811C9DC5 
+written four0_1.BIN 0 811C9DC5 
+written four0_2.BIN 0 811C9DC5 
+written four0_3.BIN 0 811C9DC5 
+> savebin zero.BIN 005000 000000 0 Yes
+written zero.BIN 0 811C9DC5 
+> savebin noext 005000 000003 2 Yes
+written noext_0 2 0F7694A7 0002
+written noext_1 2 EE74221D 0103
+> savebin a.b.BIN 005000 000004 4 Yes
+written a.b_0.BIN 1 050C5D1F 00
+written a.b_1.BIN 1 040C5B8C 01
+written a.b_2.BIN 1 070C6045 02
+written a.b_3.BIN 1 060C5EB2 03
+> savebin big.BIN 00F000 011170 0 Yes
+written big.BIN 70000 414E8F85
+> savebin bigsplit.BIN 00F000 011170 4 Yes
+written bigsplit_0.BIN 17500 544351E9
+written bigsplit_1.BIN 17500 97481975
+written bigsplit_2.BIN 17500 63A88A99
+written bigsplit_3.BIN 17500 D37A1975
+> savebin end.BIN FFFFF0 000010 0 Yes
+beep
+box "Information" "Invalid memory range."
+> savebin end2.BIN FFFFF0 00000F 0 Yes
+written end2.BIN 15 2CCBADA8 FFFFFFFFFFFFFFFFFFFFFFFFFF0101
+> savebin end3.BIN FFFFFC 000003 2 Yes
+written end3_0.BIN 2 6F1E225D FF01
+written end3_1.BIN 2 ED74208A 0102
+> touch ask_1.BIN
+> savebin ask.BIN 005000 000004 0 No
+box "Alert" "File exists! OK to replace?"
+> savebin ask.BIN 005000 000004 0 Yes
+box "Alert" "File exists! OK to replace?"
+written ask.BIN 4 C3AA51B1 00010203
+> touch exist_3.BIN
+> savebin exist.BIN 005000 000004 2 Yes
+box "Alert" "File exists! OK to replace?"
+written exist_0.BIN 2 0F7694A7 0002
+written exist_1.BIN 2 EE74221D 0103
+> savebin one.BIN 005000 000004 0 No
+box "Alert" "File exists! OK to replace?"
+written one.BIN 5 BFE534E8 0102030405

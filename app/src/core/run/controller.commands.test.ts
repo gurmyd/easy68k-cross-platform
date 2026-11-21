@@ -309,11 +309,17 @@ describe.skipIf(!enginesBuilt)('the commands of 4.8 (needs engine/dist)', { time
     expect(kit.listingRows.length).toBeGreaterThan(3);
 
     answer = true;
+    const before = kit.controller.snapshot;
+    expect(before.highlight).toBeGreaterThan(2); // the start row of the program
     await kit.controller.close();
     expect(kit.engineCalls()).toContain('close');
     expect(kit.events).toEqual(['caution', 'caution', 'listing.refresh']);
     expect(kit.listingRows).toEqual([]);
     expect(kit.controller.phase).toBe('idle');
+    // The simulator reset inside Close shows the registers: the snapshot is new, and with the
+    // listing gone no row is the current one.
+    expect(kit.controller.snapshot.revision).toBeGreaterThan(before.revision);
+    expect(kit.controller.snapshot.highlight).toBe(-1);
     // The title is not reset and Reload still loads the last file (sim-ui §8.5).
     expect(kit.controller.program).toEqual({ path: KIT_PROGRAM_PATH, title: KIT_PROGRAM_PATH, hasListing: false });
   });
@@ -361,18 +367,49 @@ describe.skipIf(!enginesBuilt)('the commands of 4.8 (needs engine/dist)', { time
     expect(kit.controller.snapshot.boxes[Box.D0]).toBe('00000101');
   });
 
-  it('pokeMemory writes directly and tells the panels to re-read', async () => {
+  it('pokeMemory writes directly and says "memory changed", not "repaint"', async () => {
     await start();
     await kit.open(counter);
     const view = kit.controller.viewRevision;
+    const repaints = kit.controller.repaintCounts;
     const live = kit.controller.liveRevision;
     let published = 0;
     kit.controller.subscribe(() => published++);
     kit.controller.pokeMemory(0x2000, 0x1ab);
     expect(kit.controller.engine.readByte(0x2000)).toBe(0xab);
-    expect(kit.controller.viewRevision).toBe(view + 1);
+    // sim-ui §10.3, §11.4: the Memory, Stack and Hardware windows are redrawn, and the Stack
+    // window is NOT re-centred, which a repaint would do.
     expect(kit.controller.liveRevision).toBe(live + 1);
+    expect(kit.controller.viewRevision).toBe(view);
+    expect(kit.controller.repaintCounts).toBe(repaints);
     expect(published).toBe(1);
+  });
+
+  it('counts the repaints of the engine by panel (4.6)', async () => {
+    await start();
+    const { controller } = kit;
+    // The start-up reset of the engine showed the main window, the Memory and the Stack window.
+    expect(controller.repaintCounts).toEqual({ listing: 1, breakpoints: 0, memory: 1, stack: 1 });
+    expect(controller.viewRevision).toBe(1);
+    await kit.open(counter); // a load also clears the Break Points window
+    expect(controller.repaintCounts).toEqual({ listing: 2, breakpoints: 1, memory: 2, stack: 2 });
+    controller.traceInto(); // scrshow(): listing, memory, stack
+    expect(controller.repaintCounts).toEqual({ listing: 3, breakpoints: 1, memory: 3, stack: 3 });
+    // A PC breakpoint set from the gutter repaints the listing only: a Stack panel the user has
+    // scrolled is not re-centred by it.
+    const before = controller.repaintCounts;
+    controller.invoke((engine) => engine.setBreakpoint(0x1002));
+    expect(controller.repaintCounts).toEqual({ listing: 4, breakpoints: 1, memory: 3, stack: 3 });
+    expect(controller.repaintCounts).not.toBe(before); // a new object when a counter has moved
+    expect(controller.viewRevision).toBe(4); // one more with every repaint, whichever panel it names
+    // The Run command shows the display once; the free run then repaints nothing until it stops.
+    controller.run();
+    const running = controller.repaintCounts;
+    expect(running).toEqual({ listing: 5, breakpoints: 1, memory: 4, stack: 4 });
+    kit.time.advance(160);
+    expect(controller.repaintCounts).toBe(running);
+    controller.pause();
+    expect(controller.repaintCounts).toEqual({ listing: 6, breakpoints: 1, memory: 5, stack: 5 });
   });
 
   it('after a halt the run commands do nothing until Pause or Rewind (O-12)', async () => {

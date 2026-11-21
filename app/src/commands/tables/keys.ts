@@ -104,6 +104,9 @@ export const KEYS: Partial<Record<KnownCommandId, KeyEntry>> = {
   'bin.file.openBinary': { win: ['Ctrl+B'], mac: ['Cmd+B', 'Ctrl+B'] },
   'bin.file.saveSrec': { win: ['Ctrl+R'], mac: ['Ctrl+R'] },
   'bin.file.saveBinary': { win: ['Ctrl+S'], mac: ['Cmd+S', 'Ctrl+S'] },
+  // F1 opens easybin.htm in the original's memory area and Address field (Form1u.cpp, VK_F1); its
+  // Help action has no ShortCut, so menus show none (NOT_SHOWN_IN_MENUS). docs/requests/B1-keys.md.
+  'bin.help.help': { win: ['F1'], mac: ['F1'] },
 
   // ---- Every mode (1.5)
   'app.mode.next': { win: ['F4'], mac: ['F4'], notInOutput: ['F4'] },
@@ -125,9 +128,11 @@ export const DESKTOP_ONLY_ON_WINDOWS_AND_LINUX: readonly string[] = ['Ctrl+F4'];
 /**
  * Commands whose key is a key of the window, not a menu shortcut: the original's menu shows none
  * next to `Help > Help` (editor-ui §2.6), although F1 on the frame opens it (editor-ui §5.2).
+ * EASyBIN's `Help > EASyBIN Help` likewise (its TAction in Form1u.dfm has no ShortCut; F1 is
+ * handled by the memory area and the Address field, docs/porting/easybin.md 15.2).
  * Menus and tool-tips show no shortcut for these.
  */
-export const NOT_SHOWN_IN_MENUS: readonly KnownCommandId[] = ['ed.help.help'];
+export const NOT_SHOWN_IN_MENUS: readonly KnownCommandId[] = ['ed.help.help', 'bin.help.help'];
 
 /** The eleven commands whose shortcuts TRAP #15 task 24 removes (sim-ui §3.5). */
 export const SUPPRESSED_BY_TASK_24: readonly KnownCommandId[] = [

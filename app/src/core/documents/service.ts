@@ -27,6 +27,8 @@ import {
   type AppState,
   type DialogService,
   type DocDefaults,
+  type DocumentPatch,
+  type DocumentSelection,
   type DocumentService,
   type DocumentState,
   type FileDialogs,
@@ -63,9 +65,7 @@ export interface DocumentServiceDeps {
 }
 
 /** The settings a document can change after it is open (E2: Insert/Replace; E4: Editor Options). */
-export type DocumentPatch = Partial<
-  Pick<DocumentState, 'insertMode' | 'tabType' | 'tabSize' | 'fontName' | 'fontSize'>
->;
+export type { DocumentPatch } from '../../contracts';
 
 /** A document to bring back from a draft (features/documents/drafts.ts). */
 export interface RestoredDocument {
@@ -347,23 +347,38 @@ export class DocumentManager implements DocumentService {
 
   /** editor-ui §6.6 with 1.4 note 3: Yes saves THIS document; a cancelled or failed save cancels. */
   async close(id: string): Promise<boolean> {
-    const entry = this.entries.get(id);
-    if (!entry) return true;
-    if (entry.state.modified) {
-      this.activate(id);
-      const answer = await this.deps.dialogs.messageBox(closeQuestion(entry.state.name));
-      if (answer === 'Cancel' || (answer !== 'Yes' && answer !== 'No')) return false;
-      if (answer === 'Yes' && !(await this.save(id))) return false;
-    }
+    if (!(await this.closeQuery(id))) return false;
     this.discard(id);
     return true;
   }
 
-  /** Closes every document in tab order with its prompt; Cancel in any prompt stops (editor-ui §1.3). */
+  /**
+   * editor-ui §1.3: the frame first asks every document's CloseQuery in tab order and closes
+   * nothing until all of them have agreed. Cancel (or a cancelled or failed save) in any prompt
+   * stops the questions and leaves EVERY document open: one answered No keeps its edits, one
+   * answered Yes has been saved (as the original saves inside CloseQuery) but stays open.
+   */
   async closeAll(): Promise<boolean> {
-    for (const id of [...this.order]) {
-      if (!(await this.close(id))) return false;
+    const ids = [...this.order];
+    for (const id of ids) {
+      if (!(await this.closeQuery(id))) return false;
     }
+    for (const id of ids) this.discard(id);
+    return true;
+  }
+
+  /**
+   * TTextStuff::FormCloseQuery (editor-ui §6.6) with 1.4 note 3: true = the document may close.
+   * A modified document asks Yes/No/Cancel; Yes saves THIS document, and a cancelled or failed
+   * save answers false. Nothing is discarded here.
+   */
+  private async closeQuery(id: string): Promise<boolean> {
+    const entry = this.entries.get(id);
+    if (!entry || !entry.state.modified) return true;
+    this.activate(id);
+    const answer = await this.deps.dialogs.messageBox(closeQuestion(entry.state.name));
+    if (answer !== 'Yes' && answer !== 'No') return false;
+    if (answer === 'Yes' && !(await this.save(id))) return false;
     return true;
   }
 
@@ -382,6 +397,18 @@ export class DocumentManager implements DocumentService {
     if ((Object.keys(patch) as (keyof DocumentPatch)[]).every((key) => entry.state[key] === next[key])) return;
     entry.state = next;
     this.publish();
+  }
+
+  /**
+   * The main selection of a document as the editor last left it (F1, editor-ui §15.3). Offsets are
+   * characters of `text(id)`: the registry's EditorState has the same "\n"-separated text, and every
+   * transaction of the editor view, selection changes included, goes through the registry.
+   */
+  selection(id: string): DocumentSelection | null {
+    if (!this.entries.has(id)) return null;
+    const { doc, selection } = this.registry.state(id);
+    const { from, to, head } = selection.main;
+    return { selected: doc.sliceString(from, to), caret: head };
   }
 
   /** Brings back a document from a draft (3.9.4): modified, with the draft's text and settings. */

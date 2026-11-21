@@ -80,6 +80,72 @@ export function isImeKey(event: { isComposing?: boolean; keyCode?: number }): bo
   return event.isComposing === true || event.keyCode === 229;
 }
 
+/** The parts of a DOM node that `indexHolding` and `holdsFocus` use (plain objects in unit tests). */
+export interface ContainerLike {
+  contains(other: unknown): boolean;
+}
+
+/**
+ * True when `candidate` has the focus: it is the focused element (`active`)
+ * or contains it. A control that hands its focus to a child when it is
+ * focused (a `tabindex="0"` container that focuses a `tabindex="-1"` child)
+ * has taken the focus too (docs/requests/W2-dialog-focus-followups.md item 1).
+ */
+export function holdsFocus(candidate: ContainerLike | null | undefined, active: unknown): boolean {
+  if (!candidate || active === null || active === undefined) return false;
+  return candidate === active || candidate.contains(active);
+}
+
+/**
+ * The index in `list` (document order) of the element that holds `node`: the
+ * element itself, else the innermost element that contains it (the last such
+ * one, since an element comes before its descendants in document order); -1
+ * when none does. A child that took the focus from its container counts as
+ * that container, so Tab and Shift+Tab move on from it.
+ */
+export function indexHolding<T extends ContainerLike>(list: readonly T[], node: unknown): number {
+  const exact = list.indexOf(node as T);
+  if (exact >= 0) return exact;
+  let found = -1;
+  list.forEach((element, index) => {
+    if (element.contains(node)) found = index;
+  });
+  return found;
+}
+
+/**
+ * The indices of a modal dialog's list to try, in turn, when the focus left
+ * the dialog and giving it back to the control that had it failed (that
+ * control was disabled, hidden or removed): that control's next neighbour
+ * first, then on through the list, wrapping; with `preceding` 0 (no known
+ * place) the first control first. `preceding` is the number of list elements
+ * before the lost control. Item 2 of docs/requests/W2-dialog-focus-followups.md.
+ */
+export function restoreOrder(count: number, preceding: number): number[] {
+  return trapOrder(count, -1, false, preceding);
+}
+
+/**
+ * True for a key that a modal dialog answers even when it reaches the
+ * document with the focus on the body (the focused control was disabled,
+ * hidden or removed): Escape, Enter, and the access keys (a letter or digit,
+ * with or without Alt / Option; not with Ctrl or Cmd). Tab has its own path.
+ * Item 3 of docs/requests/W2-dialog-focus-followups.md.
+ */
+export function isDialogBodyKey(event: {
+  key: string;
+  code: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+}): boolean {
+  if (event.key === 'Escape') return true;
+  if (event.key === 'Enter') return !event.ctrlKey && !event.metaKey && !event.altKey;
+  if (event.ctrlKey || event.metaKey) return false;
+  if (/^(Key[A-Z]|Digit\d)$/.test(event.code)) return true;
+  return event.key.length === 1 && /^[\x21-\x7e]$/.test(event.key);
+}
+
 /** The number of `list` elements (in document order) that come before `node` in the document. */
 export function countPreceding(list: readonly Element[], node: Node): number {
   let count = 0;

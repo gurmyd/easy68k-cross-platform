@@ -18,6 +18,19 @@ const repo = (file: string) => fileURLToPath(new URL(`../../../${file}`, import.
 const enginesBuilt = ['asm68k.wasm', 'asm68k-loader.mjs', 'sim68k.wasm', 'sim68k-loader.mjs'].every((file) =>
   existsSync(repo(`engine/dist/${file}`)),
 );
+
+/** Suites that load and compile the engines: on a loaded machine they need more than Vitest's 5 s. */
+const ENGINE_TIME = { timeout: 60_000 };
+
+/** With EASY68K_REQUIRE_ENGINES=1 (CI) a missing engine/dist fails instead of skipping. */
+it.runIf(process.env.EASY68K_REQUIRE_ENGINES === '1' && !enginesBuilt)(
+  'engine/dist holds both engines (EASY68K_REQUIRE_ENGINES=1)',
+  () => {
+    expect.fail(
+      'EASY68K_REQUIRE_ENGINES is 1 but engine/dist is incomplete: run "npm run build:engines" or "npm run fetch:engines"',
+    );
+  },
+);
 const fileUrl = (file: string) => pathToFileURL(repo(file));
 
 /** What the simulator's API module adds before it calls the loader (engine/sim/sim68k.mjs, createSim). */
@@ -46,7 +59,7 @@ describe('engineFiles', () => {
   });
 });
 
-describe.skipIf(!enginesBuilt)('loadEngine (needs engine/dist)', () => {
+describe.skipIf(!enginesBuilt)('loadEngine (needs engine/dist)', ENGINE_TIME, () => {
   it('loads the API module, the loader and the compiled .wasm of each engine', async () => {
     const asm = await loadEngine('asm');
     expect(typeof asm.api.assemble).toBe('function');
@@ -133,7 +146,7 @@ describe.skipIf(!enginesBuilt)('loadEngine (needs engine/dist)', () => {
   });
 });
 
-describe.skipIf(!enginesBuilt)('loadEngineFrom: what is said when an engine cannot be loaded', () => {
+describe.skipIf(!enginesBuilt)('loadEngineFrom: what is said when an engine cannot be loaded', ENGINE_TIME, () => {
   const failure = (files: Partial<ReturnType<typeof engineFiles>>) =>
     loadEngineFrom('sim', { ...engineFiles('sim'), ...files }).then(
       () => {

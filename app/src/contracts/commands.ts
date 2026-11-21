@@ -24,14 +24,29 @@ export interface CommandSpec {
 }
 export interface CommandHandler {
   run(ctx: AppContext, arg?: unknown): void | Promise<void>;
-  enabled?(state: AppState, ctx: AppContext): boolean; // default true
+  /** Default true. Menus and toolbars ask again whenever the store notifies. A handler whose answer
+   *  depends on something outside the store (the editor's undo history, selection or focus) makes
+   *  them ask again with `ctx.store.setState((state) => ({ ...state }))`, a new state object with
+   *  the same contents (docs/porting/errata/W1.md, entry 11). */
+  enabled?(state: AppState, ctx: AppContext): boolean;
   checked?(state: AppState, ctx: AppContext, arg?: unknown): boolean;
+}
+/** Options of CommandRegistry.run. Added at gate I1 (docs/porting/errata/W1.md, entry 11). */
+export interface CommandRunOptions {
+  /**
+   * Run the command although a modal dialog is open. Only the code of the open dialog itself passes
+   * it, for its Help button and F1 (editor-ui §15.2: the option dialogs open `options.htm`). The key
+   * dispatcher, toolbars, menus and the native menu never pass it, so the rule of 2.9.1 holds for
+   * everything the user can do outside the dialog.
+   */
+  allowInModal?: boolean;
 }
 export interface CommandRegistry {
   spec(id: CommandId): CommandSpec;
   register(id: CommandId, handler: CommandHandler): void; // exactly one handler per id
-  /** Does nothing when the command is disabled and while a modal dialog is open (2.9.1). */
-  run(id: CommandId, arg?: unknown): Promise<void>;
+  /** Does nothing when the command is disabled and while a modal dialog is open (2.9.1), unless
+   *  `options.allowInModal` is set (see CommandRunOptions). */
+  run(id: CommandId, arg?: unknown, options?: CommandRunOptions): Promise<void>;
   isEnabled(id: CommandId): boolean;
   isChecked(id: CommandId, arg?: unknown): boolean;
 }

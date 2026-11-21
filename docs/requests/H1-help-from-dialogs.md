@@ -1,3 +1,7 @@
+Status: accepted in its first form at gate I1 (contracts engineer, W1). `contracts/commands.ts` has `CommandRunOptions { allowInModal? }` and `CommandRegistry.run(id, arg?, options?: CommandRunOptions)`; the shell's registry honours it. Only the open dialog's own code passes `{ allowInModal: true }` (E4's option dialogs: `ctx.commands.run('ed.help.help', 'options.htm', { allowInModal: true })`; B1's About box may do the same for F1). `ctx.help.open(page)` is not added. Showing the page above the dialog is for H1 and the shell. Details: `docs/porting/errata/W1.md`, entry 11.
+
+Status (shell part, W3): done at gate I1. The registry honours `{ allowInModal: true }` (`commands/registry.ts`), and while a modal dialog is open the Help drawer is drawn above the dialog's backdrop (`data-modal` on the shell, `ui/shell/shell.css`); the dialog keeps the focus. check-shell.mjs opens `options.htm` from a message box and finds the drawer on top. E4 passes the option from its dialogs.
+
 # Request from H1: opening help from a modal dialog (gate; W3, E4)
 
 editor-ui §15.2: F1 and the `Help` button of the Editor Options and Assembler Options dialogs open

@@ -95,8 +95,14 @@ compile against; W1 is asked to take them into `app/src/contracts/`.
 
 - Fixed in `DESKTOP_BRIDGE_KEYS` (`app/src/platform/desktop.ts`): `version`, `startup`, `fs`,
   `fsSync`, `onFsChange`, `setMenu`, `onMenuCommand`, `onOpenFiles`, `setTitle`, `openExternal`,
-  `showHelp`, `newWindow`, `pasteIntoFocus`, `quit`, `setFullScreen`, `print`, `showOpenDialog`,
-  `showSaveDialog`, `chooseFolder`, `grantDroppedFile`, `devices` (`{ request, on }`, the `DesktopDeviceBridge` of W1).
+  `showHelp`, `newWindow`, `pasteIntoFocus`, `quit`, `setFullScreen`, `onFullScreenChange`, `print`,
+  `showOpenDialog`, `showSaveDialog`, `chooseFolder`, `grantDroppedFile`, `devices` (`{ request, on }`,
+  the `DesktopDeviceBridge` of W1). `onFullScreenChange` (gate I1, for the contract's optional
+  `Platform.onFullScreenChange`) carries the window's `enter-full-screen` and `leave-full-screen`
+  events on the channel `e68:full-screen-change`.
+- Gate I1: `NativeFileDialogs`, `DroppedEntry` and `DesktopDeviceSources` are contract now
+  (`contracts/platform.ts`, W1 errata 11); `platform/desktop.ts` re-exports them instead of declaring
+  its own (its `DeviceSources` is an alias of `DesktopDeviceSources`).
   `tests/desktop/dev/security.spec.ts` compares the page's object with this list (DV3's check 2 can
   use the same list).
 - Every handler checks that the message comes from the main frame of an application window the
@@ -123,6 +129,16 @@ compile against; W1 is asked to take them into `app/src/contracts/`.
   handlers (asynchronous and synchronous) to the other windows (3.8.6 rule 3). Changes made by
   other programs are not reported.
 
+### 9a. Names of folders that no listing contains (8.3 short names)
+
+- The synchronous `resolve` gives each existing segment of a path its stored spelling, found in the
+  listing of its parent. A segment that no listing contains but that exists all the same is
+  another name of the same entry: a Windows 8.3 short name (`RUNNER~1` for `runneradmin`), which a
+  student's path can contain too; or a folder that may be entered but not listed. It is kept as
+  given and the walk goes on below it. Before gate I1 the walk stopped there, so every later segment
+  kept the program's spelling (`SUB.DAT` where `Sub.Dat` was stored: three red unit tests on GitHub's
+  Windows runner, whose temporary folder is `C:\Users\RUNNER~1\...`).
+
 ### 10. The native menu on Windows and Linux
 
 - 7.6 describes the macOS menu bar. Electron also runs on Windows and Linux, where these tests run
@@ -130,9 +146,14 @@ compile against; W1 is asked to take them into `app/src/contracts/`.
   menu bar); the menu-level roles are not applied and the macOS-only item roles (`services`,
   `hide`, `hideOthers`, `unhide`, `zoom`, `front`) are left out; command accelerators carry
   `registerAccelerator: false`.
-- Keys that reach the menu on macOS: only the chords of the role items the page's menu uses
-  (Cmd+Z, Shift+Cmd+Z, Cmd+X, C, V, A, Cmd+M, Cmd+H, Alt+Cmd+H); `setIgnoreMenuShortcuts` is set
-  for each key-down in `before-input-event`. On Windows and Linux no key reaches the menu. A key is
+- Keys that reach the menu on macOS: only the chords of the role items that the window's own menu
+  has (`roleChordsOf` in `desktop/src/menu.ts`, taken from each description the page sends; out of
+  Cmd+Z, Shift+Cmd+Z, Cmd+X, C, V, A, Cmd+M, Cmd+H, Alt+Cmd+H). In Editor mode Undo and Redo are
+  command items (`ed.edit.undo`, `ed.edit.redo`), so Cmd+Z and Shift+Cmd+Z stay with the page there;
+  in Simulator and EASyBIN mode the standard Edit menu has the `undo` and `redo` roles and they go to
+  the menu (gate I1 review: a fixed list let the Editor's Undo item take Cmd+Z and drop the click as
+  `triggeredByAccelerator`). Before a window's page has sent a menu, the whole list applies.
+  `setIgnoreMenuShortcuts` is set for each key-down in `before-input-event`. On Windows and Linux no key reaches the menu. A key is
   judged by the character it types (`input.key`), as macOS matches key equivalents, so Cmd+C works
   on Dvorak (where "c" is on the key `KeyJ`) and AZERTY; by its position (`input.code`) only when it
   types no ASCII letter or digit (Option held, non-Latin layouts).
@@ -151,6 +172,11 @@ compile against; W1 is asked to take them into `app/src/contracts/`.
   inside the help stay in the window; links to the allowed sites open in the system browser after
   a confirmation; every other navigation is cancelled. `showHelp(page)` returns false for a name
   that is not a relative `.htm`/`.html` path inside the help folder.
+- Links with `target="_blank"` (H1 errata 10: the import adds it to the links to the web and to
+  the Quick Reference PDF) ask for a new window, which is never created: a file of the help folder
+  (another page, `EASy68KQuickRef.pdf`) is shown in the help window itself, by Electron's PDF
+  viewer for the PDF; an allow-listed web address goes to the system browser after the same
+  question as a followed link; anything else is refused (`helpLinkAction` in `security.ts`).
 
 ### 12. Leaving with unsaved work (3.8.4 `confirmBeforeUnload`)
 
@@ -158,6 +184,8 @@ compile against; W1 is asked to take them into `app/src/contracts/`.
   answers Electron's `will-prevent-unload` with a native question: `Leave EASy68K?` /
   `Changes you made may not be saved.`, buttons `Leave` and `Stay` (Stay is the default). The
   document gives no text.
+- Gate I1: `confirmBeforeUnload(needed, who?)` (W1 errata 11) keeps the guard while any named party
+  (`documents`, `simulator`; no name = one unnamed party) needs it, as the web platform does.
 
 ### 13. Printing
 
@@ -179,14 +207,18 @@ compile against; W1 is asked to take them into `app/src/contracts/`.
 
 - Packaged: `<resources>/app/dist` (next to the archive, `extraResources`) or `app/dist` inside the
   archive (`<app path>/app/dist`, `files`); DV3's `electron-builder.yml` must put the build at one
-  of the two. From the repository: `app/dist`. `EASY68K_APP_DIST` overrides both (tests). `EASY68K_DEV_SERVER_URL` loads the dev
-  server instead (tools/desktop-dev.mjs).
+  of the two. From the repository: `app/dist`. `EASY68K_APP_DIST` overrides it (tests). `EASY68K_DEV_SERVER_URL` loads the dev
+  server instead (tools/desktop-dev.mjs). A packaged app ignores both (entry 15).
 
 ### 15. Test-only switches
 
 - `EASY68K_DESKTOP_TEST_WINDOWS` (`hidden` or `inactive`) keeps windows off the screen and installs
   `globalThis.__easy68kDesktopTest` in the main process (granted roots, menus, windows). Nothing
   but `tests/desktop/dev` sets it. On macOS `window-all-closed` quits the app only in that mode.
+- Gate I1 review: a packaged app (`app.isPackaged`) honours none of `EASY68K_APP_DIST`,
+  `EASY68K_DEV_SERVER_URL` and `EASY68K_DESKTOP_TEST_WINDOWS` (`developmentOverrides` in
+  `security.ts`): whoever controls its environment could otherwise make app:// serve another folder,
+  load the page from another server or install the test hooks. DV3's packaged checks can assert it.
 
 ### 16. Unit tests of `desktop/src` from `app/` (8)
 

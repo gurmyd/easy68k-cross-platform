@@ -13,6 +13,7 @@ import { FEATURES } from './features';
 import { MemoryBackend } from './fs/memory-backend';
 import { MemorySyncFiles } from './fs/sync/memory';
 import { panelVisible, showPanel } from './state/panels';
+import { setModeTitle } from './state/shell';
 import { STUB_SERVICES, createFakePlatform, createTestApplication } from './state/testing';
 import { withSplit } from './state/layout';
 
@@ -421,6 +422,36 @@ describe('the window title and the native menu', () => {
     expect(windowTitle({ mode: 'editor', sim: { program } }, '1.0.0')).toBe(
       'EASy68K Editor/Assembler v5.16.01 - unofficial port 1.0.0',
     );
+  });
+
+  it("title: a mode's feature can set its own title (EASyBIN's opened file, B1-window-title)", async () => {
+    const app = createTestApplication({ version: '1.0.0' });
+    setModeTitle(app.ctx, 'easybin', 'C:\\work\\demo.S68');
+    expect(app.platform.titles.at(-1)).toBe('EASy68K Editor/Assembler v5.16.01 - unofficial port 1.0.0');
+    await app.ctx.commands.run('app.mode.set', 'easybin');
+    expect(app.platform.titles.at(-1)).toBe('C:\\work\\demo.S68 - unofficial port 1.0.0');
+    setModeTitle(app.ctx, 'easybin', '/browser/b.bin');
+    expect(app.platform.titles.at(-1)).toBe('/browser/b.bin - unofficial port 1.0.0');
+    const count = app.platform.titles.length;
+    setModeTitle(app.ctx, 'easybin', '/browser/b.bin'); // the same title: nothing to do
+    expect(app.platform.titles).toHaveLength(count);
+    setModeTitle(app.ctx, 'easybin', null); // New
+    expect(app.platform.titles.at(-1)).toBe('EASyBIN v2.5.0 - unofficial port 1.0.0');
+    expect(windowTitle({ mode: 'easybin', sim: { program: null } }, '2', { easybin: 'x.S68' })).toBe(
+      'x.S68 - unofficial port 2',
+    );
+  });
+
+  it('the context carries the build: version and repository (H1-build-info)', () => {
+    const app = createTestApplication({ version: '1.2.3', repository: 'owner/name' });
+    const build = (app.ctx as unknown as { build: unknown }).build;
+    expect(build).toEqual({ version: '1.2.3', repository: 'owner/name' });
+    expect(app.build).toBe(build);
+    expect(Object.isFrozen(build)).toBe(true);
+    expect((createTestApplication().ctx as unknown as { build: unknown }).build).toEqual({
+      version: '0.0.0-test',
+      repository: null,
+    });
   });
 
   it('the native menu is sent in the desktop app only, follows the mode and a modal dialog', async () => {

@@ -11,12 +11,20 @@
 //   - each glyph is drawn in the font colour (1-bit glyphs: full pixels);
 //   - the pen moves by TextWidth(string): the sum of the single-byte advances, where the zero-width
 //     bytes count 0 if the string has a byte of $80 or above and their full advance otherwise, in
-//     every style.
+//     every style (textExtent; in the outline faces $7F also changes its width in such a string).
 //
 // textUnmodelled() in cases.ts names the strings these rules do not cover (bytes Windows takes from
 // a fallback font); no case of the `text` suite contains one.
 
-import { cellOf, rasterGlyph, ZERO_WIDTH_BYTES, type FontRequest, type Metrics, type TestGlyph } from './fonts';
+import {
+  cellOf,
+  outlineEntry,
+  rasterGlyph,
+  ZERO_WIDTH_BYTES,
+  type FontRequest,
+  type Metrics,
+  type TestGlyph,
+} from './fonts';
 import { ITALIC_SPECIAL_BYTES, type GdiCase } from './cases';
 
 export interface Picture {
@@ -39,9 +47,16 @@ export interface TextLayout {
 const isZeroWidth = (b: number) => ZERO_WIDTH_BYTES.includes(b);
 
 /**
- * TextWidth(string) in the raster faces, given the single-byte advances: a zero-width byte inside
- * a string of two or more bytes counts 0 when the string also has a byte of $80 or above, and its
- * full advance otherwise. Style plays no part (measured: plain, bold, italic, underline, strike-out).
+ * TextWidth(string), given the advance of each byte in this string: a zero-width byte inside a
+ * string of two or more bytes counts 0 when the string also has a byte of $80 or above, and its full
+ * advance otherwise. Style plays no part (measured: plain, bold, italic, underline, strike-out).
+ *
+ * In the raster faces a byte's advance is its single-byte advance. In the outline faces (Courier
+ * New, Lucida Console, Consolas, and Arial for the proportional names) it is too, except $7F in a
+ * string with a byte of $80 or above: Windows draws it from a fallback font, and it takes that
+ * glyph's width (`delInHighString` of the outline atlas index; about 0.4 em, one more in bold)
+ * instead of the face's advance (review round 2: Courier New 9 [$E9,$7F] is 7 + 4 = 11, not 14).
+ * outlineAdvance() gives that advance.
  */
 export function textExtent(bytes: readonly number[], advanceOf: (byte: number) => number): number {
   const high = bytes.some((b) => b >= 0x80);
@@ -64,28 +79,50 @@ export function italicOverhangDropped(bytes: readonly number[]): boolean {
   return special > 0 && special < drawn.length;
 }
 
+/** Whether $7F takes the fallback glyph's width in this outline-face string (see textExtent). */
+export const delOnFallback = (bytes: readonly number[]): boolean =>
+  bytes.includes(0x7f) && bytes.some((b) => b >= 0x80);
+
+/**
+ * The advance of `byte` inside the string `bytes` in a monospaced outline face: the cell width, or
+ * for $7F in a string with a byte of $80 or above the fallback width of the atlas index. null when
+ * that width is needed and the size has no outline atlas.
+ */
+export function outlineAdvance(
+  metrics: Metrics,
+  font: FontRequest,
+  byte: number,
+  bytes: readonly number[],
+): number | null {
+  if (byte === 0x7f && delOnFallback(bytes)) return outlineEntry(metrics, font)?.delInHighString ?? null;
+  return cellOf(metrics, font).colWidth;
+}
+
+/** A glyph source; `bytes` is the whole string, for advances that depend on it. */
+export type GlyphOf = (metrics: Metrics, font: FontRequest, byte: number, bytes: readonly number[]) => TestGlyph;
+
 export function layoutText(
   metrics: Metrics,
   font: FontRequest,
   bytes: readonly number[],
-  glyphOf = rasterGlyph,
+  glyphOf: GlyphOf = rasterGlyph,
 ): TextLayout {
   const cell = cellOf(metrics, font);
   const glyphs: { glyph: TestGlyph; x: number }[] = [];
   let x = 0;
   for (const b of bytes) {
     if (bytes.length >= 2 && isZeroWidth(b)) continue;
-    const g = glyphOf(metrics, font, b);
+    const g = glyphOf(metrics, font, b, bytes);
     glyphs.push({ glyph: g, x });
     x += g.advance;
   }
-  const extent = textExtent(bytes, (b) => glyphOf(metrics, font, b).advance);
+  const extent = textExtent(bytes, (b) => glyphOf(metrics, font, b, bytes).advance);
   // GDI's simulated bold and italic overhang the last advance; the opaque cell covers the overhang
   // too (tmOverhang: 1 for bold, floor((h - 1) / 2) for italic; 0 for the outline faces).
   const fullOverhang = cell.kind === 'raster' ? rasterOverhang(font.style, cell.rowHeight) : 0;
   const allZero = bytes.length > 0 && bytes.every(isZeroWidth);
   let boxWidth: number;
-  if (allZero) boxWidth = glyphOf(metrics, font, bytes[0] as number).advance + fullOverhang;
+  if (allZero) boxWidth = glyphOf(metrics, font, bytes[0] as number, bytes).advance + fullOverhang;
   else if (glyphs.length === 0) boxWidth = 0;
   else if (font.style === 2 && italicOverhangDropped(bytes)) {
     // Only the first glyph's overhang is kept then, where it reaches past the advances
@@ -107,7 +144,8 @@ export interface Box {
  * The text cells of an outline-face case as the port draws them (advance boxes), and a predicate
  * for the pixels whose GDI colour the port cannot know: the 1-3 columns by which GDI widens a
  * TrueType cell (the glyphs' ink overhang) and, for underline and strike-out, lines outside the
- * cells. null when the case uses the proportional face (no per-byte advances at every size).
+ * cells. null when the case uses the proportional face (no per-byte advances at every size), or a
+ * $7F on the fallback path at a size without an outline atlas.
  */
 export function outlineCells(
   metrics: Metrics,
@@ -122,7 +160,13 @@ export function outlineCells(
     const cell = cellOf(metrics, font);
     if (cell.face === 'Arial') return null;
     if (font.style === 3 || font.style === 4) line = true;
-    boxes.push({ x: o.x, y: o.y, w: cell.colWidth * o.bytes.length, h: cell.rowHeight });
+    let w = 0;
+    for (const b of o.bytes) {
+      const a = outlineAdvance(metrics, font, b, o.bytes);
+      if (a === null) return null;
+      w += a;
+    }
+    boxes.push({ x: o.x, y: o.y, w, h: cell.rowHeight });
   }
   // The widening grows with the size: up to a tenth of the cell height, at least 3 pixels.
   const inside = (x: number, y: number, widen: boolean) =>
@@ -139,7 +183,7 @@ export function rasterOverhang(style: number, cellHeight: number): number {
 }
 
 /** Replays a text case (bg, fill, fontcolor, font, text, moveto; other operations do not affect text). */
-export function drawTextCase(metrics: Metrics, c: GdiCase, glyphOf = rasterGlyph): Picture {
+export function drawTextCase(metrics: Metrics, c: GdiCase, glyphOf: GlyphOf = rasterGlyph): Picture {
   const pixels = new Uint32Array(c.width * c.height);
   let fill = 0;
   let fontColor = 0xffffff;

@@ -10,7 +10,10 @@
 //   - settings reach the engine at every cold start, and options the engine changes go back into
 //     the settings;
 //   - the page's own events that matter to a program's files (the window lost the focus, the page
-//     is closing) reach the program files.
+//     is closing) reach the program files, and while bytes of a program's files or of a log are
+//     not in storage yet the platform is asked for its "leave?" question;
+//   - the desktop app's serial and network devices are told where the port map and the 68000
+//     memory are.
 //
 // No other package edits this file (3.1); a host part delivered later is picked up through its
 // class at its final path, which core/run/compose.ts constructs.
@@ -21,7 +24,11 @@ import {
   SimOption,
   type AppContext,
   type GlyphProvider,
+  type LogFileExistsProps,
+  type LogFileExistsResult,
   type PrintJob,
+  type SimFileDialogProps,
+  type SimFileDialogResult,
   type SimSession,
   type SimSessionEnv,
   type SyncFiles,
@@ -50,22 +57,22 @@ export const INPUT_TOAST_ACTION = 'Simulator';
 /** localStorage key of the program-files journal (3.8.4). */
 export const JOURNAL_KEY = 'easy68k.sim.journal.v1';
 
-/** The props of the task 58 dialog `sim.fileDialog` (features/sim-files); it resolves to a path or null. */
-export interface SimFileDialogProps {
-  /** 0 = Open, 1 = Save (trap15-a task 58). */
-  mode: number;
-  title: string;
-  filter: string;
-  initialName: string;
+/** The ids of the two dialogs the session opens for other packages (2.7; props in the contracts). */
+export const FILE_DIALOG_ID = 'sim.fileDialog';
+export const LOG_FILE_EXISTS_DIALOG_ID = 'sim.logFileExists';
+
+/** The name under which the session asks for the platform's "leave?" question (Platform.confirmBeforeUnload). */
+export const UNLOAD_PARTY = 'simulator';
+
+/** What the session uses of the page it runs in: two events and the storage of the journal. */
+export interface SessionPage {
+  addEventListener?(type: 'blur' | 'pagehide', listener: () => void): void;
+  removeEventListener?(type: 'blur' | 'pagehide', listener: () => void): void;
+  /** Absent where a page has no storage (a private window may also refuse every call). */
+  readonly localStorage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 }
 
-/** The props of the `Log File Options` dialog `sim.logFileExists` (features/log). */
-export interface LogFileExistsProps {
-  kind: 'exec' | 'output';
-  fileName: string;
-}
-
-/** For tests: other parts, other fonts, no start. */
+/** For tests: other parts, other fonts, no start, another page. */
 export interface SimSessionOptions {
   /** Objects to use instead of the host parts at their final paths. */
   parts?: Partial<SessionPartOverrides>;
@@ -73,6 +80,8 @@ export interface SimSessionOptions {
   glyphs?: GlyphProvider;
   /** false: the caller starts the session with `start()`. Default: it starts right after bootstrap. */
   autoStart?: boolean;
+  /** Default: the window (`globalThis`). */
+  page?: SessionPage;
 }
 
 /** The session as this feature built it: the contract's `SimSession` and a few members more. */
@@ -100,6 +109,7 @@ export function displayPath(path: VPath): string {
 export function createSimSession(ctx: AppContext, env: SimSessionEnv, options: SimSessionOptions = {}): RunSession {
   const report = (what: string, error: unknown): void => console.error(`Simulator: ${what}:`, error);
   const inSimulatorMode = (): boolean => ctx.store.getState().mode === 'simulator';
+  const page: SessionPage = options.page ?? (globalThis as SessionPage);
 
   /* ---- program files: one synchronous view per mount (table of 3.8.4) */
   const cachedViews = new Map<string, SyncFiles>();
@@ -171,7 +181,7 @@ export function createSimSession(ctx: AppContext, env: SimSessionEnv, options: S
     async showFileDialog(mode, title, filter, initialName) {
       const props: SimFileDialogProps = { mode, title, filter, initialName };
       try {
-        return await ctx.dialogs.open<SimFileDialogProps, VPath | null>('sim.fileDialog', props);
+        return await ctx.dialogs.open<SimFileDialogProps, SimFileDialogResult>(FILE_DIALOG_ID, props);
       } catch (error) {
         report('the file dialog of TRAP #15 task 58 could not be opened', error);
         return null; // as Cancel
@@ -184,7 +194,7 @@ export function createSimSession(ctx: AppContext, env: SimSessionEnv, options: S
         fileName: kind === 'exec' ? state.execFileName : state.outputFileName,
       };
       try {
-        return await ctx.dialogs.open<LogFileExistsProps, 'Replace' | 'Append' | 'Cancel'>('sim.logFileExists', props);
+        return await ctx.dialogs.open<LogFileExistsProps, LogFileExistsResult>(LOG_FILE_EXISTS_DIALOG_ID, props);
       } catch (error) {
         report('the Log File Options question could not be asked', error);
         return 'Cancel';
@@ -194,18 +204,20 @@ export function createSimSession(ctx: AppContext, env: SimSessionEnv, options: S
       printJobs.push(job);
       for (const listener of [...printListeners]) listener(job);
     },
+    // The storage is looked up at each use: reading the property itself can throw in a page that
+    // may not use storage.
     journal: {
       write(text) {
         try {
-          if (text === null) globalThis.localStorage?.removeItem(JOURNAL_KEY);
-          else globalThis.localStorage?.setItem(JOURNAL_KEY, text);
+          if (text === null) page.localStorage?.removeItem(JOURNAL_KEY);
+          else page.localStorage?.setItem(JOURNAL_KEY, text);
         } catch (error) {
           report('the program-files journal could not be written', error);
         }
       },
       read() {
         try {
-          return globalThis.localStorage?.getItem(JOURNAL_KEY) ?? null;
+          return page.localStorage?.getItem(JOURNAL_KEY) ?? null;
         } catch {
           return null;
         }
@@ -219,7 +231,8 @@ export function createSimSession(ctx: AppContext, env: SimSessionEnv, options: S
       );
       return answer === 'OK';
     },
-    enterFullScreen: () => void ctx.commands.run('sim.output.fullscreen'),
+    // With the argument the command sets the state; without one it would toggle.
+    enterFullScreen: () => void ctx.commands.run('sim.output.fullscreen', true),
     displayName: displayPath,
     commandLine() {
       const { run, fullScreen: full, exceptions, bitField } = ctx.platform.startupArgs();
@@ -253,15 +266,45 @@ export function createSimSession(ctx: AppContext, env: SimSessionEnv, options: S
     ui,
   });
 
-  /* ---- AppState.sim mirrors the simulator (3.12.1, 4.6) */
   const { controller, bridge } = session;
+
+  /* ---- the desktop app's serial and network devices (3.3.4) */
+  // They are made by the platform before any session exists; this tells them where the port map
+  // and the 68000 memory are. Both are read at each use: a cold start replaces the engine.
+  ctx.platform.bindDeviceSources?.({
+    portMap: () => ctx.settings.get().app.serialPortMap,
+    memory: () => controller.engine.memory,
+  });
+
+  /* ---- the "leave?" question while bytes of the program's files or of a log are not in storage */
+  let guarding = false;
+  const guardUnload = (): void => {
+    let needed = false;
+    try {
+      needed = session.files.unsaved === true || session.log.unsaved === true;
+    } catch (error) {
+      report('the state of the program files could not be read', error);
+    }
+    if (needed === guarding) return;
+    guarding = needed;
+    ctx.platform.confirmBeforeUnload(needed, UNLOAD_PARTY);
+  };
+
+  /* ---- AppState.sim mirrors the simulator (3.12.1, 4.6) */
   let logging = false;
   let breakpoints: readonly number[] = [];
+  // `sim.liveRevision` has a second writer: interface code that writes memory itself bumps it
+  // (RunController.pokeMemory in the contracts). The session therefore adds what the controller
+  // counted since the last look instead of writing the controller's number over the store's.
+  let liveSeen = controller.liveRevision;
   const sync = (): void => {
     const state = bridge.state;
     const { snapshot } = controller;
     const fullScreen = fullScreenRequest;
     fullScreenRequest = null;
+    const liveBumps = controller.liveRevision - liveSeen;
+    liveSeen = controller.liveRevision;
+    guardUnload();
     ctx.store.setState((appState) => {
       const sim = mirrorSim(appState.sim, {
         phase: controller.phase,
@@ -273,7 +316,8 @@ export function createSimSession(ctx: AppContext, env: SimSessionEnv, options: S
         logging,
         regsRevision: snapshot.revision,
         viewRevision: controller.viewRevision,
-        liveRevision: controller.liveRevision,
+        repaint: controller.repaintCounts,
+        liveRevision: appState.sim.liveRevision + liveBumps,
         messageLines: state.messageLines,
         breakpoints,
         output: {
@@ -320,10 +364,6 @@ export function createSimSession(ctx: AppContext, env: SimSessionEnv, options: S
   });
 
   /* ---- events of the page that matter to a program's files (3.8.4) */
-  const page = globalThis as {
-    addEventListener?: (type: string, listener: () => void) => void;
-    removeEventListener?: (type: string, listener: () => void) => void;
-  };
   const onBlur = (): void => {
     // The window had the focus elsewhere: files may have changed behind a cached view.
     session.files.markStale();
@@ -356,6 +396,8 @@ export function createSimSession(ctx: AppContext, env: SimSessionEnv, options: S
       stopSettings();
       page.removeEventListener?.('blur', onBlur);
       page.removeEventListener?.('pagehide', onPageHide);
+      if (guarding) ctx.platform.confirmBeforeUnload(false, UNLOAD_PARTY);
+      guarding = false;
       dispose();
     },
   });
@@ -363,10 +405,8 @@ export function createSimSession(ctx: AppContext, env: SimSessionEnv, options: S
 
   if (options.autoStart !== false) {
     // After bootstrap() has finished with the context: the engine's start-up calls may show panels.
-    void Promise.resolve().then(async () => {
-      await session.files.recoverJournal().catch((error: unknown) => report('the journal could not be applied', error));
-      await runSession.start();
-    });
+    // The start first applies the journal of the program files (core/run/compose.ts).
+    void Promise.resolve().then(() => runSession.start());
   }
   return runSession;
 }

@@ -24,7 +24,16 @@
 // self-contained source text.
 
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { extname, join } from 'node:path';
@@ -390,11 +399,25 @@ function productionBuild(): Promise<Built> {
 
     // The content types of the desktop app's protocol handler (7.6). Under /plain/ the .wasm files
     // come as application/octet-stream, as from a server that does not know the type.
-    const types: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript' };
+    const types: Record<string, string> = {
+      '.html': 'text/html',
+      '.js': 'text/javascript',
+      '.mjs': 'text/javascript',
+      '.webmanifest': 'application/manifest+json',
+    };
     const server = createServer((request, response) => {
       const [, area, ...rest] = decodeURIComponent(new URL(request.url ?? '/', 'http://localhost').pathname).split('/');
-      const file = join(dir, ...rest);
-      if ((area !== 'site' && area !== 'plain') || rest.includes('..') || !existsSync(file)) {
+      // The build leaves out app/public (copyPublicDir: false, to stay small); the server answers
+      // from it instead, as a real build would contain it. The page links some of those files: the
+      // build step of app/vite.config.ts adds the web app manifest and the icons to every index.html.
+      const inBuild = join(dir, ...rest);
+      const file = existsSync(inBuild) ? inBuild : join(repo('app/public'), ...rest);
+      if (
+        (area !== 'site' && area !== 'plain') ||
+        rest.includes('..') ||
+        !existsSync(file) ||
+        !statSync(file).isFile()
+      ) {
         response.writeHead(404).end('not found');
         return;
       }

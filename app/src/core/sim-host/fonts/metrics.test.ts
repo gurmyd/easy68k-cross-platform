@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { FontFormatError } from './atlas';
 import {
+  emPixels,
   FONT_STYLES,
   metricEntry,
   parseMetricTable,
@@ -296,16 +297,18 @@ describe('scalable/index.json: the list of the outline atlases', () => {
     ],
   };
 
-  it('reads file, face, style and the two lines of every atlas', () => {
+  it('reads file, face, style, the point size and the two lines of every atlas', () => {
     expect(parseOutlineIndex(index)).toEqual([
       {
         file: 'scalable/Courier_New-15.bin',
         face: 'Courier New',
         style: 'plain',
+        size: 9,
         underline: [15, 1],
         strikeOut: [9, 1],
       },
-      { file: 'scalable/Courier_New-16x8-b.bin', face: 'Courier New', style: 'bold' },
+      { file: 'scalable/Courier_New-16x8-b.bin', face: 'Courier New', style: 'bold', size: 10 },
+      // an atlas without a point size is read all the same
       { file: 'scalable/Arial-15-i.bin', face: 'Arial', style: 'italic' },
     ]);
     expect(parseOutlineIndex(new TextEncoder().encode(JSON.stringify(index)))).toEqual(parseOutlineIndex(index));
@@ -332,6 +335,16 @@ describe('scalable/index.json: the list of the outline atlases', () => {
       { atlases: [{ file: 'a.bin', face: 'A', style: 'plain', underline: [3] }] },
       /"underline" must be \[first row, rows\]/,
     ],
+    [
+      'a point size of 0',
+      { atlases: [{ file: 'a.bin', face: 'A', style: 'plain', size: 0 }] },
+      /"size" must be a point size from 1 to 255/,
+    ],
+    [
+      'a point size that is not a whole number',
+      { atlases: [{ file: 'a.bin', face: 'A', style: 'plain', size: 9.5 }] },
+      /"size" must be a point size from 1 to 255/,
+    ],
   ])('refuses %s', (_name, source, message) => {
     expect(() => parseOutlineIndex(source)).toThrow(FontFormatError);
     expect(() => parseOutlineIndex(source)).toThrow(message);
@@ -351,5 +364,11 @@ describe('style and size of a font', () => {
 
   it('a size is an index from 0 to 255', () => {
     expect([0, 9, 255, 256, 1000, -3, 9.7, Number.NaN].map(sizeIndex)).toEqual([0, 9, 255, 255, 255, 0, 9, 0]);
+  });
+
+  it('the em of a point size is MulDiv(size, 96, 72) pixels, as the VCL asks Windows for it', () => {
+    expect([1, 5, 8, 9, 10, 11, 12, 14, 36, 100, 255].map(emPixels)).toEqual([
+      1, 7, 11, 12, 13, 15, 16, 19, 48, 133, 340,
+    ]);
   });
 });

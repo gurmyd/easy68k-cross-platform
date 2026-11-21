@@ -1,18 +1,42 @@
 // The contracts carry exactly the declarations of ARCHITECTURE.md section 3 (W1 acceptance), and the
 // engine mirror in engine.ts and host.ts matches the real engine modules.
 //
-// Two kinds of check:
+// Three kinds of check:
 // - Exported names: every contract file is read as text and its `export interface|type|const|class|
 //   function` names are compared with the lists below (types do not exist at run time).
 // - Member names: the objects below list every member of SimEngine, SimHost, AsmOptions and
 //   AsmResult. `satisfies Record<keyof X, true>` makes `npm run typecheck` fail when a list and the
 //   interface differ; the tests then compare the same lists with the engine modules.
+// - Additions of gate I1 (docs/porting/errata/W1.md, entry 11): every member added after wave one
+//   is listed at the end of this file. `npm run typecheck` fails when one of them stops being
+//   optional (an object written against the wave-one contracts must still satisfy them), and the
+//   tests read the contract files to see that each one is there.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import type { AsmOptions, AsmResult, SimEngine, SimHost } from '.';
+import type {
+  AppContext,
+  AppState,
+  AsmOptions,
+  AsmResult,
+  CommandRegistry,
+  DialogService,
+  DocumentService,
+  FileDialogs,
+  FileSourceProvider,
+  GlyphProvider,
+  OutputDeviceDeps,
+  Platform,
+  SaveRequest,
+  SimEngine,
+  SimHost,
+  SimSession,
+  Vfs,
+} from '.';
 import * as contracts from '.';
+import { MemoryBackend } from '../fs/memory-backend';
+import { createVfs } from '../fs/vfs';
 
 const here = (file: string) => fileURLToPath(new URL(file, import.meta.url));
 const repo = (file: string) => fileURLToPath(new URL(`../../../${file}`, import.meta.url));
@@ -98,8 +122,20 @@ const EXPORTS: Record<string, string[]> = {
     'FsErrorCode',
     'FsError',
     'CachedSyncFilesDeps',
+    // gate I1 (errata W1.md, entry 11)
+    'OverwritePrompt',
+    'FolderRequest',
   ],
-  'documents.ts': ['DocKind', 'DocumentState', 'DocDefaults', 'DocumentService'], // 3.9
+  'documents.ts': [
+    // 3.9
+    'DocKind',
+    'DocumentState',
+    'DocDefaults',
+    'DocumentService',
+    // gate I1 (errata W1.md, entry 11)
+    'DocumentPatch',
+    'DocumentSelection',
+  ],
   'settings.ts': [
     // 3.10
     'SyntaxStyle',
@@ -122,7 +158,15 @@ const EXPORTS: Record<string, string[]> = {
     'SimSession',
   ],
   'store.ts': ['Store', 'AppState', 'Mode', 'EditorMessage', 'AssembleSummary'], // 3.12.1
-  'commands.ts': ['CommandId', 'CommandSpec', 'CommandHandler', 'CommandRegistry'], // 3.12.2
+  'commands.ts': [
+    // 3.12.2
+    'CommandId',
+    'CommandSpec',
+    'CommandHandler',
+    'CommandRegistry',
+    // gate I1 (errata W1.md, entry 11)
+    'CommandRunOptions',
+  ],
   'features.ts': [
     // 3.12.3
     'AppContext',
@@ -139,8 +183,24 @@ const EXPORTS: Record<string, string[]> = {
     'DialogService',
     // stand-in for @codemirror/state (errata W1.md)
     'Extension',
+    // gate I1 (errata W1.md, entry 11)
+    'BuildFacts',
+    'ToastOptions',
+    'SimFileDialogProps',
+    'SimFileDialogResult',
+    'LogFileExistsProps',
+    'LogFileExistsResult',
   ],
-  'platform.ts': ['StartupArgs', 'NativeMenuItem', 'Platform'], // 3.13
+  'platform.ts': [
+    // 3.13
+    'StartupArgs',
+    'NativeMenuItem',
+    'Platform',
+    // gate I1 (errata W1.md, entry 11)
+    'NativeFileDialogs',
+    'DroppedEntry',
+    'DesktopDeviceSources',
+  ],
   'devices.ts': [
     // 3.11.1, 4.5.3
     'Clock',
@@ -204,6 +264,8 @@ const EXPORTS: Record<string, string[]> = {
     'DesktopDeviceBridge',
     'DesktopSerialDeps',
     'DesktopNetDeps',
+    // gate I1 (errata W1.md, entry 11)
+    'FontFileLoader',
   ],
 };
 
@@ -559,5 +621,143 @@ describe('assembler mirror (3.2) against engine/asm/asm68k.mjs', () => {
     );
     expect(sorted(Object.keys(result))).toEqual(sorted(Object.keys(ASM_RESULT_KEYS)));
     expect((result as AsmResult).errorCount).toBe(0);
+  });
+});
+
+/* ------------------------------------------------------------------ additions of gate I1 */
+// docs/porting/errata/W1.md, entry 11. Twenty packages were built against the contracts as they
+// stood after wave one, so every member added at the gate must leave their code valid: it is
+// optional, or (Vfs.mkdirp) implemented by W1's own Vfs.
+
+/** true when A is assignable to B. */
+type Assignable<A, B> = [A] extends [B] ? true : false;
+/** true when an object without the members K still satisfies T, that is, when every K is optional. */
+type StillValidWithout<T, K extends keyof T> = Assignable<Omit<T, K>, T>;
+
+/**
+ * The optional additions, by interface. Each entry must have the type `true`: `npm run typecheck`
+ * fails here when a listed member becomes required (or is removed or renamed, since K must be a
+ * key of T).
+ */
+const OPTIONAL_ADDITIONS = {
+  saveRequest: true satisfies StillValidWithout<SaveRequest, 'overwritePrompt'>,
+  fileSourceProvider: true satisfies StillValidWithout<FileSourceProvider, 'chooseFolder'>,
+  fileDialogs: true satisfies StillValidWithout<FileDialogs, 'chooseFolder'>,
+  documentService: true satisfies StillValidWithout<DocumentService, 'update' | 'selection'>,
+  platform: true satisfies StillValidWithout<
+    Platform,
+    'nativeFileDialogs' | 'grantDroppedFile' | 'userDataDir' | 'bindDeviceSources' | 'onFullScreenChange'
+  >,
+  appContext: true satisfies StillValidWithout<AppContext, 'build'>,
+  simState: true satisfies StillValidWithout<AppState['sim'], 'repaint'>,
+  simSession: true satisfies StillValidWithout<SimSession, 'printJobs' | 'onPrintJob'>,
+  glyphProvider: true satisfies StillValidWithout<GlyphProvider, 'textOverhang'>,
+  outputDeviceDeps: true satisfies StillValidWithout<OutputDeviceDeps, 'message'>,
+};
+
+// Three methods gained an optional last parameter. A function with the parameters of wave one is
+// still an implementation, and a call with the arguments of wave one is still a call.
+const WAVE_ONE_SIGNATURES = {
+  run: true satisfies Assignable<(id: string, arg?: unknown) => Promise<void>, CommandRegistry['run']>,
+  toast: true satisfies Assignable<
+    (text: string, action?: { label: string; run(): void }) => void,
+    DialogService['toast']
+  >,
+  confirmBeforeUnload: true satisfies Assignable<(needed: boolean) => void, Platform['confirmBeforeUnload']>,
+};
+const NEW_ARGUMENTS = {
+  run: ['ed.help.help', 'options.htm', { allowInModal: true }] satisfies Parameters<CommandRegistry['run']>,
+  runAsBefore: ['ed.help.help'] satisfies Parameters<CommandRegistry['run']>,
+  toast: ['A new version is available.', { label: 'Reload', run() {} }, { duration: 0 }] satisfies Parameters<
+    DialogService['toast']
+  >,
+  toastAsBefore: ['Saved'] satisfies Parameters<DialogService['toast']>,
+  confirmBeforeUnload: [true, 'documents'] satisfies Parameters<Platform['confirmBeforeUnload']>,
+  confirmBeforeUnloadAsBefore: [false] satisfies Parameters<Platform['confirmBeforeUnload']>,
+};
+
+/** Where each addition is declared, as it is written in the contract file. */
+const ADDED_DECLARATIONS: Record<string, string[]> = {
+  'fs.ts': [
+    'mkdirp(path: VPath): Promise<void>;',
+    'overwritePrompt?: OverwritePrompt | null;',
+    'chooseFolder?(request: FolderRequest): Promise<VPath | null>;',
+  ],
+  'platform.ts': [
+    'readonly nativeFileDialogs?: NativeFileDialogs | null;',
+    'grantDroppedFile?(file: File): Promise<DroppedEntry | null>;',
+    'readonly userDataDir?: VPath | null;',
+    'bindDeviceSources?(sources: DesktopDeviceSources): void;',
+    'onFullScreenChange?(listener: (on: boolean) => void): () => void;',
+    'confirmBeforeUnload(needed: boolean, who?: string): void;',
+  ],
+  'documents.ts': [
+    'update?(id: string, patch: DocumentPatch): void;',
+    'selection?(id: string): DocumentSelection | null;',
+  ],
+  'commands.ts': ['run(id: CommandId, arg?: unknown, options?: CommandRunOptions): Promise<void>;'],
+  'features.ts': [
+    'readonly build?: BuildFacts;',
+    'toast(text: string, action?: { label: string; run(): void }, options?: ToastOptions): void;',
+  ],
+  'store.ts': ['repaint?: { listing: number; breakpoints: number; memory: number; stack: number };'],
+  'run.ts': [
+    'readonly printJobs?: readonly PrintJob[];',
+    'onPrintJob?(listener: (job: PrintJob) => void): () => void;',
+  ],
+  'devices.ts': ['textOverhang?(font: FontSpec): number;', 'message?: (text: string) => void;'],
+};
+
+describe('additions of gate I1 (errata W1.md, entry 11)', () => {
+  it('every added member is optional, so code written against the wave-one contracts stays valid', () => {
+    // The types above are the check (npm run typecheck); this keeps the tables in the test run.
+    for (const table of [OPTIONAL_ADDITIONS, WAVE_ONE_SIGNATURES]) {
+      for (const [name, ok] of Object.entries(table)) expect(ok, name).toBe(true);
+    }
+    expect(Object.keys(NEW_ARGUMENTS)).toHaveLength(6);
+  });
+
+  for (const [file, declarations] of Object.entries(ADDED_DECLARATIONS)) {
+    it(`${file} declares its additions`, () => {
+      // Prettier may wrap a long member over several lines: compare with white space collapsed.
+      const source = readFileSync(here(file), 'utf8').replace(/\s+/g, ' ');
+      for (const declaration of declarations) expect(source, declaration).toContain(declaration);
+    });
+  }
+
+  it('objects with exactly the members of wave one satisfy the changed interfaces', async () => {
+    const fileDialogs: FileDialogs = {
+      open: async () => null,
+      save: async () => null,
+      registerProvider: () => () => {},
+    };
+    const provider: FileSourceProvider = { id: 'upload', label: 'From this computer...', available: () => true };
+    const request: SaveRequest = { title: 'Save As', filters: [], defaultExt: '.X68' };
+    const glyphs: GlyphProvider = {
+      ready: Promise.resolve(),
+      metrics: () => ({ colWidth: 8, rowHeight: 15 }),
+      glyph: () => ({ advance: 8, width: 8, height: 15, coverage: new Uint8Array(8 * 15) }),
+    };
+    expect(fileDialogs.chooseFolder).toBeUndefined();
+    expect(provider.chooseFolder).toBeUndefined();
+    expect(request.overwritePrompt).toBeUndefined();
+    expect(glyphs.textOverhang?.({} as never) ?? 0).toBe(0);
+    expect(await fileDialogs.save(request)).toBeNull();
+  });
+
+  it('SaveRequest.overwritePrompt tells "ask this" from "ask nothing" from "ask as usual"', () => {
+    const usual: SaveRequest = { title: 'Save As', filters: [], defaultExt: '.X68' };
+    const own: SaveRequest = { ...usual, overwritePrompt: { title: 'Alert', text: 'File exists! OK to replace?' } };
+    const none: SaveRequest = { ...usual, overwritePrompt: null };
+    expect('overwritePrompt' in usual).toBe(false);
+    expect(own.overwritePrompt).toEqual({ title: 'Alert', text: 'File exists! OK to replace?' });
+    expect(none.overwritePrompt).toBeNull();
+  });
+
+  it("Vfs.mkdirp is the one required addition, and W1's Vfs has it", async () => {
+    const vfs: Vfs = createVfs();
+    vfs.mount(new MemoryBackend());
+    await vfs.mkdirp('/memory/Examples/Sub');
+    expect((await vfs.stat('/memory/Examples/Sub'))?.kind).toBe('dir');
   });
 });
