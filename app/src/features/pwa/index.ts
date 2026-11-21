@@ -1,15 +1,26 @@
-// Feature "pwa": offline use and installation of the web app.
-//
-// STUB written by W3 (wave 0): an empty feature module, so that the shell runs before this
-// feature exists (ARCHITECTURE.md 3.12.3). DV1 owns this folder and replaces the body. The
-// exported names are contract (section 8, "Stubs"): app/src/features/index.ts imports
-// them by name.
-//
-// A feature module may contribute command handlers (`commands`), panels (`panels`), dialogs
-// (`dialogs`) and an `init` function that runs once after every service exists.
-//
+// Feature "pwa": offline use and installation of the web app (ARCHITECTURE.md 1.1, 7.5, 7.6).
 // Owner: W3 > DV1.
+//
+// init() registers the service worker (app/src/sw.ts) on the web platform when the production
+// build carries it, and shows `A new version is available.` with `Reload` when a newer version
+// waits; see register.ts. The desktop app registers no worker. The manifest and the icons are
+// app/public/manifest.webmanifest and app/public/icons/; the build step that adds them to
+// index.html and writes sw.js with the precache list is build/pwa-build.mjs.
 
 import type { FeatureModule } from '../../contracts';
+import { browserEnvironment, startPwa } from './register';
 
-export const feature: FeatureModule = { id: 'pwa' };
+export const feature: FeatureModule = {
+  id: 'pwa',
+  init(ctx) {
+    const handle = startPwa(
+      {
+        platformKind: ctx.platform.kind,
+        toast: (text, action) => ctx.dialogs.toast(text, action),
+        setTimer: (delay, fn) => ctx.scheduler.setTimer(delay, fn),
+      },
+      browserEnvironment(),
+    );
+    return () => handle.dispose();
+  },
+};

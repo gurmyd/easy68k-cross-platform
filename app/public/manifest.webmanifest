@@ -1,0 +1,21 @@
+{
+  "name": "EASy68K - unofficial web and macOS port",
+  "short_name": "EASy68K",
+  "description": "Editor, assembler and simulator for the Motorola 68000: an unofficial port of EASy68K v5.16.1 that runs in the browser and offline.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["education", "developer"],
+  "background_color": "#f3f4f6",
+  "theme_color": "#0b63ce",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

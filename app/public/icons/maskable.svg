@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<title>EASy68K</title>
+<rect width="512" height="512" fill="#0b63ce"/>
+<g transform="translate(256 256) scale(0.84) translate(-256 -256)">
+<g fill="#d1d5db"><rect x="122" y="122" width="20" height="44" rx="4"/><rect x="122" y="346" width="20" height="44" rx="4"/><rect x="164" y="122" width="20" height="44" rx="4"/><rect x="164" y="346" width="20" height="44" rx="4"/><rect x="206" y="122" width="20" height="44" rx="4"/><rect x="206" y="346" width="20" height="44" rx="4"/><rect x="248" y="122" width="20" height="44" rx="4"/><rect x="248" y="346" width="20" height="44" rx="4"/><rect x="290" y="122" width="20" height="44" rx="4"/><rect x="290" y="346" width="20" height="44" rx="4"/><rect x="332" y="122" width="20" height="44" rx="4"/><rect x="332" y="346" width="20" height="44" rx="4"/><rect x="374" y="122" width="20" height="44" rx="4"/><rect x="374" y="346" width="20" height="44" rx="4"/></g>
+<rect x="96" y="150" width="320" height="212" rx="18" fill="#111827"/>
+<circle cx="113" cy="256" r="9" fill="#0b63ce"/>
+<g fill="#ffffff"><rect x="131" y="196" width="70" height="16"/><rect x="131" y="196" width="16" height="60"/><rect x="131" y="248" width="70" height="16"/><rect x="131" y="256" width="16" height="60"/><rect x="131" y="300" width="70" height="16"/><rect x="185" y="256" width="16" height="60"/><rect x="221" y="196" width="70" height="16"/><rect x="275" y="196" width="16" height="60"/><rect x="275" y="256" width="16" height="60"/><rect x="221" y="300" width="70" height="16"/><rect x="221" y="256" width="16" height="60"/><rect x="221" y="196" width="16" height="60"/><rect x="221" y="248" width="70" height="16"/><rect x="311" y="196" width="16" height="120"/><polygon points="325,248 362,196 381,196 341,256 381,316 362,316 325,264"/></g>
+</g>
+</svg>
