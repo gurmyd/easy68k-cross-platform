@@ -9,10 +9,16 @@ import {
   MemorySettingsStorage,
   SETTINGS_KEY,
   SETTING_CHOICES,
+  STAMPS_KEY,
+  changedPaths,
+  compareStamps,
   createSettingsService,
+  mergeStamped,
   mergeWithDefaults,
   parseSettings,
+  settingPaths,
   type SettingsStorage,
+  type Stamp,
 } from './service';
 
 // ---- The table SETTING_CHOICES against the contract, checked by the compiler (`npm run typecheck`).
@@ -367,5 +373,386 @@ describe('two windows on one storage (3.8.6 rule 2)', () => {
     b.dispose();
     a.update(setFontSize(16));
     expect(b.get().editor.fontSize).toBe(DEFAULT_SETTINGS.editor.fontSize);
+  });
+});
+
+// ---- Windows that see each other's writes late (errata W3 entry 26) ---------------------------
+
+/**
+ * A storage that behaves like localStorage in a browser: each window reads its own copy, and a
+ * write by one window reaches the copies of the others, together with their `storage` event and
+ * its `newValue`, only when the test delivers it. `text` is the shared store itself.
+ */
+class LateStorage {
+  text: string | null = null;
+  private readonly windows: {
+    copy: string | null;
+    queue: (string | null)[];
+    listeners: Set<(text?: string | null) => void>;
+  }[] = [];
+
+  /** The storage as a new window sees it; its copy starts as the shared store is now. */
+  window(): SettingsStorage {
+    const self = {
+      copy: this.text,
+      queue: [] as (string | null)[],
+      listeners: new Set<(text?: string | null) => void>(),
+    };
+    this.windows.push(self);
+    return {
+      read: () => self.copy,
+      write: (text) => {
+        self.copy = text;
+        this.text = text;
+        for (const other of this.windows) if (other !== self) other.queue.push(text);
+      },
+      onExternalChange: (listener) => {
+        self.listeners.add(listener);
+        return () => {
+          self.listeners.delete(listener);
+        };
+      },
+    };
+  }
+
+  /** Windows with writes of others not yet delivered. */
+  pending(): number[] {
+    return this.windows.flatMap((w, index) => (w.queue.length > 0 ? [index] : []));
+  }
+
+  /** Delivers the oldest write not yet delivered to window `index` (in the order windows were made). */
+  deliverOne(index: number): void {
+    const target = this.windows[index];
+    if (!target || target.queue.length === 0) return;
+    const text = target.queue.shift() as string | null;
+    target.copy = text;
+    for (const listener of [...target.listeners]) listener(text);
+  }
+
+  /** Delivers everything, including what deliveries cause; returns the number of deliveries. */
+  deliverAll(limit = 10_000): number {
+    let count = 0;
+    for (let pending = this.pending(); pending.length > 0; pending = this.pending()) {
+      for (const index of pending) {
+        this.deliverOne(index);
+        if (++count > limit) throw new Error('the windows keep writing');
+      }
+    }
+    return count;
+  }
+}
+
+const setBitField = (on: boolean) => (s: Settings) => ({ ...s, sim: { ...s.sim, bitField: on } });
+const setRealTabs = (on: boolean) => (s: Settings) => ({ ...s, editor: { ...s.editor, realTabs: on } });
+
+/** A clock the test moves; every window of a test shares it, as windows on one computer do. */
+function testClock(start = 1_000) {
+  let time = start;
+  return { now: () => time, advance: (ms: number) => void (time += ms) };
+}
+
+describe('two windows that see each other late (3.8.6 rule 2; errata W3 entry 26)', () => {
+  it('the interleaving of the shell check: B writes before A’s write has reached it', () => {
+    const storage = new LateStorage();
+    const clock = testClock();
+    const a = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'a' });
+    const b = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'b' });
+
+    a.update(setFontSize(14));
+    clock.advance(1);
+    b.update(setBitField(true)); // B's copy does not hold the font size yet
+    clock.advance(1);
+    a.update(setRealTabs(true)); // nor A's the bit field
+    // This is where reading again before writing used to stop: the store lacks B's change.
+    expect(parseSettings(storage.text).settings.sim.bitField).toBe(false);
+
+    storage.deliverAll();
+    const stored = parseSettings(storage.text).settings;
+    expect(stored.editor.fontSize).toBe(14);
+    expect(stored.editor.realTabs).toBe(true);
+    expect(stored.sim.bitField).toBe(true);
+    for (const window of [a, b]) {
+      expect(window.get().editor.fontSize).toBe(14);
+      expect(window.get().editor.realTabs).toBe(true);
+      expect(window.get().sim.bitField).toBe(true);
+    }
+  });
+
+  it('changes to one setting end with the later change in every window and in the store', () => {
+    const storage = new LateStorage();
+    const clock = testClock();
+    const a = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'a' });
+    const b = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'b' });
+    a.update(setFontSize(16));
+    clock.advance(5);
+    b.update(setFontSize(18)); // later, and without having seen 16
+    storage.deliverAll();
+    expect(parseSettings(storage.text).settings.editor.fontSize).toBe(18);
+    expect(a.get().editor.fontSize).toBe(18);
+    expect(b.get().editor.fontSize).toBe(18);
+
+    // The later change wins also when its write reaches the store first.
+    a.update(setFontSize(20));
+    clock.advance(5);
+    b.update(setFontSize(22));
+    storage.deliverOne(0); // a hears 22 ...
+    a.update(setRealTabs(true)); // ... and its next write keeps it
+    storage.deliverAll();
+    expect(parseSettings(storage.text).settings.editor.fontSize).toBe(22);
+    expect(a.get().editor.fontSize).toBe(22);
+    expect(b.get().editor.fontSize).toBe(22);
+  });
+
+  it('at the same millisecond every window picks the same change', () => {
+    const storage = new LateStorage();
+    const clock = testClock();
+    const a = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'a' });
+    const b = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'b' });
+    a.update(setFontSize(16));
+    b.update(setFontSize(18));
+    storage.deliverAll();
+    const stored = parseSettings(storage.text).settings.editor.fontSize;
+    expect([16, 18]).toContain(stored);
+    expect(a.get().editor.fontSize).toBe(stored);
+    expect(b.get().editor.fontSize).toBe(stored);
+  });
+
+  it('a change made after another window’s change was seen is newer, whatever the clocks say', () => {
+    const storage = new LateStorage();
+    let timeA = 5_000;
+    const a = createSettingsService(storage.window(), undefined, { now: () => timeA, writerId: 'a' });
+    const b = createSettingsService(storage.window(), undefined, { now: () => 1_000, writerId: 'b' });
+    a.update(setFontSize(16));
+    storage.deliverAll();
+    b.update(setFontSize(18)); // b's clock is behind, but b had seen 16
+    timeA += 1;
+    storage.deliverAll();
+    expect(a.get().editor.fontSize).toBe(18);
+    expect(parseSettings(storage.text).settings.editor.fontSize).toBe(18);
+  });
+
+  it('the window that wrote the stale document repairs it, also after the other window has closed', () => {
+    const storage = new LateStorage();
+    const clock = testClock();
+    const a = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'a' });
+    const b = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'b' });
+    a.update(setFontSize(14));
+    clock.advance(1);
+    b.update(setBitField(true));
+    a.dispose(); // a is gone; its write is still on its way to b
+    storage.deliverAll();
+    const stored = parseSettings(storage.text).settings;
+    expect(stored.editor.fontSize).toBe(14);
+    expect(stored.sim.bitField).toBe(true);
+  });
+
+  it('an open window keeps its layout, and a stale write keeps the stored layout', () => {
+    const storage = new LateStorage();
+    const clock = testClock();
+    const a = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'a' });
+    const b = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'b' });
+    a.update(setPanel('memory', true));
+    clock.advance(1);
+    b.update(setFontSize(12)); // b has not seen a's layout
+    storage.deliverAll();
+    expect(parseSettings(storage.text).settings.app.layout.panels).toEqual({ memory: { visible: true } });
+    expect(b.get().app.layout.panels).toEqual({});
+    expect(a.get().app.layout.panels).toEqual({ memory: { visible: true } });
+    expect(a.get().editor.fontSize).toBe(12);
+  });
+
+  it('a removed document or a cleared storage puts every window back to the defaults', () => {
+    const storage = new MemorySettingsStorage();
+    const a = createSettingsService(storage.window());
+    const b = createSettingsService(storage.window());
+    a.update(setFontSize(16));
+    expect(b.get().editor.fontSize).toBe(16);
+    storage.window().write(null as unknown as string); // what a `storage` event with key null reports
+    expect(a.get().editor.fontSize).toBe(DEFAULT_SETTINGS.editor.fontSize);
+    expect(b.get().editor.fontSize).toBe(DEFAULT_SETTINGS.editor.fontSize);
+  });
+
+  it('a storage that cannot hand on the text is read instead', () => {
+    let text: string | null = null;
+    let listener: (text?: string | null) => void = () => {};
+    const a = createSettingsService({
+      read: () => text,
+      write: (next) => void (text = next),
+      onExternalChange: (l) => {
+        listener = l;
+        return () => {};
+      },
+    });
+    text = JSON.stringify({ version: 1, editor: { fontSize: 19 } });
+    listener();
+    expect(a.get().editor.fontSize).toBe(19);
+  });
+
+  it('random interleavings of three windows: nothing lost, every window and the store agree', () => {
+    // A small seeded generator, so that a failure can be repeated.
+    let seed = 0x5eed;
+    const random = () => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
+    };
+    const pick = <T>(items: readonly T[]): T => items[Math.floor(random() * items.length)] as T;
+    type Path = 'editor.fontSize' | 'editor.realTabs' | 'sim.bitField' | 'app.theme';
+    const paths: readonly Path[] = ['editor.fontSize', 'editor.realTabs', 'sim.bitField', 'app.theme'];
+    const valueFor = (path: Path): unknown =>
+      path === 'editor.fontSize'
+        ? 8 + Math.floor(random() * 30)
+        : path === 'app.theme'
+          ? pick(['system', 'light', 'dark'])
+          : random() < 0.5;
+
+    for (let run = 0; run < 300; run++) {
+      const storage = new LateStorage();
+      const clock = testClock();
+      const windows = ['a', 'b', 'c'].map((id) => ({
+        storage: storage.window(),
+        id,
+      }));
+      const services = windows.map((w) =>
+        createSettingsService(w.storage, undefined, { now: clock.now, writerId: w.id }),
+      );
+      /** Every change made, with the stamp its window wrote for it. */
+      const changes: { path: Path; value: unknown; stamp: Stamp }[] = [];
+      for (let step = 0; step < 25; step++) {
+        const roll = random();
+        if (roll < 0.45) {
+          const index = Math.floor(random() * services.length);
+          const path = pick(paths);
+          const value = valueFor(path);
+          const own = (windows[index] as (typeof windows)[number]).storage;
+          const stampOf = (): Stamp | undefined => JSON.parse(own.read() ?? '{}')[STAMPS_KEY]?.[path];
+          const before = stampOf();
+          (services[index] as (typeof services)[number]).update((s) => withValueAt(s, path, value));
+          const stamp = stampOf();
+          // A value equal to the one the window shows is no change and gets no new stamp.
+          if (stamp !== undefined && (before === undefined || compareStamps(stamp, before) !== 0)) {
+            changes.push({ path, value, stamp });
+          }
+        } else if (roll < 0.9) {
+          const pending = storage.pending();
+          if (pending.length > 0) storage.deliverOne(pick(pending));
+        } else {
+          clock.advance(Math.floor(random() * 3));
+        }
+      }
+      storage.deliverAll();
+
+      const stored = parseSettings(storage.text).settings;
+      for (const path of paths) {
+        const mine = changes.filter((change) => change.path === path);
+        const expected =
+          mine.length === 0
+            ? valueAt(DEFAULT_SETTINGS, path)
+            : mine.reduce((latest, change) => (compareStamps(change.stamp, latest.stamp) > 0 ? change : latest)).value;
+        expect(valueAt(stored, path), `run ${run}, ${path} in the store`).toEqual(expected);
+        for (const [index, service] of services.entries()) {
+          expect(valueAt(service.get(), path), `run ${run}, ${path} in window ${index}`).toEqual(expected);
+        }
+      }
+    }
+  }, 120_000);
+});
+
+describe('stamps in the stored document (errata W3 entry 26)', () => {
+  it('a document written before stamps existed loads as before, and only changed settings get one', () => {
+    const old = JSON.stringify({ version: 1, editor: { fontSize: 15 }, app: { theme: 'dark' } });
+    const storage = new MemorySettingsStorage(old);
+    const service = createSettingsService(storage.window(), undefined, { now: () => 42, writerId: 'w' });
+    expect(service.get().editor.fontSize).toBe(15);
+    expect(service.get().app.theme).toBe('dark');
+    service.update(setExceptions(true));
+    const written = JSON.parse(storage.text ?? '');
+    expect(written[STAMPS_KEY]).toEqual({ 'sim.exceptions': [42, 'w'] });
+    expect(written.editor.fontSize).toBe(15);
+    expect(written.version).toBe(1);
+  });
+
+  it('stamps take the time from the storage, and without one they only count up', () => {
+    const timed = new MemorySettingsStorage();
+    const storage: SettingsStorage = { ...timed.window(), now: () => 1_700_000_000_000 };
+    createSettingsService(storage, undefined, { writerId: 'w' }).update(setFontSize(13));
+    expect(JSON.parse(timed.text ?? '')[STAMPS_KEY]).toEqual({ 'editor.fontSize': [1_700_000_000_000, 'w'] });
+
+    const plain = new MemorySettingsStorage();
+    const service = createSettingsService(plain.window(), undefined, { writerId: 'w' });
+    service.update(setFontSize(13));
+    service.update(setExceptions(true));
+    expect(JSON.parse(plain.text ?? '')[STAMPS_KEY]).toEqual({
+      'editor.fontSize': [1, 'w'],
+      'sim.exceptions': [2, 'w'],
+    });
+  });
+
+  it('the stamp table is not a setting: get() does not show it, broken entries are ignored', () => {
+    const text = JSON.stringify({
+      version: 1,
+      editor: { fontSize: 15 },
+      [STAMPS_KEY]: { 'editor.fontSize': [7, 'x'], 'sim.bitField': 'soon', 'app.theme': [Number.NaN, 'y'], z: [1] },
+    });
+    const parsed = parseSettings(text);
+    expect(STAMPS_KEY in (parsed.settings as unknown as Record<string, unknown>)).toBe(false);
+    expect([...parsed.stamps]).toEqual([['editor.fontSize', [7, 'x']]]);
+    expect(parseSettings(JSON.stringify({ [STAMPS_KEY]: 'nothing' })).stamps.size).toBe(0);
+  });
+
+  it('the panel layout is one setting; other settings are compared key by key', () => {
+    const base = parseSettings(null).settings as unknown as Record<string, never>;
+    const paths = settingPaths(base);
+    expect(paths.has('app.layout')).toBe(true);
+    expect([...paths.keys()].some((path) => path.startsWith('app.layout.'))).toBe(false);
+    expect(paths.has('editor.styles.code.color')).toBe(true);
+    expect(paths.has('version')).toBe(false);
+    const changed = withValueAt(
+      withValueAt(base as unknown as Settings, 'app.layout.outputZoom', 2),
+      'sim.bitField',
+      true,
+    );
+    expect(changedPaths(base, changed as unknown as Record<string, never>).sort()).toEqual([
+      'app.layout',
+      'sim.bitField',
+    ]);
+  });
+
+  it('a key with a dot in it is a key of its own', () => {
+    const before = { app: { serialPortMap: {} } };
+    const after = { app: { serialPortMap: { 'tty.usb': '/dev/tty.usb' } } };
+    expect(changedPaths(before, after)).toEqual(['app.serialPortMap.tty~1usb']);
+    const { merged, mineWon } = mergeStamped(
+      { document: after, stamps: new Map([['app.serialPortMap.tty~1usb', [2, 'a'] as Stamp]]) },
+      { document: before, stamps: new Map() },
+    );
+    expect(mineWon).toBe(true);
+    expect(merged.document).toEqual(after);
+  });
+
+  it('mergeStamped takes the later stamp of each setting, and the other side on a tie', () => {
+    const mine = {
+      document: { a: 1, b: 1, c: 1 },
+      stamps: new Map<string, Stamp>([
+        ['a', [5, 'm']],
+        ['b', [1, 'm']],
+        ['c', [3, 'x']],
+      ]),
+    };
+    const theirs = {
+      document: { a: 2, b: 2, c: 2 },
+      stamps: new Map<string, Stamp>([
+        ['b', [4, 't']],
+        ['c', [3, 'x']],
+      ]),
+    };
+    const { merged, mineWon } = mergeStamped(mine, theirs);
+    expect(merged.document).toEqual({ a: 1, b: 2, c: 2 });
+    expect(Object.fromEntries(merged.stamps)).toEqual({ a: [5, 'm'], b: [4, 't'], c: [3, 'x'] });
+    expect(mineWon).toBe(true);
+    expect(mergeStamped(theirs, merged).mineWon).toBe(false);
+    expect(compareStamps([3, 'a'], [3, 'b'])).toBeLessThan(0);
+    expect(compareStamps([4, 'a'], [3, 'b'])).toBeGreaterThan(0);
   });
 });

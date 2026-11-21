@@ -18,8 +18,10 @@
 //     Windows and is Log Start on macOS;
 //   - no command runs while a modal dialog is open, from a key or from a toolbar button; message
 //     boxes return the pressed button; a modal dialog of Simulator mode holds the controller;
-//   - settings: a `storage` event updates a second page; the theme and the whole panel layout
-//     (visible panels, separators, Output zoom, editor panes) survive a reload;
+//   - settings: a `storage` event updates a second page; two pages that write settings in turn,
+//     or while one of them has not yet received the other's write, lose nothing, and of two
+//     changes to one setting the later one ends in both pages; the theme and the whole panel
+//     layout (visible panels, separators, Output zoom, editor panes) survive a reload;
 //   - the window lock of 3.8.6 is held while a page lives and is free after it has closed;
 //   - the gallery of the component kit is served at ?gallery;
 //   - an accessibility scan (axe-core, WCAG 2.0/2.1 A and AA) of the three modes in both themes.
@@ -741,6 +743,160 @@ async function dialogPass(browser, name) {
   await context.close();
 }
 
+// --- settings in two pages (3.8.6 rule 2; errata W3 entry 26) ---------------------------------
+
+const SETTINGS_KEY = 'easy68k.settings.v1';
+
+/** Sets one setting ('editor.fontSize') through page's settings service; resolves to the page's clock after. */
+const updateSettings = (page, path, value) =>
+  page.evaluate(
+    ([name, argument]) => {
+      const [section, key] = name.split('.');
+      window.__easy68k.ctx.settings.update((s) => ({ ...s, [section]: { ...s[section], [key]: argument } }));
+      return Date.now();
+    },
+    [path, value],
+  );
+
+const FONT_SIZE = 'editor.fontSize';
+const REAL_TABS = 'editor.realTabs';
+const BIT_FIELD = 'sim.bitField';
+
+/**
+ * Waits until both pages store and show `expected` ({ 'editor.fontSize': 14, ... }). Resolves to
+ * null when they do, or to what they showed last when they still do not after `timeoutMs`.
+ */
+async function settingsSettle(pages, expected, timeoutMs = 15_000) {
+  const paths = Object.keys(expected);
+  const wanted = Object.values(expected);
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const views = [];
+    for (const page of pages) {
+      views.push(
+        await page.evaluate(
+          ([key, list]) => {
+            const at = (document, path) => path.split('.').reduce((node, name) => node?.[name], document);
+            const stored = JSON.parse(window.localStorage.getItem(key) ?? '{}');
+            const shown = window.__easy68k.ctx.settings.get();
+            return list.map((path) => [at(stored, path), at(shown, path)]);
+          },
+          [SETTINGS_KEY, paths],
+        ),
+      );
+    }
+    const settled = views.every((view) =>
+      view.every(([stored, shown], index) => same(stored, wanted[index]) && same(shown, wanted[index])),
+    );
+    if (settled) return null;
+    if (Date.now() > deadline) {
+      const named = views.map((view, page) =>
+        Object.fromEntries(view.map(([stored, shown], index) => [paths[index], { page, stored, shown }])),
+      );
+      return `want ${JSON.stringify(expected)}, have ${JSON.stringify(named)}`;
+    }
+    await pages[0].waitForTimeout(50);
+  }
+}
+
+/**
+ * Page `b` blocks its main thread for `busyMs` (so that it cannot take in other pages' writes),
+ * page `a` sets `pathA` meanwhile, and then `b` reads the stored font size and sets `pathB`
+ * from the same task. Tells whether the race happened as intended: `b` read after `a` had written
+ * (by the clock both share) and still saw the old font size.
+ */
+async function raceWithBusyPage(a, b, busyMs, pathA, valueA, pathB, valueB, fontSizeOfA) {
+  const blocked = b.evaluate(
+    ([ms, key, path, argument]) =>
+      new Promise((resolve) => {
+        window.setTimeout(() => {
+          const busyFrom = Date.now();
+          while (Date.now() < busyFrom + ms) {
+            // Keep the page busy: the other page's write cannot reach this page's copy now.
+          }
+          const readAt = Date.now();
+          const seen = JSON.parse(window.localStorage.getItem(key) ?? '{}').editor?.fontSize;
+          const [section, name] = path.split('.');
+          window.__easy68k.ctx.settings.update((s) => ({ ...s, [section]: { ...s[section], [name]: argument } }));
+          resolve({ busyFrom, readAt, seen });
+        }, 0);
+      }),
+    [busyMs, SETTINGS_KEY, pathB, valueB],
+  );
+  // Give page B time to start its block before A writes; a slower machine gets a longer block.
+  await a.waitForTimeout(Math.min(busyMs / 4, 1000));
+  const wroteAt = await updateSettings(a, pathA, valueA);
+  const { busyFrom, readAt, seen } = await blocked;
+  return { ordered: busyFrom <= wroteAt && wroteAt < readAt, stale: seen !== fontSizeOfA };
+}
+
+/**
+ * The settings rounds of the two-page pass. `inTurn`: the pages write one after the other, as a
+ * person switching windows does (ten rounds). `stale`: page B writes while page A's newer write
+ * has certainly not reached it, which the old service lost every time. `same`: both change the
+ * font size, B later; every page and the store must end with B's value.
+ */
+async function settingsRounds(a, b) {
+  const pages = [a, b];
+  const result = {};
+
+  let failure = null;
+  let round = 0;
+  for (; round < 10 && failure === null; round++) {
+    const fontSize = 10 + round;
+    const flag = round % 2 === 0;
+    await updateSettings(a, FONT_SIZE, fontSize);
+    await updateSettings(b, BIT_FIELD, flag);
+    await updateSettings(a, REAL_TABS, flag);
+    const expected = {
+      'editor.fontSize': fontSize,
+      'editor.realTabs': flag,
+      'sim.bitField': flag,
+      'app.theme': 'dark',
+    };
+    failure = await settingsSettle(pages, expected);
+    if (failure !== null) failure = `round ${round + 1}: ${failure}`;
+  }
+  result.inTurn = { ok: failure === null, detail: failure ?? `${round} rounds` };
+
+  // The race is set up by blocking page B; if a slow machine lets A's write come after B's read,
+  // the round is repeated with a longer block. Two rounds must show B reading the old value.
+  failure = null;
+  let proven = 0;
+  let tries = 0;
+  for (let busyMs = 600; proven < 2 && tries < 8 && failure === null; tries++) {
+    const fontSize = 30 + tries;
+    const flag = tries % 2 === 0;
+    const race = await raceWithBusyPage(a, b, busyMs, FONT_SIZE, fontSize, BIT_FIELD, flag, fontSize);
+    if (race.ordered && race.stale) proven++;
+    if (!race.ordered) busyMs = Math.min(busyMs * 2, 8000);
+    failure = await settingsSettle(pages, { 'editor.fontSize': fontSize, 'sim.bitField': flag, 'app.theme': 'dark' });
+    if (failure !== null) failure = `try ${tries + 1} (B read ${race.stale ? 'the old' : 'the new'} value): ${failure}`;
+  }
+  result.stale = {
+    ok: failure === null && proven >= 2,
+    detail: failure ?? `B wrote from an out-of-date copy in ${proven} of ${tries} tries`,
+  };
+
+  failure = null;
+  proven = 0;
+  tries = 0;
+  for (let busyMs = 600; proven < 1 && tries < 4 && failure === null; tries++) {
+    const fontA = 40 + tries;
+    const fontB = 50 + tries;
+    const race = await raceWithBusyPage(a, b, busyMs, FONT_SIZE, fontA, FONT_SIZE, fontB, fontA);
+    if (race.ordered && race.stale) proven++;
+    if (!race.ordered) busyMs = Math.min(busyMs * 2, 8000);
+    failure = await settingsSettle(pages, { 'editor.fontSize': fontB });
+    if (failure !== null) failure = `try ${tries + 1}: ${failure}`;
+  }
+  result.same = {
+    ok: failure === null && proven >= 1,
+    detail: failure ?? `B changed it from an out-of-date copy in ${proven} of ${tries} tries`,
+  };
+  return result;
+}
+
 /** Two pages on one origin: settings, layout, the window lock. */
 async function windowsPass(browser, name) {
   const p = `${name}:`;
@@ -784,24 +940,19 @@ async function windowsPass(browser, name) {
     `data-theme=${await theme(b.page)}`,
   );
 
-  // Two pages writing in turn do not lose each other's settings.
-  await a.page.evaluate(() =>
-    window.__easy68k.ctx.settings.update((s) => ({ ...s, editor: { ...s.editor, fontSize: 14 } })),
-  );
-  await b.page.evaluate(() =>
-    window.__easy68k.ctx.settings.update((s) => ({ ...s, sim: { ...s.sim, bitField: true } })),
-  );
-  await a.page.evaluate(() =>
-    window.__easy68k.ctx.settings.update((s) => ({ ...s, editor: { ...s.editor, realTabs: true } })),
-  );
-  const stored = await a.page.evaluate(() => JSON.parse(window.localStorage.getItem('easy68k.settings.v1') ?? '{}'));
+  // Settings written by two pages at about the same time (3.8.6 rule 2; errata W3 entry 26). A page
+  // does not see another page's localStorage write at once, so a page can write the whole document
+  // from an out-of-date copy; the service then puts the lost setting back once the other page's
+  // write reaches it. Every round therefore waits, with a limit, until both pages show and store
+  // every value; an old service that loses a setting never gets there.
+  const rounds = await settingsRounds(a.page, b.page);
+  check(`${p} settings survive two pages writing in turn`, rounds.inTurn.ok, rounds.inTurn.detail);
   check(
-    `${p} settings survive two pages writing in turn`,
-    stored.editor?.fontSize === 14 &&
-      stored.editor?.realTabs === true &&
-      stored.sim?.bitField === true &&
-      stored.app?.theme === 'dark',
+    `${p} a page writing from an out-of-date copy loses no other page's setting`,
+    rounds.stale.ok,
+    rounds.stale.detail,
   );
+  check(`${p} two pages changing one setting at once end with the later value`, rounds.same.ok, rounds.same.detail);
 
   // Panel layout: show a tool panel, move a separator, reload.
   await setMode(a.page, 'simulator');

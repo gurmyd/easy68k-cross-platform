@@ -94,16 +94,21 @@ export function createFrameScheduler(source: FrameSource = browserFrames()): Sch
 /**
  * The settings document in localStorage under `easy68k.settings.v1` (3.10). Other windows of the
  * same origin are heard through the `storage` event, which a browser sends to every window except
- * the one that wrote.
+ * the one that wrote. The listener receives the event's `newValue`: it is what the other window
+ * wrote, while `getItem` in this window may still return an older text for a while (WebKit and
+ * Chromium both keep a copy per page and update it later; errata W3 entry 26).
  */
 export function browserSettingsStorage(win: Window = window): SettingsStorage {
   return {
     read: () => win.localStorage.getItem(SETTINGS_KEY),
     write: (text) => win.localStorage.setItem(SETTINGS_KEY, text),
+    // Every window of the origin runs on this computer's clock, so stamps compare across windows.
+    now: () => Date.now(),
     onExternalChange(listener) {
       const onStorage = (event: StorageEvent) => {
         // key null = the whole storage was cleared.
-        if (event.key === SETTINGS_KEY || event.key === null) listener();
+        if (event.key === null) listener(null);
+        else if (event.key === SETTINGS_KEY) listener(event.newValue);
       };
       win.addEventListener('storage', onStorage);
       return () => win.removeEventListener('storage', onStorage);

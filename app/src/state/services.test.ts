@@ -145,8 +145,8 @@ describe('browserSettingsStorage (3.10)', () => {
       addEventListener: (_type: string, listener: (event: StorageEvent) => void) => void listeners.add(listener),
       removeEventListener: (_type: string, listener: (event: StorageEvent) => void) => void listeners.delete(listener),
     };
-    const fire = (key: string | null) => {
-      for (const listener of [...listeners]) listener({ key } as StorageEvent);
+    const fire = (key: string | null, newValue: string | null = null) => {
+      for (const listener of [...listeners]) listener({ key, newValue } as StorageEvent);
     };
     return { win: win as unknown as Window, items, fire, listeners };
   }
@@ -161,17 +161,39 @@ describe('browserSettingsStorage (3.10)', () => {
     expect(storage.read()).toBe('{"version":1}');
   });
 
+  it('gives the stamps of changed settings the wall clock that every window shares', () => {
+    const before = Date.now();
+    const time = browserSettingsStorage(fakeWindow().win).now?.() ?? -1;
+    expect(time).toBeGreaterThanOrEqual(before);
+    expect(time).toBeLessThanOrEqual(Date.now());
+  });
+
   it('reports storage events for its key (and a cleared storage), not for other keys', () => {
     const { win, fire, listeners } = fakeWindow();
     const changed = vi.fn();
     const stop = browserSettingsStorage(win).onExternalChange(changed);
-    fire('easy68k.files.index');
+    fire('easy68k.files.index', '{}');
     expect(changed).not.toHaveBeenCalled();
-    fire(SETTINGS_KEY);
+    fire(SETTINGS_KEY, '{"version":1}');
+    fire(SETTINGS_KEY, null);
     fire(null);
-    expect(changed).toHaveBeenCalledTimes(2);
+    expect(changed).toHaveBeenCalledTimes(3);
     stop();
     expect(listeners.size).toBe(0);
+  });
+
+  it("hands on the text the other window wrote (the event's newValue), not this page's copy", () => {
+    // The page's own copy may still be older when the event arrives (errata W3 entry 26).
+    const { win, items, fire } = fakeWindow();
+    items.set(SETTINGS_KEY, '{"version":1,"old":true}');
+    const changed = vi.fn();
+    browserSettingsStorage(win).onExternalChange(changed);
+    fire(SETTINGS_KEY, '{"version":1,"new":true}');
+    expect(changed).toHaveBeenLastCalledWith('{"version":1,"new":true}');
+    fire(SETTINGS_KEY, null); // removed
+    expect(changed).toHaveBeenLastCalledWith(null);
+    fire(null); // the whole storage cleared
+    expect(changed).toHaveBeenLastCalledWith(null);
   });
 });
 
