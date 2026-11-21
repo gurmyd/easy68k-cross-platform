@@ -108,13 +108,19 @@ fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`.
     question) and writes to the stored spelling, folders of an import or a drop are merged into the
     stored spelling, and dropped and uploaded files reuse the stored spelling
     (`features/files/store.ts: storedSpelling`). The document does not say this; without it a
-    `.zip` exported to Windows could hold names that collide when unpacked.
+    `.zip` exported to Windows could hold names that collide when unpacked. Gate I1 round 2: two
+    items of one import batch whose names differ only in case (a `.zip` made on Linux or macOS)
+    are a conflict too: the second one is counted in the replace question, and No keeps the first.
 
 14. **A dropped `.S68` in Simulator mode (sim-ui §8.4, 4.7 step 2).** `RunController.open(path,
     'drop')` asks the `Caution` question itself when a program is loaded. FS1 therefore asks it only
     when the first dropped item is not an `.S68` (the original asks, then ignores the item); for an
     `.S68` the copy into `/browser/Imported` is made first and the controller asks. Asking in both
-    places asked twice.
+    places asked twice. Consequence (gate I1 round 2 review): the copy's own replace question, when
+    an earlier copy with other bytes exists, comes before `Caution`, and a Cancel there leaves the
+    copy in place; recorded in `docs/differences/FS1.md`. Asking `Caution` before the copy would
+    need a way to tell `RunController.open` that the question has been answered, which the contract
+    does not have.
 
 15. **The desktop app (DV2 errata 1 and 4a; contract additions of gate I1).** When
     `Platform.nativeFileDialogs` exists, FS1 registers it as the provider `native` (which replaces the
@@ -122,12 +128,20 @@ fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`.
     passed to `Platform.grantDroppedFile`: a file on the disk is opened where it is (Simulator mode:
     loaded where it is, so its listing is found beside it), a folder opens the Open dialog (title
     `Open File`, the editor's five filters, several files) with that folder as start; a `File` the
-    main process does not know is copied as in a browser.
+    main process does not know is copied as in a browser. Gate I1 round 2: a native dialog opened in
+    Simulator mode holds the run controller while it is open (3.8.5 last sentence, 4.4.5), because it
+    does not pass through `ctx.dialogs.open`, which holds the port's own dialogs; and the native Save
+    dialog receives `defaultExt` normalised (`'*.X68'` becomes `'.X68'`, entry 9), since the desktop
+    main process appends only a plain extension.
 
 16. **`FileDialogs.chooseFolder` (H1's request, contract addition of gate I1).** The native provider's
-    folder dialog where there is one. Without it (a browser) the port's Save dialog is shown with the
-    filter `Folder` and the suggested name `New Folder` in `startDir`; the name typed there is the
-    folder, created if it does not exist (a typed existing folder is entered, as in the Save dialog).
+    folder dialog where there is one. Without it (a browser) the port's Save dialog is shown in
+    folder mode (gate I1 round 2 review: before, a typed existing folder was entered, so only a new
+    folder could be chosen): it starts in `startDir`, lists only folders (filter `Folder`), and its
+    button is `OK`. OK with an empty name takes the selected folder, or the folder shown when none is
+    selected; a typed existing folder is taken; a typed new name is created; a typed file is refused.
+    The native provider's `chooseFolder(title)` (contracts/platform.ts) takes only the request's
+    title, so a native folder dialog does not start in `startDir`.
 
 ## Contract
 

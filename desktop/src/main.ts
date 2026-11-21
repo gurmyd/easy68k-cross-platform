@@ -19,7 +19,7 @@
 // Owner: DV2.
 
 import { existsSync } from 'node:fs';
-import { extname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import {
   app,
   BrowserWindow,
@@ -64,6 +64,7 @@ import {
   pageOrigin,
   realPathOf,
   vpathOfRealPath,
+  withDefaultExtension,
 } from './security';
 import { registerSyncIpc } from './sync-ipc';
 import { AppWindows, denyAllPermissions, printDocument } from './windows';
@@ -201,11 +202,7 @@ async function answerDialog(event: IpcMainInvokeEvent, kind: unknown, request: u
     if (suggested !== undefined) options.defaultPath = suggested;
     const result = await dialog.showSaveDialog(window, options);
     if (result.canceled || !result.filePath) return null;
-    let file = result.filePath;
-    const defaultExt = req['defaultExt'];
-    if (extname(file) === '' && isShortString(defaultExt, 16) && /^\.?[A-Za-z0-9]+$/.test(defaultExt)) {
-      file += defaultExt.startsWith('.') ? defaultExt : `.${defaultExt}`;
-    }
+    const file = withDefaultExtension(result.filePath, req['defaultExt']);
     grants.addFolderOf(file);
     return vpathOfRealPath(file);
   }

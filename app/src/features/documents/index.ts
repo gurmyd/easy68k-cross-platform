@@ -11,7 +11,8 @@
 // Files handed over later (file association, Dock icon: Platform.onOpenFiles) are opened the same
 // way, in Editor mode.
 //
-// Unload guard (1.3.3): while any document is modified the browser's "leave site?" prompt is on.
+// Unload guard (1.3.3): while any document is modified the browser's "leave site?" prompt is on;
+// the feature asks for it as the party 'documents' (Platform.confirmBeforeUnload(needed, who)).
 //
 // Owner: W3 > E1.
 
@@ -37,6 +38,9 @@ export function createDocumentService(ctx: AppContext): DocumentService {
     fileDialogs: ctx.fileDialogs,
   });
 }
+
+/** The name under which this feature asks for the platform's "leave?" question. */
+const UNLOAD_PARTY = 'documents';
 
 /** What the feature takes from the browser; tests pass their own. */
 export interface DocumentsFeatureOptions {
@@ -99,16 +103,20 @@ export function createDocumentsFeature(options: DocumentsFeatureOptions = {}): F
       if (isEditorFile(ctx.platform.startupArgs().file)) void startupDocument(ctx);
       else ctx.documents.newSource();
 
-      // Unload guard.
+      // Unload guard, asked under this feature's own name so that the simulator's guard (party
+      // 'simulator') and this one cannot switch each other off (W1 errata 11).
       let guarding: boolean | null = null;
       const guard = () => {
         const needed = ctx.store.getState().documents.items.some((doc) => doc.modified);
         if (needed === guarding) return;
         guarding = needed;
-        ctx.platform.confirmBeforeUnload(needed);
+        ctx.platform.confirmBeforeUnload(needed, UNLOAD_PARTY);
       };
       disposers.push(ctx.store.subscribe(guard));
       guard();
+      disposers.push(() => {
+        if (guarding) ctx.platform.confirmBeforeUnload(false, UNLOAD_PARTY);
+      });
 
       // Files from the system (file association, Dock icon).
       disposers.push(

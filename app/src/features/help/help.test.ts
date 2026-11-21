@@ -248,6 +248,19 @@ describe('the update check', () => {
     (body: unknown, ok = true) =>
     async () => ({ ok, json: async () => body });
 
+  it('asks the repository it is given (ctx.build.repository)', async () => {
+    const asked: string[] = [];
+    await checkForUpdate(
+      '0.2.0',
+      async (url) => {
+        asked.push(url);
+        return { ok: true, json: async () => ({ tag_name: 'v0.2.0' }) };
+      },
+      'someone/else',
+    );
+    expect(asked).toEqual(['https://api.github.com/repos/someone/else/releases/latest']);
+  });
+
   it('answers with the original’s three texts', async () => {
     expect(await checkForUpdate('0.2.0', answer({ tag_name: 'v0.2.0' }))).toBe('Up to date');
     expect(await checkForUpdate('0.2.0', answer({ tag_name: 'v0.3.0' }))).toBe('Update available');

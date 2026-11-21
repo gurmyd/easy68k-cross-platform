@@ -8,7 +8,8 @@ take them into `app/src/contracts/` between waves. Every behaviour named here ha
 `app/src/core/run/*.test.ts` or `app/src/features/run/*.test.ts`.
 
 Entries 22 to 27 and the lines marked "Gate I1" were written in the first round of integration
-gate I1, when the review's open points were repaired and the neighbours' real parts were joined.
+gate I1, when the review's open points were repaired and the neighbours' real parts were joined;
+entry 28 and the lines marked "Gate I1, round 2" in its second round.
 
 ## The queue and the wait states (4.2, 4.3, 4.4)
 
@@ -315,6 +316,27 @@ gate I1, when the review's open points were repaired and the neighbours' real pa
 - Does: nothing changed; `SoftTimer.check` schedules `now` + interval as 4.5.3 says. The machine
   was busy during the measurement, so the figures show the rule, not the exact period of an idle
   PC.
+- Gate I1, round 2: the review of round 1 repeated SH7's proposal, with "or record the
+  difference" as the alternative. Neither is done: by the measurement above the original's timer
+  has the same rule (each period starts when the late tick is handled, rounded up to the clock
+  tick), so `due += period` would make the port differ from the original, not agree with it, and
+  there is no difference to record beyond the resolution, which `docs/differences/SH8.md` already
+  states (one display frame against 15.6 ms). `core/sim-host/hardware/session.test.ts` (SH7)
+  accepts 19 or 20 and needs no change.
+
+### 28. A session or controller disposed before it starts stays inert (3.12.3, 4.7.1)
+
+- Says: nothing about a session that is disposed before its start. The session starts in the
+  microtask after bootstrap (entry 21).
+- Problem: an application built and disposed at once (W3's `bootstrap.test.ts`, "bootstrap
+  without the test defaults") disposed the session before that microtask. The start then ran on
+  the disposed controller: it subscribed to frames that nothing cancelled any more, applied the
+  journal and asked for an engine; in CI the last step printed `Simulator: The simulator engine
+  could not be created: Error: unused`. Reported by the engine-binding engineer in round 1.
+- Does: `SimRunController.start()` returns at once after `dispose()` (no frames, no journal, no
+  engine), and the session's own start is skipped when the session was disposed first;
+  `RunSession.dispose()` may be called twice. Tests: `controller.load.test.ts` ("start() after
+  dispose()") and `session.test.ts` ("a session disposed before it starts").
 
 ## Interface (2.3, 2.10)
 

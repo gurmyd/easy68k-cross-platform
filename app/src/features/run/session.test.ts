@@ -1067,3 +1067,65 @@ describe.skipIf(!enginesBuilt)(
     });
   },
 );
+
+// No engine is needed here: the session must not even ask for one.
+describe('a session disposed before it starts', () => {
+  it('neither subscribes to frames nor creates an engine nor reads the journal', async () => {
+    const time = new VirtualTime();
+    let frameSubscriptions = 0;
+    const scheduler = {
+      onFrame(fn: (now: number) => void) {
+        frameSubscriptions++;
+        const stop = time.onFrame(fn);
+        return () => {
+          frameSubscriptions--;
+          stop();
+        };
+      },
+      setTimer: (delayMs: number, fn: () => void) => time.setTimer(delayMs, fn),
+    };
+    let created = 0;
+    let recovered = 0;
+    const doubles = createDeviceDoubles({
+      files: partOf<ProgramFilesApi>({
+        resetToStartup: () => {},
+        exit: async () => {},
+        recoverJournal: async () => void recovered++,
+        markStale: () => {},
+        exitNow: () => {},
+        unsaved: false,
+      }),
+    });
+    const app = createTestApplication({
+      clock: time,
+      scheduler,
+      session: {
+        engines: {
+          create: () => {
+            created++;
+            return Promise.reject(new Error('no engine in this test'));
+          },
+          release: () => {},
+        },
+        createCachedSyncFiles: () => new MemorySyncFiles(),
+      },
+      features: [feature],
+      services: {
+        createSimSession: (ctx, env) =>
+          createSimSession(ctx, env, { parts: doubles.parts, glyphs: BLANK_GLYPHS, page: createFakePage().page }),
+      },
+    });
+    // bootstrap's own test does this: build an application and dispose of it at once. The session
+    // starts in the microtask after bootstrap, which here comes after the disposal.
+    app.dispose();
+    await settle();
+    await settle();
+    expect(created).toBe(0);
+    expect(recovered).toBe(0);
+    expect(frameSubscriptions).toBe(0);
+    // A later start on the disposed session does nothing either.
+    await (runSessionOf(app.ctx.sim) as RunSession).start();
+    expect(created).toBe(0);
+    expect(frameSubscriptions).toBe(0);
+  });
+});

@@ -5,7 +5,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { Box, type DocumentState, type Extension } from '../contracts';
 import { DEFAULT_TEMPLATE } from '../core/settings/defaults';
 import { SETTINGS_KEY } from '../core/settings/service';
-import { FRAME_WATCHDOG_MS, browserSettingsStorage, createFrameScheduler, type FrameSource } from './browser';
+import {
+  FRAME_WATCHDOG_MS,
+  WATCHDOG_FRAME_MS,
+  browserSettingsStorage,
+  createFrameScheduler,
+  type FrameSource,
+} from './browser';
 import { createEditorExtensionRegistry, editorExtensionSources, subscribeEditorExtensions } from './editor-extensions';
 import {
   createInertController,
@@ -78,8 +84,17 @@ describe('createFrameScheduler (3.11.1)', () => {
     const seen: number[] = [];
     scheduler.onFrame((now) => seen.push(now));
     frames.frame(16);
-    frames.advance(999); // the tab is hidden: no frames for a second
-    expect(seen).toEqual([16, 16 + FRAME_WATCHDOG_MS, 16 + 2 * FRAME_WATCHDOG_MS, 16 + 3 * FRAME_WATCHDOG_MS]);
+    frames.advance(FRAME_WATCHDOG_MS - 1);
+    expect(seen).toEqual([16]); // nothing before 250 ms without a frame
+    frames.advance(999 - (FRAME_WATCHDOG_MS - 1)); // the tab is hidden: no frames for a second
+    // The watchdog takes over at 250 ms and then stands in for the display, 60 times a second
+    // (SH8-frame-watchdog.md): a program keeps its speed in a hidden desktop window.
+    const fromTimer = seen.slice(1);
+    expect(fromTimer[0]).toBe(16 + FRAME_WATCHDOG_MS);
+    for (let i = 1; i < fromTimer.length; i++) {
+      expect((fromTimer[i] as number) - (fromTimer[i - 1] as number)).toBeCloseTo(WATCHDOG_FRAME_MS, 6);
+    }
+    expect(fromTimer.length).toBe(1 + Math.floor((999 - FRAME_WATCHDOG_MS) / WATCHDOG_FRAME_MS));
     frames.frame(1100);
     expect(seen[seen.length - 1]).toBe(1100);
     // A frame re-arms the watchdog: nothing fires for the next 249 ms.
@@ -256,10 +271,25 @@ describe('the stub services (3.12.3)', () => {
     expect(await documents.save(active?.id ?? '')).toBe(false);
   });
 
+  it('the stub document has the members added at gate I1: update and selection', () => {
+    const app = createTestApplication();
+    const { documents, store } = app.ctx;
+    const id = documents.active()?.id ?? '';
+    expect(documents.update).toBeTypeOf('function');
+    documents.update?.(id, { insertMode: false, fontSize: 14 });
+    expect(documents.active()).toMatchObject({ insertMode: false, fontSize: 14, modified: false, revision: 0 });
+    expect(store.getState().documents.items[0]).toMatchObject({ insertMode: false, fontSize: 14 });
+    documents.update?.('unknown', { fontSize: 20 });
+    expect(documents.active()?.fontSize).toBe(14);
+    expect(documents.selection?.(id)).toEqual({ selected: '', caret: 0 });
+    expect(documents.selection?.('unknown')).toBeNull();
+  });
+
   it('file dialogs that answer Cancel', async () => {
     const dialogs = createStubFileDialogs();
     expect(await dialogs.open({ title: 'Open', filters: [], multiple: false })).toBeNull();
     expect(await dialogs.save({ title: 'Save', filters: [], defaultExt: '.X68' })).toBeNull();
+    expect(await dialogs.chooseFolder?.({ title: 'Choose a folder' })).toBeNull();
     dialogs.registerProvider({ id: 'x', label: 'X', available: () => true })();
   });
 

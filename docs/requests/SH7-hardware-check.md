@@ -27,6 +27,13 @@ and WebKit:
    disabled after SIMHALT. Without `engine/dist` part 2 is skipped, or fails when
    `EASY68K_REQUIRE_ENGINES=1`.
 
+Without `engine/dist` part 1 still runs: the simulator session's failed engine requests and its
+"The simulator engine could not be created" message are the expected outcome there and are printed
+but not counted (gate I1 round 2; before, they failed part 1, so the CI step, which has no engines
+guard, would have failed on a runner without engines). `--without-engines` answers every request for
+`engine/dist` with 404 and so proves that run on a machine that has the engines. The CI step
+therefore needs no engines guard, as its comment in `ci.yml` already says; nothing new is requested.
+
 No step waits a fixed time: each waits (up to 30 s) for the state it expects, so a slow runner
 only makes the check slower. Nothing depends on Windows (no paths in the page, no fonts, key names
 are Playwright's portable ones). WebKit's `Failed to load resource ... Timeout was reached` (the

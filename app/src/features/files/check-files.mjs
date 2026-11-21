@@ -70,6 +70,20 @@ function check(name, ok, detail = '') {
 }
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
+/**
+ * The trimmed texts of the options a dialog's list shows, once they equal `expected`, or what it
+ * shows after `timeout` ms. The list is filled from an asynchronous Vfs.list after the dialog
+ * appears, so reading it at once can give [] on a busy machine (gate I1: one WebKit run did).
+ */
+async function listedOptions(dialog, expected, timeout = 10_000) {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    const listed = (await dialog.locator('[role=option]').allInnerTexts()).map((s) => s.trim());
+    if (same(listed, expected) || Date.now() > deadline) return listed;
+    await new Promise((resolveWait) => setTimeout(resolveWait, 100));
+  }
+}
+
 function freePort() {
   return new Promise((resolvePort, reject) => {
     const server = createNetServer();
@@ -538,47 +552,61 @@ async function blockedPass(browser, name) {
  */
 async function hangingPass(browser, name) {
   const p = `${name}:`;
-  const context = await newContext(browser);
-  await context.addInitScript(hangIndexedDB);
-  const page = await context.newPage();
-  page.setDefaultTimeout(60_000);
-  const errors = [];
-  page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text());
-  });
-  page.on('pageerror', (error) => errors.push(String(error)));
-  // Measured from the moment the page has loaded its modules (the dev server's first transform of a
-  // cold cache can take longer than the whole wait on a slow runner).
-  await page.goto(baseUrl, { waitUntil: 'load', timeout: 180_000 });
-  const loadedAt = Date.now();
-  await page.waitForSelector('.e68-shell', { timeout: 60_000 });
-  const shownAfter = Date.now() - loadedAt;
+  // A timing criterion on a busy machine: up to three attempts, the best one counts (gate rule). One
+  // WebKit run on the shared PC took 26.6 s from page load to the shell, because the page's own
+  // modules arrived that slowly, while the other runs took about 3.5 s.
+  let best = null;
+  const timings = [];
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const context = await newContext(browser);
+    await context.addInitScript(hangIndexedDB);
+    const page = await context.newPage();
+    page.setDefaultTimeout(60_000);
+    const errors = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text());
+    });
+    page.on('pageerror', (error) => errors.push(String(error)));
+    // Measured from the moment the page has loaded its modules (the dev server's first transform of
+    // a cold cache can take longer than the whole wait on a slow runner).
+    await page.goto(baseUrl, { waitUntil: 'load', timeout: 180_000 });
+    const loadedAt = Date.now();
+    await page.waitForSelector('.e68-shell', { timeout: 60_000 });
+    const shownAfter = Date.now() - loadedAt;
+    timings.push(shownAfter);
+    // Read at once: 20 s after opening began, the pending store gives way to the memory stand-in.
+    await page.waitForSelector('[data-e68-panel="files"] [role=tree]');
+    const banner = await page
+      .locator('[data-e68-panel="files"] [role=alert]')
+      .innerText()
+      .catch(() => '');
+    const kind = await page.evaluate(
+      () => window.__easy68k.ctx.vfs.backends().find((b) => b.mount === 'browser')?.constructor.name,
+    );
+    if (best === null || shownAfter < best.shownAfter) {
+      await page.screenshot({ path: join(outDir, `${name}-store-opening.png`) });
+      best = { errors, shownAfter, banner, kind };
+    }
+    await context.close();
+    if (best.shownAfter < 15_000) break;
+  }
+  const { errors, shownAfter, banner, kind } = best;
   check(
     `${p} IndexedDB that never answers: the application is shown well before the 20 s time limit`,
     shownAfter < 15_000,
-    `shown ${shownAfter} ms after the page loaded`,
+    `shown ${shownAfter} ms after the page loaded (attempts: ${timings.join(', ')} ms)`,
   );
-  await page.waitForSelector('[data-e68-panel="files"] [role=tree]');
-  const banner = await page
-    .locator('[data-e68-panel="files"] [role=alert]')
-    .innerText()
-    .catch(() => '');
   check(
     `${p} IndexedDB that never answers: the Files panel says the store is still opening`,
     banner.includes('still opening'),
     banner.slice(0, 80),
-  );
-  const kind = await page.evaluate(
-    () => window.__easy68k.ctx.vfs.backends().find((b) => b.mount === 'browser')?.constructor.name,
   );
   check(
     `${p} IndexedDB that never answers: a pending store stands at /browser`,
     kind === 'PendingBrowserStore',
     String(kind),
   );
-  await page.screenshot({ path: join(outDir, `${name}-store-opening.png`) });
   check(`${p} store opening: no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
 }
 
 /** The dialogs, "From this computer...", drops, export and import, accessibility. */
@@ -636,25 +664,15 @@ async function uiPass(browser, name) {
     ]),
     JSON.stringify(typeOptions),
   );
-  const listed = await dialog.locator('[role=option]').allInnerTexts();
+  const listed = await listedOptions(dialog, ['inc', 'prog.X68']);
   check(
     `${p} Open dialog: the first filter shows folders and .X68 files`,
-    same(
-      listed.map((s) => s.trim()),
-      ['inc', 'prog.X68'],
-    ),
+    same(listed, ['inc', 'prog.X68']),
     JSON.stringify(listed),
   );
   await dialog.locator('select').nth(1).selectOption({ index: 1 });
-  const asmListed = await dialog.locator('[role=option]').allInnerTexts();
-  check(
-    `${p} Open dialog: the ASM filter`,
-    same(
-      asmListed.map((s) => s.trim()),
-      ['inc', 'lib.ASM'],
-    ),
-    JSON.stringify(asmListed),
-  );
+  const asmListed = await listedOptions(dialog, ['inc', 'lib.ASM']);
+  check(`${p} Open dialog: the ASM filter`, same(asmListed, ['inc', 'lib.ASM']), JSON.stringify(asmListed));
   const note = await dialog.locator('.e68-filedialog__note').innerText();
   check(
     `${p} Open dialog: states where files are kept`,
@@ -757,7 +775,49 @@ async function uiPass(browser, name) {
   check(`${p} Save dialog: No abandons the save`, (await page.evaluate(() => window.__result)) === null);
   check(
     `${p} Save dialog: the dialog is not shown again`,
-    (await page.locator('[role=dialog][aria-modal=true]').count()) === 0,
+    await page
+      .locator('[role=dialog][aria-modal=true]')
+      .first()
+      .waitFor({ state: 'detached', timeout: 5000 })
+      .then(
+        () => true,
+        () => false,
+      ),
+  );
+
+  // The folder chooser without a native dialog (FileDialogs.chooseFolder; errata FS1 entry 16):
+  // only folders are listed, a typed existing folder is taken, OK with no name takes the folder shown.
+  const chooseFolder = () =>
+    page.evaluate(() => {
+      window.__result = undefined;
+      void window.__easy68k.ctx.fileDialogs
+        .chooseFolder({ title: 'Copy the Examples to', startDir: '/browser/demo' })
+        .then((r) => {
+          window.__result = r;
+        });
+    });
+  await chooseFolder();
+  await dialog.waitFor();
+  const folderListed = await listedOptions(dialog, ['inc']);
+  check(`${p} folder chooser: lists only the folders`, same(folderListed, ['inc']), JSON.stringify(folderListed));
+  await page.screenshot({ path: join(outDir, `${name}-folder-chooser.png`) });
+  await dialog.getByLabel('Folder name:').fill('INC');
+  await dialog.getByRole('button', { name: 'OK' }).click();
+  await page.waitForFunction(() => window.__result !== undefined);
+  check(
+    `${p} folder chooser: a typed existing folder is taken, not entered`,
+    (await page.evaluate(() => window.__result)) === '/browser/demo/inc',
+    String(await page.evaluate(() => window.__result)),
+  );
+  await chooseFolder();
+  await dialog.waitFor();
+  await listedOptions(dialog, ['inc']);
+  await dialog.getByRole('button', { name: 'OK' }).click();
+  await page.waitForFunction(() => window.__result !== undefined);
+  check(
+    `${p} folder chooser: OK with no name takes the folder shown`,
+    (await page.evaluate(() => window.__result)) === '/browser/demo',
+    String(await page.evaluate(() => window.__result)),
   );
 
   // A drop in Editor mode: the files open in the order of the drop.
@@ -833,16 +893,32 @@ async function uiPass(browser, name) {
   await page
     .locator('[data-e68-panel="files"] [role=treeitem][aria-selected=true]', { hasText: 'My Programs' })
     .waitFor();
+  // The name the page gives the download (the link's download attribute), recorded as it is clicked.
+  await page.evaluate(() => {
+    window.__downloadNames = [];
+    const anchor = window.HTMLAnchorElement.prototype;
+    const click = anchor.click;
+    anchor.click = function () {
+      if (this.download) window.__downloadNames.push(this.download);
+      return click.call(this);
+    };
+  });
   const [storeDownload] = await Promise.all([
     page.waitForEvent('download'),
     page.locator('[data-e68-panel="files"] button[aria-label="Export..."]').click(),
   ]);
   const storeZip = join(outDir, `${name}-store.zip`);
   await storeDownload.saveAs(storeZip);
+  const requestedNames = await page.evaluate(() => window.__downloadNames);
+  // WebKit on Linux (WebKitGTK) turns the spaces of a suggested download name into underscores
+  // itself (CI run 44913261966: "My_Programs.zip"); the name the page asked for is what FS1 controls.
+  const suggested = storeDownload.suggestedFilename();
   check(
     `${p} Export... of the store root downloads "My Programs.zip"`,
-    storeDownload.suggestedFilename() === 'My Programs.zip',
-    storeDownload.suggestedFilename(),
+    same(requestedNames, ['My Programs.zip']) &&
+      (suggested === 'My Programs.zip' ||
+        (name === 'webkit' && process.platform === 'linux' && suggested === 'My_Programs.zip')),
+    `page asked for ${JSON.stringify(requestedNames)}, the browser suggests ${JSON.stringify(suggested)}`,
   );
   const before = await storeContents(page);
 

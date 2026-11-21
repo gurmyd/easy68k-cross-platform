@@ -11,7 +11,8 @@ entry 10 what still rests on something that was not measured.
 
 At the integration gate I1 the open points of the review were measured on Windows GDI as well:
 every pen width up to 255 (entry 14, which adds a table of round dots and one oddity of GDI) and
-block copies that reach past the bitmap (entry 6).
+block copies that reach past the bitmap (entry 6). In round 2 T2 committed those dots and bars as
+the reference suite `pens`, and the comparison was run again on every committed case (entry 13).
 
 ## 1. trap15-b §6.3: a one-pixel rectangle run is drawn there and back (found by the GDI capture)
 
@@ -234,23 +235,16 @@ The suites `text` and `text-outline` (task 95 through `Surface.textOut`, glyphs 
 pass in T2's test as well. Before the correction of entry 1 the result was 32 cases short: 16 in
 `rects`, 15 in `modes` and 1 in `polylines` - all of them one-pixel runs in a mode other than Copy.
 
-Two notes for T2 and for gate I1 on `tests/conformance/gdi/surface.test.ts`, which SH1 does not own:
-
-- Its two probes take SH1's stubs for SH2's code, so the groups "wide pens (SH2)" and "ellipses
-  (SH2)" run now and fail until wave 2. `surfaceDrawsWidePens()` asks for a 21-pixel dot from a
-  zero-length line of width 5, which the stub draws (trap15-b §6.2); `surfaceDrawsEllipses()` asks
-  for any pixel. Probes that only GDI's shapes satisfy: for wide pens, after `line(45,5,55,5)` with
-  pen width 4 the pixel (45,3) is untouched and (44,4) is drawn (the measured stroke of §6.2; the
-  band without caps has it the other way round); for ellipses, the top row of `ellipse(0,0,9,9)`
-  has exactly two pixels (§6.4, N = 10; the stub has four).
-- It counts rectangles of a pen 2 or more wide among SH2's cases. They are SH1's (3.4 rule 5), they
-  are all equal now, and in the SH1 group they would be guarded from now on.
-
-At gate I1, T2 took both up in its own way: its test now counts rectangles of every pen width as
-SH1's, and it tells a stub by the comment line `// STUB written by SH1` that `ellipse.ts` and
-`widepen.ts` carry: while a file has that line, the cases that need it are reported as waiting
-for SH2 and not compared. Both stubs say so in their headers; whoever replaces a stub removes the
-line.
+At the end of wave 1 SH1 made two remarks on `tests/conformance/gdi/surface.test.ts` (T2's file):
+it decided by two probes of the Surface (`surfaceDrawsWidePens()`, `surfaceDrawsEllipses()`)
+whether to compare SH2's cases, and SH1's stubs passed both, so those cases ran and failed; and it
+counted rectangles of a pen 2 or more wide among SH2's cases, although they are SH1's (3.4 rule 5).
+T2 settled both at gate I1 (T2 errata 1.12), so the remarks are history: **the two probes no longer
+exist.** The test counts rectangles of every pen width as SH1's, and a case with an ellipse or a
+line of a pen 2 or more wide waits for SH2 while the file that draws it (`ellipse.ts`,
+`widepen.ts`) starts its header with the comment line `// STUB written by SH1`. Waiting cases are
+reported as skipped tests with their number and are not compared. Both stubs carry that line;
+whoever replaces a stub removes it.
 
 **Run again at gate I1** (2026-11-21, after T2 recaptured the text suites and after the changes of
 entry 14), every case of every committed suite, with the same replay and comparison:
@@ -279,6 +273,39 @@ fallback font, an undefined Windows-1252 byte, italic itemization, the thin bar 
 bytes), so the glyphs and the extent the replay hands to `textOut` are not Windows' there;
 `text-outline-glyphs` (75 cases) holds glyph pixels of the outline faces, which 6.5.3 does not
 compare, and the replay has no glyphs for it.
+
+**Run again in gate I1 round 2** (2026-11-21), against the references as committed in 8611609:
+T2 had added the suite `pens` (request `docs/requests/SH1-gdi-dots.md`, T2 errata 1.11) and
+recaptured `text` and `text-control`. T2's own test (`npx vitest run --config
+tests/vitest.workspace.ts tests/conformance/gdi/surface.test.ts`) passes every comparison it makes
+(15 passed, 8 skipped as waiting for SH2, 2,848 cases). Counted case by case with the same replay
+and comparison:
+
+| Suite | SH1's cases equal | Of them with wide-pen rectangles | Wide lines (SH2, stub) | Ellipses (SH2, stub) |
+|---|---|---|---|---|
+| `lines` | 10,000 of 10,000 | | | |
+| `polylines` | 244 of 244 | 2 of 2 | 3 of 56 | |
+| `rects` | 10,000 of 10,000 | 8,457 of 8,457 | | |
+| `pens` (new: dots of every width 2-255, bars and frames of the widths 13-255) | 1,228 of 1,228 | 1,228 of 1,228 | 254 of 254 (the dots) | 254 of 254 (the dots) |
+| `floods` | 1,000 of 1,000 | | | |
+| `modes` | 336 of 336 | 48 of 48 | 9 of 48 | 51 of 96 |
+| `modes-high` | 238 of 238 | | | |
+| `pixels` | 500 of 500 | | | |
+| `colors` | 49 of 49 | | | |
+| `clip` | 203 of 203 | 30 of 30 | 13 of 17 | 91 of 123 |
+| `widelines` | | | 667 of 2,000 | |
+| `text` | 2,122 of 2,122 | | | |
+| `text-outline` | 198 of 198 | | | |
+| all of the above | 26,118 of 26,118 | 9,765 of 9,765 | 946 of 2,375 | 396 of 473 |
+
+120 cases of `text-outline` again have no cells to compare. Machine-dependent suites:
+`colors-system` 28 of 28; `text-control` 44 of 252, and every one of the 208 differences is a
+string T2's text model does not cover (by `textUnmodelled()`: 74 a byte drawn from the fallback
+font, 30 an undefined Windows-1252 byte, 9 italic itemization, 95 the bar of zero-width bytes;
+T2's `golden.test.ts` asserts that `text-control` holds only such strings), so the glyphs and the
+extent handed to `textOut` are not Windows' there and no difference is the surface's.
+`text-outline-glyphs` is still not comparable (6.5.3). The dots of the stubs' one-point cases are
+equal because they use the measured table (entry 14); everything else the stubs draw waits for SH2.
 
 ## 14. Pen widths above those of the references: every width 2-255 measured on GDI (gate I1)
 
@@ -332,13 +359,21 @@ compare, and the replay has no glyphs for it.
   ellipse draw it; a one-point rectangle draws it less one or two pixels at 15 widths."
 - Proposed text for §6.3, case B: "... Wider: a flat-ended bar that leaves out its far end. With a
   pen exactly 206 wide the left half of a vertical bar lies one row lower than the right half."
-- What still guards nothing but itself: the committed references stop at width 12 (rectangles) and
-  14 (lines), so until T2 adds cases (`docs/requests/SH1-gdi-dots.md`) the table is held by the
-  unit tests only: a checksum and the pixel total of the captured dots (`tables/dots.test.ts`),
-  drawn examples, and the hash of the scene of the last table row, which is the hash of the
-  picture GDI drew (`WIDE_RECTANGLE_SCENE_HASH`, checked under Node and in both browsers).
-- Measured on one machine. Whether another Windows gives the same dots at the large widths will
-  show when the cases run in CI's `windows-oracles` job.
+- Guarded by the committed references since gate I1 round 2: T2's suite `pens`
+  (`docs/requests/SH1-gdi-dots.md`, T2 errata 1.11) holds the dot of every width 2-255 as a
+  one-point rectangle, a zero-length line and a one-point ellipse, and bars and frames of every
+  width 13-255 with the sheared bar of width 206; the surface equals all of it (entry 13, last
+  table). The unit tests hold the table as well: a checksum and the pixel total of the captured
+  dots (`tables/dots.test.ts`), drawn examples, and the hash of the scene of the last table row,
+  which is the hash of the picture GDI drew (`WIDE_RECTANGLE_SCENE_HASH`, checked under Node and
+  in both browsers).
+- Measured on one machine first, then on a second Windows: in CI run 44913261966 (commit
+  8611609) the job `windows-oracles` recaptured every suite on Windows Server 10.0.26100 (the
+  references come from 10.0.26300). Of its 44 outputs, the 24 that differed were font files,
+  `metrics.json`, `spots.json` and the two machine-dependent suites `colors-system` and
+  `text-control`; `pens`, `rects`, `lines`, `polylines`, `floods`, `modes`, `modes-high`,
+  `pixels`, `colors` and `clip` were equal to the committed references. So the dots, bars and
+  frames are the same on that Windows.
 
 ## 15. Interface inside the surface folder: `dotRows` is gone (for SH2)
 

@@ -254,14 +254,15 @@ jobs:
         with:
           name: engine-dist
           path: engine/dist
-      # The suites are never committed (6.2.4). The runner names the upstream commits it wants, so
-      # the downloaded data is good for as long as the runner's folder is unchanged.
+      # The suites are never committed (6.2.4). suite.json names the upstream files and their hashes,
+      # so the downloaded data is good for as long as suite.json is unchanged, and a change of another
+      # T4 file does not download the 200 MB again (the key of ci.yml; T4's request, gate I1).
       - name: Restore the single-step data
         if: steps.guard.outputs.run == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: build/singlestep
-          key: singlestep-${{ hashFiles('tests/conformance/cpu/**') }}
+          key: singlestep-${{ hashFiles('tests/conformance/cpu/suite.json') }}
       - name: Download the suites and re-check the frozen baseline
         if: steps.guard.outputs.run == 'true'
         run: node tests/conformance/cpu/run-singlestep.mjs

@@ -66,6 +66,16 @@ smoothing only affects outputs that are not compared):
 `--as-windows "<version> cp<code page> <dpi>dpi"` judges a run as if it were on that Windows, to try
 the policy out.
 
+Under each differing output the run prints what differs (`describe-difference.ts`): for an atlas
+the glyphs (as byte ranges) and advances, for a JSON file the paths with both values, for a pack the
+cases, for the TSV the rows. The report repeats it, and the captured files are copied to
+`build/gdi-capture/run/differences/<path>`, so that a CI log is enough to judge another Windows.
+
+The second CI run (run 44913261966, 21 Nov 2026) on 10.0.26100 found 24 outputs that differ:
+`metrics.json`, `spots.json`, and the raster atlases of Courier 9x16, 12x20 and 15x25 and of
+Fixedsys 8x15 in all five styles, and the underline and strike-out atlases of Courier 8x13; the
+`text` suite was equal. That run printed no details yet; the next one does.
+
 ## Raster fonts
 
 GDI makes every size of a raster face from a few native sizes by whole-number pixel repetition
@@ -130,6 +140,23 @@ script itemization:
 In the outline faces GDI widens the opaque cell by the first and last glyph's ink overhang (1-2
 pixels at 8-18 pt, more at large sizes) and draws the TrueType underline below the cell. The port's
 cells are the advance boxes; `text-outline` comparisons leave those pixels out.
+
+## Text strings in the monospaced outline faces
+
+`text-model.ts` (`layoutOutlineText`, `outlineCells`) gives the cell and the pen of a Courier New,
+Lucida Console or Consolas string; the suites `text-outline` and `text-outline-zero` are checked
+against it. Measured against fresh captures (gate I1, review round 2, defect 14):
+
+- **Pen:** the rule of the raster faces with the per-byte advances: every byte has the cell width,
+  except Consolas `$0D`, which has 0 at every size and style (`OUTLINE_ZERO_ADVANCE`), and `$7F` in a
+  string that also has a byte of `$80` or above, which takes `delInHighString`.
+- **Cell:** the sum of the drawn widths. A zero-width byte takes none, even alone (a string of
+  zero-width bytes only fills no cell, only a sliver of the widening), and `$7F` always takes
+  `delInHighString`, with or without a byte of `$80` or above (Courier New 9 `"A" $7F "B"`: cell 18,
+  pen 21).
+- Not modelled: a string that draws only `$7F` gets the fallback font's cell, which is one row lower
+  than the face's in Courier New 8 and Lucida Console 10 (its height is not measured); such cases are
+  captured but not compared.
 
 ## Ellipse cases
 

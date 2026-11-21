@@ -12,7 +12,8 @@ node app/src/core/sim-host/surface/check-surface.mjs [--browser chromium|webkit|
 ```
 
 It starts the Vite dev server of `app/` on a free port that the system picks (port 0, since gate
-I1; no file watching, no hot reload, a dependency cache of its own under the output folder), opens
+I1; no file watching, no hot reload, no dependency scan since round 2, a dependency cache of its
+own under the output folder), opens
 an empty page on that origin in headless Chromium and WebKit - not the application, so that an
 unfinished feature cannot fail it - imports `surface.ts` into the page and checks, per browser
 (14 checks each since gate I1):

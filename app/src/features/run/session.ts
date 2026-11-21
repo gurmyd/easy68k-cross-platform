@@ -378,6 +378,7 @@ export function createSimSession(ctx: AppContext, env: SimSessionEnv, options: S
   page.addEventListener?.('pagehide', onPageHide);
 
   const dispose = session.dispose;
+  let disposed = false;
   const runSession: RunSession = Object.assign(session, {
     ui,
     printJobs,
@@ -392,6 +393,8 @@ export function createSimSession(ctx: AppContext, env: SimSessionEnv, options: S
       sync();
     },
     dispose() {
+      if (disposed) return;
+      disposed = true;
       stopFrames();
       stopSettings();
       page.removeEventListener?.('blur', onBlur);
@@ -406,7 +409,9 @@ export function createSimSession(ctx: AppContext, env: SimSessionEnv, options: S
   if (options.autoStart !== false) {
     // After bootstrap() has finished with the context: the engine's start-up calls may show panels.
     // The start first applies the journal of the program files (core/run/compose.ts).
-    void Promise.resolve().then(() => runSession.start());
+    // A session disposed before that microtask (an application built and disposed at once) does
+    // not start: it would subscribe to frames nobody cancels and create an engine nobody releases.
+    void Promise.resolve().then(() => (disposed ? undefined : runSession.start()));
   }
   return runSession;
 }

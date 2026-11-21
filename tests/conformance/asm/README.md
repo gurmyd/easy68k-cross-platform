@@ -18,19 +18,25 @@ For every program of the corpus (`tests/corpus/manifest.json`) and every option 
    the run and, when the official listing is in the repository, with the time of its date line;
 3. the result must equal the official one: **byte for byte, the date line included**, for a
    program without undefined symbols. Where the listing reports an undefined symbol, the original
-   encodes uninitialised memory; `canonicalListing` and `canonicalSRecord` mask exactly the affected
-   statements and S-record data, and the rest must be equal. Error and warning counts must agree.
+   encodes uninitialised memory; `canonicalListing` and `canonicalSRecord` mask exactly the
+   object code of the affected statements, in the listing and at their addresses in the S-records,
+   and every other byte must be equal. Error and warning counts must agree.
 
-A run that differs fails its test, unless `known-differences.json` lists it with its reason; a
-listed run that starts to match fails too, until its entry is removed.
+A run that differs fails its test, unless `known-differences.json` lists it with its reason and
+with what the port produces for it (`ours`: counts and hashes); a listed run that starts to match,
+or that differs in any other way than recorded, fails too, until the entry is updated.
+
+A run that the official program did not finish cleanly (a crash, a window it must not show) has no
+golden, except where it had finished assembling first: then its files are kept as
+`<option label>.failed.L68` / `.S68` and compared like goldens (`golden/REPORT.md` lists them).
 
 | File                                             | What                                                                                                                                                                                                  |
 | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `corpus.test.ts`                                 | The example sets: `official`, `github-mit`, and `site` when `node tools/fetch-site-examples.mjs` has fetched it (its official outputs are not in the repository; the comparison is by hash)           |
-| `checklist.test.ts`                              | The test checklist of `docs/porting/assembler.md` §3.9: one test per item, named after the item, proved by the programs `checklist/checklist.json` names; then the conformance programs no item names |
+| `checklist/checklist.test.ts`                    | The test checklist of `docs/porting/assembler.md` §3.9: one test per item, named after the item, proved by the programs `checklist/checklist.json` names; then the conformance programs no item names |
 | `harness.ts`                                     | One comparison (`compareRun`) and the per-file report                                                                                                                                                 |
 | `compare.ts`                                     | The editor model, the canonical forms and the comparison; no dependency on any assembler                                                                                                              |
-| `known-differences.json`                         | Runs in which the port does not reproduce the official output, with the reason and the owner of the cause                                                                                             |
+| `known-differences.json`                         | Runs in which the port does not reproduce the official output, with the reason, the owner of the cause and the port's output (`known-differences.ts` applies it)                                      |
 | `checklist/programs/<name>/prog.X68`             | The checklist programs (with their include files); `checklist/programs.json` gives each its option sets                                                                                               |
 | `richedit/*.X68`                                 | Sources that stress the editor's RichEdit round trip (written by `tests/oracle/wine/asm/gen_richedit_stress.py`)                                                                                      |
 | `golden/<program id>/<option label>.L68`, `.S68` | What the official program produced, unchanged. `golden/REPORT.md` lists every run without a result and why                                                                                            |

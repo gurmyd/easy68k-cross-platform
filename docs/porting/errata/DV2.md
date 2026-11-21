@@ -18,7 +18,10 @@ compile against; W1 is asked to take them into `app/src/contracts/`.
   `nativeFileDialogs: { open(OpenRequest): Promise<VPath[] | null>; save(SaveRequest): Promise<VPath | null>; chooseFolder(title): Promise<VPath | null> }`.
   The main process shows the dialog as a sheet of the window, adds the folder of every chosen file
   (or the chosen folder) to the granted roots and returns VPaths of `/disk`. `save` appends
-  `defaultExt` when the user typed no extension; macOS asks about overwriting itself.
+  `defaultExt` when the user typed no extension; macOS asks about overwriting itself. Since gate
+  I1 round 2 `defaultExt` may be spelled `X68`, `.X68` or the original's `*.X68`, as
+  `SaveRequest.defaultExt` in `contracts/fs.ts` says (`withDefaultExtension` in
+  `desktop/src/security.ts`); before, `*.X68` appended nothing.
 - For W1: add `readonly nativeFileDialogs: NativeFileDialogs | null` to `Platform` (null on the web)
   with the interface above. For FS1 meanwhile: `'nativeFileDialogs' in ctx.platform` finds it;
   a `FileSourceProvider` with id `native` can wrap it.

@@ -7,7 +7,7 @@
 
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { extname, join } from 'node:path';
+import { extname, join, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { expect, test } from '@playwright/test';
 import { isAllowedExternalUrl as pageAllows } from '../../../app/src/platform/web';
@@ -41,9 +41,10 @@ import {
   realPathOf,
   relOfRealPath,
   vpathOfRealPath,
+  withDefaultExtension,
 } from '../../../desktop/src/security';
 import { createDiskSyncHandlers } from '../../../desktop/src/sync-ipc';
-import { REPO } from './harness';
+import { REPO, startDevServer } from './harness';
 
 const scratch = mkdtempSync(join(tmpdir(), 'easy68k-unit-'));
 test.afterAll(() => rmSync(scratch, { recursive: true, force: true }));
@@ -122,6 +123,17 @@ test.describe('security.ts', () => {
     expect(vpathOfRealPath('/Users/me/x.X68', 'posix')).toBe('/disk/Users/me/x.X68');
   });
 
+  test('the Save dialog appends defaultExt in all three spellings of the contract (X68, .X68, *.X68)', () => {
+    const typed = join(scratch, 'prog');
+    for (const ext of ['X68', '.X68', '*.X68']) expect(withDefaultExtension(typed, ext), ext).toBe(`${typed}.X68`);
+    // A name with its own extension keeps it.
+    expect(withDefaultExtension(`${typed}.txt`, '*.X68')).toBe(`${typed}.txt`);
+    // Nothing usable: nothing appended.
+    for (const bad of ['', '*.*', '*', '.', 'X/68', '*.X68;*.S68', 'A'.repeat(17), 7, undefined]) {
+      expect(withDefaultExtension(typed, bad), String(bad)).toBe(typed);
+    }
+  });
+
   test('granted roots: below a root is allowed, beside it is not, a link out of it is not', () => {
     const grants = new GrantedRoots();
     const root = join(scratch, 'granted');
@@ -147,6 +159,20 @@ test.describe('security.ts', () => {
     grants.add(scratch);
     expect(grants.list()).toHaveLength(1);
     expect(() => grants.add('relative')).toThrow();
+  });
+});
+
+test.describe('harness.ts', () => {
+  test('the test dev server watches no file of app/, so edits elsewhere in the tree cannot reload a page', async () => {
+    test.setTimeout(120_000);
+    const server = await startDevServer();
+    try {
+      const app = join(REPO, 'app');
+      const watched = server.watchedPaths().filter((path) => path === app || path.startsWith(app + sep));
+      expect(watched).toEqual([]);
+    } finally {
+      await server.close();
+    }
   });
 });
 

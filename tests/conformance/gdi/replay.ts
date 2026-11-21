@@ -8,35 +8,23 @@
 //          surface is held to: the opaque cell is as wide as the sum of the glyph advances, the
 //          pen moves by `extent`. Zero-width control bytes are left out of the glyph list (they
 //          paint nothing and take no room, trap15-b 6.7); `extent` counts them unless the string
-//          has a byte of $80 or above (text-model.ts); a string of zero-width bytes only gets one
-//          blank glyph as wide as the cell GDI fills (one cell plus the style overhang).
+//          has a byte of $80 or above (text-model.ts); in the raster faces a string of zero-width
+//          bytes only gets one blank glyph as wide as the cell GDI fills (one cell plus the style
+//          overhang). The font colour goes to textOut as task 21 gave it; the Surface resolves it
+//          by trap15-b 4.6 (text-model.ts resolveColour is the tests' statement of that rule).
+//
+// `text: 'outline'` lays the strings out by layoutOutlineText() with blank glyphs (the outline
+// glyph pixels are not compared, 6.5.3); the caller skips the cases outlineCells() returns null for.
 
 import type { Glyph } from '../../../app/src/contracts';
 import { Surface } from '../../../app/src/core/sim-host/surface/surface';
 import type { GdiCase } from './cases';
-import { cellOf, loadMetrics, rasterGlyph, type FontRequest, type Metrics, type TestGlyph } from './fonts';
-import { layoutText, outlineAdvance, type GlyphOf, type Picture } from './text-model';
-
-export type GlyphSource = GlyphOf;
-
-/**
- * Outline faces: blank glyphs with Windows' cell (the glyph pixels are not compared, 6.5.3); $7F in
- * a string with a byte of $80 or above is as wide as Windows' fallback glyph (text-model.ts).
- */
-export const blankOutlineGlyph: GlyphSource = (metrics: Metrics, font: FontRequest, byte, bytes): TestGlyph => {
-  const cell = cellOf(metrics, font);
-  const advance = outlineAdvance(metrics, font, byte, bytes) ?? cell.colWidth;
-  return {
-    advance,
-    width: advance,
-    height: cell.rowHeight,
-    coverage: new Uint8Array(advance * cell.rowHeight),
-  };
-};
+import { loadMetrics, rasterGlyph, type FontRequest, type Metrics } from './fonts';
+import { layoutOutlineText, layoutText, type Picture } from './text-model';
 
 let metrics: Metrics | undefined;
 
-export function replayOnSurface(c: GdiCase, glyphs: GlyphSource = rasterGlyph): Picture {
+export function replayOnSurface(c: GdiCase, text: 'raster' | 'outline' = 'raster'): Picture {
   const surface = new Surface(c.width, c.height);
   let font: FontRequest = { name: 'Fixedsys', size: 9, style: 0 };
   let fontColor = 0xffffff;
@@ -88,11 +76,15 @@ export function replayOnSurface(c: GdiCase, glyphs: GlyphSource = rasterGlyph): 
         font = { name: o.name, size: o.size, style: o.style };
         break;
       case 'fontcolor':
-        fontColor = o.color & 0xffffff;
+        fontColor = o.color; // the Surface resolves it by 4.6 (surface.ts textOut)
         break;
       case 'text': {
         metrics ??= loadMetrics();
-        const layout = layoutText(metrics, font, o.bytes, glyphs);
+        const layout =
+          text === 'outline'
+            ? layoutOutlineText(metrics, font, o.bytes)
+            : layoutText(metrics, font, o.bytes, rasterGlyph);
+        if (layout === null) throw new Error(`${c.id}: no outline layout (outlineCells() is null for this case)`);
         let list: Glyph[] = layout.glyphs.map((g) => g.glyph);
         // GDI's cell can be wider than the sum of the advances (the bold and italic overhang of the
         // raster faces). Within the contract that is a blank glyph at the end with that advance;

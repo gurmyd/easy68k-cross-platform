@@ -1445,6 +1445,18 @@ function DialogsSection({ report }: { report: Report }) {
           title="Hidden controls"
           width={420}
           onCancel={() => setOpen(null)}
+          // The owner's key handler (errata W2 entry 18): F1 is reported, inside and on the body;
+          // T on the body is taken by the owner, so the dialog does not press 'Three'.
+          onKeyDown={(event) => {
+            const onBody = event.target === document.body || event.target === document.documentElement;
+            if (event.key === 'F1') {
+              event.preventDefault();
+              report(`Hidden controls: F1 ${onBody ? 'on the body' : 'inside'}`);
+            } else if (onBody && event.key.toLowerCase() === 't' && !event.altKey) {
+              event.preventDefault();
+              report('Hidden controls: T taken by the owner');
+            }
+          }}
           footer={
             <>
               <Button caption="&OK" isDefault onClick={() => setOpen(null)} />

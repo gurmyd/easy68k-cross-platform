@@ -6,11 +6,12 @@
 // Chromium and WebKit (Playwright). It checks what unit tests under Node cannot show:
 //
 //   - EASyBIN mode starts without console errors; menus, captions and fields of the original are on
-//     screen; the status bar shows the title;
+//     screen; the window title is the original's caption (the opened file after an open, the fixed
+//     title after New);
 //   - Open S-Record through the menu shortcut and the real file dialog (FS1), the loader's message box,
 //     the fields; Save S-Record and Save Binary (4 files) through the real dialogs, the bytes written;
 //   - Copy, Fill, the Address field, Row/Page buttons, the arrow keys and typing into the rows;
-//   - a file dropped on the window; the About box; Help;
+//   - a file dropped on the window; the About box and F1 in it (credits); F1 Help;
 //   - editing anywhere in 16 MB stays responsive: key-down to the next painted frame, measured at three
 //     addresses in at least three runs (up to six while none meets the limits), best run counts; a
 //     Fill of all 16 MB;
@@ -133,22 +134,72 @@ const readStore = (page, path) =>
       return null;
     }
   }, path);
+// Waits whose test is asynchronous poll inside page.evaluate. page.waitForFunction cannot do this: an
+// async predicate returns a promise, which counts as truthy at once, so the wait would not wait.
+
 /** Waits until the store holds `path` (a save writes asynchronously after its dialog closes). */
 const waitForStore = (page, path) =>
-  page
-    .waitForFunction(
-      async (p) => {
+  page.evaluate(
+    async ([p, wait]) => {
+      const deadline = performance.now() + wait;
+      for (;;) {
         try {
           await window.__easy68k.ctx.vfs.readFile(p);
           return true;
         } catch {
-          return false;
+          // not written yet
         }
-      },
-      path,
-      { timeout: WAIT, polling: 50 },
-    )
-    .catch(() => {}); // the check that reads the file reports what is missing
+        if (performance.now() > deadline) return false; // the check that reads the file reports it
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    },
+    [path, WAIT],
+  );
+
+/** Waits until the EASyBIN caption is `caption`; resolves to whether it became so. */
+const waitForCaption = (page, caption) =>
+  page.evaluate(
+    async ([c, wait]) => {
+      const { easybinOf } = await import('/src/features/easybin/session.ts');
+      const { model } = easybinOf(window.__easy68k.ctx);
+      const deadline = performance.now() + wait;
+      while (model.getState().caption !== c) {
+        if (performance.now() > deadline) return false;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      return true;
+    },
+    [caption, WAIT],
+  );
+
+/**
+ * Waits until the Help panel's frame shows `page` (a file name); resolves to the address it shows.
+ * The frame's own location, not its `src` attribute: the panel navigates the frame in place, so
+ * `src` keeps the first page it showed.
+ */
+const waitForHelpPage = async (page, name) => {
+  const shown = () => {
+    const frame = document.querySelector('[data-e68-panel="help"] iframe');
+    if (!frame) return '';
+    try {
+      return decodeURIComponent(frame.contentWindow.location.href);
+    } catch {
+      return frame.getAttribute('src') ?? '';
+    }
+  };
+  await page
+    .waitForFunction(`(${shown})().endsWith(${JSON.stringify(`/${name}`)})`, null, { timeout: WAIT, polling: 50 })
+    .catch(() => {}); // the check reports what the panel shows
+  return page.evaluate(shown);
+};
+
+/** Waits until the window title starts with `prefix`; resolves to the title. */
+const waitForTitle = async (page, prefix) => {
+  await page
+    .waitForFunction((t) => document.title.startsWith(t), prefix, { timeout: WAIT, polling: 50 })
+    .catch(() => {}); // the check reports the title
+  return page.title();
+};
 
 /** The message box on top: its text, then presses `button`. */
 async function answerBox(page, button) {
@@ -234,9 +285,15 @@ async function functionalSteps(name, theme) {
   ]) {
     check(`${p} caption "${text}" on screen`, (await page.getByText(text, { exact: false }).count()) > 0);
   }
+  const firstTitle = await waitForTitle(page, 'EASyBIN v2.5.0 - unofficial port ');
   check(
-    `${p} status bar shows EASyBIN v2.5.0`,
-    (await page.locator('.e68-statusbar').innerText()).includes('EASyBIN v2.5.0'),
+    `${p} window title EASyBIN v2.5.0 - unofficial port ...`,
+    firstTitle.startsWith('EASyBIN v2.5.0 - unofficial port '),
+    firstTitle,
+  );
+  check(
+    `${p} no status bar text (the original has no status bar)`,
+    (await page.locator('.e68-statusbar[data-mode="easybin"]').innerText()).trim() === '',
   );
   const firstRow = await page.locator('.e68-easybin__row:not(.e68-easybin__measure)').first().innerText();
   check(
@@ -244,6 +301,15 @@ async function functionalSteps(name, theme) {
     firstRow.startsWith('00000000: FF FF FF') && firstRow.trimEnd().endsWith('----------------'),
     firstRow,
   );
+
+  // The waits after saves really wait (an async waitForFunction predicate did not, gate I1 review).
+  await page.evaluate(() => {
+    setTimeout(() => void window.__easy68k.ctx.vfs.writeFile('/browser/b1-late.bin', new Uint8Array([1])), 400);
+  });
+  const waitStart = Date.now();
+  const arrived = await waitForStore(page, '/browser/b1-late.bin');
+  const waited = Date.now() - waitStart;
+  check(`${p} waitForStore waits for a late write`, arrived && waited >= 300, `${arrived}, ${waited} ms`);
 
   // Open S-Record with Ctrl+O, the real dialog and message box.
   await writeStore(page, '/browser/b1-hello.S68', readFileSync(join(fixtures, 'asm-hello.S68')));
@@ -262,10 +328,8 @@ async function functionalSteps(name, theme) {
     state.fields.lastAddress === '001022' && state.fields.address === '001000' && state.fields.outLength === '000023',
     JSON.stringify(state.fields),
   );
-  check(
-    `${p} status bar shows the file`,
-    (await page.locator('.e68-statusbar').innerText()).includes('/browser/b1-hello.S68'),
-  );
+  const openedTitle = await waitForTitle(page, '/browser/b1-hello.S68 - ');
+  check(`${p} window title is the opened file`, openedTitle.startsWith('/browser/b1-hello.S68 - '), openedTitle);
   await page.screenshot({ path: join(outDir, `${name}-${theme}-loaded.png`) });
 
   // Save S-Record: From/To typed, Ctrl+R, confirmation, dialog.
@@ -392,13 +456,10 @@ async function functionalSteps(name, theme) {
       first.includes('Invalid data on line 1') && second.includes('Opening as binary file.'),
       `${first.replace(/\n/g, '|')} / ${second}`,
     );
-    await page.waitForFunction(
-      async () => {
-        const { easybinOf } = await import('/src/features/easybin/session.ts');
-        return easybinOf(window.__easy68k.ctx).model.getState().caption === 'code.BIN';
-      },
-      null,
-      { timeout: WAIT, polling: 50 },
+    check(
+      `${p} drop: the window title is the dropped file's name`,
+      (await waitForCaption(page, 'code.BIN')) && (await waitForTitle(page, 'code.BIN - ')).startsWith('code.BIN - '),
+      await page.title(),
     );
     check(
       `${p} drop: loaded at First Address`,
@@ -425,22 +486,31 @@ async function functionalSteps(name, theme) {
       aboutText.includes('Use the EASy68K forum to report undocumented features.'),
   );
   await page.screenshot({ path: join(outDir, `${name}-${theme}-about.png`) });
+  // F1 in the About box: the credits page (the original's KeyPreview, aboutS.cpp).
+  await page.keyboard.press('F1');
+  const creditsShown = await waitForHelpPage(page, 'credits.htm');
+  check(
+    `${p} F1 in the About box opens credits.htm; the box stays open`,
+    creditsShown.endsWith('/credits.htm') && (await about.isVisible()),
+    creditsShown,
+  );
   await about.getByRole('button', { name: 'OK' }).click();
   await page.locator('.e68-easybin__rows').click();
   await page.keyboard.press('F1');
-  await page
-    .waitForFunction(
-      () =>
-        (document.querySelector('[data-e68-panel="help"] iframe')?.getAttribute('src') ?? '').includes('easybin.htm'),
-      null,
-      { timeout: WAIT, polling: 50 },
-    )
-    .catch(() => {}); // the check below reports what the panel shows
-  const helpSrc = await page.evaluate(
-    () => document.querySelector('[data-e68-panel="help"] iframe')?.getAttribute('src') ?? '',
-  );
-  check(`${p} F1 opens easybin.htm in the Help panel`, helpSrc.includes('easybin.htm'), helpSrc);
+  const helpShown = await waitForHelpPage(page, 'easybin.htm');
+  check(`${p} F1 opens easybin.htm in the Help panel`, helpShown.endsWith('/easybin.htm'), helpShown);
   await page.screenshot({ path: join(outDir, `${name}-${theme}-help.png`) });
+
+  // File > New puts the fixed window title back.
+  await page.locator('[role=menubar] > [role=menuitem]', { hasText: 'File' }).click();
+  await page.locator('[role=menu] [role=menuitem]', { hasText: 'New' }).first().click();
+  const caution = await answerBox(page, 'OK');
+  const newTitle = await waitForTitle(page, 'EASyBIN v2.5.0 - ');
+  check(
+    `${p} File > New: Caution, then the window title EASyBIN v2.5.0 again`,
+    caution.includes('The current environment will be lost') && newTitle.startsWith('EASyBIN v2.5.0 - '),
+    `${caution} / ${newTitle}`,
+  );
 
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
 }

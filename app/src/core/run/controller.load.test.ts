@@ -10,6 +10,7 @@ import { assembleProgram, bytesOf, createRecordingHost, type AssembledProgram } 
 import { MemoryBackend } from '../../fs/memory-backend';
 import { createVfs } from '../../fs/vfs';
 import { KIT_PROGRAM_PATH, createKit, partOf, type Kit, type KitEnv, type KitOptions } from './test-kit';
+import { VirtualTime } from './clock';
 
 const ENV: KitEnv = {
   engines: { create: createSimEngine, release: releaseSimEngine },
@@ -557,6 +558,31 @@ describe.skipIf(!enginesBuilt)('loading (needs engine/dist)', { timeout: ENGINE_
   });
 
   describe('cold start: process-start state (4.7.1)', () => {
+    it('start() after dispose() neither listens to frames nor creates an engine', async () => {
+      let frameListeners = 0;
+      const time = new VirtualTime();
+      await start({
+        start: false,
+        clock: time,
+        scheduler: {
+          onFrame(fn) {
+            frameListeners++;
+            const stop = time.onFrame(fn);
+            return () => {
+              frameListeners--;
+              stop();
+            };
+          },
+          setTimer: (delayMs, fn) => time.setTimer(delayMs, fn),
+        },
+      });
+      kit.controller.dispose();
+      await kit.controller.start();
+      expect(frameListeners).toBe(0);
+      expect(kit.created).toBe(0);
+      expect(kit.events).not.toContain('reset');
+    });
+
     const fresh = { rom: { enabled: false, start: 0, end: 0 }, size: [640, 480], pen: [0, 0] };
 
     /** Runs `leavesState` to its halt and checks that it left the state behind. */

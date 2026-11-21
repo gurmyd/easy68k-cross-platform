@@ -245,7 +245,7 @@ export function FilesPanel() {
             aria-selected={row.path === selected?.path}
             title={row.kind === 'root' ? row.name : splitVPath(row.path).rel}
             className={`e68-files__row e68-files__row--${row.kind}`}
-            style={{ paddingInlineStart: `calc(var(--sp-1) + ${(row.depth - 1) * 14}px)` }}
+            style={{ paddingInlineStart: `calc(var(--sp-1) + var(--sp-4) * ${row.depth - 1})` }}
             onPointerDown={(event) => {
               if (event.button !== 0 && event.button !== 2) return;
               model?.select(row.path);

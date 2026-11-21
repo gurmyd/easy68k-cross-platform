@@ -5747,12 +5747,14 @@
     "default": {
      "options": {},
      "status": "failed",
-     "reason": "Assembler Status dialog did not close on Alt+C",
-     "errors": null,
-     "warnings": null,
-     "l68": null,
-     "s68": null,
-     "golden": false
+     "reason": "unexpected window \"EASy68K\" above the Assembler Status dialog",
+     "outputsKept": true,
+     "received": "2d81b3976086c8b97a22192a348799eac73435d0b27053f084d0359b04c8be0a",
+     "errors": 14,
+     "warnings": 1,
+     "l68": "59b244d4e91694d58af1a46ad470e0086c28500ee1f995ba69a0a6c753e1ba88",
+     "s68": "9ec01985a7768cb42839278e8e5aa13da1b793ac091fe1d9080830706af108f9",
+     "golden": true
     }
    }
   },
@@ -6170,6 +6172,29 @@
      "l68": "054b41412d7313beea9f3e48fde3a1851f972bb0c3a56093382d47375cefed4d",
      "s68": "8cd24a4d4a28c0905e506588e6577c71c1d38fa384f425a449fb0a1679dc2b9b",
      "golden": true
+    }
+   }
+  },
+  {
+   "id": "richedit/s21_trailer_short_tab_size.X68",
+   "set": "conformance",
+   "origin": "written for this project (tests/oracle/wine/asm/gen_richedit_stress.py)",
+   "licence": "GPL-2.0-or-later",
+   "file": "richedit/s21_trailer_short_tab_size.X68",
+   "root": "richedit",
+   "sha256": "a0d7b07a1ee019a6e4a4429374fdc6d6105414c9c7e2eb4ccafb0b125e614c66",
+   "bytes": 142,
+   "flags": [],
+   "runs": {
+    "default": {
+     "options": {},
+     "status": "failed",
+     "reason": "unexpected window \"Information\" before the editor window appeared",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": null,
+     "golden": false
     }
    }
   },

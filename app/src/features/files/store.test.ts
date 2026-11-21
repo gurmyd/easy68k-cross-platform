@@ -246,6 +246,59 @@ describe('names that differ only in letter case', { timeout: 60_000 }, () => {
       expect((await names(vfs, '/browser/d/New')).sort()).toEqual(['a.x68', 'b.x68']);
     });
 
+    // Gate I1 round 1 review: one batch holding two spellings of a new name overwrote the first
+    // file silently (conflicts [], both written to A.X68).
+    it(`${kind} store: one import batch with two spellings of a new name asks before the second`, async () => {
+      const vfs = kind === 'browser' ? await browserVfs() : memoryVfs();
+      await vfs.mkdirp('/browser/x');
+      const items = [
+        { rel: 'A.X68', read: async () => ascii('first') },
+        { rel: 'a.x68', read: async () => ascii('second') },
+        { rel: 'Sub/b.x68', read: async () => ascii('b1') },
+        { rel: 'SUB/B.X68', read: async () => ascii('b2') },
+      ];
+      const plan = await planImport(vfs, '/browser/x', items);
+      expect(plan.conflicts.map((c) => c.rel)).toEqual(['a.x68', 'SUB/B.X68']);
+      const asked: string[] = [];
+      const kept = await runImport(vfs, plan, (item) => {
+        asked.push(item.rel);
+        return false;
+      });
+      expect(asked).toEqual(['a.x68', 'SUB/B.X68']);
+      expect(kept.written).toEqual(['/browser/x/A.X68', '/browser/x/Sub/b.x68']);
+      expect(kept.skipped.map((s) => s.rel)).toEqual(['a.x68', 'SUB/B.X68']);
+      expect(text(await vfs.readFile('/browser/x/A.X68'))).toBe('first');
+      expect((await names(vfs, '/browser/x')).sort()).toEqual(['A.X68', 'Sub']);
+      // Yes: the second replaces the first in the stored spelling, still one entry per name.
+      await vfs.remove('/browser/x/A.X68');
+      await vfs.remove('/browser/x/Sub');
+      const replaced = await runImport(vfs, plan, () => true);
+      expect(replaced.written).toEqual([
+        '/browser/x/A.X68',
+        '/browser/x/A.X68',
+        '/browser/x/Sub/b.x68',
+        '/browser/x/Sub/b.x68',
+      ]);
+      expect(text(await vfs.readFile('/browser/x/A.X68'))).toBe('second');
+      expect((await names(vfs, '/browser/x')).sort()).toEqual(['A.X68', 'Sub']);
+    });
+
+    it(`${kind} store: runImport asks for a file written earlier in the run even if the plan missed it`, async () => {
+      const vfs = kind === 'browser' ? await browserVfs() : memoryVfs();
+      const items = [
+        { rel: 'P.X68', read: async () => ascii('1') },
+        { rel: 'p.x68', read: async () => ascii('2') },
+      ];
+      const asked: string[] = [];
+      const result = await runImport(vfs, { dir: '/browser/y', items, conflicts: [], refused: [] }, (item) => {
+        asked.push(item.rel);
+        return false;
+      });
+      expect(asked).toEqual(['p.x68']);
+      expect(result.written).toEqual(['/browser/y/P.X68']);
+      expect(text(await vfs.readFile('/browser/y/P.X68'))).toBe('1');
+    });
+
     it(`${kind} store: importOne and storedSpelling use the stored spelling of every part`, async () => {
       const vfs = kind === 'browser' ? await browserVfs() : memoryVfs();
       await vfs.writeFile('/browser/imported/Prog.x68', ascii('v1'));

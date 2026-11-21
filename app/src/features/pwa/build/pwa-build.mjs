@@ -194,16 +194,23 @@ export function summarize(report) {
  */
 export function pwaPlugin() {
   let outDir = '';
+  let failed = false;
   return {
     name: 'easy68k-pwa',
     apply: 'build',
     configResolved(config) {
       outDir = resolve(config.root, config.build.outDir);
     },
+    buildEnd(error) {
+      if (error) failed = true;
+    },
     closeBundle: {
       order: 'post',
       sequential: true,
-      async handler() {
+      async handler(error) {
+        // The bundler calls closeBundle after a failed build too. There is no output to finish
+        // then, and throwing here would hide the build's own error behind this plugin's.
+        if (failed || error) return;
         const report = await finishPwaBuild(outDir);
         this.info?.(summarize(report).split('\n')[0]);
       },

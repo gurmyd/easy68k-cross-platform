@@ -257,10 +257,12 @@ describe.skipIf(!enginesBuilt)(
       expect(model.view.getState().breakpoints.size).toBe(app.ctx.sim.engine.breakpoints().length);
 
       await open('demo');
-      // The engine's row, whatever it is. (Here it is -1: Close cleared the list box but not the PC
-      // field, which already reads 00001000; errata U1.md entry 8.)
-      expect(selected()).toBe(app.ctx.sim.controller.snapshot.highlight);
+      // The engine's row. It is -1: Close emptied the list box but kept the PC field at 00001000,
+      // so the load does not change that field and no highlight() runs over the new rows (the
+      // original's code path, traced in errata U1.md entry 8).
       expect(app.ctx.sim.controller.snapshot.highlight).toBe(app.ctx.sim.engine.listingHighlight);
+      expect(app.ctx.sim.engine.listingHighlight).toBe(-1);
+      expect(selected()).toBe(-1);
       model.toggleBreakpoint(rowOf('ADD.L'));
       model.selectRow(6);
       // Execute: a cold start (4.7.1) with a new engine, then the load.
@@ -275,6 +277,17 @@ describe.skipIf(!enginesBuilt)(
       expect(view.breakpoints.size).toBe(0);
       expect(view.boxes[Box.PC]).toBe('00001000');
       expect(selected()).toBe(rowOf('MOVE.L #5'));
+    });
+
+    it('Open of the same program again without Close: the panel follows the engine row', async () => {
+      await start();
+      await open('demo');
+      model.selectRow(1);
+      await open('demo');
+      // Whatever the engine selected (errata U1.md entry 8 on the engine's ItemIndex here), the
+      // panel shows it and no stale click survives the new rows.
+      expect(selected()).toBe(app.ctx.sim.engine.listingHighlight);
+      expect(selected()).not.toBe(1);
     });
 
     it('the message area: load messages and trace lines arrive through the store', async () => {

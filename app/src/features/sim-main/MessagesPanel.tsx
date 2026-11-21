@@ -57,7 +57,7 @@ export function MessagesPanel() {
         renderRow={(index) => lines[index] ?? ''}
         rowProps={() => ({ role: 'listitem' })}
       />
-      <div ref={announce} className="e68-simmain__hidden" role="log" aria-live="polite" />
+      <div ref={announce} className="e68-sr e68-messages__announce" role="log" aria-live="polite" />
     </div>
   );
 }

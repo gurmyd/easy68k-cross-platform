@@ -8,7 +8,7 @@ import { createFakePlatform, createTestApplication, type TestApplication } from 
 import { deletePath, exportPath, importInto, newFolder, renamePath } from './actions';
 import { handleDrop } from './drop';
 import { DROPPED_FOLDER_TITLE, createFileDialogs, dropDeps, feature } from './index';
-import type { FileDialogService } from './dialogs';
+import { FOLDER_FILTER, type FileDialogService, type SaveDialogProps } from './dialogs';
 import { EDITOR_OPEN_FILTERS } from './filters';
 
 const ascii = (text: string): Bytes => Uint8Array.from(text, (c) => c.charCodeAt(0));
@@ -190,7 +190,7 @@ describe('feature "files"', { timeout: 60_000 }, () => {
     application.dispose();
   });
 
-  it('in a browser, chooseFolder uses the Save dialog and creates the folder typed there', async () => {
+  it('in a browser, chooseFolder uses the Save dialog in folder mode and creates a new folder', async () => {
     const application = app();
     const dialogs = application.ctx.fileDialogs as FileDialogService;
     await application.ctx.vfs.mkdirp('/browser/work');
@@ -199,8 +199,58 @@ describe('feature "files"', { timeout: 60_000 }, () => {
       '/browser/work/Examples',
     );
     expect(seen[0]?.id).toBe('file.save');
-    expect((seen[0]?.props as { initialName: string }).initialName).toBe('New Folder');
+    const props = seen[0]?.props as SaveDialogProps;
+    expect([props.folder, props.startDir, props.initialName]).toEqual([true, '/browser/work', '']);
+    expect(props.request.filters).toEqual([FOLDER_FILTER]);
     expect((await application.ctx.vfs.stat('/browser/work/Examples'))?.kind).toBe('dir');
+    application.dispose();
+  });
+
+  // Gate I1 round 2 (contracts engineer): nothing held the program while a native dialog was open.
+  it('the desktop app: a native dialog opened in Simulator mode holds the program; in Editor mode it does not', async () => {
+    const heldDuring: boolean[] = [];
+    let application: TestApplication | null = null;
+    const held = () => (application as TestApplication).ctx.sim.controller.held;
+    const platform = createFakePlatform({
+      kind: 'desktop',
+      nativeFileDialogs: {
+        open: async () => (heldDuring.push(held()), null),
+        save: async () => (heldDuring.push(held()), null),
+        chooseFolder: async () => (heldDuring.push(held()), null),
+      },
+    } as Partial<Platform>);
+    application = createTestApplication({ features: [feature], services: { createFileDialogs }, platform });
+    const { ctx } = application;
+    const dialogs = ctx.fileDialogs as FileDialogService;
+    const all = async () => {
+      await dialogs.open({ title: 'Open File', filters: [], multiple: false });
+      await dialogs.save({ title: 'Save As', filters: [], defaultExt: '.X68' });
+      await dialogs.chooseFolder({ title: 'Folder' });
+    };
+    await all();
+    expect(heldDuring).toEqual([false, false, false]);
+    ctx.store.setState((state) => ({ ...state, mode: 'simulator' }));
+    await all();
+    expect(heldDuring).toEqual([false, false, false, true, true, true]);
+    expect(ctx.sim.controller.held).toBe(false); // released after each
+    application.dispose();
+  });
+
+  // Gate I1 round 2 (contracts engineer): desktop/src/main.ts appends only a plain extension.
+  it("the desktop app: the native Save dialog receives defaultExt '.X68' for the original's '*.X68'", async () => {
+    const exts: string[] = [];
+    const platform = createFakePlatform({
+      kind: 'desktop',
+      nativeFileDialogs: {
+        open: async () => null,
+        save: async (request) => (exts.push(request.defaultExt), null),
+        chooseFolder: async () => null,
+      },
+    } as Partial<Platform>);
+    const application = createTestApplication({ features: [feature], services: { createFileDialogs }, platform });
+    for (const defaultExt of ['*.X68', 'X68', '.X68', 'bin', ''])
+      await application.ctx.fileDialogs.save({ title: 'Save As', filters: [], defaultExt });
+    expect(exts).toEqual(['.X68', '.X68', '.X68', '.bin', '']);
     application.dispose();
   });
 });

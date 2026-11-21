@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { vpathOfRealPath } from '../../../desktop/src/security';
 import {
+  enginesAvailable,
   IS_MAC,
   launchDesktop,
   mainHook,
@@ -60,32 +61,32 @@ test('New Window gives a second window with its own simulator', async () => {
     await expect.poll(() => describe(desktop.page).then((d) => d.mode)).toBe('simulator');
     expect((await describe(second)).mode).toBe(first.mode);
 
-    // ... and each has its own simulator engine (a WebAssembly instance in its own renderer).
+    // ... and each has its own simulator engine (a WebAssembly instance in its own renderer). The
+    // host is a plain {}: every method it lacks falls back to the engine's default (S5). With the
+    // engines present, a window whose engine fails to load fails the test.
     const engine = async (page: typeof second) =>
       page.evaluate(async () => {
         const binding = await import(String('/src/engine/index.ts'));
         const loader = await import(String('/src/engine/loader.ts'));
         try {
-          const sim = await binding.createSimEngine(new Proxy({}, { get: () => () => undefined }));
+          const sim = await binding.createSimEngine({});
           sim.writeBytes(0x2000, [0x12, 0x34]);
           const value = sim.readWord(0x2000);
           const info = loader.engineLoadInfo('sim');
           binding.releaseSimEngine(sim);
-          return { value, info };
+          return { value, compilations: info.compilations as number, error: null };
         } catch (error) {
-          return { error: String(error) };
+          return { value: null, compilations: null, error: String(error) };
         }
       });
-    const a = await engine(desktop.page);
-    const b = await engine(second);
-    if (!('error' in a)) {
-      expect(a.value).toBe(0x1234);
-      expect(b).toMatchObject({ value: 0x1234 });
+    if (enginesAvailable()) {
       // One compilation per window, not one shared by both.
-      expect(a.info.compilations).toBe(1);
-      expect((b as { info: { compilations: number } }).info.compilations).toBe(1);
+      expect(await engine(desktop.page)).toEqual({ value: 0x1234, compilations: 1, error: null });
+      expect(await engine(second)).toEqual({ value: 0x1234, compilations: 1, error: null });
     } else {
-      test.info().annotations.push({ type: 'note', description: `simulator engine not available: ${a.error}` });
+      test
+        .info()
+        .annotations.push({ type: 'note', description: 'engine/dist is missing: per-window engines not checked' });
     }
 
     // Each window has its own native menu.

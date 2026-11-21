@@ -13,11 +13,14 @@ import {
   SETTING_CHOICES,
   STAMPS_KEY,
   alignOutsideStamps,
+  isOutsideMark,
   changedPaths,
   compareStamps,
   createSettingsService,
   mergeStamped,
   mergeWithDefaults,
+  outsideGeneration,
+  outsideMarkPath,
   outsideWriter,
   parseSettings,
   settingPaths,
@@ -423,6 +426,11 @@ class LateStorage {
   /** Windows with writes of others not yet delivered. */
   pending(): number[] {
     return this.windows.flatMap((w, index) => (w.queue.length > 0 ? [index] : []));
+  }
+
+  /** True while window `index` has not yet been delivered the write of `text`. */
+  waiting(index: number, text: string): boolean {
+    return this.windows[index]?.queue.includes(text) ?? false;
   }
 
   /** Delivers the oldest write not yet delivered to window `index` (in the order windows were made). */
@@ -921,6 +929,263 @@ describe('a document without stamps, written while windows are open (errata W3 e
     expect(parseSettings(storage.text).settings.editor.fontSize).toBe(30);
   });
 
+  // Gate I1 round 2, the reviewers' major defect (round1-review-defects.json; errata W3 entry 31).
+  it('the same document written twice: the second write wins over a change made between the two', () => {
+    const storage = new LateStorage();
+    const clock = testClock(1_000);
+    const a = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'a' });
+    const b = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'b' });
+    const outside = storage.window();
+    const backup = JSON.stringify({ version: 1, editor: { fontSize: 21 } });
+    clock.advance(1_000); // 2000: a backup is restored
+    outside.write(backup);
+    storage.deliverAll();
+    expect([a.get().editor.fontSize, b.get().editor.fontSize]).toEqual([21, 21]);
+    clock.advance(1_000); // 3000: the person sets 30 in A
+    a.update(setFontSize(30));
+    storage.deliverAll();
+    expect(b.get().editor.fontSize).toBe(30);
+    clock.advance(1_000); // 4000: the same backup is restored again; A hears of it first
+    outside.write(backup);
+    storage.deliverOne(0);
+    expect(a.get().editor.fontSize).toBe(21);
+    clock.advance(10); // B writes another setting before it hears of the second restore
+    b.update(setBitField(true));
+    storage.deliverAll();
+    const stored = parseSettings(storage.text).settings;
+    expect([stored.editor.fontSize, stored.sim.bitField]).toEqual([21, true]);
+    for (const service of [a, b]) {
+      expect(service.get().editor.fontSize).toBe(21);
+      expect(service.get().sim.bitField).toBe(true);
+    }
+  });
+
+  it('the same document written twice: also when the late window hears the other window first', () => {
+    const storage = new LateStorage();
+    const clock = testClock(1_000);
+    const a = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'a' });
+    const b = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'b' });
+    const outside = storage.window();
+    const backup = JSON.stringify({ version: 1, editor: { fontSize: 21 } });
+    clock.advance(1_000);
+    outside.write(backup);
+    storage.deliverAll();
+    clock.advance(1_000);
+    a.update(setFontSize(30));
+    storage.deliverAll();
+    clock.advance(1_000);
+    outside.write(backup); // the second restore
+    storage.deliverOne(0); // A has it
+    clock.advance(10);
+    b.update(setBitField(true)); // B has not
+    clock.advance(10);
+    storage.deliverOne(0); // A hears B's write and puts 21 back
+    storage.deliverOne(1); // B hears A's write-back before it hears the restore itself
+    storage.deliverAll();
+    const stored = parseSettings(storage.text).settings;
+    expect([stored.editor.fontSize, stored.sim.bitField]).toEqual([21, true]);
+    for (const service of [a, b]) {
+      expect(service.get().editor.fontSize).toBe(21);
+      expect(service.get().sim.bitField).toBe(true);
+    }
+  });
+
+  it('a window that hears another window first, then the outside document late, keeps the later change', () => {
+    /** A window whose storage events the test hands over itself, in any order. */
+    const handWindow = () => {
+      let copy: string | null = null;
+      let listener: (text?: string | null) => void = () => {};
+      const written: string[] = [];
+      const storage: SettingsStorage = {
+        read: () => copy,
+        write: (text) => {
+          copy = text;
+          written.push(text);
+        },
+        onExternalChange: (l) => {
+          listener = l;
+          return () => {};
+        },
+      };
+      return {
+        storage,
+        written,
+        hear: (text: string) => {
+          copy = text;
+          listener(text);
+        },
+      };
+    };
+    const clock = testClock(2_000);
+    const wa = handWindow();
+    const wb = handWindow();
+    const a = createSettingsService(wa.storage, undefined, { now: clock.now, writerId: 'a' });
+    const b = createSettingsService(wb.storage, undefined, { now: clock.now, writerId: 'b' });
+    const outside = JSON.stringify({ version: 1, editor: { fontSize: 21 }, app: { theme: 'dark' } });
+    clock.advance(10); // 2010: B takes the outside document in
+    wb.hear(outside);
+    clock.advance(10); // 2020: the person sets 30 in B
+    b.update(setFontSize(30));
+    clock.advance(10); // 2030: A hears B's write first ...
+    wa.hear(wb.written.at(-1) as string);
+    expect(a.get().editor.fontSize).toBe(30);
+    clock.advance(10); // 2040: ... and the outside document only now
+    wa.hear(outside);
+    expect(a.get().editor.fontSize).toBe(30);
+    expect(a.get().app.theme).toBe('dark');
+    for (const text of wa.written) wb.hear(text);
+    expect(b.get().editor.fontSize).toBe(30);
+  });
+  it('a page whose developer tools write the same document twice takes in the second write too', () => {
+    const storage = new MemorySettingsStorage();
+    const clock = testClock(1_000);
+    const a = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'a' });
+    const backup = JSON.stringify({ version: 1, editor: { fontSize: 21 } });
+    storage.text = backup; // no event in the writing page
+    clock.advance(1);
+    a.update(setBitField(true));
+    expect(a.get().editor.fontSize).toBe(21);
+    clock.advance(1);
+    a.update(setFontSize(30));
+    clock.advance(1);
+    storage.text = backup; // the same text again
+    clock.advance(1);
+    a.update(setRealTabs(true));
+    expect(a.get().editor.fontSize).toBe(21);
+    expect(parseSettings(storage.text).settings.editor.fontSize).toBe(21);
+  });
+
+  it('random interleavings with outside documents, some written twice: every window and the store agree', () => {
+    let seed = 0x0d0c;
+    const random = () => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
+    };
+    const pick = <T>(items: readonly T[]): T => items[Math.floor(random() * items.length)] as T;
+    type Path = 'editor.fontSize' | 'sim.bitField' | 'app.theme';
+    const paths: readonly Path[] = ['editor.fontSize', 'sim.bitField', 'app.theme'];
+    const valueFor = (path: Path): unknown =>
+      path === 'editor.fontSize'
+        ? 8 + Math.floor(random() * 30)
+        : path === 'app.theme'
+          ? pick(['system', 'light', 'dark'])
+          : random() < 0.5;
+    const backups = [
+      JSON.stringify({ version: 1, editor: { fontSize: 21 }, app: { theme: 'dark' } }),
+      JSON.stringify({ version: 1, editor: { fontSize: 9 }, sim: { bitField: true } }),
+    ];
+    let checkedOrder = 0;
+    let checkedRepeats = 0;
+    for (let run = 0; run < 400; run++) {
+      const storage = new LateStorage();
+      const clock = testClock();
+      const services = ['a', 'b', 'c'].map((id) =>
+        createSettingsService(storage.window(), undefined, { now: clock.now, writerId: id }),
+      );
+      const outside = storage.window(); // window 3, which never reads: something other than the port
+      /** The value each setting must end with, by the order of the test's own events. */
+      const expected = new Map<Path, unknown>(paths.map((path) => [path, valueAt(DEFAULT_SETTINGS, path)]));
+      /**
+       * False once a window changed a setting while an outside document was still on its way to
+       * it: errata W3 entry 28 says nobody can tell which came first then, so only agreement is
+       * required.
+       */
+      let ordered = true;
+      let lastOutside: string | null = null;
+      const written: string[] = [];
+      for (let step = 0; step < 30; step++) {
+        const roll = random();
+        if (roll < 0.3) {
+          // Mostly a window that has the latest outside document, so that many runs keep an order
+          // the test can check; sometimes one that does not have it yet.
+          const informed = [0, 1, 2].filter((i) => lastOutside === null || !storage.waiting(i, lastOutside));
+          const index = informed.length > 0 && random() < 0.8 ? pick(informed) : Math.floor(random() * services.length);
+          const service = services[index] as SettingsStore;
+          const path = pick(paths);
+          const value = valueFor(path);
+          clock.advance(1);
+          if (lastOutside !== null && storage.waiting(index, lastOutside)) ordered = false;
+          const isChange = !Object.is(valueAt(service.get(), path), value);
+          service.update((s) => withValueAt(s, path, value));
+          if (isChange) expected.set(path, value);
+        } else if (roll < 0.4) {
+          const behind = [0, 1, 2].filter((i) => lastOutside !== null && storage.waiting(i, lastOutside));
+          if (behind.length > 0 && random() < 0.8) {
+            // Mostly let the earlier outside document arrive everywhere first.
+            storage.deliverOne(pick(behind));
+            continue;
+          }
+          clock.advance(1);
+          const text = pick(backups);
+          // An outside write while an earlier one is still on its way is the other limit of entry 28.
+          if (lastOutside !== null && [0, 1, 2].some((i) => storage.waiting(i, lastOutside as string))) {
+            ordered = false;
+          }
+          outside.write(text);
+          lastOutside = text;
+          written.push(text);
+          const parsed = parseSettings(text).settings;
+          for (const path of paths) expected.set(path, valueAt(parsed, path));
+        } else if (roll < 0.92) {
+          const pending = storage.pending().filter((index) => index < 3);
+          if (pending.length > 0) storage.deliverOne(pick(pending));
+        } else {
+          clock.advance(Math.floor(random() * 3));
+        }
+      }
+      storage.deliverAll();
+
+      const stored = parseSettings(storage.text).settings;
+      for (const path of paths) {
+        for (const [index, service] of services.entries()) {
+          expect(valueAt(service.get(), path), `run ${run}, ${path} in window ${index}`).toEqual(valueAt(stored, path));
+        }
+        if (ordered) expect(valueAt(stored, path), `run ${run}, ${path} in the store`).toEqual(expected.get(path));
+      }
+      if (ordered) checkedOrder++;
+      if (ordered && new Set(written).size < written.length) checkedRepeats++;
+    }
+    // Many runs must also be checked against the order of events, not only for agreement, and
+    // some of those must have written one document twice.
+    expect(checkedOrder).toBeGreaterThan(80); // 94 with this seed
+    expect(checkedRepeats).toBeGreaterThan(10); // 17 with this seed
+  }, 120_000);
+
+  it('the second and later writes of one text have writers of their own, and each has a mark', () => {
+    const text = '{"version":1}';
+    const first = outsideWriter(text);
+    expect(outsideWriter(text, 1)).toBe(first);
+    expect(outsideWriter(text, 2)).toBe(`${first}#2`);
+    expect(outsideGeneration(first)).toEqual({ base: first, generation: 1 });
+    expect(outsideGeneration(`${first}#12`)).toEqual({ base: first, generation: 12 });
+    expect(outsideGeneration('a')).toBeUndefined();
+    expect(outsideGeneration(`${first}#0`)).toBeUndefined();
+    expect(isOutsideMark(OUTSIDE_MARK)).toBe(true);
+    expect(isOutsideMark(outsideMarkPath(first))).toBe(true);
+    expect(isOutsideMark('editor.fontSize')).toBe(false);
+    // A key of a setting that starts with "~" is written "~0...", never "~outside".
+    expect(settingPaths({ '~outside': 1 } as never).has('~0outside')).toBe(true);
+    // A window that opens after two writes of a text names the third write #3.
+    const storage = new MemorySettingsStorage();
+    const clock = testClock(1_000);
+    const a = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'a' });
+    storage.window().write(text);
+    clock.advance(1);
+    a.update(setBitField(true));
+    storage.window().write(text);
+    clock.advance(1);
+    a.update(setBitField(false));
+    const late = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'late' });
+    storage.window().write(text);
+    clock.advance(1);
+    late.update(setRealTabs(true));
+    const stamps = JSON.parse(storage.text as string)[STAMPS_KEY] as Record<string, unknown>;
+    expect(Object.keys(stamps).filter(isOutsideMark).sort()).toEqual(
+      [outsideMarkPath(first), outsideMarkPath(`${first}#2`), outsideMarkPath(`${first}#3`)].sort(),
+    );
+  });
   it('alignOutsideStamps moves the stamps of one outside writer back to its earliest time', () => {
     const writer = outsideWriter('{"version":1}');
     expect(writer).toBe(outsideWriter('{"version":1}'));

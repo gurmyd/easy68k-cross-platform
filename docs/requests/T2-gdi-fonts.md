@@ -26,6 +26,30 @@ Status: item 1 applied before this gate (`/tools/fonts-src/** -text` is in `.git
 4. **No browser check script**: T2's acceptance list names no browser; nothing to add to
    `browser-checks`.
 
+6. **Gate I1 round 2 (review round 2): upload what the GDI capture found on the runner.** In
+   `.github/workflows/ci.yml`, job `windows-oracles`, right after the step "GDI capture, regenerate
+   and compare (T2)", add:
+
+   ```yaml
+         - name: Upload the GDI capture report (T2)
+           if: ${{ !cancelled() && needs.plan.outputs.gdi == 'true' }}
+           uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+           with:
+             name: gdi-capture-report
+             path: |
+               build/gdi-capture/run/report.txt
+               build/gdi-capture/run/differences/
+             if-no-files-found: ignore
+             retention-days: 14
+   ```
+
+   `run.mjs` now writes, for every output that differs from the committed references, the captured
+   file to `build/gdi-capture/run/differences/<path>` (at most the raster atlases, `metrics.json`,
+   `spots.json`, the TSV and the packs: about 2 MB when everything differs). The report already goes
+   to the log and the job summary; the files let a person look at what Windows Server 10.0.26100
+   draws before its differences are recorded in `other-windows.json` (errata T2 1.13, 1.16). The
+   pinned action is the one the job already uses for the native-twin report.
+
 5. **Gate I1 round 2, for information (no configuration change needed).**
    - `conformance`: `surface.test.ts` no longer fails on SH2's cases; while `surface/ellipse.ts` or
      `surface/widepen.ts` is SH1's stub those cases are reported as skipped tests named with their

@@ -35,9 +35,19 @@ const browserFrames = (): FrameSource => ({
 export const FRAME_WATCHDOG_MS = 250;
 
 /**
+ * Once the watchdog has taken over, it stands in for the display and calls the callbacks at about
+ * a display's pace (60 per second) until a frame arrives again (SH8's request
+ * docs/requests/SH8-frame-watchdog.md; errata W3 entry 32). A hidden browser tab slows this timer
+ * down by itself; the desktop app, which disables background throttling, keeps a program at its
+ * speed while its window is hidden or minimised (4.5.5).
+ */
+export const WATCHDOG_FRAME_MS = 1000 / 60;
+
+/**
  * A Scheduler on requestAnimationFrame. onFrame callbacks run once per display frame; if no frame
  * has arrived for 250 ms (hidden tab, minimised or covered window) they run from a timer instead,
- * whatever the page's visibility state says, so that a running program keeps running (4.5.5).
+ * every WATCHDOG_FRAME_MS until a frame returns, whatever the page's visibility state says, so that
+ * a running program keeps running (4.5.5).
  */
 export function createFrameScheduler(source: FrameSource = browserFrames()): Scheduler {
   const callbacks = new Set<(now: number) => void>();
@@ -53,15 +63,16 @@ export function createFrameScheduler(source: FrameSource = browserFrames()): Sch
     frame = null;
     watchdog = null;
   };
-  const armWatchdog = () => {
+  const armWatchdog = (delayMs = FRAME_WATCHDOG_MS) => {
     if (watchdog !== null) source.clearTimeout(watchdog);
     watchdog = source.setTimeout(() => {
       watchdog = null;
       if (callbacks.size === 0) return;
       // The frame request stays pending; it fires again when the page is shown.
       run(source.now());
-      if (callbacks.size > 0) armWatchdog();
-    }, FRAME_WATCHDOG_MS);
+      // It stands in for the display now; a frame that arrives goes back to the 250 ms wait.
+      if (callbacks.size > 0) armWatchdog(WATCHDOG_FRAME_MS);
+    }, delayMs);
   };
   const armFrame = () => {
     frame = source.requestFrame((now) => {

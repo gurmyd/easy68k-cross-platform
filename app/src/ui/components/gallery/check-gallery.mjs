@@ -656,6 +656,36 @@ async function keyboardPass(browser, name) {
   );
   if ((await layers()) > 0) await page.locator('[aria-modal=true] button', { hasText: /^Cancel$/ }).click();
 
+  // The owner's key handler (Dialog onKeyDown, errata W2 entry 18): it sees F1 inside the box and on
+  // the body, and a key it cancels is not acted on by the dialog.
+  await page.locator('[data-testid=open-awkward]').click();
+  await page.waitForSelector('[data-testid=awkward-body]', { timeout: 5000 });
+  await page.locator('[data-testid=awkward-body] input:not([aria-label])').focus();
+  await k('F1');
+  check(
+    `${p} the dialog's owner receives F1 pressed inside the dialog`,
+    (await output(page)).includes('Hidden controls: F1 inside'),
+    await output(page),
+  );
+  await page.evaluate(() => document.activeElement?.blur());
+  const onBody4 = await focusName();
+  await k('F1');
+  check(
+    `${p} the dialog's owner receives F1 pressed with the focus on the body`,
+    onBody4 === 'BODY' && (await output(page)).includes('Hidden controls: F1 on the body'),
+    `focus was on ${onBody4}; ${await output(page)}`,
+  );
+  await page.evaluate(() => document.activeElement?.blur());
+  await k('t');
+  const afterT = await focusName();
+  check(
+    `${p} a key the owner cancels (T on the body) is not taken by the dialog as an access key`,
+    afterT === 'BODY' && (await output(page)).includes('Hidden controls: T taken by the owner'),
+    `focus on ${afterT}; ${await output(page)}`,
+  );
+  await k('Escape');
+  if ((await layers()) > 0) await page.locator('[aria-modal=true] button', { hasText: /^Cancel$/ }).click();
+
   // Message boxes.
   await page.locator('[data-testid=open-message-confirmation]').click();
   await k('n');

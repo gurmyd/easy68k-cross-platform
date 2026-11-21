@@ -10,8 +10,8 @@
 //   extensions.ts       the CodeMirror configuration of a document view
 //   markers.ts          inline assembler markers;  cp1252-marks.ts  characters Windows-1252 lacks
 //   status.ts           texts of the status bar;   fonts.ts         the document's display font
-//   document-link.ts    how the editor reaches a document's EditorState (local adapter)
-//   panes.ts            documents per pane (Cascade, Tile);  clipboard.ts  menu Cut/Copy/Paste
+//   document-link.ts    how the editor reaches a document's EditorState (E1's registry)
+//   panes.ts            documents per pane (Cascade, Tile);  clipboard.ts  menu Cut/Copy/Paste, macOS Ctrl keys
 //   session.ts          the editor of one window: views, focus, operations
 //   *.tsx, editor.css   the React components
 //   check-editor.mjs    the browser check (Chromium and WebKit)

@@ -9,8 +9,8 @@ import type { FileDialogs, OpenRequest, SaveRequest } from '../../contracts';
 import { TITLE } from '../../core/easybin';
 import { shellStateOf } from '../../state/shell';
 import { createFakePlatform, createTestApplication } from '../../state/testing';
-import { keyByte } from './EasybinWorkspace';
-import { ABOUT_DIALOG_ID, openDropped } from './commands';
+import { keyByte, sameRow } from './EasybinWorkspace';
+import { ABOUT_DIALOG_ID, aboutBoxKey, openDropped } from './commands';
 import { feature } from './index';
 import { easybinOf } from './session';
 
@@ -81,7 +81,8 @@ describe('feature easybin', () => {
       expect(app.commands.hasHandler(id), id).toBe(true);
     }
     expect(app.panels.find('easybin', 'easybin')).toBeDefined();
-    expect(app.panels.find('easybin', 'status')).toBeDefined();
+    // The original has no status bar; its caption is the window title (see below).
+    expect(app.panels.find('easybin', 'status')).toBeUndefined();
     expect(app.dialogComponents.has(ABOUT_DIALOG_ID)).toBe(true);
   });
 
@@ -276,9 +277,66 @@ describe('feature easybin', () => {
     expect(stack().at(-1)?.id).toBe(ABOUT_DIALOG_ID);
   });
 
-  it('the status bar caption starts as the title', () => {
-    const { model } = start();
+  it('F1 in the About box asks for credits.htm, also while the modal box is open', async () => {
+    const { ctx, app, stack } = start();
+    let page: unknown = null;
+    app.commands.register('ed.help.help', { run: (_ctx, arg) => void (page = arg) });
+    void ctx.commands.run('bin.help.about');
+    await flush();
+    expect(stack().at(-1)?.id).toBe(ABOUT_DIALOG_ID);
+    expect(ctx.dialogs.isModalOpen()).toBe(true);
+    const keys = { ctrlKey: false, altKey: false, metaKey: false, shiftKey: false };
+    expect(aboutBoxKey(ctx, { key: 'F2', ...keys })).toBe(false);
+    expect(aboutBoxKey(ctx, { key: 'F1', ...keys, shiftKey: true })).toBe(false);
+    await flush();
+    expect(page).toBeNull();
+    expect(aboutBoxKey(ctx, { key: 'F1', ...keys })).toBe(true);
+    await flush();
+    expect(page).toBe('credits.htm');
+  });
+
+  it('the window title is the caption: the opened file, and the fixed title again after New', async () => {
+    const platform = createFakePlatform();
+    const { ctx, run, answer, files, model } = start(platform);
+    const title = () => shellStateOf(ctx).getState().modeTitles.easybin ?? null;
     expect(model.getState().caption).toBe(TITLE);
+    expect(title()).toBeNull();
+    await ctx.commands.run('app.mode.set', 'easybin');
+    expect(platform.titles.at(-1)).toMatch(/^EASyBIN v2\.5\.0 - unofficial port /);
+
+    await ctx.vfs.writeFile('/browser/demo/prog.S68', fixture('asm-hello.S68'));
+    files.opens.push(['/browser/demo/prog.S68']);
+    await run('bin.file.openSrec', 'OK');
+    expect(title()).toBe('/browser/demo/prog.S68');
+    expect(platform.titles.at(-1)).toMatch(/^\/browser\/demo\/prog\.S68 - unofficial port /);
+
+    await run('bin.file.new', 'OK');
+    expect(title()).toBeNull();
+    expect(platform.titles.at(-1)).toMatch(/^EASyBIN v2\.5\.0 - unofficial port /);
+
+    const done = openDropped(ctx, [{ name: 'code.BIN', data: fixture('non-srec.BIN') }]);
+    await answer('OK');
+    await answer('OK');
+    await done;
+    expect(title()).toBe('code.BIN');
+  });
+});
+
+describe('redrawing the memory rows', () => {
+  it('after a typed byte only the row that changed draws differently (the others are not redrawn)', () => {
+    const { model } = start();
+    model.setRows(20);
+    model.ensureCursor();
+    const before = model.viewRows();
+    expect(model.typeByte(0x41)).not.toBe('beep');
+    const after = model.viewRows();
+    const changed = after.map((row, i) => !sameRow(row, before[i] as (typeof before)[number]));
+    expect(changed.filter(Boolean)).toHaveLength(1);
+    // A change of the colours alone (the binary range) redraws the rows it touches.
+    model.setField('firstAddress', '000000');
+    model.setField('outLength', '000010');
+    const coloured = model.viewRows();
+    expect(coloured.map((row, i) => !sameRow(row, after[i] as (typeof after)[number])).filter(Boolean).length).toBe(1);
   });
 });
 

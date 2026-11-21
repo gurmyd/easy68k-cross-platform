@@ -53,14 +53,27 @@ export function enginesAvailable(): boolean {
 
 export interface DevServer {
   url: string;
+  /** The paths the server's file watcher watches (folders and files); empty when it watches none. */
+  watchedPaths(): string[];
   close(): Promise<void>;
 }
+
+/**
+ * The file watching of the test dev server: every path is ignored, so an edit elsewhere in the same
+ * tree sends no HMR update and no reload into the page under a test. It cannot be `watch: null`:
+ * Vite's mergeConfig skips null values of the inline configuration, so null left watching on (gate
+ * I1 round 2: "Failed to reload /src/features/easybin/EasybinWorkspace.tsx" in the page, then
+ * "Execution context was destroyed" in four tests). The dependency optimiser's own reload still
+ * reaches the page over HMR, which warmUpDevPage relies on.
+ */
+export const DEV_SERVER_WATCH = { ignored: (): boolean => true };
 
 /**
  * A Vite development server of app/ on a free port. It has a dependency cache of its own: with the
  * shared one (app/node_modules/.vite), another dev server of the same tree that optimises its
  * dependencies anew rewrites the files this one serves, and the page reloads in the middle of a
  * test ("Execution context was destroyed"; seen in gate 1 with many dev servers on one machine).
+ * It also reacts to no file change (DEV_SERVER_WATCH).
  */
 export async function startDevServer(): Promise<DevServer> {
   const { createServer } = await import('vite');
@@ -70,8 +83,7 @@ export async function startDevServer(): Promise<DevServer> {
     root: join(REPO, 'app'),
     cacheDir,
     logLevel: 'warn',
-    // No file watching: other work in the same tree must not reload the page under a test.
-    server: { host: '127.0.0.1', port: 0, strictPort: false, watch: null },
+    server: { host: '127.0.0.1', port: 0, strictPort: false, watch: DEV_SERVER_WATCH },
   });
   try {
     await server.listen();
@@ -88,6 +100,11 @@ export async function startDevServer(): Promise<DevServer> {
   }
   return {
     url,
+    watchedPaths: () =>
+      Object.entries(server.watcher.getWatched()).flatMap(([folder, names]) => [
+        folder,
+        ...names.map((name) => join(folder, name)),
+      ]),
     close: async () => {
       await server.close();
       removeQuietly(cacheDir);

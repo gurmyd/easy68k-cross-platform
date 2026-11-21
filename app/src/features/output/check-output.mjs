@@ -369,6 +369,21 @@ async function pageTools(page, errors, phases, os) {
         },
         [x, y],
       ),
+    /**
+     * Waits until a pixel of the canvas's backing store is $RRGGBB: the presenter copies what a
+     * program drew at the next animation frame, not at once. False after the time limit; the
+     * check that follows then reports the pixels it found.
+     */
+    untilPresented: (x, y, color) =>
+      h.until(
+        ([px, py, wanted]) => {
+          const canvas = document.querySelector('.e68-output__canvas');
+          if (!canvas || px >= canvas.width || py >= canvas.height) return false;
+          const [r, g, b] = canvas.getContext('2d').getImageData(px, py, 1, 1).data;
+          return ((r << 16) | (g << 8) | b) === wanted;
+        },
+        [x, y, color],
+      ),
     /** Colours ($RRGGBB) of device pixels of a screenshot of the whole page. */
     async screenPixels(points) {
       const png = await page.screenshot();
@@ -427,7 +442,10 @@ async function presentationPass(browser, name, ratio) {
   const { page, PICTURE } = h;
   await h.start('pictureProgram');
   await h.untilLong(PICTURE.drawn, 1);
-  await page.waitForTimeout(100);
+  // The program has drawn; the presenter copies it to the canvas at its next animation frame,
+  // which a slow machine may give later than a fixed pause would allow.
+  const rgbOf = (bgr) => ((bgr & 0xff) << 16) | (bgr & 0xff00) | ((bgr >> 16) & 0xff);
+  await h.untilPresented(PICTURE.pixel.x, PICTURE.pixel.y, rgbOf(PICTURE.pixel.color));
 
   const header = await page.locator('.e68-output__header').innerText();
   check(`${p} header strip: title, size, zoom`, /Output\s+640x480\s+zoom:/.test(header), JSON.stringify(header));
@@ -547,7 +565,8 @@ async function presentationPass(browser, name, ratio) {
   );
   check(
     `${p} the picture is drawn again on the new surface`,
-    (await h.canvasPixel(pixel.x, pixel.y)) === rgb(pixel.color),
+    await h.untilPresented(pixel.x, pixel.y, rgb(pixel.color)),
+    hex(await h.canvasPixel(pixel.x, pixel.y)),
   );
   // The check mark reads the store, which the session's mirror brings up to date a frame later.
   check(
@@ -1705,11 +1724,16 @@ async function fractionalRatioPass(browser, name) {
     canvas.width === 640 && canvas.height === 480 && canvas.cssWidth === 640 && canvas.cssHeight === 480,
     `${canvas.width}x${canvas.height} shown ${canvas.cssWidth}x${canvas.cssHeight}`,
   );
+  // The program has drawn; the presenter copies it to the canvas at its next animation frame.
+  await h.untilPresented(PICTURE.pixel.x, PICTURE.pixel.y, rgb(PICTURE.pixel.color));
+  const drawn = [
+    await h.canvasPixel(PICTURE.pixel.x, PICTURE.pixel.y),
+    await h.canvasPixel(PICTURE.pixel.x + 1, PICTURE.pixel.y),
+  ];
   check(
     `${p} the canvas holds the pixels the program drew, unscaled`,
-    (await h.canvasPixel(PICTURE.pixel.x, PICTURE.pixel.y)) === rgb(PICTURE.pixel.color) &&
-      (await h.canvasPixel(PICTURE.pixel.x + 1, PICTURE.pixel.y)) === 0 &&
-      canvas.rendering === 'pixelated',
+    same(drawn, [rgb(PICTURE.pixel.color), 0]) && canvas.rendering === 'pixelated',
+    `${drawn.map(hex).join(' ')}, ${canvas.rendering}`,
   );
   noErrors(p, h);
   await context.close();
@@ -1863,6 +1887,9 @@ async function appPass(browser, name) {
       /Output\s+640x480\s+zoom:/.test(await page.locator('.e68-output__header').innerText()),
     `${canvas.width}x${canvas.height}, ${JSON.stringify(await page.locator('.e68-output__header').innerText())}`,
   );
+  // The presenter copies what the program drew at its next animation frame.
+  await h.untilPresented(...inside, rgb(box.color));
+  await h.untilPresented(pixel.x, pixel.y, rgb(pixel.color));
   const drawn = [
     await h.canvasPixel(pixel.x, pixel.y),
     await h.canvasPixel(...inside),
@@ -1911,7 +1938,7 @@ async function appPass(browser, name) {
       canvas.height === 600 &&
       sizeShown &&
       (await h.until(() => window.__output.ctx.commands.isChecked('sim.options.size', 1))) &&
-      (await h.canvasPixel(pixel.x, pixel.y)) === rgb(pixel.color),
+      (await h.untilPresented(pixel.x, pixel.y, rgb(pixel.color))),
     `${canvas.width}x${canvas.height}, ${await page.locator('.e68-output__size').innerText()}`,
   );
   await page.evaluate(() => window.__output.ctx.commands.run('sim.options.size', 0));

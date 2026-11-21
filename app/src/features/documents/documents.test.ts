@@ -84,13 +84,14 @@ function openWindow(options: WindowOptions = {}) {
   const time = manualScheduler();
   const files = scriptedFileDialogs();
   const backend = options.backend ?? new MemoryBackend({ mount: 'browser', kind: 'memory', label: 'My Programs' });
-  const unload: boolean[] = [];
+  /** Each Platform.confirmBeforeUnload call as [needed, who]. */
+  const unload: [boolean, string | undefined][] = [];
   const quits: number[] = [];
   const startup: StartupArgs = { file: null, run: false, fullScreen: false, exceptions: false, bitField: false };
   const platform = createFakePlatform({
     windowId: options.windowId ?? 'window-a',
     startupArgs: () => ({ ...startup, ...options.startup }),
-    confirmBeforeUnload: (needed) => void unload.push(needed),
+    confirmBeforeUnload: (needed, who) => void unload.push([needed, who]),
     quit: () => void quits.push(1),
     ...options.platform,
   });
@@ -350,16 +351,37 @@ describe('Exit (editor-ui §1.3, 1.4 note 4)', () => {
 });
 
 describe('unload guard (1.3.3)', () => {
-  it('is on exactly while a document is modified', async () => {
+  // Every call names the party 'documents' (Platform.confirmBeforeUnload(needed, who), W1 errata
+  // 11): an unnamed call would share one slot with any other unnamed party, so the simulator's guard
+  // and this one could switch each other off.
+  it('is on exactly while a document is modified, asked under the name documents', async () => {
     const w = openWindow();
-    expect(w.unload).toEqual([false]);
+    expect(w.unload).toEqual([[false, 'documents']]);
     const doc = w.manager.active()!;
     w.type(doc.id, 'x');
     w.type(doc.id, 'y');
-    expect(w.unload).toEqual([false, true]);
+    expect(w.unload).toEqual([
+      [false, 'documents'],
+      [true, 'documents'],
+    ]);
     w.files.saves.push('/browser/s.X68');
     await w.manager.save(doc.id);
-    expect(w.unload).toEqual([false, true, false]);
+    expect(w.unload).toEqual([
+      [false, 'documents'],
+      [true, 'documents'],
+      [false, 'documents'],
+    ]);
+  });
+
+  it('gives the question back when the window is disposed while a document is modified', () => {
+    const w = openWindow();
+    w.type(w.manager.active()!.id, 'x');
+    w.app.dispose();
+    expect(w.unload).toEqual([
+      [false, 'documents'],
+      [true, 'documents'],
+      [false, 'documents'],
+    ]);
   });
 });
 

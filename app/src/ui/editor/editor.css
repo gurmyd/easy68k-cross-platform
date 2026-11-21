@@ -112,6 +112,14 @@
   color: var(--c-text-muted);
 }
 
+/* Under the highlighter (E3) the gutter takes the document's colours, so a stored preset's
+   background is not framed by the theme's panel colour: the background and the code colour of the
+   highlighter's palette (Auto or the stored preset, source and list documents alike). */
+.e68-editor__view .cm-editor.e68-syntax .cm-gutters {
+  background: var(--e68-syntax-background);
+  color: var(--e68-syntax-code);
+}
+
 .e68-editor__view .cm-lineNumbers .cm-gutterElement {
   padding: 0 var(--sp-1) 0 var(--sp-2);
 }
@@ -173,7 +181,7 @@
 }
 
 .e68-editor__view .cm-tooltip {
-  z-index: 500;
+  z-index: var(--z-toast);
   border: 0;
   background: var(--c-surface);
 }

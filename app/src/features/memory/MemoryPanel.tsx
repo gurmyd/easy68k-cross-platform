@@ -209,7 +209,7 @@ export function MemoryPanel() {
               }}
             />
           )}
-          <span id={statusId} className="e68-memory__status" aria-live="polite">
+          <span id={statusId} className="e68-sr" aria-live="polite">
             {cursorText}
           </span>
         </div>

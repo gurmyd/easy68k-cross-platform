@@ -354,6 +354,22 @@ async function interactionPass(browser, name, theme) {
   await page.evaluate(() => window.__u1.session.controller.traceInto());
   await page.waitForFunction(() => document.querySelector('.e68-messages').innerText.includes('PC=00001002'));
   check(`${p} a traced instruction appears in the message area`, true);
+  // The polite log region that announces new lines: hidden with the kit's e68-sr, but it keeps the
+  // trace line's runs of spaces (white-space: pre).
+  const announce = await page.evaluate(() => {
+    const region = document.querySelector('.e68-messages [role="log"]');
+    const style = getComputedStyle(region);
+    const box = region.getBoundingClientRect();
+    return { text: region.textContent, width: box.width, height: box.height, whiteSpace: style.whiteSpace };
+  });
+  check(
+    `${p} the log region holds the new line, is visually hidden and keeps its spaces`,
+    announce.text.includes('PC=00001002') &&
+      announce.width <= 1 &&
+      announce.height <= 1 &&
+      announce.whiteSpace === 'pre',
+    JSON.stringify(announce),
+  );
   const changed = await page.locator('.e68-regs input[data-changed="true"]').count();
   check(`${p} changed registers are marked`, changed > 0, String(changed));
   await page.screenshot({ path: join(outDir, `${name}-${theme}-traced.png`) });

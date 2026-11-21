@@ -18,6 +18,7 @@ import {
   listFiles,
   patchIndexHtml,
   precacheEntries,
+  pwaPlugin,
   readServiceWorkerManifest,
   serviceWorkerText,
   sha256,
@@ -142,6 +143,41 @@ describe('finishPwaBuild', () => {
     const dir = mkdtempSync(join(tmpdir(), 'dv1-empty-'));
     folders.push(dir);
     await expect(finishPwaBuild(dir, { code: '' })).rejects.toThrow(/index\.html does not exist/);
+  });
+});
+
+describe('pwaPlugin (app/vite.config.ts)', () => {
+  type Hooks = {
+    configResolved(config: { root: string; build: { outDir: string } }): void;
+    buildEnd(error?: Error): void;
+    closeBundle: { order: string; sequential: boolean; handler(this: unknown, error?: Error): Promise<void> };
+  };
+  const pluginFor = (outDir: string) => {
+    const plugin = pwaPlugin() as unknown as Hooks;
+    plugin.configResolved({ root: dirname(outDir), build: { outDir } });
+    return plugin;
+  };
+
+  it('finishes the output folder after a successful build', async () => {
+    const dir = fakeBuild();
+    const plugin = pluginFor(dir);
+    plugin.buildEnd();
+    await plugin.closeBundle.handler.call({ info: () => {} });
+    expect(readFileSync(join(dir, 'index.html'), 'utf8')).toContain(`name="${SW_META_NAME}"`);
+    expect(readServiceWorkerManifest(readFileSync(join(dir, SW_FILE), 'utf8')).entries).toHaveLength(5);
+  }, 60_000);
+
+  // Gate I1 round 2: the bundler calls closeBundle after a failed build too. The plugin threw
+  // "index.html does not exist" there and hid the build's real error behind its own.
+  it('leaves a failed build alone, so that the build reports its own error', async () => {
+    const empty = mkdtempSync(join(tmpdir(), 'dv1-failed-'));
+    folders.push(empty);
+    const afterBuildEnd = pluginFor(empty);
+    afterBuildEnd.buildEnd(new Error('Transform failed'));
+    await expect(afterBuildEnd.closeBundle.handler.call({})).resolves.toBeUndefined();
+    const withError = pluginFor(empty);
+    await expect(withError.closeBundle.handler.call({}, new Error('Transform failed'))).resolves.toBeUndefined();
+    expect(listFiles(empty)).toEqual([]);
   });
 });
 

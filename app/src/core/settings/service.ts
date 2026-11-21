@@ -28,9 +28,10 @@
 //   something else (an older version of the port that never saw stamps, a tool, a person in the
 //   developer tools): when such a document is written while the window is open, it replaces what
 //   the window knows, as every write did before stamps existed. Each window stamps what such a
-//   document changed when it takes it in, and windows that took in the same document agree on the
+//   document changed when it takes it in, and windows that took in the same write agree on the
 //   earliest of their times, so that a window that hears of it late cannot undo a change made after
-//   another window had it (errata W3 entry 28).
+//   another window had it (errata W3 entry 28). The same text written twice is two writes, each
+//   with a mark of its own in the stamp table (errata W3 entry 31).
 // - Where the storage can run a task a little later (`defer`), a window puts a missing setting
 //   back after a short pause rather than at once, and only if no window has put it back meanwhile:
 //   several windows that all know the missing setting then write it once, not once each.
@@ -193,22 +194,50 @@ export function compareStamps(a: Stamp, b: Stamp): number {
 export const OUTSIDE_WRITER_PREFIX = 'outside:';
 
 /**
- * An entry of the stamp table that is not a setting: the stamp of the last document without
- * stamps that the writing window took in. It travels with every write, also after the settings
- * that document changed have been changed again, so that a window that takes the same document in
- * later can learn the earlier stamp. No path of a real setting can be written like this: a `~`
- * in a key is always written `~0` or `~1`.
+ * Entries of the stamp table that are not settings. Gate I1 round 1 wrote one entry under this
+ * key, the stamp of the last document without stamps that the writing window took in; since
+ * round 2 there is one entry per outside write, under `outsideMarkPath(writer)` (errata W3 entry
+ * 31), and an entry under the bare key is still read as a mark. A mark travels with every write,
+ * also after the settings that document changed have been changed again, so that every window
+ * learns the earliest time any window took that write in. No path of a real setting can be
+ * written like this: a `~` in a key is always written `~0` or `~1`.
  */
 export const OUTSIDE_MARK = '~outside';
 
-/** The writer for a document without stamps: OUTSIDE_WRITER_PREFIX and a 32-bit FNV-1a hash. */
-export function outsideWriter(text: string): string {
+/** The stamp-table key of the mark of one outside write (`~outside/outside:<hash>[#n]`). */
+export function outsideMarkPath(writer: string): string {
+  return `${OUTSIDE_MARK}/${writer}`;
+}
+
+/** True for a key of the stamp table that is a mark, not a setting. */
+export function isOutsideMark(path: string): boolean {
+  return path === OUTSIDE_MARK || path.startsWith(`${OUTSIDE_MARK}/`);
+}
+
+/**
+ * The writer for a document without stamps: OUTSIDE_WRITER_PREFIX and a 32-bit FNV-1a hash of its
+ * text, and for the second and later write of the same text, `#` and the number of that write
+ * (`generation`, counted by each window from 1; errata W3 entry 31). The same text written twice
+ * (a backup restored twice) is two writes, which must not count from the same time.
+ */
+export function outsideWriter(text: string, generation = 1): string {
   let hash = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {
     hash ^= text.charCodeAt(i);
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
-  return `${OUTSIDE_WRITER_PREFIX}${hash.toString(16).padStart(8, '0')}`;
+  const base = `${OUTSIDE_WRITER_PREFIX}${hash.toString(16).padStart(8, '0')}`;
+  return generation > 1 ? `${base}#${generation}` : base;
+}
+
+/**
+ * The parts of an outside writer: the writer of its first write (`outside:<hash>`) and which write
+ * of that text it names. Undefined for a writer that is not an outside writer.
+ */
+export function outsideGeneration(writer: string): { base: string; generation: number } | undefined {
+  const match = /^(outside:[0-9a-f]{8})(?:#([1-9][0-9]*))?$/.exec(writer);
+  if (match === null) return undefined;
+  return { base: match[1] as string, generation: match[2] === undefined ? 1 : Number(match[2]) };
 }
 
 /**
@@ -345,7 +374,7 @@ export function mergeStamped(
   for (const [path, stamp] of mineStamps) {
     const other = theirStamps.get(path);
     if (other !== undefined && compareStamps(stamp, other) <= 0) continue;
-    if (path !== OUTSIDE_MARK) setAtPath(document, path, valueAtPath(mine.document, path));
+    if (!isOutsideMark(path)) setAtPath(document, path, valueAtPath(mine.document, path));
     stamps.set(path, stamp);
     mineWon = true;
   }
@@ -450,6 +479,14 @@ export function createSettingsService(
    */
   const seenUnstamped = new Set<string>();
 
+  /**
+   * How many writes of each outside document (by the writer of its first write) this window has
+   * taken in, so that the n-th write of a text has the same writer in every window (errata W3
+   * entry 31). A window starts from the highest write named in the document it finds: it was not
+   * open for those, and will not hear of them.
+   */
+  const outsideWrites = new Map<string, number>();
+
   const readText = (): string | null => {
     try {
       return storage.read();
@@ -467,6 +504,11 @@ export function createSettingsService(
   const firstText = readText();
   const first = parseSettings(firstText);
   if (first.unstamped && firstText !== null) seenUnstamped.add(firstText);
+  for (const [, writer] of first.stamps.values()) {
+    const parts = outsideGeneration(writer);
+    if (parts !== undefined)
+      outsideWrites.set(parts.base, Math.max(outsideWrites.get(parts.base) ?? 0, parts.generation));
+  }
   /** Everything this window knows of the shared document, the stored layout included. */
   let known: StampedDocument = stampedOf(first);
   /** The highest version number seen in storage; written back unchanged. */
@@ -495,6 +537,9 @@ export function createSettingsService(
     cancelRepair?.();
     cancelRepair = null;
     lastStored = known;
+    // The window's own copy now holds this write: a document without stamps found there later was
+    // written after it, even when it has the text of one taken in before.
+    seenUnstamped.clear();
     try {
       storage.write(serializeSettings(known, storedVersion));
     } catch (error) {
@@ -529,19 +574,37 @@ export function createSettingsService(
    * any window knew before: the page in which the document was written hears of it only through
    * the next write of another window, and a window that has not heard of it yet may still write
    * the older values. The writer of these stamps is the document's own (outsideWriter), and the
-   * stamp is also kept as OUTSIDE_MARK: when this window meets another window's stamps for the
+   * stamp is also kept as that write's mark (outsideMarkPath): when this window meets another window's stamps for the
    * same document, both count from the earlier time (alignOutsideStamps), so a window that
    * receives the document late cannot undo a change made after an earlier window took it in
-   * (errata W3 entry 28).
+   * (errata W3 entry 28). The writer also counts the writes of the same text (outsideWriter's
+   * generation), so a second write of it is not taken for the first. When the window already
+   * knows another window's stamp for this write, it heard of that window before the write itself:
+   * the write counts from that earlier time at once, and a setting this window knows to have been
+   * changed later keeps its value (errata W3 entry 31).
    */
   const replaceWith = (parsed: Parsed, text: string) => {
     storedVersion = Math.max(storedVersion, parsed.storedVersion);
-    const document = parsed.settings as unknown as JsonObject;
-    const paths = changedPaths(known.document, document);
+    const base = outsideWriter(text);
+    const generation = (outsideWrites.get(base) ?? 0) + 1;
+    outsideWrites.set(base, generation);
+    const writer = outsideWriter(text, generation);
+    let time = nextStamp()[0];
+    for (const [knownTime, knownWriter] of known.stamps.values()) {
+      if (knownWriter === writer) time = Math.min(time, knownTime);
+    }
+    const stamp: Stamp = [time, writer];
+    const document = structuredClone(parsed.settings as unknown as JsonObject);
     const stamps = new Map(known.stamps);
-    const stamp: Stamp = [nextStamp()[0], outsideWriter(text)];
-    for (const path of paths) stamps.set(path, stamp);
-    stamps.set(OUTSIDE_MARK, stamp);
+    for (const path of changedPaths(known.document, document)) {
+      const previous = known.stamps.get(path);
+      if (previous !== undefined && compareStamps(previous, stamp) > 0) {
+        setAtPath(document, path, valueAtPath(known.document, path));
+      } else {
+        stamps.set(path, stamp);
+      }
+    }
+    stamps.set(outsideMarkPath(writer), stamp);
     known = { document, stamps };
     lastStored = stampedOf(parsed);
   };

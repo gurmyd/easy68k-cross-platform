@@ -631,10 +631,11 @@ export class TextScreen implements TextScreenApi {
 
 /**
  * A text colour as the state keeps it: the 32 bits the program (task 21, D1.L) or the Options dialog
- * gave, unsigned. The original stores the value in the font of its canvas, and the VCL and Windows
- * give a top byte that is not zero the meaning it has for pens and fills (trap15-b §4.6: a system
+ * gave, unsigned. The original stores the value in the font of its canvas (`Font->Color =
+ * (TColor)c`), and the VCL hands a font colour to Windows through the same `ColorToRGB` as pen and
+ * brush colours, so a top byte that is not zero has the meaning trap15-b §4.6 gives it (a system
  * colour, a palette entry). The surface applies that rule when it draws (`SurfaceApi.textOut`), so
- * nothing is cut off here. Measured on Windows: docs/porting/errata/SH3.md entry 17.
+ * nothing is cut off here. Not yet measured for text on Windows: docs/porting/errata/SH3.md entry 17.
  */
 function textColor(color: number): number {
   return color >>> 0;

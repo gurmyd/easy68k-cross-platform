@@ -362,3 +362,19 @@ with task 2:
    saw the key-down; the number, or the fact, goes back to SH4. DV2 can automate the same in
    `tests/desktop/dev` by pressing Cmd+V and then calling the Edit menu's Paste item (or
    `webContents.paste()`) from the main process, which is the real path.
+
+## Gate I1, round 2
+
+### 22. The browser check waited a fixed time for a frame (CI, Ubuntu, WebKit)
+
+- Found: the first CI run of `check-output.mjs` on all three systems (run 44913261966) passed on
+  Windows and macOS and failed one check on Ubuntu: `webkit/ratio 1.5: the canvas holds the pixels
+  the program drew, unscaled`. The pass read the canvas as soon as the program had counted its
+  picture as drawn; the presenter copies the surface to the canvas only at the next animation
+  frame, which a slow runner may give later. The passes at ratio 1 and 2 waited a fixed 100 ms
+  instead, which is the same race with more room.
+- Does: every read of a drawn pixel first waits, up to 30 s, until the canvas shows it
+  (`untilPresented` in `pageTools`); the check then reports the pixels it found. Nothing in the
+  panel changed: the frame-to-canvas path is what 2.5 asks for.
+- Not reproduced on this PC (525 of 525 before and after); the cause is read from the code and the
+  CI log, and the repair removes the race rather than lengthening a pause.

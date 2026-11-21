@@ -1,9 +1,10 @@
 // Feature "easybin": EASyBIN mode (region id `easybin`), work package B1 (docs/porting/easybin.md).
 //
 //   commands   `sim.view.easybin` and every `bin.*` (commands.ts)
-//   panels     the workspace (region `easybin`) and the mode's status bar (region `status`)
+//   panels     the workspace (region `easybin`); the original has no status bar (easybin.md 1.2)
 //   dialogs    `easybin.about`
-//   init       files dropped on the window while EASyBIN mode is shown (docs/porting/easybin.md 1.4)
+//   init       the window title follows the original's caption (setModeTitle, state/shell.ts), and
+//              files dropped on the window while EASyBIN mode is shown (docs/porting/easybin.md 1.4)
 //
 // The state of the mode (the 16 MB memory image, the fields) is one EasybinModel per window
 // (session.ts); it lives as long as the window and survives mode switches.
@@ -12,8 +13,8 @@
 
 import type { AppContext, FeatureModule } from '../../contracts';
 import { EasybinAboutDialog } from './AboutDialog';
-import { ABOUT_DIALOG_ID, commands, openDropped } from './commands';
-import { EasybinStatus, EasybinWorkspace } from './EasybinWorkspace';
+import { ABOUT_DIALOG_ID, commands, followCaption, openDropped } from './commands';
+import { EasybinWorkspace } from './EasybinWorkspace';
 
 /** True when a drag carries files (not text). */
 function carriesFiles(transfer: DataTransfer | null): boolean {
@@ -59,10 +60,14 @@ function listenForDrops(ctx: AppContext): () => void {
 export const feature: FeatureModule = {
   id: 'easybin',
   commands,
-  panels: [
-    { id: 'easybin', title: 'EASyBIN', mode: 'easybin', component: EasybinWorkspace },
-    { id: 'status', title: 'Status', mode: 'easybin', component: EasybinStatus },
-  ],
+  panels: [{ id: 'easybin', title: 'EASyBIN', mode: 'easybin', component: EasybinWorkspace }],
   dialogs: { [ABOUT_DIALOG_ID]: EasybinAboutDialog },
-  init: (ctx) => listenForDrops(ctx),
+  init: (ctx) => {
+    const stopTitle = followCaption(ctx);
+    const stopDrops = listenForDrops(ctx);
+    return () => {
+      stopDrops();
+      stopTitle();
+    };
+  },
 };

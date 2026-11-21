@@ -1,8 +1,11 @@
-// The document link with its three kinds of document service, each a small test double.
-import { EditorState, type Transaction } from '@codemirror/state';
+// The document link with its two kinds of document service: E1's real DocumentManager and a stub.
+import type { Transaction } from '@codemirror/state';
 import { describe, expect, it } from 'vitest';
 import type { AppContext, DocumentState } from '../../contracts';
-import { createStore } from '../../state/store';
+import { DocumentManager, documentRegistryOf } from '../../core/documents';
+import { defaultSettings } from '../../core/settings/defaults';
+import { createVfs } from '../../fs/vfs';
+import { createAppStore, createStore } from '../../state/store';
 import { createDocumentLink, editorAccessOf } from './document-link';
 
 const doc = (id: string, patch: Partial<DocumentState> = {}): DocumentState => ({
@@ -27,38 +30,23 @@ function context(documents: object, items: DocumentState[]): AppContext {
   return { store, documents } as unknown as AppContext;
 }
 
-/** A registry of the shape E1's DocumentManager exposes (a double, not E1's code). */
-function fakeRegistry(text: string) {
-  type Event = { kind: string; id: string; transaction?: Transaction };
-  const listeners = new Set<(event: Event) => void>();
-  let state = EditorState.create({ doc: text });
-  const updates: unknown[] = [];
-  return {
-    updates,
-    registry: {
-      state: () => state,
-      apply(id: string, tr: Transaction) {
-        if (tr.startState !== state) throw new Error('stale');
-        state = tr.state;
-        for (const l of [...listeners]) l({ kind: 'updated', id, transaction: tr });
+/** E1's real DocumentManager with inert file system and dialogs: the service the application has. */
+function realManager() {
+  const settings = defaultSettings();
+  const store = createAppStore(settings);
+  const manager = new DocumentManager({
+    store,
+    settings: { get: () => settings },
+    dialogs: {
+      messageBox: async () => {
+        throw new Error('unexpected message box');
       },
-      subscribe(listener: (event: Event) => void) {
-        listeners.add(listener);
-        return () => listeners.delete(listener);
-      },
-      /** Something other than the editor changes the state. */
-      external(id: string, insert: string) {
-        const tr = state.update({ changes: { from: 0, insert } });
-        state = tr.state;
-        for (const l of [...listeners]) l({ kind: 'updated', id, transaction: tr });
-      },
-      replace(id: string, next: string) {
-        state = EditorState.create({ doc: next });
-        for (const l of [...listeners]) l({ kind: 'replaced', id });
-      },
+      toast: () => {},
     },
-    update: (id: string, patch: unknown) => void updates.push([id, patch]),
-  };
+    vfs: createVfs(),
+    fileDialogs: { open: async () => null, save: async () => null },
+  });
+  return { store, manager, ctx: { store, documents: manager } as unknown as AppContext };
 }
 
 describe('document link', () => {
@@ -91,49 +79,45 @@ describe('document link', () => {
     expect(createDocumentLink(ctx).state('nope').doc.length).toBe(0);
   });
 
-  it("with a registry of E1's shape: edits are stored there, outside changes reach the view", () => {
-    const fake = fakeRegistry('ABC');
-    const ctx = context({ text: () => '', list: () => [], registry: fake.registry, update: fake.update }, [
-      doc('d1', { modified: true, insertMode: false }),
-    ]);
+  it("with E1's DocumentManager: edits are stored in its registry, outside changes reach the view", () => {
+    const { manager, ctx, store } = realManager();
+    const id = manager.newSource().id;
+    const registry = documentRegistryOf(manager);
+    registry.replace(id, 'ABC');
     expect(editorAccessOf(ctx)).not.toBeNull();
     const link = createDocumentLink(ctx);
     expect(link.shared).toBe(true);
     const seen: (Transaction | undefined)[] = [];
-    link.onExternalChange('d1', (tr) => seen.push(tr));
+    link.onExternalChange(id, (tr) => seen.push(tr));
 
-    // The editor's own transaction: stored, and not reported back as an outside change.
-    link.commit('d1', link.state('d1').update({ changes: { from: 3, insert: 'D' } }));
-    expect(fake.registry.state().doc.toString()).toBe('ABCD');
+    // The editor's own transaction: stored in the registry (so Save and Assemble see it), and not
+    // reported back as an outside change.
+    link.commit(id, link.state(id).update({ changes: { from: 3, insert: 'D' } }));
+    expect(manager.text(id)).toBe('ABCD');
     expect(seen).toEqual([]);
+    expect(link.modified(id)).toBe(true);
 
     // Another part changes the state: reported with its transaction.
-    fake.registry.external('d1', '>');
+    registry.dispatch(id, { changes: { from: 0, insert: '>' } });
     expect(seen).toHaveLength(1);
     expect(seen[0]?.state.doc.toString()).toBe('>ABCD');
 
     // Reload replaces the state: reported without a transaction.
-    fake.registry.replace('d1', 'new');
+    registry.replace(id, 'new');
     expect(seen).toHaveLength(2);
     expect(seen[1]).toBeUndefined();
-    expect(link.state('d1').doc.toString()).toBe('new');
+    expect(link.state(id).doc.toString()).toBe('new');
 
-    // Modified and Insert/Replace come from DocumentState; Insert/Replace is set through update().
-    expect(link.modified('d1')).toBe(true);
-    expect(link.insertMode('d1')).toBe(false);
-    link.setInsertMode('d1', true);
-    expect(fake.updates).toEqual([['d1', { insertMode: true }]]);
+    // Insert/Replace goes through the contract's update() into DocumentState.
+    expect(link.insertMode(id)).toBe(true);
+    link.setInsertMode(id, false);
+    expect(store.getState().documents.items.find((d) => d.id === id)?.insertMode).toBe(false);
+    expect(link.insertMode(id)).toBe(false);
   });
 
-  it('with the access object proposed in errata E2.md entry 2, that one is used', () => {
-    const access = {
-      getState: () => EditorState.create({ doc: 'P' }),
-      apply: () => {},
-      subscribe: () => () => {},
-      setInsertMode: () => {},
-    };
-    const ctx = context({ text: () => '', list: () => [], editor: access }, [doc('d1')]);
-    expect(editorAccessOf(ctx)).toBe(access);
+  it('a service that only implements the contract (a test double) gets the local states', () => {
+    const ctx = context({ text: () => 'P', list: () => [], update: () => {} }, [doc('d1')]);
+    expect(editorAccessOf(ctx)).toBeNull();
     expect(createDocumentLink(ctx).state('d1').doc.toString()).toBe('P');
   });
 });

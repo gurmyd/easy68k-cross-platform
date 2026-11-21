@@ -693,16 +693,18 @@ async function examplesPass(browser, name) {
   const p = `${name}:`;
   const { context, page, errors } = await openApp(browser);
   await menuItem(page, 'Help', /^Examples/);
-  await page.waitForFunction(
-    async () => {
-      const { vfs } = window.__easy68k.ctx;
-      const manifest = await (await fetch('examples/manifest.json')).json();
-      for (const file of manifest.files) if ((await vfs.stat(`/browser/Examples/${file.name}`)) === null) return false;
-      return true;
-    },
-    null,
-    { timeout: 30000 },
-  );
+  // Playwright resolves an async waitForFunction predicate at once, so poll inside the page.
+  await page.evaluate(async () => {
+    const { vfs } = window.__easy68k.ctx;
+    const manifest = await (await fetch('examples/manifest.json')).json();
+    const deadline = Date.now() + 30000;
+    for (;;) {
+      let all = true;
+      for (const file of manifest.files) if ((await vfs.stat(`/browser/Examples/${file.name}`)) === null) all = false;
+      if (all || Date.now() > deadline) return;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  });
   const facts = await page.evaluate(async () => {
     const { vfs } = window.__easy68k.ctx;
     let list = [];

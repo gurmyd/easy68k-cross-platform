@@ -3,6 +3,7 @@
 // Owner: W1. Contracts import nothing but other contracts (3.1).
 
 import type { AppContext } from './features';
+import type { VPath } from './fs';
 import type { AppState, Mode } from './store';
 
 export type CommandId = string; // every id of section 1.3; the union lives in commands/ids.ts
@@ -40,6 +41,16 @@ export interface CommandRunOptions {
    * everything the user can do outside the dialog.
    */
   allowInModal?: boolean;
+}
+/**
+ * The argument of the command `app.files.toggle` that shows the Files panel (it never hides it
+ * then) and reveals `reveal` in its tree: `ctx.commands.run('app.files.toggle', { reveal })`.
+ * Help > Examples... in a browser copies the examples to /browser/Examples and "shows it in the
+ * Files panel" (5.8). Without an argument the command toggles the panel, as before. Added at gate
+ * I1 round 2 (docs/porting/errata/W1.md, entry 12).
+ */
+export interface FilesRevealArg {
+  reveal: VPath;
 }
 export interface CommandRegistry {
   spec(id: CommandId): CommandSpec;

@@ -48,8 +48,12 @@ export interface AppState {
      * re-reads its data, and the Stack panel re-centres, when its own counter moves.
      * `viewRevision` still moves with every one of them. Added at gate I1 as an optional member
      * (docs/porting/errata/W1.md, entry 11): while it is absent a panel falls back on `viewRevision`.
+     * `stackRedraw` (entry 12, docs/requests/U2-stack-redraw-bit.md) will count the original's
+     * `StackFrm->Repaint()`, after which the Stack panel redraws without re-centring, apart from
+     * `updateDisplay()`, which `stack` counts. The engine does not report that call yet, so nothing
+     * writes `stackRedraw` and `stack` moves for both; while it is absent, `stack` alone decides.
      */
-    repaint?: { listing: number; breakpoints: number; memory: number; stack: number };
+    repaint?: { listing: number; breakpoints: number; memory: number; stack: number; stackRedraw?: number };
   };
   dialogs: { stack: DialogInstance[] };
   settings: Settings; // mirror of SettingsService

@@ -1,9 +1,11 @@
 // Cut, Copy, Paste and Select All from the menu, the toolbar and the context menu (editor-ui §8.7;
 // ARCHITECTURE.md 1.4 note 45). Owner: E2.
 //
-// The keyboard chords never come here: the dispatcher leaves Ctrl/Cmd+X, C, V, A and Shift+Insert
-// to the focused element, where the browser fires its own clipboard events (errata/W3.md entry 1)
-// and CodeMirror takes plain text from them. This module serves the mouse:
+// The platform's own chords do not come here: the dispatcher leaves Ctrl/Cmd+X, C, V, A and
+// Shift+Insert to the focused element, where the browser fires its own clipboard events (errata/W3.md
+// entry 1) and CodeMirror takes plain text from them. The one exception is the Ctrl forms on macOS
+// (rule K2), which a Mac's browser does not treat as clipboard keys: the editor's key map sends them
+// here (extensions.ts, macControlKeys). Otherwise this module serves the mouse:
 //
 //   - the commands act on "whichever text control has focus" (§8.7): the editor, or a text field
 //     such as the Find box. A toolbar button or a menu may hold the focus at that moment, so the

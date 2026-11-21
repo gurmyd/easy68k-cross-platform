@@ -4,9 +4,10 @@
 //   node app/src/features/pwa/check-pwa.mjs [--browser chromium|webkit|all] [--out <dir>] [--dist <dir>]
 //
 // It makes a production build of app/ with the base path /easy68k-mac/ (vite build, the same
-// command as pages.yml; or takes an existing one with --dist), finishes it with the PWA build step,
-// and serves it with its own static server under /easy68k-mac/ only, with GitHub Pages' cache
-// header. A fixture file of this package is added to the build before the step, so that "a static
+// command as pages.yml; or takes an existing one with --dist), checks that the build it made was
+// already finished by pwaPlugin() in app/vite.config.ts, finishes its two copies (versions A and
+// B) with the PWA build step, and serves them with its own static server under /easy68k-mac/ only,
+// with GitHub Pages' cache header. A fixture file of this package is added to the build before the step, so that "a static
 // file of the build is available offline" does not depend on what app/public holds today. Then, in
 // headless Chromium and WebKit (Playwright):
 //
@@ -492,10 +493,10 @@ async function browserPass(name, serve, siteA, siteB) {
     await page2.evaluate(() => {
       window.__dv1Marker = 'page2';
     });
-    // A toast closes by itself after 8 s unless the pointer is on it (DialogService.toast has no
-    // lasting form yet, docs/requests/DV1-toast-duration.md). On a slow machine that is shorter than
-    // the steps below, so each page records the notice's appearance itself, and the pointer is put
-    // on page 1's notice as soon as it is there, which keeps it open until Reload is pressed.
+    // Each page records the notice's appearance itself, and the pointer is put on page 1's notice
+    // as soon as it is there. Since gate I1 the notice stays until it is answered (duration 0,
+    // docs/requests/DV1-toast-duration.md), which page 2 shows below; page 1 keeps the pointer
+    // anyway, so that its steps do not depend on that.
     for (const page of [page1, page2]) await page.evaluate(watchNotice, NOTICE);
     serve.state.root = siteB.dir;
     await page1.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.update());
@@ -507,12 +508,16 @@ async function browserPass(name, serve, siteA, siteB) {
           () => false,
         );
     const notice1 = page1.locator('.e68-toast', { hasText: NOTICE }).first();
+    let seen2At = 0;
     const [seen1, seen2] = await Promise.all([
       noticeIn(page1).then(async (seen) => {
         if (seen) await notice1.hover({ timeout: 10_000 }).catch(() => {});
         return seen;
       }),
-      noticeIn(page2),
+      noticeIn(page2).then((seen) => {
+        seen2At = Date.now();
+        return seen;
+      }),
     ]);
     check(`${p} update: page 1 shows "${NOTICE}"`, seen1);
     check(`${p} update: page 2 shows it too`, seen2);
@@ -539,6 +544,17 @@ async function browserPass(name, serve, siteA, siteB) {
       (await page2.evaluate(() => window.__dv1Marker)) === 'page2' && page2After.text.endsWith('version A\n'),
       page2After.text.trim().split('\n').pop(),
     );
+    // Page 2's notice has had neither the pointer nor the focus. A toast of the kit's default
+    // duration would have closed after 8 s; the update notice must still be there.
+    const sinceNotice = Date.now() - seen2At;
+    if (sinceNotice < 10_000) await page2.waitForTimeout(10_000 - sinceNotice);
+    const lasting = await page2.locator('.e68-toast', { hasText: NOTICE }).count();
+    check(
+      `${p} update: page 2's notice is still there after 10 s without the pointer (it stays until answered)`,
+      seen2 && lasting === 1,
+      `${lasting} notice(s) after ${Math.round((Date.now() - seen2At) / 1000)} s`,
+    );
+    await page2.screenshot({ path: join(outDir, `${name}-update-notice-lasting.png`) });
     await page2.close();
     // A page is forgotten 10 s after it was recorded at the earliest (CLIENT_GRACE_MS in sw.ts).
     await page1.waitForTimeout(11_000);
@@ -567,6 +583,17 @@ async function main() {
   if (!givenDist) productionBuild(dist);
   if (!existsSync(join(dist, 'index.html'))) throw new Error(`${dist} holds no build`);
   dist = resolve(dist);
+  // Every production build is finished by the Vite configuration itself (pwaPlugin() in
+  // app/vite.config.ts since gate I1), before this check finishes its copies once more.
+  if (!givenDist) {
+    const builtHtml = readFileSync(join(dist, 'index.html'), 'utf8');
+    check(
+      'build: vite build alone writes sw.js and the worker and manifest tags (pwaPlugin)',
+      existsSync(join(dist, 'sw.js')) &&
+        builtHtml.includes('name="easy68k-service-worker"') &&
+        builtHtml.includes('rel="manifest"'),
+    );
+  }
 
   const code = await bundleServiceWorker();
   const siteA = await makeSite(dist, join(outDir, 'site-a'), 'version A', code);

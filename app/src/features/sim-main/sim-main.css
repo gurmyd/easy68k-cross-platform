@@ -247,12 +247,9 @@
   outline-offset: -2px;
 }
 
-.e68-simmain__hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
+/* The live region that reads new message lines out. It is hidden with the kit's e68-sr; the
+   lines keep their runs of spaces (the trace lines are columns), hence white-space: pre. */
+.e68-sr.e68-messages__announce {
   white-space: pre;
 }
 

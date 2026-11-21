@@ -1,3 +1,5 @@
+Status: closed at gate I1 round 2: H1 reads ctx.build (AboutDialog.tsx).
+
 Status: accepted as asked at gate I1 (contracts engineer, W1). `contracts/features.ts` has `BuildFacts { version; repository }` and the optional `AppContext.build?: BuildFacts`; the shell's bootstrap fills it. H1 reads `ctx.build?.version` and `ctx.build?.repository` in place of `portVersionFromTitle(document.title)` and `DEFAULT_REPOSITORY`. Details: `docs/porting/errata/W1.md`, entry 11.
 
 Status (shell part, W3): done at gate I1. `bootstrap()` sets `ctx.build` (frozen `{ version, repository }`) from `BootstrapEnv.version` and the new `BootstrapEnv.repository`, which `main.tsx` takes from `buildInfo`; `Application.build` is the same object. check-shell.mjs reads it in the page.

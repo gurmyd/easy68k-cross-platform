@@ -12,7 +12,7 @@
 //   optional (an object written against the wave-one contracts must still satisfy them), and the
 //   tests read the contract files to see that each one is there.
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type {
@@ -166,6 +166,8 @@ const EXPORTS: Record<string, string[]> = {
     'CommandRegistry',
     // gate I1 (errata W1.md, entry 11)
     'CommandRunOptions',
+    // gate I1 round 2 (errata W1.md, entry 12)
+    'FilesRevealArg',
   ],
   'features.ts': [
     // 3.12.3
@@ -579,7 +581,14 @@ describe('engine mirror (3.2) against engine/sim/sim68k.mjs', () => {
       [
         contracts.RepaintBit,
         sim.Repaint as Record<string, number>,
-        { Listing: 'LISTING', Breakpoints: 'BREAKPOINTS', Memory: 'MEMORY', Stack: 'STACK' },
+        // StackRedraw: ready for docs/requests/U2-stack-redraw-bit.md (errata W1.md, entry 12)
+        {
+          Listing: 'LISTING',
+          Breakpoints: 'BREAKPOINTS',
+          Memory: 'MEMORY',
+          Stack: 'STACK',
+          StackRedraw: 'STACK_REDRAW',
+        },
       ],
       [
         contracts.FileMode,
@@ -650,6 +659,7 @@ const OPTIONAL_ADDITIONS = {
   >,
   appContext: true satisfies StillValidWithout<AppContext, 'build'>,
   simState: true satisfies StillValidWithout<AppState['sim'], 'repaint'>,
+  simRepaint: true satisfies StillValidWithout<NonNullable<AppState['sim']['repaint']>, 'stackRedraw'>,
   simSession: true satisfies StillValidWithout<SimSession, 'printJobs' | 'onPrintJob'>,
   glyphProvider: true satisfies StillValidWithout<GlyphProvider, 'textOverhang'>,
   outputDeviceDeps: true satisfies StillValidWithout<OutputDeviceDeps, 'message'>,
@@ -695,12 +705,17 @@ const ADDED_DECLARATIONS: Record<string, string[]> = {
     'update?(id: string, patch: DocumentPatch): void;',
     'selection?(id: string): DocumentSelection | null;',
   ],
-  'commands.ts': ['run(id: CommandId, arg?: unknown, options?: CommandRunOptions): Promise<void>;'],
+  'commands.ts': [
+    'run(id: CommandId, arg?: unknown, options?: CommandRunOptions): Promise<void>;',
+    'export interface FilesRevealArg { reveal: VPath; }',
+  ],
   'features.ts': [
     'readonly build?: BuildFacts;',
     'toast(text: string, action?: { label: string; run(): void }, options?: ToastOptions): void;',
   ],
-  'store.ts': ['repaint?: { listing: number; breakpoints: number; memory: number; stack: number };'],
+  'store.ts': [
+    'repaint?: { listing: number; breakpoints: number; memory: number; stack: number; stackRedraw?: number };',
+  ],
   'run.ts': [
     'readonly printJobs?: readonly PrintJob[];',
     'onPrintJob?(listener: (job: PrintJob) => void): () => void;',
@@ -760,4 +775,32 @@ describe('additions of gate I1 (errata W1.md, entry 11)', () => {
     await vfs.mkdirp('/memory/Examples/Sub');
     expect((await vfs.stat('/memory/Examples/Sub'))?.kind).toBe('dir');
   });
+
+  // Entry 12 (review of round 1): mkdirp may be required only while createVfs() is the one Vfs.
+  // A second implementation, or a fake typed as a whole Vfs, would have to grow every later
+  // member; it must take Pick<Vfs, ...> or call createVfs() instead.
+  it('fs/vfs.ts is the only implementation of Vfs in the repository', () => {
+    const roots = ['app/src', 'desktop/src', 'tests'];
+    const self = here('contracts.test.ts');
+    // `class X implements A, Vfs`, `const x: Vfs = {`, `{...} as Vfs`, `{...} satisfies Vfs`
+    const implementsVfs =
+      /\bimplements\s+(?:[\w.]+\s*,\s*)*Vfs\b(?![\w.])|:\s*Vfs\s*=\s*\{|\b(?:as|satisfies)\s+Vfs\b(?![\w.<])/;
+    const found: string[] = [];
+    for (const root of roots) {
+      const dir = repo(root);
+      if (!existsSync(dir)) continue;
+      for (const entry of readdirSync(dir, { recursive: true, encoding: 'utf8' })) {
+        if (!/\.(?:ts|tsx|mts|mjs)$/.test(entry) || /(?:^|[\\/])(?:node_modules|dist)[\\/]/.test(entry)) continue;
+        const file = `${dir}/${entry}`.replace(/\\/g, '/');
+        if (file === self.replace(/\\/g, '/')) continue;
+        if (implementsVfs.test(readFileSync(file, 'utf8'))) found.push(`${root}/${entry.replace(/\\/g, '/')}`);
+      }
+    }
+    expect(found).toEqual(['app/src/fs/vfs.ts']);
+    // and the pattern sees each of the forms it names
+    for (const form of ['class V implements Vfs {', 'class V implements A, Vfs {', 'const v: Vfs = {', '{} as Vfs;'])
+      expect(implementsVfs.test(form), form).toBe(true);
+    for (const form of ['vfs: Pick<Vfs, "stat">', 'Promise<Vfs>', 'implements VfsLike {'])
+      expect(implementsVfs.test(form), form).toBe(false);
+  }, 30_000);
 });

@@ -723,8 +723,8 @@ describe('task 21: setFontProperties', () => {
     expectChar(0, 0, 'A', 0x123456);
   });
 
-  // Measured on Windows with the calls the original makes (docs/porting/errata/SH3.md entry 17):
-  // text takes the colour rule of pens and fills (trap15-b §4.6).
+  // Text takes the colour rule of pens and fills (trap15-b §4.6), because the VCL resolves a font
+  // colour with the same ColorToRGB; not yet measured for text (docs/porting/errata/SH3.md entry 17).
   it.each([
     ['$01000005: entry 5 of the stock palette', 0x01000005, 0x800080],
     ['$0100000D: entry 13', 0x0100000d, 0x0000ff],

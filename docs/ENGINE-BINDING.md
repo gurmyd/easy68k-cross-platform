@@ -337,12 +337,15 @@ R-19 holds in reserve.
 - **Electron and `app://`, by W4.** W4 did not start GUI programs. DV2's `tests/desktop/dev` has run
   both engines under `app://` since wave one (its report: "both engines start under app://",
   passed on Windows; the CI job `desktop-dev` passed on macOS).
-- **Safari and Firefox.** Not run. Chromium and WebKit on macOS and Linux: the suite runs in the CI
-  job `browser-checks` on Ubuntu, macOS and Windows (`npm run check:engine-browsers`, step
-  "Engine binding in the browser (W4)"); W4 ran it on Windows only.
+- **Safari and Firefox.** Not run. Chromium and WebKit on macOS and Linux are run by CI: the suite
+  is the step "Engine binding in the browser (W4)" (`npm run check:engine-browsers`) of the job
+  `browser-checks` on Ubuntu, macOS and Windows. It passed 24 of 24 on all three in the runs of
+  commits a5091e2 (run 44879551646) and 8611609 (run 44913261966); the unit tests of
+  `app/src/engine` passed there too, with `EASY68K_REQUIRE_ENGINES=1`.
 - **A loader built on Linux.** The engine teams report that `sim68k-loader.mjs` differs by two bytes
   between a Windows and a Linux build while the `.wasm` files are identical. The binding never looks
-  inside the loader, so only its hashed asset name can differ; this was not run against a Linux
-  build.
+  inside the loader, so only its hashed asset name can differ. CI builds `engine/dist` on Linux
+  (job `engines / build (linux)`) and every job uses that build, so the CI runs named above ran
+  the binding on a Linux-built loader on all three systems; on this PC it runs on a Windows build.
 - **Out-of-memory behaviour of a real browser.** The `fatal` result for a failed instantiation was
   tested with a failure injected under Node, not by exhausting a browser.

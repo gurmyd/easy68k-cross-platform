@@ -54,6 +54,9 @@ def main():
     files["s18_trailer_lf.X68"] = (prog(b"    NOP\r\n") + b"\r\n*~Font name~Fixedsys~\r\n*~Font size~9~\r\n*~Tab type~0~\r\n*~Tab size~8~\r\n").replace(b"\r\n", b"\n")
     files["s19_trailer_no_newline.X68"] = prog(b"    NOP\r\n") + b"\r\n*~Font name~Courier New~\r\n*~Font size~10~\r\n*~Tab type~1~\r\n*~Tab size~4~"
     files["s20_empty.X68"] = b""
+    # a trailer line that ends before LoadFile's loop finds its '~' (textS.cpp:144-146): the
+    # AnsiString index check throws, and the catch shows "Error in LoadFile()" (errata/E1.md 2)
+    files["s21_trailer_short_tab_size.X68"] = prog(b"    NOP\r\n") + b"\r\n*~Font name~Courier New~\r\n*~Font size~10~\r\n*~Tab type~1~\r\n*~Tab size~4\r\n"
     for name, data in files.items():
         with open(os.path.join(out, name), "wb") as f:
             f.write(data)

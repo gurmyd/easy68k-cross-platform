@@ -34,9 +34,10 @@ import './about.css';
 export async function checkForUpdate(
   installed: string,
   fetchJson: (url: string) => Promise<{ ok: boolean; json(): Promise<unknown> }>,
+  repository: string = DEFAULT_REPOSITORY,
 ): Promise<string> {
   try {
-    const response = await fetchJson(latestReleaseUrl());
+    const response = await fetchJson(latestReleaseUrl(repository));
     if (!response.ok) return CHECK_NETWORK_ERROR;
     const release = (await response.json()) as { tag_name?: unknown };
     if (typeof release.tag_name !== 'string') return CHECK_NETWORK_ERROR;
@@ -60,7 +61,8 @@ function AboutBox({
   close(result: undefined): void;
 }) {
   const ctx = useAppContext();
-  const version = portVersionFromTitle(globalThis.document?.title ?? '');
+  const version = ctx.build?.version ?? portVersionFromTitle(globalThis.document?.title ?? '');
+  const repository = ctx.build?.repository ?? DEFAULT_REPOSITORY;
   const [answer, setAnswer] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const okButton = useRef<HTMLButtonElement>(null);
@@ -68,7 +70,11 @@ function AboutBox({
   const check = async () => {
     setChecking(true);
     setAnswer(
-      await checkForUpdate(version, (url) => fetch(url, { headers: { Accept: 'application/vnd.github+json' } })),
+      await checkForUpdate(
+        version,
+        (url) => fetch(url, { headers: { Accept: 'application/vnd.github+json' } }),
+        repository,
+      ),
     );
     setChecking(false);
   };
@@ -130,14 +136,14 @@ function AboutBox({
         <p className="e68-about__line">{PORT_STATEMENT}</p>
         <p className="e68-about__line">
           <a
-            href={repositoryUrl()}
+            href={repositoryUrl(repository)}
             className="e68-about__link"
             onClick={(event) => {
               event.preventDefault();
-              openLink(repositoryUrl());
+              openLink(repositoryUrl(repository));
             }}
           >
-            github.com/{DEFAULT_REPOSITORY}
+            github.com/{repository}
           </a>
         </p>
       </div>

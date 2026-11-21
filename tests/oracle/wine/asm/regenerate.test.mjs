@@ -35,7 +35,7 @@ describe('planPrograms', () => {
     expect(ids.filter((id) => id.startsWith('github/pacman-mc68000/'))).toHaveLength(24);
     expect(ids.filter((id) => id.startsWith('github/68k-assembly-learning/'))).toHaveLength(18);
     expect(ids.filter((id) => id.startsWith('checklist/')).length).toBeGreaterThanOrEqual(98);
-    expect(ids.filter((id) => id.startsWith('richedit/'))).toHaveLength(24);
+    expect(ids.filter((id) => id.startsWith('richedit/'))).toHaveLength(25);
     expect(new Set(ids).size).toBe(ids.length);
   });
 

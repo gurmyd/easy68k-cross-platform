@@ -3,13 +3,14 @@
 //
 // Files are reached only through the application context: ctx.fileDialogs (FS1's dialogs) to choose
 // a name, ctx.vfs to read, test and write. The dialogs of FS1 ask their own `File exists! OK to
-// overwrite?` unless the request says `overwritePrompt: null` (docs/porting/errata/FS1.md, Contract
-// C2); EASyBIN passes null and asks the original's own question itself, after the dialog, as the
-// original does - for Save Binary about all four derived names (13.2 step 5).
+// overwrite?` unless the request says `overwritePrompt: null` (SaveRequest.overwritePrompt in
+// contracts/fs.ts); EASyBIN passes null and asks the original's own question itself, after the
+// dialog, as the original does - for Save Binary about all four derived names (13.2 step 5).
 
 import type { AppContext, CommandHandler, CommandId, FileFilter, SaveRequest, VPath } from '../../contracts';
 import {
   APP_TITLE,
+  CREDITS_PAGE,
   HELP_PAGE,
   MESSAGES,
   OPEN_BINARY_FILTERS,
@@ -20,9 +21,10 @@ import {
   SAVE_DIALOG_TITLE,
   SAVE_SREC_DEFAULT_EXT,
   SAVE_SREC_FILTERS,
+  TITLE,
 } from '../../core/easybin';
 import { basename, dirname } from '../../core/paths/winpath';
-import { showExitScreen } from '../../state/shell';
+import { setModeTitle, showExitScreen } from '../../state/shell';
 import { beep } from './beep';
 import { easybinOf } from './session';
 
@@ -66,7 +68,7 @@ async function chooseSaveName(
 ): Promise<VPath | null> {
   const session = easybinOf(ctx);
   // `overwritePrompt: null`: FS1's dialog asks nothing; the original asks after the dialog.
-  const request: SaveRequest & { overwritePrompt: null } = {
+  const request: SaveRequest = {
     title: SAVE_DIALOG_TITLE,
     filters: [...filters],
     defaultExt,
@@ -213,6 +215,36 @@ export async function exitApplication(ctx: AppContext): Promise<void> {
   }
   if (ctx.platform.kind === 'desktop') ctx.platform.quit();
   else showExitScreen(ctx);
+}
+
+/**
+ * F1 in the About box (`KeyPreview = True`, aboutS.cpp:36-40): the credits page, as `displayHelp("CHUCK")`
+ * opens it (docs/porting/easybin.md 15.1). The About box is modal, so the command is run with
+ * `allowInModal`. Returns true when the key was F1 without modifiers (the caller then prevents the
+ * browser's default).
+ */
+export function aboutBoxKey(
+  ctx: AppContext,
+  event: { key: string; ctrlKey: boolean; altKey: boolean; metaKey: boolean; shiftKey: boolean },
+): boolean {
+  if (event.key !== 'F1' || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return false;
+  void ctx.commands.run('ed.help.help', CREDITS_PAGE, { allowInModal: true });
+  return true;
+}
+
+/**
+ * The window title follows the original's caption (docs/porting/easybin.md 1.2): the file opened
+ * last, or after New the fixed title, which the shell shows for null (docs/requests/B1-window-title.md).
+ * Returns the unsubscribe function.
+ */
+export function followCaption(ctx: AppContext): () => void {
+  const { model } = easybinOf(ctx);
+  const update = () => {
+    const { caption } = model.getState();
+    setModeTitle(ctx, 'easybin', caption === TITLE ? null : caption);
+  };
+  update();
+  return model.subscribe(update);
 }
 
 export const commands: Record<CommandId, CommandHandler> = {

@@ -1,6 +1,8 @@
 # Request from SH1 to T2: GDI reference cases for the pen widths 13-255 (gate I1)
 
-Status: open (for T2; filed in gate I1 round 1).
+Status: done. Items 1 and 2 by T2 in gate I1 round 2 (suite `pens`, 1,736 cases; T2 errata 1.11);
+item 3 by T2 in round 1. The surface equals all 1,228 rectangle cases of `pens`, and the 508 dots of
+zero-length lines and one-point ellipses as well (they wait for SH2 in T2's test); SH1 errata entry 13.
 
 The committed GDI references (`tests/conformance/gdi/cases.ts`, 6.5.1) have rectangles with the pen
 widths 0-12 and wide lines with 2-14. A pen width is a byte (task 93), and rectangles of every pen

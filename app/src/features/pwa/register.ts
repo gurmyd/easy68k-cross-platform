@@ -8,8 +8,9 @@
 //   (features/pwa/build/pwa-build.mjs). The development server and a build without the step have
 //   no such tag, and nothing is registered.
 // - When a new version has been installed and waits, the notice `A new version is available.`
-//   with the action `Reload` appears (again every hour while it waits, because a toast closes by
-//   itself after some seconds). Nothing reloads by itself: only pressing `Reload` lets the
+//   with the action `Reload` appears and stays until it is answered (`duration: 0`, gate I1,
+//   docs/requests/DV1-toast-duration.md); a dismissed notice comes again at the next start of a
+//   page while the version still waits. Nothing reloads by itself: only pressing `Reload` lets the
 //   new version take over (message to the waiting worker) and then reloads this page. Another
 //   page of the same site that sees the new version take over gets the notice and keeps running
 //   on the files of its own version (sw.ts) until it is reloaded.
@@ -17,9 +18,13 @@
 // The browser objects are reached through the small interfaces below, so that the logic runs
 // under Node with fakes (register.test.ts).
 
+import type { ToastOptions } from '../../contracts';
+
 /** The text of the update notice (7.5: "A new version is available. Reload"). */
 export const UPDATE_NOTICE = 'A new version is available.';
 export const UPDATE_ACTION = 'Reload';
+/** The notice stays until it is dismissed or `Reload` is pressed (ToastOptions.duration 0). */
+export const UPDATE_NOTICE_OPTIONS: Readonly<ToastOptions> = Object.freeze({ duration: 0 });
 /** Must equal SKIP_WAITING_MESSAGE of app/src/sw.ts (checked by register.test.ts). */
 export const SKIP_WAITING_MESSAGE = 'easy68k-skip-waiting';
 /** The name of the meta tag that the build step adds (pwa-build.mjs SW_META_NAME). */
@@ -58,7 +63,7 @@ export interface PwaEnvironment {
 
 export interface PwaDeps {
   platformKind: 'web' | 'desktop';
-  toast(text: string, action: { label: string; run(): void }): void;
+  toast(text: string, action: { label: string; run(): void }, options: ToastOptions): void;
   setTimer?: (delayMs: number, fn: () => void) => () => void;
   /** Told about a registration that failed (default: console.warn). */
   warn?: (message: string, error: unknown) => void;
@@ -98,17 +103,21 @@ export function startPwa(deps: PwaDeps, env: PwaEnvironment | null): PwaHandle {
   const showNotice = () => {
     if (disposed || noticeShown) return;
     noticeShown = true;
-    deps.toast(UPDATE_NOTICE, {
-      label: UPDATE_ACTION,
-      run: () => {
-        noticeShown = false;
-        const waiting = registration?.waiting;
-        reloadRequested = true;
-        if (waiting) waiting.postMessage({ type: SKIP_WAITING_MESSAGE });
-        // The new version has already taken over (another page pressed Reload): load it.
-        else env.reload();
+    deps.toast(
+      UPDATE_NOTICE,
+      {
+        label: UPDATE_ACTION,
+        run: () => {
+          noticeShown = false;
+          const waiting = registration?.waiting;
+          reloadRequested = true;
+          if (waiting) waiting.postMessage({ type: SKIP_WAITING_MESSAGE });
+          // The new version has already taken over (another page pressed Reload): load it.
+          else env.reload();
+        },
       },
-    });
+      UPDATE_NOTICE_OPTIONS,
+    );
   };
 
   // The page that pressed Reload loads the new version once it has taken over. Any other page
@@ -133,10 +142,7 @@ export function startPwa(deps: PwaDeps, env: PwaEnvironment | null): PwaHandle {
   const scheduleCheck = () => {
     if (!deps.setTimer || disposed) return;
     cancelTimer = deps.setTimer(UPDATE_CHECK_INTERVAL_MS, () => {
-      // A toast closes by itself after a while (DialogService.toast has no lasting form): a
-      // version that still waits is announced again, once an hour.
-      noticeShown = false;
-      if (registration?.waiting && container.controller) showNotice();
+      // Only the check for a newer deployment repeats; the notice stays on screen by itself.
       registration?.update().catch(() => {});
       scheduleCheck();
     });

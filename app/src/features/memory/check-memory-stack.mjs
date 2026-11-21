@@ -18,8 +18,8 @@
 // It uses the development-only page object `window.__easy68k` (main.tsx) to run commands and to
 // read the store and the engine. Needs engine/dist (both engines).
 //
-// Screenshots go to build/U2/check (git-ignored). Exit code 0 = every check passed. A check that
-// waits for another package is printed as "wait" and does not fail the run.
+// Screenshots go to build/U2/check (git-ignored). Exit code 0 = every check passed. A pass that
+// throws (for example a page that never opens) counts as one failed check; the others still run.
 
 /* global console, process, document, window, getComputedStyle -- page.evaluate() callbacks run in the page */
 
@@ -48,16 +48,21 @@ const browsers = browserChoice === 'all' ? ['chromium', 'webkit'] : [browserChoi
 let baseUrl = '';
 let failures = 0;
 const results = [];
-const waiting = [];
 function check(name, ok, detail = '') {
   results.push({ name, ok, detail });
   if (!ok) failures++;
   console.log(`${ok ? '  ok  ' : '  FAIL'} ${name}${detail ? ` - ${detail}` : ''}`);
 }
-/** A check whose outcome depends on another package that has not delivered yet. */
-function wait(name, detail) {
-  waiting.push(name);
-  console.log(`  wait ${name} - ${detail}`);
+/**
+ * Runs one pass; an exception (a page that does not open, a time limit) is one failed check, and
+ * the other passes still run, so that the summary line is always printed.
+ */
+async function pass(label, body) {
+  try {
+    await body();
+  } catch (error) {
+    check(`${label}: the pass ran to its end`, false, String(error?.message ?? error).split('\n')[0]);
+  }
 }
 
 /** The dev server transforms every module at the first request; on a busy machine that takes a while. */
@@ -545,24 +550,17 @@ async function stackPass(browser, programs, name, theme) {
   const scrolled = await stackMiddle(page); // 00007FFC
   await run(page, 'sim.view.memory', '00007FF0');
   await page.waitForSelector('[data-e68-panel="memory"] .e68-memory__row:not(.e68-memory__measure)');
-  const revisions = await sim(page);
   await clickCell(page, 0, 10 + 3 * 12); // byte $7FFC, high nibble
   await page.keyboard.type('9');
-  const after = await sim(page);
   check(`${p} the Memory edit reaches the engine`, (await byte(page, 0x7ffc)) === 0x9f);
   await run(page, 'sim.view.stack');
   const middleAfter = await stackMiddle(page);
-  const kept = middleAfter === '00007FFC: 9F FF FF FF ' && scrolled?.startsWith('00007FFC: ');
-  const named = `${p} a Memory edit redraws a scrolled Stack panel without re-centring it`;
-  if (kept) check(named, true, middleAfter);
-  else if (after.repaint === undefined && after.viewRevision !== revisions.viewRevision) {
-    // The session's pokeMemory moves viewRevision and does not publish sim.repaint yet, so the
-    // panel cannot tell this write from a scrshow (docs/porting/errata/U2.md, C2).
-    wait(
-      named,
-      `waiting for SH8 to publish sim.repaint or to stop bumping viewRevision in pokeMemory (${middleAfter})`,
-    );
-  } else check(named, false, `${scrolled} -> ${middleAfter}`);
+  // The session publishes sim.repaint and pokeMemory names no panel (docs/porting/errata/U2.md, C1, C2).
+  check(
+    `${p} a Memory edit redraws a scrolled Stack panel without re-centring it`,
+    middleAfter === '00007FFC: 9F FF FF FF ' && scrolled?.startsWith('00007FFC: '),
+    `${scrolled} -> ${middleAfter}`,
+  );
 
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   await context.close();
@@ -608,12 +606,12 @@ async function main() {
       try {
         for (const theme of ['light', 'dark']) {
           console.log(`\n[${name}, ${theme}: Memory panel]`);
-          await memoryPass(browser, programs, name, theme);
+          await pass(`${name}/${theme} Memory`, () => memoryPass(browser, programs, name, theme));
           console.log(`\n[${name}, ${theme}: Stack panel]`);
-          await stackPass(browser, programs, name, theme);
+          await pass(`${name}/${theme} Stack`, () => stackPass(browser, programs, name, theme));
         }
         console.log(`\n[${name}, motion]`);
-        await motionPass(browser, programs, name);
+        await pass(`${name} motion`, () => motionPass(browser, programs, name));
       } finally {
         await browser.close();
       }
@@ -622,10 +620,7 @@ async function main() {
     await server.close();
   }
   const passed = results.filter((r) => r.ok).length;
-  console.log(
-    `\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.` +
-      (waiting.length ? ` ${waiting.length} waiting for another package.` : ''),
-  );
+  console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
   process.exit(failures ? 1 : 0);
 }
 

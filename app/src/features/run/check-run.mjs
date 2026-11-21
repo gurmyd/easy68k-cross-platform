@@ -10,7 +10,8 @@
 //   - the simulator engine starts in the page and the status bar of Simulator mode shows its state;
 //   - a program is loaded from the browser store, started with the Run button and with F9, runs to
 //     its halt, and the commands follow the states of 4.8;
-//   - a task 23 delay of 50 units takes half a second of real time;
+//   - a task 23 delay of 50 units takes half a second of real time, as exactly as the browser's
+//     own timers allow;
 //   - the governor executes about a million instructions per second at the default setting, and
 //     far more at Maximum;
 //   - the boxes of the simulator (Run To Cursor without a row, the Caution question, a box the
@@ -33,8 +34,11 @@
 // it the script says so and does nothing; with EASY68K_REQUIRE_ENGINES=1 (CI) that is a failure.
 //
 // Nothing here depends on the operating system, and no check fails merely because the machine is
-// slow or busy: every wait is for a state, and the three figures that are times or rates are
-// measured several times, the best run counting.
+// slow, busy or throttled: every wait is for a state; the figures that are times or rates are
+// measured several times, the best run counting; a delay is judged against how late the browser's
+// own timers were meanwhile, and the exact instruction rate only over a second of steady frames
+// (both were missed on the macOS runners of CI, whose Chromium fires timers 20 to 100 ms late and
+// delivers frames 120 ms apart, while WebKit there was exact).
 
 /* global console, process, document, window, performance, setTimeout, Event -- the browser globals are used inside page.evaluate() callbacks, which run in the page */
 
@@ -226,20 +230,62 @@ async function pressInMainWindow(page, key) {
 
 /**
  * Runs the delay program to its halt and returns what its own clock (task 8) says the 50-unit
- * delay took, in hundredths of a second: up to `attempts` runs, ending at the first that is exact
- * (50, or 51 when the delay straddled one more tick of the clock).
+ * delay took, in hundredths of a second, together with how late the browser's own timers were
+ * meanwhile: up to `attempts` runs, ending at the first that is exact.
+ *
+ * The end of a delay is a timer of the page (4.4.2), so the port cannot end a delay earlier than
+ * the browser fires a timer. Most machines fire a 500 ms timer within a few milliseconds; a busy or
+ * throttled one (the macOS runners of CI fire Chromium's timers 20 to 100 ms late) does not. Two
+ * reference timers of 500 ms, one set just before the program is started and one just after, run
+ * alongside the delay, and the later of the two tells how late a timer due at the delay's end can
+ * be. A run is exact when it took 50 hundredths, plus one for a delay that straddled one more tick
+ * of the clock, plus the hundredths by which the reference timers were late.
  */
 async function measureDelay(page, run, polling = undefined, attempts = 5) {
-  const delays = [];
+  const runs = [];
+  const armReference = (slot) =>
+    page.evaluate((key) => {
+      const t0 = performance.now();
+      window.__sh8References ??= {};
+      window.__sh8References[key] = null;
+      setTimeout(() => {
+        window.__sh8References[key] = performance.now() - t0 - 500;
+      }, 500);
+    }, slot);
   for (let i = 0; i < attempts; i++) {
     await load(page, 'delay');
+    await armReference('before');
     await run();
+    await armReference('after');
     await waitForHalt(page, UI_TIMEOUT, polling);
+    const late = await page.waitForFunction(
+      () => {
+        const { before, after } = window.__sh8References;
+        // An object, because a timer that was on time gives 0, which waitForFunction takes as "not yet".
+        return before !== null && after !== null ? { lateMs: Math.max(before, after, 0) } : false;
+      },
+      undefined,
+      waitOptions(UI_TIMEOUT, polling),
+    );
+    const { lateMs } = await late.jsonValue();
     // The time of day wraps at midnight (8,640,000 hundredths).
-    delays.push(((await register(page, D6)) - (await register(page, D7)) + 8_640_000) % 8_640_000);
-    if (delays.at(-1) >= 50 && delays.at(-1) <= 51) break;
+    const took = ((await register(page, D6)) - (await register(page, D7)) + 8_640_000) % 8_640_000;
+    const allowed = 51 + Math.ceil(lateMs / 10);
+    runs.push({ took, lateMs, allowed });
+    if (took >= 50 && took <= allowed) break;
   }
-  return delays;
+  return runs;
+}
+
+/** The verdict on `measureDelay`: no run too short, and one run exact. */
+function judgeDelays(runs) {
+  return {
+    ok: runs.every((run) => run.took >= 50) && runs.some((run) => run.took <= run.allowed),
+    detail: runs
+      .map((run) => `${run.took}${run.lateMs >= 5 ? ` (timers ${Math.round(run.lateMs)} ms late)` : ''}`)
+      .join(', ')
+      .concat(' hundredths of a second'),
+  };
 }
 
 /** The button of a command in the toolbar of the mode in front. */
@@ -298,51 +344,65 @@ async function runPass(browser, name, programs) {
   else await page.evaluate(() => window.__easy68k.ctx.commands.run('sim.run.run'));
   check(`${p} the Run button of the toolbar starts the program`, hasToolbar && (await sim(page)).phase === 'running');
   check(`${p} the status bar says Running`, (await statusText(page)).startsWith('Running'), await statusText(page));
-  // The rate over about a second of display frames, three times; the best run counts, because the
-  // machine may be busy. The governor grants 1000 instructions per millisecond between two frames,
-  // but never more than 50 ms worth (MAX_CATCHUP_MS, 4.2): a frame that comes later than that - a
-  // busy machine, a hidden page - is deliberately not made up. `granted` is what that rule allows
-  // for the frames this run really had; the program must have executed exactly that much.
-  const runs = [];
-  for (let i = 0; i < 3; i++) {
-    runs.push(
-      await page.evaluate(
-        () =>
-          new Promise((done) => {
-            const { engine } = window.__easy68k.ctx.sim;
-            let first = null;
-            let last = 0;
-            let steps = 0;
-            let granted = 0;
-            let longest = 0;
-            const frame = (now) => {
-              if (first === null) {
-                first = now;
-                steps = engine.stepCount;
-              } else {
-                granted += Math.min(now - last, 50) * 1000;
-                longest = Math.max(longest, now - last);
-              }
-              last = now;
-              if (now - first < 1000) window.requestAnimationFrame(frame);
-              else done({ executed: (engine.stepCount - steps) >>> 0, ms: now - first, granted, longest });
-            };
-            window.requestAnimationFrame(frame);
-          }),
-      ),
+  // The rate over about a second of display frames. The governor grants 1000 instructions per
+  // millisecond between two frames, but never more than 50 ms worth (MAX_CATCHUP_MS, 4.2), and gives
+  // the engine at most 8 ms per frame: a frame that comes later than that - a busy machine, a hidden
+  // page, a throttled browser - is deliberately not made up in full. `granted` is what the first
+  // rule allows for the frames a window really had, and the program must have executed exactly that
+  // much (3 %) in one of up to five windows. Late frames can make the time budget the limit instead,
+  // so a browser that never delivers steady frames (Chromium on the macOS runners of CI: gaps of
+  // 120 ms in every window) need not show the exact rate: if no window had steady frames (no gap
+  // over 50 ms), the program must only never execute more than the rule grants, allowing for one
+  // cap of allowance carried into the window. That bound holds in every window everywhere.
+  const STEADY_GAP_MS = 50;
+  const windows = [];
+  for (let i = 0; i < 5; i++) {
+    const run = await page.evaluate(
+      (steadyGap) =>
+        new Promise((done) => {
+          const { engine } = window.__easy68k.ctx.sim;
+          let first = null;
+          let last = 0;
+          let steps = 0;
+          let granted = 0;
+          let longest = 0;
+          const frame = (now) => {
+            if (first === null) {
+              first = now;
+              steps = engine.stepCount;
+            } else {
+              granted += Math.min(now - last, steadyGap) * 1000;
+              longest = Math.max(longest, now - last);
+            }
+            last = now;
+            if (now - first < 1000) window.requestAnimationFrame(frame);
+            else done({ executed: (engine.stepCount - steps) >>> 0, ms: now - first, granted, longest });
+          };
+          window.requestAnimationFrame(frame);
+        }),
+      STEADY_GAP_MS,
     );
+    run.steady = run.longest <= STEADY_GAP_MS;
+    run.exact = Math.abs(run.executed - run.granted) <= 0.03 * run.granted;
+    windows.push(run);
+    if (run.exact) break;
   }
   const rateOf = (run) => run.executed / (run.ms / 1000);
-  const best = runs.reduce((a, b) => (Math.abs(rateOf(a) - 1e6) < Math.abs(rateOf(b) - 1e6) ? a : b));
   const describe = (run) =>
-    `${Math.round(rateOf(run)).toLocaleString('en-US')}/s (longest frame gap ${Math.round(run.longest)} ms)`;
+    `${Math.round(rateOf(run)).toLocaleString('en-US')}/s, ${Math.round((100 * run.executed) / run.granted)} % of the ` +
+    `grant (longest frame gap ${Math.round(run.longest)} ms)`;
+  const steadyWindows = windows.filter((run) => run.steady);
+  const neverAbove = windows.every((run) => run.executed <= 1.03 * run.granted + 50_000);
   check(
-    `${p} the default speed is a million instructions per second of frame time (best of three)`,
-    runs.some((run) => Math.abs(run.executed - run.granted) <= 0.03 * run.granted),
-    runs.map(describe).join(', '),
+    `${p} the default speed is a million instructions per second of frame time`,
+    neverAbove && (windows.some((run) => run.exact) || steadyWindows.length === 0),
+    windows.map(describe).join('; '),
   );
-  if (rateOf(best) < 0.95e6) {
-    console.log(`  --   ${p} below a million per second because frames came more than 50 ms apart (a busy machine)`);
+  if (!windows.some((run) => run.exact)) {
+    console.log(
+      `  --   ${p} no window was exact and none had steady frames (every one had a gap over ${STEADY_GAP_MS} ms): ` +
+        'only checked that the program never runs faster than the governor grants',
+    );
   }
   const busy = await page.evaluate(() =>
     ['sim.run.run', 'sim.run.traceInto', 'sim.run.pause', 'sim.run.rewind'].map((id) =>
@@ -428,11 +488,11 @@ async function runPass(browser, name, programs) {
 
   // --- a delay in real time, to the halt. A late timer of a busy machine can only make the delay
   //     longer, never shorter: up to five runs, the best counts, and none may be too short.
-  const delays = await measureDelay(page, () => pressInMainWindow(page, 'F9'));
+  const delays = judgeDelays(await measureDelay(page, () => pressInMainWindow(page, 'F9')));
   check(
     `${p} a task 23 delay of 50 units takes half a second, by the program's own clock (best of up to five)`,
-    delays.every((delay) => delay >= 50) && Math.min(...delays) <= 51,
-    `${delays.join(', ')} hundredths of a second`,
+    delays.ok,
+    delays.detail,
   );
   const halted = await page.evaluate(() =>
     ['sim.run.run', 'sim.run.traceInto', 'sim.file.open', 'sim.run.reload', 'sim.run.pause'].map((id) =>
@@ -616,8 +676,9 @@ async function runPass(browser, name, programs) {
     })),
   );
 
-  // --- text output, for information: the output device, the fonts and the Output panel belong to
-  //     other packages; this only reports whether a printed line reaches the surface of the session.
+  // --- text output: the output device, the fonts and the Output panel belong to other packages
+  //     (SH1, SH3, SH4); the session composes their real parts, so a printed line must reach the
+  //     surface of the session. How it looks is their checks' business.
   await load(page, 'hello');
   await pressInMainWindow(page, 'F9');
   await waitForHalt(page);
@@ -627,9 +688,7 @@ async function runPass(browser, name, programs) {
     for (const pixel of data) if ((pixel & 0xffffff) !== 0) count++;
     return count;
   });
-  console.log(
-    `  --   ${p} a printed line lights ${lit} pixels of the output surface (0 = the output parts are not there yet)`,
-  );
+  check(`${p} a printed line reaches the output surface of the session`, lit > 0, `${lit} pixels lit`);
   await page.screenshot({ path: join(outDir, `${name}-text-output.png`) });
   await pressInMainWindow(page, 'F6');
 
@@ -832,11 +891,11 @@ async function noFramesPass(browser, name, programs) {
   await prepare(page, programs, polling);
   const run = () => page.evaluate(() => window.__easy68k.ctx.commands.run('sim.run.run'));
 
-  const delays = await measureDelay(page, run, polling);
+  const delays = judgeDelays(await measureDelay(page, run, polling));
   check(
     `${p} without display frames a task 23 delay of 50 units still takes half a second (best of up to five)`,
-    delays.every((delay) => delay >= 50) && Math.min(...delays) <= 51,
-    `${delays.join(', ')} hundredths of a second`,
+    delays.ok,
+    delays.detail,
   );
 
   await load(page, 'counter');

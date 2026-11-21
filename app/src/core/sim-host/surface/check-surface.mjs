@@ -316,6 +316,8 @@ async function run(browser, name, baseUrl, shapeHashes) {
   });
   page.on('pageerror', (error) => errors.push(String(error)));
   await page.route(`**/${PAGE_PATH}`, (route) => route.fulfill({ contentType: 'text/html', body: PAGE_HTML }));
+  // A cold dev server on a slow runner transforms the modules on first request: allow it time.
+  page.setDefaultTimeout(120_000);
   await page.goto(`${baseUrl}${PAGE_PATH}`);
 
   const scenes = await page.evaluate(scenesInPage);
@@ -401,6 +403,10 @@ async function main() {
     // Port 0: the system picks a free one. No file watching and no hot reload: nothing here needs
     // them, and a file saved elsewhere in the tree must not disturb the check.
     server: { port: 0, strictPort: false, host: '127.0.0.1', hmr: false, watch: null },
+    // No dependency scan: the surface imports no package, and a scan reads the whole application
+    // from index.html, so a file half-saved elsewhere printed a scan error, and a late discovery can
+    // answer "504 Outdated Optimize Dep" to a module the page asked for.
+    optimizeDeps: { noDiscovery: true, entries: [] },
   });
   await server.listen();
   const address = server.httpServer?.address();

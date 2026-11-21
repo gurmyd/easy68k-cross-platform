@@ -9,6 +9,7 @@ import {
   basename,
   childPath,
   dirname,
+  foldCase,
   isVPath,
   isWithin,
   joinVPath,
@@ -228,9 +229,14 @@ function targetOf(dir: VPath, rel: string): VPath | null {
   }
 }
 
-/** Which items would replace an existing file. */
+/**
+ * Which items would replace a file: one that exists already, or one an earlier item of the same
+ * batch writes. Names are compared without regard to letter case (storedSpelling), so a .zip made
+ * on Linux or macOS that holds both 'A.X68' and 'a.x68' asks the replace question for the second.
+ */
 export async function planImport(vfs: Vfs, dir: VPath, items: readonly ImportItem[]): Promise<ImportPlan> {
   const plan: ImportPlan = { dir, items: [], conflicts: [], refused: [] };
+  const earlier = new Set<string>(); // folded targets of the files planned so far
   for (const item of items) {
     const target = targetOf(dir, item.rel);
     if (target === null) {
@@ -239,9 +245,12 @@ export async function planImport(vfs: Vfs, dir: VPath, items: readonly ImportIte
     }
     plan.items.push(item);
     if (!item.rel.endsWith('/')) {
+      const folded = foldCase(target);
       // An existing file whose name differs only in letter case is the same file (storedSpelling).
-      const stat = await vfs.stat(await storedSpelling(vfs, target)).catch(() => null);
-      if (stat !== null) plan.conflicts.push(item);
+      const clash =
+        earlier.has(folded) || (await vfs.stat(await storedSpelling(vfs, target)).catch(() => null)) !== null;
+      if (clash) plan.conflicts.push(item);
+      earlier.add(folded);
     }
   }
   return plan;
@@ -258,6 +267,7 @@ export async function runImport(
 ): Promise<ImportResult> {
   const result: ImportResult = { written: [], skipped: [] };
   const conflicts = new Set(plan.conflicts);
+  const written = new Set<string>(); // folded paths this run has written
   for (const item of plan.items) {
     try {
       // Resolved now, not when planned: an earlier item may have made a folder in another spelling.
@@ -266,7 +276,9 @@ export async function runImport(
         await makeFolder(vfs, target);
         continue;
       }
-      if (conflicts.has(item) && !replace(item)) {
+      // A file an earlier item of this run wrote is a conflict too, whatever the plan said.
+      const conflict = conflicts.has(item) || written.has(foldCase(target));
+      if (conflict && !replace(item)) {
         result.skipped.push({ rel: item.rel, reason: 'exists' });
         continue;
       }
@@ -278,6 +290,7 @@ export async function runImport(
       const data = await item.read();
       await vfs.writeFile(target, data);
       result.written.push(target);
+      written.add(foldCase(target));
     } catch (error) {
       result.skipped.push({ rel: item.rel, reason: error instanceof Error ? error.message : String(error) });
     }

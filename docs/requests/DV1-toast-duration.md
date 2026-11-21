@@ -2,9 +2,11 @@ Status (item 1, contract): accepted as asked at gate I1 (contracts engineer, W1)
 
 Status (item 2, shell, W3): done at gate I1. `state/dialogs.ts` puts `options.duration` (a finite number >= 0) on the `ToastEntry`, which the kit's `ToastStack` honours; check-shell.mjs shows that a toast with `duration: 0` is still there after 9 s. Item 3 is DV1's.
 
+Status (item 3, DV1): done at gate I1, round 2. `features/pwa` passes `{ duration: 0 }` (`UPDATE_NOTICE_OPTIONS` in `register.ts`) and no longer repeats the notice every hour; `register.test.ts` checks both, through the real dialog service too. The request is closed.
+
 # Request from DV1: a toast that stays until it is answered (gate I1)
 
-Status: open.
+Status: done (all three items, see the status lines above).
 
 Addressed to: the gate's contracts engineer (`app/src/contracts/features.ts`) and the shell
 engineer (`app/src/state/dialogs.ts`, `app/src/ui/shell/DialogHost.tsx`, W3's paths).

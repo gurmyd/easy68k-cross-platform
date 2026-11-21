@@ -34,6 +34,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { buildCapture, BUILD_DIR } from './build.mjs';
 import { fingerprint, judge, mayWrite, windowsIdentity } from './windows-policy.ts';
+import { describeAtlas, describeJson, describePack, describeTsv } from './describe-difference.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '..', '..', '..');
@@ -54,7 +55,7 @@ const onlyIndex = args.indexOf('--only');
 const only = new Set(onlyIndex >= 0 ? (args[onlyIndex + 1] ?? '').split(',') : ['cases', 'spots', 'fonts']);
 
 const { generateCases, serializeCases, SUITES } = await import(pathToFileURL(join(GDI, 'cases.ts')).href);
-const { encodePack, decodePack } = await import(pathToFileURL(join(GDI, 'pix.ts')).href);
+const { encodePack, decodePack, decodeAtlas } = await import(pathToFileURL(join(GDI, 'pix.ts')).href);
 
 const STYLE_NAMES = { '-': 'plain', b: 'bold', i: 'italic', u: 'underline', s: 'strikeOut' };
 
@@ -297,6 +298,24 @@ function referenceIdentity() {
   return capturedOn ? windowsIdentity(capturedOn) : null;
 }
 
+/**
+ * What differs between a committed output and the fresh capture, in a few lines (describe-difference.ts),
+ * so that a CI log on another Windows says what that Windows draws differently.
+ */
+function describeDifference(artifact, old) {
+  try {
+    const path = artifact.path.replaceAll('\\', '/');
+    if (path.endsWith('.pixpack.gz')) return describePack(decodePack(old), decodePack(artifact.bytes));
+    if (path.endsWith('.bin')) return describeAtlas(decodeAtlas(old), decodeAtlas(artifact.bytes));
+    if (path.endsWith('.json'))
+      return describeJson(JSON.parse(artifact.canon(old)), JSON.parse(artifact.canon(artifact.bytes)));
+    if (path.endsWith('.tsv')) return describeTsv(artifact.canon(old), artifact.canon(artifact.bytes));
+  } catch (error) {
+    return [`(could not describe the difference: ${error.message})`];
+  }
+  return [];
+}
+
 function report(lines) {
   const text = lines.join('\n');
   writeFileSync(join(BUILD_DIR, 'run', 'report.txt'), text + '\n');
@@ -340,6 +359,7 @@ async function main() {
   if (only.has('fonts')) await captureFonts(exe, out);
 
   const differences = [];
+  const details = [];
   let written = 0;
   let identical = 0;
   for (const a of artifacts) {
@@ -360,6 +380,15 @@ async function main() {
         const path = a.path.replaceAll('\\', '/');
         differences.push({ path, fingerprint: a.bytes === null ? 'removed' : fingerprint(a.canon(a.bytes)) });
         console.log(`  ${status.padEnd(9)} ${path}`);
+        if (old !== null && a.bytes !== null) {
+          const lines = describeDifference(a, old);
+          for (const line of lines) console.log(`              ${line}`);
+          details.push(`${path}:`, ...lines.map((line) => `  ${line}`));
+          // The captured file, for a person to compare (build/gdi-capture/run/differences/<path>).
+          const copy = join(out, 'differences', path);
+          mkdirSync(dirname(copy), { recursive: true });
+          writeFileSync(copy, a.bytes);
+        }
       }
     } else if (!same) {
       console.log(`  skipped   ${a.path}: ${status}, ${a.note ?? 'not compared'}`);
@@ -375,6 +404,9 @@ async function main() {
   report([
     `${total - differences.length} of ${total} outputs equal the committed references (${identical} byte for byte)`,
     ...verdict.lines,
+    ...(details.length
+      ? ['', 'What differs (the captured files are in build/gdi-capture/run/differences/):', ...details]
+      : []),
   ]);
   if (verdict.fail) process.exit(1);
 }

@@ -3,8 +3,9 @@
 //
 //   node app/src/features/pwa/build/finish-build.mjs [outDir]     (default: app/dist)
 //
-// Run it after `vite build` until app/vite.config.ts includes pwaPlugin()
-// (docs/requests/DV1-vite-plugin.md); after that it is harmless (the step is idempotent).
+// Since gate I1, app/vite.config.ts runs the same step at the end of every production build
+// (pwaPlugin(), docs/requests/DV1-vite-plugin.md). This command stays for a build made some other
+// way and as pages.yml's safety net; on a finished build it changes nothing (idempotent).
 
 /* global console */
 

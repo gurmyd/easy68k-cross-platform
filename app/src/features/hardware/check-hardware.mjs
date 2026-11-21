@@ -23,6 +23,10 @@
 // Nothing waits a fixed time: every step waits for the state it expects (up to WAIT ms), so a slow
 // CI runner only makes the check slower. Nothing depends on the operating system.
 //
+// Without engine/dist (or with --without-engines, which answers every request for engine/dist with
+// 404) part 1 still runs and the expected engine-load errors are printed but not counted; part 2 is
+// skipped, or fails when EASY68K_REQUIRE_ENGINES=1.
+//
 // Screenshots go to build/SH7/hardware-check (git-ignored). Prints "N of M checks passed"; exit
 // code 0 = everything passed and no console error. "Failed to load resource ... Timeout was reached"
 // (WebKit, when the development server is slow to transform a module on a loaded machine) is printed
@@ -50,11 +54,22 @@ const option = (name, fallback) => {
 const browserChoice = option('--browser', 'all');
 const outDir = resolve(option('--out', join(repoRoot, 'build', 'SH7', 'hardware-check')));
 mkdirSync(outDir, { recursive: true });
+/**
+ * --without-engines: behave as on a machine without engine/dist. Every request for a file of
+ * engine/dist is answered 404 in the page and part 2 is skipped (or fails, see below). This proves
+ * the run without engines on a machine that has them, without touching engine/dist.
+ */
+const withoutEngines = args.includes('--without-engines');
 
 /** Part 2 needs both engines; without them it is skipped, or fails when EASY68K_REQUIRE_ENGINES=1. */
-const enginesBuilt = ['sim68k.wasm', 'sim68k-loader.mjs', 'asm68k.wasm', 'asm68k-loader.mjs'].every((file) =>
-  existsSync(join(repoRoot, 'engine', 'dist', file)),
-);
+const enginesBuilt =
+  !withoutEngines &&
+  ['sim68k.wasm', 'sim68k-loader.mjs', 'asm68k.wasm', 'asm68k-loader.mjs'].every((file) =>
+    existsSync(join(repoRoot, 'engine', 'dist', file)),
+  );
+
+/** A request for a file of engine/dist (the development server serves it under /@fs/.../engine/dist/). */
+const isEngineFile = (url) => /\/engine\/dist\//.test(url);
 
 const BROWSERS = { chromium, webkit };
 const browsers = browserChoice === 'all' ? ['chromium', 'webkit'] : [browserChoice];
@@ -91,11 +106,25 @@ const WAIT = 30_000;
 /** WebKit's message when the development server answered a module request too late (see the header). */
 const isLoadTimeout = (text) => /Failed to load resource.*Timeout was reached/i.test(text);
 
+/**
+ * Without engine/dist the simulator session cannot fetch its engine when Simulator mode opens: the
+ * browser reports the failed requests of engine/dist (openApp appends the URL to the message) and the
+ * session reports "The simulator engine could not be created". That is the expected outcome then, not
+ * a defect of the panel, so it is printed but not counted. With the engines present it is counted.
+ */
+const isMissingEngine = (text) =>
+  !enginesBuilt &&
+  ((/Failed to load resource/i.test(text) && isEngineFile(text)) ||
+    /simulator engine could not be created/i.test(text));
+
 /** The "no console or page errors" check of a pass. */
 function reportErrors(prefix, errors) {
+  const ignored = (text) => isLoadTimeout(text) || isMissingEngine(text);
   const timeouts = errors.filter(isLoadTimeout);
-  const real = errors.filter((text) => !isLoadTimeout(text));
+  const missing = errors.filter(isMissingEngine);
+  const real = errors.filter((text) => !ignored(text));
   if (timeouts.length) console.log(`        not counted: ${timeouts.length} x "${timeouts[0]}"`);
+  if (missing.length) console.log(`        not counted (no engines): ${missing.length} x "${missing[0]}"`);
   check(`${prefix} no console or page errors`, real.length === 0, real.slice(0, 3).join(' | '));
 }
 
@@ -127,11 +156,21 @@ function pretendWindows() {
 async function openApp(browser) {
   const context = await browser.newContext({ viewport: { width: 1600, height: 1300 }, reducedMotion: 'reduce' });
   await context.addInitScript(pretendWindows);
+  if (withoutEngines) {
+    await context.route(
+      (url) => isEngineFile(url.pathname),
+      (route) => route.fulfill({ status: 404, contentType: 'text/plain', body: 'Not Found' }),
+    );
+  }
   const page = await context.newPage();
   const errors = [];
   pageErrors = errors;
   page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text());
+    if (message.type() !== 'error') return;
+    // Chromium's "Failed to load resource" names no URL; the location does.
+    const url = message.location()?.url ?? '';
+    const text = message.text();
+    errors.push(/Failed to load resource/i.test(text) && url && !text.includes(url) ? `${text} (${url})` : text);
   });
   page.on('pageerror', (error) => errors.push(String(error)));
   // When the development server finds a dependency it has not pre-bundled yet (a fresh cache on a
@@ -537,8 +576,8 @@ async function enginePass(browser, name, programs) {
   );
 
   // Auto interval through the panel: level 1 is selected, check box 1, interval 500.
-  // The kit draws its own box over the input: click the label, as a user does.
-  await page.locator('label:has(input[data-auto="1"])').click();
+  // A real click on the check box itself (the kit's Checkbox lets pointer events reach its input).
+  await page.locator('input[data-auto="1"]').check({ timeout: WAIT });
   const interval = page.locator('input[data-hw-interval]');
   await interval.click();
   await page.keyboard.press('Home');

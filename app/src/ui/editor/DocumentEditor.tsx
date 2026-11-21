@@ -73,9 +73,11 @@ export function DocumentEditor({ doc, active }: DocumentEditorProps) {
     // docKey stands for the parts of `doc` that matter.
     [sources, docKey],
   );
+  // Read at the moment of a key press, so that a test's override of the session's env applies.
+  const clipboard = useMemo(() => () => session.clipboardEnv, [session]);
   const config = useMemo(
-    () => editorConfig({ options, lineNumbers: global.lineNumbers, label: doc.name, features }),
-    [options, global.lineNumbers, doc.name, features],
+    () => editorConfig({ options, lineNumbers: global.lineNumbers, label: doc.name, features, clipboard }),
+    [options, global.lineNumbers, doc.name, features, clipboard],
   );
   configRef.current = config;
 

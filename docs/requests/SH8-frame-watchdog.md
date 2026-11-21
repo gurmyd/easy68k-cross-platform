@@ -1,6 +1,11 @@
 # Request from SH8: the frame watchdog must tick at the pace of a display (gate I1)
 
-Status: open.
+Status: done at gate I1 round 2 (W3), as asked. `createFrameScheduler()` in `app/src/state/browser.ts`
+still waits `FRAME_WATCHDOG_MS` (250 ms) for a frame after each frame; once the watchdog has fired it
+re-arms with `WATCHDOG_FRAME_MS` (1000 / 60 ms) until a frame arrives, which goes back to the 250 ms
+wait. Test: `app/src/state/services.test.ts` ("calls from a timer when no frame has arrived for 250 ms");
+errata W3.md entry 32. (Before: `check-run.mjs` measured about 175,000 instructions per second without
+display frames in Chromium and WebKit on Windows, 142,000 and 200,000 on the macOS runner.)
 
 Addressed to: the shell engineer (`app/src/state/browser.ts`, W3's path), and for information to
 DV2 and DV3 (risk R-20: "a program that stops while the window is minimised").

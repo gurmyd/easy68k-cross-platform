@@ -89,6 +89,7 @@ describe('FilesTreeModel', { timeout: 60_000 }, () => {
     expect(model.keyAction('ArrowRight')).toEqual({ kind: 'select', path: '/browser/demo/sub' });
     model.select('/browser/demo/prog.X68');
     expect(model.keyAction('Enter')).toEqual({ kind: 'open', path: '/browser/demo/prog.X68' });
+    expect(model.keyAction(' ')).toEqual({ kind: 'open', path: '/browser/demo/prog.X68' });
     expect(model.keyAction('ArrowLeft')).toEqual({ kind: 'select', path: '/browser/demo' });
     expect(model.keyAction('ArrowRight')).toBeNull();
     expect(model.keyAction('Home')).toEqual({ kind: 'select', path: '/browser' });

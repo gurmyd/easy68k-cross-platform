@@ -22,6 +22,7 @@ export function FileDialog({ props, close }: DialogProps<FileDialogProps, Result
   const ctx = useAppContext();
   const { vfs } = ctx;
   const isSave = props.kind === 'save';
+  const isFolderChooser = props.kind === 'save' && props.folder === true;
   const request = props.request;
   const [roots, setRoots] = useState(() => locations(vfs));
   const [dir, setDir] = useState<VPath | null>(props.startDir ?? roots[0]?.root ?? null);
@@ -135,9 +136,19 @@ export function FileDialog({ props, close }: DialogProps<FileDialogProps, Result
     setBusy(true);
     try {
       const entry = selected !== null ? entries.find((e) => e.name === selected) : undefined;
+      // The folder chooser with no name typed takes the selected folder, else the folder shown.
+      const name = isFolderChooser && typed.trim() === '' && entry?.kind === 'dir' ? entry.name : typed;
       const step =
         props.kind === 'save'
-          ? await decideSave(vfs, ctx.dialogs, dir, typed, customFilter ? -1 : filterIndex, props.request)
+          ? await decideSave(
+              vfs,
+              ctx.dialogs,
+              dir,
+              name,
+              customFilter ? -1 : filterIndex,
+              props.request,
+              isFolderChooser,
+            )
           : await decideOpen(
               vfs,
               dir,
@@ -223,7 +234,7 @@ export function FileDialog({ props, close }: DialogProps<FileDialogProps, Result
       footer={
         <>
           <Button
-            caption={isSave ? '&Save' : '&Open'}
+            caption={isFolderChooser ? '&OK' : isSave ? '&Save' : '&Open'}
             isDefault
             disabled={busy || !dir}
             onClick={() => void accept()}
@@ -283,7 +294,7 @@ export function FileDialog({ props, close }: DialogProps<FileDialogProps, Result
       </div>
       <div className="e68-filedialog__fields">
         <TextField
-          label="File &name:"
+          label={isFolderChooser ? 'Folder &name:' : 'File &name:'}
           value={typed}
           onChange={setTyped}
           inputRef={nameRef}
@@ -297,7 +308,7 @@ export function FileDialog({ props, close }: DialogProps<FileDialogProps, Result
           }}
         />
         <Select
-          label={isSave ? 'Save as &type:' : 'Files of &type:'}
+          label={isFolderChooser ? 'Show &type:' : isSave ? 'Save as &type:' : 'Files of &type:'}
           options={[
             // An <option> collapses runs of spaces; the original's labels keep theirs (2.7, captions verbatim).
             ...filters.map((f, i) => ({ value: String(i), label: f.label.replace(/ {2}/g, ' ' + NBSP) })),

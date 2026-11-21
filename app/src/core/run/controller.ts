@@ -329,9 +329,10 @@ export class SimRunController implements RunController {
   /**
    * The application's own start (4.7.1): begins listening to display frames and brings the
    * simulator into process-start state. Safe to call more than once; loads requested before it has
-   * finished wait for it.
+   * finished wait for it. After `dispose()` it does nothing: no frames, no engine, no journal.
    */
   start(): Promise<void> {
+    if (this.disposed) return this.startup ?? Promise.resolve();
     if (!this.startup) {
       this.cancelFrames = this.deps.scheduler.onFrame(() => this.tick(true));
       const { lifecycle } = this.deps;

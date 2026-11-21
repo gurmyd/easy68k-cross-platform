@@ -84,6 +84,15 @@ export interface DialogProps {
   /** Render in place without layer, trap or focus moves: the gallery's previews. */
   inline?: boolean;
   className?: string;
+  /**
+   * Keys for the dialog's owner (F1 for its help page, for example): every key pressed inside the
+   * box and, while this is the top-most modal dialog, every key pressed with the focus on the page
+   * body. Called before the dialog's own handling of Tab, Escape, Enter and the access keys; call
+   * `event.preventDefault()` to keep the dialog from acting on the key. Not called for an inline
+   * dialog, nor while another modal dialog is on top of this one. Added at gate I1 round 2 (errata
+   * W2 entry 18).
+   */
+  onKeyDown?: (event: globalThis.KeyboardEvent) => void;
 }
 
 // Remember pressed controls from the start, so the first dialog opened by a
@@ -186,6 +195,7 @@ export function Dialog({
   width,
   inline = false,
   className,
+  onKeyDown: onOwnerKey,
 }: DialogProps) {
   const titleId = useId();
   const [element, setElement] = useState<HTMLDivElement | null>(null);
@@ -257,6 +267,9 @@ export function Dialog({
   };
   const handleKeyRef = useRef(handleKey);
   handleKeyRef.current = handleKey;
+  // The owner's key handler, read by the document listener below (the prop may change).
+  const ownerKeyRef = useRef(onOwnerKey);
+  ownerKeyRef.current = onOwnerKey;
 
   // The trap: focus that lands outside the top-most modal dialog is pulled back.
   useEffect(() => {
@@ -280,13 +293,17 @@ export function Dialog({
       if (topModal() !== box) return;
       const target = event.target as Node | null;
       if (target && box.contains(target)) return;
+      const onBody = !target || target === document.body || target === document.documentElement;
+      if (onBody && ownerKeyRef.current) {
+        ownerKeyRef.current(event);
+        if (event.defaultPrevented) return;
+      }
       if (event.key === 'Tab') {
         if (event.ctrlKey || event.metaKey || event.altKey) return;
         event.preventDefault();
         moveTab(box, target ?? document.body, event.shiftKey, lastInside.current);
         return;
       }
-      const onBody = !target || target === document.body || target === document.documentElement;
       if (onBody && isDialogBodyKey(event)) handleKeyRef.current(event, box);
     };
     document.addEventListener('focusin', onFocusIn);
@@ -302,6 +319,10 @@ export function Dialog({
     if (!box || inline || event.defaultPrevented) return;
     if (modal && topModal() !== box) return;
     const target = event.target as HTMLElement;
+    if (onOwnerKey) {
+      onOwnerKey(event.nativeEvent);
+      if (event.nativeEvent.defaultPrevented) return;
+    }
 
     if (event.key === 'Tab' && modal) {
       // Ctrl / Cmd / Alt (Option) + Tab stay with the browser and the shell.

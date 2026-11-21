@@ -11,6 +11,7 @@
 
 import type { DirEntry, Vfs, VfsChange, VPath } from '../../contracts';
 import { childPath, dirname, isVPath, isWithin, splitVPath } from '../../core/paths/winpath';
+import { treeViewKeyAction } from '../../ui/components';
 import { locations, sortEntries } from './store';
 
 export interface TreeRow {
@@ -144,45 +145,25 @@ export class FilesTreeModel {
   /**
    * What a key does in the tree. Up / Down / Home / End move; Right opens a closed folder or moves
    * to its first child; Left closes an open folder or moves to the parent; Enter opens a file or
-   * toggles a folder. Returns the action for the panel to carry out, or null for keys the tree
-   * does not use.
+   * toggles a folder (Space too). Returns the action for the panel to carry out, or null for keys
+   * the tree does not use. The rules are the kit's treeViewKeyAction (ui/components/tree.ts).
    */
   keyAction(
     key: string,
   ): { kind: 'select'; path: VPath } | { kind: 'open'; path: VPath } | { kind: 'toggle'; path: VPath } | null {
     const rows = this.rows();
-    if (rows.length === 0) return null;
     const index = rows.findIndex((row) => row.path === this.selected);
-    const at = (i: number) => rows[Math.max(0, Math.min(rows.length - 1, i))] as TreeRow;
-    const current = index >= 0 ? (rows[index] as TreeRow) : null;
-    switch (key) {
-      case 'ArrowDown':
-        return { kind: 'select', path: at(index + 1).path };
-      case 'ArrowUp':
-        return { kind: 'select', path: at(index < 0 ? 0 : index - 1).path };
-      case 'Home':
-        return { kind: 'select', path: at(0).path };
-      case 'End':
-        return { kind: 'select', path: at(rows.length - 1).path };
-      case 'ArrowRight':
-        if (!current) return { kind: 'select', path: at(0).path };
-        if (current.kind === 'file') return null;
-        if (!current.expanded) return { kind: 'toggle', path: current.path };
-        return rows[index + 1] && (rows[index + 1] as TreeRow).depth > current.depth
-          ? { kind: 'select', path: (rows[index + 1] as TreeRow).path }
-          : null;
-      case 'ArrowLeft': {
-        if (!current) return null;
-        if (current.kind !== 'file' && current.expanded) return { kind: 'toggle', path: current.path };
-        if (current.kind === 'root') return null;
-        return { kind: 'select', path: dirname(current.path) };
-      }
-      case 'Enter':
-        if (!current) return null;
-        return current.kind === 'file' ? { kind: 'open', path: current.path } : { kind: 'toggle', path: current.path };
-      default:
-        return null;
-    }
+    // The kit's tree-view rules: folders and stores open and close, files are leaves that open.
+    const action = treeViewKeyAction(
+      rows.map((row) => ({ depth: row.depth, expandable: row.kind !== 'file', expanded: row.expanded })),
+      index,
+      key,
+    );
+    if (!action) return null;
+    const path = (rows[action.index] as TreeRow).path;
+    if (action.kind === 'move') return { kind: 'select', path };
+    if (action.kind === 'toggle') return { kind: 'toggle', path };
+    return { kind: 'open', path };
   }
 
   // ---- internals ------------------------------------------------------------------------------

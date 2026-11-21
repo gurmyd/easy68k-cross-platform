@@ -20,7 +20,7 @@ import { handleDrop, type DropDeps } from './drop';
 import { FileDialog } from './FileDialog';
 import { FilesPanel } from './FilesPanel';
 import { NameDialog } from './NameDialog';
-import { EDITOR_OPEN_FILTERS } from './filters';
+import { EDITOR_OPEN_FILTERS, normalizeDefaultExt } from './filters';
 import { NATIVE_PROVIDER_ID, UPLOAD_PROVIDER_ID, canTakeDroppedFolder } from './providers';
 import { IMPORTED_DIR, displayPath, importOne } from './store';
 
@@ -36,9 +36,10 @@ export function createNativeProvider(ctx: AppContext): FileSourceProvider | null
     label: 'Native dialogs',
     available: () => true,
     open: (request) => native.open(request),
-    save: (request) => native.save(request),
-    // The contract passes the request (FolderRequest); a title alone is taken too.
-    chooseFolder: (arg: FolderRequest | string) => native.chooseFolder(typeof arg === 'string' ? arg : arg.title),
+    // The openers may pass the original's malformed '*.X68' (contracts/fs.ts SaveRequest.defaultExt);
+    // the native dialog is given the plain extension, '.X68' (errata/FS1.md entry 9).
+    save: (request) => native.save({ ...request, defaultExt: normalizeDefaultExt(request.defaultExt) }),
+    chooseFolder: (request: FolderRequest) => native.chooseFolder(request.title),
   };
 }
 

@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest';
 import type { GdiCase } from './cases';
 import { loadMetrics } from './fonts';
 import { cases, firstDifference, hex6, isMachineSuite, references, suiteNames } from './golden';
-import { blankOutlineGlyph, replayOnSurface, surfaceDraws } from './replay';
+import { replayOnSurface, surfaceDraws } from './replay';
 import { outlineCells } from './text-model';
 
 const SURFACE_DIR = new URL('../../../app/src/core/sim-host/surface/', import.meta.url);
@@ -56,15 +56,19 @@ const why = (c: GdiCase) => {
   return p.ellipse && !ellipsesLanded ? 'ellipse.ts' : 'widepen.ts';
 };
 
+/** The suites whose outline-face cells and pen are compared, not their glyph pixels. */
+const OUTLINE_CELL_SUITES = ['text-outline', 'text-outline-zero'];
+
 function compare(suite: string, select: (c: GdiCase) => boolean): string[] {
   const failures: string[] = [];
   let compared = 0;
   for (const r of references(suite)) {
     if (!select(r.case)) continue;
     // Outline faces: only the cells and the pen are compared (6.5.3), not the pixels GDI adds outside them.
-    const cells = suite === 'text-outline' ? outlineCells(metrics, r.case) : undefined;
+    const outline = OUTLINE_CELL_SUITES.includes(suite);
+    const cells = outline ? outlineCells(metrics, r.case) : undefined;
     if (cells === null) continue;
-    const got = replayOnSurface(r.case, suite === 'text-outline' ? blankOutlineGlyph : undefined);
+    const got = replayOnSurface(r.case, outline ? 'outline' : 'raster');
     compared++;
     const diff = firstDifference(got, r.image, cells ? (x, y) => !cells.uncertain(x, y) : undefined);
     if (diff) {

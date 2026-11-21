@@ -88,3 +88,15 @@ needed.
 - Does: part 2 uses `ctx.sim` as the application built it, loads programs with File > Open
   (`ctx.sim.controller.open`) from the browser store, and writes memory through
   `controller.invoke`. Every step waits for the state it expects instead of a number of frames.
+
+## 8. The browser check without engine/dist (gate I1, round 2)
+
+- Was: the round-1 reviewers found that part 1 of `check-hardware.mjs` failed on a machine without
+  `engine/dist`: opening Simulator mode makes the real session fetch its engine, and the two 404s and
+  "The simulator engine could not be created" counted as console errors, while the CI step runs
+  without an engines guard.
+- Does: without the engines those three messages are printed but not counted (any other error still
+  is); part 2 is skipped, or fails with `EASY68K_REQUIRE_ENGINES=1`. The new switch
+  `--without-engines` answers every request for `engine/dist` with 404 so the case can be run on a
+  machine that has the engines. The auto-interrupt check box is now clicked with `locator.check()`
+  on its input, since the kit's Checkbox passes pointer events to it (round 1 clicked the label).

@@ -73,6 +73,12 @@ export interface VfsChange {
   origin: 'local' | 'external';
 }
 
+/**
+ * One implementation only: `createVfs()` of app/src/fs/vfs.ts, which the bootstrap and every test
+ * call (a test mounts a MemoryBackend on it). Nothing else implements this interface; code that
+ * needs a few members takes `Pick<Vfs, ...>`. That is why a member added later, such as `mkdirp`,
+ * can be required (docs/porting/errata/W1.md, entry 12; contracts.test.ts checks it).
+ */
 export interface Vfs {
   mount(backend: FileSystemBackend): void;
   unmount(mount: string): void;

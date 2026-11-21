@@ -21,6 +21,11 @@ list comes from the build output needs a step after the build, and `app/vite.con
 - The tags are added to the built `index.html`, not to the source `app/index.html`, so the
   development server has no manifest link either (nothing to install while developing, and no
   worker: the meta tag is what makes `features/pwa` register one).
+- Gate I1: the configuration engineer added `pwaPlugin()` to `app/vite.config.ts`, so every
+  production build is now finished (CI `e2e`, `desktop-dev`, `release.yml`, the desktop packages
+  too; the desktop app still registers no worker, 7.6 and `register.ts`). `pages.yml` keeps
+  `finish-build.mjs` as an idempotent safety net. Since round 2, `check-pwa.mjs` checks that
+  `vite build` alone (with the real configuration) wrote `sw.js` and the tags.
 
 ## 2. "Versioned by the build hash" (7.5)
 
@@ -76,6 +81,14 @@ Filed at gate I1 as `docs/requests/DV1-toast-duration.md`. Until it is applied, 
 records the notice's appearance in each page and keeps the pointer on it, so a slow machine does
 not lose the notice before the check presses `Reload`.
 
+Gate I1, round 2: the contract has `ToastOptions { duration? }` and the shell passes it on.
+`features/pwa` now shows the notice with `{ duration: 0 }`: it stays until `Reload` or the close
+button. The hourly repeat of the notice is gone; the hourly `registration.update()` stays. A
+notice the student closed comes again at the next start of a page while a version still waits
+(the toast contract tells the caller nothing about a dismissal). `check-pwa.mjs` keeps recording
+the notice and resting the pointer on it; that is harmless and keeps the check independent of the
+duration.
+
 ## 6. Not done: file handlers of the installed app (5.7)
 
 5.7 lists "Web, installed app: file handlers in the manifest for `.x68`, `.l68`, `.s68`
@@ -123,3 +136,11 @@ display, the start URL of the site and every icon. `Page.getInstallabilityErrors
 Playwright's headless Chromium (159.0.8154.6) it answers `[]` even for a page with no manifest at
 all (tried with a scratch page), so it proves nothing. WebKit has no such interface; Safari's "Add
 to Dock" and Chromium's real install prompt were not tried.
+
+## 10. pwaPlugin() after a failed build (gate I1, round 2)
+
+Vite (rolldown) calls `closeBundle` after a failed build too. `pwaPlugin()` then ran the step on
+an output folder without `index.html` and threw `pwa-build: ... index.html does not exist`, which
+replaced the build's own error in the report (seen when another package's file did not parse:
+the real `PARSE_ERROR` was hidden). The plugin now notes an error from `buildEnd` or the
+`closeBundle` argument and leaves a failed build alone; `pwa-build.test.ts` covers both paths.

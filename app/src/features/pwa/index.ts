@@ -16,7 +16,7 @@ export const feature: FeatureModule = {
     const handle = startPwa(
       {
         platformKind: ctx.platform.kind,
-        toast: (text, action) => ctx.dialogs.toast(text, action),
+        toast: (text, action, options) => ctx.dialogs.toast(text, action, options),
         setTimer: (delay, fn) => ctx.scheduler.setTimer(delay, fn),
       },
       browserEnvironment(),

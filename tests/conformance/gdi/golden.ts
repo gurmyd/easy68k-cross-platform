@@ -55,8 +55,10 @@ export interface Spots {
   controlBytes: { byte: number; cellRight: number; pen: number }[];
 }
 
+let spotValues: Spots | undefined;
+/** golden/spots.json, read once (treat it as read-only). */
 export function spots(): Spots {
-  return JSON.parse(readFileSync(`${GOLDEN_DIR}spots.json`, 'utf8')) as Spots;
+  return (spotValues ??= JSON.parse(readFileSync(`${GOLDEN_DIR}spots.json`, 'utf8')) as Spots);
 }
 
 /** First differing pixel of two pictures of the same size, or null. */

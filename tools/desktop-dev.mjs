@@ -21,6 +21,7 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { electronDevEnv } from './desktop-dev-env.mjs';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const main = join(repo, 'desktop', 'src', 'main.ts');
@@ -61,19 +62,12 @@ const npmArgs = [
   ...(process.argv.length > 2 ? ['--', ...process.argv.slice(2)] : []),
 ];
 const npmCli = process.env.npm_execpath;
+// Without ELECTRON_RUN_AS_NODE (docs/requests/DV2-desktop-dev-env.md; see desktop-dev-env.mjs).
+const env = electronDevEnv(process.env, url);
 const child =
   npmCli && /\.[cm]?js$/.test(npmCli)
-    ? spawn(process.execPath, [npmCli, ...npmArgs], {
-        cwd: repo,
-        stdio: 'inherit',
-        env: { ...process.env, EASY68K_DEV_SERVER_URL: url },
-      })
-    : spawn('npm', npmArgs, {
-        cwd: repo,
-        stdio: 'inherit',
-        shell: true,
-        env: { ...process.env, EASY68K_DEV_SERVER_URL: url },
-      });
+    ? spawn(process.execPath, [npmCli, ...npmArgs], { cwd: repo, stdio: 'inherit', env })
+    : spawn('npm', npmArgs, { cwd: repo, stdio: 'inherit', shell: true, env });
 
 let stopping = false;
 async function stop(code) {

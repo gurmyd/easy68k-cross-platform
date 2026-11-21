@@ -42,7 +42,7 @@ import { MemorySyncFiles } from '../fs/sync/memory';
 /** One untitled source document holding the template; it cannot be saved, closed or replaced. */
 export function createStubDocumentService(ctx: AppContext): DocumentService {
   const settings = ctx.settings.get().editor;
-  const document: DocumentState = {
+  let document: DocumentState = {
     id: 'stub-1',
     path: null,
     name: 'untitled1.x68',
@@ -69,6 +69,20 @@ export function createStubDocumentService(ctx: AppContext): DocumentService {
     close: async () => false,
     closeAll: async () => true,
     activate: () => {},
+    // The members added at gate I1 (contracts/documents.ts), so that they can become required.
+    update: (id, patch) => {
+      if (id !== document.id) return;
+      document = { ...document, ...patch };
+      const changed = document;
+      ctx.store.setState((state) => ({
+        ...state,
+        documents: {
+          ...state.documents,
+          items: state.documents.items.map((item) => (item.id === changed.id ? changed : item)),
+        },
+      }));
+    },
+    selection: (id) => (id === document.id ? { selected: '', caret: 0 } : null),
   };
 }
 
@@ -80,6 +94,7 @@ export function createStubFileDialogs(): FileDialogs {
     open: async () => null,
     save: async () => null,
     registerProvider: () => () => {},
+    chooseFolder: async () => null,
   };
 }
 
@@ -350,5 +365,8 @@ export function createInertSimSession(ctx: AppContext): SimSession {
     printer: new PrinterDevice({ font: () => ctx.settings.get().sim.printerFont, submit: () => {} }),
     glyphs: blankGlyphs,
     onEngineReplaced: () => () => {},
+    // Members added at gate I1 (contracts/run.ts): nothing prints here.
+    printJobs: [],
+    onPrintJob: () => () => {},
   };
 }

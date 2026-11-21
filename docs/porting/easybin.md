@@ -954,7 +954,9 @@ Windows-isms that need a decision (the port's decisions are in ARCHITECTURE.md 1
 1. **Separate program.** EASyBIN becomes the third mode of the application (ARCHITECTURE.md 1.4 note
    26). Its memory image lives as long as the window; switching modes keeps it.
 2. **Window title.** The original shows the opened file's path in the title bar; in the port the
-   window title belongs to the shell, so the path is shown in the mode's status bar.
+   window title belongs to the shell, and EASyBIN sets it with the shell's `setModeTitle`
+   (`state/shell.ts`): the opened file's path, or the fixed title after New, followed by the port's
+   ` - unofficial port <version>` as every title is. The mode has no status bar, as the original.
 3. **Files** are reached through the port's file dialogs and stores (ARCHITECTURE.md 3.8); text-mode
    CR LF translation and the Ctrl-Z end-of-file rule are emulated on the bytes.
 4. **Exit** quits the whole application (it is one program in the port), with the editor's prompts.
@@ -1108,7 +1110,8 @@ here and to `docs/differences/B1.md`):
 | `Binary Input/Output Split` (1, 2, 4 files) and `File Split` digits | - | workspace | | | = |
 | `Binary File(s)` group: First Address, Length | - | workspace | | | = |
 | From / To, Size + Copy, fill byte + Fill | - | workspace | | | = |
-| Window title = opened file | - | status bar of EASyBIN mode | | | ~ |
+| Window title = opened file | - | window title (with the port's notice) | | | = |
+| F1 in the About box (credits page) | - | Help panel, `credits.htm` | F1 | F1 | ~ (Help panel) |
 | Files dropped on the window | - | drop while EASyBIN mode is shown | | | = |
 | Tab order | - | follows the layout | | | ~ (Q18) |
 | Command line `EASyBIN <file>` | - | none | | | x (19 item 7) |
@@ -1120,9 +1123,8 @@ here and to `docs/differences/B1.md`):
 1. **Exit.** Quitting the whole application from EASyBIN mode (the port's choice, as the editor's and
    simulator's Exit do) versus leaving only EASyBIN mode. The original program ends; nothing is lost
    that the user did not already lose there.
-2. **Window title.** The path of the opened file in the window title in EASyBIN mode needs a value in
-   `AppState` or a hook in the shell (`docs/requests/B1-window-title.md`); until then the status bar
-   shows it.
+2. **Window title.** Settled at gate I1: the shell's `setModeTitle` (`docs/requests/B1-window-title.md`)
+   shows the opened file in the window title in EASyBIN mode.
 3. **Items marked UNVERIFIED** (the VCL's treatment of an eight-digit text in a six-digit mask edit,
    `OnClick` when New sets `ItemIndex`, the glyph of `$7F`, the Borland `sscanf` on a sign or `0x` in
    an S-record line) can only be settled with the real `EASyBIN.exe` on Windows.

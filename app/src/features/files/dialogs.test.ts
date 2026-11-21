@@ -5,7 +5,14 @@ import type { Bytes, MessageBoxRequest, OpenRequest, SaveRequest, VPath } from '
 import { createVfs } from '../../fs/vfs';
 import { MemoryBackend } from '../../fs/memory-backend';
 import { createTestApplication } from '../../state/testing';
-import { decideOpen, decideSave, visibleEntries, type OpenDialogProps, type SaveDialogProps } from './dialogs';
+import {
+  FOLDER_FILTER,
+  decideOpen,
+  decideSave,
+  visibleEntries,
+  type OpenDialogProps,
+  type SaveDialogProps,
+} from './dialogs';
 import { EDITOR_DEFAULT_EXT, EDITOR_OPEN_FILTERS, EDITOR_SAVE_FILTERS } from './filters';
 import { createFileDialogs, feature } from './index';
 
@@ -107,6 +114,31 @@ describe('decideSave', () => {
       filter: { label: '*.ASM', patterns: ['*.ASM'] },
     });
     expect(await decideSave(vfs, boxes('Yes'), '/browser/demo', '   ', 0, saveRequest)).toEqual({ kind: 'nothing' });
+  });
+
+  // Gate I1 round 2 review: the folder chooser entered a typed existing folder instead of taking it.
+  it('in folder mode takes the folder shown, a typed existing folder, or a new name; refuses a file', async () => {
+    const vfs = await storeWith({ '/browser/demo/sub/x.txt': '', '/browser/demo/file.X68': '' });
+    const request: SaveRequest = { title: 'Folder', filters: [FOLDER_FILTER], defaultExt: '', overwritePrompt: null };
+    const decide = (typed: string) => decideSave(vfs, boxes('Yes'), '/browser/demo', typed, 0, request, true);
+    expect(await decide('')).toEqual({ kind: 'done', paths: ['/browser/demo'] });
+    expect(await decide('SUB')).toEqual({ kind: 'done', paths: ['/browser/demo/sub'] });
+    expect(await decide('New Folder')).toEqual({ kind: 'done', paths: ['/browser/demo/New Folder'] });
+    expect(await decide('sub\\deeper')).toEqual({ kind: 'done', paths: ['/browser/demo/sub/deeper'] });
+    expect(await decide('file.x68')).toEqual({
+      kind: 'error',
+      title: 'Folder',
+      text: 'file.x68\nThis is a file, not a folder.',
+    });
+    expect(
+      visibleEntries(
+        [
+          { name: 'sub', kind: 'dir' as const },
+          { name: 'file.X68', kind: 'file' as const },
+        ],
+        FOLDER_FILTER,
+      ),
+    ).toEqual([{ name: 'sub', kind: 'dir' }]);
   });
 });
 

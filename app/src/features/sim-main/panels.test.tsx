@@ -94,6 +94,8 @@ describe('markup', () => {
     expect(html).toContain('aria-label="Messages"');
     expect(html).toContain('role="log"');
     expect(html).toContain('aria-live="polite"');
+    // Hidden with the kit's screen-reader class, not a copy of it (gate I1, the kit's request).
+    expect(html).toMatch(/class="e68-sr e68-messages__announce" role="log"/);
   });
 
   it('Find dialog: caption, label and buttons of findDialogS.dfm; the Find button disabled while empty', () => {

@@ -15,6 +15,15 @@ None of these changes what a student's program can observe.
   port still loads only that one, but also copies a dropped `.L68` with the same base name into the
   same folder, so that the simulator finds the listing beside the program instead of showing the
   nine explanatory lines.
+- **A dropped `.S68` in Simulator mode is copied before the `Caution` question (browser).** The
+  original asks `The current debug environment will be lost, click OK to continue.` first and does
+  nothing on Cancel. The port must copy the file into `My Programs/Imported/` before the simulator
+  can load it, and the simulator asks that question when it loads (ARCHITECTURE.md 4.7 step 2). So,
+  when a program is loaded: if an earlier copy with other contents is already there, the question
+  `"My Programs/Imported/<name>" already exists with other contents. Replace it with the new file?`
+  (title `Drop`) comes first; then `Caution`; and on Cancel the copy (or the replaced file) stays in
+  `My Programs/Imported/`, while the loaded program and the simulator are left exactly as they were.
+  The desktop app loads a dropped `.S68` where it lies and asks only `Caution`, as the original does.
 - **The port's own Open and Save dialogs (browser).** They list the browser store ("My Programs")
   and an opened folder instead of the disk, offer `From this computer...` (and `Open folder...` where
   the browser can), and say in a short note where files are kept. Names are checked against

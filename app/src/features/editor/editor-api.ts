@@ -2,10 +2,10 @@
 //
 // The feature module (index.ts) registers the editor area as the panel `editor` and the commands
 // of the Edit and Window menus. The component and the editing operations live in app/src/ui/editor
-// (ARCHITECTURE.md section 8 and 9.2). The layer rule of 3.1, as the lint rule enforces it, does not
-// let `features/editor/` import `ui/editor/` (only `ui/components/`), so the feature reaches the
-// component through ui-link.ts and this interface; ui/editor/index.ts implements it and is checked
-// against it by the compiler (errata/E2.md, entry 1; docs/requests/E2-layer-rule.md).
+// (ARCHITECTURE.md section 8 and 9.2). The feature imports the component through ui-link.ts (the
+// layer rule lets `features/editor/` import `ui/editor/`, docs/requests/E2-layer-rule.md) and uses
+// it through this interface; ui/editor/index.ts implements it and is checked against it by the
+// compiler (errata/E2.md, entry 1).
 
 import type { ComponentType } from 'react';
 import type { AppContext } from '../../contracts';

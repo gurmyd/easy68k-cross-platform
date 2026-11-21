@@ -26,6 +26,7 @@ import {
   type TestGlyph,
 } from './fonts';
 import { ITALIC_SPECIAL_BYTES, type GdiCase } from './cases';
+import { spots } from './golden';
 
 export interface Picture {
   width: number;
@@ -95,7 +96,61 @@ export function outlineAdvance(
   bytes: readonly number[],
 ): number | null {
   if (byte === 0x7f && delOnFallback(bytes)) return outlineEntry(metrics, font)?.delInHighString ?? null;
-  return cellOf(metrics, font).colWidth;
+  const cell = cellOf(metrics, font);
+  if ((OUTLINE_ZERO_ADVANCE[cell.face] ?? []).includes(byte)) return 0;
+  return cell.colWidth;
+}
+
+/**
+ * Bytes whose advance in a monospaced outline face is 0 instead of the cell width, at every size
+ * and style (review round 2 of gate I1: measured at sizes 0-255 in all five styles; the other
+ * zero-width bytes and the other faces have the cell width). Consolas has a zero-width glyph for
+ * the carriage return; `windows-outline-metrics.tsv` shows it at the measured sizes.
+ */
+export const OUTLINE_ZERO_ADVANCE: Readonly<Record<string, readonly number[]>> = { Consolas: [0x0d] };
+
+/**
+ * The width `byte` takes in the opaque cell of a monospaced outline face, which is not always its
+ * TextWidth advance (review round 2 of gate I1, defect 14; measured against fresh captures in 2,120
+ * strings at the atlas sizes, and zero-width strings at sizes 0-72): a zero-width byte takes none,
+ * even alone (GDI then fills no cell, only the widening of `outlineCells`); `$7F` always takes the
+ * fallback glyph's width (`delInHighString`), with or without a byte of `$80` or above, although
+ * TextWidth counts the face's advance for it when there is none. null when that width is needed and
+ * the size has no outline atlas.
+ */
+export function outlineCellAdvance(
+  metrics: Metrics,
+  font: FontRequest,
+  byte: number,
+  bytes: readonly number[],
+): number | null {
+  if (isZeroWidth(byte)) return 0;
+  if (byte === 0x7f) return outlineEntry(metrics, font)?.delInHighString ?? null;
+  return outlineAdvance(metrics, font, byte, bytes);
+}
+
+/**
+ * Task 95 in a monospaced outline face, with blank glyphs (the glyph pixels of the outline faces are
+ * substitutes and are not compared, 6.5.3): the cell from outlineCellAdvance(), the pen from
+ * textExtent() with outlineAdvance(). null when a width is not known at this size.
+ */
+export function layoutOutlineText(metrics: Metrics, font: FontRequest, bytes: readonly number[]): TextLayout | null {
+  const cell = cellOf(metrics, font);
+  const glyphs: { glyph: TestGlyph; x: number }[] = [];
+  let x = 0;
+  for (const b of bytes) {
+    const a = outlineCellAdvance(metrics, font, b, bytes);
+    if (a === null) return null;
+    if (isZeroWidth(b)) continue;
+    glyphs.push({
+      glyph: { advance: a, width: a, height: cell.rowHeight, coverage: new Uint8Array(a * cell.rowHeight) },
+      x,
+    });
+    x += a;
+  }
+  if (bytes.some((b) => outlineAdvance(metrics, font, b, bytes) === null)) return null;
+  const extent = textExtent(bytes, (b) => outlineAdvance(metrics, font, b, bytes) as number);
+  return { glyphs, boxWidth: x, extent, cellHeight: cell.rowHeight };
 }
 
 /** A glyph source; `bytes` is the whole string, for advances that depend on it. */
@@ -144,29 +199,32 @@ export interface Box {
  * The text cells of an outline-face case as the port draws them (advance boxes), and a predicate
  * for the pixels whose GDI colour the port cannot know: the 1-3 columns by which GDI widens a
  * TrueType cell (the glyphs' ink overhang) and, for underline and strike-out, lines outside the
- * cells. null when the case uses the proportional face (no per-byte advances at every size), or a
- * $7F on the fallback path at a size without an outline atlas.
+ * cells; and the pen after the last string. The cells and the pen follow layoutOutlineText(). null
+ * when the case uses the proportional face (no per-byte advances at every size), a $7F at a size
+ * without an outline atlas, or a string that draws only $7F (the fallback font's cell height).
  */
 export function outlineCells(
   metrics: Metrics,
   c: GdiCase,
-): { boxes: Box[]; uncertain: (x: number, y: number) => boolean } | null {
+): { boxes: Box[]; pen: [number, number]; uncertain: (x: number, y: number) => boolean } | null {
   let font: FontRequest = { name: 'Fixedsys', size: 9, style: 0 };
   const boxes: Box[] = [];
+  let pen: [number, number] = [0, 0];
   let line = false;
   for (const o of c.ops) {
     if (o.op === 'font') font = { name: o.name, size: o.size, style: o.style };
+    if (o.op === 'moveto') pen = [o.x, o.y];
     if (o.op !== 'text') continue;
     const cell = cellOf(metrics, font);
     if (cell.face === 'Arial') return null;
     if (font.style === 3 || font.style === 4) line = true;
-    let w = 0;
-    for (const b of o.bytes) {
-      const a = outlineAdvance(metrics, font, b, o.bytes);
-      if (a === null) return null;
-      w += a;
-    }
-    boxes.push({ x: o.x, y: o.y, w, h: cell.rowHeight });
+    const layout = layoutOutlineText(metrics, font, o.bytes);
+    if (layout === null) return null;
+    // A string whose drawn bytes are all $7F gets the fallback font's cell, which can be a row lower
+    // than the face's (Courier New 8, Lucida Console 10); its height is not measured.
+    if (o.bytes.includes(0x7f) && o.bytes.every((b) => b === 0x7f || isZeroWidth(b))) return null;
+    boxes.push({ x: o.x, y: o.y, w: layout.boxWidth, h: cell.rowHeight });
+    pen = [o.x + layout.extent, o.y];
   }
   // The widening grows with the size: up to a tenth of the cell height, at least 3 pixels.
   const inside = (x: number, y: number, widen: boolean) =>
@@ -174,7 +232,7 @@ export function outlineCells(
       const m = widen ? Math.max(3, Math.ceil(b.h / 10)) : 0;
       return x >= b.x - m && x < b.x + b.w + m && y >= b.y && y < b.y + b.h;
     });
-  return { boxes, uncertain: (x, y) => !inside(x, y, false) && (inside(x, y, true) || line) };
+  return { boxes, pen, uncertain: (x, y) => !inside(x, y, false) && (inside(x, y, true) || line) };
 }
 
 /** tmOverhang of GDI's style simulation for a raster face. */
@@ -182,8 +240,31 @@ export function rasterOverhang(style: number, cellHeight: number): number {
   return style === 1 ? 1 : style === 2 ? Math.floor((cellHeight - 1) / 2) : 0;
 }
 
+/** The tables a colour form needs (golden/spots.json). */
+export interface ColourTables {
+  sysColors: readonly number[];
+  stockPalette: readonly number[];
+}
+
+/**
+ * The colour GDI draws for a VCL TColor, by trap15-b 4.6 as the capture measured it: bit 31 = the
+ * system colour of the low byte (black above 30), else bit 24 = the stock palette entry of the low 16
+ * bits (black from 20), else the low 24 bits. The same for pens, brushes and (request
+ * SH3-gdi-text-colour.md) the font colour of task 21.
+ */
+export function resolveColour(c: number, tables: ColourTables): number {
+  if (c & 0x80000000) return (c & 0xff) <= 30 ? ((tables.sysColors[c & 0xff] as number) ?? 0) : 0;
+  if (c & 0x01000000) return (tables.stockPalette[c & 0xffff] as number | undefined) ?? 0;
+  return c & 0xffffff;
+}
+
 /** Replays a text case (bg, fill, fontcolor, font, text, moveto; other operations do not affect text). */
-export function drawTextCase(metrics: Metrics, c: GdiCase, glyphOf: GlyphOf = rasterGlyph): Picture {
+export function drawTextCase(
+  metrics: Metrics,
+  c: GdiCase,
+  glyphOf: GlyphOf = rasterGlyph,
+  colours: ColourTables = spots(),
+): Picture {
   const pixels = new Uint32Array(c.width * c.height);
   let fill = 0;
   let fontColor = 0xffffff;
@@ -201,7 +282,7 @@ export function drawTextCase(metrics: Metrics, c: GdiCase, glyphOf: GlyphOf = ra
         fill = o.color & 0xffffff;
         break;
       case 'fontcolor':
-        fontColor = o.color & 0xffffff;
+        fontColor = resolveColour(o.color, colours);
         break;
       case 'font':
         font = { name: o.name, size: o.size, style: o.style };

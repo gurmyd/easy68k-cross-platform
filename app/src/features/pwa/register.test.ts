@@ -82,7 +82,7 @@ const SW_URL = 'https://example.test/easy68k-mac/sw.js';
 function setup(options: { kind?: 'web' | 'desktop'; controlled?: boolean; scriptUrl?: string | null } = {}) {
   const container = new FakeContainer();
   if (options.controlled) container.controller = {};
-  const toasts: { text: string; action: { label: string; run(): void } }[] = [];
+  const toasts: { text: string; action: { label: string; run(): void }; options: unknown }[] = [];
   const timers: { delay: number; fn: () => void }[] = [];
   const warnings: string[] = [];
   const env: PwaEnvironment & { reloads: number } = {
@@ -95,7 +95,7 @@ function setup(options: { kind?: 'web' | 'desktop'; controlled?: boolean; script
   };
   const deps: PwaDeps = {
     platformKind: options.kind ?? 'web',
-    toast: (text, action) => void toasts.push({ text, action }),
+    toast: (text, action, toastOptions) => void toasts.push({ text, action, options: toastOptions }),
     setTimer: (delay, fn) => {
       const timer = { delay, fn };
       timers.push(timer);
@@ -184,12 +184,22 @@ describe('update notice', () => {
     t.container.registration.waiting = worker;
     worker.become('installed'); // a second statechange report changes nothing
     expect(t.toasts.map((toast) => [toast.text, toast.action.label])).toEqual([[UPDATE_NOTICE, UPDATE_ACTION]]);
-    // An hour passes: the notice (a toast that has closed by itself by now) comes again; still
-    // nothing reloads and the waiting version is not told to take over.
+    // The notice stays until it is answered (gate I1, DV1-toast-duration.md).
+    expect(t.toasts[0]?.options).toEqual({ duration: 0 });
+    // An hour passes: only the update check repeats. The notice, still on screen, is not shown a
+    // second time; nothing reloads and the waiting version is not told to take over.
     t.timers[0]?.fn();
+    expect(t.container.registration.updates).toBe(1);
     expect(t.env.reloads).toBe(0);
     expect(worker.messages).toEqual([]);
-    expect(t.toasts.map((toast) => toast.text)).toEqual([UPDATE_NOTICE, UPDATE_NOTICE]);
+    expect(t.toasts.map((toast) => toast.text)).toEqual([UPDATE_NOTICE]);
+  });
+
+  it('a notice for another page taking over stays too', async () => {
+    const t = setup({ controlled: true });
+    await t.handle.registration;
+    t.container.changeController({});
+    expect(t.toasts.map((toast) => [toast.text, toast.options])).toEqual([[UPDATE_NOTICE, { duration: 0 }]]);
   });
 
   it('Reload lets the waiting version take over and reloads when it has', async () => {
@@ -260,6 +270,20 @@ describe('the feature module', () => {
     const app = createTestApplication({ features: [feature] });
     await Promise.resolve();
     expect(container.registered.map((entry) => entry.url)).toEqual([SW_URL]);
+    app.dispose();
+  });
+
+  it('passes the lasting notice to the dialog service (duration 0)', async () => {
+    const container = new FakeContainer();
+    container.controller = {};
+    container.registration.waiting = new FakeWorker();
+    stubPage(container);
+    const app = createTestApplication({ features: [feature] });
+    await vi.waitFor(() => expect(app.dialogs.toasts.getState()).toHaveLength(1));
+    const [entry] = app.dialogs.toasts.getState();
+    expect(entry?.text).toBe(UPDATE_NOTICE);
+    expect(entry?.action?.label).toBe(UPDATE_ACTION);
+    expect(entry?.duration).toBe(0);
     app.dispose();
   });
 

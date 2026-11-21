@@ -52,16 +52,22 @@ export interface SaveDialogProps {
   /** The suggested file name (from request.suggested). */
   initialName: string;
   registry: ProviderRegistry;
+  /** The folder chooser of chooseFolder(): the dialog returns a folder (decideSave's `folderMode`). */
+  folder?: boolean;
 }
 export type FileDialogProps = OpenDialogProps | SaveDialogProps;
+
+/** The one filter of the folder chooser: no pattern, so that only folders are listed. */
+export const FOLDER_FILTER: FileFilter = { label: 'Folder', patterns: [] };
 
 /** The file dialogs plus what the Files feature itself uses. */
 export interface FileDialogService extends FileDialogs {
   readonly registry: ProviderRegistry;
   /**
    * A folder (Help > Examples... in the desktop app, 5.8; FileDialogs.chooseFolder). The native
-   * provider's folder dialog where there is one; elsewhere the port's Save dialog, whose typed name
-   * is the folder, created if it does not exist. null = cancelled.
+   * provider's folder dialog where there is one; elsewhere the port's Save dialog in folder mode:
+   * OK with an empty name takes the folder shown, a typed name is the folder, created if it does
+   * not exist. null = cancelled.
    */
   chooseFolder(request: FolderRequest): Promise<VPath | null>;
   /** The folder the last dialog ended in (the next one starts there). */
@@ -74,6 +80,36 @@ export function createFileDialogService(ctx: AppContext, registry = createProvid
     const provider = registry.get(NATIVE_PROVIDER_ID);
     return provider && provider.available() ? provider : undefined;
   };
+  /**
+   * A native dialog opened from Simulator mode holds the program like any modal dialog (3.8.5 last
+   * sentence, 4.4.5). The port's own dialogs are held by ctx.dialogs.open; a native one is not shown
+   * through it, so the hold is taken here.
+   */
+  const heldWhileOpen = async <T>(show: () => Promise<T>): Promise<T> => {
+    const release = ctx.store.getState().mode === 'simulator' ? ctx.sim.controller.hold() : undefined;
+    try {
+      return await show();
+    } finally {
+      release?.();
+    }
+  };
+  /** The port's own Save dialog (the Save dialog of save(), or the folder chooser of chooseFolder()). */
+  const showSaveDialog = async (request: SaveRequest, folder: boolean, folderStart?: VPath): Promise<VPath | null> => {
+    const suggested = request.suggested && isVPath(request.suggested) ? request.suggested : undefined;
+    const startDir = await chooseStartDir(ctx.vfs, [folderStart, suggested ? dirname(suggested) : undefined, last]);
+    const props: SaveDialogProps = {
+      kind: 'save',
+      request,
+      startDir,
+      initialName: suggested ? basename(suggested) : '',
+      registry,
+      ...(folder ? { folder: true } : {}),
+    };
+    const result = await ctx.dialogs.open<SaveDialogProps, VPath | null>(SAVE_DIALOG_ID, props);
+    if (!result) return null;
+    last = folder ? result : dirname(result);
+    return result;
+  };
   return {
     registry,
     lastDir: () => last,
@@ -81,7 +117,10 @@ export function createFileDialogService(ctx: AppContext, registry = createProvid
 
     async open(request) {
       const nativeProvider = native();
-      if (nativeProvider?.open) return nativeProvider.open(request);
+      if (nativeProvider?.open) {
+        const nativeOpen = nativeProvider.open.bind(nativeProvider);
+        return heldWhileOpen(() => nativeOpen(request));
+      }
       const startDir = await chooseStartDir(ctx.vfs, [request.startDir, last]);
       const props: OpenDialogProps = { kind: 'open', request, startDir, registry };
       const result = await ctx.dialogs.open<OpenDialogProps, VPath[] | null>(OPEN_DIALOG_ID, props);
@@ -92,36 +131,26 @@ export function createFileDialogService(ctx: AppContext, registry = createProvid
 
     async save(request) {
       const nativeProvider = native();
-      if (nativeProvider?.save) return nativeProvider.save(request);
-      const suggested = request.suggested && isVPath(request.suggested) ? request.suggested : undefined;
-      const startDir = await chooseStartDir(ctx.vfs, [suggested ? dirname(suggested) : undefined, last]);
-      const props: SaveDialogProps = {
-        kind: 'save',
-        request,
-        startDir,
-        initialName: suggested ? basename(suggested) : '',
-        registry,
-      };
-      const result = await ctx.dialogs.open<SaveDialogProps, VPath | null>(SAVE_DIALOG_ID, props);
-      if (!result) return null;
-      last = dirname(result);
-      return result;
+      if (nativeProvider?.save) {
+        const nativeSave = nativeProvider.save.bind(nativeProvider);
+        return heldWhileOpen(() => nativeSave(request));
+      }
+      return showSaveDialog(request, false);
     },
 
     async chooseFolder(request) {
       const nativeProvider = native();
       if (nativeProvider?.chooseFolder) {
-        // FS1's own native provider (index.ts) takes the request or its title alike.
-        const choose = nativeProvider.chooseFolder as (arg: FolderRequest | string) => Promise<VPath | null>;
-        return choose.call(nativeProvider, request);
+        const nativeChoose = nativeProvider.chooseFolder.bind(nativeProvider);
+        return heldWhileOpen(() => nativeChoose(request));
       }
-      const chosen = await this.save({
-        title: request.title,
-        filters: [{ label: 'Folder', patterns: ['*'] }],
-        defaultExt: '',
-        ...(request.startDir ? { suggested: `${request.startDir}/New Folder` } : {}),
-        overwritePrompt: null,
-      });
+      // The port's Save dialog in folder mode (decideSave's `folderMode`): OK with an empty name takes
+      // the folder shown, a typed existing folder is taken, a typed new name is created.
+      const chosen = await showSaveDialog(
+        { title: request.title, filters: [FOLDER_FILTER], defaultExt: '', overwritePrompt: null },
+        true,
+        request.startDir,
+      );
       if (chosen === null) return null;
       const stat = await ctx.vfs.stat(chosen).catch(() => null);
       if (stat?.kind === 'file') {
@@ -185,6 +214,10 @@ export async function decideOpen(
 /**
  * The Save button (editor-ui §6.4): the default extension rule, then the overwrite question.
  * A typed folder is entered. The result path keeps the stored spelling of an existing file.
+ *
+ * With `folderMode` set (the folder chooser of chooseFolder) the result is a folder instead: an empty
+ * name takes the folder shown, a typed existing folder is taken rather than entered, and a typed
+ * name that does not exist is returned for the caller to create. A typed existing file is an error.
  */
 export async function decideSave(
   vfs: Vfs,
@@ -193,19 +226,23 @@ export async function decideSave(
   typed: string,
   filterIndex: number,
   request: SaveRequest,
+  folderMode = false,
 ): Promise<DialogStep> {
   const raw = typed.trim().replace(/^"(.*)"$/, '$1');
-  if (raw === '') return { kind: 'nothing' };
+  if (raw === '') return folderMode ? { kind: 'done', paths: [dir] } : { kind: 'nothing' };
   if (hasWildcard(raw))
     return { kind: 'filter', filter: { label: raw, patterns: raw.split(';').map((p) => p.trim()) } };
   const lexical = resolveLexically(dir, raw);
   if (lexical === null || !locationOf(vfs, lexical)) {
     return { kind: 'error', title: request.title, text: `${raw}\nThe file name is not valid.` };
   }
-  // A typed folder is entered.
+  // A typed folder is entered (the folder chooser takes it).
   const asFolder = await vfs.resolve(dir, raw);
   if (asFolder !== null && (await vfs.stat(asFolder).catch(() => null))?.kind === 'dir') {
-    return { kind: 'navigate', dir: asFolder };
+    return folderMode ? { kind: 'done', paths: [asFolder] } : { kind: 'navigate', dir: asFolder };
+  }
+  if (folderMode && asFolder !== null) {
+    return { kind: 'error', title: request.title, text: `${raw}\nThis is a file, not a folder.` };
   }
   const name = applyDefaultExtension(basename(lexical), request, filterIndex);
   const reason = invalidNameReason(name);
@@ -222,7 +259,9 @@ export async function decideSave(
   }
   const existing = await vfs.resolve(folderFound, name);
   const existingStat = existing !== null ? await vfs.stat(existing).catch(() => null) : null;
-  if (existing !== null && existingStat?.kind === 'dir') return { kind: 'navigate', dir: existing };
+  if (existing !== null && existingStat?.kind === 'dir') {
+    return folderMode ? { kind: 'done', paths: [existing] } : { kind: 'navigate', dir: existing };
+  }
   if (existing !== null && existingStat?.kind === 'file') {
     const prompt =
       request.overwritePrompt === undefined

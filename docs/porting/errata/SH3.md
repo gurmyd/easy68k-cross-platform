@@ -3,11 +3,13 @@
 What SH3 found while writing `app/src/core/sim-host/text/`, `fonts/` and `io.ts`: where
 `docs/ARCHITECTURE.md` or a spec is silent, ambiguous or cannot be met as written, what the
 repository does, and why. Entries under **Contract** concern declarations other packages compile
-against; none of them changes `app/src/contracts/`.
+against; SH3 never edits `app/src/contracts/` itself. Gate I1 took up entries 1, 4 and 5 there
+(errata W1.md entry 11).
 
 T2 measured Windows while SH3 was written and recorded what it found in
 `docs/porting/errata/T2.md` and `tests/oracle/gdi-capture/README.md` ("what SH3 has to do").
-Entries 5-9 and 14 say how SH3 took that up.
+Entries 5-9, 14 and 25-27 say how SH3 took that up; entry 27 gives the result against T2's GDI
+text references.
 
 ## Contract
 
@@ -24,6 +26,10 @@ Entries 5-9 and 14 say how SH3 took that up.
   The text is built from `MAX_SURFACE` of `surface/surface.ts`.
 - Proposed: add `message: (text: string) => void` to `OutputDeviceDeps`; SH8's `session.ts` passes
   the writer of the simulator message area.
+- **Resolved at gate I1:** `OutputDeviceDeps.message?` is in the contract (optional, so that a
+  caller without it still compiles), `OutputDeviceExtras` is gone from `io.ts`, and SH8's
+  `core/run/compose.ts` passes the writer of the message area. `io.test.ts` covers both the message
+  and its absence.
 
 ### 2. Who runs the prompt timer (3.5.2, 3.5.3, 4.5.3)
 
@@ -52,7 +58,8 @@ Entries 5-9 and 14 say how SH3 took that up.
 
 - Says: "`fonts/atlas-provider.ts` implements `GlyphProvider`"; no class name, no constructor.
   `core/` may not use `fetch`.
-- Does: `new AtlasGlyphProvider(load, options?)`, where `load: FontFileLoader` is
+- Does: `new AtlasGlyphProvider(load, options?)`, where `load: FontFileLoader` (declared in the
+  contracts since gate I1; `atlas-provider.ts` re-exports it) is
   `(path: string) => Promise<Bytes | null>` for a path below `app/public/fonts/` (`metrics.json`,
   `scalable/index.json`, `bitmap/Fixedsys-15.bin`, ...); `null` means "no such file". The
   composition root supplies the loader (a `fetch` relative to the page). The synchronous core is
@@ -74,11 +81,15 @@ Entries 5-9 and 14 say how SH3 took that up.
   - SH1's surface fills the sum of the advances of the glyphs it is given (SH1 erratum 3).
     `TextScreen` therefore appends **one glyph without ink, as wide as the overhang**, to the
     glyphs of every text in such a font, and passes the true pen movement as `extent`.
-  - The overhang comes from an optional method beside the contract, `StyleOverhang.textOverhang(font)`
-    (`fonts/types.ts`), which `AtlasGlyphProvider` and `FontSet` have. `TextScreen` calls it when
-    the provider has it and assumes 0 otherwise (the stub provider of `stub-host.test.ts`).
+  - The overhang comes from `textOverhang(font)`, which `AtlasGlyphProvider` and `FontSet` have.
+    `TextScreen` calls it when the provider has it and assumes 0 otherwise (the stub provider of
+    `stub-host.test.ts`).
 - Proposed: `GlyphProvider.textOverhang(font): number`, and a sentence in 3.4 that the opaque box
   is as wide as the advances of the glyphs given.
+- **Resolved at gate I1:** `GlyphProvider.textOverhang?(font)` is in the contract as an optional
+  member, and the comment of `SurfaceApi.textOut` says that the box is the advances of the glyphs
+  given. The local interface `StyleOverhang` of `fonts/types.ts` is gone. What remains local is
+  `FallbackGlyphs.delInHighText(font)` (entry 25).
 
 ## File formats (6.5.3) and T2's files
 
@@ -162,7 +173,7 @@ Entries 5-9 and 14 say how SH3 took that up.
   empty glyphs of the measured cell.
 - Known limit (T2 erratum 4, second item): the advances of the proportional face (Arial, behind
   `Lucida Sans Typerwriter` and `Terminal`) are known at the atlas sizes only; at other sizes they
-  are scaled, so the pen after task 95 in such a font can differ from Windows by rounding.
+  are estimated (entry 26), so the pen after task 95 in such a font can differ from Windows.
 
 ### 12. "A name that is not in the table is the Options font's name"
 
@@ -185,15 +196,26 @@ Entries 5-9 and 14 say how SH3 took that up.
 
 - Says: 3.5.1, "bytes below `$20` paint nothing but count one cell in the extent" (the PORT rule of
   trap15-b §6.7).
-- Measured (trap15-b §6.7 itself, confirmed and extended by T2): only `$09 $0A $0D $1C-$1F` take
-  no width, and only inside a text of two or more bytes; `$0C` is the font's solid block in a full
-  cell; a text of zero-width bytes only fills one cell; with underline or strike-out a zero-width
-  byte that is not among the trailing ones does not count in the extent; the italic overhang
-  (entry 5) is left out when the text, without its trailing zero-width bytes, has two or more
-  bytes and one of them is zero-width or `$7F`.
-- Does: exactly those rules (`TextScreen.drawText`), because T2's font data and T2's GDI references
-  make them reproducible pixel for pixel. The usual case, a text that ends in CR, LF, is the same
-  under either rule.
+- Measured (trap15-b §6.7 itself, confirmed and extended by T2, errata T2.md section 2, "Additions
+  to 6.7"; corrected by T2 after its first verification, and this entry with it):
+  - only `$09 $0A $0D $1C-$1F` take no width, and only inside a text of two or more bytes: they
+    paint nothing and the bytes after them are drawn where the drawn bytes before them end;
+    `$0C` is the font's solid block in a full cell;
+  - the pen moves by the advances of all bytes, the zero-width ones included, **except that the
+    zero-width bytes count nothing when the text also has a byte of `$80` or above**, in every
+    style (the first version of this entry, after T2's first version, had "with underline or
+    strike-out" as the condition; fresh captures showed the condition is the high byte);
+  - the opaque box is as wide as the advances of the drawn bytes plus the style overhang of the
+    font (entry 5); a text of zero-width bytes only fills the cell of its first byte plus that
+    overhang (bold `$0A` in Fixedsys 9: 10 columns);
+  - with italic, the overhang is left out when two or more bytes are drawn and the text has a
+    zero-width byte (trailing ones included) or has `$7F` and a drawn byte other than `$7F`: the
+    box is then the wider of the advances and the first advance plus the overhang;
+  - `$7F` in an outline face, in a text with a byte of `$80` or above: entry 25.
+- Does: exactly those rules (`TextScreen.layout`, used by `drawText`; `charOut`, the echo and the
+  prompt hand the surface one byte and take the same path), because T2's font data and T2's GDI
+  references make them reproducible pixel for pixel; entry 27 has the numbers. The usual case, a
+  text that ends in CR, LF, is the same under either rule.
 - Not reproduced (T2 lists them as machine dependent): the bytes Windows draws from an
   anti-aliased fallback font (`$01-$08 $0B $0E-$1B`) are empty cells of their single-byte width
   instead of a narrow hollow box; the five undefined Windows-1252 bytes; the 1-2 pixels by which
@@ -221,11 +243,22 @@ Entries 5-9 and 14 say how SH3 took that up.
 
 - Says: trap15-a task 21, "values with a non-zero top byte are VCL/GDI special colours;
   UNVERIFIED - the port should use the low 24 bits".
-- Does: that, for task 21 and for the Options colour; `TextState.fontColor` holds the masked value.
-- Note for the spec owner: the VCL sets the text colour of a canvas through the same
-  `ColorToRGB` that trap15-b §4.6 describes for pens and brushes, so the rule there very probably
-  applies to the font colour too. SH1's `textOut` already applies that rule to the colour it is
-  given (SH1 erratum 3); passing the unmasked value from `TextScreen` is then a one-line change.
+- Found: the original assigns the register to the canvas font (`Font->Color = (TColor)c`,
+  `simIOu.cpp:935-994`), and the VCL selects a font colour into the device context with
+  `SetTextColor(Handle, ColorToRGB(Font.Color))` - the same `ColorToRGB` that trap15-b §4.6
+  establishes from the binary for pens, brushes and pixels, followed by the same GDI handling of a
+  palette index. The rule of §4.6 therefore applies to text as well: a set bit 31 is a system
+  colour, a set bit 24 an entry of the stock palette, any other top byte is ignored. Using the low
+  24 bits would draw `$80000005` (system colour 5, white) as `$000005`, nearly black.
+- Does (changed at gate I1 from the first version, which masked the colour): `TextState.fontColor`
+  and `optionsFontColor` hold the 32 bits as given, unsigned (`textColor` in `text-screen.ts`), and
+  SH1's `textOut` resolves the colour with the rule of §4.6 when it draws (SH1 erratum 4). Task 21,
+  the Options colour, the echo and the prompt all take that path; `text-screen.test.ts` has nine
+  colours with a non-zero top byte.
+- Not verified: the rule rests on the VCL and on §4.6, not on a capture of text on Windows. T2's
+  colour suites draw pixels, lines, rectangles and fills, no text.
+  `docs/requests/SH3-gdi-text-colour.md` asks T2 for text cases with such colours; if Windows
+  disagrees, `textColor` is the one place to change.
 
 ### 18. Three places where the original would fail and the port does not
 
@@ -268,12 +301,110 @@ Entries 5-9 and 14 say how SH3 took that up.
   `app/src/core/sim-host/text/check-text.mjs` (wave-zero convention). It runs the two scenarios of
   `text/pixel-scenario.ts` under Node, in Chromium and in WebKit and compares pixels;
   `pixel-scenario.test.ts` holds the Node half with fixed hashes. `docs/requests/SH3-text-check.md`
-  asks for the root script and the CI step.
+  asked for the root script and the CI step; gate I1 added both (`npm run check:text`, job
+  `browser-checks` on Ubuntu, macOS and Windows).
+- Since gate I1 the check also runs both scenarios on the real `Surface` with the fonts of
+  `app/public/fonts` (fetched by the browsers as the application fetches them), and replays the
+  four text suites of T2's GDI capture (entry 27) in each browser, which must give exactly the
+  pictures and pen positions of the Node run. Nothing in it depends on the operating system or on
+  the speed of the machine: the fonts are data files, the comparisons are of whole numbers, and no
+  step waits for a time.
 
 ### 23. Test doubles of this package
 
 - `text/testing.ts`: `TestSurface` (a `SurfaceApi` for tests; pixels, lines and rectangles drawn
-  plainly, not GDI), `ManualScheduler`, `createTextRig()`. `fonts/synthetic.ts`: a complete
+  plainly, not GDI; colours resolved with SH1's `resolveColor`, as the real surface does),
+  `ManualScheduler`, `createTextRig()`. `text/gdi-replay.ts`: replays a case of T2's GDI capture
+  on the real `OutputDevice`, `TextScreen` and `Surface` (entry 27). `fonts/synthetic.ts`: a complete
   synthetic font set, by default in the layout of T2's files (native raster atlases with rules,
-  outline atlases with their index), optionally with only what 6.5.3 describes. Neither is imported
-  by the application. Other packages may use them in tests.
+  outline atlases with their index), optionally with only what 6.5.3 describes. None of them is
+  imported by the application. Other packages may use them in tests.
+
+## Gate I1
+
+### 24. `OutputDevice.setWindowSize` without `setupWindow()` and `WindowSizeChecked()` (trap15-b §4.3)
+
+- Original: `setWindowSize` (`simIOu.cpp:187-233`) ends with `setupWindow()`, which lays the window
+  out again in its windowed or full-screen form (in full screen it switches the display to the new
+  size), and `Form1->WindowSizeChecked()`, which sets the radio marks of the size menu.
+- Does: neither. The Output panel lays the surface out from its size on every frame, in a window
+  and in full screen, and the size menu reads its marks from the same size; so a program sees the
+  same thing. The full-screen flag is the engine's (`host.setupWindow(fullScreen)`): `OutputDevice`
+  passes it on in `setupWindow` only, and must not send a remembered value of it on a size change.
+  `io.test.ts` ("does not ask the Output panel to lay itself out again") holds that.
+- Nothing a program can observe differs (task 33 answers the clamped size either way); no row in
+  `docs/differences/SH3.md`.
+
+### 25. `$7F` in an outline face, in a text with a byte of `$80` or above (T2 erratum, "Additions to 6.7")
+
+- Found by T2 in gate I1: in such a text Windows draws `$7F` from a fallback font, and the byte then
+  takes that glyph's width, for the pen and for the box, instead of the face's advance (Courier New
+  9: 4 pixels, not 7). The width is measured per atlas: `delInHighString` in `scalable/index.json`.
+  The raster faces do not do this.
+- Does: `parseOutlineIndex` reads `delInHighString` (and the point size `size`, entry 26) when
+  present. `FontSet.delInHighText(font)` gives, for an outline face whose atlas has the field, a
+  glyph without ink of that width (scaled with the em at a size without an atlas; the line of an
+  underlined or struck-out font is drawn across it); null otherwise. `TextScreen` uses it in place
+  of the byte's own glyph for every `$7F` of a text that has a byte of `$80` or above.
+- Contract: `GlyphProvider` has no such method; it is the optional local interface
+  `FallbackGlyphs` (`fonts/types.ts`), which `AtlasGlyphProvider` and `FontSet` implement.
+  `TextScreen` draws the byte's own glyph with a provider that lacks it. Proposed:
+  `GlyphProvider.delInHighText?(font): Glyph | null`, beside `textOverhang`.
+- Not reproduced: the glyph itself (another font's, anti-aliased) is left blank; its pixels are
+  machine dependent and T2's `text-outline` suite draws the text in the fill colour.
+
+### 26. Outline faces at a size without an atlas (3.5.1; T2 erratum 1.3)
+
+- T2 stores outline atlases at 8-18, 24 and 36 points only (no 48 and 72 points, no `-u`/`-s`
+  atlases), to stay within its size budget; its erratum 1.3, which the gate's reviewer proposed to
+  accept, leaves the rest to the provider.
+- Does:
+  - a size above 36 points takes the 36 point atlas of the same face and style (bold, italic, or
+    plain for underline and strike-out, whose line comes from the list, entry 10), resampled to
+    the measured cell. `font-set.listed.test.ts` and `gdi-references.test.ts` check every size from
+    37 to 255 in every style of the five outline names;
+  - an advance as wide as the atlas cell becomes the measured column width (every glyph of a
+    fixed-pitch face, and the "W" of the proportional one, whose width is what the metric table
+    holds). Any other advance (a letter of the proportional face) grows with the em, `emPixels(size)
+    = MulDiv(size, 96, 72)` as the VCL asks Windows for the font, when the list gives the atlas its
+    point size; without it, like the cell. The picture is stretched with its advance. At 1 point an
+    advance may round to 0, as on Windows.
+- Result against Windows (`text-outline`, the proportional substitute at 1, 5, 100 and 255 points,
+  where no atlas exists): the pen is Windows' in 16 of 32 cases; the others are 1-8 pixels off on
+  texts 230-620 pixels wide (largest: 255 points bold, 611 against 619, 1.3 %). The test requires
+  2 %. Recorded in `docs/differences/SH3.md`.
+
+### 27. The text screen against T2's GDI text references (6.5.3; the I1 integration test SH3 proposed)
+
+`text/gdi-references.test.ts` (unit test, Node) and `check-text.mjs` (Node, Chromium, WebKit)
+replay every text case of `tests/conformance/gdi/golden` as a 68000 program causes it - task 21 for
+font and colour, task 95 for the text - on the real `OutputDevice`, `TextScreen` and `Surface`
+with the application's `AtlasGlyphProvider` loading `app/public/fonts`, and compare with what GDI
+drew on Windows 11. Numbers at gate I1 round 2:
+
+| Suite | What is compared | Result |
+|---|---|---|
+| `text` (raster faces: Fixedsys 0-121 pt, Courier 0-199 pt, five styles, every byte, random strings, every zero-width rule) | every pixel and the pen | 2,122 of 2,122 equal |
+| `text-outline`, Courier New, Lucida Console, Consolas (15 sizes, four styles) | cell rectangles and pen | 198 of 198 equal |
+| `text-outline`, the proportional substitute at the 11 sizes with an atlas (incl. size 0) | cell rectangles and pen | 88 of 88 equal |
+| `text-outline`, the proportional substitute at 1, 5, 100, 255 pt | pen | 16 of 32 equal, all within 2 % (entry 26) |
+| `text-outline-glyphs` (outline faces with visible glyphs) | pen | 75 of 75 equal |
+| `text-control` (machine-dependent strings; not required) | every pixel and the pen | 44 of 252 equal (pictures 46, pens 217) |
+
+The 208 `text-control` cases that differ, by T2's reason (`textUnmodelled` in `cases.ts`):
+
+- a byte Windows draws from an anti-aliased fallback font (`$01-$08 $0B $0E-$1B`): 90 cases, 16
+  equal, pens equal in 85. The port paints an empty cell of the byte's own width where Windows
+  paints a narrow smoothed box; the 5 pens that differ are strings where the fallback glyph's
+  width is not the byte's width;
+- a byte Windows-1252 leaves undefined (`$81 $8D $8F $90 $9D`): 34 cases, 4 equal. Inside a string
+  GDI takes such a byte's width from elsewhere; not modelled (T2);
+- zero-width bytes only, at the sizes where Windows 11 draws a thin fallback bar instead of filling
+  the cell (`ZERO_WIDTH_BAR_SIZES`): 111 cases, 16 equal, pens equal in all 111. The port fills the
+  cell, as at every other size;
+- italic strings with `$86 $87 $88 $98`, whose overhang Windows decides by script itemization: 11
+  cases, 2 equal, pens equal in all 11; the port leaves the overhang in;
+- `$0C`, `@` or `$80` that Windows may draw from a fallback font: 6 cases, all equal.
+
+These depend on the machine's font smoothing or on Windows' script itemization, which T2 did not
+model; the port keeps the rule of the ordinary case. `docs/differences/SH3.md` lists them.

@@ -7,7 +7,16 @@
 // pages; the model (core/easybin/model.ts) has every rule, this component measures, draws and
 // forwards keys, clicks and the wheel.
 
-import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react';
+import {
+  memo,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+} from 'react';
 import type { AppContext } from '../../contracts';
 import { byteForCodePoint } from '../../core/codec/cp1252';
 import {
@@ -60,25 +69,46 @@ function runCommand(ctx: AppContext, id: string): void {
   void ctx.commands.run(id);
 }
 
-function Row({ row }: { row: ViewRow }) {
+const sameCells = (a: readonly string[], b: readonly string[]) =>
+  a.length === b.length && a.every((cell, i) => cell === b[i]);
+
+/**
+ * True when two rows draw the same. viewRows() builds new row objects on every change, so without
+ * this every key typed would redraw all rows; with it only the row that changed is redrawn, which
+ * keeps typing responsive on slow machines (the check measures key-down to painted frame).
+ */
+export function sameRow(a: ViewRow, b: ViewRow): boolean {
   return (
-    <div className="e68-easybin__row" data-invalid={row.invalid ? 'true' : undefined}>
-      <span className="e68-easybin__addr">{row.addressText}</span>
-      {row.hex.map((cell, i) => (
-        <span key={i} className={`e68-easybin__byte e68-easybin__byte--${row.tones[i]}`}>
-          {`${cell} `}
-        </span>
-      ))}
-      <span className="e68-easybin__ascii">
-        {row.ascii.map((ch, i) => (
-          <span key={i} className={row.tones[i] === 'invalid' ? 'e68-easybin__byte--invalid' : undefined}>
-            {ch === '\x7f' ? DEL_GLYPH : ch}
-          </span>
-        ))}
-      </span>
-    </div>
+    a.addressText === b.addressText &&
+    a.invalid === b.invalid &&
+    sameCells(a.hex, b.hex) &&
+    sameCells(a.tones, b.tones) &&
+    sameCells(a.ascii, b.ascii)
   );
 }
+
+const Row = memo(
+  function Row({ row }: { row: ViewRow }) {
+    return (
+      <div className="e68-easybin__row" data-invalid={row.invalid ? 'true' : undefined}>
+        <span className="e68-easybin__addr">{row.addressText}</span>
+        {row.hex.map((cell, i) => (
+          <span key={i} className={`e68-easybin__byte e68-easybin__byte--${row.tones[i]}`}>
+            {`${cell} `}
+          </span>
+        ))}
+        <span className="e68-easybin__ascii">
+          {row.ascii.map((ch, i) => (
+            <span key={i} className={row.tones[i] === 'invalid' ? 'e68-easybin__byte--invalid' : undefined}>
+              {ch === '\x7f' ? DEL_GLYPH : ch}
+            </span>
+          ))}
+        </span>
+      </div>
+    );
+  },
+  (previous, next) => sameRow(previous.row, next.row),
+);
 
 /** A read-only value of the `S-Record File` group: `$`, an optional grey `00`, the digits. */
 function ReadOnlyValue({ label, value, zeroByte }: { label: string; value: string; zeroByte: boolean }) {
@@ -159,7 +189,9 @@ export function EasybinWorkspace() {
     );
   };
 
+  // F1 is not handled here: the dispatcher binds it to `bin.help.help` in EASyBIN mode (tables/keys.ts).
   const onAddressKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.defaultPrevented || event.nativeEvent.isComposing) return;
     switch (event.key) {
       case 'PageUp':
       case 'PageDown':
@@ -176,11 +208,6 @@ export function EasybinWorkspace() {
         event.preventDefault();
         model.touch();
         break;
-      case 'F1':
-        // Reached only while no chord binds F1 in EASyBIN mode (docs/requests/B1-keys.md).
-        event.preventDefault();
-        runCommand(ctx, 'bin.help.help');
-        break;
     }
   };
 
@@ -190,11 +217,6 @@ export function EasybinWorkspace() {
     if (ARROWS.has(event.key)) {
       event.preventDefault();
       model.moveCursor(event.key as Parameters<typeof model.moveCursor>[0]);
-      return;
-    }
-    if (event.key === 'F1') {
-      event.preventDefault();
-      runCommand(ctx, 'bin.help.help');
       return;
     }
     const byte = keyByte(event);
@@ -350,7 +372,7 @@ export function EasybinWorkspace() {
                 }}
               />
             )}
-            <span id={statusId} className="e68-easybin__status" aria-live="polite">
+            <span id={statusId} className="e68-sr" aria-live="polite">
               {cursorInfo}
             </span>
           </div>
@@ -398,12 +420,4 @@ export function EasybinWorkspace() {
       </div>
     </div>
   );
-}
-
-/** The status bar of EASyBIN mode: the original's window title (TITLE, or the opened file). */
-export function EasybinStatus() {
-  const ctx = useAppContext();
-  const { model } = easybinOf(ctx);
-  const caption = useSyncExternalStore(model.subscribe, () => model.getState().caption);
-  return <span className="e68-statusbar__cell e68-statusbar__cell--grow">{caption}</span>;
 }

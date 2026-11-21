@@ -89,6 +89,12 @@ export const SUITES: readonly { readonly name: string; readonly machine: boolean
     about: 'task 95 text in the outline faces drawn in the fill colour: cell rectangles and pen positions only (6.5.3)',
   },
   {
+    name: 'text-outline-zero',
+    machine: false,
+    about:
+      'as text-outline, for strings of zero-width bytes and $7F without a byte of $80 or above (gate I1 review round 2, defect 14)',
+  },
+  {
     name: 'text-outline-glyphs',
     machine: true,
     about: 'outline-face text with visible glyphs (font smoothing); for looking at, not for comparing',
@@ -884,8 +890,42 @@ function text(): GdiCase[] {
       ]);
     }
   }
+  // The font colour of task 21 in the colour forms of 4.6 (request SH3-gdi-text-colour.md): one
+  // case each, Fixedsys 9, fill $800000, "AB" at (2, 2).
+  for (const color of TEXT_COLOUR_FORMS) {
+    add(24, 20, [
+      { op: 'fill', color: 0x800000 },
+      { op: 'fontcolor', color },
+      { op: 'text', x: 2, y: 2, bytes: ASCII('AB') },
+    ]);
+  }
   return cases;
 }
+
+/** Font colours with a non-zero top byte (request SH3-gdi-text-colour.md); theme-independent. */
+export const TEXT_COLOUR_FORMS: readonly number[] = [
+  0x01000005, 0x0100000d, 0x01000014, 0x0100ff05, 0x7f000007, 0x02336699, 0x80000005, 0x80000008, 0x8000000f,
+  0xff336699,
+];
+
+/**
+ * Outline-face strings of zero-width bytes and $7F without a byte of $80 or above (review round 2 of
+ * gate I1, defect 14: Consolas' $0D has advance 0, a zero-width byte takes no room in the cell even
+ * alone, and $7F always fills the fallback glyph's width; text-model.ts outlineCellAdvance).
+ */
+export const OUTLINE_ZERO_WIDTH_STRINGS: readonly (readonly number[])[] = [
+  [13],
+  [9],
+  [13, 10],
+  [13, 29, 13, 13, 13, 9],
+  [29, 9, 13, 9, 9],
+  [65, 13, 66],
+  [0x7f],
+  [0x7f, 0x7f],
+  [65, 0x7f, 66],
+  [13, 0x7f, 28],
+  [0x7f, 32],
+];
 
 function textOutline(glyphs: boolean): GdiCase[] {
   const suite = glyphs ? 'text-outline-glyphs' : 'text-outline';
@@ -931,6 +971,42 @@ function textOutline(glyphs: boolean): GdiCase[] {
   return cases;
 }
 
+/**
+ * The suite text-outline-zero: OUTLINE_ZERO_WIDTH_STRINGS in the three monospaced outline faces.
+ * $7F needs the width of the fallback glyph, which is known at the atlas sizes (8 and 10 here);
+ * the strings without $7F are also drawn at 13 and 72 pt, which have no atlas. A suite of its own
+ * so that SH3's gdi-references.test.ts, which reads text-outline, takes these cases up when the
+ * port follows the rules (T2 errata section 2).
+ */
+function textOutlineZero(): GdiCase[] {
+  const suite = 'text-outline-zero';
+  const cases: GdiCase[] = [];
+  for (const name of ['Courier New', 'Lucida Console', 'Consolas']) {
+    for (const size of [8, 10, 13, 72]) {
+      for (const style of [0, 1, 3, 4]) {
+        for (const bytes of OUTLINE_ZERO_WIDTH_STRINGS) {
+          if (bytes.includes(0x7f) && size !== 8 && size !== 10) continue;
+          cases.push({
+            id: `${suite}-${pad(cases.length)}`,
+            suite,
+            width: size >= 72 ? 480 : 160,
+            height: size >= 72 ? 140 : 40,
+            ops: [
+              { op: 'bg', color: 0x336699 },
+              { op: 'font', name, size, style },
+              { op: 'fill', color: 0x0000ff },
+              { op: 'fontcolor', color: 0x0000ff },
+              { op: 'moveto', x: 1, y: 1 },
+              { op: 'text', x: 8, y: 4, bytes: [...bytes] },
+            ],
+          });
+        }
+      }
+    }
+  }
+  return cases;
+}
+
 /** Every case of 6.5.1 and 6.5.3, in suite order. Deterministic. */
 export function generateCases(): GdiCase[] {
   return [
@@ -948,6 +1024,7 @@ export function generateCases(): GdiCase[] {
     ...clip(),
     ...text(),
     ...textOutline(false),
+    ...textOutlineZero(),
     ...textOutline(true),
   ];
 }

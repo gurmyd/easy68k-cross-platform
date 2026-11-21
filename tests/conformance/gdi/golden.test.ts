@@ -5,11 +5,29 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { COLOUR_FORMS, RASTER_SIZE_LIMIT, textUnmodelled, ZERO_WIDTH_BAR_SIZES, type GdiCase } from './cases';
+import {
+  COLOUR_FORMS,
+  OUTLINE_ZERO_WIDTH_STRINGS,
+  RASTER_SIZE_LIMIT,
+  TEXT_COLOUR_FORMS,
+  textUnmodelled,
+  ZERO_WIDTH_BAR_SIZES,
+  ZERO_WIDTH_BYTES,
+  type GdiCase,
+} from './cases';
 import { cellOf, loadAtlas, loadMetrics, loadScalableIndex, STYLE_NAMES, FONTS_DIR } from './fonts';
 import { cases, firstDifference, hasPack, hex6, references, spots, suiteNames } from './golden';
 import { decodeAtlas } from './pix';
-import { delOnFallback, drawTextCase, layoutText, outlineAdvance, outlineCells, textExtent } from './text-model';
+import {
+  delOnFallback,
+  drawTextCase,
+  layoutText,
+  OUTLINE_ZERO_ADVANCE,
+  outlineAdvance,
+  outlineCells,
+  resolveColour,
+  textExtent,
+} from './text-model';
 
 const T = 120_000;
 
@@ -326,14 +344,7 @@ describe('rasterisation rules of trap15-b 6 against the capture', () => {
     '4.6: the colour forms draw the resolved colour on pixel, line, outline, interior and flood fill',
     () => {
       const s = spots();
-      const resolve = (c: number) =>
-        c & 0x80000000
-          ? (c & 0xff) <= 30
-            ? (s.sysColors[c & 0xff] as number)
-            : 0
-          : c & 0x01000000
-            ? ((s.stockPalette[c & 0xffff] as number) ?? 0)
-            : c & 0xffffff;
+      const resolve = (c: number) => resolveColour(c, s);
       const refs = references('colors');
       expect(refs.length).toBe(COLOUR_FORMS.length);
       for (const r of refs) {
@@ -455,20 +466,20 @@ describe('text references against the font data', () => {
     () => {
       const failures: string[] = [];
       let checked = 0;
-      for (const r of references('text-outline')) {
+      for (const r of [...references('text-outline'), ...references('text-outline-zero')]) {
         const cells = outlineCells(metrics, r.case);
-        if (!cells) continue; // proportional face: per-byte advances exist only at the atlas sizes
+        if (!cells) continue; // proportional face, or a width that is not known at this size
         checked++;
-        const last = cells.boxes[cells.boxes.length - 1] as { x: number; y: number; w: number };
         const fill = 0x0000ff;
         const back = 0x336699;
         for (let y = 0; y < r.image.height; y++) {
           for (let x = 0; x < r.image.width; x++) {
             const inBox = cells.boxes.some((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h);
             const got = (r.image.pixels[y * r.image.width + x] as number) & 0xffffff;
-            // GDI widens a TrueType cell by the glyphs' ink overhang, and draws underline and
-            // strike-out outside it: those pixels may be the fill colour (errata T2 section 4).
-            if (cells.uncertain(x, y) && got === fill) continue;
+            // GDI widens a TrueType cell by the glyphs' ink overhang, and draws underline, strike-out
+            // and the smoothed ink edge outside it: those pixels may take any colour (errata T2
+            // section 2, last item).
+            if (cells.uncertain(x, y)) continue;
             if (got !== (inBox ? fill : back)) {
               failures.push(`${r.case.id} at ${x},${y}`);
               y = r.image.height;
@@ -476,8 +487,8 @@ describe('text references against the font data', () => {
             }
           }
         }
-        if (r.pen[0] !== last.x + last.w || r.pen[1] !== last.y)
-          failures.push(`${r.case.id}: pen ${r.pen}, expected ${last.x + last.w},${last.y}`);
+        if (r.pen[0] !== cells.pen[0] || r.pen[1] !== cells.pen[1])
+          failures.push(`${r.case.id}: pen ${r.pen}, expected ${cells.pen}`);
       }
       expect(checked).toBeGreaterThan(150);
       expect(failures.slice(0, 20)).toEqual([]);
@@ -588,6 +599,103 @@ describe('text references against the font data', () => {
         expect(r.pen[0]).not.toBe(last.x + last.bytes.length * cellOf(metrics, font).colWidth);
       }
       expect(checked).toBe(18);
+    },
+    T,
+  );
+
+  it(
+    'outline faces: zero-width bytes take no room in the cell, Consolas $0D advances 0, $7F fills the fallback width',
+    () => {
+      // Review round 2 of gate I1, defect 14: the model gave every byte the cell width, so Consolas
+      // strings of zero-width bytes put the pen too far and every cell with a zero-width byte or $7F
+      // was too wide. The previous rule is kept here to show that these cases tell the two apart.
+      const previous = (c: GdiCase) => {
+        let font = { name: 'Fixedsys', size: 9, style: 0 };
+        let pen = 0;
+        let width = 0;
+        for (const o of c.ops) {
+          if (o.op === 'font') font = o;
+          if (o.op === 'text') {
+            width = o.bytes.length * cellOf(metrics, font).colWidth;
+            pen = o.x + textExtent(o.bytes, () => cellOf(metrics, font).colWidth);
+          }
+        }
+        return { pen, width };
+      };
+      const isZeroWidthCase = (c: GdiCase) =>
+        c.ops.some((o) => o.op === 'text' && OUTLINE_ZERO_WIDTH_STRINGS.some((s) => s.join(',') === o.bytes.join(',')));
+      let checked = 0;
+      let penDiffers = 0;
+      let cellDiffers = 0;
+      for (const r of references('text-outline-zero')) {
+        expect([r.case.id, isZeroWidthCase(r.case)]).toEqual([r.case.id, true]);
+        const cells = outlineCells(metrics, r.case);
+        const text = r.case.ops.find((o) => o.op === 'text');
+        const onlyDel = text?.op === 'text' && text.bytes.every((b) => b === 0x7f || ZERO_WIDTH_BYTES.includes(b));
+        const onlyDelWithDel = onlyDel && text.bytes.includes(0x7f);
+        // A string that draws only $7F has the fallback font's cell height, which is not measured.
+        expect([r.case.id, cells !== null]).toEqual([r.case.id, !onlyDelWithDel]);
+        if (!cells) continue;
+        checked++;
+        expect([r.case.id, r.pen]).toEqual([r.case.id, cells.pen]);
+        const old = previous(r.case);
+        if (old.pen !== r.pen[0]) penDiffers++;
+        if (old.width !== (cells.boxes[0] as { w: number }).w) cellDiffers++;
+      }
+      // 11 strings at 8 and 10 pt, the 6 without $7F also at 13 and 72 pt; 3 strings draw only $7F.
+      expect(checked).toBe(3 * (2 * 4 * (11 - 3) + 2 * 4 * 6));
+      expect(penDiffers).toBeGreaterThan(20); // the Consolas strings with $0D
+      expect(cellDiffers).toBeGreaterThan(200);
+    },
+    T,
+  );
+
+  it('OUTLINE_ZERO_ADVANCE agrees with windows-outline-metrics.tsv in the monospaced outline faces', () => {
+    // Every byte has the cell width there except the undefined bytes (and $98 in Courier New), which
+    // no modelled case contains, and the listed bytes, which have 0.
+    const tsv = readFileSync(new URL('../../../tools/fonts-src/windows-outline-metrics.tsv', import.meta.url), 'utf8');
+    const ignored = [0x81, 0x8d, 0x8f, 0x90, 0x9d, 0x98];
+    let rows = 0;
+    for (const line of tsv.split(/\r?\n/)) {
+      if (!line || line.startsWith('#')) continue;
+      const f = line.split('\t');
+      const face = f[3] as string;
+      if (!['Courier New', 'Lucida Console', 'Consolas'].includes(face)) continue;
+      rows++;
+      const colWidth = Number(f[4]);
+      const advances = (f[16] as string).split(',').map(Number);
+      for (let b = 1; b < 256; b++) {
+        if (ignored.includes(b)) continue;
+        const zero = (OUTLINE_ZERO_ADVANCE[face] ?? []).includes(b);
+        expect([face, f[1], f[2], b, advances[b]]).toEqual([face, f[1], f[2], b, zero ? 0 : colWidth]);
+      }
+    }
+    expect(rows).toBeGreaterThan(100);
+  });
+
+  it(
+    'task 21 font colours with a non-zero top byte follow 4.6 (request SH3-gdi-text-colour.md)',
+    () => {
+      const s = spots();
+      let checked = 0;
+      for (const r of references('text')) {
+        const fc = r.case.ops.find((o) => o.op === 'fontcolor');
+        if (!fc || fc.op !== 'fontcolor' || !TEXT_COLOUR_FORMS.includes(fc.color)) continue;
+        const text = r.case.ops.find((o) => o.op === 'text');
+        if (text?.op !== 'text' || text.bytes.join(',') !== '65,66') continue;
+        checked++;
+        const want = resolveColour(fc.color, s);
+        const fill = 0x800000;
+        const colours = new Set<number>();
+        for (const p of r.image.pixels) colours.add(p & 0xffffff);
+        colours.delete(0); // the background outside the cell
+        colours.delete(fill);
+        // "AB" in Fixedsys has glyph pixels, all in the resolved colour (black or the fill colour cannot
+        // be told apart here; the pixel-for-pixel test above checks those cases too).
+        const expected = want === fill || want === 0 ? [] : [hex6(want)];
+        expect([hex6(fc.color), [...colours].map(hex6)]).toEqual([hex6(fc.color), expected]);
+      }
+      expect(checked).toBe(TEXT_COLOUR_FORMS.length);
     },
     T,
   );

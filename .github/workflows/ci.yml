@@ -9,6 +9,7 @@
 #   job / step                 runs when this exists
 #   conformance                tests/conformance/*/vitest.config.ts or tests/parity/vitest.config.ts
 #   e2e                        tests/e2e/**/*.spec.ts or tests/a11y/**/*.spec.ts
+#   unit: integration step     tests/integration/*/vitest.config.ts (npm run test:integration; I1, I2, I3)
 #   browser-checks: one step per browser check script, each guarded by its file
 #     (the table of `checks` in the plan step; npm run check:<name>):
 #       gallery       app/src/ui/components/gallery/check-gallery.mjs   W2
@@ -28,11 +29,13 @@
 #       run           app/src/features/run/check-run.mjs                 SH8
 #       sim-main      app/src/features/sim-main/check-sim-main.mjs       U1
 #       pwa           app/src/features/pwa/check-pwa.mjs                 DV1
+#       wave1         tests/integration/wave1/check-wave1.mjs            I1
 #   windows-oracles: GDI       tests/oracle/gdi-capture/run.mjs     (npm run oracle:gdi, T2)
 #   windows-oracles: twins     tests/oracle/native-twin/run.mjs     (npm run oracle:twins, T4)
 #   windows-oracles: asm CLI   tests/oracle/asm-cli/run.mjs         (T1)
 #   windows-oracles: engines   weekly schedule or manual run: Windows engine build vs Linux (7.3)
 #   desktop-dev                tests/desktop/dev/playwright.config.ts (DV2), and desktop/** or app/** changed
+#   windows-oracles uploads build/gdi-capture/run when the GDI step fails (for other-windows.json)
 #
 # check and unit run on every push and pull request.
 #
@@ -89,6 +92,7 @@ jobs:
     outputs:
       conformance: ${{ steps.guards.outputs.conformance }}
       e2e: ${{ steps.guards.outputs.e2e }}
+      integration: ${{ steps.guards.outputs.integration }}
       gallery: ${{ steps.guards.outputs.gallery }}
       shell: ${{ steps.guards.outputs.shell }}
       editor: ${{ steps.guards.outputs.editor }}
@@ -106,6 +110,7 @@ jobs:
       run: ${{ steps.guards.outputs.run }}
       sim_main: ${{ steps.guards.outputs.sim_main }}
       pwa: ${{ steps.guards.outputs.pwa }}
+      wave1: ${{ steps.guards.outputs.wave1 }}
       browser_checks: ${{ steps.guards.outputs.browser_checks }}
       gdi: ${{ steps.guards.outputs.gdi }}
       twins: ${{ steps.guards.outputs.twins }}
@@ -134,6 +139,7 @@ jobs:
           conformance=$(flag has tests/conformance -mindepth 2 -maxdepth 2 -name vitest.config.ts)
           [ -f tests/parity/vitest.config.ts ] && conformance=true
           e2e=$(flag has tests/e2e tests/a11y -name '*.spec.ts')
+          integration=$(flag has tests/integration -mindepth 2 -maxdepth 2 -name vitest.config.ts)
           # The browser checks: output name and the file whose existence turns its step on.
           checks='
             gallery         app/src/ui/components/gallery/check-gallery.mjs
@@ -153,6 +159,7 @@ jobs:
             run             app/src/features/run/check-run.mjs
             sim_main        app/src/features/sim-main/check-sim-main.mjs
             pwa             app/src/features/pwa/check-pwa.mjs
+            wave1           tests/integration/wave1/check-wave1.mjs
           '
           check_names=""
           browser_checks=false
@@ -186,7 +193,7 @@ jobs:
 
           # The weekly schedule runs the engine comparison only (7.3, 7.4).
           if [ "$EVENT" = schedule ]; then
-            conformance=false; e2e=false; gdi=false; twins=false; asm_cli=false; desktop_dev=false
+            conformance=false; e2e=false; integration=false; gdi=false; twins=false; asm_cli=false; desktop_dev=false
             for name in $check_names; do eval "$name=false"; done
             browser_checks=false
           fi
@@ -194,6 +201,7 @@ jobs:
           {
             echo "conformance=$conformance"
             echo "e2e=$e2e"
+            echo "integration=$integration"
             for name in $check_names; do eval "echo \"$name=\$$name\""; done
             echo "browser_checks=$browser_checks"
             echo "gdi=$gdi"
@@ -207,7 +215,7 @@ jobs:
             echo "### Job guards"
             echo "| guard | runs |"
             echo "|---|---|"
-            for name in conformance e2e $check_names browser_checks gdi twins asm_cli engines_weekly windows_oracles desktop_dev; do
+            for name in conformance e2e integration $check_names browser_checks gdi twins asm_cli engines_weekly windows_oracles desktop_dev; do
               eval "value=\$$name"
               echo "| $name | $value |"
             done
@@ -245,7 +253,7 @@ jobs:
 
   unit:
     name: unit (${{ matrix.os }})
-    needs: [engines]
+    needs: [plan, engines]
     if: github.event_name != 'schedule'
     strategy:
       fail-fast: false
@@ -288,6 +296,11 @@ jobs:
         run: node --test "test/*.test.mjs"
       - name: Unit tests
         run: npm test
+      # The Node halves of the integration scenarios (9.3): real engines, no browser. They run
+      # even when a unit test failed, so that one run shows both.
+      - name: Integration scenarios under Node (I1)
+        if: ${{ !cancelled() && needs.plan.outputs.integration == 'true' }}
+        run: npm run test:integration
 
   conformance:
     name: conformance (${{ matrix.os }})
@@ -356,9 +369,10 @@ jobs:
       - name: Playwright version
         id: playwright
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      # Restore and save apart, as in browser-checks: the cache is kept even when a test fails.
       - name: Restore Playwright browsers
         id: browsers
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           # Playwright's default browser folder on Linux, macOS and Windows.
           path: |
@@ -367,8 +381,18 @@ jobs:
             ~/AppData/Local/ms-playwright
           key: playwright-${{ steps.playwright.outputs.version }}-${{ runner.os }}-${{ runner.arch }}-${{ matrix.browser }}
       - name: Install ${{ matrix.browser }}
+        id: browsers-install
         if: steps.browsers.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Save Playwright browsers
+        if: steps.browsers.outputs.cache-hit != 'true' && steps.browsers-install.outcome == 'success'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/Library/Caches/ms-playwright
+            ~/AppData/Local/ms-playwright
+          key: playwright-${{ steps.playwright.outputs.version }}-${{ runner.os }}-${{ runner.arch }}-${{ matrix.browser }}
       - name: Install the system libraries for ${{ matrix.browser }}
         if: steps.browsers.outputs.cache-hit == 'true' && runner.os == 'Linux'
         run: npx playwright install-deps ${{ matrix.browser }}
@@ -404,6 +428,10 @@ jobs:
   # 176, surface 13, easybin 196), simulator about 14 minutes (engine 44, pwa 67, text 10,
   # output 227, hardware 49, run 66, sim-main 298, memory-stack 66): about 30
   # minutes together, more than one runner should take.
+  # On GitHub (run 44913261966, the first with every check), whole jobs including set-up:
+  # interface 7.2 min (Ubuntu), 10.8 (macOS), 6.9 (Windows); simulator 7.8, 9.6 and 6.8. The
+  # longest steps were sim-main 3.4 min and output 2.4 on macOS. The limit of 45 minutes leaves
+  # room for four times that.
   browser-checks:
     name: browser-checks (${{ matrix.os }}, ${{ matrix.group }})
     needs: [plan, engines]
@@ -439,9 +467,11 @@ jobs:
       - name: Playwright version
         id: playwright
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      # Restore and save are separate steps: actions/cache saves only at the end of a green job, and
+      # with one failing check among seventeen a new Playwright version would never be cached.
       - name: Restore Playwright browsers
         id: browsers
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           # Playwright's default browser folder on Linux, macOS and Windows.
           path: |
@@ -450,8 +480,19 @@ jobs:
             ~/AppData/Local/ms-playwright
           key: playwright-${{ steps.playwright.outputs.version }}-${{ runner.os }}-${{ runner.arch }}-chromium-webkit
       - name: Install Chromium and WebKit
+        id: browsers-install
         if: steps.browsers.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium webkit
+      # Both groups of one system use the same key; the second save only warns that it exists.
+      - name: Save Playwright browsers
+        if: steps.browsers.outputs.cache-hit != 'true' && steps.browsers-install.outcome == 'success'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/Library/Caches/ms-playwright
+            ~/AppData/Local/ms-playwright
+          key: playwright-${{ steps.playwright.outputs.version }}-${{ runner.os }}-${{ runner.arch }}-chromium-webkit
       - name: Install the system libraries for Chromium and WebKit
         if: steps.browsers.outputs.cache-hit == 'true' && runner.os == 'Linux'
         run: npx playwright install-deps chromium webkit
@@ -505,7 +546,8 @@ jobs:
         if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.text == 'true' && needs.engines.outputs.available == 'asm sim' }}
         run: npm run check:text
       # check:output and check:hardware skip their engine parts by themselves when
-      # engine/dist is missing (and fail then when EASY68K_REQUIRE_ENGINES=1).
+      # engine/dist is missing (and fail then when EASY68K_REQUIRE_ENGINES=1); so does
+      # check:shell above for its simulator session. check:hardware --without-engines proves it.
       - name: Output panel check (SH4)
         if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.output == 'true' }}
         run: npm run check:output
@@ -521,6 +563,9 @@ jobs:
       - name: Memory and Stack check (U2)
         if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.memory_stack == 'true' && needs.engines.outputs.available == 'asm sim' }}
         run: npm run check:memory-stack
+      - name: Integration scenario in the browser (I1)
+        if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.wave1 == 'true' && needs.engines.outputs.available == 'asm sim' }}
+        run: npm run check:wave1
       - name: Upload the screenshots of the browser checks
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -544,6 +589,7 @@ jobs:
             build/SH8/run-check/
             build/U1/sim-main-check/
             build/U2/check/
+            build/I1/wave1-check/
           if-no-files-found: ignore
           retention-days: 14
 
@@ -577,8 +623,21 @@ jobs:
 
       # The three oracles are independent: each runs even when an earlier one failed.
       - name: GDI capture, regenerate and compare (T2)
+        id: gdi
         if: ${{ !cancelled() && needs.plan.outputs.gdi == 'true' }}
         run: npm run oracle:gdi
+      # On a Windows other than the references' (tests/oracle/gdi-capture/windows-policy.ts), the
+      # step fails until a person has looked at the differences and recorded them in
+      # other-windows.json. What they look at is the capture of this run (build/gdi-capture/run,
+      # about 25 MB), which leaves with the runner unless it is uploaded here.
+      - name: Upload the GDI capture of this run (T2)
+        if: ${{ !cancelled() && steps.gdi.outcome == 'failure' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gdi-capture-run
+          path: build/gdi-capture/run/
+          if-no-files-found: ignore
+          retention-days: 14
       # The 68000 single-step suite (about 200 MB) is cached by the hash of its manifest.
       # fetch-suite.mjs checks every cached file again (size, git SHA-1, SHA-256) and downloads
       # only what is missing or wrong, so a stale or partial cache cannot pass. The cache is saved
@@ -679,13 +738,21 @@ jobs:
       - name: Electron version
         id: electron
         run: echo "version=$(node -p "require('electron/package.json').version")" >> "$GITHUB_OUTPUT"
+      # Restore and save apart, so that the download is cached even when a desktop test fails.
       - name: Restore the Electron download
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: electron-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Caches/electron
           key: electron-${{ steps.electron.outputs.version }}-${{ runner.os }}-${{ runner.arch }}
       - name: Install the Electron binary
         run: node node_modules/electron/install.js
+      - name: Save the Electron download
+        if: steps.electron-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/electron
+          key: electron-${{ steps.electron.outputs.version }}-${{ runner.os }}-${{ runner.arch }}
       - name: Production build of the app
         run: npm run build
       - name: Desktop development-build tests (6.7)

@@ -26,6 +26,7 @@ import {
   type ViewUpdate,
 } from '@codemirror/view';
 import { TabType } from '../../contracts';
+import { cutOrCopy, pasteFromMenu, type ClipboardEnv } from './clipboard';
 import {
   autoIndentAfterEnter,
   enterKey,
@@ -198,7 +199,52 @@ export const editorKeymap: readonly KeyBinding[] = [
   { key: 'Mod-z', run: undo, preventDefault: true },
   { key: 'Mod-Shift-z', run: redo, preventDefault: true },
   { key: 'Mod-a', run: selectAll },
+  ...macControlKeys(),
 ];
+
+/* ------------------------------------------------------------------ Ctrl+letter on macOS (rule K2) */
+
+/**
+ * The page's clipboard functions, for the clipboard keys below. The editor session provides them
+ * (`session.clipboardEnv`, read at the moment of the key press); without them those keys do nothing.
+ */
+export const clipboardKeysEnv = Facet.define<() => ClipboardEnv, (() => ClipboardEnv) | null>({
+  combine: (values) => values[0] ?? null,
+});
+
+function clipboardKey(action: 'cut' | 'copy' | 'paste') {
+  return (view: EditorView): boolean => {
+    const env = view.state.facet(clipboardKeysEnv)?.();
+    if (!env) return false;
+    const target = { kind: 'editor', view } as const;
+    if (action === 'paste') void pasteFromMenu(target, env);
+    else void cutOrCopy(target, action, env);
+    return true;
+  };
+}
+
+/**
+ * Rule K2 (ARCHITECTURE.md 1.3): on macOS every Ctrl+letter shortcut works with Cmd or Ctrl, so the
+ * key table gives Undo, Cut, Copy, Paste and Select All the chords Cmd+Z, X, C, V, A and also
+ * Ctrl+Z, X, C, V, A. The dispatcher leaves all of these to the focused editor (TEXT_EDITING_COMMANDS
+ * in commands/tables/keys.ts). The browser acts on the Cmd forms by itself (its own cut, copy and
+ * paste events; CodeMirror's `Mod-` bindings), but on a Mac the Ctrl forms are the system's text
+ * movement keys: Ctrl+A moves to the start of the paragraph, Ctrl+V pages down, Ctrl+C and Ctrl+X
+ * do nothing. So the editor binds the Ctrl forms itself, on macOS only (CodeMirror's `mac` field):
+ * Ctrl+Z undoes, Ctrl+A selects all, Ctrl+X and Ctrl+C cut and copy through the browser's
+ * `execCommand` (allowed during the key press; the Clipboard API when refused) and Ctrl+V pastes
+ * as Paste from the menu does (note 45: the desktop app pastes natively, a browser asks for the
+ * clipboard and, when refused, says `Press Cmd+V to paste`). Errata/E2.md entry 13.
+ */
+function macControlKeys(): KeyBinding[] {
+  return [
+    { mac: 'Ctrl-z', run: undo, preventDefault: true },
+    { mac: 'Ctrl-a', run: selectAll, preventDefault: true },
+    { mac: 'Ctrl-x', run: clipboardKey('cut'), preventDefault: true },
+    { mac: 'Ctrl-c', run: clipboardKey('copy'), preventDefault: true },
+    { mac: 'Ctrl-v', run: clipboardKey('paste'), preventDefault: true },
+  ];
+}
 
 /* ------------------------------------------------------------------ Replace mode (editor-ui §8.6) */
 
@@ -266,12 +312,15 @@ export interface EditorConfigInput {
   label: string;
   /** Extensions contributed by other features for this document (state/editor-extensions.ts). */
   features: readonly Extension[];
+  /** The page's clipboard functions for the Ctrl+X, C, V keys on macOS (`clipboardKeysEnv`). */
+  clipboard?: () => ClipboardEnv;
 }
 
 /** The contents of `editorCompartment` for a document. */
 export function editorConfig(input: EditorConfigInput): Extension {
   return [
     viewOptions.of(input.options),
+    input.clipboard ? clipboardKeysEnv.of(input.clipboard) : [],
     baseExtensions,
     input.lineNumbers ? lineNumbers() : [],
     EditorView.contentAttributes.of({ 'aria-label': input.label }),

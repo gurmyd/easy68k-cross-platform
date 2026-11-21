@@ -9,7 +9,7 @@
 // Owner: DV2.
 
 import { realpathSync, statSync } from 'node:fs';
-import { dirname, isAbsolute, join, posix, resolve, win32 } from 'node:path';
+import { dirname, extname, isAbsolute, join, posix, resolve, win32 } from 'node:path';
 import type { WebPreferences } from 'electron';
 
 // ---- Content Security Policy -------------------------------------------------------------------
@@ -301,6 +301,17 @@ export function isFolder(path: string): boolean {
 /** A plain string of reasonable length (names, channels, titles). */
 export function isShortString(value: unknown, max = 4096): value is string {
   return typeof value === 'string' && value.length <= max;
+}
+
+/**
+ * The file a native Save dialog returns, with SaveRequest.defaultExt appended when the user typed
+ * no extension. The contract (contracts/fs.ts) lets the caller spell the extension "X68", ".X68" or
+ * the original's "*.X68"; anything else (wildcards, separators, a long string) appends nothing.
+ */
+export function withDefaultExtension(file: string, defaultExt: unknown): string {
+  if (extname(file) !== '' || !isShortString(defaultExt, 16)) return file;
+  const match = /^(?:\*?\.)?([A-Za-z0-9]+)$/.exec(defaultExt);
+  return match ? `${file}.${match[1]}` : file;
 }
 
 /** Bytes as they arrive over IPC (structured clone keeps Uint8Array). */
