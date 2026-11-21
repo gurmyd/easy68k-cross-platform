@@ -1,9 +1,9 @@
-# easy68k-mac
+# easy68k-cross-platform
 
-An unofficial port of [EASy68K](http://www.easy68k.com/), the Motorola 68000 editor, assembler and simulator, so that it runs in a web browser and as a macOS app. The original runs only on Windows.
+An unofficial port of [EASy68K](http://www.easy68k.com/), the Motorola 68000 editor, assembler and simulator, so that it runs outside Windows: in a web browser on any operating system, and as a macOS app. The original runs only on Windows.
 
 > **Status: work in progress.**
-> A preview of the web version is online at <https://gurmyd.github.io/easy68k-mac/>. It is
+> A preview of the web version is online at <https://gurmyd.github.io/easy68k-cross-platform/>. It is
 > unfinished: expect defects, and do not rely on it for coursework yet. There is no macOS app to
 > download yet. This page will say so when that changes.
 
@@ -13,7 +13,7 @@ EASy68K is widely used to teach 68000 assembly language. This project takes the 
 
 Planned:
 
-- a web version that needs no installation and works offline after the first visit
+- a web version that needs no installation and works offline after the first visit, on Windows, macOS, Linux and ChromeOS (tested with the engines of Chrome and Safari; Firefox is not tested yet)
 - a macOS app for Apple Silicon and Intel Macs
 - the original's features: editor, assembler, simulator, text and graphics output, sound, hardware window, memory and stack views, breakpoints, logging
 
@@ -26,6 +26,10 @@ Planned:
 - The macOS app exists as a development build that is tested on GitHub's macOS machines. The installer is not built yet.
 
 No person has tried it on a Mac yet.
+
+## The name
+
+The repository was called `easy68k-mac` until November 2026. Its old address redirects here; the name still appears inside the code as the label of this port's changes to the original sources.
 
 ## Credits
 
