@@ -104,6 +104,25 @@ export function browserSettingsStorage(win: Window = window): SettingsStorage {
     write: (text) => win.localStorage.setItem(SETTINGS_KEY, text),
     // Every window of the origin runs on this computer's clock, so stamps compare across windows.
     now: () => Date.now(),
+    // A write-back waits 10 to 50 ms, a different pause in each window, so that of several windows
+    // that would put the same setting back one writes and the others see that it is done. A page
+    // that is being closed runs the task at once.
+    defer(task) {
+      let done = false;
+      const run = () => {
+        if (done) return;
+        cancel();
+        task();
+      };
+      const timer = win.setTimeout(run, 10 + Math.random() * 40);
+      win.addEventListener('pagehide', run);
+      const cancel = () => {
+        done = true;
+        win.clearTimeout(timer);
+        win.removeEventListener('pagehide', run);
+      };
+      return cancel;
+    },
     onExternalChange(listener) {
       const onStorage = (event: StorageEvent) => {
         // key null = the whole storage was cleared.

@@ -195,6 +195,46 @@ describe('browserSettingsStorage (3.10)', () => {
     fire(null); // the whole storage cleared
     expect(changed).toHaveBeenLastCalledWith(null);
   });
+
+  it('runs a write-back after a short pause, at once when the page is hidden, never after cancel', () => {
+    vi.useFakeTimers();
+    try {
+      const byType = new Map<string, Set<() => void>>();
+      const win = {
+        setTimeout: (task: () => void, ms: number) => globalThis.setTimeout(task, ms),
+        clearTimeout: (id: ReturnType<typeof setTimeout>) => globalThis.clearTimeout(id),
+        addEventListener: (type: string, listener: () => void) => {
+          if (!byType.has(type)) byType.set(type, new Set());
+          byType.get(type)?.add(listener);
+        },
+        removeEventListener: (type: string, listener: () => void) => void byType.get(type)?.delete(listener),
+      } as unknown as Window;
+      const storage = browserSettingsStorage(win);
+      const task = vi.fn();
+      storage.defer?.(task);
+      vi.advanceTimersByTime(5);
+      expect(task).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(50);
+      expect(task).toHaveBeenCalledTimes(1);
+      expect(byType.get('pagehide')?.size ?? 0).toBe(0);
+
+      const hidden = vi.fn();
+      storage.defer?.(hidden);
+      for (const listener of [...(byType.get('pagehide') ?? [])]) listener();
+      expect(hidden).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(100);
+      expect(hidden).toHaveBeenCalledTimes(1);
+
+      const cancelled = vi.fn();
+      const cancel = storage.defer?.(cancelled);
+      cancel?.();
+      vi.advanceTimersByTime(100);
+      for (const listener of [...(byType.get('pagehide') ?? [])]) listener();
+      expect(cancelled).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('the stub services (3.12.3)', () => {

@@ -18,6 +18,7 @@ import {
   parseSettings,
   settingPaths,
   type SettingsStorage,
+  type SettingsStore,
   type Stamp,
 } from './service';
 
@@ -617,23 +618,25 @@ describe('two windows that see each other late (3.8.6 rule 2; errata W3 entry 26
       const services = windows.map((w) =>
         createSettingsService(w.storage, undefined, { now: clock.now, writerId: w.id }),
       );
-      /** Every change made, with the stamp its window wrote for it. */
-      const changes: { path: Path; value: unknown; stamp: Stamp }[] = [];
+      /**
+       * Every change made, in the order the test made it. The clock moves on before every update,
+       * so each change is later than everything stored before it, and by the rule of the service
+       * the last change made to a setting is the one that must win. The oracle is the test's own
+       * order of events; it does not read the stamps the service writes.
+       */
+      const changes: { path: Path; value: unknown }[] = [];
       for (let step = 0; step < 25; step++) {
         const roll = random();
         if (roll < 0.45) {
           const index = Math.floor(random() * services.length);
+          const service = services[index] as (typeof services)[number];
           const path = pick(paths);
           const value = valueFor(path);
-          const own = (windows[index] as (typeof windows)[number]).storage;
-          const stampOf = (): Stamp | undefined => JSON.parse(own.read() ?? '{}')[STAMPS_KEY]?.[path];
-          const before = stampOf();
-          (services[index] as (typeof services)[number]).update((s) => withValueAt(s, path, value));
-          const stamp = stampOf();
-          // A value equal to the one the window shows is no change and gets no new stamp.
-          if (stamp !== undefined && (before === undefined || compareStamps(stamp, before) !== 0)) {
-            changes.push({ path, value, stamp });
-          }
+          clock.advance(1);
+          // A value equal to the one the window shows is no change (the window has nothing to stamp).
+          const isChange = !Object.is(valueAt(service.get(), path), value);
+          service.update((s) => withValueAt(s, path, value));
+          if (isChange) changes.push({ path, value });
         } else if (roll < 0.9) {
           const pending = storage.pending();
           if (pending.length > 0) storage.deliverOne(pick(pending));
@@ -645,11 +648,8 @@ describe('two windows that see each other late (3.8.6 rule 2; errata W3 entry 26
 
       const stored = parseSettings(storage.text).settings;
       for (const path of paths) {
-        const mine = changes.filter((change) => change.path === path);
-        const expected =
-          mine.length === 0
-            ? valueAt(DEFAULT_SETTINGS, path)
-            : mine.reduce((latest, change) => (compareStamps(change.stamp, latest.stamp) > 0 ? change : latest)).value;
+        const last = changes.filter((change) => change.path === path).at(-1);
+        const expected = last === undefined ? valueAt(DEFAULT_SETTINGS, path) : last.value;
         expect(valueAt(stored, path), `run ${run}, ${path} in the store`).toEqual(expected);
         for (const [index, service] of services.entries()) {
           expect(valueAt(service.get(), path), `run ${run}, ${path} in window ${index}`).toEqual(expected);
@@ -657,6 +657,194 @@ describe('two windows that see each other late (3.8.6 rule 2; errata W3 entry 26
       }
     }
   }, 120_000);
+});
+
+describe('putting a missing setting back once, not once per window (errata W3 entry 26)', () => {
+  /** Tasks handed to `defer`, run when the test says so. */
+  function deferQueue() {
+    const tasks = new Set<() => void>();
+    return {
+      defer: (task: () => void) => {
+        tasks.add(task);
+        return () => void tasks.delete(task);
+      },
+      runAll: () => {
+        for (const task of [...tasks]) {
+          tasks.delete(task);
+          task();
+        }
+      },
+      size: () => tasks.size,
+    };
+  }
+
+  /** LateStorage windows that count their writes and defer through `queue`. */
+  function counted(storage: LateStorage, queue: ReturnType<typeof deferQueue>) {
+    const counter = { writes: 0 };
+    const base = storage.window();
+    const window: SettingsStorage = {
+      ...base,
+      write: (text) => {
+        counter.writes++;
+        base.write(text);
+      },
+      defer: queue.defer,
+    };
+    return { window, counter };
+  }
+
+  it('of three windows that know a setting a stale write lacks, the first to repair writes, the others not', () => {
+    const storage = new LateStorage();
+    const clock = testClock();
+    const queues = [deferQueue(), deferQueue(), deferQueue(), deferQueue()];
+    const made = queues.map((queue) => counted(storage, queue));
+    const services = made.map((m, index) =>
+      createSettingsService(m.window, undefined, { now: clock.now, writerId: `w${index}` }),
+    );
+    const [a, , , d] = services as [SettingsStore, SettingsStore, SettingsStore, SettingsStore];
+    a.update(setFontSize(14));
+    // Windows 1 and 2 hear of it; window 3 (d) does not yet.
+    storage.deliverOne(1);
+    storage.deliverOne(2);
+    clock.advance(1);
+    d.update(setBitField(true)); // lacks the font size
+    // a, 1 and 2 all hear d's write and would put the font size back.
+    storage.deliverOne(0);
+    storage.deliverOne(1);
+    storage.deliverOne(2);
+    expect(queues.slice(0, 3).map((q) => q.size())).toEqual([1, 1, 1]);
+    const before = made.map((m) => m.counter.writes);
+    queues[1]?.runAll(); // window 1's pause ends first: it writes
+    // its write reaches a and 2 before their pauses end: they have nothing left to write
+    storage.deliverOne(0);
+    storage.deliverOne(2);
+    queues[0]?.runAll();
+    queues[2]?.runAll();
+    const writes = made.map((m, index) => m.counter.writes - (before[index] ?? 0));
+    expect(writes).toEqual([0, 1, 0, 0]);
+    storage.deliverAll();
+    for (const queue of queues) queue.runAll();
+    storage.deliverAll();
+    const stored = parseSettings(storage.text).settings;
+    expect(stored.editor.fontSize).toBe(14);
+    expect(stored.sim.bitField).toBe(true);
+    for (const service of services) {
+      expect(service.get().editor.fontSize).toBe(14);
+      expect(service.get().sim.bitField).toBe(true);
+    }
+  });
+
+  it('a window that is disposed while its write-back waits makes it at once', () => {
+    const storage = new LateStorage();
+    const clock = testClock();
+    const queue = deferQueue();
+    const a = createSettingsService(counted(storage, queue).window, undefined, { now: clock.now, writerId: 'a' });
+    const b = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'b' });
+    a.update(setFontSize(14));
+    clock.advance(1);
+    b.update(setBitField(true)); // stale
+    storage.deliverOne(0); // a hears it and waits to repair
+    expect(queue.size()).toBe(1);
+    a.dispose();
+    expect(queue.size()).toBe(0);
+    expect(parseSettings(storage.text).settings.editor.fontSize).toBe(14);
+    expect(parseSettings(storage.text).settings.sim.bitField).toBe(true);
+  });
+
+  it('an update made while a write-back waits writes everything at once and cancels it', () => {
+    const storage = new LateStorage();
+    const clock = testClock();
+    const queue = deferQueue();
+    const a = createSettingsService(counted(storage, queue).window, undefined, { now: clock.now, writerId: 'a' });
+    const b = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'b' });
+    a.update(setFontSize(14));
+    clock.advance(1);
+    b.update(setBitField(true));
+    storage.deliverOne(0);
+    clock.advance(1);
+    a.update(setRealTabs(true));
+    expect(queue.size()).toBe(0);
+    const stored = parseSettings(storage.text).settings;
+    expect([stored.editor.fontSize, stored.sim.bitField, stored.editor.realTabs]).toEqual([14, true, true]);
+  });
+});
+
+describe('a document without stamps, written while windows are open (errata W3 entry 26)', () => {
+  it('replaces what the windows know, as a write did before stamps existed', () => {
+    const storage = new MemorySettingsStorage();
+    const clock = testClock();
+    const a = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'a' });
+    const b = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'b' });
+    a.update(setFontSize(16));
+    a.update((s) => ({ ...s, app: { ...s.app, theme: 'light' } }));
+    clock.advance(1);
+    // Something other than the port (a tool, the developer tools) writes a document of the old shape.
+    storage.window().write(JSON.stringify({ version: 1, editor: { fontSize: 21 }, app: { theme: 'dark' } }));
+    expect(a.get().editor.fontSize).toBe(21);
+    expect(b.get().app.theme).toBe('dark');
+    clock.advance(1);
+    b.update(setBitField(true));
+    const stored = parseSettings(storage.text).settings;
+    expect([stored.editor.fontSize, stored.app.theme, stored.sim.bitField]).toEqual([21, 'dark', true]);
+    expect([a.get().editor.fontSize, a.get().app.theme, a.get().sim.bitField]).toEqual([21, 'dark', true]);
+  });
+
+  it('written in one page, it is not undone when that page hears of it only through another', () => {
+    const storage = new LateStorage();
+    const clock = testClock();
+    const own = storage.window();
+    const a = createSettingsService(own, undefined, { now: clock.now, writerId: 'a' });
+    const b = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'b' });
+    const c = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'c' });
+    a.update(setFontSize(16));
+    storage.deliverAll();
+    clock.advance(1);
+    // The developer tools of page a write; page a gets no event for it.
+    own.write(JSON.stringify({ version: 1, editor: { fontSize: 21 } }));
+    storage.deliverOne(1); // b hears of it, c not yet
+    clock.advance(1);
+    b.update(setBitField(true));
+    expect(c.get().editor.fontSize).toBe(16); // c has not heard of it yet
+    storage.deliverAll();
+    const stored = parseSettings(storage.text).settings;
+    expect([stored.editor.fontSize, stored.sim.bitField]).toEqual([21, true]);
+    for (const service of [a, b, c]) {
+      expect(service.get().editor.fontSize).toBe(21);
+      expect(service.get().sim.bitField).toBe(true);
+    }
+  });
+
+  it('written in the window itself, it is taken in by the next update', () => {
+    const storage = new MemorySettingsStorage();
+    const a = createSettingsService(storage.window(), undefined, { now: () => 5, writerId: 'a' });
+    a.update(setFontSize(16));
+    storage.text = JSON.stringify({ version: 1, editor: { fontSize: 21 } }); // no event in the writing page
+    a.update(setBitField(true));
+    expect(parseSettings(storage.text).settings.editor.fontSize).toBe(21);
+    expect(a.get().editor.fontSize).toBe(21);
+  });
+
+  it('an old document the window has already taken in, still in its copy, does not undo a newer write', () => {
+    const old = JSON.stringify({ version: 1, editor: { fontSize: 15 } });
+    const storage = new LateStorage();
+    storage.text = old;
+    const clock = testClock();
+    const a = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'a' });
+    const b = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'b' });
+    a.update(setFontSize(17));
+    clock.advance(1);
+    b.update(setBitField(true)); // b's copy still holds the old document, which b found at start
+    storage.deliverAll();
+    const stored = parseSettings(storage.text).settings;
+    expect([stored.editor.fontSize, stored.sim.bitField]).toEqual([17, true]);
+    expect(b.get().editor.fontSize).toBe(17);
+  });
+
+  it('this port always writes the stamp table, empty before any change', () => {
+    const storage = new MemorySettingsStorage();
+    createSettingsService(storage.window()).update((s) => s);
+    expect(JSON.parse(storage.text ?? '')[STAMPS_KEY]).toEqual({});
+  });
 });
 
 describe('stamps in the stored document (errata W3 entry 26)', () => {

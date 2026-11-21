@@ -23,7 +23,14 @@
 //   the window knows: the newer stamp wins. A window that finds one of its newer settings missing
 //   from a document another window wrote writes the merged document back. Changes to different
 //   settings are therefore never lost, and two windows that change the same setting at about the
-//   same time end with the same value, the one with the later stamp.
+//   same time end with the same value, the one with the later stamp. This port always writes the
+//   `stamps` table (empty when nothing has been changed yet). A document WITHOUT one was written by
+//   something else (an older version of the port that never saw stamps, a tool, a person in the
+//   developer tools): when such a document is written while the window is open, it replaces what
+//   the window knows, as every write did before stamps existed.
+// - Where the storage can run a task a little later (`defer`), a window puts a missing setting
+//   back after a short pause rather than at once, and only if no window has put it back meanwhile:
+//   several windows that all know the missing setting then write it once, not once each.
 // - The panel layout (`app.layout`) is one setting for this purpose, and it is the exception: a
 //   window that is open keeps its own layout, whatever other windows store. It reads the stored
 //   layout once, at start, and writes its own layout only when it changes it.
@@ -58,6 +65,11 @@ export interface SettingsStorage {
    * has seen, and of two changes made at once neither counts as the later one.
    */
   now?(): number;
+  /**
+   * Runs `task` a little later (a few tens of milliseconds, a different pause in each window) and
+   * returns what cancels it. Without it a window puts a missing setting back at once.
+   */
+  defer?(task: () => void): () => void;
 }
 
 /** The service plus what only its owner (the bootstrap) uses. */
@@ -287,6 +299,11 @@ interface Parsed {
   storedVersion: number;
   /** The stamp table of the document (empty for a document written before stamps existed). */
   stamps: Map<string, Stamp>;
+  /**
+   * True for a stored JSON object without a `stamps` table: written by something other than this
+   * port (which always writes the table), so it is taken as it is rather than merged.
+   */
+  unstamped: boolean;
 }
 
 /** The settings in a stored text. Anything unreadable gives the defaults. */
@@ -300,6 +317,7 @@ export function parseSettings(text: string | null): Parsed {
     }
   }
   let document: JsonObject = isObject(raw) ? { ...raw } : {};
+  const unstamped = isObject(raw) && !(STAMPS_KEY in raw);
   const stamps = parseStamps(document[STAMPS_KEY]);
   delete document[STAMPS_KEY];
   const found = typeof document.version === 'number' && Number.isInteger(document.version) ? document.version : 1;
@@ -309,22 +327,27 @@ export function parseSettings(text: string | null): Parsed {
   }
   const merged = mergeWithDefaults(defaultSettings() as unknown as JsonObject, document, CHOICES);
   merged.version = SETTINGS_VERSION;
-  return { settings: merged as unknown as Settings, storedVersion: Math.max(found, SETTINGS_VERSION), stamps };
+  return {
+    settings: merged as unknown as Settings,
+    storedVersion: Math.max(found, SETTINGS_VERSION),
+    stamps,
+    unstamped,
+  };
 }
 
-/** The text stored for a document: its settings, the version and, when there are any, the stamps. */
+/**
+ * The text stored for a document: its settings, the version and the stamps. The stamp table is
+ * written also when it is empty: a document without one is read as written by something else.
+ */
 export function serializeSettings(stamped: StampedDocument, version: number): string {
   const stored: JsonObject = { ...stamped.document, version };
-  delete stored[STAMPS_KEY];
-  if (stamped.stamps.size > 0) {
-    // Sorted, so that two windows that know the same write the same text.
-    const table: JsonObject = {};
-    for (const path of [...stamped.stamps.keys()].sort()) {
-      const [time, writer] = stamped.stamps.get(path) as Stamp;
-      table[path] = [time, writer];
-    }
-    stored[STAMPS_KEY] = table;
+  // Sorted, so that two windows that know the same write the same text.
+  const table: JsonObject = {};
+  for (const path of [...stamped.stamps.keys()].sort()) {
+    const [time, writer] = stamped.stamps.get(path) as Stamp;
+    table[path] = [time, writer];
   }
+  stored[STAMPS_KEY] = table;
   return JSON.stringify(stored);
 }
 
@@ -359,14 +382,20 @@ export function createSettingsService(
   const writerId = options.writerId ?? randomWriterId();
   const listeners = new Set<() => void>();
 
-  const readStored = (): Parsed => {
-    let text: string | null = null;
+  /**
+   * The documents without stamps this window has already taken in (normally none, or the one it
+   * found at start). Its own copy of the storage may still show one of them after a newer write
+   * has reached the window by an event; only one it has not seen is a new write from outside.
+   */
+  const seenUnstamped = new Set<string>();
+
+  const readText = (): string | null => {
     try {
-      text = storage.read();
+      return storage.read();
     } catch (error) {
       onStorageError(error);
+      return null;
     }
-    return parseSettings(text);
   };
 
   const stampedOf = (parsed: Parsed): StampedDocument => ({
@@ -374,7 +403,9 @@ export function createSettingsService(
     stamps: parsed.stamps,
   });
 
-  const first = readStored();
+  const firstText = readText();
+  const first = parseSettings(firstText);
+  if (first.unstamped && firstText !== null) seenUnstamped.add(firstText);
   /** Everything this window knows of the shared document, the stored layout included. */
   let known: StampedDocument = stampedOf(first);
   /** The highest version number seen in storage; written back unchanged. */
@@ -394,7 +425,15 @@ export function createSettingsService(
     for (const listener of [...listeners]) listener();
   };
 
+  /** The newest document this window knows to be in storage: written by it, read, or reported. */
+  let lastStored: StampedDocument = known;
+  /** Cancels the write-back that is waiting, if one is. */
+  let cancelRepair: (() => void) | null = null;
+
   const write = () => {
+    cancelRepair?.();
+    cancelRepair = null;
+    lastStored = known;
     try {
       storage.write(serializeSettings(known, storedVersion));
     } catch (error) {
@@ -402,12 +441,18 @@ export function createSettingsService(
     }
   };
 
-  /** Takes in a document from storage or from another window; true when it lacked something. */
-  const absorb = (parsed: Parsed): boolean => {
-    storedVersion = Math.max(storedVersion, parsed.storedVersion);
-    const { merged, mineWon } = mergeStamped(known, stampedOf(parsed));
-    known = merged;
-    return mineWon;
+  /** Writes what this window knows back if the stored document (as far as it knows) lacks some of it. */
+  const repair = () => {
+    if (storage.defer === undefined) {
+      write();
+      return;
+    }
+    if (cancelRepair !== null) return;
+    cancelRepair = storage.defer(() => {
+      cancelRepair = null;
+      // Another window may have put the setting back meanwhile.
+      if (mergeStamped(known, lastStored).mineWon) write();
+    });
   };
 
   /** A stamp later than every stamp this window has seen, so that its change counts as newer. */
@@ -417,17 +462,68 @@ export function createSettingsService(
     return [Math.max(now(), latest + 1), writerId];
   };
 
+  /**
+   * Takes in a document written by something else than this port: it replaces what the window
+   * knows. The settings it changed are stamped now, by this window, so that they count as newer
+   * than what any window knew before: the page in which the document was written hears of it only
+   * through the next write of another window, and a window that has not heard of it yet may still
+   * write the older values.
+   */
+  const replaceWith = (parsed: Parsed) => {
+    storedVersion = Math.max(storedVersion, parsed.storedVersion);
+    const document = parsed.settings as unknown as JsonObject;
+    const paths = changedPaths(known.document, document);
+    const stamps = new Map(known.stamps);
+    if (paths.length > 0) {
+      const stamp = nextStamp();
+      for (const path of paths) stamps.set(path, stamp);
+    }
+    known = { document, stamps };
+    lastStored = stampedOf(parsed);
+  };
+
+  /** Takes in a document from storage or from another window; true when it lacked something. */
+  const absorb = (parsed: Parsed): boolean => {
+    storedVersion = Math.max(storedVersion, parsed.storedVersion);
+    const theirs = stampedOf(parsed);
+    const { merged, mineWon } = mergeStamped(known, theirs);
+    known = merged;
+    lastStored = theirs;
+    return mineWon;
+  };
+
+  /**
+   * Takes in a stored text. `written` is true when another window has just written it (an event),
+   * false when it was read from this window's copy, which may be older than what the window knows.
+   * True when the text lacked something this window knows.
+   */
+  const takeIn = (text: string | null, written: boolean): boolean => {
+    const parsed = parseSettings(text);
+    if (parsed.unstamped && text !== null && (written || !seenUnstamped.has(text))) {
+      seenUnstamped.add(text);
+      replaceWith(parsed);
+      return false;
+    }
+    return absorb(parsed);
+  };
+
   const stopListening = storage.onExternalChange((text) => {
     // The common case after a repair: the other window wrote exactly what this one knows.
-    if (typeof text === 'string' && text === serializeSettings(known, storedVersion)) return;
+    if (typeof text === 'string' && text === serializeSettings(known, storedVersion)) {
+      lastStored = known;
+      return;
+    }
     if (text === null) {
       // The document was removed (or the whole storage cleared): start again from the defaults.
       const parsed = parseSettings(null);
       known = stampedOf(parsed);
+      lastStored = known;
       storedVersion = parsed.storedVersion;
-    } else if (absorb(text === undefined ? readStored() : parseSettings(text))) {
+      cancelRepair?.();
+      cancelRepair = null;
+    } else if (text === undefined ? takeIn(readText(), true) : takeIn(text, true)) {
       // The other window wrote without one of this window's newer settings: put it back.
-      write();
+      repair();
     }
     const next = view();
     if (sameJson(next, current)) return;
@@ -439,7 +535,7 @@ export function createSettingsService(
     get: () => current,
 
     update(change) {
-      absorb(readStored());
+      takeIn(readText(), false);
       const base = view();
       const next = change(structuredClone(base));
       const paths = changedPaths(base as unknown as JsonObject, next as unknown as JsonObject);
@@ -469,6 +565,10 @@ export function createSettingsService(
     },
 
     dispose() {
+      // A write-back that is still waiting is made now: the window may be closing.
+      if (cancelRepair !== null && mergeStamped(known, lastStored).mineWon) write();
+      cancelRepair?.();
+      cancelRepair = null;
       stopListening();
       listeners.clear();
     },
