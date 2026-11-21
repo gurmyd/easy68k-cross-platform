@@ -19,7 +19,8 @@ and why. No entry concerns `app/src/contracts/`, so there is no **Contract** sec
 - 7.4 names the kinds ("the two `.dmg`, two `.zip`, `engine-dist.zip`, the web zip and
   `SHA256SUMS.txt`"), not the names. They are `EASy68K-<v>-arm64.dmg`, `EASy68K-<v>-x64.dmg`,
   `EASy68K-<v>-arm64-mac.zip`, `EASy68K-<v>-x64-mac.zip`, `engine-dist.zip` (the name
-  `tools/fetch-engines.mjs` asks for) and `easy68k-mac-web-<v>.zip`, in
+  `tools/fetch-engines.mjs` asks for) and `easy68k-cross-platform-web-<v>.zip` (`easy68k-mac-web-<v>.zip`
+  until the repository was renamed; entry 20), in
   `desktop/scripts/release.mjs` `releaseFiles()`; a unit test keeps them equal to the
   `artifactName` patterns of `electron-builder.yml`. `SHA256SUMS.txt` is in the format of
   `shasum -a 256` (`shasum -a 256 -c SHA256SUMS.txt` checks a download).
@@ -36,10 +37,8 @@ and why. No entry concerns `app/src/contracts/`, so there is no **Contract** sec
 
 ### 4. Bundle identifier
 
-- No identifier is given anywhere. `appId: io.github.easy68k-mac.app` (`CFBundleIdentifier`). It
-  names the project, not a person; Electron's user-data folder follows `productName` (`EASy68K`),
-  not the identifier. Changing it later would make macOS treat the app as a different one (file
-  associations, permissions), so it should be decided before the first published release (O-7).
+- No identifier is given anywhere. The first version used `io.github.easy68k-mac.app`; it was
+  replaced before any release by `org.easy68k-port.easy68k`, fixed for good (entry 19).
 
 ### 5. A fifth fuse: NODE_OPTIONS off (7.6)
 
@@ -117,6 +116,11 @@ and why. No entry concerns `app/src/contracts/`, so there is no **Contract** sec
 - The sheet is read and answered through System Events (needs the Accessibility permission). The
   document is modified by real typing, which also gives the page the user activation without
   which Chromium asks nothing before unloading.
+- "Modified" is read from the editor's own status row (`.e68-editor__cell--modified`,
+  `app/src/ui/editor/EditorStatusBar.tsx`). The first version read the shell's `footer.e68-statusbar`,
+  which in Editor mode shows only the document's name; that failed check 4 on both runners in the
+  first GitHub run (44938122931: `Received string: "untitled1.x68"`), while the screenshot of check
+  2 showed both rows.
 
 ### 12. Check 5: how "finishes within 3.5 s" is measured (6.7, 4.5.5)
 
@@ -186,6 +190,9 @@ and why. No entry concerns `app/src/contracts/`, so there is no **Contract** sec
   `Electron.app`.
 - 1.1 says the app runs "on macOS"; it names no version, so nothing in the document changes. The
   README's system requirement should be taken from the first release notes, not written by hand.
+- Measured in the first GitHub run (44938122931), on both architectures: `LSMinimumSystemVersion`
+  13.0, equal to the stock Electron 45.4.1 `Info.plist`; `minos` 13.0 of the main binary and of
+  Electron Framework. The app needs **macOS 13 (Ventura) or later**.
 
 ### 18. desktop/scripts import console and process (no change to eslint.config.js)
 
@@ -197,3 +204,73 @@ and why. No entry concerns `app/src/contracts/`, so there is no **Contract** sec
   imports can go; nothing depends on it. The first version had also left an untracked self-test for
   the widened pattern in `tests/lint/node-globals.test.ts` (a gate path), which failed
   `npm run lint` once the pattern was reverted; it is removed, and its text is in the request.
+
+### 19. The bundle identifier, fixed for good: `org.easy68k-port.easy68k` (decided before the first release)
+
+- The first version used `io.github.easy68k-mac.app`. The repository was renamed from
+  `easy68k-mac` to `easy68k-cross-platform` before any release, which showed that a name taken from
+  the repository can go stale. The identifier is now `org.easy68k-port.easy68k`, in
+  `desktop/electron-builder.yml` (`appId`) and `desktop/scripts/packaging.mjs` (`BUNDLE_ID`); a unit
+  test keeps the two equal, and check 1 compares the signed bundle's `CFBundleIdentifier` and code
+  signing identifier with `BUNDLE_ID`.
+- Why it can never change after the first release: macOS keys by it the app's preferences file
+  (`~/Library/Preferences/<id>.plist`, where Chromium and AppKit keep, for example, the last folder
+  of the open and save panels), its saved window state (`~/Library/Saved Application State/<id>.savedState`),
+  its caches below `~/Library/Caches` and `~/Library/HTTPStorages`, the person's "Open With > Change
+  All" choice for `.X68`, `.L68` and `.S68` in Launch Services, and any privacy permission the
+  person grants. A new identifier would make macOS treat the next version as a different app and
+  leave all of that behind. (Electron's own user-data folder, which holds the app's settings and
+  the files of its disk backend, follows `productName`: `~/Library/Application Support/EASy68K`,
+  `app.getPath('userData')`. It does not depend on the identifier, and `productName` must not
+  change either.)
+- Why this one: it names the product and says that this is a port; it contains neither the
+  repository's name (renamed once already, and the same app is now one of several deliveries) nor
+  a person or an account; and it does not use the domain of the original EASy68K (`easy68k.com`),
+  which would suggest that the original's author publishes it. Reverse-DNS form with a domain the
+  project would have to keep is not needed: an identifier only has to be unique, and for a
+  Developer ID signature later (section 11) Apple registers any identifier nobody else has taken.
+- Electron derives the helper apps' identifiers from it (`org.easy68k-port.easy68k.helper`,
+  `.helper.Renderer`, ...).
+
+### 20. release.yml yields SHA256SUMS.txt on every run; the downloads are checked; the web zip's name
+
+- 9.4's acceptance asks that "the release job produces the six artifacts and the checksum file". The
+  first version wrote `SHA256SUMS.txt` only in the `publish` job, which a build-and-test run (manual,
+  `draft_release` unticked) skips, so such a run had no checksum file. A `checksums` job now runs on
+  every run: it checks that the six files are there (`release.mjs checksums`), verifies the sums
+  with `sha256sum -c`, writes the notes, prints each file's size and the sums into the run summary,
+  and uploads `SHA256SUMS.txt` (artifact `release-checksums`) and `notes.md` (artifact
+  `draft-notes`). `publish` needs it, downloads the same files, only checks them
+  (`release.mjs verify`: exactly the six files, and a `SHA256SUMS.txt` that lists exactly them with
+  their hashes) and creates the draft. It writes no new sums, so the draft carries what the
+  `checksums` job showed.
+- `desktop/scripts/check-downloads.mjs` runs in each mac job before the packaged checks: the app
+  inside the `.zip` (unpacked with `ditto`, as Archive Utility does) and inside the `.dmg` (mounted
+  read-only) must pass `codesign --verify --deep --strict` and have the CDHash of the bundle the
+  checks start, so the downloads are the tested bundle; the `.dmg` must hold the link to
+  `/Applications` the install steps mention. It prints Gatekeeper's assessment of a quarantined copy
+  (`spctl --assess`, `syspolicy_check distribution`) as evidence for the first-start text; that is
+  information, not a pass or fail.
+- The web zip is `easy68k-cross-platform-web-<version>.zip` (the project's name after the rename on
+  2026-11-21); the four app files keep the product name `EASy68K`.
+### 21. First runs on GitHub's Mac runners (release.yml, manual, `draft_release` unticked)
+
+- Run 44938122931 (commit fdabb2b, the package as reviewed): `version`, `engines`, `web` passed; on
+  `macos-15` (arm64) and `macos-15-intel` (x64) `npm run desktop:dist` built, thinned serialport's
+  `.node` (`x86_64 arm64 -> arm64` / `-> x86_64`), set the six fuses and signed ad hoc (15 items,
+  `codesign --verify --deep --strict` passed). Packaged suite: 46 of 47 passed on each; check 4
+  failed only because it read the wrong status bar (entry 11). Checks 1, 2, 3 and 5 passed against
+  the fused, ad-hoc signed bundle the first time.
+- Run 44938987022 (commit b83af54): every job passed except `publish`, skipped as intended. 51 of
+  51 packaged-suite tests on each architecture (35 unit, 1 prebuilt, 15 checks 1-5). Check 4 saw the
+  sheet "Leave EASy68K?" / "Changes you made may not be saved." with Stay and Leave. Check 5: 3149 ms
+  (arm64) and 3379 ms (x64) from F9 to Halted, window minimised 333 ms and 743 ms after F9, the
+  program's own clock 301 and 302 hundredths, each in the first attempt. The page's
+  `document.visibilityState` stays `visible` while minimised (`backgroundThrottling: false`). Sizes:
+  `EASy68K-<v>-arm64.dmg` 123,208,226 bytes, `-arm64-mac.zip` 119,759,537, `-x64.dmg` 129,079,052,
+  `-x64-mac.zip` 125,636,363, the web zip 5,054,860, `engine-dist.zip` 110,508.
+- `syspolicy_check distribution` also printed "Internal Xprotect Error: One or more files in your
+  application triggered an Xprotect error" on both runners. It reads as a failure of the scan on
+  the runner, not a detection (no malware name is given, and the same app passes Gatekeeper's
+  signature checks except notarisation); it could not be examined further there. The manual test
+  (6.8) should note whether a real Mac shows any XProtect message.
