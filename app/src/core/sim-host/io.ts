@@ -1,67 +1,169 @@
-// The I/O window as the engine sees it (ARCHITECTURE.md 3.3.1): OutputDevice composes TextScreen
-// and Surface into the `text` and `graphics` host parts.
-//
-// STUB written by W1 (wave 0). SH3 replaces the body; the class name, the constructor signature and
-// the exported names are contract (section 8, "Stubs"). This stub does nothing and returns the
-// engine's defaults (HOST_DEFAULTS of engine/sim/sim68k.mjs).
+// The I/O window as the engine sees it (ARCHITECTURE.md 3.3.1): OutputDevice composes TextScreen and
+// Surface into the `text` and `graphics` host parts. It has no state of its own; a method either
+// belongs to the text screen, to the surface, to both (a size change), or to the Output panel
+// (show, bring to front, full screen), which reaches it through the three callbacks.
 //
 // Owner: W1 > SH3.
 
 import type { Bytes, OutputDeviceApi, OutputDeviceDeps } from '../../contracts';
+import { MAX_SURFACE } from './surface/surface';
 
 export type { OutputDeviceDeps } from '../../contracts';
 
+/** Smallest canvas (simIOu.cpp:40-41). */
+export const MIN_WIDTH = 640;
+export const MIN_HEIGHT = 480;
+
+/** Message for a size request above the port's limit (ARCHITECTURE.md 2.5). */
+export const SIZE_LIMIT_MESSAGE = `Output window size limited to ${MAX_SURFACE} x ${MAX_SURFACE}`;
+
+/**
+ * What OutputDevice can use beyond the contract's `OutputDeviceDeps`. Optional, so that a caller
+ * that passes exactly the contract's object keeps working (docs/porting/errata/SH3.md, "Contract").
+ */
+export interface OutputDeviceExtras {
+  /** One line for the simulator message area: the size-limit message of 2.5. */
+  message?: (text: string) => void;
+}
+
 export class OutputDevice implements OutputDeviceApi {
-  constructor(private readonly deps: OutputDeviceDeps) {}
+  constructor(private readonly deps: OutputDeviceDeps & OutputDeviceExtras) {}
 
-  /* HostIoText */
-  charOut(_ch: number): void {}
-  textOut(_text: Bytes): void {}
-  textOutCR(_text: Bytes): void {}
-  clear(): void {}
-  getrc(): number | undefined {
-    return undefined;
-  }
-  gotorc(_row: number, _col: number): void {}
-  setFontProperties(_color: number, _style: number): void {}
-  getCharAt(_row: number, _col: number): number | undefined {
-    return undefined;
-  }
-  scrollRect(_row: number, _col: number, _height: number, _width: number, _direction: number): void {}
-  setWindowSize(_width: number, _height: number): void {}
-  getWindowSize(): [number, number] | undefined {
-    return undefined;
-  }
-  setupWindow(_fullScreen: boolean): void {}
-  ioShow(): void {}
-  ioBringToFront(): void {}
-  inputPrompt(_mode: number): void {}
-  erasePrompt(): void {}
-  inputEcho(_ch: number, _echo: boolean): void {}
-  inputBackspace(_echo: boolean): void {}
-  doCRLF(): void {}
-  invalidate(): void {}
+  /* ---- HostIoText: the text screen ---- */
 
-  /* HostIoGraphics */
-  setLineColor(_color: number): void {}
-  setFillColor(_color: number): void {}
-  drawPixel(_x: number, _y: number): void {}
-  getPixel(_x: number, _y: number): number {
-    return 0;
+  charOut(ch: number): void {
+    this.deps.text.charOut(ch);
   }
-  line(_x1: number, _y1: number, _x2: number, _y2: number): void {}
-  lineTo(_x: number, _y: number): void {}
-  moveTo(_x: number, _y: number): void {}
-  rectangle(_x1: number, _y1: number, _x2: number, _y2: number): void {}
-  ellipse(_x1: number, _y1: number, _x2: number, _y2: number): void {}
-  floodFill(_x: number, _y: number): void {}
-  unfilledRectangle(_x1: number, _y1: number, _x2: number, _y2: number): void {}
-  unfilledEllipse(_x1: number, _y1: number, _x2: number, _y2: number): void {}
-  setDrawingMode(_mode: number): void {}
-  setPenWidth(_width: number): void {}
-  formPaint(): void {}
-  drawText(_text: Bytes, _x: number, _y: number): void {}
-  getXY(): [number, number] | undefined {
-    return undefined;
+  textOut(text: Bytes): void {
+    this.deps.text.textOut(text);
+  }
+  textOutCR(text: Bytes): void {
+    this.deps.text.textOutCR(text);
+  }
+  clear(): void {
+    this.deps.text.clear();
+  }
+  getrc(): number {
+    return this.deps.text.getrc();
+  }
+  gotorc(row: number, col: number): void {
+    this.deps.text.gotorc(row, col);
+  }
+  setFontProperties(color: number, style: number): void {
+    this.deps.text.setFontProperties(color, style);
+  }
+  getCharAt(row: number, col: number): number {
+    return this.deps.text.getCharAt(row, col);
+  }
+  scrollRect(row: number, col: number, height: number, width: number, direction: number): void {
+    this.deps.text.scrollRect(row, col, height, width, direction);
+  }
+  inputPrompt(mode: number): void {
+    this.deps.text.inputPrompt(mode);
+  }
+  erasePrompt(): void {
+    this.deps.text.erasePrompt();
+  }
+  inputEcho(ch: number, echo: boolean): void {
+    this.deps.text.inputEcho(ch, echo);
+  }
+  inputBackspace(echo: boolean): void {
+    this.deps.text.inputBackspace(echo);
+  }
+  doCRLF(): void {
+    this.deps.text.doCRLF();
+  }
+
+  /* ---- HostIoText: the window ---- */
+
+  /**
+   * setWindowSize (simIOu.cpp:187-233, trap15-b §4.3). 0, 0 keeps the size. Every call blacks the
+   * whole surface and measures the text grid again; the cursor and the shadow array stay as they
+   * are. The surface clamps each side to at least 640 x 480 and to the port's maximum; a request
+   * above the maximum is reported in the message area.
+   */
+  setWindowSize(width: number, height: number): void {
+    const { surface, text } = this.deps;
+    width &= 0xffff; // ushort parameters
+    height &= 0xffff;
+    if (height === 0 && width === 0) {
+      width = surface.back.width;
+      height = surface.back.height;
+    }
+    if (width > MAX_SURFACE || height > MAX_SURFACE) this.deps.message?.(SIZE_LIMIT_MESSAGE);
+    surface.resize(Math.max(width, MIN_WIDTH), Math.max(height, MIN_HEIGHT));
+    text.setTextSize();
+  }
+  getWindowSize(): [number, number] {
+    const { back } = this.deps.surface;
+    return [back.width, back.height];
+  }
+  setupWindow(fullScreen: boolean): void {
+    this.deps.setFullScreen(fullScreen);
+  }
+  ioShow(): void {
+    this.deps.show();
+  }
+  ioBringToFront(): void {
+    this.deps.bringToFront();
+  }
+  /** "this->Invalidate()": the window is repainted from the back buffer. */
+  invalidate(): void {
+    this.deps.surface.formPaint();
+  }
+
+  /* ---- HostIoGraphics: the surface ---- */
+
+  setLineColor(color: number): void {
+    this.deps.surface.setLineColor(color);
+  }
+  setFillColor(color: number): void {
+    this.deps.surface.setFillColor(color);
+  }
+  drawPixel(x: number, y: number): void {
+    this.deps.surface.drawPixel(x, y);
+  }
+  getPixel(x: number, y: number): number {
+    return this.deps.surface.getPixel(x, y);
+  }
+  line(x1: number, y1: number, x2: number, y2: number): void {
+    this.deps.surface.line(x1, y1, x2, y2);
+  }
+  lineTo(x: number, y: number): void {
+    this.deps.surface.lineTo(x, y);
+  }
+  moveTo(x: number, y: number): void {
+    this.deps.surface.moveTo(x, y);
+  }
+  rectangle(x1: number, y1: number, x2: number, y2: number): void {
+    this.deps.surface.rectangle(x1, y1, x2, y2);
+  }
+  ellipse(x1: number, y1: number, x2: number, y2: number): void {
+    this.deps.surface.ellipse(x1, y1, x2, y2);
+  }
+  floodFill(x: number, y: number): void {
+    this.deps.surface.floodFill(x, y);
+  }
+  unfilledRectangle(x1: number, y1: number, x2: number, y2: number): void {
+    this.deps.surface.unfilledRectangle(x1, y1, x2, y2);
+  }
+  unfilledEllipse(x1: number, y1: number, x2: number, y2: number): void {
+    this.deps.surface.unfilledEllipse(x1, y1, x2, y2);
+  }
+  setDrawingMode(mode: number): void {
+    this.deps.surface.setDrawingMode(mode);
+  }
+  setPenWidth(width: number): void {
+    this.deps.surface.setPenWidth(width);
+  }
+  formPaint(): void {
+    this.deps.surface.formPaint();
+  }
+  /** Task 95 draws with the font of the text screen (trap15-b §5.7). */
+  drawText(text: Bytes, x: number, y: number): void {
+    this.deps.text.drawText(text, x, y);
+  }
+  getXY(): [number, number] {
+    return this.deps.surface.getXY();
   }
 }

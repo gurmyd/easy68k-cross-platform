@@ -1,0 +1,27 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:29:17 AM
+
+00000000  =00000005                  1  X   EQU 5
+00000000  =00000005                  2  X   EQU 5
+00000000  =00000001                  3  Y   EQU 1
+Line 4 ERROR: Symbol defined more than once
+00000000                             4  Y   EQU 2
+00001000                             5      ORG $1000
+00001000  6000 0008                  6      BRA FWD
+00001004  203C 00000003              7      MOVE.L #LATER,D0
+0000100A  4E71                       8  FWD NOP
+0000100C  =00000003                  9  LATER   EQU 3
+0000100C                            10      END $1000
+
+1 error detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+FWD                 100A
+LATER               3
+X                   5
+Y                   1

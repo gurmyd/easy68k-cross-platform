@@ -1,0 +1,37 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:31:18 AM
+
+00001000                             1      ORG $1000
+Line 2 ERROR: Label is not allowed
+00001000                 TRUE        2  L   IFEQ 0
+00001000= 01                         3      DC.B 1
+00001001                             4      ENDC
+Line 5 ERROR: Invalid argument
+00001001                 TRUE        5      IFEQ
+00001001= 02                         6      DC.B 2
+00001002                             7      ENDC
+Line 8 ERROR: Invalid argument
+00001002                 TRUE        8      IFNC A
+00001002= 03                         9      DC.B 3
+00001003                            10      ENDC
+00001003                 TRUE       11      IFNE UNDEF
+00001003= 04                        12      DC.B 4
+00001004                            13      ENDC
+00001004                 TRUE       14      IFNE 'A'
+00001004= 05                        15      DC.B 5
+00001005                            16      ENDC
+00001005                 FALSE      17      IFC A ,A
+00001005                            18      ENDC
+00001005                 TRUE       19      IFC A  A
+00001005= 07                        20      DC.B 7
+00001006                            21      ENDC
+00001006                            22      END $1000
+
+3 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------

@@ -1,0 +1,1111 @@
+{
+  "programs": [
+    {
+      "id": "line-01-label-in-column-1-indented-label-with-colon-labe",
+      "title": "label in column 1, indented label with colon, label alone at an odd address",
+      "spec": "3.1.3",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "line-02-opcode-in-column-1-is-a-label",
+      "title": "opcode in column 1 is a label",
+      "spec": "3.1.3",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "line-03-32-33-and-40-character-labels",
+      "title": "32-, 33- and 40-character labels",
+      "spec": "3.1.3",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "line-04-dot-underscore-and-dollar-in-labels-a-label-with",
+      "title": "dot, underscore and dollar in labels; a label with a dot cannot be referenced",
+      "spec": "3.1.3",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "line-05-illegal-first-character",
+      "title": "illegal first character",
+      "spec": "3.1.3",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "line-06-local-labels-and-what-ends-their-scope",
+      "title": "local labels and what ends their scope",
+      "spec": "3.1.3",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [
+        {
+          "macrosExpanded": true
+        }
+      ]
+    },
+    {
+      "id": "line-07-local-label-whose-mangled-name-reaches-33-charac",
+      "title": "local label whose mangled name reaches 33 characters",
+      "spec": "3.1.3",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "line-08-duplicate-definitions-with-equal-and-different-v",
+      "title": "duplicate definitions with equal and different values; phase error",
+      "spec": "3.1.3",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "line-09-comment-forms",
+      "title": "comment forms",
+      "spec": "3.1.2",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "line-10-lines-of-255-256-and-300-characters-are-split-af",
+      "title": "lines of 255, 256 and 300 characters are split after 255",
+      "spec": "1.3",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "line-11-lower-case-and-mixed-case",
+      "title": "lower case and mixed case",
+      "spec": "3.1.1",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "line-12-bytes-80-in-strings-comments-and-labels",
+      "title": "bytes >= $80 in strings, comments and labels",
+      "spec": "3.3, 9.2",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "textmode-01-lf-only-main-source-assembles-like-cr-lf",
+      "title": "LF-only main source assembles like CR LF",
+      "spec": "9.4.1",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "textmode-02-last-line-without-line-end-gets-one-editor-save",
+      "title": "last line without line end gets one (editor save)",
+      "spec": "9.4.1",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "textmode-03-ctrl-z-ends-the-main-source",
+      "title": "Ctrl-Z ends the main source",
+      "spec": "9.4.1",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "textmode-04-macro-temp-file-counts-cr-lf-second-macro-value",
+      "title": "macro temp file counts CR LF: second macro value",
+      "spec": "9.4.2",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "size-01-size-suffix-forms",
+      "title": "size suffix forms",
+      "spec": "3.2",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "size-02-bit-field-mnemonics-with-assemble-bit-field-off",
+      "title": "bit-field mnemonics with \"Assemble Bit Field\" off",
+      "spec": "2, 3.2",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [
+        {
+          "bitFieldInstructions": false
+        }
+      ]
+    },
+    {
+      "id": "size-03-opt-bit-enables-bit-fields-and-writes-the-simula",
+      "title": "OPT BIT enables bit fields and writes the simulator marker",
+      "spec": "2, 5.4",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [
+        {
+          "bitFieldInstructions": false
+        }
+      ]
+    },
+    {
+      "id": "expr-01-operators-and-the-unusual-precedence",
+      "title": "operators and the unusual precedence",
+      "spec": "3.3",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "expr-02-character-constants-too-long-constants-and-numbe",
+      "title": "character constants, too-long constants and numbers",
+      "spec": "3.3",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "expr-03-division-by-zero-single-and-spaces-in-expression",
+      "title": "division by zero, single > and spaces in expressions",
+      "spec": "3.3",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "expr-04-undefined-symbol-followed-by-and-inside-parenthe",
+      "title": "undefined symbol followed by +, -, * and inside parentheses",
+      "spec": "3.3 error protocol",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "expr-05-int-min-divided-by-1-raises-the-exception-of-rou",
+      "title": "INT_MIN divided by -1 raises the exception of routine eval",
+      "spec": "9.2, P12",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "expr-06-shift-counts-of-32-and-more-are-taken-modulo-32",
+      "title": "shift counts of 32 and more are taken modulo 32",
+      "spec": "9.2, P11",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-01-org-odd-value-forward-reference-size-missing-ope",
+      "title": "ORG: odd value, forward reference, size, missing operand",
+      "spec": "3.4",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-02-section-labels-are-section-numbers-location-per",
+      "title": "SECTION: labels are section numbers, location per section",
+      "spec": "3.4",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-03-offset-org-round-trip-offset-with-a-label",
+      "title": "OFFSET ... ORG * round trip, OFFSET with a label",
+      "spec": "3.4",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-04-end-without-operand",
+      "title": "END without operand",
+      "spec": "3.4",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-05-end-comment-is-invalid-syntax",
+      "title": "END ; comment is invalid syntax",
+      "spec": "3.1.2",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-06-end-comment-makes-the-current-location-the-start",
+      "title": "END * comment makes the current location the start address",
+      "spec": "3.1.2",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-07-end-with-a-label-does-not-set-the-start-address",
+      "title": "END with a label does not set the start address",
+      "spec": "3.4",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-08-end-missing-odd-end-address",
+      "title": "END missing; odd END address",
+      "spec": "3.4, 4.3",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-09-end-with-an-odd-address",
+      "title": "END with an odd address",
+      "spec": "3.4",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-10-equ-and-set",
+      "title": "EQU and SET",
+      "spec": "3.4",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-11-set-and-macro-lines-reached-only-in-pass-2-forwa",
+      "title": "SET and MACRO lines reached only in pass 2 (forward reference in IFNE)",
+      "spec": "9.3.9, P14",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-12-dc-strings-versus-constants",
+      "title": "DC strings versus constants",
+      "spec": "3.4",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-13-alignment-of-dc-w-ds-labels-and-instructions-aft",
+      "title": "alignment of DC.W, DS, labels and instructions after an odd DC.B",
+      "spec": "3.4, 3.1.3",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-14-dcb-and-ds-errors",
+      "title": "DCB and DS errors",
+      "spec": "3.4",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-15-opt-words-unknown-word-in-a-list-comment-as-oper",
+      "title": "OPT: words, unknown word in a list, comment as operand, label",
+      "spec": "3.4",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [
+        {
+          "crossReference": false
+        }
+      ]
+    },
+    {
+      "id": "dir-16-fail-with-and-without-text-fail-w-fail-with",
+      "title": "FAIL with and without text, FAIL.W, FAIL with %",
+      "spec": "3.4, 9.3.4",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-17-memory-directives-and-s0-map-records",
+      "title": "MEMORY directives and S0 map records",
+      "spec": "3.4, 6.3",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-18-simhalt-writes-its-second-word-at-the-same-addre",
+      "title": "SIMHALT writes its second word at the same address",
+      "spec": "3.4, 6.4",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-19-page-marker-and-label-error",
+      "title": "PAGE marker and label error",
+      "spec": "3.4, 5.4",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-20-reg-and-movem",
+      "title": "REG and MOVEM",
+      "spec": "3.4",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-21-list-nolist-and-an-evaluated-if-under-nolist",
+      "title": "LIST / NOLIST and an evaluated IF under NOLIST",
+      "spec": "3.4, 3.5, 5.2",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-22-pass-1-option-leak-a-source-ending-in-nolist-lis",
+      "title": "pass-1 option leak: a source ending in NOLIST lists no source lines",
+      "spec": "1.3",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-23-pass-1-option-leak-opt-nowar-hides-warnings-abov",
+      "title": "pass-1 option leak: OPT NOWAR hides warnings above it, still counted",
+      "spec": "1.3, 2",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-24-pass-1-option-leak-opt-mex-at-the-end-expands-ea",
+      "title": "pass-1 option leak: OPT MEX at the end expands earlier calls",
+      "spec": "2",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "include-01-include-quoted-unquoted-in-a-sub-folder-with-and",
+      "title": "INCLUDE quoted, unquoted, in a sub-folder with \\ and /, any case",
+      "spec": "3.4.1",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "include-02-include-missing-file-no-operand-size-suffix-labe",
+      "title": "INCLUDE: missing file, no operand, size suffix, label, tab ends no name",
+      "spec": "3.4.1",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "include-03-include-lines-and-second-character-lines-are-ski",
+      "title": "INCLUDE: * lines and ~ second-character lines are skipped, trailer ignored",
+      "spec": "3.4.1",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "include-04-include-error-inside-nested-include-line-numbers",
+      "title": "INCLUDE: error inside, nested include, line numbers and file of messages",
+      "spec": "3.4.1, 4.4",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "include-05-include-end-inside-the-include-ends-the-assembly",
+      "title": "INCLUDE: END inside the include ends the assembly",
+      "spec": "3.4.1",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "include-06-include-last-line-without-line-end-bare-label-an",
+      "title": "INCLUDE: last line without line end (bare label) and object code on the end line",
+      "spec": "3.1.3, 3.4.1",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "include-07-include-file-cr-lf-lf-and-ctrl-z-text-mode-per-f",
+      "title": "INCLUDE file: CR LF, LF and Ctrl-Z (text mode per file)",
+      "spec": "9.4.1",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "include-08-include-file-with-a-lone-cr-inside-a-line",
+      "title": "INCLUDE file with a lone CR inside a line",
+      "spec": "9.4.1 (ez_file.cpp EZ_TEXT_DROP_ALL_CR)",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "include-09-include-that-includes-itself-stops-when-no-file",
+      "title": "INCLUDE that includes itself stops when no file can be opened",
+      "spec": "3.4.1 (open-file limit)",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "incbin-01-incbin-odd-length-missing-file-label-binary-byte",
+      "title": "INCBIN odd length, missing file, label, binary bytes untouched",
+      "spec": "3.4.1",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "cond-01-ifxx-true-and-false-nesting-three-deep-comments",
+      "title": "IFxx true and false, nesting three deep, comments in skipped blocks",
+      "spec": "3.5",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "cond-02-label-on-ifxx-missing-operand-undefined-symbol-i",
+      "title": "label on IFxx, missing operand, undefined symbol, IFC A ,A",
+      "spec": "3.5",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "cond-03-missing-endc-skips-to-the-end-of-the-file",
+      "title": "missing ENDC skips to the end of the file",
+      "spec": "3.5",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "macro-01-arguments-0-9-a-narg-and-the-size-argument",
+      "title": "arguments \\0..\\9, \\A, NARG, \\@ and the size argument",
+      "spec": "3.6",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [
+        {
+          "macrosExpanded": true
+        }
+      ]
+    },
+    {
+      "id": "macro-02-text-arguments-null-arguments-a-b-versus-a-b",
+      "title": "<text> arguments, '' null arguments, A, B versus A ,B",
+      "spec": "3.6",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [
+        {
+          "macrosExpanded": true
+        }
+      ]
+    },
+    {
+      "id": "macro-03-35-and-36-arguments",
+      "title": "35 and 36 arguments",
+      "spec": "3.6",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "macro-04-continuation-lines-and-the-line-numbers-after-th",
+      "title": "continuation lines and the line numbers after them",
+      "spec": "3.6, 4.4",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "macro-05-ifarg-mexit-nested-macros-and-numbering",
+      "title": "IFARG, MEXIT, nested macros and \\@ numbering",
+      "spec": "3.6",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [
+        {
+          "macrosExpanded": true
+        }
+      ]
+    },
+    {
+      "id": "macro-06-ifarg-inside-a-false-ifxx-argument-present-and-a",
+      "title": "IFARG inside a false IFxx, argument present and absent",
+      "spec": "3.6",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "macro-07-forward-use-duplicate-definition-macro-without-l",
+      "title": "forward use, duplicate definition, MACRO without label",
+      "spec": "3.6",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "macro-08-missing-endm-disables-macro-expansion",
+      "title": "missing ENDM disables macro expansion",
+      "spec": "3.6",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "macro-09-binary-constants-and-a-valid-printf-conversion-i",
+      "title": "binary constants and a valid printf conversion in macro body lines",
+      "spec": "9.3.4, P5",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [
+        {
+          "macrosExpanded": true
+        }
+      ]
+    },
+    {
+      "id": "macro-10-expanded-line-longer-than-255-characters",
+      "title": "expanded line longer than 255 characters",
+      "spec": "9.3.8, P8",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "macro-11-structured-code-inside-a-macro-label-on-the-call",
+      "title": "structured code inside a macro, label on the call",
+      "spec": "3.6",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [
+        {
+          "macrosExpanded": true,
+          "structuredExpanded": true
+        }
+      ]
+    },
+    {
+      "id": "stc-01-if-else-endi-while-endw-repeat-until-with-sizes",
+      "title": "IF/ELSE/ENDI, WHILE/ENDW, REPEAT/UNTIL with sizes, extents, AND, OR",
+      "spec": "3.7",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [
+        {
+          "structuredExpanded": true
+        }
+      ]
+    },
+    {
+      "id": "stc-02-for-to-downto-by-and-dbloop-unless",
+      "title": "FOR TO/DOWNTO/BY and DBLOOP/UNLESS",
+      "spec": "3.7",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [
+        {
+          "structuredExpanded": true
+        }
+      ]
+    },
+    {
+      "id": "stc-03-missing-then-do-unknown-condition-mismatched-and",
+      "title": "missing THEN / DO, unknown condition, mismatched and empty-stack terminators",
+      "spec": "3.7, 9.3.6",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "stc-04-unclosed-if-indented-lbl-if-if-with-var-l-more-t",
+      "title": "unclosed IF, indented LBL: IF, IF with VAR.L, more than 9 IFs (hex labels)",
+      "spec": "3.7",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [
+        {
+          "structuredExpanded": true
+        }
+      ]
+    },
+    {
+      "id": "quirk-01-automatic-moveq-addq-subq-and-n-l",
+      "title": "automatic MOVEQ / ADDQ / SUBQ and #n.L",
+      "spec": "3.8",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "quirk-02-branch-sizing-and-absolute-short-long",
+      "title": "branch sizing and absolute short/long",
+      "spec": "3.8",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "quirk-03-5-16-1-regressions-in-opparse-cpp-d-an-and-d-pc",
+      "title": "5.16.1 regressions in OPPARSE.CPP: (d,An) and (d,PC,Xn)",
+      "spec": "8.3",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "quirk-04-parenthesised-absolute-address-next-to-an-pc-for",
+      "title": "parenthesised absolute address next to An; (PC) forms; NULL from eval in opParse",
+      "spec": "3.8, 8.3, P13",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "quirk-05-index-registers-address-mode-spellings-sp",
+      "title": "index registers, address-mode spellings, SP",
+      "spec": "3.8",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "output-01-s1-s2-s3-records-record-splitting-s8-with-a-3-by",
+      "title": "S1 / S2 / S3 records, record splitting, S8 with a 3-byte address",
+      "spec": "6",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "output-02-long-dc-with-constants-expanded-off-and-on",
+      "title": "long DC with Constants Expanded off and on",
+      "spec": "5.3",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [
+        {},
+        {
+          "constantsExpanded": true
+        }
+      ]
+    },
+    {
+      "id": "output-03-symbol-table-order-and-contents",
+      "title": "symbol table order and contents",
+      "spec": "5.5",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "output-04-tab-expansion-fixed-sizes-and-assembly-tabs",
+      "title": "tab expansion: Fixed sizes and Assembly tabs",
+      "spec": "5.2",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [
+        {
+          "tabType": 1,
+          "tabSize": 4
+        },
+        {
+          "tabType": 1,
+          "tabSize": 8
+        },
+        {
+          "tabType": 0
+        },
+        {
+          "tabType": 1,
+          "tabSize": 20
+        }
+      ]
+    },
+    {
+      "id": "output-05-fixed-tab-size-0-every-listed-line-with-a-tab-ra",
+      "title": "fixed tab size 0: every listed line with a tab raises the listLine exception",
+      "spec": "9.3.9",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "output-06-listing-and-s-record-switched-off",
+      "title": "listing and S-record switched off",
+      "spec": "2",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [
+        {
+          "generateListing": false
+        },
+        {
+          "generateSRecord": false
+        },
+        {
+          "showWarnings": false,
+          "crossReference": false
+        }
+      ]
+    },
+    {
+      "id": "output-07-undefined-symbol-in-a-structured-line-label-of-a",
+      "title": "undefined symbol in a structured line, label of a rejected mnemonic",
+      "spec": "1.5, 3.1.3",
+      "from": "engine/asm/test/cases.mjs",
+      "runs": [{}]
+    },
+    {
+      "id": "line-13-local-labels-across-set-and-a-structured-stateme",
+      "title": "local labels across SET and a structured statement",
+      "spec": "3.1.3",
+      "from": "T1",
+      "runs": [
+        {},
+        {
+          "structuredExpanded": true
+        }
+      ]
+    },
+    {
+      "id": "line-14-tabs-versus-spaces",
+      "title": "tabs versus spaces",
+      "spec": "3.1.1, 5.2",
+      "from": "T1",
+      "runs": [{}]
+    },
+    {
+      "id": "expr-07-star-in-instructions-dc-equ-and-org",
+      "title": "star in instructions, DC, EQU and ORG",
+      "spec": "3.3",
+      "from": "T1",
+      "runs": [{}]
+    },
+    {
+      "id": "expr-08-forward-references-in-the-directives-that-forbid",
+      "title": "forward references in the directives that forbid them",
+      "spec": "3.4",
+      "from": "T1",
+      "runs": [{}]
+    },
+    {
+      "id": "dir-25-every-directive-with-a-label-with-a-size-suffix",
+      "title": "every directive with a label, with a size suffix and without operand",
+      "spec": "3.4",
+      "from": "T1",
+      "runs": [{}]
+    },
+    {
+      "id": "macro-12-recursion-that-ends-by-a-condition",
+      "title": "recursion that ends by a condition",
+      "spec": "3.6",
+      "from": "T1",
+      "runs": [
+        {},
+        {
+          "macrosExpanded": true
+        }
+      ]
+    },
+    {
+      "id": "macro-13-recursion-to-the-limit",
+      "title": "recursion to the limit",
+      "spec": "3.6",
+      "from": "T1",
+      "runs": [{}]
+    },
+    {
+      "id": "macro-14-trailing-comment-on-a-call-without-arguments-nar",
+      "title": "trailing comment on a call without arguments; NARG inside a comment",
+      "spec": "3.6",
+      "from": "T1",
+      "runs": [
+        {
+          "macrosExpanded": true
+        }
+      ]
+    },
+    {
+      "id": "output-08-options-in-all-combinations",
+      "title": "options in all combinations",
+      "spec": "2",
+      "from": "T1",
+      "runs": [
+        {
+          "showWarnings": false,
+          "crossReference": false,
+          "bitFieldInstructions": false
+        },
+        {
+          "crossReference": false,
+          "bitFieldInstructions": false
+        },
+        {
+          "showWarnings": false,
+          "bitFieldInstructions": false
+        },
+        {
+          "bitFieldInstructions": false
+        },
+        {
+          "showWarnings": false,
+          "crossReference": false,
+          "macrosExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "crossReference": false,
+          "macrosExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "showWarnings": false,
+          "macrosExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "macrosExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "showWarnings": false,
+          "crossReference": false,
+          "structuredExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "crossReference": false,
+          "structuredExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "showWarnings": false,
+          "structuredExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "structuredExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "showWarnings": false,
+          "crossReference": false,
+          "macrosExpanded": true,
+          "structuredExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "crossReference": false,
+          "macrosExpanded": true,
+          "structuredExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "showWarnings": false,
+          "macrosExpanded": true,
+          "structuredExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "macrosExpanded": true,
+          "structuredExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "showWarnings": false,
+          "crossReference": false,
+          "constantsExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "crossReference": false,
+          "constantsExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "showWarnings": false,
+          "constantsExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "constantsExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "showWarnings": false,
+          "crossReference": false,
+          "macrosExpanded": true,
+          "constantsExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "crossReference": false,
+          "macrosExpanded": true,
+          "constantsExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "showWarnings": false,
+          "macrosExpanded": true,
+          "constantsExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "macrosExpanded": true,
+          "constantsExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "showWarnings": false,
+          "crossReference": false,
+          "structuredExpanded": true,
+          "constantsExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "crossReference": false,
+          "structuredExpanded": true,
+          "constantsExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "showWarnings": false,
+          "structuredExpanded": true,
+          "constantsExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "structuredExpanded": true,
+          "constantsExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "showWarnings": false,
+          "crossReference": false,
+          "macrosExpanded": true,
+          "structuredExpanded": true,
+          "constantsExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "crossReference": false,
+          "macrosExpanded": true,
+          "structuredExpanded": true,
+          "constantsExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "showWarnings": false,
+          "macrosExpanded": true,
+          "structuredExpanded": true,
+          "constantsExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "macrosExpanded": true,
+          "structuredExpanded": true,
+          "constantsExpanded": true,
+          "bitFieldInstructions": false
+        },
+        {
+          "showWarnings": false,
+          "crossReference": false
+        },
+        {
+          "crossReference": false
+        },
+        {
+          "showWarnings": false
+        },
+        {},
+        {
+          "showWarnings": false,
+          "crossReference": false,
+          "macrosExpanded": true
+        },
+        {
+          "crossReference": false,
+          "macrosExpanded": true
+        },
+        {
+          "showWarnings": false,
+          "macrosExpanded": true
+        },
+        {
+          "macrosExpanded": true
+        },
+        {
+          "showWarnings": false,
+          "crossReference": false,
+          "structuredExpanded": true
+        },
+        {
+          "crossReference": false,
+          "structuredExpanded": true
+        },
+        {
+          "showWarnings": false,
+          "structuredExpanded": true
+        },
+        {
+          "structuredExpanded": true
+        },
+        {
+          "showWarnings": false,
+          "crossReference": false,
+          "macrosExpanded": true,
+          "structuredExpanded": true
+        },
+        {
+          "crossReference": false,
+          "macrosExpanded": true,
+          "structuredExpanded": true
+        },
+        {
+          "showWarnings": false,
+          "macrosExpanded": true,
+          "structuredExpanded": true
+        },
+        {
+          "macrosExpanded": true,
+          "structuredExpanded": true
+        },
+        {
+          "showWarnings": false,
+          "crossReference": false,
+          "constantsExpanded": true
+        },
+        {
+          "crossReference": false,
+          "constantsExpanded": true
+        },
+        {
+          "showWarnings": false,
+          "constantsExpanded": true
+        },
+        {
+          "constantsExpanded": true
+        },
+        {
+          "showWarnings": false,
+          "crossReference": false,
+          "macrosExpanded": true,
+          "constantsExpanded": true
+        },
+        {
+          "crossReference": false,
+          "macrosExpanded": true,
+          "constantsExpanded": true
+        },
+        {
+          "showWarnings": false,
+          "macrosExpanded": true,
+          "constantsExpanded": true
+        },
+        {
+          "macrosExpanded": true,
+          "constantsExpanded": true
+        },
+        {
+          "showWarnings": false,
+          "crossReference": false,
+          "structuredExpanded": true,
+          "constantsExpanded": true
+        },
+        {
+          "crossReference": false,
+          "structuredExpanded": true,
+          "constantsExpanded": true
+        },
+        {
+          "showWarnings": false,
+          "structuredExpanded": true,
+          "constantsExpanded": true
+        },
+        {
+          "structuredExpanded": true,
+          "constantsExpanded": true
+        },
+        {
+          "showWarnings": false,
+          "crossReference": false,
+          "macrosExpanded": true,
+          "structuredExpanded": true,
+          "constantsExpanded": true
+        },
+        {
+          "crossReference": false,
+          "macrosExpanded": true,
+          "structuredExpanded": true,
+          "constantsExpanded": true
+        },
+        {
+          "showWarnings": false,
+          "macrosExpanded": true,
+          "structuredExpanded": true,
+          "constantsExpanded": true
+        },
+        {
+          "macrosExpanded": true,
+          "structuredExpanded": true,
+          "constantsExpanded": true
+        },
+        {
+          "generateListing": false
+        },
+        {
+          "generateSRecord": false
+        }
+      ]
+    }
+  ]
+}

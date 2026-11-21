@@ -1,0 +1,254 @@
+/* The editor area (ARCHITECTURE.md 2.2, 2.4, 2.8). Owner: E2. Colours and sizes come from the design
+   tokens of app/src/styles, so both themes work; the syntax colours are the highlighter's (E3). */
+
+.e68-editor {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--c-bg);
+}
+
+.e68-editor[data-layout='vertical'] {
+  flex-direction: row;
+}
+
+.e68-editor__slot {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.e68-editor[data-layout='horizontal'] > .e68-editor__slot:first-child,
+.e68-editor[data-layout='vertical'] > .e68-editor__slot:first-child {
+  flex: none;
+}
+
+.e68-editor__pane {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--c-surface);
+}
+
+.e68-editor[data-layout='horizontal'] .e68-editor__pane[data-active='true'] .e68-editor__tabs,
+.e68-editor[data-layout='vertical'] .e68-editor__pane[data-active='true'] .e68-editor__tabs {
+  box-shadow: inset 0 2px 0 var(--c-accent);
+}
+
+.e68-editor__tabs {
+  flex: none;
+}
+
+.e68-editor__panel {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.e68-editor__empty {
+  flex: 1 1 auto;
+  margin: 0;
+  padding: var(--sp-4);
+  color: var(--c-text-muted);
+  font: var(--fs-md) / var(--lh-body) var(--font-ui);
+}
+
+/* ---- the CodeMirror view */
+
+.e68-editor__view {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  color: var(--c-text);
+}
+
+.e68-editor__view .cm-editor {
+  flex: 1 1 auto;
+  height: 100%;
+  min-width: 0;
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+
+.e68-editor__view .cm-editor.cm-focused {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.e68-editor__view .cm-scroller {
+  font-family: inherit;
+  line-height: 1.3;
+}
+
+.e68-editor__view .cm-content {
+  caret-color: var(--c-text);
+}
+
+.e68-editor__view .cm-editor .cm-cursor {
+  border-left-color: var(--c-text);
+}
+
+/* The selection stays visible when the focus is elsewhere (HideSelection = False, editor-ui §7.1). */
+.e68-editor__view .cm-editor .cm-scroller .cm-selectionLayer .cm-selectionBackground {
+  background: color-mix(in srgb, var(--c-selection) 70%, var(--c-surface));
+}
+
+.e68-editor__view .cm-editor.cm-focused .cm-scroller .cm-selectionLayer .cm-selectionBackground {
+  background: var(--c-selection);
+}
+
+.e68-editor__view .cm-gutters {
+  border-right: 1px solid var(--c-border);
+  background: var(--c-panel);
+  color: var(--c-text-muted);
+}
+
+.e68-editor__view .cm-lineNumbers .cm-gutterElement {
+  padding: 0 var(--sp-1) 0 var(--sp-2);
+}
+
+/* A tab character, as wide as the columns to its stop (the width is set per widget in ch). */
+.e68-tab {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: top;
+  height: 1px;
+}
+
+/* Characters that Windows-1252 cannot store (3.9.3). */
+.e68-not1252 {
+  text-decoration: underline wavy var(--c-warning);
+  text-decoration-skip-ink: none;
+  text-underline-offset: 2px;
+}
+
+/* ---- inline assembler markers (2.2) */
+
+.e68-squiggle {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 2px;
+}
+
+.e68-squiggle--error {
+  text-decoration-color: var(--c-danger);
+}
+
+.e68-squiggle--warning {
+  text-decoration-color: var(--c-warning);
+}
+
+.e68-marker-gutter .cm-gutterElement {
+  padding: 0 2px;
+}
+
+.e68-marker {
+  display: inline-block;
+  width: 1.4em;
+  border-radius: var(--r-sm);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  text-align: center;
+  cursor: default;
+}
+
+.e68-marker--error {
+  background: var(--c-danger);
+  color: var(--c-surface);
+}
+
+.e68-marker--warning {
+  background: var(--c-warning);
+  color: var(--c-surface);
+}
+
+.e68-editor__view .cm-tooltip {
+  z-index: 500;
+  border: 0;
+  background: var(--c-surface);
+}
+
+.e68-marker-tip {
+  max-width: 60ch;
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--c-border-strong);
+  border-left: 3px solid var(--c-danger);
+  border-radius: var(--r-sm);
+  background-color: var(--c-surface);
+  box-shadow: var(--shadow-popup);
+  color: var(--c-text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+  white-space: pre-wrap;
+}
+
+.e68-marker-tip--warning {
+  border-left-color: var(--c-warning);
+}
+
+/* ---- status bar under the document (editor-ui §7.2: panels of 90, 60, 50, 50 px and the rest) */
+
+.e68-editor__status {
+  display: flex;
+  flex: none;
+  align-items: stretch;
+  height: var(--h-status);
+  border-top: 1px solid var(--c-border);
+  background: var(--c-panel);
+  color: var(--c-text);
+  font: var(--fs-sm) / var(--h-status) var(--font-ui);
+}
+
+.e68-editor__cell {
+  flex: none;
+  overflow: hidden;
+  padding: 0 var(--sp-2);
+  border-right: 1px solid var(--c-border);
+  white-space: pre;
+}
+
+.e68-editor__cell--position {
+  width: 90px;
+}
+
+.e68-editor__cell--modified {
+  width: 60px;
+}
+
+.e68-editor__cell--insert {
+  width: 64px;
+  margin: 0;
+  border-top: 0;
+  border-bottom: 0;
+  border-left: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.e68-editor__cell--insert:hover {
+  background: var(--c-hover);
+}
+
+.e68-editor__cell--empty {
+  width: 50px;
+}
+
+.e68-editor__cell--info {
+  flex: 1 1 auto;
+  border-right: 0;
+  color: var(--c-text-muted);
+}

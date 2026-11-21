@@ -1,0 +1,12 @@
+M	MACRO
+	IFEQ 1
+	IFARG 1
+	ENDC
+	DC.B 2
+	ENDC
+	DC.B 3
+	ENDM
+	ORG $1000
+	M X
+	M
+	END $1000

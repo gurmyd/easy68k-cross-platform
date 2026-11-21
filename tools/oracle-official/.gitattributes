@@ -1,9 +1,0 @@
-# Scripts run inside a Linux container: LF always.
-*.sh        text eol=lf
-*.py        text eol=lf
-Dockerfile  text eol=lf
-*.md        text eol=lf
-# 68000 test programs are kept byte for byte (line ends are part of what the
-# editor's RichEdit round trip is tested on): never converted.
-*.X68       -text
-*.x68       -text

@@ -1,0 +1,266 @@
+00000000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:28:58 AM
+
+00000000                             1  ; =============================================================================
+00000000                             2  ; GAME VARIABLES
+00000000                             3  ; =============================================================================
+00000000                             4  
+00000000                             5  ; NOTE FOR DIRECTIONS: 0=UP,1=DOWN,2=LEFT,3=RIGHT
+00000000                             6  
+00000000                             7  ; --- PAC-MAN RELATED VARIABLES -----------------------------------------------
+00000000                             8  PAC_POS_X                 DS.W    1          ; PAC-MAN X COORDINATE
+00000002                             9  PAC_POS_Y                 DS.W    1          ; PAC-MAN Y COORDINATE
+00000004                            10  PAC_FACE                  DS.W    1          ; PAC-MAN DIRECTION
+00000006                            11  NEXT_PAC_POS_X            DS.W    1          ; NEXT PAC-MAN X COORDINATE
+00000008                            12  NEXT_PAC_POS_Y            DS.W    1          ; NEXT PAC-MAN Y COORDINATE
+0000000A                            13  PAC_INTENT                DS.W    1          ; NEXT PAC-MAN DIRECTION
+0000000C                            14  PREVIOUS_PAC_POS_X        DS.W    1          ; PREVIOUS PAC-MAN X COORDINATE
+0000000E                            15  PREVIOUS_PAC_POS_Y        DS.W    1          ; PREVIOUS PAC-MAN Y COORDINATE
+00000010                            16  
+00000010                            17  ; --- MAP RELATED VARIABLES ---------------------------------------------------
+Line 18 ERROR: Undefined symbol
+00000010                            18  MAPDATA                   DS.B    MAPWITH*MAPHIGH
+00000010                            19  
+00000010                            20  ; --- SND RELATED VARIABLES ---------------------------------------------------
+00000010                            21  CHKCHOMP                  DS.W    1
+00000012                            22  STARTTIM                  DS.W    1
+00000014                            23  
+00000014                            24  ; --- BLINKY RELATED VARIABLES ------------------------------------------------
+00000014                            25  BLINKY_DIR                DS.W    1          ; BLINKY DIRECTION
+00000016                            26  BLINKY_POS_X              DS.W    1          ; BLINKY X COORDINATE
+00000018                            27  BLINKY_POS_Y              DS.W    1          ; BLINKY Y COORDINATE
+0000001A                            28  BLINKY_IS_BLUE            DS.W    1          ; BLINKY IS SCARED
+0000001C= 00 00 00 00               29  BLINKY_ALLOWED_DIR        DC.B    0,0,0,0    ; DIRECTION ARRAY
+00000020= 0000 0000 0000 0000       30  BLINKY_EUCYDEAN_DIS       DC.W    0,0,0,0    ; DISTANCE ARRAY
+00000028                            31  BLINKY_COLOR              DS.L    1
+0000002C                            32  BLINKY_ESTADO             DS.W    1
+0000002E                            33  BLINKY_SPEED              DS.W    1
+00000030                            34  BLINKY_SCATERTIMER        DS.W    1          ; SCATTER TIMER
+00000032                            35  BLINKY_SCATER_ON          DS.W    1          ; SCATTER FLAG
+00000034                            36  BLINKY_CHASETIMER         DS.W    1          ; CHASE TIMER
+00000036                            37  BLINKY_CHASE_ON           DS.W    1          ; CHASE FLAG
+00000038                            38  BLINKY_FRIGHTENED_TIMER   DS.W    1          ; SCARED TIMER
+0000003A                            39  BLINKY_MODE_SWITCH_COUNT  DS.W    1
+0000003C                            40  BLINKY_TARGET_X           DS.W    1          ; BLINKY TARGET X
+0000003E                            41  BLINKY_TARGET_Y           DS.W    1          ; BLINKY TARGET Y
+00000040                            42  
+00000040                            43  ; --- PINKY RELATED VARIABLES -------------------------------------------------
+00000040                            44  PINKY_DIR                 DS.W    1          ; PINKY DIRECTION
+00000042                            45  PINKY_POS_X               DS.W    1          ; PINKY X COORDINATE
+00000044                            46  PINKY_POS_Y               DS.W    1          ; PINKY Y COORDINATE
+00000046                            47  PINKY_IS_BLUE             DS.W    1          ; PINKY IS SCARED
+00000048= 00 00 00 00               48  PINKY_ALLOWED_DIR         DC.B    0,0,0,0    ; DIRECTION ARRAY
+0000004C= 0000 0000 0000 0000       49  PINKY_EUCYDEAN_DIS        DC.W    0,0,0,0    ; DISTANCE ARRAY
+00000054                            50  PINKY_COLOR               DS.L    1
+00000058                            51  PINKY_ESTADO              DS.W    1
+0000005A                            52  PINKY_SPEED               DS.W    1
+0000005C                            53  PINKY_SCATERTIMER         DS.W    1          ; SCATTER TIMER
+0000005E                            54  PINKY_SCATER_ON           DS.W    1          ; SCATTER FLAG
+00000060                            55  PINKY_CHASETIMER          DS.W    1          ; CHASE TIMER
+00000062                            56  PINKY_CHASE_ON            DS.W    1          ; CHASE FLAG
+00000064                            57  PINKY_FRIGHTENED_TIMER    DS.W    1          ; SCARED TIMER
+00000066                            58  PINKY_MODE_SWITCH_COUNT   DS.W    1
+00000068                            59  PINKY_TARGET_X            DS.W    1          ; PINKY TARGET X
+0000006A                            60  PINKY_TARGET_Y            DS.W    1          ; PINKY TARGET Y
+0000006C                            61  
+0000006C                            62  ; --- INKY RELATED VARIABLES --------------------------------------------------
+0000006C                            63  INKY_DIR                  DS.W    1          ; INKY DIRECTION
+0000006E                            64  INKY_POS_X                DS.W    1          ; INKY X COORDINATE
+00000070                            65  INKY_POS_Y                DS.W    1          ; INKY Y COORDINATE
+00000072                            66  INKY_IS_BLUE              DS.W    1          ; INKY IS SCARED
+00000074= 00 00 00 00               67  INKY_ALLOWED_DIR          DC.B    0,0,0,0    ; DIRECTION ARRAY
+00000078= 0000 0000 0000 0000       68  INKY_EUCYDEAN_DIS         DC.W    0,0,0,0    ; DISTANCE ARRAY
+00000080                            69  INKY_COLOR                DS.L    1
+00000084                            70  INKY_ESTADO               DS.W    1
+00000086                            71  INKY_SPEED                DS.W    1
+00000088                            72  INKY_SCATERTIMER          DS.W    1          ; SCATTER TIMER
+0000008A                            73  INKY_SCATER_ON            DS.W    1          ; SCATTER FLAG
+0000008C                            74  INKY_CHASETIMER           DS.W    1          ; CHASE TIMER
+0000008E                            75  INKY_CHASE_ON             DS.W    1          ; CHASE FLAG
+00000090                            76  INKY_FRIGHTENED_TIMER     DS.W    1          ; SCARED TIMER
+00000092                            77  INKY_MODE_SWITCH_COUNT    DS.W    1
+00000094                            78  INKY_TARGET_X             DS.W    1          ; INKY TARGET X
+00000096                            79  INKY_TARGET_Y             DS.W    1          ; INKY TARGET Y
+00000098                            80  
+00000098                            81  ; --- CLYDE RELATED VARIABLES -------------------------------------------------
+00000098                            82  CLYDE_DIR                 DS.W    1          ; CLYDE DIRECTION
+0000009A                            83  CLYDE_POS_X               DS.W    1          ; CLYDE X COORDINATE
+0000009C                            84  CLYDE_POS_Y               DS.W    1          ; CLYDE Y COORDINATE
+0000009E                            85  CLYDE_IS_BLUE             DS.W    1          ; CLYDE IS SCARED
+000000A0= 00 00 00 00               86  CLYDE_ALLOWED_DIR         DC.B    0,0,0,0    ; DIRECTION ARRAY
+000000A4= 0000 0000 0000 0000       87  CLYDE_EUCYDEAN_DIS        DC.W    0,0,0,0    ; DISTANCE ARRAY
+000000AC= 0000 0000 0000 0000       88  CLYDE_DIS_PAC             DC.W    0,0,0,0    ; DISTANCE ARRAY
+000000B4                            89  CLYDE_COLOR               DS.L    1
+000000B8                            90  CLYDE_ESTADO              DS.W    1
+000000BA                            91  IS_CLYDE_NEAR             DS.B    1
+000000BC                            92  CLYDE_SPEED               DS.W    1
+000000BE                            93  CLYDE_SCATERTIMER         DS.W    1          ; SCATTER TIMER
+000000C0                            94  CLYDE_SCATER_ON           DS.W    1          ; SCATTER FLAG
+000000C2                            95  CLYDE_CHASETIMER          DS.W    1          ; CHASE TIMER
+000000C4                            96  CLYDE_CHASE_ON            DS.W    1          ; CHASE FLAG
+000000C6                            97  CLYDE_FRIGHTENED_TIMER    DS.W    1          ; SCARED TIMER
+000000C8                            98  CLYDE_MODE_SWITCH_COUNT   DS.W    1
+000000CA                            99  CLYDE_TARGET_X            DS.W    1          ; CLYDE TARGET X
+000000CC                           100  CLYDE_TARGET_Y            DS.W    1          ; CLYDE TARGET Y
+000000CE                           101  
+000000CE                           102  ; --- GAME RELATED VARIABLES --------------------------------------------------
+000000CE                           103  PACMAN_LIVES              DS.B    1          ; NUMBER OF PAC-MAN LIVES
+000000D0                           104  TOTAL_PELLETS_COL         DS.W    1          ; TOTAL PELLETS COLLECTED
+000000D2                           105  CURRENT_SCORE             DS.L    1          ; CURRENT SCORE
+000000D6                           106  CURRENT_SCORE2            DS.B    1024       ; CURRENT SCORE (BUFFER)
+000004D6                           107  CURRENT_SCORE3            DS.B    1024       ; AUX CURRENT SCORE (BUFFER)
+000008D6                           108  HIGH_SCORE                DS.B    1024       ; HIGH SCORE (BUFFER)
+00000CD6                           109  HIGH_SCORE2               DS.L    1          ; HIGH SCORE
+00000CDA                           110  DEBUG                     DS.W    1          ; DEBUG VAR TO SEE GHOST TARGET
+00000CDC                           111  
+00000CDC                           112  ; --- STATE RELATED VARIABLES -------------------------------------------------
+00000CDC                           113  STACUR                    DS.W    1          ; CURRENT STATE
+00000CDE                           114  STANEXT                   DS.W    1          ; NEXT STATE
+00000CE0                           115  LEVEL                     DS.W    1
+00000CE2                           116  ISCTIMER                  DS.W    1          ; INTRO STATE TIMER
+00000CE4                           117  INSTIMER                  DS.W    1          ; INSTRUCTIONS STATE TIMER
+00000CE6                           118  
+00000CE6                           119  ; --- FPS RELATED VARIABLES ---------------------------------------------------
+00000CE6                           120  FRAMECOUNT                DS.W    1
+00000CE8                           121  FRAMEPRINT                DS.W    1
+00000CEA                           122  TIME                      DS.L    1                   
+00000CEE                           123                            DS.W    0            
+00000CEE                           124  
+00000CEE                           125  
+00000CEE                           126  
+00000CEE                           127  
+00000CEE                           128  
+00000CEE                           129  
+00000CEE                           130  
+00000CEE                           131  
+00000CEE                           132  
+00000CEE                           133  
+00000CEE                           134  
+00000CEE                           135  
+00000CEE                           136  
+00000CEE                           137  
+00000CEE                           138  
+00000CEE                           139  
+00000CEE                           140  
+00000CEE                           141  
+00000CEE                           142  
+00000CEE                           143  
+00000CEE                           144  
+00000CEE                           145  
+00000CEE                           146  
+00000CEE                           147  
+00000CEE                           148  
+00000CEE                           149  
+00000CEE                           150  
+00000CEE                           151  
+00000CEE                           152  
+00000CEE                           153  
+00000CEE                           154  
+00000CEE                           155  
+Line 156 WARNING: END directive missing, starting address not set
+
+1 error detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+BLINKY_ALLOWED_DIR  1C
+BLINKY_CHASETIMER   34
+BLINKY_CHASE_ON     36
+BLINKY_COLOR        28
+BLINKY_DIR          14
+BLINKY_ESTADO       2C
+BLINKY_EUCYDEAN_DIS  20
+BLINKY_FRIGHTENED_TIMER  38
+BLINKY_IS_BLUE      1A
+BLINKY_MODE_SWITCH_COUNT  3A
+BLINKY_POS_X        16
+BLINKY_POS_Y        18
+BLINKY_SCATERTIMER  30
+BLINKY_SCATER_ON    32
+BLINKY_SPEED        2E
+BLINKY_TARGET_X     3C
+BLINKY_TARGET_Y     3E
+CHKCHOMP            10
+CLYDE_ALLOWED_DIR   A0
+CLYDE_CHASETIMER    C2
+CLYDE_CHASE_ON      C4
+CLYDE_COLOR         B4
+CLYDE_DIR           98
+CLYDE_DIS_PAC       AC
+CLYDE_ESTADO        B8
+CLYDE_EUCYDEAN_DIS  A4
+CLYDE_FRIGHTENED_TIMER  C6
+CLYDE_IS_BLUE       9E
+CLYDE_MODE_SWITCH_COUNT  C8
+CLYDE_POS_X         9A
+CLYDE_POS_Y         9C
+CLYDE_SCATERTIMER   BE
+CLYDE_SCATER_ON     C0
+CLYDE_SPEED         BC
+CLYDE_TARGET_X      CA
+CLYDE_TARGET_Y      CC
+CURRENT_SCORE       D2
+CURRENT_SCORE2      D6
+CURRENT_SCORE3      4D6
+DEBUG               CDA
+FRAMECOUNT          CE6
+FRAMEPRINT          CE8
+HIGH_SCORE          8D6
+HIGH_SCORE2         CD6
+INKY_ALLOWED_DIR    74
+INKY_CHASETIMER     8C
+INKY_CHASE_ON       8E
+INKY_COLOR          80
+INKY_DIR            6C
+INKY_ESTADO         84
+INKY_EUCYDEAN_DIS   78
+INKY_FRIGHTENED_TIMER  90
+INKY_IS_BLUE        72
+INKY_MODE_SWITCH_COUNT  92
+INKY_POS_X          6E
+INKY_POS_Y          70
+INKY_SCATERTIMER    88
+INKY_SCATER_ON      8A
+INKY_SPEED          86
+INKY_TARGET_X       94
+INKY_TARGET_Y       96
+INSTIMER            CE4
+ISCTIMER            CE2
+IS_CLYDE_NEAR       BA
+LEVEL               CE0
+MAPDATA             10
+NEXT_PAC_POS_X      6
+NEXT_PAC_POS_Y      8
+PACMAN_LIVES        CE
+PAC_FACE            4
+PAC_INTENT          A
+PAC_POS_X           0
+PAC_POS_Y           2
+PINKY_ALLOWED_DIR   48
+PINKY_CHASETIMER    60
+PINKY_CHASE_ON      62
+PINKY_COLOR         54
+PINKY_DIR           40
+PINKY_ESTADO        58
+PINKY_EUCYDEAN_DIS  4C
+PINKY_FRIGHTENED_TIMER  64
+PINKY_IS_BLUE       46
+PINKY_MODE_SWITCH_COUNT  66
+PINKY_POS_X         42
+PINKY_POS_Y         44
+PINKY_SCATERTIMER   5C
+PINKY_SCATER_ON     5E
+PINKY_SPEED         5A
+PINKY_TARGET_X      68
+PINKY_TARGET_Y      6A
+PREVIOUS_PAC_POS_X  C
+PREVIOUS_PAC_POS_Y  E
+STACUR              CDC
+STANEXT             CDE
+STARTTIM            12
+TIME                CEA
+TOTAL_PELLETS_COL   D0

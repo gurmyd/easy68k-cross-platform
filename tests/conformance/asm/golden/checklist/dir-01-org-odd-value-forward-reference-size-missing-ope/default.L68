@@ -1,0 +1,24 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:29:43 AM
+
+Line 1 WARNING: Origin value is odd (Location counter set to next highest address)
+00001002                             1      ORG $1001
+00001002  4E71                       2      NOP
+Line 3 ERROR: Forward references not allowed with this directive
+00001004                             3      ORG FWD
+Line 4 ERROR: Invalid size code
+00002000                             4      ORG.W $2000
+Line 5 ERROR: Invalid syntax
+00002000                             5      ORG
+00002000  4E71                       6  FWD NOP
+00002002                             7      END $1000
+
+3 errors detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+FWD                 2000

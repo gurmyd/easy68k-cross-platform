@@ -1,15 +1,22 @@
-// Feature "help": the Help panel, the About boxes, the examples.
+// Feature "help": the Help panel, the About boxes, the examples (ARCHITECTURE.md 9.2, H1).
 //
-// STUB written by W3 (wave 0): an empty feature module, so that the shell runs before this
-// feature exists (ARCHITECTURE.md 3.12.3). H1 owns this folder and replaces the body. The
-// exported names are contract (section 8, "Stubs"): app/src/features/index.ts imports
-// them by name.
-//
-// A feature module may contribute command handlers (`commands`), panels (`panels`), dialogs
-// (`dialogs`) and an `init` function that runs once after every service exists.
+// Contributes the eight commands of the Help menus and of F1, the Help panel (a drawer on the
+// right edge in every mode, shown with `showPanel(ctx, 'help')`) and the two About dialogs.
+// The pages themselves are the original's, imported into app/public/help by tools/import-help.mjs.
 //
 // Owner: W3 > H1.
 
 import type { FeatureModule } from '../../contracts';
+import { EditorAboutDialog, SimulatorAboutDialog } from './AboutDialog';
+import { commands } from './commands';
+import { HelpPanel } from './HelpPanel';
 
-export const feature: FeatureModule = { id: 'help' };
+export const feature: FeatureModule = {
+  id: 'help',
+  commands,
+  panels: [{ id: 'help', title: 'Help', mode: 'editor', component: HelpPanel }],
+  dialogs: {
+    'about.editor': EditorAboutDialog,
+    'about.sim': SimulatorAboutDialog,
+  },
+};

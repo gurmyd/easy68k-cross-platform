@@ -1,0 +1,21 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:29:34 AM
+
+00001000                             1      ORG $1000
+00001000  4E71                       2  _A$B    NOP
+00001002  4E71                       3  A.B NOP
+00001004  60FA                       4      BRA _A$B
+Line 5 ERROR: Comma expected
+00001006                             5      MOVE.W A.B,D0
+00001006                             6      END $1000
+
+1 error detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+A.B                 1002
+_A$B                1000

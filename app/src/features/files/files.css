@@ -1,0 +1,157 @@
+/* The Files panel and the file dialogs (ARCHITECTURE.md 2.2, 3.8.5). Owner: FS1. Tokens only. */
+
+.e68-files {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--c-surface);
+  color: var(--c-text);
+  font-size: var(--fs-md);
+}
+
+.e68-files__strip {
+  flex: none;
+  gap: var(--sp-1);
+  padding: var(--sp-1);
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-panel);
+}
+
+.e68-files__problem {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: flex-start;
+  flex: none;
+  margin: 0;
+  padding: var(--sp-2);
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-accent-soft);
+  color: var(--c-danger);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+}
+
+.e68-files__tree {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--sp-1) 0;
+  outline: none;
+}
+
+.e68-files__tree:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(-1 * var(--sp-1));
+}
+
+.e68-files__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: 22px;
+  padding-inline-end: var(--sp-2);
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+
+.e68-files__row:hover {
+  background: var(--c-hover);
+}
+
+.e68-files__row[aria-selected='true'] {
+  background: var(--c-selection);
+}
+
+.e68-files__tree:focus .e68-files__row[aria-selected='true'] {
+  box-shadow: inset 2px 0 0 var(--c-accent);
+}
+
+.e68-files__row--root {
+  font-weight: 600;
+}
+
+.e68-files__twisty {
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+  width: 14px;
+  color: var(--c-text-muted);
+}
+
+.e68-files__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.e68-files__error,
+.e68-files__message {
+  color: var(--c-danger);
+}
+
+.e68-files__entry {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.e68-files__entry-name {
+  white-space: pre;
+}
+
+/* ---- the Open and Save dialogs ---- */
+
+.e68-filedialog .e68-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.e68-filedialog__lookin {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.e68-filedialog__lookin-select {
+  min-width: 260px;
+}
+
+.e68-filedialog__list {
+  position: relative;
+}
+
+.e68-filedialog__empty {
+  position: absolute;
+  inset: var(--sp-4) 0 auto 0;
+  margin: 0;
+  text-align: center;
+  color: var(--c-text-muted);
+  pointer-events: none;
+}
+
+.e68-filedialog__fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-2);
+}
+
+.e68-filedialog__fields .e68-field-label {
+  display: grid;
+  grid-template-columns: 9em 1fr;
+  align-items: center;
+}
+
+.e68-filedialog__providers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.e68-filedialog__note {
+  margin: 0;
+  color: var(--c-text-muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+}

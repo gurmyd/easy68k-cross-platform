@@ -1,0 +1,45 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:27:32 AM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : reverse-word
+00000000                             3  * Written by : Henry Wrightson
+00000000                             4  * Date       : 9/8/2026
+00000000                             5  * Description: Put a word into memory, reverse it in memory and output
+00000000                             6  *-----------------------------------------------------------
+00001000                             7      ORG    $1000    
+00001000                             8  START:
+00001000  43F9 00001030              9      lea     buffer,a1
+00001006  7004                      10      moveq   #4,d0
+00001008                            11      
+00001008                            12  Loop:
+00001008  143B 0020                 13      MOVE.B  message(PC,D0.W),D2
+0000100C  1382 1000                 14      MOVE.B  D2,(A1,D1.W)
+00001010  5241                      15      ADDQ    #1,D1
+00001012  5340                      16      SUBQ    #1,D0
+00001014  6AF2                      17      BPL     Loop
+00001016  1439 0000102F             18      MOVE.B  message+5,D2
+0000101C  1342 0005                 19      MOVE.B  D2,5(A1)
+00001020                            20      
+00001020  103C 000E                 21      MOVE.B  #14,D0
+00001024  4E4F                      22      TRAP    #15
+00001026                            23  
+00001026  FFFF FFFF                 24      SIMHALT
+0000102A                            25      
+0000102A= 48 65 6C 6C 6F 00         26  message     dc.b    'Hello',0
+00001030                            27  buffer      ds.b    5
+00001035                            28      
+00001035                            29      END    START
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+BUFFER              1030
+LOOP                1008
+MESSAGE             102A
+START               1000

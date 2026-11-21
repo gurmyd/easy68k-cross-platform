@@ -1,0 +1,365 @@
+// The simulator session, composed (ARCHITECTURE.md 3.3.1, 3.11.2, 4.7.1).
+//
+// One function builds everything a window's simulator consists of - the host parts, the composed
+// host, the software timers and the run controller - and ties them to each other. It is used
+// twice:
+//
+//   features/run/session.ts   the application: time, files, dialogs and panels of the real page
+//   core/run/headless.ts      tests and conformance runs under Node: virtual time, files in memory
+//
+// so both run the same parts wired the same way. What differs comes in as `SessionEnv`. The parts
+// are the classes at their final paths (3.3.1); a caller may put its own object in place of any of
+// them (`SessionEnv.parts`), which is how a test replaces a device by a double.
+//
+// Owner: SH8.
+
+import {
+  HwDevice,
+  SimOption,
+  type AudioBackend,
+  type Clock,
+  type ControllerRequest,
+  type FontSpec,
+  type GlyphProvider,
+  type HardwareModelApi,
+  type HostNet,
+  type HostSerial,
+  type InputEvent68k,
+  type ListingViewApi,
+  type LogServiceApi,
+  type OutputDeviceApi,
+  type OutputKeyboardApi,
+  type PrinterDeviceApi,
+  type PrintJob,
+  type ProgramFilesApi,
+  type Scheduler,
+  type SimEngine,
+  type SimEngineFactory,
+  type SimSession,
+  type SimSettings,
+  type SoundDeviceApi,
+  type SurfaceApi,
+  type SyncFiles,
+  type TextScreenApi,
+  type Vfs,
+  type VPath,
+} from '../../contracts';
+import { ListingView } from '../listing/view';
+import { SoundDevice } from '../sim-host/audio/sound-device';
+import { ProgramFiles } from '../sim-host/files/program-files';
+import { HardwareModel } from '../sim-host/hardware/model';
+import { createSimHost } from '../sim-host/index';
+import { OutputKeyboard } from '../sim-host/input/keyboard';
+import { OutputDevice } from '../sim-host/io';
+import { LogService } from '../sim-host/log/log-service';
+import { NullNet } from '../sim-host/net/null';
+import { PrinterDevice } from '../sim-host/printer';
+import { NullSerial } from '../sim-host/serial/null';
+import { Surface } from '../sim-host/surface/surface';
+import { TextScreen } from '../sim-host/text/text-screen';
+import { SimRunController, type CommandLineSwitches } from './controller';
+import { TimerSet } from './timers';
+import { SimUiBridge, type ChangedOption } from './ui-bridge';
+
+/** The size of the Output window when the original starts (3.3.2). */
+export const STARTUP_WIDTH = 640;
+export const STARTUP_HEIGHT = 480;
+
+/** Parts a caller may supply instead of the classes at the final paths. */
+export interface SessionPartOverrides {
+  surface: SurfaceApi;
+  text: TextScreenApi;
+  /** The `text` and `graphics` host parts. */
+  output: OutputDeviceApi;
+  keyboard: OutputKeyboardApi;
+  sound: SoundDeviceApi;
+  hardware: HardwareModelApi;
+  log: LogServiceApi;
+  files: ProgramFilesApi;
+  printer: PrinterDeviceApi;
+  listing: ListingViewApi;
+}
+
+/** What the session shows, asks and is told through the user interface. */
+export interface SessionUi {
+  /** Text output: make the Output panel visible if it is collapsed; the focus stays (2.10). */
+  showOutput(): void;
+  /** `host.ioShow()`: a keyboard-input task starts; the Output panel gets the keyboard (2.10). */
+  inputStarted(): void;
+  /** `host.ioBringToFront()`: Run was pressed; bring the Output panel forward with the keyboard. */
+  bringOutputToFront(): void;
+  /** `host.setupWindow(fullScreen)`, and the end of full screen at a cold start (2.5). */
+  setFullScreen(on: boolean): void;
+  /** `host.hardwareShow()` (task 32/0): make the Hardware panel visible. */
+  showHardwarePanel(): void;
+  /** The Hardware panel is visible: a cold start then tells the engine so (4.7.1 step 4). */
+  hardwarePanelVisible(): boolean;
+  /** The bell character (trap15-a §3.5). */
+  beep(): void;
+  /** `host.focusMain()`: the keyboard focus goes to the Listing panel (2.10). */
+  focusMain(): void;
+  /** The engine changed the exceptions or bit-field option (sim-ui Q14). */
+  optionChanged(option: ChangedOption, value: boolean): void;
+  /** Task 32/5: the original writes its settings file. */
+  saveSettings(): void;
+  /** The task 58 dialog; resolves to the chosen path or null. */
+  showFileDialog(mode: number, title: string, filter: string, initialName: string): Promise<VPath | null>;
+  /** The `Log File Options` question for an existing log file. */
+  askLogFileExists(kind: 'exec' | 'output'): Promise<'Replace' | 'Append' | 'Cancel'>;
+  /** A finished print job of task 10. */
+  submitPrintJob(job: PrintJob): void;
+  /** Bytes that must survive an abrupt close of the page (3.8.4). */
+  journal: { write(text: string | null): void; read(): string | null };
+  /** The `Caution` question (sim-ui §8.4); true = OK. */
+  confirmCaution(): Promise<boolean>;
+  /** The `/f` switch: the full-screen command of the Output panel. */
+  enterFullScreen(): void;
+  /** The path as the user sees it (4.7 step 6). */
+  displayName(path: VPath): string;
+  /** The switches this application was started with (sim-ui §8.1). */
+  commandLine(): CommandLineSwitches;
+  /** A cold start has put the panels' own state back to its start (3.3.2, last row of the table). */
+  resetPanels(): void;
+  report(what: string, error: unknown): void;
+}
+
+export interface SessionEnv {
+  clock: Clock;
+  scheduler: Scheduler;
+  engines: SimEngineFactory;
+  vfs: Vfs;
+  /** The synchronous view of a program folder, by mount (table of 3.8.4). */
+  viewFor: (dir: VPath) => SyncFiles;
+  /** Starts writing what the views hold to storage now ("when execution stops", 3.8.4). */
+  settleFiles: () => void;
+  audio: AudioBackend;
+  glyphs: GlyphProvider;
+  /** The desktop app's serial and network devices; absent in a browser (3.3.4). */
+  serial?: HostSerial | null;
+  net?: HostNet | null;
+  os: 'mac' | 'windows' | 'linux';
+  /** The current `SimSettings`. */
+  settings: () => SimSettings;
+  ui: SessionUi;
+  parts?: Partial<SessionPartOverrides>;
+}
+
+/** The session with what its owner needs beyond the contract. */
+export interface ComposedSession extends SimSession {
+  readonly controller: SimRunController;
+  readonly bridge: SimUiBridge;
+  readonly timers: TimerSet;
+  /** The application's own start: process-start state (4.7.1). Resolves when the engine is there. */
+  start(): Promise<void>;
+  /** Ends the session: frames, timers and the engine. */
+  dispose(): void;
+}
+
+/** A font of the settings, without a style, as the text screen takes it. */
+export function plainFont(font: { name: string; size: number }): FontSpec {
+  return { name: font.name, size: font.size, bold: false, italic: false, underline: false, strikeOut: false };
+}
+
+/**
+ * The saved SimSettings applied to a new engine, as the original's LoadSettings applies sim68K.dat
+ * (4.7.1 step 4): exceptions, bit field, both log types, the display option of Auto Trace, and the
+ * four device addresses (whose handlers also set the push-button byte, hardware §8). The fonts are
+ * in place before the engine exists (`resetParts`); the auto-trace interval is read when the timer
+ * starts (ui-bridge.ts); the Stack and Memory panels read their choices from the settings.
+ */
+export function applySimSettings(engine: SimEngine, settings: SimSettings, hardwareVisible: boolean): void {
+  engine.setOption(SimOption.Exceptions, settings.exceptions);
+  engine.setOption(SimOption.BitField, settings.bitField);
+  engine.setOption(SimOption.ExecLogType, settings.execLogType);
+  engine.setOption(SimOption.OutputLogType, settings.outputLogType);
+  engine.setOption(SimOption.DisableDisplay, settings.disableDisplay);
+  engine.setDeviceAddress(HwDevice.Seg7, settings.seg7Address);
+  engine.setDeviceAddress(HwDevice.Led, settings.ledAddress);
+  engine.setDeviceAddress(HwDevice.Switch, settings.switchAddress);
+  engine.setDeviceAddress(HwDevice.PushButton, settings.buttonAddress);
+  // Showing the Hardware window zeroes the switch byte, as at the original's start.
+  if (hardwareVisible) engine.setHardwareVisible(true);
+}
+
+export function composeSession(env: SessionEnv): ComposedSession {
+  const { clock, scheduler, ui, parts = {} } = env;
+  const timers = new TimerSet(clock);
+
+  // The parts post to the controller's queue and the controller is built from the parts, so the
+  // queue is reached through this binding, which is set a few lines below.
+  let controller: SimRunController | null = null;
+  const theController = (): SimRunController => {
+    if (!controller) throw new Error('The run controller was used before the session was composed');
+    return controller;
+  };
+  const post = (entry: InputEvent68k | ControllerRequest): void => theController().post(entry);
+
+  const bridge = new SimUiBridge({
+    clock,
+    timers,
+    post,
+    autoTraceIntervalMs: () => env.settings().autoTraceIntervalMs,
+    optionChanged: (option, value) => ui.optionChanged(option, value),
+    saveSettings: () => ui.saveSettings(),
+    focusMain: () => ui.focusMain(),
+    textFontAssign: (target, source) => text.fontAssign(target, source),
+    printerFontChanged: () => printer.fontChanged(),
+  });
+  const message = (line: string): void => bridge.addMessage(line);
+
+  const log: LogServiceApi =
+    parts.log ??
+    new LogService({
+      vfs: env.vfs,
+      clock,
+      scheduler,
+      invoke: (fn) => theController().invoke(fn),
+      askFileExists: (kind) => ui.askLogFileExists(kind),
+    });
+  const surface: SurfaceApi = parts.surface ?? new Surface(STARTUP_WIDTH, STARTUP_HEIGHT);
+  const text: TextScreenApi =
+    parts.text ??
+    new TextScreen({
+      surface,
+      glyphs: env.glyphs,
+      scheduler,
+      outputLog: (data) => log.outputWrite(data),
+      beep: () => ui.beep(),
+      show: () => ui.showOutput(),
+    });
+  const output: OutputDeviceApi =
+    parts.output ??
+    new OutputDevice({
+      surface,
+      text,
+      show: () => ui.inputStarted(),
+      bringToFront: () => ui.bringOutputToFront(),
+      setFullScreen: (on) => ui.setFullScreen(on),
+    });
+  const keyboard: OutputKeyboardApi = parts.keyboard ?? new OutputKeyboard({ post, os: env.os });
+  const files: ProgramFilesApi =
+    parts.files ??
+    new ProgramFiles({
+      viewFor: env.viewFor,
+      message,
+      showFileDialog: (mode, title, filter, initialName) => ui.showFileDialog(mode, title, filter, initialName),
+      post,
+      journal: ui.journal,
+    });
+  const sound: SoundDeviceApi =
+    parts.sound ?? new SoundDevice({ backend: env.audio, clock, readProgramFile: (name) => files.read(name), message });
+  const hardware: HardwareModelApi =
+    parts.hardware ??
+    new HardwareModel({
+      post,
+      timers: { create: (onTick) => timers.create(onTick) },
+      showPanel: () => ui.showHardwarePanel(),
+    });
+  const printer: PrinterDeviceApi =
+    parts.printer ??
+    new PrinterDevice({ font: () => env.settings().printerFont, submit: (job) => ui.submitPrintJob(job) });
+  const serial: HostSerial = env.serial ?? new NullSerial();
+  const net: HostNet = env.net ?? new NullNet();
+  const listing: ListingViewApi = parts.listing ?? new ListingView(() => theController().engine);
+
+  const host = createSimHost({
+    main: bridge,
+    hardware,
+    log,
+    files,
+    text: output,
+    graphics: output,
+    sound,
+    serial,
+    net,
+    printer,
+  });
+
+  /** `resetToStartup()` of a device that came from the platform and may not have one. */
+  const resetDevice = (device: object): void => {
+    (device as { resetToStartup?: () => void }).resetToStartup?.();
+  };
+
+  controller = new SimRunController({
+    clock,
+    scheduler,
+    engines: env.engines,
+    host,
+    bridge,
+    timers,
+    speed: () => env.settings().speed,
+    vfs: env.vfs,
+    glyphs: env.glyphs,
+    files,
+    log,
+    listing,
+    lifecycle: {
+      // The old simulator exits as the original's process does (4.7.1 step 1).
+      async exit() {
+        await log.exit();
+        await files.exit();
+        ui.setFullScreen(false);
+      },
+      // Every part back to the state right after start (4.7.1 step 2, table of 3.3.2). The printer's
+      // reset submits an open job as it stands, which is how the old simulator's print job is closed.
+      resetToStartup() {
+        surface.resetToStartup();
+        text.resetToStartup();
+        keyboard.resetToStartup();
+        sound.resetToStartup();
+        files.resetToStartup();
+        printer.resetToStartup();
+        hardware.resetToStartup();
+        log.resetToStartup();
+        resetDevice(serial);
+        resetDevice(net);
+        ui.resetPanels();
+        // The original loads its settings before the simulator's first reset: the Output Window
+        // Font must be in place when the engine's start-up reset assigns it.
+        text.setOptionsFont(plainFont(env.settings().outputFont), text.state.optionsFontColor);
+      },
+      applySettings(engine) {
+        applySimSettings(engine, env.settings(), ui.hardwarePanelVisible());
+      },
+      stopped() {
+        env.settleFiles();
+        void log.flush().catch((error: unknown) => ui.report('The log files could not be written', error));
+      },
+    },
+    ui: {
+      confirmCaution: () => ui.confirmCaution(),
+      resumeAudio: () => env.audio.resume(),
+      enterFullScreen: () => ui.enterFullScreen(),
+      displayName: (path) => ui.displayName(path),
+      commandLine: () => ui.commandLine(),
+      report: (what, error) => ui.report(what, error),
+    },
+    // The two things a user can change without the controller hearing of it (4.7.1, last paragraph).
+    partsUntouched: () =>
+      surface.back.width === STARTUP_WIDTH && surface.back.height === STARTUP_HEIGHT && !text.state.textWrap,
+  });
+  const built = controller;
+
+  return {
+    get engine() {
+      return built.engine;
+    },
+    host,
+    controller: built,
+    surface,
+    text,
+    keyboard,
+    sound,
+    hardware,
+    listing,
+    log,
+    files,
+    printer,
+    glyphs: env.glyphs,
+    onEngineReplaced: (listener) => built.onEngineReplaced(listener),
+    bridge,
+    timers,
+    start: () => built.start(),
+    dispose: () => built.dispose(),
+  };
+}

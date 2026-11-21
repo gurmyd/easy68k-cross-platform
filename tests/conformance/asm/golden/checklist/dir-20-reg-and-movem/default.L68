@@ -1,0 +1,45 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:31:26 AM
+
+00001000                             1      ORG $1000
+00001000                             2  R   REG D0-D2/A0/A5-A6
+00001000                             3  R2  REG D7-A1
+00001000  =00000005                  4  N   EQU 5
+Line 5 ERROR: Symbol is not a register list symbol
+00001000                             5  BAD REG N
+Line 6 ERROR: Label required with this directive
+00001000                             6      REG D0
+00001000  48E7 E086                  7      MOVEM.L R,-(SP)
+00001004  4C9F 6107                  8      MOVEM.W (SP)+,R
+00001008  4890 0003                  9      MOVEM D0/D1,(A0)
+Line 10 ERROR: Invalid size code
+0000100C  4890 0001                 10      MOVEM.B D0,(A0)
+00001010  48F8 0001 0005            11      MOVEM.L D0,N
+Line 12 ERROR: Comma expected
+00001016                            12      MOVEM.L D0-D1-D2,(A0)
+Line 13 ERROR: Invalid syntax
+00001016                            13      MOVEM.L R3,(A0)
+00001016                            14  R3  REG D1
+Line 15 ERROR: Invalid addressing mode
+00001016                            15      MOVEM.L D0,D1
+Line 16 ERROR: Symbol is not a register list symbol
+00001016                            16      MOVEM.L (A0),N
+Line 17 ERROR: Register list symbol not previously defined
+00001016                            17      MOVEM.L (A0),R4
+00001016                            18  R4  REG D2
+00001016                            19      END $1000
+
+8 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+BAD                 1234
+N                   5
+R                   6107
+R2                  380
+R3                  2
+R4                  4

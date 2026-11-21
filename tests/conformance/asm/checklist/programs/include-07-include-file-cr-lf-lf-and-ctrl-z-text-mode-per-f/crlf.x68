@@ -1,0 +1,4 @@
+M	MACRO
+	NOP
+	ENDM
+	M

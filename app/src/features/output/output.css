@@ -1,0 +1,155 @@
+/*
+ * The Output panel (ARCHITECTURE.md 2.5). Owner: SH4.
+ *
+ *   .e68-output              the panel: header strip above the body
+ *     __header               title, surface size, zoom choice, full-screen button
+ *     __body                 everything below the strip
+ *       __viewport           scrolls when the surface does not fit
+ *         __canvas           the surface, scaled by a whole number, never smoothed
+ *       __keys               the hidden textarea that takes the keys for the program
+ *       __prompt             "Press any key or click to enter full screen"
+ *
+ * The surface is the picture of a program: it is black where nothing is drawn, in both themes,
+ * as the original's window is. Around it the panel has the theme's colours.
+ */
+
+.e68-output {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--c-bg);
+}
+
+.e68-output__header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: var(--h-toolbar);
+  padding: 0 var(--sp-2);
+  background: var(--c-panel);
+  border-bottom: 1px solid var(--c-border);
+  color: var(--c-text);
+  font-size: var(--fs-md);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.e68-output__title {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.e68-output__size {
+  color: var(--c-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.e68-output__grow {
+  flex: 1 1 auto;
+}
+
+/* As a tab of the narrow layout the panel cannot be collapsed (2.3). */
+[role='tabpanel'] .e68-output__collapse {
+  display: none;
+}
+
+.e68-output__body {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.e68-output__viewport {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+}
+
+/* The panel has the keyboard: every key goes to the program (2.9.4). */
+.e68-output[data-keys='true'] .e68-output__viewport {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.e68-output__canvas {
+  display: block;
+  background: #000;
+  /* No smoothing at any scale. `pixelated` is the standard value; older Firefox knows the other. */
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+  /* A program reads the mouse itself: no text cursor, no touch scrolling over the surface. */
+  cursor: default;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/*
+ * The textarea that has the focus while the program has the keyboard. It must be focusable and
+ * must receive composed text and pastes, so it is neither `display: none` nor `visibility:
+ * hidden`; it is one transparent pixel in the corner of the body.
+ */
+.e68-output__keys {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  opacity: 0;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  /* 16 px keeps mobile browsers from zooming the page when the field gets the focus. */
+  font-size: 16px;
+  pointer-events: none;
+  white-space: pre;
+}
+
+.e68-output__prompt {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: calc(100% - 2 * var(--sp-4));
+  padding: var(--sp-2) var(--sp-4);
+  transform: translate(-50%, -50%);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-popup);
+  color: var(--c-text);
+  font-size: var(--fs-lg);
+  text-align: center;
+  cursor: pointer;
+}
+
+/*
+ * Full screen (2.5): the panel covers the whole window, black, with the surface in the middle.
+ * The header strip is not part of the surface and disappears. In a browser the page's root element
+ * is what the Fullscreen API shows, so the window is the screen; in the desktop app the window
+ * itself is full screen. Dialogs, menus and toasts are layers above (2.8).
+ */
+.e68-output[data-fullscreen='true'] {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-modeless) - 1);
+  background: #000;
+}
+
+.e68-output[data-fullscreen='true'] .e68-output__header {
+  display: none;
+}
+
+.e68-output[data-fullscreen='true'] .e68-output__viewport {
+  outline: none;
+}

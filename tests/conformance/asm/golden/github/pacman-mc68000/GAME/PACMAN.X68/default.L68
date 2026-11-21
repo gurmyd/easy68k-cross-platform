@@ -1,0 +1,605 @@
+00000000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:29:30 AM
+
+00000000                             1  ; =============================================================================
+00000000                             2  ; PAC-MAN MANAGEMENT
+00000000                             3  ; =============================================================================
+00000000                             4              
+00000000                             5  ; -----------------------------------------------------------------------------
+00000000                             6  PAC_INIT
+00000000                             7  ; INITIALIZE PACMAN.
+00000000                             8  ; INPUT    : NONE
+00000000                             9  ; OUTPUT   : NONE
+00000000                            10  ; MODIFIES : NONE
+00000000                            11  ; -----------------------------------------------------------------------------
+Line 12 ERROR: Undefined symbol
+00000000  33FC BD16 005455B8        12                            MOVE.W  #PAC_START_X,(PAC_POS_X)
+Line 13 ERROR: Undefined symbol
+00000008  33FC BD16 005455B8        13                            MOVE.W  #PAC_START_Y,(PAC_POS_Y)
+00000010                            14                            ; START LEFT
+Line 15 ERROR: Undefined symbol
+00000010  33FC 0001 005455B8        15                            MOVE.W  #1,(PAC_FACE)
+Line 16 ERROR: Undefined symbol
+00000018  33FC 0001 005455B8        16                            MOVE.W  #1,(PAC_INTENT)
+Line 17 ERROR: Undefined symbol
+00000020  4279 004DBD16             17                            CLR.W   (TOTAL_PELLETS_COL)
+Line 18 ERROR: Undefined symbol
+00000026  1E3C 0016                 18                            MOVE.B  #SNDSTART,D7
+0000002A  4E43                      19                            TRAP    #3
+0000002C  4E75                      20                            RTS
+0000002E                            21  
+0000002E                            22  ; -----------------------------------------------------------------------------
+0000002E                            23  PAC_UPDATE
+0000002E                            24  ; UPDATES PACMAN.
+0000002E                            25  ; INPUT    : NONE
+0000002E                            26  ; OUTPUT   : NONE
+0000002E                            27  ; MODIFIES : NONE
+0000002E                            28  ; -----------------------------------------------------------------------------
+0000002E  48A7 FF80                 29                            MOVEM.W D0-D7/A0,-(A7)
+00000032                            30              
+00000032                            31                            ; LOAD CURRENT COORDINATES
+Line 32 ERROR: Undefined symbol
+00000032  3039 004DBD16             32                            MOVE.W  (PAC_POS_Y),D0
+Line 33 ERROR: Undefined symbol
+00000038  3239 004DBD16             33                            MOVE.W  (PAC_POS_X),D1
+Line 34 ERROR: Undefined symbol
+0000003E  3C39 004DBD16             34                            MOVE.W  (PAC_FACE),D6
+00000044                            35              
+00000044                            36                            ; SAVE PREVIOUS COORDENATES
+Line 37 ERROR: Undefined symbol
+00000044  33C0 005455B8             37                            MOVE.W  D0,(PREVIOUS_PAC_POS_Y)
+Line 38 ERROR: Undefined symbol
+0000004A  33C1 005455B8             38                            MOVE.W  D1,(PREVIOUS_PAC_POS_X)
+00000050                            39              
+Line 40 ERROR: Undefined symbol
+00000050  33C0 005455B8             40                            MOVE.W  D0,(NEXT_PAC_POS_Y)
+Line 41 ERROR: Undefined symbol
+00000056  33C1 005455B8             41                            MOVE.W  D1,(NEXT_PAC_POS_X)
+0000005C                            42              
+Line 43 ERROR: Undefined symbol
+0000005C  0839 0001 005455B8        43                            BTST.B  #1,(KBDVAL)
+00000064  6700 000A                 44                            BEQ     .CHKDWN
+Line 45 ERROR: Undefined symbol
+00000068  33FC 0002 005455B8        45                            MOVE.W  #2,(PAC_INTENT)
+00000070                            46              
+Line 47 ERROR: Undefined symbol
+00000070  0839 0003 005455B8        47  .CHKDWN                   BTST.B  #3,(KBDVAL)
+00000078  6700 000A                 48                            BEQ     .CONTINUE 
+Line 49 ERROR: Undefined symbol
+0000007C  33FC 0004 005455B8        49                            MOVE.W  #4,(PAC_INTENT)
+00000084                            50              
+00000084                            51  .CONTINUE
+Line 52 ERROR: Undefined symbol
+00000084  0839 0000 005455B8        52                            BTST.B  #0,(KBDVAL)
+0000008C  6700 000A                 53                            BEQ     .CHKRIGHT
+Line 54 ERROR: Undefined symbol
+00000090  33FC 0001 005455B8        54                            MOVE.W  #1,(PAC_INTENT)
+00000098                            55  
+Line 56 ERROR: Undefined symbol
+00000098  0839 0002 005455B8        56  .CHKRIGHT                 BTST.B  #2,(KBDVAL)
+000000A0  6700 000A                 57                            BEQ     .DIRECTION
+Line 58 ERROR: Undefined symbol
+000000A4  33FC 0003 005455B8        58                            MOVE.W  #3,(PAC_INTENT)
+000000AC                            59                            
+000000AC                            60  .DIRECTION                ; MOVE FORWARD
+Line 61 ERROR: Undefined symbol
+000000AC  0C79 0001 005455B8        61                            CMP.W   #1,(PAC_INTENT)
+000000B4  6700 001E                 62                            BEQ     .MVLEFT
+Line 63 ERROR: Undefined symbol
+000000B8  0C79 0002 005455B8        63                            CMP.W   #2,(PAC_INTENT)
+000000C0  6700 001E                 64                            BEQ     .MVUP
+Line 65 ERROR: Undefined symbol
+000000C4  0C79 0003 005455B8        65                            CMP.W   #3,(PAC_INTENT)
+000000CC  6700 001E                 66                            BEQ     .MVRIGHT
+000000D0  6000 0026                 67                            BRA     .MVDOWN
+000000D4                            68              
+000000D4                            69  
+Line 70 ERROR: Undefined symbol
+000000D4  0479 BD16 005455B8        70  .MVLEFT                   SUB.W   #PACMAN_SPEED,(NEXT_PAC_POS_X)
+000000DC  6000 0022                 71                            BRA     .CONT
+000000E0                            72  
+Line 73 ERROR: Undefined symbol
+000000E0  0479 BD16 005455B8        73  .MVUP                     SUB.W   #PACMAN_SPEED,(NEXT_PAC_POS_Y)
+000000E8  6000 0016                 74                            BRA     .CONT
+000000EC                            75  
+Line 76 ERROR: Undefined symbol
+000000EC  0679 BD16 005455B8        76  .MVRIGHT                  ADD.W   #PACMAN_SPEED,(NEXT_PAC_POS_X)
+000000F4  6000 000A                 77                            BRA     .CONT
+000000F8                            78              
+Line 79 ERROR: Undefined symbol
+000000F8  0679 BD16 005455B8        79  .MVDOWN                   ADD.W   #PACMAN_SPEED,(NEXT_PAC_POS_Y)
+00000100                            80  
+00000100                            81  .CONT       
+00000100                            82                            ; CHECK TOP LEFT 
+Line 83 ERROR: Undefined symbol
+00000100  3439 004DBD16             83                            MOVE.W  (NEXT_PAC_POS_Y),D2
+Line 84 ERROR: Undefined symbol
+00000106  3639 004DBD16             84                            MOVE.W  (NEXT_PAC_POS_X),D3
+0000010C  4EB9 000002EE             85                            JSR     CHKCOL
+00000112  0804 0000                 86                            BTST.L  #0,D4
+00000116  6600 006A                 87                            BNE     .REAL
+0000011A                            88              
+0000011A                            89                            ; CHECK BOTTOM RIGHT
+Line 90 ERROR: Undefined symbol
+0000011A  3439 004DBD16             90                            MOVE.W  (NEXT_PAC_POS_Y),D2
+Line 91 ERROR: Undefined symbol
+00000120  3639 004DBD16             91                            MOVE.W  (NEXT_PAC_POS_X),D3 
+Line 92 ERROR: Comma expected
+00000126                            92                            ADD.W   #PACRAD-2,D2
+Line 93 ERROR: Comma expected
+00000126                            93                            ADD.W   #PACRAD-2,D3
+00000126  4EB9 000002EE             94                            JSR     CHKCOL
+0000012C  0804 0000                 95                            BTST.L  #0,D4
+00000130  6600 0050                 96                            BNE     .REAL
+00000134                            97              
+00000134                            98                            ; CHECK TOP RIGHT
+Line 99 ERROR: Undefined symbol
+00000134  3439 004DBD16             99                            MOVE.W  (NEXT_PAC_POS_Y),D2
+Line 100 ERROR: Undefined symbol
+0000013A  3639 004DBD16            100                            MOVE.W  (NEXT_PAC_POS_X),D3 
+Line 101 ERROR: Comma expected
+00000140                           101                            ADD.W   #PACRAD-2,D2
+00000140  4EB9 000002EE            102                            JSR     CHKCOL
+00000146  0804 0000                103                            BTST.L  #0,D4
+0000014A  6600 0036                104                            BNE     .REAL
+0000014E                           105              
+0000014E                           106                            ; CHECK BOTTOM LEFT 
+Line 107 ERROR: Undefined symbol
+0000014E  3439 004DBD16            107                            MOVE.W  (NEXT_PAC_POS_Y),D2
+Line 108 ERROR: Undefined symbol
+00000154  3639 004DBD16            108                            MOVE.W  (NEXT_PAC_POS_X),D3 
+Line 109 ERROR: Comma expected
+0000015A                           109                            ADD.W   #PACRAD-2,D3
+0000015A  4EB9 000002EE            110                            JSR     CHKCOL
+00000160  0804 0000                111                            BTST.L  #0,D4
+00000164  6600 001C                112                            BNE     .REAL
+00000168  6000 0012                113                            BRA     .NOCOL
+0000016C                           114              
+0000016C                           115              
+Line 116 ERROR: Symbol value differs between first and second pass
+0000016C                           116  .NOCOL                    ; TELEPORT PLAYER BACK TO PLACE
+Line 117 ERROR: Undefined symbol
+0000016C  3C39 004DBD16            117                            MOVE.W  (PAC_INTENT),D6
+00000172                           118             
+Line 119 ERROR: Symbol value differs between first and second pass
+00000172                           119  .REAL                     ; UPDATE VARIABLE
+00000172  4247                     120                            CLR.W   D7
+00000174  4285                     121                            CLR.L   D5    
+Line 122 ERROR: Undefined symbol
+00000176  33C6 005455B8            122                            MOVE.W  D6,(PAC_FACE)
+0000017C                           123                            
+0000017C                           124                            ; MOVE FORWARD
+Line 125 ERROR: Undefined symbol
+0000017C  0C79 0001 005455B8       125                            CMP.W   #1,(PAC_FACE)
+00000184  6700 002E                126                            BEQ     .MVLEFT2
+Line 127 ERROR: Undefined symbol
+00000188  0C79 0002 005455B8       127                            CMP.W   #2,(PAC_FACE)
+00000190  6700 002E                128                            BEQ     .MVUP2
+Line 129 ERROR: Undefined symbol
+00000194  0C79 0003 005455B8       129                            CMP.W   #3,(PAC_FACE)
+0000019C  6700 002E                130                            BEQ     .MVRIGHT2
+000001A0  6000 0036                131                            BRA     .MVDOWN2
+000001A4                           132              
+Line 133 ERROR: Symbol value differs between first and second pass
+000001A4                           133  .MVLEFT2                  SUB.W   #PACMAN_SPEED,(PAC_POS_X)
+000001A4  6000 003A                134                            BRA     .CONT2
+000001A8                           135  
+Line 136 ERROR: Symbol value differs between first and second pass
+000001A8                           136  .MVUP2                    SUB.W   #PACMAN_SPEED,(PAC_POS_Y)
+000001A8  6000 0036                137                            BRA     .CONT2
+000001AC                           138  
+Line 139 ERROR: Symbol value differs between first and second pass
+000001AC                           139  .MVRIGHT2                 ADD.W   #PACMAN_SPEED,(PAC_POS_X)
+000001AC  6000 0032                140                            BRA     .CONT2
+000001B0                           141              
+Line 142 ERROR: Symbol value differs between first and second pass
+000001B0                           142  .MVDOWN2                  ADD.W   #PACMAN_SPEED,(PAC_POS_Y) 
+000001B0                           143      
+Line 144 ERROR: Symbol value differs between first and second pass
+000001B0                           144  .CONT2       
+000001B0                           145                  
+000001B0  247C 00000000            146                            MOVE.L  #$00000000,A2
+000001B6                           147                            ; CHECK TOP LEFT 
+Line 148 ERROR: Undefined symbol
+000001B6  3439 004DBD16            148                            MOVE.W  (PAC_POS_Y),D2
+Line 149 ERROR: Undefined symbol
+000001BC  3639 004DBD16            149                            MOVE.W  (PAC_POS_X),D3
+000001C2  4EB9 000002EE            150                            JSR     CHKCOL
+000001C8  0804 0000                151                            BTST.L  #0,D4
+000001CC  6600 0102                152                            BNE     .ISCOL2
+000001D0                           153              
+000001D0                           154                            ; CHECK BOTTOM RIGHT
+Line 155 ERROR: Undefined symbol
+000001D0  3439 004DBD16            155                            MOVE.W  (PAC_POS_Y),D2
+Line 156 ERROR: Undefined symbol
+000001D6  3639 004DBD16            156                            MOVE.W  (PAC_POS_X),D3
+Line 157 ERROR: Comma expected
+000001DC                           157                            ADD.W   #PACRAD-2,D2
+Line 158 ERROR: Comma expected
+000001DC                           158                            ADD.W   #PACRAD-2,D3
+000001DC  4EB9 000002EE            159                            JSR     CHKCOL
+000001E2  0804 0000                160                            BTST.L  #0,D4
+000001E6  6600 00E8                161                            BNE     .ISCOL2
+000001EA                           162              
+000001EA                           163                            ; CHECK TOP RIGHT
+Line 164 ERROR: Undefined symbol
+000001EA  3439 004DBD16            164                            MOVE.W  (PAC_POS_Y),D2
+Line 165 ERROR: Undefined symbol
+000001F0  3639 004DBD16            165                            MOVE.W  (PAC_POS_X),D3 
+Line 166 ERROR: Comma expected
+000001F6                           166                            ADD.W   #PACRAD-2,D2
+000001F6  4EB9 000002EE            167                            JSR     CHKCOL
+000001FC  0804 0000                168                            BTST.L  #0,D4
+00000200  6600 00CE                169                            BNE     .ISCOL2
+00000204                           170              
+00000204                           171                            ; CHECK BOTTOM LEFT 
+Line 172 ERROR: Undefined symbol
+00000204  3439 004DBD16            172                            MOVE.W  (PAC_POS_Y),D2
+Line 173 ERROR: Undefined symbol
+0000020A  3639 004DBD16            173                            MOVE.W  (PAC_POS_X),D3 
+Line 174 ERROR: Comma expected
+00000210                           174                            ADD.W   #PACRAD-2,D3
+00000210  4EB9 000002EE            175                            JSR     CHKCOL
+00000216  0804 0000                176                            BTST.L  #0,D4
+0000021A  6600 00B4                177                            BNE     .ISCOL2
+Line 178 ERROR: Undefined symbol
+0000021E  DF79 005455B8            178                            ADD.W   D7,(TOTAL_PELLETS_COL)
+Line 179 ERROR: Undefined symbol
+00000224  DBB9 005455B8            179                            ADD.L   D5,(CURRENT_SCORE)
+0000022A  BA7C 0000                180                            CMP.W   #0,D5
+0000022E  6700 0080                181                            BEQ     .NOSND
+00000232  BA7C 000A                182                            CMP.W   #10,D5
+00000236  6700 004C                183                            BEQ     .MINISND
+Line 184 ERROR: Undefined symbol
+0000023A  1E3C 0016                184                            MOVE.B  #SNDBIGDOT,D7
+0000023E  4E43                     185                            TRAP    #3
+00000240  6000 006E                186                            BRA     .NOSND
+Line 187 ERROR: Symbol value differs between first and second pass
+00000244                           187  .MINISND                  CMP.W   #1,(CHKCHOMP)
+00000244  6700 005C                188                            BEQ     .PLY2
+Line 189 ERROR: Undefined symbol
+00000248  1E3C 0016                189                            MOVE.B  #SNDCHOMP,D7
+Line 190 ERROR: Undefined symbol
+0000024C  33FC 0001 005455B8       190                            MOVE.W  #1,(CHKCHOMP)
+00000254  4E43                     191                            TRAP    #3
+00000256  6000 0058                192                            BRA     .NOSND  
+Line 193 ERROR: Symbol value differs between first and second pass
+0000025A                           193  .PLY2                     MOVE.B  #SNDCHOMP2,D7
+Line 194 ERROR: Undefined symbol
+0000025A  33FC 0000 005455B8       194                            MOVE.W  #0,(CHKCHOMP)
+00000262  4E43                     195                            TRAP    #3 
+Line 196 ERROR: Symbol value differs between first and second pass
+00000264                           196  .NOSND      
+00000264  4247                     197                            CLR.W   D7     
+00000266  4285                     198                            CLR.L   D5
+00000268  1A12                     199                            MOVE.B  (A2),D5
+0000026A  BA7C 0005                200                            CMP.W   #5,D5
+0000026E  6700 0056                201                            BEQ     .PUT_INTERSECTION   
+00000272  14BC 0000                202                            MOVE.B  #$00,(A2)
+00000276  6000 0052                203                            BRA     .CONTINUE9
+Line 204 ERROR: Symbol value differs between first and second pass
+0000027A                           204  .PUT_INTERSECTION
+0000027A  14BC 0006                205                            MOVE.B  #$06,(A2)
+Line 206 ERROR: Symbol value differs between first and second pass
+0000027E                           206  .CONTINUE9                CLR.W   D5
+0000027E  6000 0068                207                            BRA     .FINISH
+00000282                           208              
+Line 209 ERROR: Symbol value differs between first and second pass
+00000282                           209  .ISCOL2      
+Line 210 ERROR: Undefined symbol
+00000282  33F9 004DBD16 005455B8   210                            MOVE.W  (PREVIOUS_PAC_POS_Y),(PAC_POS_Y)
+Line 211 ERROR: Undefined symbol
+0000028C  33F9 004DBD16 005455B8   211                            MOVE.W  (PREVIOUS_PAC_POS_X),(PAC_POS_X)
+00000296  6000 0050                212                            BRA     .FINISH
+Line 213 ERROR: Symbol value differs between first and second pass
+0000029A                           213  .FINISH
+0000029A  4C9F 01FF                214                            MOVEM.W (A7)+,D0-D7/A0
+0000029E                           215              
+0000029E  4E75                     216                            RTS
+000002A0                           217  
+000002A0                           218  ; -----------------------------------------------------------------------------
+Line 219 ERROR: Symbol value differs between first and second pass
+000002A0                           219  CHKCOL
+000002A0                           220  ; CHECK COLLISIONS.
+000002A0                           221  ; INPUT    : D2 - Y
+000002A0                           222  ;            D3 - X
+000002A0                           223  ; OUTPUT   : D4 - 1: WALL - 0: FREE
+000002A0                           224  ; MODIFIES : NONE
+000002A0                           225  ; -----------------------------------------------------------------------------
+000002A0  48E7 F000                226                            MOVEM.L D0-D3,-(A7)  
+000002A4                           227              
+Line 228 ERROR: Undefined symbol
+000002A4  0442 BD16                228                            SUB.W   #MAP_START_Y,D2
+000002A8                           229                            ; IN D2 --> YM
+Line 230 ERROR: Undefined symbol
+000002A8  84FC BD16                230                            DIVU    #CELSIZE,D2
+000002AC  5342                     231                            SUBQ.W  #1,D2
+000002AE                           232              
+Line 233 ERROR: Undefined symbol
+000002AE  0443 BD16                233                            SUB.W   #MAP_START_X,D3
+000002B2                           234                            ; IN D3 --> XM
+Line 235 ERROR: Undefined symbol
+000002B2  86FC BD16                235                            DIVU    #CELSIZE,D3
+000002B6  5343                     236                            SUBQ.W  #1,D3
+000002B8                           237              
+Line 238 ERROR: Undefined symbol
+000002B8  41F9 004DBD16            238                            LEA.L   MAPDATA,A0
+Line 239 ERROR: Undefined symbol
+000002BE  C4FC BD16                239                            MULU    #MAPWITH,D2                  
+000002C2  D443                     240                            ADD.W   D3,D2
+000002C4  D0C2                     241                            ADD.W   D2,A0
+000002C6  4242                     242                            CLR.W   D2
+000002C8  1410                     243                            MOVE.B  (A0),D2
+000002CA                           244              
+000002CA  C4FC 0006                245                            MULU    #6,D2
+000002CE  2242                     246                            MOVE.L  D2,A1
+000002D0  4EE9 0322                247                            JMP     .JUMPLIST(A1)
+000002D4                           248  
+Line 249 ERROR: Symbol value differs between first and second pass
+000002D4                           249  .JUMPLIST:   
+000002D4  4EF9 0000034C            250                            JMP     .ISFREE
+000002DA  4EF9 00000354            251                            JMP     .ISWALL
+000002E0  4EF9 0000035C            252                            JMP     .ISMINIDOT
+000002E6  4EF9 0000036C            253                            JMP     .ISGIGADOT
+000002EC  4EF9 000003B4            254                            JMP     .ISPORTAL
+000002F2  4EF9 0000035C            255                            JMP     .ISMINIDOT
+000002F8  4EF9 0000034C            256                            JMP     .ISFREE
+000002FE                           257              
+Line 258 ERROR: Symbol value differs between first and second pass
+000002FE                           258  .ISFREE
+000002FE  383C 0000                259                            MOVE.W  #0,D4
+00000302  6000 00E8                260                            BRA     .RETURN
+00000306                           261                            
+Line 262 ERROR: Symbol value differs between first and second pass
+00000306                           262  .ISWALL
+00000306  383C 0001                263                            MOVE.W  #1,D4
+0000030A  6000 00E0                264                            BRA     .RETURN
+0000030E                           265              
+Line 266 ERROR: Symbol value differs between first and second pass
+0000030E                           266  .ISMINIDOT
+0000030E  383C 0000                267                            MOVE.W  #0,D4
+00000312                           268                            ; ADD SCORE
+00000312  7A0A                     269                            MOVE.L  #10,D5
+00000314  3E3C 0001                270                            MOVE.W  #1,D7
+00000318  3448                     271                            MOVE.W  A0,A2
+0000031A                           272              
+0000031A  6000 00D0                273                            BRA     .RETURN
+0000031E                           274              
+Line 275 ERROR: Symbol value differs between first and second pass
+0000031E                           275  .ISGIGADOT
+0000031E  383C 0000                276                            MOVE.W  #0,D4
+00000322                           277                            ; ADD SCORE
+00000322  7A32                     278                            MOVE.L  #50,D5
+00000324  3E3C 0001                279                            MOVE.W  #1,D7
+00000328  3448                     280                            MOVE.W  A0,A2
+0000032A                           281                            ; RESTART TIMERS
+Line 282 ERROR: Undefined symbol
+0000032A  4279 004DBD16            282                            CLR.W   (BLINKY_FRIGHTENED_TIMER)  
+Line 283 ERROR: Undefined symbol
+00000330  4279 004DBD16            283                            CLR.W   (PINKY_FRIGHTENED_TIMER)
+Line 284 ERROR: Undefined symbol
+00000336  4279 004DBD16            284                            CLR.W   (INKY_FRIGHTENED_TIMER)  
+Line 285 ERROR: Undefined symbol
+0000033C  4279 004DBD16            285                            CLR.W   (CLYDE_FRIGHTENED_TIMER)
+00000342                           286                            
+00000342                           287                            ; SCARE GHOSTS
+Line 288 ERROR: Undefined symbol
+00000342  33FC 0001 005455B8       288                            MOVE.W  #1,(BLINKY_IS_BLUE)
+Line 289 ERROR: Undefined symbol
+0000034A  33FC 0001 005455B8       289                            MOVE.W  #1,(PINKY_IS_BLUE)
+Line 290 ERROR: Undefined symbol
+00000352  33FC 0001 005455B8       290                            MOVE.W  #1,(INKY_IS_BLUE)
+Line 291 ERROR: Undefined symbol
+0000035A  33FC 0001 005455B8       291                            MOVE.W  #1,(CLYDE_IS_BLUE)
+00000362                           292              
+00000362  6000 0088                293                            BRA     .RETURN
+Line 294 ERROR: Symbol value differs between first and second pass
+00000366                           294  .ISPORTAL
+00000366                           295                            ;TELEPORT PACMAN TO THE OTHER SIDE OF THE MAP
+Line 296 ERROR: Undefined symbol
+00000366  303C BD16                296                            MOVE.W  #PORTAL_RIGHT_X,D0
+Line 297 ERROR: Undefined symbol
+0000036A  B079 004DBD16            297                            CMP.W   (NEXT_PAC_POS_X),D0
+00000370                           298  
+00000370  6D00 0068                299                            BLT     .RIGHTSIDE
+00000374                           300              
+00000374                           301                            ; TELEPORT TO RIGHT SIDE
+Line 302 ERROR: Invalid syntax
+00000374                           302                            MOVE.W  #PORTAL_RIGHT_X+CELSIZE,D0
+Line 303 ERROR: Undefined symbol
+00000374  33C0 005455B8            303                            MOVE.W  D0,(PAC_POS_X)
+Line 304 ERROR: Undefined symbol
+0000037A  33FC 0001 005455B8       304                            MOVE.W  #1,(PAC_FACE)
+00000382  4244                     305                            CLR.W   D4 
+00000384  6000 0066                306                            BRA     .RETURN  
+00000388                           307              
+Line 308 ERROR: Symbol value differs between first and second pass
+00000388                           308  .RIGHTSIDE
+00000388                           309                            ; TELEPORT TO LEFT SIDE
+Line 310 ERROR: Comma expected
+00000388                           310                            MOVE.W  #PORTAL_LEFT_X-CELSIZE,D0
+Line 311 ERROR: Undefined symbol
+00000388  33C0 005455B8            311                            MOVE.W  D0,(PAC_POS_X)
+Line 312 ERROR: Undefined symbol
+0000038E  33FC 0003 005455B8       312                            MOVE.W  #3,(PAC_FACE)
+00000396                           313         
+Line 314 ERROR: Symbol value differs between first and second pass
+00000396                           314  .RETURN
+00000396  4CDF 000F                315                            MOVEM.L (A7)+,D0-D3  
+0000039A  4E75                     316                            RTS
+0000039C                           317              
+0000039C                           318  ; -----------------------------------------------------------------------------
+Line 319 ERROR: Symbol value differs between first and second pass
+0000039C                           319  PAC_PLOT
+0000039C                           320  ; PLOTS PACMAN.
+0000039C                           321  ; INPUT    : NONE
+0000039C                           322  ; OUTPUT   : NONE
+0000039C                           323  ; MODIFIES : NONE
+0000039C                           324  ; -----------------------------------------------------------------------------
+0000039C                           325  
+0000039C  48E7 F800                326                            MOVEM.L D0-D4,-(A7)   
+000003A0                           327  
+Line 328 ERROR: Undefined symbol
+000003A0  0C79 0001 005455B8       328                            CMP.W   #1,(PAC_FACE)
+000003A8  6700 0074                329                            BEQ     .DRAW_L
+Line 330 ERROR: Undefined symbol
+000003AC  0C79 0002 005455B8       330                            CMP.W   #2,(PAC_FACE)
+000003B4  6700 0088                331                            BEQ     .DRAW_U
+Line 332 ERROR: Undefined symbol
+000003B8  0C79 0003 005455B8       332                            CMP.W   #3,(PAC_FACE)
+000003C0  6700 009C                333                            BEQ     .DRAW_R
+000003C4  6000 00B8                334                            BRA     .DRAW_D
+000003C8                           335              
+Line 336 ERROR: Symbol value differs between first and second pass
+000003C8                           336  .DRAW_L
+Line 337 ERROR: Undefined symbol
+000003C8  0839 0004 005455B8       337                            BTST.B  #4,(SCRCYCCT)
+000003D0  6700 0062                338                            BEQ     .LFT2
+Line 339 ERROR: Undefined symbol
+000003D4  41F9 004DBD16            339                            LEA     PC_LEFT2,A0
+000003DA  6000 00BE                340                            BRA     .DRAW
+Line 341 ERROR: Symbol value differs between first and second pass
+000003DE                           341  .LFT2                     LEA     PC_LEFT3,A0
+000003DE  6000 00BA                342                            BRA     .DRAW
+000003E2                           343                            
+Line 344 ERROR: Symbol value differs between first and second pass
+000003E2                           344  .DRAW_U
+Line 345 ERROR: Undefined symbol
+000003E2  0839 0004 005455B8       345                            BTST.B  #4,(SCRCYCCT)
+000003EA  6700 0068                346                            BEQ     .U2
+Line 347 ERROR: Undefined symbol
+000003EE  41F9 004DBD16            347                            LEA     PC_UP2,A0
+000003F4  6000 00A4                348                            BRA     .DRAW
+Line 349 ERROR: Symbol value differs between first and second pass
+000003F8                           349  .U2                       LEA     PC_UP3,A0
+000003F8  6000 00A0                350                            BRA     .DRAW
+Line 351 ERROR: Symbol value differs between first and second pass
+000003FC                           351  .DRAW_R
+Line 352 ERROR: Undefined symbol
+000003FC  0839 0004 005455B8       352                            BTST.B  #4,(SCRCYCCT)
+00000404  6700 006E                353                            BEQ     .RH2
+Line 354 ERROR: Undefined symbol
+00000408  41F9 004DBD16            354                            LEA     PC_RIGHT2,A0
+0000040E  6000 008A                355                            BRA     .DRAW
+Line 356 ERROR: Symbol value differs between first and second pass
+00000412                           356  .RH2
+Line 357 ERROR: Undefined symbol
+00000412  41F9 004DBD16            357                            LEA     PC_RIGHT3,A0
+00000418  6000 0080                358                            BRA     .DRAW
+Line 359 ERROR: Symbol value differs between first and second pass
+0000041C                           359  .DRAW_D            
+0000041C                           360  
+Line 361 ERROR: Undefined symbol
+0000041C  0839 0004 005455B8       361                            BTST.B  #4,(SCRCYCCT)
+00000424  6700 006E                362                            BEQ     .DW2          
+Line 363 ERROR: Undefined symbol
+00000428  41F9 004DBD16            363                            LEA     PC_DOWN2,A0
+0000042E  6000 006A                364                            BRA     .DRAW
+Line 365 ERROR: Symbol value differs between first and second pass
+00000432                           365  .DW2
+Line 366 ERROR: Undefined symbol
+00000432  41F9 004DBD16            366                            LEA     PC_DOWN3,A0
+00000438                           367  
+00000438                           368  
+Line 369 ERROR: Symbol value differs between first and second pass
+00000438                           369  .DRAW                     ; INT J
+Line 370 ERROR: Undefined symbol
+00000438  3E39 004DBD16            370                            MOVE.W  (PAC_POS_Y),D7
+Line 371 ERROR: Undefined symbol
+0000043E  0447 BD16                371                            SUB.W   #PACRAD,D7
+00000442  760F                     372                            MOVE.L  #15,D3
+00000444                           373  
+Line 374 ERROR: Symbol value differs between first and second pass
+00000444                           374  .LOOP1       
+00000444                           375                            ; INT I 
+Line 376 ERROR: Undefined symbol
+00000444  3C39 004DBD16            376                            MOVE.W  (PAC_POS_X),D6    
+Line 377 ERROR: Undefined symbol
+0000044A  0446 BD16                377                            SUB.W   #PACRAD,D6
+0000044E  780F                     378                            MOVE.L  #15,D4
+Line 379 ERROR: Symbol value differs between first and second pass
+00000450                           379  .LOOP2
+00000450                           380                            ; SET FILL COLOR
+00000450  2218                     381                            MOVE.L  (A0)+,D1
+00000452  0801 0008                382                            BTST    #8,D1
+00000456  6700 0074                383                            BEQ     .NEXT
+0000045A  103C 0050                384                            MOVE.B  #80,D0
+0000045E  4E4F                     385                            TRAP    #15
+00000460                           386              
+00000460                           387                            ; DRAW PIXEL
+00000460  2206                     388                            MOVE.L  D6,D1
+00000462  3407                     389                            MOVE.W  D7,D2
+00000464  103C 0052                390                            MOVE.B  #82,D0
+00000468  4E4F                     391                            TRAP    #15
+0000046A                           392              
+Line 393 ERROR: Symbol value differs between first and second pass
+0000046A                           393  .NEXT                     ADD.W   #1,D6
+0000046A  51CC 0046                394                            DBRA    D4, .LOOP2
+0000046E  5247                     395                            ADD.W   #1,D7
+00000470  51CB 0034                396                            DBRA    D3, .LOOP1
+00000474                           397  
+00000474  4CDF 001F                398                            MOVEM.L (A7)+,D0-D4
+00000478                           399  
+00000478  4E75                     400                            RTS
+0000047A                           401  
+0000047A                           402  
+0000047A                           403  
+0000047A                           404  
+0000047A                           405  
+Line 406 WARNING: END directive missing, starting address not set
+
+140 errors detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+CHKCOL              2EE
+CHKCOL:ISFREE       34C
+CHKCOL:ISGIGADOT    36C
+CHKCOL:ISMINIDOT    35C
+CHKCOL:ISPORTAL     3B4
+CHKCOL:ISWALL       354
+CHKCOL:JUMPLIST     322
+CHKCOL:RETURN       3EC
+CHKCOL:RIGHTSIDE    3DA
+PAC_INIT            0
+PAC_PLOT            3F2
+PAC_PLOT:DRAW       49A
+PAC_PLOT:DRAW_D     47E
+PAC_PLOT:DRAW_L     41E
+PAC_PLOT:DRAW_R     45E
+PAC_PLOT:DRAW_U     43E
+PAC_PLOT:DW2        494
+PAC_PLOT:LFT2       434
+PAC_PLOT:LOOP1      4A6
+PAC_PLOT:LOOP2      4B2
+PAC_PLOT:NEXT       4CC
+PAC_PLOT:RH2        474
+PAC_PLOT:U2         454
+PAC_UPDATE          2E
+PAC_UPDATE:CHKDWN   70
+PAC_UPDATE:CHKRIGHT  98
+PAC_UPDATE:CONT     100
+PAC_UPDATE:CONT2    1E0
+PAC_UPDATE:CONTINUE  84
+PAC_UPDATE:CONTINUE9  2CA
+PAC_UPDATE:DIRECTION  AC
+PAC_UPDATE:FINISH   2E8
+PAC_UPDATE:ISCOL2   2D0
+PAC_UPDATE:MINISND  284
+PAC_UPDATE:MVDOWN   F8
+PAC_UPDATE:MVDOWN2  1D8
+PAC_UPDATE:MVLEFT   D4
+PAC_UPDATE:MVLEFT2  1B4
+PAC_UPDATE:MVRIGHT  EC
+PAC_UPDATE:MVRIGHT2  1CC
+PAC_UPDATE:MVUP     E0
+PAC_UPDATE:MVUP2    1C0
+PAC_UPDATE:NOCOL    17C
+PAC_UPDATE:NOSND    2B0
+PAC_UPDATE:PLY2     2A2
+PAC_UPDATE:PUT_INTERSECTION  2C6
+PAC_UPDATE:REAL     182

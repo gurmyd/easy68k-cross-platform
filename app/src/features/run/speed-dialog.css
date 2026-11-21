@@ -1,0 +1,15 @@
+/* The Execution Speed dialog (SpeedDialog.tsx). Owner: SH8. */
+
+.e68-speed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.e68-speed__note {
+  margin: 0;
+  color: var(--c-text-muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+  white-space: normal;
+}

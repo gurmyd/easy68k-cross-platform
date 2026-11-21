@@ -1,0 +1,214 @@
+{
+  "about": "The test checklist of docs/porting/assembler.md section 3.9, item by item, with the programs of ./programs that prove each item against the official EDIT68K.exe v5.16.1. A program is named by the start of its folder name (\"line-01\"); richedit/ names a program of ../richedit. checklist.test.ts turns every item into one test.",
+  "sections": [
+    {
+      "title": "Line syntax",
+      "items": [
+        {
+          "item": "label in column 1 / indented with colon / alone on a line at an odd address",
+          "programs": ["line-01"]
+        },
+        { "item": "opcode in column 1", "programs": ["line-02"] },
+        { "item": "32-, 33- and 40-character labels", "programs": ["line-03"] },
+        { "item": "`.`, `_`, `$` in labels", "programs": ["line-04"] },
+        { "item": "illegal first character", "programs": ["line-05"] },
+        {
+          "item": "local labels across EQU, SET, macro definition, macro call, structured statement",
+          "programs": ["line-06", "line-13"]
+        },
+        { "item": "duplicate labels with equal and different values", "programs": ["line-08"] },
+        { "item": "phase error", "programs": ["line-08"] },
+        { "item": "comment forms", "programs": ["line-09"] },
+        {
+          "item": "line of 255, 256 and 300 characters",
+          "programs": [
+            "line-10",
+            "richedit/s03_long_line_255",
+            "richedit/s03_long_line_256",
+            "richedit/s03_long_line_300"
+          ]
+        },
+        { "item": "tabs versus spaces", "programs": ["line-14", "richedit/s14_tabs"] },
+        { "item": "lower / mixed case", "programs": ["line-11"] },
+        {
+          "item": "CR LF and LF input",
+          "programs": ["textmode-01", "richedit/s06_mixed_endings", "richedit/s07_lf_only"]
+        },
+        { "item": "last line without newline", "programs": ["textmode-02", "richedit/s08_no_final_newline"] },
+        {
+          "item": "bytes >= $80 in strings, comments and labels",
+          "programs": ["line-12", "richedit/s01_all_bytes_comment", "richedit/s02_high_bytes_dcb"]
+        }
+      ]
+    },
+    {
+      "title": "Expressions",
+      "items": [
+        { "item": "each operand form", "programs": ["expr-01", "expr-02"] },
+        { "item": "each operator", "programs": ["expr-01"] },
+        { "item": "precedence pairs across all four levels", "programs": ["expr-01"] },
+        { "item": "unary chains", "programs": ["expr-01"] },
+        { "item": "3-, 4- and 5-character constants", "programs": ["expr-02"] },
+        { "item": "9-digit hex", "programs": ["expr-02"] },
+        { "item": "`*` in instructions / DC / EQU / ORG", "programs": ["expr-07", "expr-01"] },
+        { "item": "division by zero", "programs": ["expr-03", "expr-05"] },
+        { "item": "space inside an expression", "programs": ["expr-03"] },
+        {
+          "item": "forward references in every directive that forbids them",
+          "programs": ["expr-08", "dir-01", "dir-14"]
+        }
+      ]
+    },
+    {
+      "title": "Directives",
+      "items": [
+        {
+          "item": "every row of 3.4 with and without label, with a size suffix, with a missing operand, with a forward reference",
+          "programs": ["dir-25", "dir-01", "dir-02", "dir-03", "dir-10", "dir-14", "dir-20", "expr-08"]
+        },
+        { "item": "DC strings versus constants including the space-after-comma case", "programs": ["dir-12"] },
+        {
+          "item": "odd `loc` before DC.B / DC.W / DS / instruction / SIMHALT / INCBIN / label",
+          "programs": ["dir-13", "dir-18", "incbin-01", "line-01"]
+        },
+        { "item": "OFFSET ... ORG * round trip", "programs": ["dir-03"] },
+        { "item": "SECTION switching and section labels", "programs": ["dir-02"] },
+        { "item": "MEMORY for all four types and its S0 records", "programs": ["dir-17"] },
+        {
+          "item": "OPT each word and its pass-1 leakage",
+          "programs": ["dir-15", "dir-22", "dir-23", "dir-24", "size-03"]
+        },
+        { "item": "LIST / NOLIST including a file ending in NOLIST", "programs": ["dir-21", "dir-22"] },
+        { "item": "PAGE", "programs": ["dir-19"] },
+        { "item": "FAIL with and without text", "programs": ["dir-16"] },
+        {
+          "item": "INCLUDE (quoted, unquoted, missing file, nested, `*` comment lines, error inside, END inside)",
+          "programs": [
+            "include-01",
+            "include-02",
+            "include-03",
+            "include-04",
+            "include-05",
+            "include-06",
+            "include-07",
+            "include-08",
+            "include-09"
+          ]
+        },
+        { "item": "INCBIN (odd length, missing file)", "programs": ["incbin-01"] },
+        {
+          "item": "END with / without operand, with a label, missing, in column 1",
+          "programs": ["dir-04", "dir-07", "dir-08", "dir-09", "line-02"]
+        }
+      ]
+    },
+    {
+      "title": "Conditionals",
+      "items": [
+        { "item": "each IFxx true and false", "programs": ["cond-01"] },
+        { "item": "nesting three deep", "programs": ["cond-01"] },
+        { "item": "label on IFxx", "programs": ["cond-02"] },
+        { "item": "missing operand", "programs": ["cond-02"] },
+        { "item": "missing ENDC", "programs": ["cond-03"] },
+        { "item": "comment lines inside a skipped block", "programs": ["cond-01"] },
+        { "item": "undefined symbol in the expression", "programs": ["cond-02"] }
+      ]
+    },
+    {
+      "title": "Macros",
+      "items": [
+        { "item": "`\\0` for each size", "programs": ["macro-01"] },
+        { "item": "`\\1`..`\\9`, `\\A`", "programs": ["macro-01"] },
+        { "item": "`<...>`", "programs": ["macro-02"] },
+        { "item": "`''`", "programs": ["macro-02"] },
+        { "item": "35 and 36 arguments", "programs": ["macro-03"] },
+        { "item": "continuation line", "programs": ["macro-04"] },
+        { "item": "`\\@` in nested calls", "programs": ["macro-05", "macro-01"] },
+        { "item": "NARG including inside a comment", "programs": ["macro-01", "macro-14"] },
+        { "item": "IFARG", "programs": ["macro-05", "macro-06"] },
+        { "item": "MEXIT", "programs": ["macro-05"] },
+        { "item": "nested macro", "programs": ["macro-05"] },
+        { "item": "recursion to the limit", "programs": ["macro-12", "macro-13"] },
+        { "item": "forward use", "programs": ["macro-07"] },
+        { "item": "duplicate definition", "programs": ["macro-07"] },
+        { "item": "missing ENDM", "programs": ["macro-08"] },
+        { "item": "`%` binary constants and `%d` in a body line (hazard 9.3.4)", "programs": ["macro-09"] },
+        { "item": "a body line that expands beyond 255 characters", "programs": ["macro-10"] },
+        { "item": "structured code inside a macro", "programs": ["macro-11"] },
+        { "item": "label on the call", "programs": ["macro-11"] },
+        { "item": "trailing comment on a call without arguments", "programs": ["macro-14"] }
+      ]
+    },
+    {
+      "title": "Structured",
+      "items": [
+        {
+          "item": "every row of 3.7 with `.B/.W/.L`, `.S/.L`, AND, OR, `<cc>` only, immediate on either side, `(An)+` pair, `<T>`, `<F>`",
+          "programs": ["stc-01", "stc-02"]
+        },
+        { "item": "missing THEN / DO", "programs": ["stc-03"] },
+        { "item": "mismatched terminators", "programs": ["stc-03"] },
+        { "item": "terminator with empty stack", "programs": ["stc-03"] },
+        { "item": "unterminated opener", "programs": ["stc-04"] },
+        { "item": "more than 9 structures of one kind (hex label digits)", "programs": ["stc-04"] },
+        { "item": "SEX on and off", "programs": ["line-13", "output-08"] }
+      ]
+    },
+    {
+      "title": "Outputs",
+      "items": [
+        { "item": "listing column layout", "programs": ["output-04", "output-03"] },
+        { "item": "continuation lines", "programs": ["output-02"] },
+        { "item": "`...`", "programs": ["output-02"] },
+        { "item": "symbol table order", "programs": ["output-03"] },
+        { "item": "S-record types S1/S2/S3", "programs": ["output-01"] },
+        { "item": "record splitting", "programs": ["output-01"] },
+        { "item": "S0 map records", "programs": ["dir-17"] },
+        { "item": "S8", "programs": ["output-01"] },
+        { "item": "SIMHALT overlap", "programs": ["dir-18"] },
+        { "item": "options in all combinations", "programs": ["output-08", "output-06"] },
+        { "item": "error and warning counts", "programs": ["dir-23", "output-08"] },
+        {
+          "item": "message list line numbers with include files and macro continuation lines",
+          "programs": ["include-04", "macro-04"]
+        }
+      ]
+    },
+    {
+      "title": "Quirks that need a pinned test each",
+      "items": [
+        {
+          "item": "an undefined symbol followed by `+`, `-`, `*` and inside parentheses (3.3, error protocol)",
+          "programs": ["expr-04"]
+        },
+        { "item": "a label on a line with an invalid mnemonic and a later reference to it", "programs": ["output-07"] },
+        { "item": "a local label whose mangled name reaches 33 characters", "programs": ["line-07"] },
+        { "item": "`(expr),An` versus `(expr),Dn`", "programs": ["quirk-04"] },
+        {
+          "item": "the 5.16.1 `(d,An)` / `(d,PC,Xn)` cases of 8.3 including `JMP (TABLE,PC,D0.W)` and `BTST #n,(d,PC,Xn)`",
+          "programs": ["quirk-03"]
+        },
+        { "item": "`END ; comment`, `END * comment`, `END` with a label", "programs": ["dir-05", "dir-06", "dir-07"] },
+        { "item": "`OFFSET` and `MEMORY` with a label", "programs": ["dir-03", "dir-17", "dir-25"] },
+        { "item": "`OPT` with an unknown word in a list", "programs": ["dir-15"] },
+        { "item": "`FAIL.W`", "programs": ["dir-16"] },
+        { "item": "`IFC A ,A`", "programs": ["cond-02"] },
+        { "item": "`IFxx` under `NOLIST`", "programs": ["dir-21"] },
+        { "item": "macro arguments `A, B` / `A ,B` / `<A<B>C>` / `<<GT>>` / `'IT''S'`", "programs": ["macro-02"] },
+        { "item": "`IFARG` inside a false `IFxx` with the argument present and absent", "programs": ["macro-06"] },
+        {
+          "item": "a warning on a macro call line (what is listed after the message)",
+          "programs": ["macro-04", "output-08"]
+        },
+        { "item": "`MACRO` without label", "programs": ["macro-07"] },
+        { "item": "an indented `LBL: IF ...`", "programs": ["stc-04"] },
+        { "item": "`IF D0 <EQ> VAR.L THEN`", "programs": ["stc-04"] },
+        {
+          "item": "an INCLUDE file whose last line is a bare label without line end and one that ends in an instruction (object code on the \"end include\" line)",
+          "programs": ["include-06"]
+        },
+        { "item": "a source with an unclosed `IF` (stack state in pass 2)", "programs": ["stc-04"] }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "files": [
+    {
+      "name": "0.wav",
+      "size": 7908
+    },
+    {
+      "name": "1.wav",
+      "size": 6720
+    },
+    {
+      "name": "MACRO.X68",
+      "size": 2023
+    },
+    {
+      "name": "chime.wav",
+      "size": 69664
+    },
+    {
+      "name": "clockDigital.X68",
+      "size": 5923
+    },
+    {
+      "name": "clockWithSound.X68",
+      "size": 14648
+    },
+    {
+      "name": "fileio.X68",
+      "size": 1279
+    },
+    {
+      "name": "graphicSound.X68",
+      "size": 6524
+    },
+    {
+      "name": "mouseWindowSize.X68",
+      "size": 8910
+    },
+    {
+      "name": "roger.wav",
+      "size": 11102
+    },
+    {
+      "name": "tick.wav",
+      "size": 2474
+    },
+    {
+      "name": "tock.wav",
+      "size": 1794
+    },
+    {
+      "name": "tutorial1.X68",
+      "size": 3660
+    },
+    {
+      "name": "tutorial2.X68",
+      "size": 2748
+    },
+    {
+      "name": "tutorial3.X68",
+      "size": 3091
+    },
+    {
+      "name": "tutorial4.X68",
+      "size": 4672
+    }
+  ]
+}

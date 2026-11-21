@@ -1,0 +1,25 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:29:49 AM
+
+00001000                             1      ORG $1000
+00001000                 TRUE        2      IFNE FWD
+00001000  =00000005                  3  S   SET 5
+00001000= 05                         4      DC.B S
+00001001                             5  M   MACRO
+00001001                             6      NOP
+00001001                             7      ENDM
+00001001                             8      ENDC
+00001001  =00000001                  9  FWD EQU 1
+00001001                            10      END $1000
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+FWD                 1
+M                   0
+S                   5

@@ -1,0 +1,73 @@
+/* The Stack panel (StackPanel.tsx). Owner: U2. */
+
+.e68-stack {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+
+.e68-stack__rows {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 var(--sp-1);
+  font-family: var(--font-mono);
+  font-size: var(--fs-md);
+  line-height: 1.2;
+  white-space: pre;
+  outline: none;
+}
+
+.e68-stack__rows:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--c-accent);
+}
+
+.e68-stack__row {
+  width: max-content;
+}
+
+.e68-stack__measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* The two marks keep their colours in both themes, with black text (2.8). */
+.e68-stack__byte[data-mark='reg'] {
+  background: var(--c-stack-reg);
+  color: var(--c-stack-text);
+}
+
+.e68-stack__byte[data-mark='sp'] {
+  background: var(--c-stack-sp);
+  color: var(--c-stack-text);
+}
+
+/* Bytes in the enabled Invalid range of the Hardware panel: red text. */
+.e68-stack__byte[data-invalid='true'] {
+  color: var(--c-danger);
+}
+
+/* On a mark the theme's danger colour can be too light (dark theme); the gutter red is the same in
+   both themes and readable on aqua and yellow. */
+.e68-stack__byte[data-invalid='true'][data-mark] {
+  color: var(--c-bp-on);
+}
+
+.e68-stack__side {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-1);
+  border-left: 1px solid var(--c-border);
+  background: var(--c-panel);
+}

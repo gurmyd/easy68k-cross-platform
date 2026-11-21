@@ -1,0 +1,19 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:30:10 AM
+
+00001000                             1      ORG $1000
+00001000                             2  M   MACRO
+00001000                             3      NOP
+00001000                             4      ENDM
+00001000                             5m     M
+00001002                             6      END $1000
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+M                   0

@@ -1,0 +1,60 @@
+00000000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:29:31 AM
+
+00000000                             1  ; =============================================================================
+00000000                             2  ; SYSTEM CONSTANTS
+00000000                             3  ; =============================================================================
+00000000                             4  
+00000000                             5  ; --- SCREEN RELATED CONSTANTS ------------------------------------------------
+00000000  =00000320                  6  SCRWIDTH                  EQU     800        ; SCREEN WIDTH
+00000000  =000002D0                  7  SCRHEIGH                  EQU     720        ; SCREEN HEIGHT
+00000000                             8  
+00000000                             9  ; --- KEYBOARD CODES ----------------------------------------------------------
+00000000  =00000041                 10  KBDLEFT                  EQU      'A'
+00000000  =00000057                 11  KBDUP                    EQU      'W'
+00000000  =00000044                 12  KBDRIGHT                 EQU      'D'
+00000000  =00000053                 13  KBDDOWN                  EQU      'S'
+00000000  =00000020                 14  STARTKEY                 EQU      ' '
+00000000  =00000050                 15  DEBUGKEY                 EQU      'P'
+00000000                            16  
+00000000                            17  ; --- SOUND ID'S --------------------------------------------------------------
+00000000  =00000000                 18  SNDSTART                 EQU      0
+00000000  =00000001                 19  SNDBIGDOT                EQU      1
+00000000  =00000002                 20  SNDCHOMP                 EQU      2
+00000000  =00000003                 21  SNDCHOMP2                EQU      3
+00000000  =00000004                 22  SNDDEATH                 EQU      4
+00000000  =00000005                 23  SNDEATGHOS               EQU      5
+00000000                            24  
+00000000                            25  
+00000000                            26  
+00000000                            27  
+00000000                            28  
+00000000                            29  
+00000000                            30  
+00000000                            31  
+00000000                            32  
+00000000                            33  
+Line 34 WARNING: END directive missing, starting address not set
+
+No errors detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+DEBUGKEY            50
+KBDDOWN             53
+KBDLEFT             41
+KBDRIGHT            44
+KBDUP               57
+SCRHEIGH            2D0
+SCRWIDTH            320
+SNDBIGDOT           1
+SNDCHOMP            2
+SNDCHOMP2           3
+SNDDEATH            4
+SNDEATGHOS          5
+SNDSTART            0
+STARTKEY            20

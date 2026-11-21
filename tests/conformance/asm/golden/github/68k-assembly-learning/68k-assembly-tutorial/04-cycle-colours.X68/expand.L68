@@ -1,0 +1,178 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:27:06 AM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : cycle-colours
+00000000                             3  * Written by : Henry Wrightson
+00000000                             4  * Date       : 07/08/2026
+00000000                             5  * Description: Cycle through the RGB spectrum
+00000000                             6  *-----------------------------------------------------------
+00001000                             7      ORG    $1000
+00001000                             8  Start:
+00001000  41F9 00001112              9      lea     ColourStateTable,a0
+00001006                            10      
+00001006                            11  CycleColourLoop:
+00001006  4EB9 0000101E             12      jsr     IncrementColours
+0000100C  4EB9 0000109E             13      jsr     DisplayMessage    
+00001012  4EB9 000010F8             14      jsr     WaitABit
+00001018  60EC                      15      bra.s   CycleColourLoop
+0000101A                            16      
+0000101A  FFFF FFFF                 17      SIMHALT
+0000101E                            18  
+0000101E                            19  IncrementColours:
+0000101E  1028 0000                 20      move.b  COLOURSTATE_DR(a0),d0
+00001022  D139 0000110E             21      add.b   d0,Red
+00001028  1028 0001                 22      move.b  COLOURSTATE_DG(a0),d0
+0000102C  D139 0000110F             23      add.b   d0,Green
+00001032  1028 0002                 24      move.b  COLOURSTATE_DB(a0),d0
+00001036  D139 00001110             25      add.b   d0,Blue
+0000103C                            26      
+0000103C  1028 0003                 27      move.b  COLOURSTATE_TR(a0),d0
+00001040  B039 0000110E             28      cmp.b   Red,d0
+00001046  661E                      29      bne.s   .SkipTriggers
+00001048                            30      
+00001048  1028 0004                 31      move.b  COLOURSTATE_TG(a0),d0
+0000104C  B039 0000110F             32      cmp.b   Green,d0
+00001052  6612                      33      bne.s   .SkipTriggers
+00001054                            34      
+00001054  1028 0005                 35      move.b  COLOURSTATE_TB(a0),d0
+00001058  B039 00001110             36      cmp.b   Blue,d0
+0000105E  6606                      37      bne.s   .SkipTriggers
+00001060  4EB9 00001068             38      jsr     NextColourState
+00001066                            39  .SkipTriggers:
+00001066  4E75                      40      rts
+00001068                            41  
+00001068                            42  NextColourState:
+00001068  5239 00001111             43      addq.b  #1,ColourState
+0000106E  1039 00001111             44      move.b  ColourState,d0
+00001074  0C00 0006                 45      cmpi.b  #LAST_COLOUR_STATE,d0
+00001078  6600 0008                 46      bne     .SkipRollover
+0000107C  4239 00001111             47      clr.b   ColourState
+00001082                            48  .SkipRollover:
+00001082  4EB9 0000108A             49      jsr     MoveColourStateRecord
+00001088  4E75                      50      rts
+0000108A                            51  
+0000108A                            52  MoveColourStateRecord:
+0000108A  1039 00001111             53      move.b  ColourState,d0
+00001090  7206                      54      moveq   #COLOUR_STATE_TABLE_WIDTH,d1
+00001092  C0C1                      55      mulu.w  d1,d0           ; multiply by record size
+00001094                            56  
+00001094  41F9 00001112             57      lea     ColourStateTable,a0
+0000109A  D0C0                      58      adda.w  d0,a0
+0000109C                            59  
+0000109C  4E75                      60      RTS
+0000109E                            61          
+0000109E                            62  DisplayMessage:
+0000109E  4EB9 000010B8             63      JSR     SetCursorPosition
+000010A4  4EB9 000010CA             64      JSR     MoveColourToD1
+000010AA  4EB9 000010E4             65      JSR     SetMessageColour
+000010B0  4EB9 000010EC             66      JSR     OutputMessage
+000010B6  4E75                      67      RTS
+000010B8                            68  
+000010B8                            69  SetCursorPosition:
+000010B8  45F9 00001102             70      lea     Message,a2
+000010BE  7200                      71      moveq   #0,d1           ;load col into low byte of d1
+000010C0  E149                      72      lsl.w   #8,d1           ;shift the low byte of d1 over to high byte
+000010C2  7200                      73      moveq   #0,d1           ;load row into low byte of d1
+000010C4  700B                      74      moveq   #11,d0          ;load command to position cursor
+000010C6  4E4F                      75      trap    #15
+000010C8  4E75                      76      rts
+000010CA                            77  
+000010CA                            78  MoveColourToD1:
+000010CA  7200                      79      moveq    #0,d1
+000010CC  1239 00001110             80      move.b  Blue,d1
+000010D2  E189                      81      lsl.l   #8,d1
+000010D4  8239 0000110F             82      or.b    Green,d1
+000010DA  E189                      83      lsl.l   #8,d1
+000010DC  8239 0000110E             84      or.b    Red,d1
+000010E2  4E75                      85      rts
+000010E4                            86  
+000010E4                            87  SetMessageColour:    
+000010E4  7400                      88      moveq   #0,d2           ;set style
+000010E6  7015                      89      moveq   #21,d0          ;set text colour code
+000010E8  4E4F                      90      trap    #15
+000010EA  4E75                      91      rts
+000010EC                            92      
+000010EC                            93  OutputMessage:    
+000010EC  43F9 00001102             94      lea     Message,a1      ;hello world message
+000010F2  700E                      95      moveq   #14,d0          ;load command to output text
+000010F4  4E4F                      96      trap    #15
+000010F6  4E75                      97      rts
+000010F8                            98  
+000010F8                            99  WaitABit:
+000010F8  303C 2710                100      move.w  #10000,d0
+000010FC                           101  .Loop:
+000010FC  5340                     102      subq    #1,d0
+000010FE  66FC                     103      bne     .Loop
+00001100  4E75                     104      rts
+00001102                           105      
+00001102                           106  * Offsets
+00001102  =00000000                107  COLOURSTATE_DR      EQU     0
+00001102  =00000001                108  COLOURSTATE_DG      EQU     1
+00001102  =00000002                109  COLOURSTATE_DB      EQU     2
+00001102  =00000003                110  COLOURSTATE_TR      EQU     3
+00001102  =00000004                111  COLOURSTATE_TG      EQU     4
+00001102  =00000005                112  COLOURSTATE_TB      EQU     5
+00001102                           113  
+00001102                           114  * Constants
+00001102  =00000006                115  COLOUR_STATE_TABLE_WIDTH    EQU 6
+00001102  =00000006                116  LAST_COLOUR_STATE   EQU     6
+00001102                           117  
+00001102                           118  * Variables
+00001102= 48 65 6C 6C 6F 20 57     119  Message             DC.B    'Hello World',0
+          6F 72 6C 64 00        
+0000110E                           121  
+0000110E                           122  * Colour variables with their starting values
+0000110E= FF                       123  Red                 DC.B    $FF
+0000110F= 00                       124  Green               DC.B    $00
+00001110= 00                       125  Blue                DC.B    $00
+00001111= 00                       126  ColourState         DC.B    0
+00001112                           127  
+00001112                           128  * DeltaR, DeltaG, DeltaB, TriggerR, TriggerG, TriggerB
+00001112                           129  * The Delta is how much to change each RGB value
+00001112                           130  * The Trigger is the condition that causes a state change, when R,G,B = TriggerR,TriggerG,TriggerB
+00001112= 00 01 00 FF FF 00        131  ColourStateTable:   DC.B     0, 1, 0, $FF, $FF, $00 ;red     >  yellow
+00001118= FF 00 00 00 FF 00        132                      DC.B    -1, 0, 0, $00, $FF, $00 ;yellow  >  green
+0000111E= 00 00 01 00 FF FF        133                      DC.B     0, 0, 1, $00, $FF, $FF ;green   >  cyan
+00001124= 00 FF 00 00 00 FF        134                      DC.B     0,-1, 0, $00, $00, $FF ;cyan    >  blue
+0000112A= 01 00 00 FF 00 FF        135                      DC.B     1, 0, 0, $FF, $00, $FF ;blue    >  magenta
+00001130= 00 00 FF FF 00 00        136                      DC.B     0, 0,-1, $FF, $00, $00 ;magenta >  red
+00001136                           137              
+00001136                           138      END    START        ; last line of source
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+BLUE                1110
+COLOURSTATE         1111
+COLOURSTATETABLE    1112
+COLOURSTATE_DB      2
+COLOURSTATE_DG      1
+COLOURSTATE_DR      0
+COLOURSTATE_TB      5
+COLOURSTATE_TG      4
+COLOURSTATE_TR      3
+COLOUR_STATE_TABLE_WIDTH  6
+CYCLECOLOURLOOP     1006
+DISPLAYMESSAGE      109E
+GREEN               110F
+INCREMENTCOLOURS    101E
+INCREMENTCOLOURS:SKIPTRIGGERS  1066
+LAST_COLOUR_STATE   6
+MESSAGE             1102
+MOVECOLOURSTATERECORD  108A
+MOVECOLOURTOD1      10CA
+NEXTCOLOURSTATE     1068
+NEXTCOLOURSTATE:SKIPROLLOVER  1082
+OUTPUTMESSAGE       10EC
+RED                 110E
+SETCURSORPOSITION   10B8
+SETMESSAGECOLOUR    10E4
+START               1000
+WAITABIT            10F8
+WAITABIT:LOOP       10FC

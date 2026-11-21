@@ -1,0 +1,26 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:30:16 AM
+
+00001000                             1      ORG $1000
+00001000                             2      INCLUDE 'inc1.x68'
+00001000  4E71                       3      NOP
+00001000  4E71                       4  -------------------- end include --------------------
+00001002                             5      INCLUDE INC2.X68
+00001002  4E75                       6      RTS
+00001002  4E75                       7  -------------------- end include --------------------
+00001004                             8      include "sub\Inc3.x68"
+00001004= 0003                       9      DC.W 3
+00001004= 0003                      10  -------------------- end include --------------------
+00001006                            11      INCLUDE sub/inc4.X68
+00001006= 0004                      12      DC.W 4
+00001006= 0004                      13  -------------------- end include --------------------
+00001008                            14      END $1000
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------

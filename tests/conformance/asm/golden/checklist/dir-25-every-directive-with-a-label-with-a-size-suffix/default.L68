@@ -1,0 +1,86 @@
+00000000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:32:36 AM
+
+00001000                             1      ORG $1000
+Line 2 ERROR: Invalid size code
+00001100                             2  L1  ORG.W   $1100
+Line 3 ERROR: Invalid size code
+00000000                             3  L2  SECTION.W 1
+Line 4 ERROR: Label required with this directive
+00000000                             4      SECTION
+00000000                             5  L3  SECTION
+Line 6 ERROR: Invalid syntax
+00000000                             6      SECTION 16
+00001100                             7      SECTION 0
+Line 8 ERROR: Invalid size code
+00001100                             8  L4  EQU.W   5
+Line 9 ERROR: Label required with this directive
+00001100                             9      EQU 5
+Line 10 ERROR: Invalid size code
+00001100  =00000006                 10  L5  SET.L   6
+Line 11 ERROR: Label required with this directive
+00001100                            11      SET 7
+00001100= 0001                      12  L6  DC  1
+Line 13 ERROR: Invalid size code
+00001102= 0002                      13  L7  DC.S    2
+Line 14 ERROR: Invalid syntax
+00001104=                           14      DC
+Line 15 ERROR: Invalid syntax
+00001104=                           15      DC.B
+00001104= 0003 0003                 16  L8  DCB 2,3
+Line 17 ERROR: Invalid syntax
+00001108=                           17      DCB
+00001108                            18  L9  DS  1
+Line 19 ERROR: Invalid syntax
+0000110A                            19      DS
+Line 20 ERROR: Label is not allowed
+0000110A                            20  L10 OPT.W   MEX
+Line 21 ERROR: Invalid syntax
+0000110A                            21      OPT
+Line 22 ERROR: Invalid size code
+0000110A                            22  L11 REG.W   D0-D2
+Line 23 ERROR: Label required with this directive
+0000110A                            23      REG D0
+Line 24 ERROR: Invalid syntax
+0000110A                            24  L12 REG
+Line 25 ERROR: Invalid size code
+0000110A  FFFF FFFF                 25  L13 SIMHALT.W
+<------------------------------ PAGE ------------------------------>
+Line 26 ERROR: Label is not allowed
+0000110E                            26  L16 PAGE.W
+Line 27 ERROR: Invalid size code
+0000110E                            27  L17 FAIL.L  text
+Line 28 ERROR: Invalid size code
+0000110E                            28  L18 INCLUDE.W
+Line 29 ERROR: Invalid size code
+0000110E                            29  L19 INCBIN.W
+Line 30 ERROR: Label is not allowed
+0000110E                            30  L20 MEMORY.W ROM $2000,$2FFF
+Line 31 ERROR: Invalid syntax
+0000110E                            31      MEMORY
+Line 32 ERROR: Invalid syntax
+0000110E                            32      MEMORY  ROM
+Line 33 ERROR: Invalid syntax
+0000110E                            33      MEMORY  BOGUS $1,$2
+Line 34 ERROR: Label is not allowed
+0000110E                            34  L21 END.W   $1000
+
+28 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+L1                  1100
+L11                 7
+L13                 110A
+L2                  1
+L3                  1
+L4                  5
+L5                  6
+L6                  1100
+L7                  1102
+L8                  1104
+L9                  1108

@@ -1,0 +1,45 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:31:52 AM
+
+Line 1 ERROR: Forward references not allowed with this directive
+00000000                             1      ORG LATERORG
+Line 2 ERROR: Forward references not allowed with this directive
+00000000                             2  A   EQU LATER
+00000000  =00000004                  3  B   SET LATER
+Line 4 ERROR: Forward references not allowed with this directive
+00000000                             4      DS.B    LATER
+Line 5 ERROR: Forward references not allowed with this directive
+00000000                             5      DS.W    LATER
+Line 6 ERROR: Forward references not allowed with this directive
+00000000=                            6      DCB.B   LATER,1
+Line 7 ERROR: Forward references not allowed with this directive
+00000000                             7      OFFSET  LATER
+00000000                             8      ORG *
+00000000                 FALSE       9      IFEQ    LATER
+00000000                            10      ENDC
+Line 11 ERROR: Forward references not allowed with this directive
+00000000                            11      MEMORY  ROM LATER,LATER2
+Line 12 ERROR: Forward references not allowed with this directive
+00000000                            12      SECTION LATERSEC
+00001000                            13      ORG $1000
+00001000  =00000004                 14  LATER   EQU 4
+00001000  =00000008                 15  LATER2  EQU 8
+00001000  =00000002                 16  LATERSEC EQU    2
+00001000  =00002000                 17  LATERORG EQU    $2000
+Line 18 ERROR: Undefined symbol
+00001000= F4F4 0004                 18      DC.W    A,B
+00001004                            19      END $1000
+
+9 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+B                   4
+LATER               4
+LATER2              8
+LATERORG            2000
+LATERSEC            2

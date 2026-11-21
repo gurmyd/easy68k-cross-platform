@@ -1,0 +1,1659 @@
+00000000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:27:17 AM
+
+00000000                             1  ; =============================================================================
+00000000                             2  ; CLYDE
+00000000                             3  ; =============================================================================
+00000000                             4              
+00000000                             5  ; -----------------------------------------------------------------------------
+00000000                             6  CLYDE_INIT
+00000000                             7  ; INITIALIZE CLYDE.
+00000000                             8  ; INPUT    : NONE
+00000000                             9  ; OUTPUT   : NONE
+00000000                            10  ; MODIFIES : NONE
+00000000                            11  ; -----------------------------------------------------------------------------
+Line 12 ERROR: Undefined symbol
+00000000  33FC BD16 005455B8        12                            MOVE.W  #CLYDE_START_X,(CLYDE_POS_X)
+Line 13 ERROR: Undefined symbol
+00000008  33FC BD16 005455B8        13                            MOVE.W  #CLYDE_START_Y,(CLYDE_POS_Y)
+00000010                            14                            ; START UP
+Line 15 ERROR: Undefined symbol
+00000010  33FC 0002 005455B8        15                            MOVE.W  #2,(CLYDE_DIR)
+00000018                            16                            ; WE START ALWAYS IN SCATTER MODE
+Line 17 ERROR: Undefined symbol
+00000018  33FC 0001 005455B8        17                            MOVE.W  #1, (CLYDE_SCATER_ON)
+Line 18 ERROR: Undefined symbol
+00000020  4279 004DBD16             18                            CLR.W   (CLYDE_CHASE_ON)
+Line 19 ERROR: Undefined symbol
+00000026  4279 004DBD16             19                            CLR.W   (CLYDE_SCATERTIMER)
+Line 20 ERROR: Undefined symbol
+0000002C  4279 004DBD16             20                            CLR.W   (CLYDE_CHASETIMER)
+Line 21 ERROR: Undefined symbol
+00000032  4279 004DBD16             21                            CLR.W   (CLYDE_MODE_SWITCH_COUNT)
+Line 22 ERROR: Undefined symbol
+00000038  23FC 004DBD16 005455B8    22                            MOVE.L  #ORANGE,(CLYDE_COLOR)
+Line 23 ERROR: Undefined symbol
+00000042  4279 004DBD16             23                            CLR.W   (CLYDE_IS_BLUE)
+Line 24 ERROR: Undefined symbol
+00000048  4279 004DBD16             24                            CLR.W   (CLYDE_FRIGHTENED_TIMER)
+Line 25 ERROR: Undefined symbol
+0000004E  4279 004DBD16             25                            CLR.W   (CLYDE_ESTADO)
+Line 26 ERROR: Undefined symbol
+00000054  33FC 0002 005455B8        26                            MOVE.W  #2,(CLYDE_SPEED)
+0000005C  4E75                      27                            RTS
+0000005E                            28                  
+0000005E                            29  ; -----------------------------------------------------------------------------
+0000005E                            30  CLYDE_UPDATE
+0000005E                            31  ; UPDATES CLYDE.
+0000005E                            32  ; INPUT    : NONE
+0000005E                            33  ; OUTPUT   : NONE
+0000005E                            34  ; MODIFIES : NONE
+0000005E                            35  ; -----------------------------------------------------------------------------
+0000005E                            36          
+0000005E  48A7 FF80                 37                            MOVEM.W D0-D7/A0,-(A7)
+00000062                            38                  
+Line 39 ERROR: Undefined symbol
+00000062  0C79 0000 005455B8        39                            CMP.W   #0,(CLYDE_ESTADO)
+0000006A  6700 05BE                 40                            BEQ     .IS_HOME
+Line 41 ERROR: Undefined symbol
+0000006E  0C79 0001 005455B8        41                            CMP.W   #1,(CLYDE_ESTADO)
+00000076  6700 05B2                 42                            BEQ     .IS_HOME
+Line 43 ERROR: Undefined symbol
+0000007A  0C79 0002 005455B8        43                            CMP.W   #2,(CLYDE_ESTADO)
+00000082  6700 05A6                 44                            BEQ     .IS_HOME
+Line 45 ERROR: Undefined symbol
+00000086  0C79 0003 005455B8        45                            CMP.W   #3,(CLYDE_ESTADO)
+0000008E  6700 059A                 46                            BEQ     .IS_HOME
+00000092                            47                            
+Line 48 ERROR: Undefined symbol
+00000092  0C79 0001 005455B8        48                            CMP.W   #1,(CLYDE_IS_BLUE)
+0000009A  6700 02B4                 49                            BEQ     .FRIGHTENED_MODE
+0000009E                            50                  
+0000009E  4EB9 0000082C             51                            JSR     MODE_UPDATE_CLYDE
+000000A4                            52                  
+Line 53 ERROR: Undefined symbol
+000000A4  3039 004DBD16             53                            MOVE.W  (CLYDE_POS_X),D0
+Line 54 ERROR: Undefined symbol
+000000AA  3239 004DBD16             54                            MOVE.W  (CLYDE_POS_Y),D1
+000000B0                            55                  
+000000B0                            56                            ; MOVE FORWARD
+Line 57 ERROR: Undefined symbol
+000000B0  0C79 0001 005455B8        57                            CMP.W   #1,(CLYDE_DIR)
+000000B8  6700 001E                 58                            BEQ     .MVLEFT
+Line 59 ERROR: Undefined symbol
+000000BC  0C79 0002 005455B8        59                            CMP.W   #2,(CLYDE_DIR)
+000000C4  6700 001C                 60                            BEQ     .MVUP
+Line 61 ERROR: Undefined symbol
+000000C8  0C79 0003 005455B8        61                            CMP.W   #3,(CLYDE_DIR)
+000000D0  6700 001A                 62                            BEQ     .MVRIGHT
+000000D4  6000 0020                 63                            BRA     .MVDOWN
+000000D8                            64             
+Line 65 ERROR: Undefined symbol
+000000D8  9079 004DBD16             65  .MVLEFT                   SUB.W   (CLYDE_SPEED),D0
+000000DE  6000 001C                 66                            BRA     .CONT
+000000E2                            67      
+Line 68 ERROR: Undefined symbol
+000000E2  9279 004DBD16             68  .MVUP                     SUB.W   (CLYDE_SPEED),D1
+000000E8  6000 0012                 69                            BRA     .CONT
+000000EC                            70      
+Line 71 ERROR: Undefined symbol
+000000EC  D079 004DBD16             71  .MVRIGHT                  ADD.W   (CLYDE_SPEED),D0
+000000F2  6000 0008                 72                            BRA     .CONT
+000000F6                            73                  
+Line 74 ERROR: Undefined symbol
+000000F6  D279 004DBD16             74  .MVDOWN                   ADD.W   (CLYDE_SPEED),D1
+000000FC                            75      
+000000FC                            76  .CONT         
+Line 77 ERROR: Undefined symbol
+000000FC  33C0 005455B8             77                            MOVE.W  D0,(CLYDE_POS_X)
+Line 78 ERROR: Undefined symbol
+00000102  33C1 005455B8             78                            MOVE.W  D1,(CLYDE_POS_Y)                  
+00000108                            79                  
+00000108                            80                            ; CHECK TOP LEFT 
+Line 81 ERROR: Undefined symbol
+00000108  3439 004DBD16             81                            MOVE.W  (CLYDE_POS_Y),D2
+Line 82 ERROR: Undefined symbol
+0000010E  3639 004DBD16             82                            MOVE.W  (CLYDE_POS_X),D3
+00000114  4EB9 0000074E             83                            JSR     CHECK_COLLISIONS_CLYDE
+0000011A  0804 0000                 84                            BTST.L  #0,D4
+0000011E  6700 01CA                 85                            BEQ     .DONE
+00000122                            86                  
+00000122                            87                            ; CHECK BOTTOM RIGHT
+Line 88 ERROR: Undefined symbol
+00000122  3439 004DBD16             88                            MOVE.W  (CLYDE_POS_Y),D2
+Line 89 ERROR: Undefined symbol
+00000128  3639 004DBD16             89                            MOVE.W  (CLYDE_POS_X),D3
+Line 90 ERROR: Comma expected
+0000012E                            90                            ADD.W   #PACRAD-1,D2
+Line 91 ERROR: Comma expected
+0000012E                            91                            ADD.W   #PACRAD-1,D3
+0000012E  4EB9 0000074E             92                            JSR     CHECK_COLLISIONS_CLYDE
+00000134  0804 0000                 93                            BTST.L  #0,D4
+00000138  6700 01B0                 94                            BEQ     .DONE
+0000013C                            95                  
+0000013C                            96                            ; CHECK TOP RIGHT
+Line 97 ERROR: Undefined symbol
+0000013C  3439 004DBD16             97                            MOVE.W  (CLYDE_POS_Y),D2
+Line 98 ERROR: Undefined symbol
+00000142  3639 004DBD16             98                            MOVE.W  (CLYDE_POS_X),D3 
+Line 99 ERROR: Comma expected
+00000148                            99                            ADD.W   #PACRAD-1,D2
+00000148  4EB9 0000074E            100                            JSR     CHECK_COLLISIONS_CLYDE
+0000014E  0804 0000                101                            BTST.L  #0,D4
+00000152  6700 0196                102                            BEQ     .DONE
+00000156                           103                  
+00000156                           104                            ; CHECK BOTTOM LEFT 
+Line 105 ERROR: Undefined symbol
+00000156  3439 004DBD16            105                            MOVE.W  (CLYDE_POS_Y),D2
+Line 106 ERROR: Undefined symbol
+0000015C  3639 004DBD16            106                            MOVE.W  (CLYDE_POS_X),D3 
+Line 107 ERROR: Comma expected
+00000162                           107                            ADD.W   #PACRAD-1,D3
+00000162  4EB9 0000074E            108                            JSR     CHECK_COLLISIONS_CLYDE
+00000168  0804 0000                109                            BTST.L  #0,D4
+0000016C  6700 017C                110                            BEQ     .DONE
+00000170                           111      
+00000170                           112                            ; HE IS IN INTERSECTION
+Line 113 ERROR: Undefined symbol
+00000170  43F9 004DBD16            113                            LEA.L   CLYDE_ALLOWED_DIR,A1
+00000176                           114                            ; INITIALIZE ARRAY TO 1
+00000176  22BC 01010101            115                            MOVE.L  #$01010101,(A1)
+0000017C                           116                  
+Line 117 ERROR: Undefined symbol
+0000017C  3239 004DBD16            117                            MOVE.W  (CLYDE_DIR),D1
+00000182                           118                  
+00000182  B27C 0001                119                            CMP.W   #1,D1
+00000186  6600 001C                120                            BNE     .CHKUP
+0000018A                           121                            ; MOVE 0 TO POS 2 IN ARRAY
+0000018A  137C 0000 0002           122                            MOVE.B  #0,2(A1)
+00000190  6000 0042                123                            BRA     .CONT2
+00000194                           124      
+Line 125 ERROR: Symbol value differs between first and second pass
+00000194                           125  .CHKUP                    CMP.W   #2,D1
+00000194  6600 0020                126                            BNE     .CHKRIGHT
+00000198                           127                            ; MOVE 0 TO POS 3 IN ARRAY
+00000198  137C 0000 0003           128                            MOVE.B  #0,3(A1)
+0000019E  6000 0034                129                            BRA     .CONT2
+000001A2                           130                  
+Line 131 ERROR: Symbol value differs between first and second pass
+000001A2                           131  .CHKRIGHT                 CMP.W   #3,D1
+000001A2  6600 0022                132                            BNE     .CHKDOWN
+000001A6                           133                            ; MOVE 0 TO POS 0 IN ARRAY
+000001A6  12BC 0000                134                            MOVE.B  #0,(A1)
+000001AA  6000 0028                135                            BRA     .CONT2
+000001AE                           136                  
+Line 137 ERROR: Symbol value differs between first and second pass
+000001AE                           137  .CHKDOWN                  CMP.W   #4,D1
+000001AE  6600 0024                138                            BNE     .CONT2
+000001B2                           139                            ; MOVE 0 TO POS 1 IN ARRAY
+000001B2  137C 0000 0001           140                            MOVE.B  #0,1(A1)
+000001B8                           141                  
+000001B8                           142                            ; WE REMOVED THE DIRECTION HE IS FACING TO
+000001B8                           143                            ; WHEN HE ENTERED THE INTERSECTION FROM THE TUPLE
+000001B8                           144                            ; NOW WE REMOVE THE DIRECTIONS WITH WALL
+Line 145 ERROR: Symbol value differs between first and second pass
+000001B8                           145  .CONT2                    MOVE.W  (CLYDE_POS_X),D0
+Line 146 ERROR: Undefined symbol
+000001B8  3239 004DBD16            146                            MOVE.W  (CLYDE_POS_Y),D1
+000001BE  4EB9 000007FA            147                            JSR     GETMAPCOORDS_CLYDE
+000001C4                           148                  
+000001C4  3400                     149                            MOVE.W  D0,D2      ; XM
+000001C6  3601                     150                            MOVE.W  D1,D3      ; YM
+000001C8                           151                  
+000001C8                           152                            ; LEFT SIDE
+000001C8  5302                     153                            SUBQ.B  #1,D2
+000001CA  4EB9 00000810            154                            JSR     MAPGET_CLYDE
+000001D0  B87C 0001                155                            CMP.W   #1,D4
+000001D4  6600 0028                156                            BNE     .CHKMAPUP
+000001D8  12BC 0000                157                            MOVE.B  #0,(A1)
+000001DC                           158                  
+Line 159 ERROR: Symbol value differs between first and second pass
+000001DC                           159  .CHKMAPUP
+000001DC  3400                     160                            MOVE.W  D0,D2      ; XM
+000001DE  3601                     161                            MOVE.W  D1,D3      ; YM
+000001E0                           162                  
+000001E0                           163                            ; UP SIDE
+000001E0  5303                     164                            SUBQ.B  #1,D3
+000001E2  4EB9 00000810            165                            JSR     MAPGET_CLYDE
+000001E8  B87C 0001                166                            CMP.W   #1,D4
+000001EC  6600 002A                167                            BNE     .CHKMAPRIGHT
+000001F0  137C 0000 0001           168                            MOVE.B  #0,1(A1)
+000001F6                           169                  
+Line 170 ERROR: Symbol value differs between first and second pass
+000001F6                           170  .CHKMAPRIGHT
+000001F6  3400                     171                            MOVE.W  D0,D2      ; Xm
+000001F8  3601                     172                            MOVE.W  D1,D3      ; Ym
+000001FA                           173                  
+000001FA                           174                            ; RIGHT SIDE
+000001FA  5202                     175                            ADDQ.B  #1,D2
+000001FC  4EB9 00000810            176                            JSR     MAPGET_CLYDE
+00000202  B87C 0001                177                            CMP.W   #1,D4
+00000206  6600 002A                178                            BNE     .CHKMAPDOWN
+0000020A  137C 0000 0002           179                            MOVE.B  #0,2(A1)
+00000210                           180      
+Line 181 ERROR: Symbol value differs between first and second pass
+00000210                           181  .CHKMAPDOWN
+00000210  3400                     182                            MOVE.W  D0,D2      ; XM
+00000212  3601                     183                            MOVE.W  D1,D3      ; YM
+00000214                           184                  
+00000214                           185                            ; DOWN SIDE
+00000214  5203                     186                            ADDQ.B  #1,D3
+00000216  4EB9 00000810            187                            JSR     MAPGET_CLYDE
+0000021C  B87C 0001                188                            CMP.W   #1,D4
+00000220  6600 002A                189                            BNE     .CONT3
+00000224  137C 0000 0003           190                            MOVE.B  #0,3(A1)
+0000022A                           191                  
+Line 192 ERROR: Symbol value differs between first and second pass
+0000022A                           192  .CONT3                    ; WE HAVE REMOVED THE DIRECTIONS WITH WALL 
+0000022A                           193                            ; FROM THE TUPLE NOW WE HAVE TO CALCULATE 
+0000022A                           194                            ; THE EUCYDEAN DISTANCE FROM THE ALLOWED DIRECTIONS
+0000022A                           195                  
+Line 196 ERROR: Undefined symbol
+0000022A  45F9 004DBD16            196                            LEA.L   CLYDE_EUCYDEAN_DIS,A2
+Line 197 ERROR: Undefined symbol
+00000230  3039 004DBD16            197                            MOVE.W  (CLYDE_POS_X),D0
+Line 198 ERROR: Undefined symbol
+00000236  3239 004DBD16            198                            MOVE.W  (CLYDE_POS_Y),D1
+0000023C                           199      
+0000023C                           200                            ; RECAP
+0000023C                           201                            ; A1 - CLYDE_ALLOWED_DIR
+0000023C                           202                            ; A2 - CLYDE_EUCYDEAN_DIS
+0000023C                           203                            ; D0 - X
+0000023C                           204                            ; D1 - Y
+0000023C                           205                  
+0000023C  24BC 7F7F7F7F            206                            MOVE.L  #$7F7F7F7F,(A2)
+00000242  257C 7F7F7F7F 0004       207                            MOVE.L  #$7F7F7F7F,4(A2)
+0000024A                           208                  
+0000024A                           209                            ; FIRST DISTANCE WITH PACMAN!!
+0000024A  4EB9 000009DC            210                            JSR PAC_DIS
+00000250                           211                  
+00000250  0C11 0001                212                            CMP.B   #1,(A1)
+00000254  6600 0034                213                            BNE     .CALCUP
+00000258                           214                            ; CALC LEFT
+00000258  3400                     215                            MOVE.W  D0,D2      ; X
+0000025A  3601                     216                            MOVE.W  D1,D3      ; Y
+0000025C                           217                  
+Line 218 ERROR: Undefined symbol
+0000025C  0442 BD16                218                            SUB.W   #CELSIZE,D2
+00000260  4EB9 000008D8            219                            JSR     CALCDIS_CLYDE
+00000266  3483                     220                            MOVE.W  D3,(A2)
+00000268                           221                  
+Line 222 ERROR: Symbol value differs between first and second pass
+00000268                           222  .CALCUP                   CMP.B   #1,1(A1)
+00000268  6600 003C                223                            BNE     .CALCRIGHT
+0000026C                           224                            ; CALC UP
+0000026C  3400                     225                            MOVE.W  D0,D2      ; X
+0000026E  3601                     226                            MOVE.W  D1,D3      ; Y
+00000270                           227                  
+Line 228 ERROR: Undefined symbol
+00000270  0443 BD16                228                            SUB.W   #CELSIZE,D3
+00000274  4EB9 000008D8            229                            JSR     CALCDIS_CLYDE
+0000027A  3543 0002                230                            MOVE.W  D3,2(A2)
+0000027E                           231                  
+Line 232 ERROR: Symbol value differs between first and second pass
+0000027E                           232  .CALCRIGHT                CMP.B   #1,2(A1)
+0000027E  6600 0042                233                            BNE     .CALCDOWN
+00000282                           234                            ; CALC RIGHT
+00000282  3400                     235                            MOVE.W  D0,D2      ; X
+00000284  3601                     236                            MOVE.W  D1,D3      ; Y
+00000286                           237                  
+Line 238 ERROR: Undefined symbol
+00000286  0642 BD16                238                            ADD.W   #CELSIZE,D2
+0000028A  4EB9 000008D8            239                            JSR     CALCDIS_CLYDE
+00000290  3543 0004                240                            MOVE.W  D3,4(A2)
+00000294                           241                  
+Line 242 ERROR: Symbol value differs between first and second pass
+00000294                           242  .CALCDOWN                 CMP.B   #1,3(A1)
+00000294  6600 0048                243                            BNE     .CONT4
+00000298                           244                            ; CALC DOWN
+00000298  3400                     245                            MOVE.W  D0,D2      ; X
+0000029A  3601                     246                            MOVE.W  D1,D3      ; Y
+0000029C                           247                  
+Line 248 ERROR: Undefined symbol
+0000029C  0643 BD16                248                            ADD.W   #CELSIZE,D3
+000002A0  4EB9 000008D8            249                            JSR     CALCDIS_CLYDE
+000002A6  3543 0006                250                            MOVE.W  D3,6(A2)
+000002AA                           251                  
+Line 252 ERROR: Symbol value differs between first and second pass
+000002AA                           252  .CONT4                    ; WE HAVE THE VALID DISTANCES, 
+000002AA                           253                            ; NOW HE WILL GO THRU THE SHORTEST PATH
+000002AA  4EB9 00000970            254                            JSR     FIND_MIN_CLYDE
+Line 255 ERROR: Undefined symbol
+000002B0  33C1 005455B8            255                            MOVE.W  D1,(CLYDE_DIR)
+Line 256 ERROR: Symbol value differs between first and second pass
+000002B6                           256  .DONE      
+000002B6                           257                            ; CHECK BOTTOM RIGHT
+Line 258 ERROR: Undefined symbol
+000002B6  3439 004DBD16            258                            MOVE.W  (CLYDE_POS_Y),D2
+Line 259 ERROR: Undefined symbol
+000002BC  3639 004DBD16            259                            MOVE.W  (CLYDE_POS_X),D3
+Line 260 ERROR: Comma expected
+000002C2                           260                            ADD.W   #PACRAD-1,D2
+Line 261 ERROR: Comma expected
+000002C2                           261                            ADD.W   #PACRAD-1,D3
+000002C2  4EB9 0000074E            262                            JSR     CHECK_COLLISIONS_CLYDE
+000002C8                           263                
+000002C8                           264                            ; CHECK IF PACMAN KILLED CLYDE
+000002C8                           265                            ; D0 = CLYDE X
+000002C8                           266                            ; D1 = CLYDE Y
+Line 267 ERROR: Undefined symbol
+000002C8  3039 004DBD16            267                            MOVE.W  (CLYDE_POS_X),D0
+Line 268 ERROR: Undefined symbol
+000002CE  3239 004DBD16            268                            MOVE.W  (CLYDE_POS_Y),D1
+000002D4                           269                            ; D2 = PACMAN X
+000002D4                           270                            ; D3 = PACMAN Y
+Line 271 ERROR: Undefined symbol
+000002D4  3439 004DBD16            271                            MOVE.W  (PAC_POS_X),D2
+Line 272 ERROR: Undefined symbol
+000002DA  3639 004DBD16            272                            MOVE.W  (PAC_POS_Y),D3
+000002E0                           273      
+000002E0                           274                            ; ABSOLUTE DISTANCE
+000002E0  9042                     275                            SUB.W   D2,D0      ; D0 = |CLYDE X - PACMAN X|
+000002E2  4A40                     276                            TST.W   D0
+000002E4  6A00 0040                277                            BPL     .CHECK_Y
+000002E8  4440                     278                            NEG.W   D0
+000002EA                           279      
+Line 280 ERROR: Symbol value differs between first and second pass
+000002EA                           280  .CHECK_Y
+000002EA  9243                     281                            SUB.W   D3,D1      ; D1 = |CLYDE Y - PACMAN Y|
+000002EC  4A41                     282                            TST.W   D1
+000002EE  6A00 0040                283                            BPL     .SUM_DIST
+000002F2  4441                     284                            NEG.W   D1
+000002F4                           285      
+Line 286 ERROR: Symbol value differs between first and second pass
+000002F4                           286  .SUM_DIST
+000002F4  D240                     287                            ADD.W   D0,D1
+000002F6                           288                            
+000002F6                           289                            ; COLLISION
+Line 290 ERROR: Undefined symbol
+000002F6  B27C BD16                290                            CMP.W   #PACRAD,D1
+000002FA  6C00 0050                291                            BGE     .NO_COLLISION
+Line 292 ERROR: Undefined symbol
+000002FE  5379 005455B8            292                            SUBQ.W  #1,(PACMAN_LIVES)
+00000304                           293                  
+00000304                           294                            ; TELEPORT BOTH TO STARTING POSITION
+Line 295 ERROR: Undefined symbol
+00000304  1E3C 0016                295                            MOVE.B  #SNDDEATH,D7
+00000308  4E43                     296                            TRAP    #3
+Line 297 ERROR: Undefined symbol
+0000030A  4EB9 004DBD16            297                            JSR     RESTART
+00000310                           298                  
+Line 299 ERROR: Symbol value differs between first and second pass
+00000310                           299  .NO_COLLISION
+00000310  6000 0436                300                            BRA     .MEGADONE
+00000314                           301            
+Line 302 ERROR: Symbol value differs between first and second pass
+00000314                           302  .FRIGHTENED_MODE        
+Line 303 ERROR: Undefined symbol
+00000314  5279 005455B8            303                            ADDQ    #1,(CLYDE_FRIGHTENED_TIMER)
+Line 304 ERROR: Undefined symbol
+0000031A  33FC 0001 005455B8       304                            MOVE.W  #1,(CLYDE_SPEED)                     
+Line 305 ERROR: Undefined symbol
+00000322  23FC 004DBD16 005455B8   305                            MOVE.L  #DARK_BLUE,(CLYDE_COLOR)
+Line 306 ERROR: Undefined symbol
+0000032C  3039 004DBD16            306                            MOVE.W  (CLYDE_POS_X),D0
+Line 307 ERROR: Undefined symbol
+00000332  3239 004DBD16            307                            MOVE.W  (CLYDE_POS_Y),D1
+00000338                           308                  
+00000338                           309                            ; MOVE FORWARD
+Line 310 ERROR: Undefined symbol
+00000338  0C79 0001 005455B8       310                            CMP.W   #1,(CLYDE_DIR)
+00000340  6700 005A                311                            BEQ     .MVLEFTF
+Line 312 ERROR: Undefined symbol
+00000344  0C79 0002 005455B8       312                            CMP.W   #2,(CLYDE_DIR)
+0000034C  6700 0058                313                            BEQ     .MVUPF
+Line 314 ERROR: Undefined symbol
+00000350  0C79 0003 005455B8       314                            CMP.W   #3,(CLYDE_DIR)
+00000358  6700 0056                315                            BEQ     .MVRIGHTF
+0000035C  6000 005C                316                            BRA     .MVDOWNF
+00000360                           317                 
+Line 318 ERROR: Symbol value differs between first and second pass
+00000360                           318  .MVLEFTF                  SUB.W   (CLYDE_SPEED),D0
+00000360  6000 005E                319                            BRA     .CONTF
+Line 320 ERROR: Symbol value differs between first and second pass
+00000364                           320  .MVUPF                    SUB.W   (CLYDE_SPEED),D1
+00000364  6000 005A                321                            BRA     .CONTF
+Line 322 ERROR: Symbol value differs between first and second pass
+00000368                           322  .MVRIGHTF                 ADD.W   (CLYDE_SPEED),D0
+00000368  6000 0056                323                            BRA     .CONTF
+Line 324 ERROR: Symbol value differs between first and second pass
+0000036C                           324  .MVDOWNF                  ADD.W   (CLYDE_SPEED),D1
+0000036C                           325      
+Line 326 ERROR: Symbol value differs between first and second pass
+0000036C                           326  .CONTF         
+Line 327 ERROR: Undefined symbol
+0000036C  33C0 005455B8            327                            MOVE.W  D0,(CLYDE_POS_X)
+Line 328 ERROR: Undefined symbol
+00000372  33C1 005455B8            328                            MOVE.W  D1,(CLYDE_POS_Y)  
+00000378                           329                  
+00000378                           330                            ; CHECK TOP LEFT 
+Line 331 ERROR: Undefined symbol
+00000378  3439 004DBD16            331                            MOVE.W  (CLYDE_POS_Y),D2
+Line 332 ERROR: Undefined symbol
+0000037E  3639 004DBD16            332                            MOVE.W  (CLYDE_POS_X),D3
+00000384  4EB9 0000074E            333                            JSR     CHECK_COLLISIONS_CLYDE
+0000038A  0804 0000                334                            BTST.L  #0,D4
+0000038E  6700 01DC                335                            BEQ     .DONEF
+00000392                           336                  
+00000392                           337                            ; CHECK BOTTOM RIGHT
+Line 338 ERROR: Undefined symbol
+00000392  3439 004DBD16            338                            MOVE.W  (CLYDE_POS_Y),D2
+Line 339 ERROR: Undefined symbol
+00000398  3639 004DBD16            339                            MOVE.W  (CLYDE_POS_X),D3
+Line 340 ERROR: Comma expected
+0000039E                           340                            ADD.W   #PACRAD-1,D2
+Line 341 ERROR: Comma expected
+0000039E                           341                            ADD.W   #PACRAD-1,D3
+0000039E  4EB9 0000074E            342                            JSR     CHECK_COLLISIONS_CLYDE
+000003A4  0804 0000                343                            BTST.L  #0,D4
+000003A8  6700 01C2                344                            BEQ     .DONEF
+000003AC                           345                  
+000003AC                           346                            ; CHECK TOP RIGHT
+Line 347 ERROR: Undefined symbol
+000003AC  3439 004DBD16            347                            MOVE.W  (CLYDE_POS_Y),D2
+Line 348 ERROR: Undefined symbol
+000003B2  3639 004DBD16            348                            MOVE.W  (CLYDE_POS_X),D3 
+Line 349 ERROR: Comma expected
+000003B8                           349                            ADD.W   #PACRAD-1,D2
+000003B8  4EB9 0000074E            350                            JSR     CHECK_COLLISIONS_CLYDE
+000003BE  0804 0000                351                            BTST.L  #0,D4
+000003C2  6700 01A8                352                            BEQ     .DONEF
+000003C6                           353                  
+000003C6                           354                            ; CHECK BOTTOM LEFT 
+Line 355 ERROR: Undefined symbol
+000003C6  3439 004DBD16            355                            MOVE.W  (CLYDE_POS_Y),D2
+Line 356 ERROR: Undefined symbol
+000003CC  3639 004DBD16            356                            MOVE.W  (CLYDE_POS_X),D3 
+Line 357 ERROR: Comma expected
+000003D2                           357                            ADD.W   #PACRAD-1,D3
+000003D2  4EB9 0000074E            358                            JSR     CHECK_COLLISIONS_CLYDE
+000003D8  0804 0000                359                            BTST.L  #0,D4
+000003DC  6700 018E                360                            BEQ     .DONEF
+000003E0                           361                  
+000003E0                           362                            ; HE IS IN INTERSECTION
+Line 363 ERROR: Undefined symbol
+000003E0  43F9 004DBD16            363                            LEA.L   CLYDE_ALLOWED_DIR,A1
+000003E6                           364                            ; INITIALIZE ARRAY TO 1
+000003E6  22BC 01010101            365                            MOVE.L  #$01010101,(A1)
+000003EC                           366                  
+000003EC                           367                            ; NOW WE REMOVE THE DIRECTIONS WITH WALL
+Line 368 ERROR: Undefined symbol
+000003EC  3039 004DBD16            368                            MOVE.W  (CLYDE_POS_X),D0
+Line 369 ERROR: Undefined symbol
+000003F2  3239 004DBD16            369                            MOVE.W  (CLYDE_POS_Y),D1
+000003F8  4EB9 000007FA            370                            JSR     GETMAPCOORDS_CLYDE
+000003FE                           371                  
+000003FE  3400                     372                            MOVE.W  D0,D2      ; XM
+00000400  3601                     373                            MOVE.W  D1,D3      ; YM
+00000402                           374                  
+00000402                           375                            ; LEFT SIDE
+00000402  5302                     376                            SUBQ.B  #1,D2
+00000404  4EB9 00000810            377                            JSR     MAPGET_CLYDE
+0000040A  B87C 0001                378                            CMP.W   #1,D4
+0000040E  6600 006A                379                            BNE     .CHKMAPUPF
+00000412  12BC 0000                380                            MOVE.B  #0,(A1)
+00000416                           381                  
+Line 382 ERROR: Symbol value differs between first and second pass
+00000416                           382  .CHKMAPUPF
+00000416  3400                     383                            MOVE.W  D0,D2      ; XM
+00000418  3601                     384                            MOVE.W  D1,D3      ; YM
+0000041A                           385                  
+0000041A                           386                            ; UP SIDE
+0000041A  5303                     387                            SUBQ.B  #1,D3
+0000041C  4EB9 00000810            388                            JSR     MAPGET_CLYDE
+00000422  B87C 0001                389                            CMP.W   #1,D4
+00000426  6600 006C                390                            BNE     .CHKMAPRIGHTF
+0000042A  137C 0000 0001           391                            MOVE.B  #0,1(A1)
+00000430                           392                  
+Line 393 ERROR: Symbol value differs between first and second pass
+00000430                           393  .CHKMAPRIGHTF
+00000430  3400                     394                            MOVE.W  D0,D2      ; XM
+00000432  3601                     395                            MOVE.W  D1,D3      ; YM
+00000434                           396                  
+00000434                           397                            ; RIGHT SIDE
+00000434  5202                     398                            ADDQ.B  #1,D2
+00000436  4EB9 00000810            399                            JSR     MAPGET_CLYDE
+0000043C  B87C 0001                400                            CMP.W   #1,D4
+00000440  6600 006C                401                            BNE     .CHKMAPDOWNF
+00000444  137C 0000 0002           402                            MOVE.B  #0,2(A1)
+0000044A                           403      
+Line 404 ERROR: Symbol value differs between first and second pass
+0000044A                           404  .CHKMAPDOWNF
+0000044A  3400                     405                            MOVE.W  D0,D2      ; XM
+0000044C  3601                     406                            MOVE.W  D1,D3      ; YM
+0000044E                           407                  
+0000044E                           408                            ; DOWN SIDE
+0000044E  5203                     409                            ADDQ.B  #1,D3
+00000450  4EB9 00000810            410                            JSR     MAPGET_CLYDE
+00000456  B87C 0001                411                            CMP.W   #1,D4
+0000045A  6600 006C                412                            BNE     .CONT3F
+0000045E  137C 0000 0003           413                            MOVE.B  #0,3(A1)
+00000464                           414                  
+Line 415 ERROR: Symbol value differs between first and second pass
+00000464                           415  .CONT3F                   ; WE HAVE REMOVED THE DIRECTIONS WITH WALL 
+00000464                           416                            ; FROM THE TUPLE NOW WE HAVE TO CALCULATE 
+00000464                           417                            ; THE EUCYDEAN DISTANCE FROM THE ALLOWED DIRECTIONS
+00000464                           418                  
+Line 419 ERROR: Undefined symbol
+00000464  45F9 004DBD16            419                            LEA.L   CLYDE_EUCYDEAN_DIS,A2
+Line 420 ERROR: Undefined symbol
+0000046A  3039 004DBD16            420                            MOVE.W  (CLYDE_POS_X),D0
+Line 421 ERROR: Undefined symbol
+00000470  3239 004DBD16            421                            MOVE.W  (CLYDE_POS_Y),D1
+00000476                           422      
+00000476                           423                            ; RECAP
+00000476                           424                            ; A1 - CLYDE_ALLOWED_DIR
+00000476                           425                            ; A2 - CLYDE_EUCYDEAN_DIS
+00000476                           426                            ; D0 - X
+00000476                           427                            ; D1 - Y
+00000476                           428                  
+00000476  24BC 00000000            429                            MOVE.L  #$00000000,(A2)
+0000047C  257C 00000000 0004       430                            MOVE.L  #$00000000,4(A2)
+00000484                           431                  
+00000484  0C11 0001                432                            CMP.B   #1,(A1)
+00000488  6600 0076                433                            BNE     .CALCUPF
+0000048C                           434                            ; CALC LEFT
+0000048C  3400                     435                            MOVE.W  D0,D2      ; X
+0000048E  3601                     436                            MOVE.W  D1,D3      ; Y
+00000490                           437                  
+Line 438 ERROR: Undefined symbol
+00000490  0442 BD16                438                            SUB.W  #CELSIZE,D2
+00000494  4EB9 000008D8            439                            JSR     CALCDIS_CLYDE
+0000049A  3483                     440                            MOVE.W  D3,(A2)
+0000049C                           441                  
+Line 442 ERROR: Symbol value differs between first and second pass
+0000049C                           442  .CALCUPF                  CMP.B   #1,1(A1)
+0000049C  6600 007E                443                            BNE     .CALCRIGHTF
+000004A0                           444                            ; CALC UP
+000004A0  3400                     445                            MOVE.W  D0,D2      ; X
+000004A2  3601                     446                            MOVE.W  D1,D3      ; Y
+000004A4                           447                  
+Line 448 ERROR: Undefined symbol
+000004A4  0443 BD16                448                            SUB.W   #CELSIZE,D3
+000004A8  4EB9 000008D8            449                            JSR     CALCDIS_CLYDE
+000004AE  3543 0002                450                            MOVE.W  D3,2(A2)
+000004B2                           451                  
+Line 452 ERROR: Symbol value differs between first and second pass
+000004B2                           452  .CALCRIGHTF               CMP.B   #1,2(A1)
+000004B2  6600 0084                453                            BNE     .CALCDOWNF
+000004B6                           454                            ; CALC RIGHT
+000004B6  3400                     455                            MOVE.W  D0,D2      ; X
+000004B8  3601                     456                            MOVE.W  D1,D3      ; Y
+000004BA                           457                  
+Line 458 ERROR: Undefined symbol
+000004BA  0642 BD16                458                            ADD.W   #CELSIZE,D2
+000004BE  4EB9 000008D8            459                            JSR     CALCDIS_CLYDE
+000004C4  3543 0004                460                            MOVE.W  D3,4(A2)
+000004C8                           461                  
+Line 462 ERROR: Symbol value differs between first and second pass
+000004C8                           462  .CALCDOWNF                CMP.B   #1,3(A1)
+000004C8  6600 008A                463                            BNE     .CONT4F
+000004CC                           464                            ; CALC DOWN
+000004CC  3400                     465                            MOVE.W  D0,D2      ; X
+000004CE  3601                     466                            MOVE.W  D1,D3      ; Y
+000004D0                           467                  
+Line 468 ERROR: Undefined symbol
+000004D0  0643 BD16                468                            ADD.W   #CELSIZE,D3
+000004D4  4EB9 000008D8            469                            JSR     CALCDIS_CLYDE
+000004DA  3543 0006                470                            MOVE.W  D3,6(A2)
+000004DE                           471                  
+Line 472 ERROR: Symbol value differs between first and second pass
+000004DE                           472  .CONT4F                   ; WE HAVE THE VALID DISTANCES, NOW HE WILL GO
+000004DE                           473                            ; THRU THE SHORTENEST PATH
+000004DE  4EB9 000009A6            474                            JSR     FIND_MAX_CLYDE
+Line 475 ERROR: Undefined symbol
+000004E4  33C1 005455B8            475                            MOVE.W  D1,(CLYDE_DIR)
+Line 476 ERROR: Undefined symbol
+000004EA  0C79 BD16 005455B8       476                            CMP.W   #FRIGHTENED,(CLYDE_FRIGHTENED_TIMER)
+000004F2  6E00 0114                477                            BGT     .BC_TIME  
+Line 478 ERROR: Symbol value differs between first and second pass
+000004F6                           478  .DONEF      
+000004F6                           479                            ; CHECK BOTTOM RIGHT
+Line 480 ERROR: Undefined symbol
+000004F6  3439 004DBD16            480                            MOVE.W  (CLYDE_POS_Y),D2
+Line 481 ERROR: Undefined symbol
+000004FC  3639 004DBD16            481                            MOVE.W  (CLYDE_POS_X),D3
+Line 482 ERROR: Comma expected
+00000502                           482                            ADD.W   #PACRAD-1,D2
+Line 483 ERROR: Comma expected
+00000502                           483                            ADD.W   #PACRAD-1,D3
+00000502  4EB9 0000074E            484                            JSR     CHECK_COLLISIONS_CLYDE
+00000508                           485                
+00000508                           486                            ; CHECK IF PACMAN KILLED CLYDE
+00000508                           487                            ; D0 = CLYDE X
+00000508                           488                            ; D1 = CLYDE Y
+Line 489 ERROR: Undefined symbol
+00000508  3039 004DBD16            489                            MOVE.W  (CLYDE_POS_X),D0
+Line 490 ERROR: Undefined symbol
+0000050E  3239 004DBD16            490                            MOVE.W  (CLYDE_POS_Y),D1
+00000514                           491                            ; D2 = Pac-Man X
+00000514                           492                            ; D3 = Pac-Man Y
+Line 493 ERROR: Undefined symbol
+00000514  3439 004DBD16            493                            MOVE.W  (PAC_POS_X),D2
+Line 494 ERROR: Undefined symbol
+0000051A  3639 004DBD16            494                            MOVE.W  (PAC_POS_Y),D3
+00000520                           495      
+00000520                           496                            ; ABSOLUTE DISTANCE
+00000520  9042                     497                            SUB.W   D2,D0      ; D0 = |CLYDE X - PACMAN X|
+00000522  4A40                     498                            TST.W   D0
+00000524  6A00 0082                499                            BPL     .CHECK_YF
+00000528  4440                     500                            NEG.W   D0
+0000052A                           501      
+Line 502 ERROR: Symbol value differs between first and second pass
+0000052A                           502  .CHECK_YF
+0000052A  9243                     503                            SUB.W   D3,D1      ; D1 = |CLYDE Y - PACMAN Y|
+0000052C  4A41                     504                            TST.W   D1
+0000052E  6A00 0082                505                            BPL     .SUM_DISTF
+00000532  4441                     506                            NEG.W   D1
+00000534                           507      
+Line 508 ERROR: Symbol value differs between first and second pass
+00000534                           508  .SUM_DISTF
+00000534  D240                     509                            ADD.W   D0,D1
+00000536                           510                            
+00000536                           511                            ; COLLISION
+Line 512 ERROR: Undefined symbol
+00000536  B27C BD16                512                            CMP.W   #PACRAD,D1
+0000053A  6C00 00C8                513                            BGE     .NO_COLLISIONF
+0000053E                           514                            ; TELEPORT BACK TO HIS HOME
+0000053E                           515                            ; REPRODUCE SOUND
+Line 516 ERROR: Undefined symbol
+0000053E  1E3C 0016                516                            MOVE.B  #SNDEATGHOS,D7
+00000542  4E43                     517                            TRAP    #3
+Line 518 ERROR: Undefined symbol
+00000544  33FC BD16 005455B8       518                            MOVE.W  #CLYDE_START_X,(CLYDE_POS_X)
+Line 519 ERROR: Undefined symbol
+0000054C  33FC BD16 005455B8       519                            MOVE.W  #CLYDE_START_Y,(CLYDE_POS_Y)
+Line 520 ERROR: Undefined symbol
+00000554  06B9 000000C8 005455B8   520                            ADD.L   #200,(CURRENT_SCORE)
+Line 521 ERROR: Undefined symbol
+0000055E  4279 004DBD16            521                            CLR.W   (CLYDE_IS_BLUE)
+Line 522 ERROR: Undefined symbol
+00000564  33FC 0002 005455B8       522                            MOVE.W  #2,(CLYDE_SPEED)
+Line 523 ERROR: Undefined symbol
+0000056C  23FC 004DBD16 005455B8   523                            MOVE.L  #ORANGE,(CLYDE_COLOR)
+Line 524 ERROR: Undefined symbol
+00000576  33FC 0001 005455B8       524                            MOVE.W  #1,(CLYDE_ESTADO)
+Line 525 ERROR: Undefined symbol
+0000057E  33FC 0002 005455B8       525                            MOVE.W  #2,(CLYDE_DIR)
+00000586                           526      
+Line 527 ERROR: Symbol value differs between first and second pass
+00000586                           527  .NO_COLLISIONF
+00000586  6000 01C0                528                            BRA     .MEGADONE
+0000058A                           529            
+Line 530 ERROR: Symbol value differs between first and second pass
+0000058A                           530  .BC_TIME  
+Line 531 ERROR: Undefined symbol
+0000058A  4279 004DBD16            531                            CLR.W   (CLYDE_IS_BLUE)          
+Line 532 ERROR: Undefined symbol
+00000590  33FC 0002 005455B8       532                            MOVE.W  #2,(CLYDE_SPEED)
+Line 533 ERROR: Undefined symbol
+00000598  23FC 004DBD16 005455B8   533                            MOVE.L  #ORANGE,(CLYDE_COLOR)
+Line 534 ERROR: Undefined symbol
+000005A2  4279 004DBD16            534                            CLR.W   (CLYDE_FRIGHTENED_TIMER) 
+000005A8  6000 019E                535                            BRA     .MEGADONE
+Line 536 ERROR: Symbol value differs between first and second pass
+000005AC                           536  .IS_HOME
+Line 537 ERROR: Undefined symbol
+000005AC  4279 004DBD16            537                            CLR.W   (CLYDE_IS_BLUE)
+Line 538 ERROR: Undefined symbol
+000005B2  3039 004DBD16            538                            MOVE.W  (CLYDE_POS_X),D0
+Line 539 ERROR: Undefined symbol
+000005B8  3239 004DBD16            539                            MOVE.W  (CLYDE_POS_Y),D1
+000005BE                           540                            
+000005BE                           541                            ; MOVE FORWARD
+Line 542 ERROR: Undefined symbol
+000005BE  0C79 0001 005455B8       542                            CMP.W   #1,(CLYDE_DIR)
+000005C6  6700 009C                543                            BEQ     .MVLEFTH
+Line 544 ERROR: Undefined symbol
+000005CA  0C79 0002 005455B8       544                            CMP.W   #2,(CLYDE_DIR)
+000005D2  6700 009A                545                            BEQ     .MVUPH
+Line 546 ERROR: Undefined symbol
+000005D6  0C79 0003 005455B8       546                            CMP.W   #3,(CLYDE_DIR)
+000005DE  6700 0098                547                            BEQ     .MVRIGHTH
+000005E2  6000 009E                548                            BRA     .MVDOWNH
+000005E6                           549             
+Line 550 ERROR: Symbol value differs between first and second pass
+000005E6                           550  .MVLEFTH                  SUB.W   (CLYDE_SPEED),D0
+000005E6  6000 00A0                551                            BRA     .CONTH
+000005EA                           552      
+Line 553 ERROR: Symbol value differs between first and second pass
+000005EA                           553  .MVUPH                    SUB.W   (CLYDE_SPEED),D1
+000005EA  6000 009C                554                            BRA     .CONTH
+000005EE                           555      
+Line 556 ERROR: Symbol value differs between first and second pass
+000005EE                           556  .MVRIGHTH                 ADD.W   (CLYDE_SPEED),D0
+000005EE  6000 0098                557                            BRA     .CONTH
+000005F2                           558                  
+Line 559 ERROR: Symbol value differs between first and second pass
+000005F2                           559  .MVDOWNH                  ADD.W   (CLYDE_SPEED),D1
+Line 560 ERROR: Symbol value differs between first and second pass
+000005F2                           560  .CONTH
+Line 561 ERROR: Undefined symbol
+000005F2  33C0 005455B8            561                            MOVE.W  D0,(CLYDE_POS_X)
+Line 562 ERROR: Undefined symbol
+000005F8  33C1 005455B8            562                            MOVE.W  D1,(CLYDE_POS_Y)
+000005FE                           563                  
+Line 564 ERROR: Undefined symbol
+000005FE  0C79 0002 005455B8       564                            CMP.W   #2,(CLYDE_ESTADO)
+00000606  6700 010C                565                            BEQ     .LEAVING_HOME
+Line 566 ERROR: Undefined symbol
+0000060A  0C79 0003 005455B8       566                            CMP.W   #3,(CLYDE_ESTADO)
+00000612  6700 0114                567                            BEQ     .LEFT_HOME
+00000616                           568  
+Line 569 ERROR: Undefined symbol
+00000616  0C79 0150 005455B8       569                            CMP.W   #336,(CLYDE_POS_Y)
+0000061E  6D00 009C                570                            BLT     .DOWN_HOUSE
+00000622  6000 00A0                571                            BRA     .CHECK_U_H
+Line 572 ERROR: Symbol value differs between first and second pass
+00000626                           572  .DOWN_HOUSE     
+Line 573 ERROR: Undefined symbol
+00000626  33FC 0004 005455B8       573                            MOVE.W  #4,(CLYDE_DIR)
+0000062E                           574                  
+Line 575 ERROR: Symbol value differs between first and second pass
+0000062E                           575  .CHECK_U_H                CMP.W   #368,(CLYDE_POS_Y)
+0000062E  6E00 00A4                576                            BGT     .UP_HOUSE
+00000632  6000 00A8                577                            BRA     .CHKMIDH
+00000636                           578  
+Line 579 ERROR: Symbol value differs between first and second pass
+00000636                           579  .UP_HOUSE     
+Line 580 ERROR: Undefined symbol
+00000636  33FC 0002 005455B8       580                            MOVE.W  #2,(CLYDE_DIR)
+0000063E                           581                  
+Line 582 ERROR: Symbol value differs between first and second pass
+0000063E                           582  .CHKMIDH                  ;IF IF MIDDLE AND IF TIME OUT
+Line 583 ERROR: Undefined symbol
+0000063E  0C79 0160 005455B8       583                            CMP.W   #352,(CLYDE_POS_Y)
+00000646  6600 0100                584                            BNE     .MEGADONE
+Line 585 ERROR: Undefined symbol
+0000064A  0C79 0001 005455C0       585                            CMP.W   #1,(CLYDE_ESTADO) ;TIME OUT
+00000652  6600 00F4                586                            BNE     .MEGADONE
+00000656                           587                  
+Line 588 ERROR: Undefined symbol
+00000656  33FC 0001 005455B8       588                            MOVE.W  #1,(CLYDE_DIR)
+Line 589 ERROR: Undefined symbol
+0000065E  0C79 0198 005455B8       589                            CMP.W   #408,(CLYDE_POS_X)
+00000666  6E00 00E0                590                            BGT     .MEGADONE
+Line 591 ERROR: Undefined symbol
+0000066A  33FC 0002 005455B8       591                            MOVE.W  #2,(CLYDE_ESTADO)
+00000672  6000 00D4                592                            BRA     .MEGADONE
+00000676                           593                  
+Line 594 ERROR: Symbol value differs between first and second pass
+00000676                           594  .LEAVING_HOME
+Line 595 ERROR: Undefined symbol
+00000676  33FC 0002 005455B8       595                            MOVE.W  #2,(CLYDE_DIR)
+Line 596 ERROR: Undefined symbol
+0000067E  33FC 0003 005455B8       596                            MOVE.W  #3,(CLYDE_ESTADO)
+00000686  6000 00C0                597                            BRA     .MEGADONE
+0000068A                           598  
+Line 599 ERROR: Symbol value differs between first and second pass
+0000068A                           599  .LEFT_HOME
+Line 600 ERROR: Undefined symbol
+0000068A  0C79 BD16 005455B8       600                            CMP.W   #BLINKY_START_Y,(CLYDE_POS_Y)
+00000692  6E00 00B4                601                            BGT     .MEGADONE
+Line 602 ERROR: Undefined symbol
+00000696  33FC 0001 005455B8       602                            MOVE.W  #1,(CLYDE_DIR)
+Line 603 ERROR: Undefined symbol
+0000069E  33FC 0004 005455B8       603                            MOVE.W  #4,(CLYDE_ESTADO)
+000006A6  6000 00A0                604                            BRA     .MEGADONE
+Line 605 ERROR: Symbol value differs between first and second pass
+000006AA                           605  .MEGADONE
+000006AA                           606      
+000006AA  4C9F 01FF                607                            MOVEM.W (A7)+,D0-D7/A0
+000006AE  4E75                     608                            RTS
+000006B0                           609  ; -----------------------------------------------------------------------------
+Line 610 ERROR: Symbol value differs between first and second pass
+000006B0                           610  CHECK_COLLISIONS_CLYDE
+000006B0                           611  ; CHECK COLLISIONS.
+000006B0                           612  ; INPUT    : D2 - Y
+000006B0                           613  ;            D3 - X
+000006B0                           614  ; OUTPUT   : D4 - 1: INTERSECTION - 0: NO INTERSECTION
+000006B0                           615  ; MODIFIES : NONE
+000006B0                           616  ; -----------------------------------------------------------------------------
+000006B0  48E7 F000                617                            MOVEM.L D0-D3,-(A7)
+000006B4                           618                  
+Line 619 ERROR: Undefined symbol
+000006B4  0442 BD16                619                            SUB.W   #MAP_START_Y,D2
+000006B8                           620                            ; IN D2 --> YM
+Line 621 ERROR: Undefined symbol
+000006B8  84FC BD16                621                            DIVU    #CELSIZE,D2
+000006BC  5342                     622                            SUBQ.W  #1,D2
+000006BE                           623                  
+Line 624 ERROR: Undefined symbol
+000006BE  0443 BD16                624                            SUB.W   #MAP_START_X,D3
+000006C2                           625                            ; IN D3 --> XM
+Line 626 ERROR: Undefined symbol
+000006C2  86FC BD16                626                            DIVU    #CELSIZE,D3
+000006C6  5343                     627                            SUBQ.W  #1,D3
+000006C8                           628                  
+Line 629 ERROR: Undefined symbol
+000006C8  41F9 004DBD16            629                            LEA.L   MAPDATA,A0
+Line 630 ERROR: Undefined symbol
+000006CE  C4FC BD16                630                            MULU    #MAPWITH,D2                  
+000006D2  D443                     631                            ADD.W   D3,D2
+000006D4  D0C2                     632                            ADD.W   D2,A0
+000006D6  4242                     633                            CLR.W   D2
+000006D8  1410                     634                            MOVE.B  (A0),D2
+000006DA                           635                  
+000006DA  C4FC 0006                636                            MULU    #6,D2
+000006DE  2242                     637                            MOVE.L  D2,A1
+000006E0  4EE9 0782                638                            JMP     .JUMPLIST(A1)
+Line 639 ERROR: Symbol value differs between first and second pass
+000006E4                           639  .JUMPLIST:   
+000006E4  4EF9 000007F2            640                            JMP     .RETURN
+000006EA  4EF9 000007AC            641                            JMP     .IS_WALL
+000006F0  4EF9 000007F2            642                            JMP     .RETURN
+000006F6  4EF9 000007F2            643                            JMP     .RETURN
+000006FC  4EF9 000007B2            644                            JMP     .ISPORTAL
+00000702  4EF9 000007EC            645                            JMP     .IS_INTER
+00000708  4EF9 000007EC            646                            JMP     .IS_INTER
+Line 647 ERROR: Symbol value differs between first and second pass
+0000070E                           647  .IS_WALL
+0000070E  7802                     648                            MOVE.L  #2,D4
+00000710  6000 00E0                649                            BRA     .RETURN
+Line 650 ERROR: Symbol value differs between first and second pass
+00000714                           650  .ISPORTAL
+00000714                           651                            ; TELEPORT CLYDE TO THE OTHER SIDE OF THE MAP
+Line 652 ERROR: Undefined symbol
+00000714  303C BD16                652                            MOVE.W  #PORTAL_RIGHT_X,D0
+Line 653 ERROR: Undefined symbol
+00000718  B079 004DBD16            653                            CMP.W   (CLYDE_POS_X),D0
+0000071E                           654      
+0000071E  6D00 00B6                655                            BLT     .RSIDE
+00000722                           656                  
+00000722                           657                            ; TELEPORT TO RIGHT SIDE
+Line 658 ERROR: Invalid syntax
+00000722                           658                            MOVE.W  #PORTAL_RIGHT_X+CELSIZE,D0
+Line 659 ERROR: Undefined symbol
+00000722  33C0 005455B8            659                            MOVE.W  D0,(CLYDE_POS_X)
+Line 660 ERROR: Undefined symbol
+00000728  33FC 0001 005455B8       660                            MOVE.W  #1,(CLYDE_DIR)
+00000730  6000 00C0                661                            BRA     .RETURN   
+00000734                           662                  
+Line 663 ERROR: Symbol value differs between first and second pass
+00000734                           663  .RSIDE
+00000734                           664                            ; TELEPORT TO LEFT SIDE
+Line 665 ERROR: Comma expected
+00000734                           665                            MOVE.W  #PORTAL_LEFT_X-CELSIZE,D0
+Line 666 ERROR: Undefined symbol
+00000734  33C0 005455B8            666                            MOVE.W  D0,(CLYDE_POS_X)
+Line 667 ERROR: Undefined symbol
+0000073A  33FC 0003 005455B8       667                            MOVE.W  #3,(CLYDE_DIR)
+00000742  6000 00AE                668                            BRA     .RETURN
+00000746                           669                  
+Line 670 ERROR: Symbol value differs between first and second pass
+00000746                           670  .IS_INTER
+00000746  7801                     671                            MOVE.L  #1,D4
+00000748  6000 00AA                672                            BRA     .FINISH
+Line 673 ERROR: Symbol value differs between first and second pass
+0000074C                           673  .RETURN
+0000074C  7800                     674                            MOVE.L  #0,D4
+Line 675 ERROR: Symbol value differs between first and second pass
+0000074E                           675  .FINISH            
+0000074E  4CDF 000F                676                            MOVEM.L (A7)+,D0-D3
+00000752  4E75                     677                            RTS         
+00000754                           678          
+00000754                           679  ; -----------------------------------------------------------------------------
+Line 680 ERROR: Symbol value differs between first and second pass
+00000754                           680  GETMAPCOORDS_CLYDE
+00000754                           681  ; RETURN MAP ROW AND COLUMN.
+00000754                           682  ; INPUT    : D0 - X
+00000754                           683  ;            D1 - Y
+00000754                           684  ; OUTPUT   : D0 - X
+00000754                           685  ;            D1 - Y
+00000754                           686  ; MODIFIES : NONE
+00000754                           687  ; -----------------------------------------------------------------------------
+Line 688 ERROR: Undefined symbol
+00000754  0441 BD16                688                            SUB.W   #MAP_START_Y,D1
+00000758                           689                            ; IN D1 --> YM
+Line 690 ERROR: Undefined symbol
+00000758  82FC BD16                690                            DIVU    #CELSIZE,D1
+0000075C  5341                     691                            SUBQ.W  #1,D1
+0000075E                           692                  
+Line 693 ERROR: Undefined symbol
+0000075E  0440 BD16                693                            SUB.W   #MAP_START_X,D0
+00000762                           694                            ; IN D0 --> XM
+Line 695 ERROR: Undefined symbol
+00000762  80FC BD16                695                            DIVU    #CELSIZE,D0
+00000766  5340                     696                            SUBQ.W  #1,D0
+00000768                           697                  
+00000768  4E75                     698                            RTS
+0000076A                           699                  
+0000076A                           700  ; -----------------------------------------------------------------------------
+Line 701 ERROR: Symbol value differs between first and second pass
+0000076A                           701  MAPGET_CLYDE
+0000076A                           702  ; RETURN MAP TILE.
+0000076A                           703  ; INPUT    : D2 - X
+0000076A                           704  ;            D3 - Y
+0000076A                           705  ; OUTPUT   : D4 - 1: WALL - 0: NO WALL
+0000076A                           706  ; MODIFIES : NONE
+0000076A                           707  ; -----------------------------------------------------------------------------
+0000076A  48E7 3080                708                            MOVEM.L D2-D3/A0,-(A7)
+Line 709 ERROR: Undefined symbol
+0000076E  41F9 004DBD16            709                            LEA.L   MAPDATA,A0
+Line 710 ERROR: Undefined symbol
+00000774  C6FC BD16                710                            MULU    #MAPWITH,D3                  
+00000778  D642                     711                            ADD.W   D2,D3
+0000077A  D0C3                     712                            ADD.W   D3,A0
+0000077C  4243                     713                            CLR.W   D3
+0000077E  1810                     714                            MOVE.B  (A0),D4
+00000780  4CDF 010C                715                            MOVEM.L (A7)+,D2-D3/A0
+00000784  4E75                     716                            RTS
+00000786                           717  
+00000786                           718  ; -----------------------------------------------------------------------------               
+Line 719 ERROR: Symbol value differs between first and second pass
+00000786                           719  MODE_UPDATE_CLYDE
+00000786                           720  ; UPDATE MODES.
+00000786                           721  ; INPUT    : NONE
+00000786                           722  ; OUTPUT   : NONE
+00000786                           723  ; MODIFIES : NONE
+00000786                           724  ; -----------------------------------------------------------------------------
+00000786                           725                            ; CHECK IF WE HAVE REACHED MAX_MODE_SWITCH
+Line 726 ERROR: Undefined symbol
+00000786  0C79 BD16 005455B8       726                            CMP.W   #MAX_MODE_SWITCH, (CLYDE_MODE_SWITCH_COUNT)
+0000078E                           727                            ; IF WE HAVE REACHED MAX_MODE_SWITCH WE KEEP ON 
+0000078E                           728                            ; CHASE MODE FOR THE REST OF THE GAME
+0000078E  6C00 012C                729                            BGE     .PERM 
+00000792                           730                            ; CHECK IF CHASE IS ON
+Line 731 ERROR: Undefined symbol
+00000792  0C79 0001 005455B8       731                            CMP.W   #1, (CLYDE_CHASE_ON)
+0000079A  6700 00B8                732                            BEQ     .IN_C_MODE
+0000079E                           733                            ; CHECK IF SCATTER IS ON
+Line 734 ERROR: Undefined symbol
+0000079E  0C79 0001 005455B8       734                            CMP.W   #1, (CLYDE_SCATER_ON)
+000007A6  6700 00C2                735                            BEQ     .IN_S_MODE
+000007AA                           736                            ; IF NOTHING IS ON THEN GO TO END
+000007AA  6000 012A                737                            BRA     .END
+000007AE                           738          
+Line 739 ERROR: Symbol value differs between first and second pass
+000007AE                           739  .IN_C_MODE
+000007AE                           740                            ; IF CHASE IS ON
+000007AE                           741                            ; ++ THE CHASE TIMER
+Line 742 ERROR: Undefined symbol
+000007AE  5279 005455B8            742                            ADDQ.W  #1, (CLYDE_CHASETIMER)
+000007B4                           743                            ; IF TIMER IS BIGGER THAN #CHASE
+Line 744 ERROR: Undefined symbol
+000007B4  0C79 BD16 005455B8       744                            CMP.W   #CHASE, (CLYDE_CHASETIMER)
+000007BC  6E00 00C2                745                            BGT     .SW_TO_S_MODE
+000007C0                           746                            ; IF NOT WE END UPDATE
+000007C0  6000 0114                747                            BRA     .END
+000007C4                           748          
+Line 749 ERROR: Symbol value differs between first and second pass
+000007C4                           749  .IN_S_MODE
+000007C4                           750                            ; IF SCATTER IS ON
+000007C4                           751                            ; ++ TIMER 
+Line 752 ERROR: Undefined symbol
+000007C4  5279 005455B8            752                            ADDQ.W  #1, (CLYDE_SCATERTIMER)
+000007CA                           753                            ; IF TIMER IS BIGGER THAN #SCATER
+Line 754 ERROR: Undefined symbol
+000007CA  0C79 BD16 005455B8       754                            CMP.W   #SCATER, (CLYDE_SCATERTIMER)
+000007D2  6E00 00CA                755                            BGT     .SW_TO_C_MODE
+000007D6                           756                            ; IF NOT END UPDATE
+000007D6  6000 00FE                757                            BRA     .END
+000007DA                           758          
+Line 759 ERROR: Symbol value differs between first and second pass
+000007DA                           759  .SW_TO_S_MODE
+000007DA                           760                            ; SCATTER IS NOW ON
+Line 761 ERROR: Undefined symbol
+000007DA  33FC 0001 005455B8       761                            MOVE.W  #1, (CLYDE_SCATER_ON)
+000007E2                           762                            ; IF SCATTER IS ON CHASE IS OFF AND ITS TIMER IS 0
+Line 763 ERROR: Undefined symbol
+000007E2  4279 004DBD16            763                            CLR.W   (CLYDE_CHASE_ON)
+Line 764 ERROR: Undefined symbol
+000007E8  4279 004DBD16            764                            CLR.W   (CLYDE_SCATERTIMER)
+000007EE                           765          
+000007EE                           766                            ; IF WE EVER ENTER THIS CODE PART IS 
+000007EE                           767                            ; BECAUSE WE MADE 1 SWITCH
+000007EE                           768                            ; MODE_SWITCH_COUNT++
+Line 769 ERROR: Undefined symbol
+000007EE  5279 005455B8            769                            ADDQ.W  #1, (CLYDE_MODE_SWITCH_COUNT)
+000007F4                           770                  
+000007F4  6000 00E0                771                            BRA     .END
+000007F8                           772          
+Line 773 ERROR: Symbol value differs between first and second pass
+000007F8                           773  .SW_TO_C_MODE
+000007F8                           774                            ; CHASE IS NOW ON
+Line 775 ERROR: Undefined symbol
+000007F8  33FC 0001 005455B8       775                            MOVE.W  #1, (CLYDE_CHASE_ON)
+00000800                           776                            ; IF CHASE IS ON SCATTER IS OFF AND ITS TIMER IS 0
+Line 777 ERROR: Undefined symbol
+00000800  4279 004DBD16            777                            CLR.W   (CLYDE_SCATER_ON)
+Line 778 ERROR: Undefined symbol
+00000806  4279 004DBD16            778                            CLR.W   (CLYDE_CHASETIMER)
+0000080C                           779          
+0000080C                           780                            ; IF WE EVER ENTER THIS CODE PART IS 
+0000080C                           781                            ; BECAUSE WE MADE 1 SWITCH
+0000080C                           782                            ; MODE_SWITCH_COUNT++
+Line 783 ERROR: Undefined symbol
+0000080C  5279 005455B8            783                            ADDQ.W  #1, (CLYDE_MODE_SWITCH_COUNT)
+00000812                           784          
+00000812  6000 00C2                785                            BRA     .END
+00000816                           786          
+Line 787 ERROR: Symbol value differs between first and second pass
+00000816                           787  .PERM
+00000816                           788                            ; IF WE ENTER THIS PART OF THE CODE THERE 
+00000816                           789                            ; IS NO MORE SWITHCING IN BETWEN MODES
+00000816                           790                            ; SO CHASES IS ON AND SCATER OFF 
+00000816                           791                            ; SCATER TIMER 0
+00000816                           792                            ; AND CHASE TIMER 0
+Line 793 ERROR: Undefined symbol
+00000816  33FC 0001 005455B8       793                            MOVE.W  #1, (CLYDE_CHASE_ON)
+Line 794 ERROR: Undefined symbol
+0000081E  4279 004DBD16            794                            CLR.W   (CLYDE_SCATER_ON)
+Line 795 ERROR: Undefined symbol
+00000824  4279 004DBD16            795                            CLR.W   (CLYDE_CHASETIMER)
+Line 796 ERROR: Undefined symbol
+0000082A  4279 004DBD16            796                            CLR.W   (CLYDE_SCATERTIMER)
+Line 797 ERROR: Symbol value differs between first and second pass
+00000830                           797  .END
+00000830  4E75                     798                            RTS
+00000832                           799                            
+00000832                           800  ; -----------------------------------------------------------------------------
+Line 801 ERROR: Symbol value differs between first and second pass
+00000832                           801  CALCDIS_CLYDE
+00000832                           802  ; CALC DIS TO TARGET.
+00000832                           803  ; INPUT    : D2 - X
+00000832                           804  ;            D3 - Y
+00000832                           805  ; OUTPUT   : D3 - EUCYDEAN DISTANCE TO TARGET
+00000832                           806  ; MODIFIES : NONE
+00000832                           807  ; -----------------------------------------------------------------------------
+00000832  48A7 E000                808                            MOVEM.W D0-D2,-(A7)
+00000836                           809                  
+00000836                           810                            ; IF IS BLUE IS ON WE SET PACMAN AS THE TARGET
+Line 811 ERROR: Undefined symbol
+00000836  0C79 0001 005455B8       811                            CMP.W   #1, (CLYDE_IS_BLUE)
+0000083E  6700 00F0                812                            BEQ     .SET_PAC_TAR
+00000842                           813                            ; IF CHASE IS ON WE SET PACMAN AS THE TARGET
+Line 814 ERROR: Undefined symbol
+00000842  0C79 0001 005455B8       814                            CMP.W   #1, (CLYDE_CHASE_ON)
+0000084A  6600 00B8                815                            BNE     .CHK_S
+0000084E                           816                            ; IF NEAR WE SET CLYDE'S HOME AS THE TARGET
+Line 817 ERROR: Undefined symbol
+0000084E  0C79 0001 005455B8       817                            CMP.W   #1,(IS_CLYDE_NEAR)
+00000856  6700 00CC                818                            BEQ     .SET_S_TAR
+0000085A  6000 00B8                819                            BRA     .SET_C_TAR
+0000085E                           820                  
+Line 821 ERROR: Symbol value differs between first and second pass
+0000085E                           821  .CHK_S                    ; IF SCATTER IS ON WE SET CLYDE'S HOME AS THE TARGET
+Line 822 ERROR: Undefined symbol
+0000085E  0C79 0001 005455B8       822                            CMP.W   #1, (CLYDE_SCATER_ON)
+00000866  6700 00BC                823                            BEQ     .SET_S_TAR
+0000086A                           824                            ; IF NONE OF THEM ARE ON WE SET THE TARGET TO PACMAN
+0000086A  6000 00D4                825                            BRA     .DEFAULT_TARGET
+0000086E                           826          
+0000086E                           827          
+Line 828 ERROR: Symbol value differs between first and second pass
+0000086E                           828  .SET_C_TAR
+Line 829 ERROR: Undefined symbol
+0000086E  3039 004DBD16            829                            MOVE.W  (PAC_POS_X),D0
+Line 830 ERROR: Undefined symbol
+00000874  3239 004DBD16            830                            MOVE.W  (PAC_POS_Y),D1
+0000087A  6000 00CC                831                            BRA     .DISLOGIC
+0000087E                           832          
+0000087E                           833          
+Line 834 ERROR: Symbol value differs between first and second pass
+0000087E                           834  .SET_S_TAR
+Line 835 ERROR: Undefined symbol
+0000087E  303C BD16                835                            MOVE.W  #CLYDE_HOME_X, D0
+Line 836 ERROR: Undefined symbol
+00000882  323C BD16                836                            MOVE.W  #CLYDE_HOME_Y, D1
+00000886  6000 00C0                837                            BRA     .DISLOGIC
+0000088A                           838  
+Line 839 ERROR: Symbol value differs between first and second pass
+0000088A                           839  .SET_PAC_TAR
+Line 840 ERROR: Undefined symbol
+0000088A  3039 004DBD16            840                            MOVE.W  (PAC_POS_X),D0
+Line 841 ERROR: Undefined symbol
+00000890  3239 004DBD16            841                            MOVE.W  (PAC_POS_Y),D1
+00000896  6000 00B0                842                            BRA     .DISLOGIC    
+0000089A                           843          
+Line 844 ERROR: Symbol value differs between first and second pass
+0000089A                           844  .DEFAULT_TARGET
+Line 845 ERROR: Undefined symbol
+0000089A  303C BD16                845                            MOVE.W  #CLYDE_HOME_X, D0
+Line 846 ERROR: Undefined symbol
+0000089E  323C BD16                846                            MOVE.W  #CLYDE_HOME_Y, D1
+000008A2                           847          
+Line 848 ERROR: Symbol value differs between first and second pass
+000008A2                           848  .DISLOGIC
+Line 849 ERROR: Undefined symbol
+000008A2  33C0 005455B8            849                            MOVE.W  D0,(CLYDE_TARGET_X)
+Line 850 ERROR: Undefined symbol
+000008A8  33C1 005455B8            850                            MOVE.W  D1,(CLYDE_TARGET_Y)
+000008AE                           851                  
+000008AE                           852                            ; ABSOLUTE DISTANCE
+000008AE  9440                     853                            SUB.W   D0,D2
+000008B0  4A42                     854                            TST.W   D2
+000008B2  6A00 00AA                855                            BPL     .CHKY
+000008B6  4442                     856                            NEG.W   D2
+000008B8                           857          
+Line 858 ERROR: Symbol value differs between first and second pass
+000008B8                           858  .CHKY                     SUB.W   D1,D3
+000008B8  4A43                     859                            TST.W   D3
+000008BA  6A00 00AC                860                            BPL     .SUM
+000008BE  4443                     861                            NEG.W   D3
+000008C0                           862                  
+Line 863 ERROR: Symbol value differs between first and second pass
+000008C0                           863  .SUM                      ADD.W   D2,D3
+000008C0  4C9F 0007                864                            MOVEM.W (A7)+,D0-D2
+000008C4  4E75                     865                            RTS
+000008C6                           866                  
+000008C6                           867  ; -----------------------------------------------------------------------------
+Line 868 ERROR: Symbol value differs between first and second pass
+000008C6                           868  FIND_MIN_CLYDE
+000008C6                           869  ; FIND MIN DISTANCE.
+000008C6                           870  ; INPUT    : NONE
+000008C6                           871  ; OUTPUT   : D1 - INDEX
+000008C6                           872  ; MODIFIES : NONE
+000008C6                           873  ; -----------------------------------------------------------------------------
+000008C6  48E7 3F00                874                            MOVEM.L D2-D7,-(A7) 
+000008CA                           875                            
+000008CA                           876                            ; INDEX = 1
+000008CA  7201                     877                            MOVEQ   #1, D1
+000008CC  267C 00000000            878                            MOVE.L  #0,A3
+Line 879 ERROR: Undefined symbol
+000008D2  362B BD16                879                            MOVE.W  CLYDE_EUCYDEAN_DIS(A3),D3
+000008D6  303C 0001                880                            MOVE.W  #1,D0
+000008DA                           881          
+Line 882 ERROR: Symbol value differs between first and second pass
+000008DA                           882  .LOOP
+000008DA  548B                     883                            ADDQ.L  #2,A3
+000008DC  5241                     884                            ADDQ.W  #1,D1
+000008DE  B27C 0005                885                            CMP.W   #5,D1
+000008E2  6700 00BA                886                            BEQ     .OUT
+000008E6                           887          
+Line 888 ERROR: Undefined symbol
+000008E6  382B BD16                888                            MOVE.W  CLYDE_EUCYDEAN_DIS(A3),D4
+000008EA                           889                            
+000008EA                           890                            ; COMPARE
+000008EA  B843                     891                            CMP     D3,D4
+000008EC  6E00 0096                892                            BGT     .LOOP
+000008F0  3604                     893                            MOVE.W  D4,D3
+000008F2  3001                     894                            MOVE.W  D1,D0
+000008F4  6000 008E                895                            BRA     .LOOP 
+Line 896 ERROR: Symbol value differs between first and second pass
+000008F8                           896  .OUT        
+000008F8  3200                     897                            MOVE.W  D0,D1
+000008FA                           898          
+000008FA  4CDF 00FC                899                            MOVEM.L (A7)+,D2-D7
+000008FE                           900                            ; RETURN INDEX
+000008FE  4E75                     901                            RTS
+00000900                           902          
+00000900                           903                 
+00000900                           904  ; -----------------------------------------------------------------------------
+Line 905 ERROR: Symbol value differs between first and second pass
+00000900                           905  FIND_MAX_CLYDE
+00000900                           906  ; FIND MAX DISTANCE.
+00000900                           907  ; INPUT    : NONE
+00000900                           908  ; OUTPUT   : D1 - INDEX
+00000900                           909  ; MODIFIES : NONE
+00000900                           910  ; -----------------------------------------------------------------------------
+00000900                           911          
+00000900  48E7 3F00                912                            MOVEM.L D2-D7,-(A7) 
+00000904                           913                            
+00000904                           914                            ; INDEX = 1
+00000904  7201                     915                            MOVEQ   #1, D1
+00000906  267C 00000000            916                            MOVE.L  #0,A3
+Line 917 ERROR: Undefined symbol
+0000090C  362B BD16                917                            MOVE.W  CLYDE_EUCYDEAN_DIS(A3),D3
+00000910  303C 0001                918                            MOVE.W  #1,D0
+00000914                           919          
+00000914                           920          
+Line 921 ERROR: Symbol value differs between first and second pass
+00000914                           921  .LOOP
+00000914  548B                     922                            ADDQ.L  #2,A3
+00000916  5241                     923                            ADDQ.W  #1,D1
+00000918  B27C 0005                924                            CMP.W   #5,D1
+0000091C  6700 00B6                925                            BEQ     .OUT
+00000920                           926          
+Line 927 ERROR: Undefined symbol
+00000920  382B BD16                927                            MOVE.W  CLYDE_EUCYDEAN_DIS(A3),D4
+00000924                           928                            
+00000924                           929                            ; COMPARE
+00000924  B843                     930                            CMP     D3,D4
+00000926  6D00 0092                931                            BLT     .LOOP
+0000092A  3604                     932                            MOVE.W  D4,D3
+0000092C  3001                     933                            MOVE.W  D1,D0
+0000092E  6000 008A                934                            BRA     .LOOP 
+Line 935 ERROR: Symbol value differs between first and second pass
+00000932                           935  .OUT        
+00000932  3200                     936                            MOVE.W  D0,D1
+00000934                           937          
+00000934  4CDF 00FC                938                            MOVEM.L (A7)+,D2-D7
+00000938                           939                            
+00000938                           940                            ; RETURN INDEX
+00000938  4E75                     941                            RTS
+0000093A                           942  ; -----------------------------------------------------------------------------
+Line 943 ERROR: Symbol value differs between first and second pass
+0000093A                           943  PAC_DIS
+0000093A                           944  ; CALC DIS TO PACMAN.
+0000093A                           945  ; INPUT    : A1 - TUPLE
+0000093A                           946  ; OUTPUT   : NONE
+0000093A                           947  ; MODIFIES : NONE
+0000093A                           948  ; -----------------------------------------------------------------------------
+0000093A  48E7 F020                949                            MOVEM.L D0-D3/A2,-(A7)
+0000093E                           950                  
+Line 951 ERROR: Undefined symbol
+0000093E  45F9 004DBD16            951                            LEA.L   CLYDE_DIS_PAC,A2
+Line 952 ERROR: Undefined symbol
+00000944  3039 004DBD16            952                            MOVE.W  (CLYDE_POS_X),D0
+Line 953 ERROR: Undefined symbol
+0000094A  3239 004DBD16            953                            MOVE.W  (CLYDE_POS_Y),D1
+00000950                           954      
+00000950                           955                            ; RECAP
+00000950                           956                            ; A1 - CLYDE_ALLOWED_DIR
+00000950                           957                            ; A2 - CLYDE_DIS_PAC !!!
+00000950                           958                            ; D0 - X
+00000950                           959                            ; D1 - Y
+00000950                           960                  
+00000950  24BC 7F7F7F7F            961                            MOVE.L  #$7F7F7F7F,(A2)
+00000956  257C 7F7F7F7F 0004       962                            MOVE.L  #$7F7F7F7F,4(A2)
+0000095E                           963                  
+0000095E  0C11 0001                964                            CMP.B   #1,(A1)
+00000962  6600 00B4                965                            BNE     .CALCUP
+00000966                           966                            ; CALC LEFT
+00000966  3400                     967                            MOVE.W  D0,D2      ; X
+00000968  3601                     968                            MOVE.W  D1,D3      ; Y
+0000096A                           969                  
+Line 970 ERROR: Undefined symbol
+0000096A  0442 BD16                970                            SUB.W  #CELSIZE,D2
+0000096E  4EB9 00000A78            971                            JSR     CALCDISPAC_CLYDE
+00000974  3483                     972                            MOVE.W  D3,(A2)
+00000976                           973                  
+Line 974 ERROR: Symbol value differs between first and second pass
+00000976                           974  .CALCUP                   CMP.B   #1,1(A1)
+00000976  6600 00BC                975                            BNE     .CALCRIGHT
+0000097A                           976                            ; CALC UP
+0000097A  3400                     977                            MOVE.W  D0,D2      ; X
+0000097C  3601                     978                            MOVE.W  D1,D3      ; Y
+0000097E                           979                  
+Line 980 ERROR: Undefined symbol
+0000097E  0443 BD16                980                            SUB.W   #CELSIZE,D3
+00000982  4EB9 00000A78            981                            JSR     CALCDISPAC_CLYDE
+00000988  3543 0002                982                            MOVE.W  D3,2(A2)
+0000098C                           983                  
+Line 984 ERROR: Symbol value differs between first and second pass
+0000098C                           984  .CALCRIGHT                CMP.B   #1,2(A1)
+0000098C  6600 00C2                985                            BNE     .CALCDOWN
+00000990                           986                            ; CALC RIGHT
+00000990  3400                     987                            MOVE.W  D0,D2      ; X
+00000992  3601                     988                            MOVE.W  D1,D3      ; Y
+00000994                           989                  
+Line 990 ERROR: Undefined symbol
+00000994  0642 BD16                990                            ADD.W   #CELSIZE,D2
+00000998  4EB9 00000A78            991                            JSR     CALCDISPAC_CLYDE
+0000099E  3543 0004                992                            MOVE.W  D3,4(A2)
+000009A2                           993                  
+Line 994 ERROR: Symbol value differs between first and second pass
+000009A2                           994  .CALCDOWN                 CMP.B   #1,3(A1)
+000009A2  6600 00C8                995                            BNE     .FINISH
+000009A6                           996                            ; CALC DOWN
+000009A6  3400                     997                            MOVE.W  D0,D2      ; X
+000009A8  3601                     998                            MOVE.W  D1,D3      ; Y
+000009AA                           999                  
+Line 1000 ERROR: Undefined symbol
+000009AA  0643 BD16               1000                            ADD.W   #CELSIZE,D3
+000009AE  4EB9 00000A78           1001                            JSR     CALCDISPAC_CLYDE
+000009B4  3543 0006               1002                            MOVE.W  D3,6(A2)
+Line 1003 ERROR: Symbol value differs between first and second pass
+000009B8                          1003  .FINISH
+000009B8  4EB9 00000AA4           1004                            JSR     LESS_THAN8                
+000009BE  4CDF 040F               1005                            MOVEM.L (A7)+,D0-D3/A2
+000009C2  4E75                    1006                            RTS
+000009C4                          1007  
+000009C4                          1008  ; -----------------------------------------------------------------------------
+Line 1009 ERROR: Symbol value differs between first and second pass
+000009C4                          1009  CALCDISPAC_CLYDE
+000009C4                          1010  ; CALC DIS TO PACMAN.
+000009C4                          1011  ; INPUT    : D2 - X
+000009C4                          1012  ;            D3 - Y
+000009C4                          1013  ; OUTPUT   : D3 - EUCLIDEAN DISTANCE TO PACMAN
+000009C4                          1014  ; MODIFIES : NONE
+000009C4                          1015  ; -----------------------------------------------------------------------------
+000009C4  48A7 E000               1016                            MOVEM.W D0-D2,-(A7)
+000009C8                          1017                  
+Line 1018 ERROR: Undefined symbol
+000009C8  3039 004DBD16           1018                            MOVE.W  (PAC_POS_X),D0
+Line 1019 ERROR: Undefined symbol
+000009CE  3239 004DBD16           1019                            MOVE.W  (PAC_POS_Y),D1
+000009D4                          1020                  
+000009D4  9440                    1021                            SUB.W   D0,D2
+000009D6  4A42                    1022                            TST.W   D2
+000009D8  6A00 00B8               1023                            BPL     .CHKY
+000009DC  4442                    1024                            NEG.W   D2
+000009DE                          1025          
+Line 1026 ERROR: Symbol value differs between first and second pass
+000009DE                          1026  .CHKY                     SUB.W   D1,D3
+000009DE  4A43                    1027                            TST.W   D3
+000009E0  6A00 00BA               1028                            BPL     .SUM
+000009E4  4443                    1029                            NEG.W   D3
+000009E6                          1030                  
+Line 1031 ERROR: Symbol value differs between first and second pass
+000009E6                          1031  .SUM                      ADD.W   D2,D3
+000009E6  4C9F 0007               1032                            MOVEM.W (A7)+,D0-D2
+000009EA  4E75                    1033                            RTS
+000009EC                          1034  
+000009EC                          1035  
+000009EC                          1036  ; -----------------------------------------------------------------------------
+Line 1037 ERROR: Symbol value differs between first and second pass
+000009EC                          1037  LESS_THAN8
+000009EC                          1038  ; CHECK IF CLYDE IS LESS THAN 8 TILES FROM PACMAN
+000009EC                          1039  ; INPUT    : NONE
+000009EC                          1040  ; OUTPUT   : NONE
+000009EC                          1041  ; MODIFIES : NONE
+000009EC                          1042  ; -----------------------------------------------------------------------------
+000009EC  48E7 7000               1043                            MOVEM.L D1-D3,-(A7)
+000009F0                          1044              
+000009F0  267C 00000000           1045                            MOVE.L  #0,A3
+Line 1046 ERROR: Undefined symbol
+000009F6  362B BD16               1046                            MOVE.W  CLYDE_DIS_PAC(A3),D3
+000009FA  7201                    1047                            MOVEQ   #1, D1
+000009FC  B67C 0080               1048                            CMP.W   #128,D3
+00000A00  6F00 00D0               1049                            BLE     .FOUND
+00000A04                          1050              
+Line 1051 ERROR: Symbol value differs between first and second pass
+00000A04                          1051  .LOOP                     ADDQ.L  #2,A3
+00000A04  5241                    1052                            ADDQ.W  #1,D1
+00000A06  B27C 0005               1053                            CMP.W   #5,D1
+00000A0A  6700 00D2               1054                            BEQ     .NO
+00000A0E                          1055              
+Line 1056 ERROR: Undefined symbol
+00000A0E  362B BD16               1056                            MOVE.W  CLYDE_DIS_PAC(A3),D3
+00000A12  B67C 0080               1057                            CMP.W   #128,D3
+00000A16  6E00 00A4               1058                            BGT     .LOOP
+Line 1059 ERROR: Symbol value differs between first and second pass
+00000A1A                          1059  .FOUND                    MOVE.W  #1,(IS_CLYDE_NEAR)
+00000A1A  6000 00CA               1060                            BRA     .OUT
+Line 1061 ERROR: Symbol value differs between first and second pass
+00000A1E                          1061  .NO                       MOVE.W  #0,(IS_CLYDE_NEAR)
+Line 1062 ERROR: Symbol value differs between first and second pass
+00000A1E  4CDF 000E               1062  .OUT                      MOVEM.L (A7)+,D1-D3    
+00000A22  4E75                    1063                            RTS
+00000A24                          1064  
+00000A24                          1065  ; -----------------------------------------------------------------------------           
+Line 1066 ERROR: Symbol value differs between first and second pass
+00000A24                          1066  CLYDE_PLOT
+00000A24                          1067  ; PLOTS CLYDE.
+00000A24                          1068  ; INPUT    : NONE
+00000A24                          1069  ; OUTPUT   : NONE
+00000A24                          1070  ; MODIFIES : NONE
+00000A24                          1071  ; -----------------------------------------------------------------------------
+00000A24  48E7 F800               1072                            MOVEM.L D0-D4,-(A7)   
+00000A28                          1073                  
+Line 1074 ERROR: Undefined symbol
+00000A28  0C79 0001 005455B8      1074                            CMP.W   #1,(CLYDE_IS_BLUE)
+00000A30  6600 00D6               1075                            BNE     .NOPUEDE
+Line 1076 ERROR: Undefined symbol
+00000A34  0C79 0004 005455B8      1076                            CMP.W   #4,(CLYDE_ESTADO)
+00000A3C  6C00 00F2               1077                            BGE     .DRAW_S
+Line 1078 ERROR: Symbol value differs between first and second pass
+00000A40                          1078  .NOPUEDE            
+Line 1079 ERROR: Undefined symbol
+00000A40  0C79 0001 005455B8      1079                            CMP.W   #1,(CLYDE_DIR)
+00000A48  6700 0106               1080                            BEQ     .DRAW_L
+Line 1081 ERROR: Undefined symbol
+00000A4C  0C79 0002 005455B8      1081                            CMP.W   #2,(CLYDE_DIR)
+00000A54  6700 011A               1082                            BEQ     .DRAW_U
+Line 1083 ERROR: Undefined symbol
+00000A58  0C79 0003 005455B8      1083                            CMP.W   #3,(CLYDE_DIR)
+00000A60  6700 012E               1084                            BEQ     .DRAW_R
+00000A64  6000 014A               1085                            BRA     .DRAW_D
+00000A68                          1086              
+Line 1087 ERROR: Symbol value differs between first and second pass
+00000A68                          1087  .DRAW_S                   BTST.B  #4,(SCRCYCCT)
+00000A68  6700 00DC               1088                            BEQ     .SCA2
+Line 1089 ERROR: Undefined symbol
+00000A6C  41F9 004DBD16           1089                            LEA     SCARED,A0
+00000A72  6000 0158               1090                            BRA     .DRAW
+Line 1091 ERROR: Symbol value differs between first and second pass
+00000A76                          1091  .SCA2                     
+Line 1092 ERROR: Undefined symbol
+00000A76  41F9 004DBD16           1092                            LEA     SCARED2,A0
+00000A7C  6000 014E               1093                            BRA     .DRAW
+Line 1094 ERROR: Symbol value differs between first and second pass
+00000A80                          1094  .DRAW_L
+Line 1095 ERROR: Undefined symbol
+00000A80  0839 0004 005455B8      1095                            BTST.B  #4,(SCRCYCCT)
+00000A88  6700 00DC               1096                            BEQ     .LFT2
+Line 1097 ERROR: Undefined symbol
+00000A8C  41F9 004DBD16           1097                            LEA     C_LEFT,A0
+00000A92  6000 0138               1098                            BRA     .DRAW
+Line 1099 ERROR: Symbol value differs between first and second pass
+00000A96                          1099  .LFT2                     LEA     C_LEFT2,A0
+00000A96  6000 0134               1100                            BRA     .DRAW
+00000A9A                          1101                            
+Line 1102 ERROR: Symbol value differs between first and second pass
+00000A9A                          1102  .DRAW_U
+Line 1103 ERROR: Undefined symbol
+00000A9A  0839 0004 005455B8      1103                            BTST.B  #4,(SCRCYCCT)
+00000AA2  6700 00E2               1104                            BEQ     .U2
+Line 1105 ERROR: Undefined symbol
+00000AA6  41F9 004DBD16           1105                            LEA     C_UP,A0
+00000AAC  6000 011E               1106                            BRA     .DRAW
+Line 1107 ERROR: Symbol value differs between first and second pass
+00000AB0                          1107  .U2                       LEA     C_UP2,A0
+00000AB0  6000 011A               1108                            BRA     .DRAW
+Line 1109 ERROR: Symbol value differs between first and second pass
+00000AB4                          1109  .DRAW_R
+Line 1110 ERROR: Undefined symbol
+00000AB4  0839 0004 005455B8      1110                            BTST.B  #4,(SCRCYCCT)
+00000ABC  6700 00E8               1111                            BEQ     .RH2
+Line 1112 ERROR: Undefined symbol
+00000AC0  41F9 004DBD16           1112                            LEA     C_RIGHT,A0
+00000AC6  6000 0104               1113                            BRA     .DRAW
+Line 1114 ERROR: Symbol value differs between first and second pass
+00000ACA                          1114  .RH2
+Line 1115 ERROR: Undefined symbol
+00000ACA  41F9 004DBD16           1115                            LEA     C_RIGHT2,A0
+00000AD0  6000 00FA               1116                            BRA     .DRAW
+Line 1117 ERROR: Symbol value differs between first and second pass
+00000AD4                          1117  .DRAW_D            
+00000AD4                          1118  
+Line 1119 ERROR: Undefined symbol
+00000AD4  0839 0004 005455B8      1119                            BTST.B  #4,(SCRCYCCT)
+00000ADC  6700 00E8               1120                            BEQ     .DW2          
+Line 1121 ERROR: Undefined symbol
+00000AE0  41F9 004DBD16           1121                            LEA     C_DOWN,A0
+00000AE6  6000 00E4               1122                            BRA     .DRAW
+Line 1123 ERROR: Symbol value differs between first and second pass
+00000AEA                          1123  .DW2
+Line 1124 ERROR: Undefined symbol
+00000AEA  41F9 004DBD16           1124                            LEA     C_DOWN2,A0
+00000AF0                          1125  
+Line 1126 ERROR: Symbol value differs between first and second pass
+00000AF0                          1126  .DRAW                     ; INT J
+Line 1127 ERROR: Undefined symbol
+00000AF0  3E39 004DBD16           1127                            MOVE.W  (CLYDE_POS_Y),D7
+Line 1128 ERROR: Undefined symbol
+00000AF6  0447 BD16               1128                            SUB.W   #PACRAD,D7
+00000AFA  760F                    1129                            MOVE.L  #15,D3
+00000AFC                          1130  
+Line 1131 ERROR: Symbol value differs between first and second pass
+00000AFC                          1131  .LOOP1       
+00000AFC                          1132                            ; INT I
+Line 1133 ERROR: Undefined symbol
+00000AFC  3C39 004DBD16           1133                            MOVE.W  (CLYDE_POS_X),D6
+Line 1134 ERROR: Undefined symbol
+00000B02  0446 BD16               1134                            SUB.W   #PACRAD,D6
+00000B06  780F                    1135                            MOVE.L  #15,D4
+Line 1136 ERROR: Symbol value differs between first and second pass
+00000B08                          1136  .LOOP2
+00000B08                          1137                            ;SET FILL COLOR
+00000B08  2218                    1138                            MOVE.L  (A0)+,D1
+00000B0A  0801 0008               1139                            BTST    #8,D1
+00000B0E  6700 00EE               1140                            BEQ     .NEXT
+00000B12  103C 0050               1141                            MOVE.B  #80,D0
+00000B16  4E4F                    1142                            TRAP    #15
+00000B18                          1143              
+00000B18                          1144                            ;DRAW PIXEL
+00000B18  2206                    1145                            MOVE.L  D6,D1
+00000B1A  3407                    1146                            MOVE.W  D7,D2
+00000B1C  103C 0052               1147                            MOVE.B  #82,D0
+00000B20  4E4F                    1148                            TRAP    #15
+00000B22                          1149              
+Line 1150 ERROR: Symbol value differs between first and second pass
+00000B22                          1150  .NEXT                     ADD.W   #1,D6
+00000B22  51CC 00C0               1151                            DBRA    D4, .LOOP2
+00000B26  5247                    1152                            ADD.W   #1,D7
+00000B28  51CB 00AE               1153                            DBRA    D3, .LOOP1
+00000B2C                          1154                  
+00000B2C                          1155                            ;DEBUG
+Line 1156 ERROR: Undefined symbol
+00000B2C  0C79 0001 005455B8      1156                            CMP.W   #1,(DEBUG)
+00000B34  6600 0112               1157                            BNE     .NODEBUG
+00000B38                          1158                            ; SET PEN COLOR
+00000B38  103C 0050               1159                            MOVE.B  #80,D0
+Line 1160 ERROR: Undefined symbol
+00000B3C  223C 004DBD16           1160                            MOVE.L  #ORANGE,D1
+00000B42  4E4F                    1161                            TRAP #15
+00000B44                          1162                            ; DEFINE COORDINATES
+Line 1163 ERROR: Undefined symbol
+00000B44  3239 004DBD16           1163                            MOVE.W  (CLYDE_TARGET_X),D1
+Line 1164 ERROR: Undefined symbol
+00000B4A  0441 BD16               1164                            SUB.W   #PACRAD,D1
+Line 1165 ERROR: Undefined symbol
+00000B4E  3439 004DBD16           1165                            MOVE.W  (CLYDE_TARGET_Y),D2
+Line 1166 ERROR: Undefined symbol
+00000B54  0442 BD16               1166                            SUB.W   #PACRAD,D2
+00000B58  3601                    1167                            MOVE.W  D1,D3
+Line 1168 ERROR: Undefined symbol
+00000B5A  0643 BD16               1168                            ADD.W   #PACRAD,D3
+00000B5E  3802                    1169                            MOVE.W  D2,D4
+Line 1170 ERROR: Undefined symbol
+00000B60  0644 BD16               1170                            ADD.W   #PACRAD,D4
+00000B64                          1171                  
+00000B64                          1172                            ; DRAW TARGET 
+00000B64  103C 005B               1173                            MOVE.B  #91,D0
+00000B68  4E4F                    1174                            TRAP    #15
+00000B6A                          1175          
+Line 1176 ERROR: Symbol value differs between first and second pass
+00000B6A  4CDF 001F               1176  .NODEBUG                  MOVEM.L (A7)+,D0-D4
+00000B6E                          1177          
+00000B6E  4E75                    1178                            RTS
+00000B70                          1179  
+Line 1180 WARNING: END directive missing, starting address not set
+
+350 errors detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+CALCDISPAC_CLYDE    A78
+CALCDISPAC_CLYDE:CHKY  A92
+CALCDISPAC_CLYDE:SUM  A9C
+CALCDIS_CLYDE       8D8
+CALCDIS_CLYDE:CHKY  95E
+CALCDIS_CLYDE:CHK_S  904
+CALCDIS_CLYDE:DEFAULT_TARGET  940
+CALCDIS_CLYDE:DISLOGIC  948
+CALCDIS_CLYDE:SET_C_TAR  914
+CALCDIS_CLYDE:SET_PAC_TAR  930
+CALCDIS_CLYDE:SET_S_TAR  924
+CALCDIS_CLYDE:SUM   968
+CHECK_COLLISIONS_CLYDE  74E
+CHECK_COLLISIONS_CLYDE:FINISH  7F4
+CHECK_COLLISIONS_CLYDE:ISPORTAL  7B2
+CHECK_COLLISIONS_CLYDE:IS_INTER  7EC
+CHECK_COLLISIONS_CLYDE:IS_WALL  7AC
+CHECK_COLLISIONS_CLYDE:JUMPLIST  782
+CHECK_COLLISIONS_CLYDE:RETURN  7F2
+CHECK_COLLISIONS_CLYDE:RSIDE  7D6
+CLYDE_INIT          0
+CLYDE_PLOT          AEC
+CLYDE_PLOT:DRAW     BCC
+CLYDE_PLOT:DRAW_D   BB0
+CLYDE_PLOT:DRAW_L   B50
+CLYDE_PLOT:DRAW_R   B90
+CLYDE_PLOT:DRAW_S   B30
+CLYDE_PLOT:DRAW_U   B70
+CLYDE_PLOT:DW2      BC6
+CLYDE_PLOT:LFT2     B66
+CLYDE_PLOT:LOOP1    BD8
+CLYDE_PLOT:LOOP2    BE4
+CLYDE_PLOT:NEXT     BFE
+CLYDE_PLOT:NODEBUG  C48
+CLYDE_PLOT:NOPUEDE  B08
+CLYDE_PLOT:RH2      BA6
+CLYDE_PLOT:SCA2     B46
+CLYDE_PLOT:U2       B86
+CLYDE_UPDATE        5E
+CLYDE_UPDATE:BC_TIME  608
+CLYDE_UPDATE:CALCDOWN  2C2
+CLYDE_UPDATE:CALCDOWNF  538
+CLYDE_UPDATE:CALCRIGHT  2A6
+CLYDE_UPDATE:CALCRIGHTF  51C
+CLYDE_UPDATE:CALCUP  28A
+CLYDE_UPDATE:CALCUPF  500
+CLYDE_UPDATE:CHECK_U_H  6C4
+CLYDE_UPDATE:CHECK_Y  326
+CLYDE_UPDATE:CHECK_YF  5A8
+CLYDE_UPDATE:CHKDOWN  1C6
+CLYDE_UPDATE:CHKMAPDOWN  232
+CLYDE_UPDATE:CHKMAPDOWNF  4AE
+CLYDE_UPDATE:CHKMAPRIGHT  218
+CLYDE_UPDATE:CHKMAPRIGHTF  494
+CLYDE_UPDATE:CHKMAPUP  1FE
+CLYDE_UPDATE:CHKMAPUPF  47A
+CLYDE_UPDATE:CHKMIDH  6DC
+CLYDE_UPDATE:CHKRIGHT  1B6
+CLYDE_UPDATE:CHKUP  1A4
+CLYDE_UPDATE:CONT   FC
+CLYDE_UPDATE:CONT2  1D4
+CLYDE_UPDATE:CONT3  24C
+CLYDE_UPDATE:CONT3F  4C8
+CLYDE_UPDATE:CONT4  2DE
+CLYDE_UPDATE:CONT4F  554
+CLYDE_UPDATE:CONTF  3C0
+CLYDE_UPDATE:CONTH  688
+CLYDE_UPDATE:DONE   2EA
+CLYDE_UPDATE:DONEF  56C
+CLYDE_UPDATE:DOWN_HOUSE  6BC
+CLYDE_UPDATE:FRIGHTENED_MODE  350
+CLYDE_UPDATE:IS_HOME  62A
+CLYDE_UPDATE:LEAVING_HOME  714
+CLYDE_UPDATE:LEFT_HOME  728
+CLYDE_UPDATE:MEGADONE  748
+CLYDE_UPDATE:MVDOWN  F6
+CLYDE_UPDATE:MVDOWNF  3BA
+CLYDE_UPDATE:MVDOWNH  682
+CLYDE_UPDATE:MVLEFT  D8
+CLYDE_UPDATE:MVLEFTF  39C
+CLYDE_UPDATE:MVLEFTH  664
+CLYDE_UPDATE:MVRIGHT  EC
+CLYDE_UPDATE:MVRIGHTF  3B0
+CLYDE_UPDATE:MVRIGHTH  678
+CLYDE_UPDATE:MVUP   E2
+CLYDE_UPDATE:MVUPF  3A6
+CLYDE_UPDATE:MVUPH  66E
+CLYDE_UPDATE:NO_COLLISION  34C
+CLYDE_UPDATE:NO_COLLISIONF  604
+CLYDE_UPDATE:SUM_DIST  330
+CLYDE_UPDATE:SUM_DISTF  5B2
+CLYDE_UPDATE:UP_HOUSE  6D4
+FIND_MAX_CLYDE      9A6
+FIND_MAX_CLYDE:LOOP  9BA
+FIND_MAX_CLYDE:OUT  9D4
+FIND_MIN_CLYDE      970
+FIND_MIN_CLYDE:LOOP  984
+FIND_MIN_CLYDE:OUT  99E
+GETMAPCOORDS_CLYDE  7FA
+LESS_THAN8          AA4
+LESS_THAN8:FOUND    AD2
+LESS_THAN8:LOOP     ABC
+LESS_THAN8:NO       ADE
+LESS_THAN8:OUT      AE6
+MAPGET_CLYDE        810
+MODE_UPDATE_CLYDE   82C
+MODE_UPDATE_CLYDE:END  8D6
+MODE_UPDATE_CLYDE:IN_C_MODE  854
+MODE_UPDATE_CLYDE:IN_S_MODE  86A
+MODE_UPDATE_CLYDE:PERM  8BC
+MODE_UPDATE_CLYDE:SW_TO_C_MODE  89E
+MODE_UPDATE_CLYDE:SW_TO_S_MODE  880
+PAC_DIS             9DC
+PAC_DIS:CALCDOWN    A50
+PAC_DIS:CALCRIGHT   A34
+PAC_DIS:CALCUP      A18
+PAC_DIS:FINISH      A6C

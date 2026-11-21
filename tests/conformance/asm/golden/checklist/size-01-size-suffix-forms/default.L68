@@ -1,0 +1,27 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:30:31 AM
+
+00001000                             1      ORG $1000
+00001000  3200                       2      MOVE.  D0,D1
+Line 3 ERROR: Invalid syntax
+00001002                             3      MOVE. D0,D1
+Line 4 ERROR: Invalid size code
+00001002  4E71                       4      NOP.
+Line 5 ERROR: Invalid size code
+00001004  3200                       5      MOVE.X D0,D1
+Line 6 ERROR: Invalid syntax
+00001006                             6      MOVE.BD0,D1
+Line 7 ERROR: Invalid opcode
+00001006                             7      MOVEC D0,VBR
+Line 8 ERROR: Invalid opcode
+00001006                             8      RTD #4
+00001006                             9      END $1000
+
+6 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------

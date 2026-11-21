@@ -1,0 +1,3 @@
+	ORG $1000
+	INCLUDE inc.x68
+	END $1000

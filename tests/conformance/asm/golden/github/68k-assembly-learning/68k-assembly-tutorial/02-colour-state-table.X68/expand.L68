@@ -1,0 +1,185 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:27:20 AM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      :
+00000000                             3  * Written by :
+00000000                             4  * Date       :
+00000000                             5  * Description:
+00000000                             6  *-----------------------------------------------------------
+00001000                             7      ORG    $1000
+00001000                             8  Start:                  ; first instruction of program
+00001000                             9  
+00001000                            10  * Put program code here    
+00001000  43F9 0000115C             11      LEA     Message,A1
+00001006                            12      
+00001006                            13  CycleColour:
+00001006  4EB9 00001018             14      JSR     JumpToColourStateHandler
+0000100C  4EB9 0000111A             15      JSR     OutputColour
+00001012  60F2                      16      BRA     CycleColour
+00001014                            17  
+00001014  FFFF FFFF                 18      SIMHALT             ; halt simulator
+00001018                            19  
+00001018                            20          
+00001018                            21  JumpToColourStateHandler:
+00001018  1039 0000116B             22      MOVE.B  ColourState,D0
+0000101E  4880                      23      EXT.W   D0
+00001020  E548                      24      LSL.W   #2,D0
+00001022  41F9 0000116C             25      LEA     ColourStateTable,A0
+00001028  2470 0000                 26      MOVE.L  0(A0,D0.W),A2
+0000102C  4E92                      27      JSR     (A2)
+0000102E  4E75                      28      RTS
+00001030                            29  
+00001030                            30  ColourState0_RedUp:
+00001030  5239 00001168             31      ADDQ.B  #1,Red
+00001036  0C39 00FF 00001168        32      CMP.B   #255,Red
+0000103E  6600 0008                 33      BNE     State0Done
+00001042  4EB9 00001100             34      JSR     IncrementColourState
+00001048                            35  State0Done:
+00001048  4E75                      36      RTS
+0000104A                            37  
+0000104A                            38  ColourState1_GreenUp:
+0000104A  5239 00001169             39      ADDQ.B  #1,Green
+00001050  0C39 00FF 00001169        40      CMP.B   #255,Green
+00001058  6600 0008                 41      BNE     State1Done
+0000105C  4EB9 00001100             42      JSR     IncrementColourState
+00001062                            43  State1Done:
+00001062  4E75                      44      RTS
+00001064                            45      
+00001064                            46  ColourState2_RedDown:
+00001064  5339 00001168             47      SUBQ.B  #1,Red
+0000106A  0C39 0000 00001168        48      CMP.B   #0,Red
+00001072  6600 0008                 49      BNE     State2Done
+00001076  4EB9 00001100             50      JSR     IncrementColourState
+0000107C                            51  State2Done:
+0000107C  4E75                      52      RTS
+0000107E                            53      
+0000107E                            54  ColourState3_BlueUp:
+0000107E  5239 0000116A             55      ADDQ.B  #1,Blue
+00001084  0C39 00FF 0000116A        56      CMP.B   #255,Blue
+0000108C  6600 0008                 57      BNE     State3Done
+00001090  4EB9 00001100             58      JSR     IncrementColourState
+00001096                            59  State3Done:
+00001096  4E75                      60      RTS
+00001098                            61  
+00001098                            62  ColourState4_GreenDown:
+00001098  5339 00001169             63      SUBQ.B  #1,Green
+0000109E  0C39 0000 00001169        64      CMP.B   #0,Green
+000010A6  6600 0008                 65      BNE     State4Done
+000010AA  4EB9 00001100             66      JSR     IncrementColourState
+000010B0                            67  State4Done:
+000010B0  4E75                      68      RTS
+000010B2                            69  
+000010B2                            70  ColourState5_RedUp:
+000010B2  5239 00001168             71      ADDQ.B  #1,Red
+000010B8  0C39 00FF 00001168        72      CMP.B   #255,Red
+000010C0  6600 0008                 73      BNE     State5Done
+000010C4  4EB9 00001100             74      JSR     IncrementColourState
+000010CA                            75  State5Done:
+000010CA  4E75                      76      RTS
+000010CC                            77  
+000010CC                            78  ColourState6_BlueDown:
+000010CC  5339 0000116A             79      SUBQ.B  #1,Blue
+000010D2  0C39 0000 0000116A        80      CMP.B   #0,Blue
+000010DA  6600 0008                 81      BNE     State6Done
+000010DE  4EB9 00001100             82      JSR     IncrementColourState
+000010E4                            83  State6Done:
+000010E4  4E75                      84      RTS
+000010E6                            85      
+000010E6                            86  ColourState7_RedDown:
+000010E6  5339 00001168             87      SUBQ.B  #1,Red
+000010EC  0C39 0000 00001168        88      CMP.B   #0,Red
+000010F4  6600 0008                 89      BNE     State7Done
+000010F8  4EB9 00001100             90      JSR     IncrementColourState
+000010FE                            91  State7Done:
+000010FE  4E75                      92      RTS
+00001100                            93  
+00001100                            94  IncrementColourState:
+00001100  5239 0000116B             95      ADD.B   #1,ColourState
+00001106  0C39 0008 0000116B        96      CMP.B   #8,ColourState
+0000110E  6600 0008                 97      BNE     SkipCycle
+00001112  4239 0000116B             98      CLR.B   ColourState
+00001118                            99  SkipCycle:
+00001118  4E75                     100      RTS
+0000111A                           101  
+0000111A                           102  OutputColour:
+0000111A  123C 0000                103      MOVE.B  #0,D1           ;load row into low byte of d1
+0000111E  E149                     104      LSL.W   #8,D1           ;shift the low byte of d1 over to high byte
+00001120  123C 0000                105      MOVE.B  #0,D1           ;load col into low byte of d1
+00001124  103C 000B                106      MOVE.B  #11,D0          ;load command to position cursor
+00001128  4E4F                     107      TRAP    #15
+0000112A                           108      
+0000112A  4EB9 00001142            109      JSR     MoveColourToD1  ;set colour
+00001130  143C 0000                110      MOVE.B  #0,D2           ;set style
+00001134  103C 0015                111      MOVE.B  #21,D0          ;set text colour code
+00001138  4E4F                     112      TRAP    #15
+0000113A                           113      
+0000113A  103C 000E                114      MOVE.B  #14,D0          ;load command to output text
+0000113E  4E4F                     115      TRAP    #15
+00001140  4E75                     116      RTS
+00001142                           117  
+00001142                           118  MoveColourToD1:
+00001142  7200                     119      MOVEQ   #0,D1
+00001144  1239 0000116A            120      MOVE.B  Blue,D1
+0000114A  E189                     121      LSL.L   #8,D1
+0000114C  8239 00001169            122      OR.B    Green,D1
+00001152  E189                     123      LSL.L   #8,D1
+00001154  8239 00001168            124      OR.B    Red,D1
+0000115A  4E75                     125      RTS
+0000115C                           126  
+0000115C                           127  * Put variables and constants here
+0000115C= 48 65 6C 6C 6F 20 57     128  Message     DC.B    'Hello World',0
+          6F 72 6C 64 00        
+00001168= 00                       130  Red         DC.B    0
+00001169= 00                       131  Green       DC.B    0
+0000116A= 00                       132  Blue        DC.B    0
+0000116B= 00                       133  ColourState DC.B    0
+0000116C                           134  ColourStateTable:
+0000116C= 00001030                 135              DC.L    ColourState0_RedUp
+00001170= 0000104A                 136              DC.L    ColourState1_GreenUp
+00001174= 00001064                 137              DC.L    ColourState2_RedDown
+00001178= 0000107E                 138              DC.L    ColourState3_BlueUp
+0000117C= 00001098                 139              DC.L    ColourState4_GreenDown
+00001180= 000010B2                 140              DC.L    ColourState5_RedUp
+00001184= 000010CC                 141              DC.L    ColourState6_BlueDown
+00001188= 000010E6                 142              DC.L    ColourState7_RedDown
+0000118C                           143              
+0000118C                           144      END    Start        ; last line of source
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+BLUE                116A
+COLOURSTATE         116B
+COLOURSTATE0_REDUP  1030
+COLOURSTATE1_GREENUP  104A
+COLOURSTATE2_REDDOWN  1064
+COLOURSTATE3_BLUEUP  107E
+COLOURSTATE4_GREENDOWN  1098
+COLOURSTATE5_REDUP  10B2
+COLOURSTATE6_BLUEDOWN  10CC
+COLOURSTATE7_REDDOWN  10E6
+COLOURSTATETABLE    116C
+CYCLECOLOUR         1006
+GREEN               1169
+INCREMENTCOLOURSTATE  1100
+JUMPTOCOLOURSTATEHANDLER  1018
+MESSAGE             115C
+MOVECOLOURTOD1      1142
+OUTPUTCOLOUR        111A
+RED                 1168
+SKIPCYCLE           1118
+START               1000
+STATE0DONE          1048
+STATE1DONE          1062
+STATE2DONE          107C
+STATE3DONE          1096
+STATE4DONE          10B0
+STATE5DONE          10CA
+STATE6DONE          10E4
+STATE7DONE          10FE

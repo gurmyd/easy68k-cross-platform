@@ -1,0 +1,22 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:32:09 AM
+
+0000FFF0                             1      ORG $FFF0
+0000FFF0= 11 11 11 11 11 11 ...      2      DCB.B 40,$11
+00123456                             3      ORG $123456
+00123456= 00000001 00000002          4      DC.L 1,2
+01000000                             5      ORG $01000000
+01000000= 0003                       6      DC.W 3
+00001000                             7      ORG $1000
+00001000= 2222 2222 2222 2...        8  S   DCB.W 20,$2222
+00001028                             9      END S
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+S                   1000

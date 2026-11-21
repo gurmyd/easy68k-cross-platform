@@ -1,0 +1,79 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:28:16 AM
+
+00001000                             1      ORG     $1000
+00001000                             2  
+00001000                             3  Start:
+00001000  43F9 00001054              4      lea Intro,a1
+00001006  700E                       5      moveq   #14,d0
+00001008  4E4F                       6      trap    #15
+0000100A                             7      
+0000100A  6000 0002                  8      bra     CheckKeys
+0000100E                             9  
+0000100E                            10  CheckKeys:
+0000100E  7013                      11      moveq   #19,d0
+00001010  7200                      12      moveq   #0,d1
+00001012  4E4F                      13      trap    #15
+00001014                            14  
+00001014  4A41                      15      tst.w   d1
+00001016  67F6                      16      beq.s   CheckKeys
+00001018                            17  
+00001018  3601                      18      move.w  d1,d3             ; Save key code
+0000101A                            19  
+0000101A                            20      ; Cursor to 0,0
+0000101A  700B                      21      moveq   #11,d0
+0000101C  7200                      22      moveq   #0,d1
+0000101E  4E4F                      23      trap    #15
+00001020                            24  
+00001020                            25      ; "Pressed key code: "
+00001020  43F9 00001060             26      lea     Message,a1
+00001026  700E                      27      moveq   #14,d0
+00001028  4E4F                      28      trap    #15
+0000102A                            29  
+0000102A                            30      ; #
+0000102A  43F9 00001079             31      lea     Hash,a1
+00001030  700E                      32      moveq   #14,d0
+00001032  4E4F                      33      trap    #15
+00001034                            34  
+00001034                            35      ; Decimal
+00001034  3203                      36      move.w  d3,d1
+00001036  740A                      37      moveq   #10,d2
+00001038  700F                      38      moveq   #15,d0
+0000103A  4E4F                      39      trap    #15
+0000103C                            40  
+0000103C                            41      ; $
+0000103C  43F9 0000107C             42      lea     Dollar,a1
+00001042  700E                      43      moveq   #14,d0
+00001044  4E4F                      44      trap    #15
+00001046                            45  
+00001046                            46      ; Hex
+00001046  3203                      47      move.w  d3,d1
+00001048  7410                      48      moveq   #16,d2
+0000104A  700F                      49      moveq   #15,d0
+0000104C  4E4F                      50      trap    #15
+0000104E                            51  
+0000104E  60BE                      52      bra.s   CheckKeys
+00001050                            53  
+00001050  FFFF FFFF                 54      SIMHALT
+00001054                            55  
+00001054= 50 72 65 73 73 20 ...     56  Intro   dc.b    'Press a key',0
+00001060= 50 72 65 73 73 65 ...     57  Message dc.b    'Pressed key ASCII code: ',0
+00001079= 20 23 00                  58  Hash    dc.b    ' #',0
+0000107C= 20 24 00                  59  Dollar  dc.b    ' $',0
+0000107F                            60  
+0000107F                            61      END     Start
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+CHECKKEYS           100E
+DOLLAR              107C
+HASH                1079
+INTRO               1054
+MESSAGE             1060
+START               1000

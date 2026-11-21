@@ -1,0 +1,20 @@
+00000000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:30:18 AM
+
+00000000                             1  ; ==============================================================================
+00000000                             2  ; UTIL CONSTANTS
+00000000                             3  ; ==============================================================================
+00000000                             4  
+00000000  =00000008                  5  UTLCHRWD                  EQU     8          ; CHARACTER WIDTH IN PIXELS
+00000000                             6  
+Line 7 WARNING: END directive missing, starting address not set
+
+No errors detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+UTLCHRWD            8

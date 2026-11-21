@@ -1,0 +1,29 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:32:18 AM
+
+00001000                             1      ORG $1000
+00001000= 00000000                   2  TABLE   DC.L 0
+00001004  2038 1004                  3      MOVE.L (TABLE+4),D0
+00001008  21C0 1004                  4      MOVE.L D0,(TABLE+4)
+Line 5 ERROR: Invalid syntax
+0000100C                             5      MOVE.L (TABLE+4),A0
+Line 6 ERROR: Invalid syntax
+0000100C                             6      LEA (TABLE),A1
+Line 7 ERROR: Invalid syntax
+0000100C                             7      MOVE.W D0,(TABLE) ; x,A0
+0000100C  4EFA EFF2                  8      JMP (PC)
+Line 9 ERROR: An exception occurred in routine 'opParse'. 
+00001010                             9      MOVE.W (1+,A0),D0
+Line 10 ERROR: An exception occurred in routine 'opParse'. 
+00001010                            10      MOVE.W (1+,PC),D0
+00001010                            11      END $1000
+
+5 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+TABLE               1000

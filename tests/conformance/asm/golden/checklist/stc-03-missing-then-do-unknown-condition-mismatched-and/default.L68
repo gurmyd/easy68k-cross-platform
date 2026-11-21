@@ -1,0 +1,40 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:31:15 AM
+
+00001000                             1      ORG $1000
+00001000                             2      ENDI
+Line 3 ERROR: Undefined symbol
+00001000                             3s _020C002A
+00001000                             4      IF D0 <EQ> #1
+Line 5 WARNING: THEN expected
+00001004  6600 0008                  5      IF D0 <EQ> #1
+00001008  4E71                       6      NOP
+0000100A                             7      ENDW
+Line 8 ERROR: No matching WHILE statement was found
+0000100E                             8      ENDW
+0000100E                             9      WHILE D0 <XX> #1 DO
+Line 10 ERROR: Invalid syntax
+00001012                            10s     B?? _10000001
+00001012                            11      ENDF
+Line 12 ERROR: No matching FOR statement was found
+00001012                            12      ENDF
+00001012                            13      REPEAT
+00001012                            14      UNTIL D0 <EQ> D1
+Line 15 WARNING: DO expected
+00001014  66FC                      15      UNTIL D0 <EQ> D1
+00001016                            16      UNLESS
+Line 17 ERROR: No matching DBLOOP statement was found
+00001016                            17      UNLESS
+00001016                            18      END $1000
+
+5 errors detected
+2 warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+_00000000           100E
+_10000000           100E
+_30000000           1012

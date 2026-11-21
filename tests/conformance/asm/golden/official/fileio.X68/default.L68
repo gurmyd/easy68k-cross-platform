@@ -1,0 +1,61 @@
+00000800 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:27:06 AM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title         : FileIO
+00000000                             3  * Written by    : Chuck Kelly
+00000000                             4  * Date Created  : December-2-2004
+00000000                             5  * Description   : Demonstrate file I/O in EASy68K
+00000000                             6  * Modification  : Oct-18-2008 by CK
+00000000                             7  * Dec-25-2012 by CK, Uses SIMHALT
+00000000                             8  *-----------------------------------------------------------
+00000800                             9      ORG     $800
+00000800                            10  START
+00000800  43F9 0000084C             11      lea     filename,a1
+00000806  303C 0034                 12      move    #52,d0          open new file
+0000080A  4E4F                      13      trap    #15
+0000080C                            14  
+0000080C  43F9 00000856             15      lea     data,a1         data to write
+00000812  343C 0018                 16      move    #datasize,d2    # bytes to write
+00000816  303C 0036                 17      move    #54,d0          write to file
+0000081A  4E4F                      18      trap    #15
+0000081C                            19  
+0000081C  343C 0000                 20      move    #0,d2           file position
+00000820  303C 0037                 21      move    #55,d0
+00000824  4E4F                      22      trap    #15
+00000826                            23  
+00000826  43F9 0000086E             24      lea     buffer,a1
+0000082C  343C 0018                 25      move    #datasize,d2    # bytes to read
+00000830  303C 0035                 26      move    #53,d0          read from file
+00000834  4E4F                      27      trap    #15
+00000836                            28  
+00000836  303C 0032                 29      move    #50,d0
+0000083A  4E4F                      30      trap    #15             close all files
+0000083C                            31  
+0000083C  43F9 0000084C             32      lea     filename,a1
+00000842  303C 0039                 33      move    #57,d0          delete file
+00000846  4E4F                      34      trap    #15
+00000848                            35  
+00000848  FFFF FFFF                 36      SIMHALT                 Halt Simulator
+0000084C                            37  
+0000084C= 74 65 73 74 31 2E ...     38  filename    dc.b    'test1.txt',0
+00000856= 74 68 69 73 20 69 ...     39  data        dc.b    'this is a test'
+00000864= 01 02 03 04 05 06 ...     40              dc.b    1,2,3,4,5,6,7,8,9,0
+0000086E  =00000018                 41  datasize    equ     *-data
+0000086E                            42  buffer      ds.b    80
+000008BE                            43  
+000008BE                            44      END     START
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+BUFFER              86E
+DATA                856
+DATASIZE            18
+FILENAME            84C
+START               800

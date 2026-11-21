@@ -1,0 +1,257 @@
+/* The Hardware panel (HardwarePanel.tsx). Owner: W3 > SH7.
+
+   The display, the LEDs and the switch indicators are pictures of hardware, not themed interface:
+   ARCHITECTURE.md 2.6 fixes them at #FF0000 (on) and #400000 (off) on a black and a grey panel in
+   both themes (hardware §1.1: clRed and clDrkMaroon; §2.2, §2.3: Panel2 clBlack, Panel1 clGray).
+   No design token exists for these, so they are the four custom properties below. The rest of the
+   panel uses the tokens of app/src/styles. */
+
+.e68-hw {
+  --hw-on: #ff0000;
+  --hw-off: #400000;
+  --hw-display: #000000;
+  --hw-led-panel: #808080;
+  --hw-led-rim: #800000; /* clMaroon pen of the LED shapes */
+  /* The raised grey controls (switch body, push buttons, IRQ and Reset buttons). */
+  --hw-face: #c0c0c0;
+  --hw-light: #ffffff;
+  --hw-shade: #808080;
+  --hw-dark: #404040;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  min-width: max-content;
+  font-size: var(--fs-md);
+  color: var(--c-text);
+}
+
+.e68-hw--empty {
+  color: var(--c-text-muted);
+}
+
+/* ---- rows 1-4: devices on the left, their address on the right */
+
+.e68-hw__devices {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  align-items: center;
+  column-gap: var(--sp-4);
+  row-gap: var(--sp-2);
+}
+
+.e68-hw__device {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.e68-hw__display {
+  display: block;
+  background: var(--hw-display);
+}
+
+.e68-hw__leds {
+  display: block;
+  background: var(--hw-led-panel);
+}
+
+.e68-hw__lamp--on {
+  fill: var(--hw-on);
+}
+
+.e68-hw__lamp--off {
+  fill: var(--hw-off);
+}
+
+.e68-hw__led {
+  stroke: var(--hw-led-rim);
+  stroke-width: 2;
+}
+
+.e68-hw__address .e68-field-label__text {
+  font-weight: 600;
+}
+
+/* hardware §2.6: the address text turns red when it overlaps another device. */
+.e68-hw__field--conflict .e68-masked__input {
+  color: var(--c-danger);
+  font-weight: 600;
+}
+
+/* The eight bit columns: 40 px apart, starting 16 px in, as in the original. */
+.e68-hw__strip,
+.e68-hw__bits {
+  display: grid;
+  grid-template-columns: repeat(8, 40px);
+  padding-left: 8px;
+  width: 329px;
+  box-sizing: border-box;
+}
+
+.e68-hw__slot {
+  display: flex;
+  justify-content: center;
+}
+
+.e68-hw__bit {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--c-text);
+}
+
+/* ---- toggle switches */
+
+.e68-hw__switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 29px;
+  height: 45px;
+  padding: 0;
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-sm);
+  background: var(--hw-face);
+  cursor: pointer;
+}
+
+.e68-hw__switch-frame {
+  fill: var(--hw-shade);
+  stroke: var(--hw-dark);
+  stroke-width: 1;
+}
+
+.e68-hw__switch-rocker {
+  fill: var(--hw-light);
+  stroke: var(--hw-dark);
+  stroke-width: 1;
+}
+
+/* ---- push buttons (33 x 33, grey raised square; drawn sunken while held) */
+
+.e68-hw__pb {
+  width: 33px;
+  height: 33px;
+  padding: 0;
+  border: 3px solid;
+  border-color: var(--hw-light) var(--hw-dark) var(--hw-dark) var(--hw-light);
+  border-radius: 0;
+  background: var(--hw-face);
+  cursor: pointer;
+  touch-action: none;
+}
+
+.e68-hw__pb[data-held] {
+  border-color: var(--hw-dark) var(--hw-light) var(--hw-light) var(--hw-dark);
+  background: var(--hw-shade);
+}
+
+/* ---- IRQ and Reset buttons (25 x 25; disabled: a flat dark-maroon square, hardware §3.2) */
+
+.e68-hw__irq {
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  border: 2px solid;
+  border-color: var(--hw-light) var(--hw-dark) var(--hw-dark) var(--hw-light);
+  border-radius: 0;
+  background: var(--hw-face);
+  cursor: pointer;
+}
+
+.e68-hw__irq:active:not(:disabled) {
+  border-color: var(--hw-dark) var(--hw-light) var(--hw-light) var(--hw-dark);
+}
+
+.e68-hw__irq:disabled {
+  border: 2px solid var(--hw-off);
+  background: var(--hw-off);
+  cursor: default;
+}
+
+.e68-hw__switch:focus-visible,
+.e68-hw__pb:focus-visible,
+.e68-hw__irq:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* ---- row 5: three groups */
+
+.e68-hw__groups {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--sp-3);
+}
+
+.e68-hw__group {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+}
+
+.e68-hw__legend {
+  padding: 0 var(--sp-1);
+  font-weight: 600;
+  white-space: pre;
+}
+
+.e68-hw__levels {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.e68-hw__level {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.e68-hw__auto-label {
+  margin-top: var(--sp-2);
+  text-align: center;
+  white-space: pre;
+}
+
+.e68-hw__line {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin-bottom: var(--sp-2);
+}
+
+.e68-hw__unit {
+  white-space: pre;
+}
+
+.e68-hw__group--reset {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---- row 6: memory map */
+
+.e68-hw__map {
+  display: grid;
+  grid-template-columns: max-content max-content max-content max-content;
+  align-items: center;
+  column-gap: var(--sp-3);
+  row-gap: var(--sp-2);
+}
+
+.e68-hw__map-head {
+  font-weight: 600;
+}
+
+.e68-hw__note {
+  color: var(--c-text-muted);
+  white-space: pre;
+}

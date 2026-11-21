@@ -1,0 +1,30 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:31:18 AM
+
+00001000                             1      ORG $1000
+00001000= AA AA AA                   2      DCB.B 3,$AA
+00001004= 1234 1234                  3      DCB.W 2,$1234
+Line 4 ERROR: Forward references not allowed with this directive
+00001008=                            4      DCB.L FWD,1
+Line 5 ERROR: Invalid block length
+00001008=                            5      DCB.B -1,0
+Line 6 ERROR: Invalid syntax
+00001008=                            6      DCB.B 3 ,1
+Line 7 ERROR: Invalid block length
+00001008                             7      DS.B -1
+Line 8 ERROR: Forward references not allowed with this directive
+00001008                             8      DS.L FWD
+Line 9 ERROR: Invalid block length
+00001008=                            9      DCB.B $FFFFFF,0
+00001008  4E71                      10  FWD NOP
+0000100A                            11      END $1000
+
+6 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+FWD                 1008

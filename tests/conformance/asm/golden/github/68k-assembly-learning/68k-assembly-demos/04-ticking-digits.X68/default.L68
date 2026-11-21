@@ -1,0 +1,62 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:27:32 AM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : ticking-digits
+00000000                             3  * Written by : Henry Wrightson
+00000000                             4  * Date       : 11/8/2026
+00000000                             5  * Description: Use the Hardware window to view the LED digits
+00000000                             6  *            : counting from 0 to 9
+00000000                             7  *-----------------------------------------------------------
+00001000                             8      ORG    $1000
+00001000                             9      
+00001000                            10  DELAY    MACRO
+00001000                            11      move.b  #23,d0          trap task 23
+00001000                            12      move.l  #\1,d1          delay amount
+00001000                            13      trap    #15
+00001000                            14      ENDM
+00001000                            15  
+00001000                            16  START:                  ; first instruction of program
+00001000                            17      
+00001000  23FC 00000000 00E00000    18      move.l  #0,$00E00000
+0000100A  23FC 00000000 00E00004    19      move.l  #0,$00E00004
+00001014  23FC 00000000 00E00008    20      move.l  #0,$00E00008
+0000101E  23FC 00000000 00E0000C    21      move.l  #0,$00E0000C
+00001028  41F9 00E0000E             22      lea     $00E0000E,a0
+0000102E  43F9 00001054             23      lea     DisplayDigits,a1
+00001034                            24  loop:
+00001034  103C 0017                 25      move.b  #23,d0           ; trap task 23
+00001038  7232                      26      move.l  #50,d1           ; delay amount
+0000103A  4E4F                      27      trap    #15
+0000103C                            28      
+0000103C  1231 2000                 29      move.b  (a1,d2.w),d1
+00001040  1081                      30      move.b  d1,(a0)
+00001042                            31      
+00001042  5202                      32      addi.b  #1,d2
+00001044  B43C 000A                 33      cmp.b   #10,d2
+00001048  6600 0004                 34      bne     Continue
+0000104C  7400                      35      moveq   #0,d2
+0000104E                            36  Continue:
+0000104E  60E4                      37      bra     Loop
+00001050                            38  
+00001050  FFFF FFFF                 39      SIMHALT             ; halt simulator
+00001054                            40  
+00001054                            41  ;                       0  1 2  3  4   5   6   7 8   9
+00001054= 3F 06 5B 4F 66 6D ...     42  DisplayDigits:  dc.b    63,6,91,79,102,109,125,7,127,103
+0000105E                            43      
+0000105E                            44  
+0000105E                            45      END    START        ; last line of source
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+CONTINUE            104E
+DELAY               0
+DISPLAYDIGITS       1054
+LOOP                1034
+START               1000

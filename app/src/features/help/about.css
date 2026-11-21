@@ -1,0 +1,56 @@
+/* The About boxes (AboutDialog.tsx). Owner: H1. */
+
+.e68-about {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-4);
+  overflow: auto;
+}
+
+.e68-about p {
+  margin: 0;
+}
+
+.e68-about__title {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+.e68-about__line {
+  white-space: pre-wrap;
+}
+
+.e68-about__link {
+  color: var(--c-ok);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.e68-about__rule {
+  width: 100%;
+  margin: var(--sp-1) 0;
+  border: 0;
+  border-top: 1px solid var(--c-border);
+}
+
+.e68-about__port {
+  font-weight: 600;
+}
+
+.e68-about__subtitle {
+  color: var(--c-text-muted);
+  font-weight: 400;
+}
+
+.e68-about__check {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.e68-about__answer {
+  min-width: 8ch;
+  font-weight: 600;
+}

@@ -1,0 +1,26 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:30:00 AM
+
+00001000                             1      ORG $1000
+Line 2 ERROR: Division by zero attempted
+00001000= 0000                       2      DC.W 1/0
+Line 3 ERROR: Division by zero attempted
+00001002= 0000                       3      DC.W 1\0
+Line 4 ERROR: Invalid syntax
+00001004=                            4      DC.W 2>1
+00001004  303C 0003                  5      MOVE.W #(1 + 2),D0
+Line 6 ERROR: Comma expected
+00001008                             6      MOVE.W #1 + 2,D0
+00001008  3028 0004                  7      MOVE.W ( 4, A0 ),D0
+Line 8 ERROR: Invalid syntax
+0000100C                             8      MOVE.W 12( A0 ),D0
+0000100C                             9      END $1000
+
+5 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------

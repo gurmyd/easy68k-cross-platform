@@ -1,0 +1,17 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:31:43 AM
+
+00001000                             1      ORG $1000
+00001000                             2      INCLUDE cr.x68
+00001000= 0001                       3      DC.W 1  DC.W 2
+00001000= 0001                       4  -------------------- end include --------------------
+00001002                             5      END $1000
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------

@@ -1,0 +1,348 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:27:41 AM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : ai-bubble-sort
+00000000                             3  * Written by : chatGPT
+00000000                             4  * Date       : 13/8/2026
+00000000                             5  * Description: Created by chatGPT with this prompt
+00000000                             6  *              Create a 68k assembly code program that will run in EASy68K to bubble sort the following list of words into ascending alphabetical order. The list of words is;
+00000000                             7  *              
+00000000                             8  *              the
+00000000                             9  *              quick
+00000000                            10  *              brown
+00000000                            11  *              fox
+00000000                            12  *              jumps
+00000000                            13  *              over
+00000000                            14  *              the
+00000000                            15  *              lazy
+00000000                            16  *              dog
+00000000                            17  *
+00000000                            18  *              Assume you do not know what the words are or how many at assembly time, so you will have to bulid any word pointer lists at runtime.
+00000000                            19  *
+00000000                            20  *              Output the word list at the beginning with a intro messaage saying 'This is a list of words'. Then output the sorted list at the end with the message 'Now they are sorted' 'Now they are sorted'.
+00000000                            21  *-----------------------------------------------------------
+00001000                            22          ORG     $1000
+00001000                            23  
+00001000                            24  START:
+00001000                            25          ; -----------------------------------------
+00001000                            26          ; Clear screen
+00001000                            27          ; -----------------------------------------
+00001000                            28  
+00001000  700B                      29          MOVEQ   #11,D0
+00001002  323C FF00                 30          MOVE.W  #$FF00,D1
+00001006  4E4F                      31          TRAP    #15
+00001008                            32  
+00001008                            33  
+00001008                            34          ; -----------------------------------------
+00001008                            35          ; Build pointer table at runtime
+00001008                            36          ; -----------------------------------------
+00001008                            37  
+00001008  41F9 000012B0             38          LEA     Words,A0
+0000100E  43F9 0000111C             39          LEA     WordIndex,A1
+00001014                            40  
+00001014                            41  BuildIndex:
+00001014  4A10                      42          TST.B   (A0)
+00001016  6708                      43          BEQ.S   IndexDone
+00001018                            44  
+00001018  22C8                      45          MOVE.L  A0,(A1)+
+0000101A                            46  
+0000101A                            47  FindEnd:
+0000101A  4A18                      48          TST.B   (A0)+
+0000101C  66FC                      49          BNE.S   FindEnd
+0000101E                            50  
+0000101E  60F4                      51          BRA.S   BuildIndex
+00001020                            52  
+00001020                            53  
+00001020                            54  IndexDone:
+00001020  22FC 00000000             55          MOVE.L  #0,(A1)+
+00001026                            56  
+00001026                            57  
+00001026                            58          ; -----------------------------------------
+00001026                            59          ; Print original list
+00001026                            60          ; -----------------------------------------
+00001026                            61  
+00001026  43F9 000010F0             62          LEA     IntroMsg,A1
+0000102C  6100 00A8                 63          BSR     PrintString
+00001030  6100 00AA                 64          BSR     CRLF
+00001034                            65  
+00001034  41F9 0000111C             66          LEA     WordIndex,A0
+0000103A  6100 0026                 67          BSR     PrintList
+0000103E                            68  
+0000103E                            69  
+0000103E                            70          ; -----------------------------------------
+0000103E                            71          ; Bubble sort pointer table
+0000103E                            72          ; -----------------------------------------
+0000103E                            73  
+0000103E  6100 0034                 74          BSR     BubbleSort
+00001042                            75  
+00001042                            76  
+00001042                            77          ; -----------------------------------------
+00001042                            78          ; Print sorted list
+00001042                            79          ; -----------------------------------------
+00001042                            80  
+00001042  6100 0098                 81          BSR     CRLF
+00001046                            82  
+00001046  43F9 00001108             83          LEA     SortedMsg,A1
+0000104C  6100 0088                 84          BSR     PrintString
+00001050  6100 008A                 85          BSR     CRLF
+00001054                            86  
+00001054  41F9 0000111C             87          LEA     WordIndex,A0
+0000105A  6100 0006                 88          BSR     PrintList
+0000105E                            89  
+0000105E                            90  
+0000105E                            91          ; -----------------------------------------
+0000105E                            92          ; Exit
+0000105E                            93          ; -----------------------------------------
+0000105E                            94  
+0000105E  7009                      95          MOVEQ   #9,D0
+00001060  4E4F                      96          TRAP    #15
+00001062                            97  
+00001062                            98  
+00001062                            99  ; =================================================
+00001062                           100  ; PrintList
+00001062                           101  ;
+00001062                           102  ; A0 -> pointer table
+00001062                           103  ; table terminated by zero
+00001062                           104  ; =================================================
+00001062                           105  
+00001062                           106  PrintList:
+00001062  2018                     107          MOVE.L  (A0)+,D0
+00001064  670C                     108          BEQ.S   PrintListDone
+00001066                           109  
+00001066  2240                     110          MOVEA.L D0,A1
+00001068  6100 006C                111          BSR     PrintString
+0000106C  6100 006E                112          BSR     CRLF
+00001070                           113  
+00001070  60F0                     114          BRA.S   PrintList
+00001072                           115  
+00001072                           116  PrintListDone:
+00001072  4E75                     117          RTS
+00001074                           118  
+00001074                           119  
+00001074                           120  ; =================================================
+00001074                           121  ; BubbleSort
+00001074                           122  ;
+00001074                           123  ; WordIndex contains pointers to the strings.
+00001074                           124  ; We first count the entries in the table.
+00001074                           125  ; =================================================
+00001074                           126  
+00001074                           127  BubbleSort:
+00001074                           128  
+00001074                           129          ; -----------------------------------------
+00001074                           130          ; Count words in WordIndex
+00001074                           131          ; -----------------------------------------
+00001074                           132  
+00001074  41F9 0000111C            133          LEA     WordIndex,A0
+0000107A  7E00                     134          MOVEQ   #0,D7
+0000107C                           135  
+0000107C                           136  CountWords:
+0000107C  2018                     137          MOVE.L  (A0)+,D0
+0000107E  6704                     138          BEQ.S   CountDone
+00001080                           139  
+00001080  5247                     140          ADDQ.W  #1,D7
+00001082  60F8                     141          BRA.S   CountWords
+00001084                           142  
+00001084                           143  
+00001084                           144  CountDone:
+00001084                           145          ; D7 = number of words
+00001084                           146          ;
+00001084                           147          ; Need N-1 passes.
+00001084  5347                     148          SUBQ.W  #1,D7
+00001086                           149  
+00001086  4A47                     150          TST.W   D7
+00001088  6F2E                     151          BLE.S   SortDone
+0000108A                           152  
+0000108A                           153  
+0000108A                           154  ; -----------------------------------------
+0000108A                           155  ; Outer loop
+0000108A                           156  ; -----------------------------------------
+0000108A                           157  
+0000108A                           158  OuterLoop:
+0000108A                           159  
+0000108A  41F9 0000111C            160          LEA     WordIndex,A0
+00001090  3C07                     161          MOVE.W  D7,D6
+00001092                           162  
+00001092                           163          ; DBRA performs count+1 iterations,
+00001092                           164          ; so reduce the count by one.
+00001092  5346                     165          SUBQ.W  #1,D6
+00001094                           166  
+00001094                           167  
+00001094                           168  ; -----------------------------------------
+00001094                           169  ; Inner loop
+00001094                           170  ; -----------------------------------------
+00001094                           171  
+00001094                           172  InnerLoop:
+00001094                           173  
+00001094  2250                     174          MOVEA.L (A0),A1
+00001096  2468 0004                175          MOVEA.L 4(A0),A2
+0000109A                           176  
+0000109A  6100 001E                177          BSR     CompareStrings
+0000109E                           178  
+0000109E                           179          ; D0 > 0 means first word is alphabetically
+0000109E                           180          ; AFTER the second word, so swap them.
+0000109E                           181  
+0000109E  4A40                     182          TST.W   D0
+000010A0  6F0C                     183          BLE.S   NoSwap
+000010A2                           184  
+000010A2  2210                     185          MOVE.L  (A0),D1
+000010A4  2428 0004                186          MOVE.L  4(A0),D2
+000010A8                           187  
+000010A8  2082                     188          MOVE.L  D2,(A0)
+000010AA  2141 0004                189          MOVE.L  D1,4(A0)
+000010AE                           190  
+000010AE                           191  
+000010AE                           192  NoSwap:
+000010AE  5888                     193          ADDQ.L  #4,A0
+000010B0                           194  
+000010B0  51CE FFE2                195          DBRA    D6,InnerLoop
+000010B4                           196  
+000010B4  5347                     197          SUBQ.W  #1,D7
+000010B6  6ED2                     198          BGT.S   OuterLoop
+000010B8                           199  
+000010B8                           200  
+000010B8                           201  SortDone:
+000010B8  4E75                     202          RTS
+000010BA                           203  
+000010BA                           204  ; =================================================
+000010BA                           205  ; CompareStrings
+000010BA                           206  ;
+000010BA                           207  ; A1 -> first string
+000010BA                           208  ; A2 -> second string
+000010BA                           209  ;
+000010BA                           210  ; Returns:
+000010BA                           211  ;   D0 < 0  first before second
+000010BA                           212  ;   D0 = 0  equal
+000010BA                           213  ;   D0 > 0  first after second
+000010BA                           214  ; =================================================
+000010BA                           215  
+000010BA                           216  CompareStrings:
+000010BA                           217  
+000010BA                           218  CompareLoop:
+000010BA  1219                     219          MOVE.B  (A1)+,D1
+000010BC  141A                     220          MOVE.B  (A2)+,D2
+000010BE                           221  
+000010BE  B202                     222          CMP.B   D2,D1
+000010C0  6606                     223          BNE.S   CharactersDifferent
+000010C2                           224  
+000010C2  4A01                     225          TST.B   D1
+000010C4  670C                     226          BEQ.S   StringsEqual
+000010C6                           227  
+000010C6  60F2                     228          BRA.S   CompareLoop
+000010C8                           229  
+000010C8                           230  
+000010C8                           231  CharactersDifferent:
+000010C8  4881                     232          EXT.W   D1
+000010CA  4882                     233          EXT.W   D2
+000010CC  9242                     234          SUB.W   D2,D1
+000010CE  3001                     235          MOVE.W  D1,D0
+000010D0  4E75                     236          RTS
+000010D2                           237  
+000010D2                           238  
+000010D2                           239  StringsEqual:
+000010D2  7000                     240          MOVEQ   #0,D0
+000010D4  4E75                     241          RTS
+000010D6                           242  
+000010D6                           243  
+000010D6                           244  ; =================================================
+000010D6                           245  ; PrintString
+000010D6                           246  ; =================================================
+000010D6                           247  
+000010D6                           248  PrintString:
+000010D6  700E                     249          MOVEQ   #14,D0
+000010D8  4E4F                     250          TRAP    #15
+000010DA  4E75                     251          RTS
+000010DC                           252  
+000010DC                           253  
+000010DC                           254  ; =================================================
+000010DC                           255  ; CRLF
+000010DC                           256  ; =================================================
+000010DC                           257  
+000010DC                           258  CRLF:
+000010DC  7006                     259          MOVEQ   #6,D0
+000010DE  123C 000D                260          MOVE.B  #13,D1
+000010E2  4E4F                     261          TRAP    #15
+000010E4                           262  
+000010E4  123C 000A                263          MOVE.B  #10,D1
+000010E8  4E4F                     264          TRAP    #15
+000010EA  4E75                     265          RTS
+000010EC                           266  
+000010EC  FFFF FFFF                267          SIMHALT
+000010F0                           268  
+000010F0                           269  ; =================================================
+000010F0                           270  ; Messages
+000010F0                           271  ; =================================================
+000010F0                           272  
+000010F0                           273  IntroMsg:
+000010F0= 54 68 69 73 20 69 ...    274          DC.B    'This is a list of words',0
+00001108                           275  
+00001108                           276  SortedMsg:
+00001108= 4E 6F 77 20 74 68 ...    277          DC.B    'Now they are sorted',0
+0000111C                           278  
+0000111C                           279  
+0000111C                           280  ; =================================================
+0000111C                           281  ; Runtime pointer table
+0000111C                           282  ;
+0000111C                           283  ; IMPORTANT:
+0000111C                           284  ; The program does NOT know how many words
+0000111C                           285  ; there are when assembled.
+0000111C                           286  ;
+0000111C                           287  ; Reserve space for up to 100 words.
+0000111C                           288  ; =================================================
+0000111C                           289  
+0000111C                           290  WordIndex:
+0000111C                           291          DS.L    101
+000012B0                           292  
+000012B0                           293  
+000012B0                           294  ; =================================================
+000012B0                           295  ; Input data
+000012B0                           296  ;
+000012B0                           297  ; The program discovers where each word starts
+000012B0                           298  ; and builds WordIndex at runtime.
+000012B0                           299  ; =================================================
+000012B0                           300  
+000012B0                           301  Words:
+000012B0= 74 68 65 00              302          DC.B    'the',0
+000012B4= 71 75 69 63 6B 00        303          DC.B    'quick',0
+000012BA= 62 72 6F 77 6E 00        304          DC.B    'brown',0
+000012C0= 66 6F 78 00              305          DC.B    'fox',0
+000012C4= 6A 75 6D 70 73 00        306          DC.B    'jumps',0
+000012CA= 6F 76 65 72 00           307          DC.B    'over',0
+000012CF= 74 68 65 00              308          DC.B    'the',0
+000012D3= 6C 61 7A 79 00           309          DC.B    'lazy',0
+000012D8= 64 6F 67 00              310          DC.B    'dog',0
+000012DC= 00                       311          DC.B    0
+000012DD                           312          
+000012DD                           313          end     Start
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+BUBBLESORT          1074
+BUILDINDEX          1014
+CHARACTERSDIFFERENT  10C8
+COMPARELOOP         10BA
+COMPARESTRINGS      10BA
+COUNTDONE           1084
+COUNTWORDS          107C
+CRLF                10DC
+FINDEND             101A
+INDEXDONE           1020
+INNERLOOP           1094
+INTROMSG            10F0
+NOSWAP              10AE
+OUTERLOOP           108A
+PRINTLIST           1062
+PRINTLISTDONE       1072
+PRINTSTRING         10D6
+SORTDONE            10B8
+SORTEDMSG           1108
+START               1000
+STRINGSEQUAL        10D2
+WORDINDEX           111C
+WORDS               12B0

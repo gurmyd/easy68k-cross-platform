@@ -1,0 +1,1 @@
+    ORG     $1000START:    NOP    NOP* bare CR above    SIMHALT    END     START

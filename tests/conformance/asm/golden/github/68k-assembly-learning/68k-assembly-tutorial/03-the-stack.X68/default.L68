@@ -1,0 +1,22 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:28:08 AM
+
+00001000                             1      org     $1000
+00001000                             2  Start:
+00001000                             3  
+00001000  3F3C 0001                  4      move.w #1,-(sp) ; push to the stack. stack pointer always moves down
+00001004  321F                       5      move.w (sp)+,d1 ; pop off the stack. always remember to move the pointer back up when popping
+00001006                             6      
+00001006  FFFF FFFF                  7      simhalt
+0000100A                             8  
+0000100A                             9      end     Start
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+START               1000

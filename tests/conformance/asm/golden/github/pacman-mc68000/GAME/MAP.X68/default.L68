@@ -1,0 +1,278 @@
+00000000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:29:18 AM
+
+00000000                             1  ; -----------------------------------------------------------------------------
+00000000                             2  ; MAP
+00000000                             3  ; -----------------------------------------------------------------------------
+00000000                             4  
+00000000                             5  ; -----------------------------------------------------------------------------
+00000000                             6  MAPINIT
+00000000                             7  ; COPIES MAPDATAO TO MAPDATA. THIS IS NECESSARY (THOUGH IT COULD BE OPTIMIZED)
+00000000                             8  ; SINCE MAPDATA IS MODIFIED WHILE PLAYING WHEN OBJECTS ARE PICKED.
+00000000                             9  ; INPUT    - NONE
+00000000                            10  ; OUTPUT   - NONE
+00000000                            11  ; MODIFIES - NONE
+00000000                            12  ; -----------------------------------------------------------------------------
+00000000  48E7 80C0                 13                            MOVEM.L D0/A0-A1,-(A7)
+Line 14 ERROR: Invalid syntax
+00000004                            14                            MOVE.W  #MAPWITH*MAPHIGH,D0
+Line 15 ERROR: Undefined symbol
+00000004  41F9 004DBD16             15                            LEA     MAPDATA0,A0
+Line 16 ERROR: Undefined symbol
+0000000A  43F9 004DBD16             16                            LEA     MAPDATA,A1
+00000010                            17                            
+00000010                            18                            ; LET US COPY WORD BY WORD
+00000010  E240                      19                            ASR.W   #1,D0
+Line 20 ERROR: Symbol value differs between first and second pass
+00000012                            20  .LOOP                     MOVE.W  (A0)+,(A1)+
+00000012  51C8 0002                 21                            DBRA    D0,.LOOP
+00000016  4CDF 0301                 22                            MOVEM.L (A7)+,D0/A0-A1
+0000001A  4E75                      23                            RTS
+0000001C                            24  
+0000001C                            25  ; -----------------------------------------------------------------------------
+Line 26 ERROR: Symbol value differs between first and second pass
+0000001C                            26  MAPPLOT
+0000001C                            27  ; DRAWS THE MAP.
+0000001C                            28  ; INPUT    : NONE 
+0000001C                            29  ; OUTPUT   : NONE
+0000001C                            30  ; MODIFIES : NONE
+0000001C                            31  ; -----------------------------------------------------------------------------
+0000001C  48E7 FF00                 32                            MOVEM.L D0-D7,-(A7)
+00000020                            33      
+00000020                            34                            ; LOAD EFECTIVE ADDRES INTO A0 (FIRST POS OF MAP)
+Line 35 ERROR: Undefined symbol
+00000020  41F9 004DBD16             35                            LEA     MAPDATA,A0
+00000026                            36  
+00000026                            37                            ; INT J
+Line 38 ERROR: Undefined symbol
+00000026  2E3C 004DBD16             38                            MOVE.L  #MAP_START_Y,D7
+Line 39 ERROR: Comma expected
+0000002C                            39                            MOVE.L  #MAPHIGH-1,D3
+Line 40 ERROR: Symbol value differs between first and second pass
+0000002C                            40  .LOOP1       
+0000002C                            41                            ; INT I
+Line 42 ERROR: Undefined symbol
+0000002C  3C3C BD16                 42                            MOVE.W  #MAP_START_X,D6
+Line 43 ERROR: Comma expected
+00000030                            43                            MOVE.L  #MAPWITH-1,D4
+Line 44 ERROR: Symbol value differs between first and second pass
+00000030                            44  .LOOP2
+00000030  1018                      45                            MOVE.B  (A0)+,D0
+00000032  C0FC 0006                 46                            MULU    #6,D0
+00000036  2240                      47                            MOVE.L  D0,A1
+00000038  4EE9 004E                 48                            JMP     .JUMPLIST(A1)
+0000003C                            49              
+Line 50 ERROR: Symbol value differs between first and second pass
+0000003C                            50  .JUMPLIST:   
+0000003C  4EF9 00000078             51                            JMP     .ISFREE
+00000042  4EF9 0000009A             52                            JMP     .ISWALL
+00000048  4EF9 000000BC             53                            JMP     .ISMINIDOT
+0000004E  4EF9 000000DE             54                            JMP     .ISGIGADOT
+00000054  4EF9 00000100             55                            JMP     .CONTINUE
+0000005A  4EF9 000000BC             56                            JMP     .ISMINIDOT
+00000060  4EF9 00000078             57                            JMP     .ISFREE
+00000066                            58              
+Line 59 ERROR: Symbol value differs between first and second pass
+00000066                            59  .ISFREE
+00000066  103C 0050                 60                            MOVE.B  #80,D0
+Line 61 ERROR: Undefined symbol
+0000006A  223C 004DBD16             61                            MOVE.L  #BLACK,D1
+00000070  4E4F                      62                            TRAP    #15
+00000072                            63                            ; TRAP CODE TO DEFINE PEN COLOR
+00000072  103C 0051                 64                            MOVE.B  #81,D0
+Line 65 ERROR: Undefined symbol
+00000076  223C 004DBD16             65                            MOVE.L  #BLACK,D1
+0000007C  4E4F                      66                            TRAP    #15
+0000007E  4EB9 0000011A             67                            JSR     DRSQUARE
+00000084  6000 007A                 68                            BRA     .CONTINUE
+00000088                            69  
+Line 70 ERROR: Symbol value differs between first and second pass
+00000088                            70  .ISWALL
+00000088                            71                            ; TRAP CODE TO DEFINE PEN COLOR
+00000088  103C 0050                 72                            MOVE.B  #80,D0
+Line 73 ERROR: Undefined symbol
+0000008C  223C 004DBD16             73                            MOVE.L  #BLACK,D1
+00000092  4E4F                      74                            TRAP    #15
+00000094                            75  
+00000094                            76                            ; TRAP CODE TO DEFINE FILL COLOR
+00000094  103C 0051                 77                            MOVE.B  #81,D0
+Line 78 ERROR: Undefined symbol
+00000098  223C 004DBD16             78                            MOVE.L  #BLUE,D1
+0000009E  4E4F                      79                            TRAP    #15
+000000A0  4EB9 0000011A             80                            JSR     DRSQUARE
+000000A6  6000 0058                 81                            BRA     .CONTINUE
+000000AA                            82              
+Line 83 ERROR: Symbol value differs between first and second pass
+000000AA                            83  .ISMINIDOT
+000000AA                            84                            ; TRAP CODE TO DEFINE PEN COLOR
+000000AA  103C 0050                 85                            MOVE.B  #80,D0
+Line 86 ERROR: Undefined symbol
+000000AE  223C 004DBD16             86                            MOVE.L  #WHITE,D1
+000000B4  4E4F                      87                            TRAP    #15
+000000B6                            88                            
+000000B6                            89                            ; TRAP CODE TO DEFINE FILL COLOR
+000000B6  103C 0051                 90                            MOVE.B  #81,D0
+Line 91 ERROR: Undefined symbol
+000000BA  223C 004DBD16             91                            MOVE.L  #WHITE,D1
+000000C0  4E4F                      92                            TRAP    #15
+000000C2                            93      
+000000C2  4EB9 0000013A             94                            JSR     DRMINIDOT
+000000C8  6000 0036                 95                            BRA     .CONTINUE
+000000CC                            96  
+000000CC                            97              
+Line 98 ERROR: Symbol value differs between first and second pass
+000000CC                            98  .ISGIGADOT
+000000CC                            99  
+000000CC                           100                            ; TRAP CODE TO DEFINE PEN COLOR
+000000CC  103C 0050                101                            MOVE.B  #80,D0
+Line 102 ERROR: Undefined symbol
+000000D0  223C 004DBD16            102                            MOVE.L  #WHITE,D1
+000000D6  4E4F                     103                            TRAP    #15
+000000D8                           104      
+000000D8                           105                            ; TRAP CODE TO DEFINE FILL COLOR
+000000D8  103C 0051                106                            MOVE.B  #81,D0
+Line 107 ERROR: Undefined symbol
+000000DC  223C 004DBD16            107                            MOVE.L  #WHITE,D1
+000000E2  4E4F                     108                            TRAP    #15
+000000E4                           109  
+000000E4  4EB9 00000162            110                            JSR     DRGIGADOT
+000000EA  6000 0014                111                            BRA     .CONTINUE
+000000EE                           112      
+Line 113 ERROR: Symbol value differs between first and second pass
+000000EE                           113  .CONTINUE
+000000EE                           114                            ; NEXT TILE
+Line 115 ERROR: Undefined symbol
+000000EE  0686 004DBD16            115                            ADD.L   #CELSIZE,D6
+000000F4  51CC FF4C                116                            DBRA    D4, .LOOP2
+Line 117 ERROR: Undefined symbol
+000000F8  0687 004DBD16            117                            ADD.L   #CELSIZE,D7
+000000FE  51CB FF38                118                            DBRA    D3, .LOOP1
+00000102                           119  
+00000102  4CDF 00FF                120                            MOVEM.L (A7)+,D0-D7
+00000106  4E75                     121                            RTS
+00000108                           122          
+00000108                           123  ; -----------------------------------------------------------------------------
+Line 124 ERROR: Symbol value differs between first and second pass
+00000108                           124  DRSQUARE
+00000108                           125  ; DRAWS SQUARE.
+00000108                           126  ; INPUT    : D6,D7 
+00000108                           127  ; OUTPUT   : NONE
+00000108                           128  ; MODIFIES : NONE
+00000108                           129  ; -----------------------------------------------------------------------------
+00000108                           130  
+00000108  48E7 F800                131                            MOVEM.L D0-D4,-(A7)
+0000010C                           132  
+0000010C                           133                            ; X COORDENATES OF SQUARE
+0000010C  2206                     134                            MOVE.L  D6,D1      ; START X 
+0000010E  2606                     135                            MOVE.L  D6,D3      ; MOVE INIT X TO D3
+00000110                           136                            ; ADD THE CELL SIZE FOR RIGHT X
+Line 137 ERROR: Undefined symbol
+00000110  0643 BD16                137                            ADD.W   #CELSIZE,D3
+00000114                           138                            ; Y COORDENATES OF SQUARE
+00000114  2407                     139                            MOVE.L  D7,D2
+00000116  2807                     140                            MOVE.L  D7,D4
+Line 141 ERROR: Undefined symbol
+00000118  0644 BD16                141                            ADD.W   #CELSIZE,D4
+0000011C                           142      
+0000011C  103C 0057                143                            MOVE.B  #87,D0
+00000120  4E4F                     144                            TRAP    #15
+00000122                           145      
+00000122  4CDF 001F                146                            MOVEM.L (A7)+,D0-D4
+00000126                           147      
+00000126  4E75                     148                            RTS 
+00000128                           149      
+00000128                           150      
+00000128                           151  ; -----------------------------------------------------------------------------
+Line 152 ERROR: Symbol value differs between first and second pass
+00000128                           152  DRMINIDOT 
+00000128                           153  ; DRAWS MINI DOT.
+00000128                           154  ; INPUT    : D6,D7 
+00000128                           155  ; OUTPUT   : NONE
+00000128                           156  ; MODIFIES : NONE
+00000128                           157  ; -----------------------------------------------------------------------------
+00000128                           158  
+00000128  48E7 F800                159                            MOVEM.L  D0-D4,-(A7)
+0000012C                           160  
+0000012C                           161                            ;X COORDENATES OF DOT
+0000012C  2206                     162                            MOVE.L  D6,D1      ; START X 
+0000012E  5C81                     163                            ADD.L   #6,D1
+00000130  2606                     164                            MOVE.L  D6,D3      ; MOVE INIT X TO D3
+00000132                           165                            ; ADD THE CELL SIZE FOR RIGHT X
+Line 166 ERROR: Undefined symbol
+00000132  0643 BD16                166                            ADD.W   #CELSIZE,D3
+00000136  5D83                     167                            SUB.L   #6,D3
+00000138                           168                            ;Y COORDENATES OF DOT
+00000138  2407                     169                            MOVE.L  D7,D2
+0000013A  5C82                     170                            ADD.L   #6,D2
+0000013C  2807                     171                            MOVE.L  D7,D4
+Line 172 ERROR: Undefined symbol
+0000013E  0644 BD16                172                            ADD.W   #CELSIZE,D4
+00000142  5D84                     173                            SUB.L   #6,D4
+00000144                           174      
+00000144  103C 0058                175                            MOVE.B  #88,D0
+00000148  4E4F                     176                            TRAP    #15
+0000014A                           177      
+0000014A  4CDF 001F                178                            MOVEM.L (A7)+,D0-D4
+0000014E                           179      
+0000014E  4E75                     180                            RTS
+00000150                           181      
+00000150                           182  ; -----------------------------------------------------------------------------
+Line 183 ERROR: Symbol value differs between first and second pass
+00000150                           183  DRGIGADOT 
+00000150                           184  ; DRAWS BIG DOT.
+00000150                           185  ; INPUT    : D6,D7 
+00000150                           186  ; OUTPUT   : NONE
+00000150                           187  ; MODIFIES : NONE
+00000150                           188  ; -----------------------------------------------------------------------------
+00000150  48E7 F800                189                            MOVEM.L D0-D4,-(A7)
+00000154                           190  
+00000154                           191                            ;X COORDENATES OF DOT
+00000154  2206                     192                            MOVE.L  D6,D1      ; START X 
+00000156  5881                     193                            ADD.L   #4,D1
+00000158  2606                     194                            MOVE.L  D6,D3      ; MOVE INIT X TO D3
+0000015A                           195                            ; ADD THE CELL SIZE FOR RIGHT X
+Line 196 ERROR: Undefined symbol
+0000015A  0643 BD16                196                            ADD.W   #CELSIZE,D3
+0000015E  5983                     197                            SUB.L   #4,D3
+00000160                           198                            ;Y COORDENATES OF DOT
+00000160  2407                     199                            MOVE.L  D7,D2
+00000162  5882                     200                            ADD.L   #4,D2
+00000164  2807                     201                            MOVE.L  D7,D4
+Line 202 ERROR: Undefined symbol
+00000166  0644 BD16                202                            ADD.W   #CELSIZE,D4
+0000016A  5984                     203                            SUB.L   #4,D4
+0000016C                           204      
+0000016C  103C 0058                205                            MOVE.B  #88,D0
+00000170  4E4F                     206                            TRAP    #15
+00000172                           207      
+00000172  4CDF 001F                208                            MOVEM.L (A7)+,D0-D4
+00000176                           209  
+00000176  4E75                     210                            RTS
+00000178                           211  
+00000178                           212  
+00000178                           213  
+00000178                           214  
+Line 215 WARNING: END directive missing, starting address not set
+
+37 errors detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+DRGIGADOT           162
+DRMINIDOT           13A
+DRSQUARE            11A
+MAPINIT             0
+MAPINIT:LOOP        16
+MAPPLOT             22
+MAPPLOT:CONTINUE    100
+MAPPLOT:ISFREE      78
+MAPPLOT:ISGIGADOT   DE
+MAPPLOT:ISMINIDOT   BC
+MAPPLOT:ISWALL      9A
+MAPPLOT:JUMPLIST    4E
+MAPPLOT:LOOP1       38
+MAPPLOT:LOOP2       42

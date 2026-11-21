@@ -1,0 +1,27 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:33:11 AM
+
+00001000                             1      ORG $1000
+00001000  =0000000D                  2  CR  EQU $0D
+00001000                             3  PRINT   MACRO
+00001000                             4      LEA \1,A1
+00001000                             5      MOVE.B  #14,D0
+00001000                             6      TRAP    #15
+00001000                             7      ENDM
+00001000                             8m START   PRINT   MSG
+0000100C                             9      IF.W D0 <EQ> #1 THEN
+00001014  5241                      10      ADDQ.W  #1,D1
+00001016                            11      ENDI
+00001016  E8C0 0084                 12      BFTST   D0{2:4}
+0000101A= 01                        13      DC.B    1
+0000101C= 1234                      14      DC.W    $1234
+Line 15 WARNING: Origin value is odd (Location counter set to next highest address)
+00001102                            15      ORG $1101
+00001102= 41 20 6C 6F 6E 67 ...     16  MSG DC.B    'A long string constant that does not fit the object field',CR,0
+0000113E= 00000001 00000002 ...     17      DC.L    1,2,3,4,5
+00001152  FFFF FFFF                 18      SIMHALT
+00001156                            19      END START
+
+No errors detected
+1 warning generated

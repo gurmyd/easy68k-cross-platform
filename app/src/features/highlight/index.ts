@@ -1,15 +1,18 @@
-// Feature "highlight": syntax highlighting.
+// Feature "highlight": syntax highlighting of source documents (ARCHITECTURE.md 9.2 E3;
+// editor-ui §9). Owner: W3 > E3.
 //
-// STUB written by W3 (wave 0): an empty feature module, so that the shell runs before this
-// feature exists (ARCHITECTURE.md 3.12.3). E3 owns this folder and replaces the body. The
-// exported names are contract (section 8, "Stubs"): app/src/features/index.ts imports
-// them by name.
-//
-// A feature module may contribute command handlers (`commands`), panels (`panels`), dialogs
-// (`dialogs`) and an `init` function that runs once after every service exists.
-//
-// Owner: W3 > E3.
+// The highlighter has no commands, panels or dialogs. It contributes one CodeMirror extension per
+// document view through the editor-extension registry (app/src/state/editor-extensions.ts); the
+// editor component (E2) applies it. The line analysis is app/src/core/highlight; this folder holds
+// the decorations and the preset resolution (colors.ts), including the port's `Auto` preset.
 
 import type { FeatureModule } from '../../contracts';
+import { createHighlightEnvironment, highlightExtension } from './extension';
 
-export const feature: FeatureModule = { id: 'highlight' };
+export const feature: FeatureModule = {
+  id: 'highlight',
+  init(ctx) {
+    const env = createHighlightEnvironment(ctx);
+    return ctx.editorExtensions.register((doc) => highlightExtension(env, doc));
+  },
+};

@@ -1,0 +1,23 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:31:09 AM
+
+00001000                             1      ORG $1000
+00001000                             2      INCLUDE l.x68
+00001000  4E71                       3      NOP
+Line 4 ERROR: Invalid opcode
+00001002                             4  LAST
+00001002                             5  -------------------- end include --------------------
+00001002                             6      INCLUDE r.x68
+00001002  4E71                       7      NOP
+00001004  4E75                       8      RTS
+00001004  4E75                       9  -------------------- end include --------------------
+00001006                            10      END $1000
+
+1 error detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------

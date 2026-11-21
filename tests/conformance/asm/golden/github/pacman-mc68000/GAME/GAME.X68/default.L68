@@ -1,0 +1,359 @@
+00000000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:28:56 AM
+
+00000000                             1  ; =============================================================================
+00000000                             2  ; GAME MANAGEMENT
+00000000                             3  ; =============================================================================
+00000000                             4  
+00000000                             5  ; -----------------------------------------------------------------------------
+00000000                             6  GAMINIT
+00000000                             7  ; INITIALIZES GAME.
+00000000                             8  ; INPUT    : NONE
+00000000                             9  ; OUTPUT   : NONE
+00000000                            10  ; MODIFIES : NONE
+00000000                            11  ; -----------------------------------------------------------------------------
+Line 12 ERROR: Undefined symbol
+00000000  4EB9 004DBD16             12                            JSR     MAPINIT
+Line 13 ERROR: Undefined symbol
+00000006  4EB9 004DBD16             13                            JSR     PAC_INIT
+Line 14 ERROR: Undefined symbol
+0000000C  4EB9 004DBD16             14                            JSR     BLINKY_INIT
+Line 15 ERROR: Undefined symbol
+00000012  4EB9 004DBD16             15                            JSR     PINKY_INIT
+Line 16 ERROR: Undefined symbol
+00000018  4EB9 004DBD16             16                            JSR     INKY_INIT
+Line 17 ERROR: Undefined symbol
+0000001E  4EB9 004DBD16             17                            JSR     CLYDE_INIT
+Line 18 ERROR: Undefined symbol
+00000024  4EB9 004DBD16             18                            JSR     FPS_INIT
+0000002A                            19                            
+0000002A                            20                            ; LEER HIGHSCORE.TXT
+Line 21 ERROR: Undefined symbol
+0000002A  41F9 004DBD16             21                            LEA     HIGH_SCORE,A0
+00000030  43F9 0000015A             22                            LEA     FILENAME,A1
+00000036  4EB9 00000168             23                            JSR     FILLOAD
+0000003C                            24              
+0000003C  4E75                      25                            RTS
+0000003E                            26  
+0000003E                            27  ; -----------------------------------------------------------------------------
+0000003E                            28  GAMUPD
+0000003E                            29  ; UPDATES THE GAME
+0000003E                            30  ; INPUT    : NONE
+0000003E                            31  ; OUTPUT   : NONE
+0000003E                            32  ; MODIFIES : NONE
+0000003E                            33  ; -----------------------------------------------------------------------------
+Line 34 ERROR: Undefined symbol
+0000003E  0839 0005 005455B8        34                            BTST.B  #5,(KBDEDGE)
+00000046  6700 0022                 35                            BEQ     .NODEBUG
+Line 36 ERROR: Undefined symbol
+0000004A  0C79 0001 005455B8        36                            CMP.W   #1,(DEBUG)
+00000052  6700 000E                 37                            BEQ     .DEBUGOFF
+Line 38 ERROR: Undefined symbol
+00000056  33FC 0001 005455B8        38                            MOVE.W  #1,(DEBUG)
+0000005E  6000 000A                 39                            BRA     .NODEBUG         
+Line 40 ERROR: Undefined symbol
+00000062  33FC 0000 005455B8        40  .DEBUGOFF                 MOVE.W  #0,(DEBUG)
+Line 41 ERROR: Undefined symbol
+0000006A  5279 005455B8             41  .NODEBUG                  ADDQ    #1,(STARTTIM)
+Line 42 ERROR: Undefined symbol
+00000070  0C79 0096 005455B8        42                            CMP.W   #150,(STARTTIM)
+00000078  6D00 00DE                 43                            BLT     .DONE 
+0000007C                            44              
+Line 45 ERROR: Undefined symbol
+0000007C  4EB9 004DBD16             45                            JSR     PAC_UPDATE
+Line 46 ERROR: Undefined symbol
+00000082  4EB9 004DBD16             46                            JSR     BLINKY_UPDATE
+Line 47 ERROR: Undefined symbol
+00000088  4EB9 004DBD16             47                            JSR     PINKY_UPDATE
+Line 48 ERROR: Undefined symbol
+0000008E  4EB9 004DBD16             48                            JSR     INKY_UPDATE
+Line 49 ERROR: Undefined symbol
+00000094  4EB9 004DBD16             49                            JSR     CLYDE_UPDATE
+Line 50 ERROR: Undefined symbol
+0000009A  4EB9 004DBD16             50                            JSR     FPS_UPDATE
+000000A0                            51              
+000000A0                            52                            ; RELEASE GHOSTS
+Line 53 ERROR: Undefined symbol
+000000A0  0C79 0001 005455B8        53                            CMP.W   #1,(INKY_ESTADO)
+000000A8  6E00 0016                 54                            BGT     .CHKCLYDE
+Line 55 ERROR: Undefined symbol
+000000AC  0C79 001E 005455B8        55                            CMP.W   #30,(TOTAL_PELLETS_COL)
+000000B4  6D00 000A                 56                            BLT     .CHKCLYDE
+Line 57 ERROR: Undefined symbol
+000000B8  33FC 0001 005455B8        57                            MOVE.W  #1,(INKY_ESTADO)
+000000C0                            58   
+Line 59 ERROR: Undefined symbol
+000000C0  0C79 0001 005455B8        59  .CHKCLYDE                 CMP.W   #1,(CLYDE_ESTADO)
+000000C8  6E00 0016                 60                            BGT     .CHKWIN
+Line 61 ERROR: Undefined symbol
+000000CC  0C79 0052 005455B8        61                            CMP.W   #82,(TOTAL_PELLETS_COL)
+000000D4  6D00 000A                 62                            BLT     .CHKWIN
+Line 63 ERROR: Undefined symbol
+000000D8  33FC 0001 005455B8        63                            MOVE.W  #1,(CLYDE_ESTADO)
+000000E0                            64                            
+000000E0                            65  .CHKWIN                   ; CHECK WIN
+Line 66 ERROR: Undefined symbol
+000000E0  0C79 BD16 005455B8        66                            CMP.W   #TOTALPELLETS,(TOTAL_PELLETS_COL)
+000000E8  6D00 0014                 67                            BLT     .CHKLOSS
+Line 68 ERROR: Undefined symbol
+000000EC  4279 004DBD16             68                            CLR.W   (STARTTIM)
+Line 69 ERROR: Undefined symbol
+000000F2  33FC 0003 005455B8        69                            MOVE.W  #3,(STANEXT)
+000000FA  6000 005C                 70                            BRA     .DONE
+000000FE                            71              
+000000FE                            72  .CHKLOSS                  ; CHECK LOSS
+Line 73 ERROR: Undefined symbol
+000000FE  0C79 0000 005455B8        73                            CMP.W   #0,(PACMAN_LIVES)
+00000106  6E00 0050                 74                            BGT     .DONE
+Line 75 ERROR: Undefined symbol
+0000010A  2C39 004DBD16             75                            MOVE.L  (HIGH_SCORE2),D6
+Line 76 ERROR: Undefined symbol
+00000110  BCB9 004DBD16             76                            CMP.L   (CURRENT_SCORE),D6
+00000116  6E00 0032                 77                            BGT     .CHSTATE
+0000011A                            78                            
+0000011A                            79                            ; WRITE CURRENT SCORE
+Line 80 ERROR: Undefined symbol
+0000011A  2039 004DBD16             80                            MOVE.L  (CURRENT_SCORE),D0
+00000120                            81              
+00000120  4EB9 000001C6             82                            JSR CONVERT_ASCII
+00000126                            83                            
+00000126                            84                            ; CLOSE ALL OPEN FILES (RECOMENDED)
+00000126  103C 0032                 85                            MOVE.B  #50,D0
+0000012A  4E4F                      86                            TRAP    #15
+0000012C                            87                            
+0000012C                            88                            ; OPEN NEW FILE (CAN OVERWRITE!)
+0000012C  103C 0034                 89                            MOVE.B  #52,D0
+00000130                            90                            ; SPECIFY FILE NAME
+00000130  43F9 0000015A             91                            LEA     FILENAME,A1
+00000136  4E4F                      92                            TRAP    #15
+00000138                            93                            
+00000138                            94                            ; WRITE FILE
+00000138  103C 0036                 95                            MOVE.B  #54,D0
+Line 96 ERROR: Undefined symbol
+0000013C  43F9 004DBD16             96                            LEA     CURRENT_SCORE3,A1
+00000142  4E4F                      97                            TRAP    #15
+00000144                            98              
+00000144                            99                            ; CLOSE THE FILE
+00000144  103C 0038                100                            MOVE.B  #56,D0
+00000148  4E4F                     101                            TRAP    #15
+0000014A                           102  .CHSTATE
+Line 103 ERROR: Undefined symbol
+0000014A  4279 004DBD16            103                            CLR.W   (STARTTIM)
+Line 104 ERROR: Undefined symbol
+00000150  33FC 0004 005455B8       104                            MOVE.W  #4,(STANEXT)                                    
+00000158  4E75                     105  .DONE                     RTS
+0000015A                           106  
+0000015A= 48 49 47 48 53 43 ...    107  FILENAME                  DC.B    'HIGHSCORE.txt',0
+00000168                           108                            DS.W    0
+00000168                           109                            
+00000168                           110  ; -----------------------------------------------------------------------------
+00000168                           111  FILLOAD
+00000168                           112  ; LOADS AN FILE FROM DISK TO MEMORY
+00000168                           113  ; INPUT    : A0 - DESTINATION ADDR. WITH ENOUGH SPACE AVAILABLE.
+00000168                           114  ;            A1 - POINTER TO FILE NAME
+00000168                           115  ; OUTPUT   : NONE
+00000168                           116  ; MODIFIES : NONE
+00000168                           117  ; NOTE     : THE READ DATA LOOP READS 1 BYTE AT A TIME TO ENSURE ALL FILES CAN
+00000168                           118  ;            BE LOADED. HOWEVER, IF THE FILE SIZE IS KNOWN BEFOREHAND, NO LOOP
+00000168                           119  ;            WOULD BE NECESSARY AND A SINGLE CALL TO TRAP #15 TASK 53 WOULD 
+00000168                           120  ;            READ THE WHOLE FILE AS LONG AS THE FILE SIZE IS PLACED INTO D2.L.
+00000168                           121  ; NOTE     : THE ZERO-TERMINATOR (JUST BEFORE CLOSE THE FILE) IS A REQUIREMENT
+00000168                           122  ;            FOR TEXT-FILES IF THE TEXT IS TO BE PRINTED. FOR OTHER USES, IT
+00000168                           123  ;            CAN BE REMOVED.
+00000168                           124  ; -----------------------------------------------------------------------------
+00000168  48E7 F0C0                125                            MOVEM.L D0-D3/A0-A1,-(A7)
+0000016C                           126                            ; CLOSE ALL FILES
+0000016C  103C 0032                127                            MOVE.B  #50,D0
+00000170  4E4F                     128                            TRAP    #15
+00000172                           129                            
+00000172                           130                            ; OPEN FILE (ASSUMES A1 POINTS TO FILENAME)
+00000172  103C 0033                131                            MOVE.B  #51,D0
+00000176  4E4F                     132                            TRAP    #15        ; D1.L:=FILE HANDLER
+00000178  4243                     133                            CLR.W   D3
+0000017A                           134                            
+0000017A                           135                            ; READ DATA
+0000017A  2248                     136                            MOVE.L  A0,A1      ; A1 MUST BE THE BUFFER ADDRESS
+0000017C  103C 0035                137  .LOOP                     MOVE.B  #53,D0     ; READ DATA TASK
+00000180  7401                     138                            MOVE.L  #1,D2      ; BYTES TO READ (ONE BY ONE)
+00000182  4E4F                     139                            TRAP    #15
+00000184  5243                     140                            ADDQ    #1,D3
+00000186  D3C2                     141                            ADD.L   D2,A1      ; ADVANCE POINTER
+00000188  4A00                     142                            TST.B   D0         ; END OF FILE OR ERROR?
+0000018A  67F0                     143                            BEQ     .LOOP      ; NO: READ MORE
+0000018C  4221                     144                            CLR.B   -(A1)      ; PUT A ZERO-TERMINATOR.
+0000018E                           145                            
+0000018E                           146                            ; CLOSE THE FILE
+0000018E  103C 0038                147                            MOVE.B  #56,D0
+00000192  4E4F                     148                            TRAP    #15
+00000194  5343                     149                            SUBQ    #1,D3
+00000196  3803                     150                            MOVE.W  D3,D4
+00000198  2248                     151                            MOVE.L  A0,A1
+0000019A                           152              
+0000019A                           153  .CONVERT_LOOP
+0000019A                           154                            ; CONVERT READ BUFFER TO NUMBER
+0000019A  4A03                     155                            TST.B   D3
+0000019C  6700 000A                156                            BEQ     .DONE
+000001A0  0419 0030                157                            SUB.B   #$30,(A1)+
+000001A4  5303                     158                            SUB.B   #1,D3
+000001A6  60F2                     159                            BRA     .CONVERT_LOOP            
+000001A8                           160  .DONE
+000001A8  7000                     161                            MOVEQ   #0,D0
+000001AA                           162  .LOOP_CONCAT:
+000001AA  1418                     163                            MOVE.B  (A0)+,D2
+000001AC  0202 000F                164                            ANDI.B  #$0F,D2
+000001B0  C0FC 000A                165                            MULU    #10,D0
+000001B4  D002                     166                            ADD.B   D2,D0
+000001B6  5304                     167                            SUBQ.B  #1,D4
+000001B8                           168  
+000001B8  66F0                     169                            BNE     .LOOP_CONCAT
+000001BA                           170              
+Line 171 ERROR: Undefined symbol
+000001BA  23C0 005455B8            171                            MOVE.L  D0,(HIGH_SCORE2)
+000001C0                           172                      
+000001C0  4CDF 030F                173                            MOVEM.L (A7)+,D0-D3/A0-A1
+000001C4  4E75                     174                            RTS
+000001C6                           175                            
+000001C6                           176  ; -----------------------------------------------------------------------------
+000001C6                           177  CONVERT_ASCII
+000001C6                           178  ; SAVES D0 IN CURRENT_SCORE3 BUFFER IN ASCII
+000001C6                           179  ; INPUT    : D0 - DATA
+000001C6                           180  ; OUTPUT   : D2 - LENGHT
+000001C6                           181  ; MODIFIES : NONE
+000001C6                           182  ; -----------------------------------------------------------------------------
+000001C6  48E7 D0C0                183                            MOVEM.L D0-D1/D3/A0-A1,-(A7)
+Line 184 ERROR: Undefined symbol
+000001CA  41F9 004DBD16            184                            LEA     CURRENT_SCORE2,A0
+000001D0  7200                     185                            MOVEQ   #0,D1      ; DIGIT COUNTER
+000001D2  10FC 0000                186                            MOVE.B  #0,(A0)+
+000001D6                           187      
+000001D6                           188  .CONVERT_LOOP
+000001D6                           189                            ; SUBTRACT THE NECESSARY VALUE TO REACH A 
+000001D6                           190                            ; MULTIPLE OF 10, STORE THE NUMBER OF TIMES 
+000001D6                           191                            ; WE HAVE SUBTRACTED IN THE BUFFER (BYTE)
+000001D6                           192                            ; REPEAT DIVISION UNTIL THE RESULT OF THE 
+000001D6                           193                            ; SUBTRACTION IS 0
+000001D6                           194  
+000001D6                           195                            ; WE HAVE THE NUMBERS IN THE BUFFER IN REVERSE ORDER
+000001D6                           196                            ; READ BUFFER2 AND WRITE IN THE CORRECT ORDER, 
+000001D6                           197                            ; FOR THIS WE NEED TO HAVE STORED THE LENGTH
+000001D6                           198                            ; ADD 30 TO EACH NUMBER
+000001D6                           199  
+000001D6                           200                            ; NOTE: THE FIRST BYTE OF THE BUFFER IN REVERSE 
+000001D6                           201                            ; ORDER WILL ALWAYS BE 0
+000001D6                           202              
+000001D6  5241                     203                            ADDQ.W  #1,D1
+000001D8  4A40                     204                            TST.W   D0
+000001DA  6700 0020                205                            BEQ     .REVES
+000001DE  80FC 000A                206                            DIVU    #10,D0
+000001E2  4243                     207                            CLR.W   D3
+000001E4  2400                     208  .REPETIR                  MOVE.L  D0,D2
+000001E6  84FC 000A                209                            DIVU    #10,D2
+000001EA  4842                     210                            SWAP    D2
+000001EC  4A42                     211                            TST.W   D2
+000001EE  6700 0008                212                            BEQ     .SEGUIR
+000001F2  5340                     213                            SUBQ.W  #1,D0
+000001F4  5243                     214                            ADDQ.W  #1,D3
+000001F6  60EC                     215                            BRA     .REPETIR
+000001F8  10C3                     216  .SEGUIR                   MOVE.B  D3,(A0)+
+000001FA  60DA                     217                            BRA     .CONVERT_LOOP
+000001FC                           218  .REVES
+000001FC  3401                     219                            MOVE.W  D1,D2
+000001FE  5341                     220                            SUBQ.W  #1,D1
+Line 221 ERROR: Undefined symbol
+00000200  43F9 004DBD16            221                            LEA     CURRENT_SCORE3,A1
+00000206                           222  .LOOP_REVES 
+00000206  12A0                     223                            MOVE.B  -(A0),(A1)
+00000208  0619 0030                224                            ADD.B   #48,(A1)+
+0000020C  51C9 FFF8                225                            DBRA    D1,.LOOP_REVES
+00000210  12FC 0000                226                            MOVE.B  #0,(A1)+
+00000214                           227                            
+00000214  4CDF 030B                228                            MOVEM.L (A7)+,D0-D1/D3/A0-A1
+00000218  4E75                     229                            RTS
+0000021A                           230                            
+0000021A                           231  ; -----------------------------------------------------------------------------
+0000021A                           232  GAMPLOT
+0000021A                           233  ; PLOTS THE GAME
+0000021A                           234  ; INPUT    : NONE
+0000021A                           235  ; OUTPUT   : NONE
+0000021A                           236  ; MODIFIES : NONE
+0000021A                           237  ; -----------------------------------------------------------------------------
+Line 238 ERROR: Undefined symbol
+0000021A  4EB9 004DBD16            238                            JSR     MAPPLOT
+Line 239 ERROR: Undefined symbol
+00000220  4EB9 004DBD16            239                            JSR     PAC_PLOT
+Line 240 ERROR: Undefined symbol
+00000226  4EB9 004DBD16            240                            JSR     SCOPLOT
+Line 241 ERROR: Undefined symbol
+0000022C  4EB9 004DBD16            241                            JSR     BLINKY_PLOT
+Line 242 ERROR: Undefined symbol
+00000232  4EB9 004DBD16            242                            JSR     PINKY_PLOT
+Line 243 ERROR: Undefined symbol
+00000238  4EB9 004DBD16            243                            JSR     INKY_PLOT
+Line 244 ERROR: Undefined symbol
+0000023E  4EB9 004DBD16            244                            JSR     CLYDE_PLOT
+Line 245 ERROR: Undefined symbol
+00000244  4EB9 004DBD16            245                            JSR     VANISH
+Line 246 ERROR: Undefined symbol
+0000024A  4EB9 004DBD16            246                            JSR     FPS_PLOT
+00000250                           247  
+00000250  4E75                     248                            RTS
+00000252                           249  
+00000252                           250  
+00000252                           251  
+00000252                           252  
+00000252                           253  
+00000252                           254  
+00000252                           255  
+00000252                           256  
+00000252                           257  
+00000252                           258  
+00000252                           259  
+00000252                           260  
+00000252                           261  
+00000252                           262  
+00000252                           263  
+00000252                           264  
+00000252                           265  
+00000252                           266  
+00000252                           267  
+00000252                           268  
+00000252                           269  
+00000252                           270  
+00000252                           271  
+00000252                           272  
+00000252                           273  
+00000252                           274  
+00000252                           275  
+00000252                           276  
+Line 277 WARNING: END directive missing, starting address not set
+
+48 errors detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+CONVERT_ASCII       1C6
+CONVERT_ASCII:CONVERT_LOOP  1D6
+CONVERT_ASCII:LOOP_REVES  206
+CONVERT_ASCII:REPETIR  1E4
+CONVERT_ASCII:REVES  1FC
+CONVERT_ASCII:SEGUIR  1F8
+FILENAME            15A
+FILLOAD             168
+FILLOAD:CONVERT_LOOP  19A
+FILLOAD:DONE        1A8
+FILLOAD:LOOP        17C
+FILLOAD:LOOP_CONCAT  1AA
+GAMINIT             0
+GAMPLOT             21A
+GAMUPD              3E
+GAMUPD:CHKCLYDE     C0
+GAMUPD:CHKLOSS      FE
+GAMUPD:CHKWIN       E0
+GAMUPD:CHSTATE      14A
+GAMUPD:DEBUGOFF     62
+GAMUPD:DONE         158
+GAMUPD:NODEBUG      6A

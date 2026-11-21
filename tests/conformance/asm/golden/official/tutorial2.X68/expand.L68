@@ -1,0 +1,130 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:26:16 AM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title         : Tutorial 2 for EASy68k
+00000000                             3  * Written by    : Chuck Kelly
+00000000                             4  * Date Created  : Mar-07-2003
+00000000                             5  * Dec-25-2012 by CK, Uses SIMHALT
+00000000                             6  * Description   :
+00000000                             7  *
+00000000                             8  * A simple number guessing game. The program generates a random number between 1 and 100
+00000000                             9  * and asks the player to guess the number. After each guess the program displays higher or lower
+00000000                            10  * until the player guesses the correct number.
+00000000                            11  *
+00000000                            12  * Demonstrates Input/Output & Branching.
+00000000                            13  *-----------------------------------------------------------
+00001000                            14      ORG     $1000
+00001000                            15  
+00001000  103C 000E                 16  start   move.b  #14,d0      Display instructions
+00001004  43F9 00001074             17      lea     instrMsg,a1
+0000100A  4E4F                      18      trap    #15
+0000100C                            19  
+0000100C                            20  * Generate random number for player to guess
+0000100C                            21  * Uses timer as random number generator. This may not be the best way to
+0000100C                            22  * generate a random number but it will work for this demonstration.
+0000100C                            23  * Trap code 8 returns time in hundredths of a second since midnight in D1.L
+0000100C                            24  
+0000100C  103C 0008                 25      move.b  #8,d0
+00001010  4E4F                      26      trap    #15
+00001012  C2BC 005FFFFF             27      and.l   #$5FFFFF,d1     prevent overflow in divu
+00001018  82FC 0064                 28      divu    #100,d1         time count / 100
+0000101C  4841                      29      swap    d1              swap upper and lower words of D1 to put remainder in low word
+0000101E  5241                      30      addq.w  #1,d1           d1.w contains number from 1 to 100
+00001020  3401                      31      move    d1,d2           d2 = d1
+00001022                            32  
+00001022                            33  again:
+00001022  103C 000E                 34      move.b  #14,d0          Display 'enter guess' prompt
+00001026  43F9 000010D9             35      lea     enterMsg,a1
+0000102C  4E4F                      36      trap    #15
+0000102E                            37  
+0000102E  103C 0004                 38      move.b  #4,d0           get user guess in D1.L
+00001032  4E4F                      39      trap    #15
+00001034                            40  
+00001034  B27C 0000                 41      cmp     #0,d1           if exit
+00001038  6700 0036                 42      beq     end
+0000103C                            43  
+0000103C  B242                      44      cmp     d2,d1           compare the user guess in d1 to the number in d2
+0000103E  6200 0014                 45      bhi     tooBig          if the guess is too big
+00001042  6500 001E                 46      blo     tooSmall        if the guess is too small
+00001046                            47  
+00001046                            48  * The user guessed the number
+00001046  103C 000E                 49      move.b  #14,d0          Display 'Good Guess' message
+0000104A  43F9 000010EE             50      lea     goodMsg,a1
+00001050  4E4F                      51      trap    #15
+00001052                            52  
+00001052  60AC                      53      bra     start           goto start
+00001054                            54  
+00001054  103C 000E                 55  tooBig  move.b  #14,d0      Display 'Too Big'
+00001058  43F9 0000110F             56      lea     bigMsg,a1
+0000105E  4E4F                      57      trap    #15
+00001060                            58  
+00001060  60C0                      59      bra     again           guess again
+00001062                            60  
+00001062  103C 000E                 61  tooSmall    move.b  #14,d0  Display 'Too Small'
+00001066  43F9 00001129             62      lea     smallMsg,a1
+0000106C  4E4F                      63      trap    #15
+0000106E                            64  
+0000106E  60B2                      65      bra     again           guess again
+00001070                            66  
+00001070  FFFF FFFF                 67  end     SIMHALT
+00001074                            68  
+00001074  =0000000D                 69  CR      EQU     $0D
+00001074  =0000000A                 70  LF      EQU     $0A
+00001074                            71  
+00001074= 0D 0A                     72  instrMsg    dc.b    CR,LF
+00001076= 2D 2D 2D 2D 2D 20 4E      73      dc.b    '----- Number guessing game -----',CR,LF
+          75 6D 62 65 72 20 67  
+          75 65 73 73 69 6E 67  
+          20 67 61 6D 65 20 2D  
+          2D 2D 2D 2D 0D 0A     
+00001098= 20 47 75 65 73 73 20      78      dc.b    ' Guess the number from 1 to 100',CR,LF
+          74 68 65 20 6E 75 6D  
+          62 65 72 20 66 72 6F  
+          6D 20 31 20 74 6F 20  
+          31 30 30 0D 0A        
+000010B9= 20 45 6E 74 65 72 20      83      dc.b    ' Enter a 0 to quit the game',CR,LF,CR,LF,0
+          61 20 30 20 74 6F 20  
+          71 75 69 74 20 74 68  
+          65 20 67 61 6D 65 0D  
+          0A 0D 0A 00           
+000010D9                            88  
+000010D9= 0D 0A 45 6E 74 65 72      89  enterMsg    dc.b    CR,LF,'Enter your guess: ',0
+          20 79 6F 75 72 20 67  
+          75 65 73 73 3A 20 00  
+000010EE= 0D 0A 47 6F 6F 64 20      92  goodMsg     dc.b    CR,LF,'Good guess, that is correct!',CR,LF,0
+          67 75 65 73 73 2C 20  
+          74 68 61 74 20 69 73  
+          20 63 6F 72 72 65 63  
+          74 21 0D 0A 00        
+0000110F= 0D 0A 59 6F 75 72 20      97  bigMsg      dc.b    CR,LF,'Your guess is too big',CR,LF,0
+          67 75 65 73 73 20 69  
+          73 20 74 6F 6F 20 62  
+          69 67 0D 0A 00        
+00001129= 0D 0A 59 6F 75 72 20     101  smallMsg    dc.b    CR,LF,'Your guess is too small',CR,LF,0
+          67 75 65 73 73 20 69  
+          73 20 74 6F 6F 20 73  
+          6D 61 6C 6C 0D 0A 00  
+00001145                           105          
+00001145                           106      END     start
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+AGAIN               1022
+BIGMSG              110F
+CR                  D
+END                 1070
+ENTERMSG            10D9
+GOODMSG             10EE
+INSTRMSG            1074
+LF                  A
+SMALLMSG            1129
+START               1000
+TOOBIG              1054
+TOOSMALL            1062

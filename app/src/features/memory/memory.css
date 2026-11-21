@@ -1,0 +1,128 @@
+/* The Memory panel (MemoryPanel.tsx). Owner: U2. */
+
+.e68-memory {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+
+.e68-memory__main {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: auto;
+}
+
+.e68-memory__strip {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-3);
+  padding: var(--sp-1) var(--sp-2);
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-panel);
+}
+
+.e68-memory__header {
+  flex: none;
+  padding: var(--sp-1) var(--sp-1) 0;
+  color: var(--c-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-md);
+  line-height: 1.2;
+  white-space: pre;
+}
+
+.e68-memory__rows {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 var(--sp-1);
+  font-family: var(--font-mono);
+  font-size: var(--fs-md);
+  line-height: 1.2;
+  white-space: pre;
+  cursor: text;
+  outline: none;
+}
+
+.e68-memory__rows:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--c-accent);
+}
+
+.e68-memory__row {
+  width: max-content;
+}
+
+.e68-memory__row[data-invalid='true'] .e68-memory__addr,
+.e68-memory__row[data-invalid='true'] .e68-memory__hex,
+.e68-memory__row[data-invalid='true'] .e68-memory__ascii {
+  color: var(--c-danger);
+}
+
+.e68-memory__measure {
+  position: absolute;
+  top: 0;
+  left: var(--sp-1);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* The one-cell frame of the original's cursor; shown while the rows have the focus. */
+.e68-memory__cursor {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid var(--c-text);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.e68-memory__rows:focus .e68-memory__cursor {
+  visibility: visible;
+  animation: e68-memory-blink 1s steps(1, end) infinite;
+}
+
+@keyframes e68-memory-blink {
+  50% {
+    border-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .e68-memory__rows:focus .e68-memory__cursor {
+    animation: none;
+  }
+}
+
+.e68-memory__status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.e68-memory__side {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-1);
+  border-left: 1px solid var(--c-border);
+  background: var(--c-panel);
+}
+
+.e68-memory__sidelabel {
+  margin-top: var(--sp-2);
+  color: var(--c-text-muted);
+  font-size: var(--fs-sm);
+}

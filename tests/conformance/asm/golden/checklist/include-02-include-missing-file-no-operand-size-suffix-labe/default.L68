@@ -1,0 +1,29 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:31:35 AM
+
+00001000                             1      ORG $1000
+00001000                             2      INCLUDE missing.x68
+Line 3 ERROR: Unable to access specified file
+00001000                             3      INCLUDE missing.x68
+Line 4 ERROR: Unable to access specified file
+00001000                             4      INCLUDE
+Line 5 ERROR: Invalid size code
+00001000                             5      INCLUDE.W inc1.x68
+00001000                             6  L   INCLUDE inc1.x68
+00001000  4E71                       7      NOP
+00001000  4E71                       8  -------------------- end include --------------------
+00001002                             9      INCLUDE inc1.x68    comment
+Line 10 ERROR: Unable to access specified file
+00001002                            10      INCLUDE inc1.x68    comment
+00001002  60FC                      11      BRA L
+00001004                            12      END $1000
+
+4 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+L                   1000

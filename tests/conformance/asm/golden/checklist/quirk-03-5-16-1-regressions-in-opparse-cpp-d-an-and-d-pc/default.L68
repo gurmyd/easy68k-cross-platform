@@ -1,0 +1,36 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:30:58 AM
+
+00001000                             1      ORG $1000
+00001000= 0001 0002 0003 0004        2  TABLE   DC.W 1,2,3,4
+00001008  =00000008                  3  PTR EQU 8
+00001008  =00000004                  4  SCORE   EQU 4
+00001008  323B 00FE                  5      MOVE.W (TABLE,PC,D0.W),D1
+0000100C  323B 00F2                  6      MOVE.W TABLE(PC,D0.W),D1
+00001010  323B 00FE                  7      MOVE.W (PC,D0.W),D1
+00001014  343B 90FE                  8      MOVE.W (PC,A1),D2
+Line 9 ERROR: Invalid syntax
+00001018                             9      MOVE.W ($C,A0),D1
+Line 10 ERROR: Invalid syntax
+00001018                            10      MOVE.W (PTR,A0),D1
+Line 11 ERROR: Invalid syntax
+00001018                            11      MOVE.W (SCORE,A0,D1.L),D2
+00001018  3228 001C                 12      MOVE.W ($1C,A0),D1
+0000101C  4EFB 10FE                 13      JMP (TABLE,PC,D1.W)
+00001020  41FB 08FE                 14      LEA (TABLE,PC,D0.L),A0
+00001024  083B 0003 00FC            15      BTST #3,(TABLE,PC,D0.W)
+0000102A  303A EFD8                 16      MOVE.W (SCORE,PC),D0
+0000102E  3028 0008                 17      MOVE.W PTR(A0),D0
+00001032                            18      END $1000
+
+3 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+PTR                 8
+SCORE               4
+TABLE               1000

@@ -1,0 +1,33 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:30:44 AM
+
+00001000                             1      ORG $1000
+00001000= 4142 4300                  2      DC.W 'ABC'
+00001004= 41424344 45000000          3      DC.L 'ABCDE'
+0000100C= 41 42 43                   4      DC.B 'AB', 'C'
+0000100F= 41 42 43                   5      DC.B 'AB','C'
+00001012=                            6      DC.B ''
+00001012= 42                         7      DC.B 'A'+1
+00001013= 01 02                      8      DC.B 1 , 2
+00001016= 0005                       9      DC.W 5(A0)
+Line 10 ERROR: Invalid syntax
+00001018= 01                        10      DC.B 1,"x",2
+Line 11 ERROR: Immediate data exceeds 8 bits
+00001019= 00                        11      DC.B 256
+Line 12 ERROR: Immediate data exceeds 16 bits
+0000101A= 0000                      12      DC.W 65536
+Line 13 ERROR: Invalid size code
+0000101C= 0001                      13      DC.S 1
+Line 14 ERROR: Invalid syntax
+0000101E=                           14      DC.B
+0000101E= 49 54 27 53               15      DC.B 'IT''S'
+00001022                            16      END $1000
+
+5 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------

@@ -1,0 +1,20 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:30:41 AM
+
+00001000                             1      ORG $1000
+00001000                             2      INCLUDE inc.x68
+00001000                             3   * listed comment
+00001000                             4  ; listed comment
+00001000  4E71                       5      NOP
+00001002                             6  
+00001002                             7  -------------------- end include --------------------
+00001002                             8      END $1000
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------

@@ -1,0 +1,5 @@
+	ORG $1000
+	INCLUDE crlf.x68
+	INCLUDE lf.x68
+	INCLUDE z.x68
+	END $1000

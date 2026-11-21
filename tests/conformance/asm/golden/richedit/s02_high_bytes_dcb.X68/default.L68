@@ -1,0 +1,19 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:34:21 AM
+
+00001000                             1      ORG     $1000
+00001000                             2  START:
+00001000= 80 81 82 83 84 85 ...      3      DC.B    '€‚ƒ„…†‡ˆ‰Š‹Œ‘’“”•–—˜™š›œŸ ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»',0
+0000103D= BC BD BE BF C0 C1 ...      4      DC.B    '¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏĞÑÒÓÔÕÖ×ØÙÚÛÜİŞßàáâãäåæçèéêëìíîïğñòóôõö÷øùúûüışÿ',0
+00001082  FFFF FFFF                  5      SIMHALT
+00001086                             6      END     START
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+START               1000

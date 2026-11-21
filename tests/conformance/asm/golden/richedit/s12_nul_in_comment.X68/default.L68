@@ -1,0 +1,17 @@
+00000000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:34:19 AM
+
+00001000                             1      ORG     $1000
+00001000                             2  START:
+00001000                             3  * before NUL
+Line 4 WARNING: END directive missing, starting address not set
+
+No errors detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+START               1000

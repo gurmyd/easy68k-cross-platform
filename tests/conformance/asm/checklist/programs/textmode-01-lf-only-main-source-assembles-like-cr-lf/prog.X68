@@ -1,0 +1,6 @@
+	ORG $1000
+M	MACRO
+	NOP
+	ENDM
+	M
+	END $1000

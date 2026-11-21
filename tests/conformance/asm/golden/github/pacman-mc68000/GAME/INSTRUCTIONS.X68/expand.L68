@@ -1,0 +1,198 @@
+00000000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:28:01 AM
+
+00000000                             1  ; =============================================================================
+00000000                             2  ; INSTRUCTIONS SCREEN
+00000000                             3  ; =============================================================================
+00000000                             4  
+00000000                             5  ; -----------------------------------------------------------------------------
+00000000                             6  INSINIT
+00000000                             7  ; INSTRUCTIONS SCREEN INIT
+00000000                             8  ; INPUT    : NONE
+00000000                             9  ; OUTPUT   : NONE
+00000000                            10  ; MODIFIES : NONE
+00000000                            11  ; -----------------------------------------------------------------------------
+Line 12 ERROR: Undefined symbol
+00000000  4279 004DBD16             12                            CLR.W   (INSTIMER)
+00000006  4E75                      13                            RTS
+00000008                            14  
+00000008                            15  ; -----------------------------------------------------------------------------
+00000008                            16  INSUPD
+00000008                            17  ; INSTRUCTIONS SCREEN UPDATE
+00000008                            18  ; INPUT    : NONE
+00000008                            19  ; OUTPUT   : NONE
+00000008                            20  ; MODIFIES : NONE
+00000008                            21  ; -----------------------------------------------------------------------------
+Line 22 ERROR: Undefined symbol
+00000008  0839 0004 005455B8        22                            BTST.B  #4,(KBDEDGE)
+00000010  6700 0008                 23                            BEQ     .CONT
+Line 24 ERROR: Undefined symbol
+00000014  4279 004DBD16             24                            CLR.W   (STANEXT)
+Line 25 ERROR: Undefined symbol
+0000001A  5279 005455B8             25  .CONT                     ADDQ.W  #1,(INSTIMER)
+Line 26 ERROR: Undefined symbol
+00000020  0C79 BD16 005455B8        26                            CMP.W   #INSMAXTM,(INSTIMER)
+00000028  6D00 0008                 27                            BLT     .DONE
+Line 28 ERROR: Undefined symbol
+0000002C  4279 004DBD16             28                            CLR.W   (STANEXT)
+00000032                            29  .DONE
+00000032  4E75                      30                            RTS
+00000034                            31  
+00000034                            32  ; -----------------------------------------------------------------------------
+00000034                            33  INSPLOT
+00000034                            34  ; INSTRUCTIONS SCREEN PLOT
+00000034                            35  ; INPUT    : NONE
+00000034                            36  ; OUTPUT   : NONE
+00000034                            37  ; MODIFIES : NONE
+00000034                            38  ; -----------------------------------------------------------------------------
+00000034                            39  
+00000034  48E7 C0C0                 40                            MOVEM.L D0-D1/A0-A1,-(A7)
+00000038  4281                      41                            CLR.L   D1
+0000003A  103C 0051                 42                            MOVE.B  #81,D0
+0000003E  4E4F                      43                            TRAP    #15
+00000040  103C 000B                 44                            MOVE.B  #11,D0
+00000044  43F9 0000027A             45                            LEA     .TXTLST,A1
+0000004A  2219                      46  .LOOP                     MOVE.L  (A1)+,D1
+0000004C  6700 000C                 47                            BEQ     .CHECKBLINK
+00000050  2041                      48                            MOVE.L  D1,A0
+Line 49 ERROR: Undefined symbol
+00000052  4EB9 004DBD16             49                            JSR     UTLPRINT
+00000058  60F0                      50                            BRA     .LOOP
+0000005A                            51  .CHECKBLINK
+Line 52 ERROR: Undefined symbol
+0000005A  0839 0004 005455B8        52                            BTST.B  #4,(SCRCYCCT)
+00000062  6700 0012                 53                            BEQ     .DONE
+00000066                            54              
+00000066  41F9 00000252             55                            LEA     .TXT12,A0
+0000006C  103C 001E                 56                            MOVE.B  #30,D0                  
+Line 57 ERROR: Undefined symbol
+00000070  4EB9 004DBD16             57                            JSR     UTLPRINT
+00000076                            58              
+00000076  4CDF 0303                 59  .DONE                     MOVEM.L (A7)+,D0-D1/A0-A1
+0000007A  4E75                      60                            RTS
+0000007C                            61                            
+0000007C= 57 45 4C 43 4F 4D 45      62  .TXT1                     DC.B    'WELCOME TO A VERSION PAC-MAN MADE IN EASY 68000!',0
+          20 54 4F 20 41 20 56  
+          45 52 53 49 4F 4E 20  
+          50 41 43 2D 4D 41 4E  
+          20 4D 41 44 45 20 49  
+          4E 20 45 41 53 59 20  
+          36 38 30 30 30 21 00  
+000000AD= 59 4F 55 52 20 47 4F      69  .TXT2                     DC.B    'YOUR GOAL IN THIS GAME IS TO SOCRE HAS HIGH AS POSIBLE',0
+          41 4C 20 49 4E 20 54  
+          48 49 53 20 47 41 4D  
+          45 20 49 53 20 54 4F  
+          20 53 4F 43 52 45 20  
+          48 41 53 20 48 49 47  
+          48 20 41 53 20 50 4F  
+          53 49 42 4C 45 00     
+000000E4= 4F 46 20 43 4F 55 52      77  .TXT3                     DC.B    'OF COURSE IT WONT BE EASY, BLINKY INKY PINKY AND CLYDE',0
+          53 45 20 49 54 20 57  
+          4F 4E 54 20 42 45 20  
+          45 41 53 59 2C 20 42  
+          4C 49 4E 4B 59 20 49  
+          4E 4B 59 20 50 49 4E  
+          4B 59 20 41 4E 44 20  
+          43 4C 59 44 45 00     
+0000011B= 57 49 4C 4C 20 54 52      85  .TXT4                     DC.B    'WILL TRY AS HARD AS THEY CAN TO STOP YOU',0
+          59 20 41 53 20 48 41  
+          52 44 20 41 53 20 54  
+          48 45 59 20 43 41 4E  
+          20 54 4F 20 53 54 4F  
+          50 20 59 4F 55 00     
+00000144= 54 52 59 20 41 56 4F      91  .TXT5                     DC.B    'TRY AVOIDING THEM BY MOVING PAC-MAN USING THE  KEYBOARD',0
+          49 44 49 4E 47 20 54  
+          48 45 4D 20 42 59 20  
+          4D 4F 56 49 4E 47 20  
+          50 41 43 2D 4D 41 4E  
+          20 55 53 49 4E 47 20  
+          54 48 45 20 20 4B 45  
+          59 42 4F 41 52 44 00  
+0000017C= 48 4F 57 20 54 4F 20      99  .TXT6                     DC.B    'HOW TO DO IT? YOU MAY ASK.',0
+          44 4F 20 49 54 3F 20  
+          59 4F 55 20 4D 41 59  
+          20 41 53 4B 2E 00     
+00000197= 49 54 20 49 53 20 45     103  .TXT7                     DC.B    'IT IS EASY: JUST USE W KEY TO MOVE PACMAN UP!',0
+          41 53 59 3A 20 4A 55  
+          53 54 20 55 53 45 20  
+          57 20 4B 45 59 20 54  
+          4F 20 4D 4F 56 45 20  
+          50 41 43 4D 41 4E 20  
+          55 50 21 00           
+000001C5= 41 4E 44 20 55 53 45     110  .TXT8                     DC.B    'AND USE THE S TO MOVE PACMAN DOWN.',0
+          20 54 48 45 20 53 20  
+          54 4F 20 4D 4F 56 45  
+          20 50 41 43 4D 41 4E  
+          20 44 4F 57 4E 2E 00  
+000001E8= 57 48 41 54 20 41 42     115  .TXT9                     DC.B    'WHAT ABOUT LEFT AND RIGHT?',0
+          4F 55 54 20 4C 45 46  
+          54 20 41 4E 44 20 52  
+          49 47 48 54 3F 00     
+00000203= 45 41 53 59 2C 20 55     119  .TXT10                    DC.B    'EASY, USE A TO GO LEFT AND D TO GO RIGHT',0
+          53 45 20 41 20 54 4F  
+          20 47 4F 20 4C 45 46  
+          54 20 41 4E 44 20 44  
+          20 54 4F 20 47 4F 20  
+          52 49 47 48 54 00     
+0000022C= 59 4F 55 20 4D 41 59     125  .TXT11                    DC.B    'YOU MAY ALLWAYS HAVE FUN IN THIS GAME',0
+          20 41 4C 4C 57 41 59  
+          53 20 48 41 56 45 20  
+          46 55 4E 20 49 4E 20  
+          54 48 49 53 20 47 41  
+          4D 45 00              
+00000252= 50 52 45 53 53 20 53     131  .TXT12                    DC.B    'PRESS SPACE BAR TO GO BACK TO MAIN MENU',0
+          50 41 43 45 20 42 41  
+          52 20 54 4F 20 47 4F  
+          20 42 41 43 4B 20 54  
+          4F 20 4D 41 49 4E 20  
+          4D 45 4E 55 00        
+0000027A                           137                            DS.W    0
+0000027A                           138                            
+0000027A= 0000007C 000000AD        139  .TXTLST                   DC.L    .TXT1,.TXT2,.TXT3,.TXT4,.TXT5,.TXT6,.TXT7,.TXT8,.TXT9
+          000000E4 0000011B     
+          00000144 0000017C     
+          00000197 000001C5     
+          000001E8              
+0000029E= 00000203 0000022C        144                            DC.L    .TXT10,.TXT11,0
+          00000000              
+000002AA                           146  
+000002AA                           147  
+000002AA                           148  
+000002AA                           149  
+000002AA                           150  
+000002AA                           151  
+000002AA                           152  
+000002AA                           153  
+000002AA                           154  
+000002AA                           155  
+Line 156 WARNING: END directive missing, starting address not set
+
+9 errors detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+INSINIT             0
+INSPLOT             34
+INSPLOT:CHECKBLINK  5A
+INSPLOT:DONE        76
+INSPLOT:LOOP        4A
+INSPLOT:TXT1        7C
+INSPLOT:TXT10       203
+INSPLOT:TXT11       22C
+INSPLOT:TXT12       252
+INSPLOT:TXT2        AD
+INSPLOT:TXT3        E4
+INSPLOT:TXT4        11B
+INSPLOT:TXT5        144
+INSPLOT:TXT6        17C
+INSPLOT:TXT7        197
+INSPLOT:TXT8        1C5
+INSPLOT:TXT9        1E8
+INSPLOT:TXTLST      27A
+INSUPD              8
+INSUPD:CONT         1A
+INSUPD:DONE         32

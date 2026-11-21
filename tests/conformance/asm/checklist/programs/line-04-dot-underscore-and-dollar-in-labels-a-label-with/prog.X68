@@ -1,0 +1,6 @@
+	ORG $1000
+_A$B	NOP
+A.B	NOP
+	BRA _A$B
+	MOVE.W A.B,D0
+	END $1000

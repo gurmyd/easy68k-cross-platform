@@ -1,0 +1,159 @@
+00000000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:26:51 AM
+
+00000000                             1  Test:
+Line 2 ERROR: Undefined symbol
+00000000  223C 004DBD16              2      move.l  #COLOUR_WHITE,d1       ; set pen colour
+00000006  6100 00F8                  3      bsr     SetPenColour
+0000000A                             4  
+0000000A  203C 00003039              5      move.l  #12345,d0
+Line 6 ERROR: Undefined symbol
+00000010  33FC 000A 005455B8         6      move.w  #10,digitPlotX
+Line 7 ERROR: Undefined symbol
+00000018  33FC 000A 005455B8         7      move.w  #10,digitPlotY
+00000020  6100 001E                  8      bsr     PlotNumber
+00000024                             9  
+00000024  203C 00010932             10      move.l  #67890,d0
+Line 11 ERROR: Undefined symbol
+0000002A  33FC 005A 005455B8        11      move.w  #90,digitPlotX
+Line 12 ERROR: Undefined symbol
+00000032  33FC 000A 005455B8        12      move.w  #10,digitPlotY
+0000003A  6100 0004                 13      bsr     PlotNumber
+0000003E  4E75                      14      rts
+00000040                            15  
+00000040                            16  PlotNumber:                     ; plot the 5-digit number in d0 as pixels at digitPlotX,digitPlotY
+00000040  6100 0008                 17      bsr     BuildBuffer
+00000044  6100 0032                 18      bsr     PlotDigits
+00000048                            19  
+00000048  4E75                      20      rts
+0000004A                            21  
+0000004A                            22  BuildBuffer:                    ; number = d0
+0000004A  2200                      23      move.l  d0,d1               ; number
+Line 24 ERROR: Undefined symbol
+0000004C  41F9 004DBD16             24      lea     digitBuffer,a0      ; point just past buffer
+00000052  5A48                      25      adda.w  #5,a0               ; maximum of 5 digits so the number fits in a word
+Line 26 ERROR: Undefined symbol
+00000054  13FC 0000 005455B8        26      move.b  #0,digitCount
+0000005C                            27  
+0000005C                            28  .getDigit:
+0000005C  82FC 000A                 29      divu    #10,d1              ; quotient in low word, remainder in high word
+00000060                            30  
+00000060  4841                      31      swap    d1                  ; remainder -> low word
+00000062  1101                      32      move.b  d1,-(a0)            ; store it
+Line 33 ERROR: Undefined symbol
+00000064  5239 005455CC             33      addq.b  #1,digitCount       ; increment the digit counter
+0000006A                            34  
+0000006A  4841                      35      swap    d1                  ; quotient back to low word
+0000006C  0281 0000FFFF             36      andi.l  #$0000ffff,d1
+00000072                            37  
+00000072  4A41                      38      tst.w   d1
+00000074  66E6                      39      bne     .getDigit
+00000076  4E75                      40      rts
+00000078                            41  
+00000078                            42  PlotDigits:                     ; d0 = number to plot
+00000078  7800                      43      moveq   #0,d4
+Line 44 ERROR: Undefined symbol
+0000007A  1839 004DBD16             44      move.b  digitCount,d4
+00000080  5304                      45      subi.b  #1,d4
+00000082                            46  .digitLoop
+00000082  7000                      47      moveq   #0,d0
+00000084  1018                      48      move.b  (a0)+,d0            ; read digit from buffer
+00000086                            49      
+Line 50 ERROR: Undefined symbol
+00000086  43F9 004DBD16             50      lea     digits,a1
+0000008C  E748                      51      lsl.w   #3,d0               ; digit * 8
+0000008E  D2C0                      52      adda.w  d0,a1
+00000090                            53  
+00000090  7000                      54      moveq   #0,d0
+00000092  7607                      55      moveq   #7,d3
+00000094                            56  .digitLineLoop
+00000094  1019                      57      move.b  (a1)+,d0            ; read first bit line of digit into d0
+Line 58 ERROR: Undefined symbol
+00000096  13FC 0007 005455B8        58      move.b  #7,digitPlotLine
+Line 59 ERROR: Undefined symbol
+0000009E  9739 005455B8             59      sub.b   d3,digitPlotLine
+000000A4  6100 000C                 60      bsr     PlotBitLine
+000000A8                            61  
+000000A8  51CB FFEA                 62      dbra    d3,.digitLineLoop
+000000AC                            63  
+000000AC  51CC FFD4                 64      dbra    d4,.digitLoop
+000000B0  4E75                      65      rts
+000000B2                            66  
+000000B2                            67  PlotBitLine:    ; d4 = digit counter
+Line 68 ERROR: Invalid opcode
+000000B2                            68      CacheDataRegisters
+000000B2  3A00                      69      move    d0,d5
+000000B4  163C 0007                 70      move.b  #7,d3
+000000B8                            71  .bitLineLoop
+000000B8  0705                      72      btst    d3,d5
+000000BA  6700 003E                 73      beq     .noPixel
+000000BE                            74  
+000000BE  7200                      75      moveq   #0,d1
+Line 76 ERROR: Undefined symbol
+000000C0  1239 004DBD16             76      move.b  digitCount,d1
+000000C6  5341                      77      subq    #1,d1
+000000C8  9204                      78      sub.b   d4,d1               ; start with current zero-based digit position 
+000000CA  C2FC 0008                 79      mulu    #8,d1               ; shift along 8bits for each digit displayed
+000000CE  5E41                      80      addq    #7,d1
+000000D0  9203                      81      sub.b   d3,d1               ; add the number of bits along the line
+000000D2  E349                      82      lsl.w   #1,d1               ; double it to make the font larger
+Line 83 ERROR: Undefined symbol
+000000D4  D279 004DBD16             83      add.w   digitPlotX,d1       ; add the x position
+000000DA                            84  
+000000DA  7400                      85      moveq   #0,d2
+Line 86 ERROR: Undefined symbol
+000000DC  D439 004DBD16             86      add.b   digitPlotLine,d2    ; the y is simply the current line
+000000E2  E34A                      87      lsl.w   #1,d2               ; double it to make the font larger
+Line 88 ERROR: Undefined symbol
+000000E4  D479 004DBD16             88      add.w   digitPlotY,d2       ; add the y position
+000000EA                            89  
+000000EA  7052                      90      moveq   #82,d0
+000000EC  4E4F                      91      trap    #15
+000000EE  5241                      92      addq    #1,d1
+000000F0  4E4F                      93      trap    #15
+000000F2  5242                      94      addq    #1,d2
+000000F4  4E4F                      95      trap    #15
+000000F6  5341                      96      subq    #1,d1
+000000F8  4E4F                      97      trap    #15
+000000FA                            98  
+000000FA                            99  .noPixel
+000000FA  51CB FFBC                100      dbra    d3,.bitLineLoop
+000000FE                           101  
+Line 102 ERROR: Invalid opcode
+000000FE                           102      RestoreDataRegisters
+000000FE  4E75                     103      rts
+00000100                           104  
+00000100                           105  SetPenColour:                   ; set pen colour to d1.l ($00RRGGBB)
+00000100  6100 0008                106      bsr     ReverseRGB
+00000104  7050                     107      moveq   #80,d0
+00000106  4E4F                     108      trap    #15
+00000108  4E75                     109      rts
+0000010A                           110  
+0000010A                           111  ReverseRGB:                     ; convert d1 from $00RRGGBB to $00BBGGRR
+0000010A  E059                     112      ror.w   #8,d1
+0000010C  4841                     113      swap    d1
+0000010E  E149                     114      lsl.w   #8,d1
+00000110  E089                     115      lsr.l   #8,d1
+00000112  4E75                     116      rts
+Line 117 WARNING: END directive missing, starting address not set
+
+18 errors detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+BUILDBUFFER         4A
+BUILDBUFFER:GETDIGIT  5C
+PLOTBITLINE         B2
+PLOTBITLINE:BITLINELOOP  B8
+PLOTBITLINE:NOPIXEL  FA
+PLOTDIGITS          78
+PLOTDIGITS:DIGITLINELOOP  94
+PLOTDIGITS:DIGITLOOP  82
+PLOTNUMBER          40
+REVERSERGB          10A
+SETPENCOLOUR        100
+TEST                0

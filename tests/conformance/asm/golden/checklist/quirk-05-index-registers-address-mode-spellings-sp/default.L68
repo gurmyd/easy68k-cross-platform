@@ -1,0 +1,27 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:31:25 AM
+
+00001000                             1      ORG $1000
+00001000  3030 1004                  2      MOVE.W 4(A0,D1),D0
+00001004  3030 1804                  3      MOVE.W 4(A0,D1.L),D0
+00001008  3030 9004                  4      MOVE.W (4,A0,A1.W),D0
+0000100C  3030 1000                  5      MOVE.W (A0,D1),D0
+00001010  3EE7                       6      MOVE.W -(SP),(SP)+
+00001012  3017                       7      MOVE.W (SP),D0
+00001014  4E68                       8      MOVE.L USP,A0
+00001016  40C0                       9      MOVE SR,D0
+00001018  44FC 0001                 10      MOVE #1,CCR
+Line 11 ERROR: Invalid syntax
+0000101C                            11      MOVE.W 4(A0,SP),D0
+Line 12 ERROR: Invalid syntax
+0000101C                            12      MOVE.W 4(A0,D1.X),D0
+0000101C                            13      END $1000
+
+2 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------

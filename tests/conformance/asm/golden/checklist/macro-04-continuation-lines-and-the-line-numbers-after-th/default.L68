@@ -1,0 +1,26 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:30:30 AM
+
+00000000                             1  M   MACRO
+00000000                             2      DC.B \1,\2,\3
+00000000                             3m     ENDM
+00001000                             4m     ORG $1000
+00001000                             5m     M 1,
+00001000                             6m & 2,
+00001000                             7m & 3
+00001003                             8m     M 4,
+Line 9 ERROR: Invalid argument
+00001003                             9m no ampersand
+Line 10 ERROR: Immediate data exceeds 8 bits
+00001004  103C 002C                 10m     MOVE.B #300,D0
+00001008                            11m     END $1000
+
+2 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+M                   0

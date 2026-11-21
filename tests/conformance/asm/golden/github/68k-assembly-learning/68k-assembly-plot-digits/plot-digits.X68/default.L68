@@ -1,0 +1,310 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:27:59 AM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : plot-digits
+00000000                             3  * Written by : Henry Wrightson
+00000000                             4  * Date       : 28/8/2026
+00000000                             5  * Type       : Program file
+00000000                             6  * Description: Plot a number with a bitmask font
+00000000                             7  *-----------------------------------------------------------
+00001000                             8      org     $1000
+00001000                             9      
+00001000                            10      include 'macros.X68'
+00001000                            11  
+00001000                            12  ;====================================================
+00001000                            13  ;======================= Macros =====================
+00001000                            14  ;====================================================
+00001000                            15  CacheRegisters macro
+00001000                            16      movem.l d0-d7/a0-a6,-(a7)
+00001000                            17      endm
+00001000                            18  
+00001000                            19  RestoreRegisters macro
+00001000                            20      movem.l (a7)+,d0-d7/a0-a6
+00001000                            21      endm
+00001000                            22  
+00001000                            23  CacheDataRegisters macro
+00001000                            24      movem.l d0-d7,-(a7)
+00001000                            25      endm
+00001000                            26  
+00001000                            27  RestoreDataRegisters macro
+00001000                            28      movem.l (a7)+,d0-d7
+00001000                            29      endm
+00001000                            30  -------------------- end include --------------------
+00001000                            31  
+00001000                            32  Start:
+00001000                            33      
+00001000  4EB9 0000100A             34      jsr     Test
+00001006  6100 011E                 35      bsr     Finish
+0000100A                            36      
+0000100A                            37      include 'code.X68'
+0000100A                            38  Test:
+0000100A  223C 00FFFFFF             39      move.l  #COLOUR_WHITE,d1       ; set pen colour
+00001010  6100 0100                 40      bsr     SetPenColour
+00001014                            41  
+00001014  203C 00003039             42      move.l  #12345,d0
+0000101A  33FC 000A 0000112A        43      move.w  #10,digitPlotX
+00001022  33FC 000A 0000112C        44      move.w  #10,digitPlotY
+0000102A  6100 001E                 45      bsr     PlotNumber
+0000102E                            46  
+0000102E  203C 00010932             47      move.l  #67890,d0
+00001034  33FC 005A 0000112A        48      move.w  #90,digitPlotX
+0000103C  33FC 000A 0000112C        49      move.w  #10,digitPlotY
+00001044  6100 0004                 50      bsr     PlotNumber
+00001048  4E75                      51      rts
+0000104A                            52  
+0000104A                            53  PlotNumber:                     ; plot the 5-digit number in d0 as pixels at digitPlotX,digitPlotY
+0000104A  6100 0008                 54      bsr     BuildBuffer
+0000104E  6100 0032                 55      bsr     PlotDigits
+00001052                            56  
+00001052  4E75                      57      rts
+00001054                            58  
+00001054                            59  BuildBuffer:                    ; number = d0
+00001054  2200                      60      move.l  d0,d1               ; number
+00001056  41F9 00001180             61      lea     digitBuffer,a0      ; point just past buffer
+0000105C  5A48                      62      adda.w  #5,a0               ; maximum of 5 digits so the number fits in a word
+0000105E  13FC 0000 0000112F        63      move.b  #0,digitCount
+00001066                            64  
+00001066                            65  .getDigit:
+00001066  82FC 000A                 66      divu    #10,d1              ; quotient in low word, remainder in high word
+0000106A                            67  
+0000106A  4841                      68      swap    d1                  ; remainder -> low word
+0000106C  1101                      69      move.b  d1,-(a0)            ; store it
+0000106E  5239 0000112F             70      addq.b  #1,digitCount       ; increment the digit counter
+00001074                            71  
+00001074  4841                      72      swap    d1                  ; quotient back to low word
+00001076  0281 0000FFFF             73      andi.l  #$0000ffff,d1
+0000107C                            74  
+0000107C  4A41                      75      tst.w   d1
+0000107E  66E6                      76      bne     .getDigit
+00001080  4E75                      77      rts
+00001082                            78  
+00001082                            79  PlotDigits:                     ; d0 = number to plot
+00001082  7800                      80      moveq   #0,d4
+00001084  1839 0000112F             81      move.b  digitCount,d4
+0000108A  5304                      82      subi.b  #1,d4
+0000108C                            83  .digitLoop
+0000108C  7000                      84      moveq   #0,d0
+0000108E  1018                      85      move.b  (a0)+,d0            ; read digit from buffer
+00001090                            86      
+00001090  43F9 00001130             87      lea     digits,a1
+00001096  E748                      88      lsl.w   #3,d0               ; digit * 8
+00001098  D2C0                      89      adda.w  d0,a1
+0000109A                            90  
+0000109A  7000                      91      moveq   #0,d0
+0000109C  7607                      92      moveq   #7,d3
+0000109E                            93  .digitLineLoop
+0000109E  1019                      94      move.b  (a1)+,d0            ; read first bit line of digit into d0
+000010A0  13FC 0007 0000112E        95      move.b  #7,digitPlotLine
+000010A8  9739 0000112E             96      sub.b   d3,digitPlotLine
+000010AE  6100 000C                 97      bsr     PlotBitLine
+000010B2                            98  
+000010B2  51CB FFEA                 99      dbra    d3,.digitLineLoop
+000010B6                           100  
+000010B6  51CC FFD4                101      dbra    d4,.digitLoop
+000010BA  4E75                     102      rts
+000010BC                           103  
+000010BC                           104  PlotBitLine:    ; d4 = digit counter
+000010BC                           105m     CacheDataRegisters
+000010C0  3A00                     106      move    d0,d5
+000010C2  163C 0007                107      move.b  #7,d3
+000010C6                           108  .bitLineLoop
+000010C6  0705                     109      btst    d3,d5
+000010C8  6700 003E                110      beq     .noPixel
+000010CC                           111  
+000010CC  7200                     112      moveq   #0,d1
+000010CE  1239 0000112F            113      move.b  digitCount,d1
+000010D4  5341                     114      subq    #1,d1
+000010D6  9204                     115      sub.b   d4,d1               ; start with current zero-based digit position 
+000010D8  C2FC 0008                116      mulu    #8,d1               ; shift along 8bits for each digit displayed
+000010DC  5E41                     117      addq    #7,d1
+000010DE  9203                     118      sub.b   d3,d1               ; add the number of bits along the line
+000010E0  E349                     119      lsl.w   #1,d1               ; double it to make the font larger
+000010E2  D279 0000112A            120      add.w   digitPlotX,d1       ; add the x position
+000010E8                           121  
+000010E8  7400                     122      moveq   #0,d2
+000010EA  D439 0000112E            123      add.b   digitPlotLine,d2    ; the y is simply the current line
+000010F0  E34A                     124      lsl.w   #1,d2               ; double it to make the font larger
+000010F2  D479 0000112C            125      add.w   digitPlotY,d2       ; add the y position
+000010F8                           126  
+000010F8  7052                     127      moveq   #82,d0
+000010FA  4E4F                     128      trap    #15
+000010FC  5241                     129      addq    #1,d1
+000010FE  4E4F                     130      trap    #15
+00001100  5242                     131      addq    #1,d2
+00001102  4E4F                     132      trap    #15
+00001104  5341                     133      subq    #1,d1
+00001106  4E4F                     134      trap    #15
+00001108                           135  
+00001108                           136  .noPixel
+00001108  51CB FFBC                137      dbra    d3,.bitLineLoop
+0000110C                           138  
+0000110C                           139m     RestoreDataRegisters
+00001110  4E75                     140      rts
+00001112                           141  
+00001112                           142  SetPenColour:                   ; set pen colour to d1.l ($00RRGGBB)
+00001112  6100 0008                143      bsr     ReverseRGB
+00001116  7050                     144      moveq   #80,d0
+00001118  4E4F                     145      trap    #15
+0000111A  4E75                     146      rts
+0000111C                           147  
+0000111C                           148  ReverseRGB:                     ; convert d1 from $00RRGGBB to $00BBGGRR
+0000111C  E059                     149      ror.w   #8,d1
+0000111E  4841                     150      swap    d1
+00001120  E149                     151      lsl.w   #8,d1
+00001122  E089                     152      lsr.l   #8,d1
+00001124  4E75                     153      rts
+00001124  4E75                     154  -------------------- end include --------------------
+00001126                           155  
+00001126                           156  Finish:
+00001126  FFFF FFFF                157      simhalt
+0000112A                           158  
+0000112A                           159      include 'variables.X68'
+0000112A  =00FFFFFF                160  COLOUR_WHITE    equ     $00ffffff
+0000112A                           161  
+0000112A= 0000                     162  digitPlotX      dc.w    0
+0000112C= 0000                     163  digitPlotY      dc.w    0
+0000112E= 00                       164  digitPlotLine   dc.b    0
+0000112F= 00                       165  digitCount      dc.b    0
+00001130                           166  
+00001130                           167  digits:
+00001130                           168      ; 0
+00001130= 1C                       169      dc.b $1C    ; %00011100
+00001131= 22                       170      dc.b $22    ; %00100010
+00001132= 22                       171      dc.b $22    ; %00100010
+00001133= 22                       172      dc.b $22    ; %00100010
+00001134= 22                       173      dc.b $22    ; %00100010
+00001135= 22                       174      dc.b $22    ; %00100010
+00001136= 1C                       175      dc.b $1C    ; %00011100
+00001137= 00                       176      dc.b $00    ; %00000000
+00001138                           177  
+00001138                           178      ; 1
+00001138= 08                       179      dc.b $08    ; %00001000
+00001139= 18                       180      dc.b $18    ; %00011000
+0000113A= 08                       181      dc.b $08    ; %00001000
+0000113B= 08                       182      dc.b $08    ; %00001000
+0000113C= 08                       183      dc.b $08    ; %00001000
+0000113D= 08                       184      dc.b $08    ; %00001000
+0000113E= 1C                       185      dc.b $1C    ; %00011100
+0000113F= 00                       186      dc.b $00    ; %00000000
+00001140                           187  
+00001140                           188      ; 2
+00001140= 1C                       189      dc.b $1C    ; %00011100
+00001141= 22                       190      dc.b $22    ; %00100010
+00001142= 02                       191      dc.b $02    ; %00000010
+00001143= 04                       192      dc.b $04    ; %00000100
+00001144= 08                       193      dc.b $08    ; %00001000
+00001145= 10                       194      dc.b $10    ; %00010000
+00001146= 3E                       195      dc.b $3E    ; %00111110
+00001147= 00                       196      dc.b $00    ; %00000000
+00001148                           197  
+00001148                           198      ; 3
+00001148= 1C                       199      dc.b $1C    ; %00011100
+00001149= 22                       200      dc.b $22    ; %00100010
+0000114A= 02                       201      dc.b $02    ; %00000010
+0000114B= 0C                       202      dc.b $0C    ; %00001100
+0000114C= 02                       203      dc.b $02    ; %00000010
+0000114D= 22                       204      dc.b $22    ; %00100010
+0000114E= 1C                       205      dc.b $1C    ; %00011100
+0000114F= 00                       206      dc.b $00    ; %00000000
+00001150                           207  
+00001150                           208      ; 4
+00001150= 04                       209      dc.b $04    ; %00000100
+00001151= 0C                       210      dc.b $0C    ; %00001100
+00001152= 14                       211      dc.b $14    ; %00010100
+00001153= 24                       212      dc.b $24    ; %00100100
+00001154= 3E                       213      dc.b $3E    ; %00111110
+00001155= 04                       214      dc.b $04    ; %00000100
+00001156= 04                       215      dc.b $04    ; %00000100
+00001157= 00                       216      dc.b $00    ; %00000000
+00001158                           217  
+00001158                           218      ; 5
+00001158= 3E                       219      dc.b $3E    ; %00111110
+00001159= 20                       220      dc.b $20    ; %00100000
+0000115A= 20                       221      dc.b $20    ; %00100000
+0000115B= 1C                       222      dc.b $1C    ; %00011100
+0000115C= 02                       223      dc.b $02    ; %00000010
+0000115D= 22                       224      dc.b $22    ; %00100010
+0000115E= 1C                       225      dc.b $1C    ; %00011100
+0000115F= 00                       226      dc.b $00    ; %00000000
+00001160                           227  
+00001160                           228      ; 6
+00001160= 1C                       229      dc.b $1C    ; %00011100
+00001161= 22                       230      dc.b $22    ; %00100010
+00001162= 20                       231      dc.b $20    ; %00100000
+00001163= 3C                       232      dc.b $3C    ; %00111100
+00001164= 22                       233      dc.b $22    ; %00100010
+00001165= 22                       234      dc.b $22    ; %00100010
+00001166= 1C                       235      dc.b $1C    ; %00011100
+00001167= 00                       236      dc.b $00    ; %00000000
+00001168                           237  
+00001168                           238      ; 7
+00001168= 3E                       239      dc.b $3E    ; %00111110
+00001169= 02                       240      dc.b $02    ; %00000010
+0000116A= 04                       241      dc.b $04    ; %00000100
+0000116B= 08                       242      dc.b $08    ; %00001000
+0000116C= 10                       243      dc.b $10    ; %00010000
+0000116D= 10                       244      dc.b $10    ; %00010000
+0000116E= 10                       245      dc.b $10    ; %00010000
+0000116F= 00                       246      dc.b $00    ; %00000000
+00001170                           247  
+00001170                           248      ; 8
+00001170= 1C                       249      dc.b $1C    ; %00011100
+00001171= 22                       250      dc.b $22    ; %00100010
+00001172= 22                       251      dc.b $22    ; %00100010
+00001173= 1C                       252      dc.b $1C    ; %00011100
+00001174= 22                       253      dc.b $22    ; %00100010
+00001175= 22                       254      dc.b $22    ; %00100010
+00001176= 1C                       255      dc.b $1C    ; %00011100
+00001177= 00                       256      dc.b $00    ; %00000000
+00001178                           257  
+00001178                           258      ; 9
+00001178= 1C                       259      dc.b $1C    ; %00011100
+00001179= 22                       260      dc.b $22    ; %00100010
+0000117A= 22                       261      dc.b $22    ; %00100010
+0000117B= 1E                       262      dc.b $1E    ; %00011110
+0000117C= 02                       263      dc.b $02    ; %00000010
+0000117D= 22                       264      dc.b $22    ; %00100010
+0000117E= 1C                       265      dc.b $1C    ; %00011100
+0000117F= 00                       266      dc.b $00    ; %00000000
+00001180                           267  
+00001180                           268  digitBuffer:    
+00001180                           269      ds.b    6
+00001186                           270      ds.b    4   ; spacer
+00001186                           271  -------------------- end include --------------------
+0000118A                           272  
+0000118A                           273      end     Start
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+BUILDBUFFER         1054
+BUILDBUFFER:GETDIGIT  1066
+CACHEDATAREGISTERS  52
+CACHEREGISTERS      0
+COLOUR_WHITE        FFFFFF
+DIGITBUFFER         1180
+DIGITCOUNT          112F
+DIGITPLOTLINE       112E
+DIGITPLOTX          112A
+DIGITPLOTY          112C
+DIGITS              1130
+FINISH              1126
+PLOTBITLINE         10BC
+PLOTBITLINE:BITLINELOOP  10C6
+PLOTBITLINE:NOPIXEL  1108
+PLOTDIGITS          1082
+PLOTDIGITS:DIGITLINELOOP  109E
+PLOTDIGITS:DIGITLOOP  108C
+PLOTNUMBER          104A
+RESTOREDATAREGISTERS  75
+RESTOREREGISTERS    29
+REVERSERGB          111C
+SETPENCOLOUR        1112
+START               1000
+TEST                100A

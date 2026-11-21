@@ -1,0 +1,1554 @@
+00000000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:28:59 AM
+
+00000000                             1  ; =============================================================================
+00000000                             2  ; INKY
+00000000                             3  ; =============================================================================
+00000000                             4  
+00000000                             5  ; -----------------------------------------------------------------------------
+00000000                             6  INKY_INIT
+00000000                             7  ; INITIALIZE INKY.
+00000000                             8  ; INPUT    : NONE
+00000000                             9  ; OUTPUT   : NONE
+00000000                            10  ; MODIFIES : NONE
+00000000                            11  ; -----------------------------------------------------------------------------
+Line 12 ERROR: Undefined symbol
+00000000  33FC BD16 005455B8        12                            MOVE.W  #INKY_START_X,(INKY_POS_X)
+Line 13 ERROR: Undefined symbol
+00000008  33FC BD16 005455B8        13                            MOVE.W  #INKY_START_Y,(INKY_POS_Y)
+00000010                            14                            ; START UP
+Line 15 ERROR: Undefined symbol
+00000010  33FC 0002 005455B8        15                            MOVE.W  #2,(INKY_DIR)
+00000018                            16                            ; WE START ALWAYS IN SCATER MODE
+Line 17 ERROR: Undefined symbol
+00000018  33FC 0001 005455B8        17                            MOVE.W  #1, (INKY_SCATER_ON)
+Line 18 ERROR: Undefined symbol
+00000020  4279 004DBD16             18                            CLR.W   (INKY_CHASE_ON)
+Line 19 ERROR: Undefined symbol
+00000026  4279 004DBD16             19                            CLR.W   (INKY_SCATERTIMER)
+Line 20 ERROR: Undefined symbol
+0000002C  4279 004DBD16             20                            CLR.W   (INKY_CHASETIMER)
+Line 21 ERROR: Undefined symbol
+00000032  4279 004DBD16             21                            CLR.W   (INKY_MODE_SWITCH_COUNT)
+Line 22 ERROR: Undefined symbol
+00000038  23FC 004DBD16 005455B8    22                            MOVE.L  #LIGHT_BLUE,(INKY_COLOR)
+Line 23 ERROR: Undefined symbol
+00000042  4279 004DBD16             23                            CLR.W   (INKY_IS_BLUE)
+Line 24 ERROR: Undefined symbol
+00000048  4279 004DBD16             24                            CLR.W   (INKY_FRIGHTENED_TIMER)
+Line 25 ERROR: Undefined symbol
+0000004E  4279 004DBD16             25                            CLR.W   (INKY_ESTADO)
+Line 26 ERROR: Undefined symbol
+00000054  33FC 0002 005455B8        26                            MOVE.W  #2,(INKY_SPEED)
+0000005C  4E75                      27                            RTS
+0000005E                            28                  
+0000005E                            29  ; -----------------------------------------------------------------------------
+0000005E                            30  INKY_UPDATE
+0000005E                            31  ; UPDATES INKY.
+0000005E                            32  ; INPUT    : NONE
+0000005E                            33  ; OUTPUT   : NONE
+0000005E                            34  ; MODIFIES : NONE
+0000005E                            35  ; -----------------------------------------------------------------------------
+0000005E                            36      
+0000005E  48A7 FF80                 37                            MOVEM.W D0-D7/A0,-(A7)
+00000062                            38                   
+00000062                            39                  
+Line 40 ERROR: Undefined symbol
+00000062  0C79 0000 005455B8        40                            CMP.W   #0,(INKY_ESTADO)
+0000006A  6700 05B8                 41                            BEQ     .IS_HOME
+Line 42 ERROR: Undefined symbol
+0000006E  0C79 0001 005455B8        42                            CMP.W   #1,(INKY_ESTADO)
+00000076  6700 05AC                 43                            BEQ     .IS_HOME
+Line 44 ERROR: Undefined symbol
+0000007A  0C79 0002 005455B8        44                            CMP.W   #2,(INKY_ESTADO)
+00000082  6700 05A0                 45                            BEQ     .IS_HOME
+Line 46 ERROR: Undefined symbol
+00000086  0C79 0003 005455B8        46                            CMP.W   #3,(INKY_ESTADO)
+0000008E  6700 0594                 47                            BEQ     .IS_HOME
+Line 48 ERROR: Undefined symbol
+00000092  0C79 0001 005455B8        48                            CMP.W   #1,(INKY_IS_BLUE)
+0000009A  6700 02AE                 49                            BEQ     .FRIGHTENED_MODE
+0000009E                            50              
+0000009E  4EB9 00000826             51                            JSR     MODE_UPDATE_INKY
+Line 52 ERROR: Undefined symbol
+000000A4  3039 004DBD16             52                            MOVE.W  (INKY_POS_X),D0
+Line 53 ERROR: Undefined symbol
+000000AA  3239 004DBD16             53                            MOVE.W  (INKY_POS_Y),D1
+000000B0                            54                            
+000000B0                            55                            ; MOVE FORWARD
+Line 56 ERROR: Undefined symbol
+000000B0  0C79 0001 005455B8        56                            CMP.W   #1,(INKY_DIR)
+000000B8  6700 001E                 57                            BEQ     .MVLEFT
+Line 58 ERROR: Undefined symbol
+000000BC  0C79 0002 005455B8        58                            CMP.W   #2,(INKY_DIR)
+000000C4  6700 001C                 59                            BEQ     .MVUP
+Line 60 ERROR: Undefined symbol
+000000C8  0C79 0003 005455B8        60                            CMP.W   #3,(INKY_DIR)
+000000D0  6700 001A                 61                            BEQ     .MVRIGHT
+000000D4  6000 0020                 62                            BRA     .MVDOWN
+000000D8                            63             
+Line 64 ERROR: Undefined symbol
+000000D8  9079 004DBD16             64  .MVLEFT                   SUB.W   (INKY_SPEED),D0
+000000DE  6000 001C                 65                            BRA     .CONT
+000000E2                            66      
+Line 67 ERROR: Undefined symbol
+000000E2  9279 004DBD16             67  .MVUP                     SUB.W   (INKY_SPEED),D1
+000000E8  6000 0012                 68                            BRA     .CONT
+000000EC                            69      
+Line 70 ERROR: Undefined symbol
+000000EC  D079 004DBD16             70  .MVRIGHT                  ADD.W   (INKY_SPEED),D0
+000000F2  6000 0008                 71                            BRA     .CONT
+000000F6                            72                  
+Line 73 ERROR: Undefined symbol
+000000F6  D279 004DBD16             73  .MVDOWN                   ADD.W   (INKY_SPEED),D1
+000000FC                            74      
+000000FC                            75  .CONT         
+Line 76 ERROR: Undefined symbol
+000000FC  33C0 005455B8             76                            MOVE.W  D0,(INKY_POS_X)
+Line 77 ERROR: Undefined symbol
+00000102  33C1 005455B8             77                            MOVE.W  D1,(INKY_POS_Y)
+00000108                            78                   
+00000108                            79                            ; CHECK TOP LEFT 
+Line 80 ERROR: Undefined symbol
+00000108  3439 004DBD16             80                            MOVE.W  (INKY_POS_Y),D2
+Line 81 ERROR: Undefined symbol
+0000010E  3639 004DBD16             81                            MOVE.W  (INKY_POS_X),D3
+00000114  4EB9 00000748             82                            JSR     CHECK_COLLISIONS_INKY
+0000011A  0804 0000                 83                            BTST.L  #0,D4
+0000011E  6700 01C4                 84                            BEQ     .DONE
+00000122                            85                  
+00000122                            86                            ; CHECK BOTTOM RIGHT
+Line 87 ERROR: Undefined symbol
+00000122  3439 004DBD16             87                            MOVE.W  (INKY_POS_Y),D2
+Line 88 ERROR: Undefined symbol
+00000128  3639 004DBD16             88                            MOVE.W  (INKY_POS_X),D3
+Line 89 ERROR: Comma expected
+0000012E                            89                            ADD.W   #PACRAD-1,D2
+Line 90 ERROR: Comma expected
+0000012E                            90                            ADD.W   #PACRAD-1,D3
+0000012E  4EB9 00000748             91                            JSR     CHECK_COLLISIONS_INKY
+00000134  0804 0000                 92                            BTST.L  #0,D4
+00000138  6700 01AA                 93                            BEQ     .DONE
+0000013C                            94                  
+0000013C                            95                            ; CHECK TOP RIGHT
+Line 96 ERROR: Undefined symbol
+0000013C  3439 004DBD16             96                            MOVE.W  (INKY_POS_Y),D2
+Line 97 ERROR: Undefined symbol
+00000142  3639 004DBD16             97                            MOVE.W  (INKY_POS_X),D3 
+Line 98 ERROR: Comma expected
+00000148                            98                            ADD.W   #PACRAD-1,D2
+00000148  4EB9 00000748             99                            JSR     CHECK_COLLISIONS_INKY
+0000014E  0804 0000                100                            BTST.L  #0,D4
+00000152  6700 0190                101                            BEQ     .DONE
+00000156                           102                  
+00000156                           103                            ; CHECK BOTTOM LEFT 
+Line 104 ERROR: Undefined symbol
+00000156  3439 004DBD16            104                            MOVE.W  (INKY_POS_Y),D2
+Line 105 ERROR: Undefined symbol
+0000015C  3639 004DBD16            105                            MOVE.W  (INKY_POS_X),D3 
+Line 106 ERROR: Comma expected
+00000162                           106                            ADD.W   #PACRAD-1,D3
+00000162  4EB9 00000748            107                            JSR     CHECK_COLLISIONS_INKY
+00000168  0804 0000                108                            BTST.L  #0,D4
+0000016C  6700 0176                109                            BEQ     .DONE
+00000170                           110      
+00000170                           111                            ; HE IS IN INTERSECTION
+Line 112 ERROR: Undefined symbol
+00000170  43F9 004DBD16            112                            LEA.L   INKY_ALLOWED_DIR,A1
+00000176                           113                            ; INITIALIZE ARRAY TO 1
+00000176  22BC 01010101            114                            MOVE.L  #$01010101,(A1)
+0000017C                           115                  
+Line 116 ERROR: Undefined symbol
+0000017C  3239 004DBD16            116                            MOVE.W  (INKY_DIR),D1
+00000182                           117                  
+00000182  B27C 0001                118                            CMP.W   #1,D1
+00000186  6600 001C                119                            BNE     .CHKUP
+0000018A                           120                            ; MOVE 0 TO POS 2 IN ARRAY
+0000018A  137C 0000 0002           121                            MOVE.B  #0,2(A1)
+00000190  6000 0042                122                            BRA     .CONT2
+00000194                           123      
+Line 124 ERROR: Symbol value differs between first and second pass
+00000194                           124  .CHKUP                    CMP.W   #2,D1
+00000194  6600 0020                125                            BNE     .CHKRIGHT
+00000198                           126                            ; MOVE 0 TO POS 3 IN ARRAY
+00000198  137C 0000 0003           127                            MOVE.B  #0,3(A1)
+0000019E  6000 0034                128                            BRA     .CONT2
+000001A2                           129                  
+Line 130 ERROR: Symbol value differs between first and second pass
+000001A2                           130  .CHKRIGHT                 CMP.W   #3,D1
+000001A2  6600 0022                131                            BNE     .CHKDOWN
+000001A6                           132                            ; MOVE 0 TO POS 0 IN ARRAY
+000001A6  12BC 0000                133                            MOVE.B  #0,(A1)
+000001AA  6000 0028                134                            BRA     .CONT2
+000001AE                           135                  
+Line 136 ERROR: Symbol value differs between first and second pass
+000001AE                           136  .CHKDOWN                  CMP.W   #4,D1
+000001AE  6600 0024                137                            BNE     .CONT2
+000001B2                           138                            ; MOVE 0 TO POS 1 IN ARRAY
+000001B2  137C 0000 0001           139                            MOVE.B  #0,1(A1)
+000001B8                           140                            
+000001B8                           141                            ; WE REMOVED THE DIRECTION HE IS FACING TO
+000001B8                           142                            ; WHEN HE ENTERED THE INTERSECTION FROM THE TUPLE
+000001B8                           143                            ; NOW WE REMOVE THE DIRECTIONS WITH WALL
+Line 144 ERROR: Symbol value differs between first and second pass
+000001B8                           144  .CONT2                    MOVE.W  (INKY_POS_X),D0
+Line 145 ERROR: Undefined symbol
+000001B8  3239 004DBD16            145                            MOVE.W  (INKY_POS_Y),D1
+000001BE  4EB9 000007F4            146                            JSR     GETMAPCOORDS_INKY
+000001C4                           147                  
+000001C4  3400                     148                            MOVE.W  D0,D2      ; XM
+000001C6  3601                     149                            MOVE.W  D1,D3      ; YM
+000001C8                           150                  
+000001C8                           151                            ; LEFT SIDE
+000001C8  5302                     152                            SUBQ.B  #1,D2
+000001CA  4EB9 0000080A            153                            JSR     MAPGET_INKY
+000001D0  B87C 0001                154                            CMP.W   #1,D4
+000001D4  6600 0028                155                            BNE     .CHKMAPUP
+000001D8  12BC 0000                156                            MOVE.B  #0,(A1)
+000001DC                           157                  
+Line 158 ERROR: Symbol value differs between first and second pass
+000001DC                           158  .CHKMAPUP
+000001DC  3400                     159                            MOVE.W  D0,D2      ; XM
+000001DE  3601                     160                            MOVE.W  D1,D3      ; YM
+000001E0                           161                  
+000001E0                           162                            ; UP SIDE
+000001E0  5303                     163                            SUBQ.B  #1,D3
+000001E2  4EB9 0000080A            164                            JSR     MAPGET_INKY
+000001E8  B87C 0001                165                            CMP.W   #1,D4
+000001EC  6600 002A                166                            BNE     .CHKMAPRIGHT
+000001F0  137C 0000 0001           167                            MOVE.B  #0,1(A1)
+000001F6                           168                  
+Line 169 ERROR: Symbol value differs between first and second pass
+000001F6                           169  .CHKMAPRIGHT
+000001F6  3400                     170                            MOVE.W  D0,D2      ; XM
+000001F8  3601                     171                            MOVE.W  D1,D3      ; YM
+000001FA                           172                  
+000001FA                           173                            ; RIGHT SIDE
+000001FA  5202                     174                            ADDQ.B  #1,D2
+000001FC  4EB9 0000080A            175                            JSR     MAPGET_INKY
+00000202  B87C 0001                176                            CMP.W   #1,D4
+00000206  6600 002A                177                            BNE     .CHKMAPDOWN
+0000020A  137C 0000 0002           178                            MOVE.B  #0,2(A1)
+00000210                           179      
+Line 180 ERROR: Symbol value differs between first and second pass
+00000210                           180  .CHKMAPDOWN
+00000210  3400                     181                            MOVE.W  D0,D2      ; XM
+00000212  3601                     182                            MOVE.W  D1,D3      ; YM
+00000214                           183                  
+00000214                           184                            ; DOWN SIDE
+00000214  5203                     185                            ADDQ.B  #1,D3
+00000216  4EB9 0000080A            186                            JSR     MAPGET_INKY
+0000021C  B87C 0001                187                            CMP.W   #1,D4
+00000220  6600 002A                188                            BNE     .CONT3
+00000224  137C 0000 0003           189                            MOVE.B  #0,3(A1)
+0000022A                           190                  
+Line 191 ERROR: Symbol value differs between first and second pass
+0000022A                           191  .CONT3                    ; WE HAVE REMOVED THE DIRECTIONS WITH WALL 
+0000022A                           192                            ; FROM THE TUPLE NOW WE HAVE TO CALCULATE 
+0000022A                           193                            ; THE EUCYDEAN DISTANCE FROM THE ALLOWED DIRECTIONS
+0000022A                           194                  
+Line 195 ERROR: Undefined symbol
+0000022A  45F9 004DBD16            195                            LEA.L   INKY_EUCYDEAN_DIS,A2
+Line 196 ERROR: Undefined symbol
+00000230  3039 004DBD16            196                            MOVE.W  (INKY_POS_X),D0
+Line 197 ERROR: Undefined symbol
+00000236  3239 004DBD16            197                            MOVE.W  (INKY_POS_Y),D1
+0000023C                           198      
+0000023C                           199                            ; RECAP
+0000023C                           200                            ; A1 - INKY_ALLOWED_DIR
+0000023C                           201                            ; A2 - INKY_EUCYDEAN_DIS
+0000023C                           202                            ; D0 - X
+0000023C                           203                            ; D1 - Y
+0000023C                           204                  
+0000023C  24BC 7F7F7F7F            205                            MOVE.L  #$7F7F7F7F,(A2)
+00000242  257C 7F7F7F7F 0004       206                            MOVE.L  #$7F7F7F7F,4(A2)
+0000024A                           207                  
+0000024A  0C11 0001                208                            CMP.B   #1,(A1)
+0000024E  6600 0034                209                            BNE     .CALCUP
+00000252                           210                            ; CALC LEFT
+00000252  3400                     211                            MOVE.W  D0,D2      ; X
+00000254  3601                     212                            MOVE.W  D1,D3      ; Y
+00000256                           213                  
+Line 214 ERROR: Undefined symbol
+00000256  0442 BD16                214                            SUB.W  #CELSIZE,D2
+0000025A  4EB9 000008D2            215                            JSR     CALCDIS_INKY
+00000260  3483                     216                            MOVE.W  D3,(A2)
+00000262                           217                  
+Line 218 ERROR: Symbol value differs between first and second pass
+00000262                           218  .CALCUP                   CMP.B   #1,1(A1)
+00000262  6600 003C                219                            BNE     .CALCRIGHT
+00000266                           220                            ; CALC UP
+00000266  3400                     221                            MOVE.W  D0,D2      ; X
+00000268  3601                     222                            MOVE.W  D1,D3      ; Y
+0000026A                           223                  
+Line 224 ERROR: Undefined symbol
+0000026A  0443 BD16                224                            SUB.W  #CELSIZE,D3
+0000026E  4EB9 000008D2            225                            JSR     CALCDIS_INKY
+00000274  3543 0002                226                            MOVE.W  D3,2(A2)
+00000278                           227                  
+Line 228 ERROR: Symbol value differs between first and second pass
+00000278                           228  .CALCRIGHT                CMP.B   #1,2(A1)
+00000278  6600 0042                229                            BNE     .CALCDOWN
+0000027C                           230                            ; CALC RIGHT
+0000027C  3400                     231                            MOVE.W  D0,D2      ; X
+0000027E  3601                     232                            MOVE.W  D1,D3      ; Y
+00000280                           233                  
+Line 234 ERROR: Undefined symbol
+00000280  0642 BD16                234                            ADD.W  #CELSIZE,D2
+00000284  4EB9 000008D2            235                            JSR     CALCDIS_INKY
+0000028A  3543 0004                236                            MOVE.W  D3,4(A2)
+0000028E                           237                  
+Line 238 ERROR: Symbol value differs between first and second pass
+0000028E                           238  .CALCDOWN                 CMP.B   #1,3(A1)
+0000028E  6600 0048                239                            BNE     .CONT4
+00000292                           240                            ; CALC DOWN
+00000292  3400                     241                            MOVE.W  D0,D2      ; X
+00000294  3601                     242                            MOVE.W  D1,D3      ; Y
+00000296                           243                            
+Line 244 ERROR: Undefined symbol
+00000296  0643 BD16                244                            ADD.W  #CELSIZE,D3
+0000029A  4EB9 000008D2            245                            JSR     CALCDIS_INKY
+000002A0  3543 0006                246                            MOVE.W  D3,6(A2)
+000002A4                           247                  
+Line 248 ERROR: Symbol value differs between first and second pass
+000002A4                           248  .CONT4                    ; WE HAVE THE VALID DISTANCES, 
+000002A4                           249                            ; NOW HE WILL GO THRU THE SHORTEST PATH
+000002A4  4EB9 000009C4            250                            JSR FIND_MIN_INKY
+Line 251 ERROR: Undefined symbol
+000002AA  33C1 005455B8            251                            MOVE.W  D1,(INKY_DIR)
+000002B0                           252                  
+Line 253 ERROR: Symbol value differs between first and second pass
+000002B0                           253  .DONE       
+000002B0                           254                            ; CHECK BOTTOM RIGHT
+Line 255 ERROR: Undefined symbol
+000002B0  3439 004DBD16            255                            MOVE.W  (INKY_POS_Y),D2
+Line 256 ERROR: Undefined symbol
+000002B6  3639 004DBD16            256                            MOVE.W  (INKY_POS_X),D3
+Line 257 ERROR: Comma expected
+000002BC                           257                            ADD.W   #PACRAD-1,D2
+Line 258 ERROR: Comma expected
+000002BC                           258                            ADD.W   #PACRAD-1,D3
+000002BC  4EB9 00000748            259                            JSR     CHECK_COLLISIONS_INKY
+000002C2                           260                
+000002C2                           261                            ; CHECK IF INKY KILLED PACMAN
+000002C2                           262                            ; D0 = INKY X
+000002C2                           263                            ; D1 = INKY Y
+Line 264 ERROR: Undefined symbol
+000002C2  3039 004DBD16            264                            MOVE.W  (INKY_POS_X),D0
+Line 265 ERROR: Undefined symbol
+000002C8  3239 004DBD16            265                            MOVE.W  (INKY_POS_Y),D1
+000002CE                           266                            ; D2 = PACMAN X
+000002CE                           267                            ; D3 = PACMAN Y
+Line 268 ERROR: Undefined symbol
+000002CE  3439 004DBD16            268                            MOVE.W  (PAC_POS_X),D2
+Line 269 ERROR: Undefined symbol
+000002D4  3639 004DBD16            269                            MOVE.W  (PAC_POS_Y),D3
+000002DA                           270      
+000002DA                           271                            ; ABSOLUTE DISTANCE
+000002DA  9042                     272                            SUB.W   D2,D0      ; D0 = |INKY X - PACMAN X|
+000002DC  4A40                     273                            TST.W   D0
+000002DE  6A00 0040                274                            BPL     .CHECK_Y
+000002E2  4440                     275                            NEG.W   D0
+000002E4                           276      
+Line 277 ERROR: Symbol value differs between first and second pass
+000002E4                           277  .CHECK_Y
+000002E4  9243                     278                            SUB.W   D3,D1      ; D1 = |INKY Y - PACMAN Y|
+000002E6  4A41                     279                            TST.W   D1
+000002E8  6A00 0040                280                            BPL     .SUM_DIST
+000002EC  4441                     281                            NEG.W   D1
+000002EE                           282      
+Line 283 ERROR: Symbol value differs between first and second pass
+000002EE                           283  .SUM_DIST
+000002EE  D240                     284                            ADD.W   D0,D1
+000002F0                           285                
+000002F0                           286                            ; COLLISION
+Line 287 ERROR: Undefined symbol
+000002F0  B27C BD16                287                            CMP.W   #PACRAD,D1
+000002F4  6C00 0050                288                            BGE     .NO_COLLISION
+Line 289 ERROR: Undefined symbol
+000002F8  5379 005455B8            289                            SUBQ.W  #1,(PACMAN_LIVES)
+000002FE                           290                  
+000002FE                           291                            ; TELEPORT BOTH TO STARTING POSITION
+Line 292 ERROR: Undefined symbol
+000002FE  1E3C 0016                292                            MOVE.B  #SNDDEATH,D7
+00000302  4E43                     293                            TRAP    #3
+Line 294 ERROR: Undefined symbol
+00000304  4EB9 004DBD16            294                            JSR RESTART
+0000030A                           295  
+Line 296 ERROR: Symbol value differs between first and second pass
+0000030A                           296  .NO_COLLISION
+0000030A  6000 0436                297                            BRA     .MEGADONE
+0000030E                           298            
+Line 299 ERROR: Symbol value differs between first and second pass
+0000030E                           299  .FRIGHTENED_MODE        
+Line 300 ERROR: Undefined symbol
+0000030E  5279 005455B8            300                            ADDQ    #1,(INKY_FRIGHTENED_TIMER)
+Line 301 ERROR: Undefined symbol
+00000314  33FC 0001 005455B8       301                            MOVE.W  #1,(INKY_SPEED)                     
+Line 302 ERROR: Undefined symbol
+0000031C  23FC 004DBD16 005455B8   302                            MOVE.L  #DARK_BLUE,(INKY_COLOR)
+Line 303 ERROR: Undefined symbol
+00000326  3039 004DBD16            303                            MOVE.W  (INKY_POS_X),D0
+Line 304 ERROR: Undefined symbol
+0000032C  3239 004DBD16            304                            MOVE.W  (INKY_POS_Y),D1
+00000332                           305                  
+00000332                           306                            ; MOVE FORWARD
+Line 307 ERROR: Undefined symbol
+00000332  0C79 0001 005455B8       307                            CMP.W   #1,(INKY_DIR)
+0000033A  6700 005A                308                            BEQ     .MVLEFTF
+Line 309 ERROR: Undefined symbol
+0000033E  0C79 0002 005455B8       309                            CMP.W   #2,(INKY_DIR)
+00000346  6700 0058                310                            BEQ     .MVUPF
+Line 311 ERROR: Undefined symbol
+0000034A  0C79 0003 005455B8       311                            CMP.W   #3,(INKY_DIR)
+00000352  6700 0056                312                            BEQ     .MVRIGHTF
+00000356  6000 005C                313                            BRA     .MVDOWNF
+0000035A                           314             
+Line 315 ERROR: Symbol value differs between first and second pass
+0000035A                           315  .MVLEFTF                  SUB.W   (INKY_SPEED),D0
+0000035A  6000 005E                316                            BRA     .CONTF
+0000035E                           317      
+Line 318 ERROR: Symbol value differs between first and second pass
+0000035E                           318  .MVUPF                    SUB.W   (INKY_SPEED),D1
+0000035E  6000 005A                319                            BRA     .CONTF
+00000362                           320      
+Line 321 ERROR: Symbol value differs between first and second pass
+00000362                           321  .MVRIGHTF                 ADD.W   (INKY_SPEED),D0
+00000362  6000 0056                322                            BRA     .CONTF
+00000366                           323                  
+Line 324 ERROR: Symbol value differs between first and second pass
+00000366                           324  .MVDOWNF                  ADD.W   (INKY_SPEED),D1
+00000366                           325      
+Line 326 ERROR: Symbol value differs between first and second pass
+00000366                           326  .CONTF         
+Line 327 ERROR: Undefined symbol
+00000366  33C0 005455B8            327                            MOVE.W  D0,(INKY_POS_X)
+Line 328 ERROR: Undefined symbol
+0000036C  33C1 005455B8            328                            MOVE.W  D1,(INKY_POS_Y)
+00000372                           329    
+00000372                           330                            ; CHECK TOP LEFT 
+Line 331 ERROR: Undefined symbol
+00000372  3439 004DBD16            331                            MOVE.W  (INKY_POS_Y),D2
+Line 332 ERROR: Undefined symbol
+00000378  3639 004DBD16            332                            MOVE.W  (INKY_POS_X),D3
+0000037E  4EB9 00000748            333                            JSR     CHECK_COLLISIONS_INKY
+00000384  0804 0000                334                            BTST.L  #0,D4
+00000388  6700 01DC                335                            BEQ     .DONEF
+0000038C                           336                  
+0000038C                           337                            ; CHECK BOTTOM RIGHT
+Line 338 ERROR: Undefined symbol
+0000038C  3439 004DBD16            338                            MOVE.W  (INKY_POS_Y),D2
+Line 339 ERROR: Undefined symbol
+00000392  3639 004DBD16            339                            MOVE.W  (INKY_POS_X),D3
+Line 340 ERROR: Comma expected
+00000398                           340                            ADD.W   #PACRAD-1,D2
+Line 341 ERROR: Comma expected
+00000398                           341                            ADD.W   #PACRAD-1,D3
+00000398  4EB9 00000748            342                            JSR     CHECK_COLLISIONS_INKY
+0000039E  0804 0000                343                            BTST.L  #0,D4
+000003A2  6700 01C2                344                            BEQ     .DONEF
+000003A6                           345                  
+000003A6                           346                            ; CHECK TOP RIGHT
+Line 347 ERROR: Undefined symbol
+000003A6  3439 004DBD16            347                            MOVE.W  (INKY_POS_Y),D2
+Line 348 ERROR: Undefined symbol
+000003AC  3639 004DBD16            348                            MOVE.W  (INKY_POS_X),D3 
+Line 349 ERROR: Comma expected
+000003B2                           349                            ADD.W   #PACRAD-1,D2
+000003B2  4EB9 00000748            350                            JSR     CHECK_COLLISIONS_INKY
+000003B8  0804 0000                351                            BTST.L  #0,D4
+000003BC  6700 01A8                352                            BEQ     .DONEF
+000003C0                           353                  
+000003C0                           354                            ; CHECK BOTTOM LEFT 
+Line 355 ERROR: Undefined symbol
+000003C0  3439 004DBD16            355                            MOVE.W  (INKY_POS_Y),D2
+Line 356 ERROR: Undefined symbol
+000003C6  3639 004DBD16            356                            MOVE.W  (INKY_POS_X),D3 
+Line 357 ERROR: Comma expected
+000003CC                           357                            ADD.W   #PACRAD-1,D3
+000003CC  4EB9 00000748            358                            JSR     CHECK_COLLISIONS_INKY
+000003D2  0804 0000                359                            BTST.L  #0,D4
+000003D6  6700 018E                360                            BEQ     .DONEF
+000003DA                           361                  
+000003DA                           362                            ; HE IS IN INTERSECTION
+Line 363 ERROR: Undefined symbol
+000003DA  43F9 004DBD16            363                            LEA.L   INKY_ALLOWED_DIR,A1
+000003E0                           364                            ; INITIALIZE ARRAY TO 1
+000003E0  22BC 01010101            365                            MOVE.L  #$01010101,(A1)
+000003E6                           366                  
+000003E6                           367                            ; NOW WE REMOVE THE DIRECTIONS WITH WALL
+Line 368 ERROR: Symbol value differs between first and second pass
+000003E6                           368  .CONT2F                   MOVE.W  (INKY_POS_X),D0
+Line 369 ERROR: Undefined symbol
+000003E6  3239 004DBD16            369                            MOVE.W  (INKY_POS_Y),D1
+000003EC  4EB9 000007F4            370                            JSR     GETMAPCOORDS_INKY
+000003F2                           371                  
+000003F2  3400                     372                            MOVE.W  D0,D2      ; XM
+000003F4  3601                     373                            MOVE.W  D1,D3      ; YY
+000003F6                           374                  
+000003F6                           375                            ; LEFT SIDE
+000003F6  5302                     376                            SUBQ.B  #1,D2
+000003F8  4EB9 0000080A            377                            JSR     MAPGET_INKY
+000003FE  B87C 0001                378                            CMP.W   #1,D4
+00000402  6600 0070                379                            BNE     .CHKMAPUPF
+00000406  12BC 0000                380                            MOVE.B  #0,(A1)
+0000040A                           381                  
+Line 382 ERROR: Symbol value differs between first and second pass
+0000040A                           382  .CHKMAPUPF
+0000040A  3400                     383                            MOVE.W  D0,D2      ; XM
+0000040C  3601                     384                            MOVE.W  D1,D3      ; YM
+0000040E                           385                  
+0000040E                           386                            ; UP SIDE
+0000040E  5303                     387                            SUBQ.B  #1,D3
+00000410  4EB9 0000080A            388                            JSR     MAPGET_INKY
+00000416  B87C 0001                389                            CMP.W   #1,D4
+0000041A  6600 0072                390                            BNE     .CHKMAPRIGHTF
+0000041E  137C 0000 0001           391                            MOVE.B  #0,1(A1)
+00000424                           392                  
+Line 393 ERROR: Symbol value differs between first and second pass
+00000424                           393  .CHKMAPRIGHTF
+00000424  3400                     394                            MOVE.W  D0,D2      ; XM
+00000426  3601                     395                            MOVE.W  D1,D3      ; YM
+00000428                           396                  
+00000428                           397                            ; RIGHT SIDE
+00000428  5202                     398                            ADDQ.B  #1,D2
+0000042A  4EB9 0000080A            399                            JSR     MAPGET_INKY
+00000430  B87C 0001                400                            CMP.W   #1,D4
+00000434  6600 0072                401                            BNE     .CHKMAPDOWNF
+00000438  137C 0000 0002           402                            MOVE.B  #0,2(A1)
+0000043E                           403      
+Line 404 ERROR: Symbol value differs between first and second pass
+0000043E                           404  .CHKMAPDOWNF
+0000043E  3400                     405                            MOVE.W  D0,D2      ; XM
+00000440  3601                     406                            MOVE.W  D1,D3      ; YM
+00000442                           407                  
+00000442                           408                            ; DOWN SIDE
+00000442  5203                     409                            ADDQ.B  #1,D3
+00000444  4EB9 0000080A            410                            JSR     MAPGET_INKY
+0000044A  B87C 0001                411                            CMP.W   #1,D4
+0000044E  6600 0072                412                            BNE     .CONT3F
+00000452  137C 0000 0003           413                            MOVE.B  #0,3(A1)
+00000458                           414                  
+Line 415 ERROR: Symbol value differs between first and second pass
+00000458                           415  .CONT3F                   ; WE HAVE REMOVED THE DIRECTIONS WITH WALL 
+00000458                           416                            ; FROM THE TUPLE NOW WE HAVE TO CALCULATE 
+00000458                           417                            ; THE EUCYDEAN DISTANCE FROM THE ALLOWED DIRECTIONS
+00000458                           418                  
+Line 419 ERROR: Undefined symbol
+00000458  45F9 004DBD16            419                            LEA.L   INKY_EUCYDEAN_DIS,A2
+Line 420 ERROR: Undefined symbol
+0000045E  3039 004DBD16            420                            MOVE.W  (INKY_POS_X),D0
+Line 421 ERROR: Undefined symbol
+00000464  3239 004DBD16            421                            MOVE.W  (INKY_POS_Y),D1
+0000046A                           422      
+0000046A                           423                            ; RECAP
+0000046A                           424                            ; A1 - INKY_ALLOWED_DIR
+0000046A                           425                            ; A2 - INKY_EUCYDEAN_DIS
+0000046A                           426                            ; D0 - X
+0000046A                           427                            ; D1 - Y
+0000046A                           428                  
+0000046A  24BC 00000000            429                            MOVE.L  #$00000000,(A2)
+00000470  257C 00000000 0004       430                            MOVE.L  #$00000000,4(A2)
+00000478                           431                  
+00000478  0C11 0001                432                            CMP.B   #1,(A1)
+0000047C  6600 007C                433                            BNE     .CALCUPF
+00000480                           434                            ; CALC LEFT
+00000480  3400                     435                            MOVE.W  D0,D2      ; X
+00000482  3601                     436                            MOVE.W  D1,D3      ; Y
+00000484                           437                  
+Line 438 ERROR: Undefined symbol
+00000484  0442 BD16                438                            SUB.W  #CELSIZE,D2
+00000488  4EB9 000008D2            439                            JSR     CALCDIS_INKY
+0000048E  3483                     440                            MOVE.W  D3,(A2)
+00000490                           441                  
+Line 442 ERROR: Symbol value differs between first and second pass
+00000490                           442  .CALCUPF                  CMP.B   #1,1(A1)
+00000490  6600 0084                443                            BNE     .CALCRIGHTF
+00000494                           444                            ; CALC UP
+00000494  3400                     445                            MOVE.W  D0,D2      ; X
+00000496  3601                     446                            MOVE.W  D1,D3      ; Y
+00000498                           447                  
+Line 448 ERROR: Undefined symbol
+00000498  0443 BD16                448                            SUB.W  #CELSIZE,D3
+0000049C  4EB9 000008D2            449                            JSR     CALCDIS_INKY
+000004A2  3543 0002                450                            MOVE.W  D3,2(A2)
+000004A6                           451                  
+Line 452 ERROR: Symbol value differs between first and second pass
+000004A6                           452  .CALCRIGHTF               CMP.B   #1,2(A1)
+000004A6  6600 008A                453                            BNE     .CALCDOWNF
+000004AA                           454                            ; CALC RIGHT
+000004AA  3400                     455                            MOVE.W  D0,D2      ; X
+000004AC  3601                     456                            MOVE.W  D1,D3      ; Y
+000004AE                           457                  
+Line 458 ERROR: Undefined symbol
+000004AE  0642 BD16                458                            ADD.W  #CELSIZE,D2
+000004B2  4EB9 000008D2            459                            JSR     CALCDIS_INKY
+000004B8  3543 0004                460                            MOVE.W  D3,4(A2)
+000004BC                           461                  
+Line 462 ERROR: Symbol value differs between first and second pass
+000004BC                           462  .CALCDOWNF                CMP.B   #1,3(A1)
+000004BC  6600 0090                463                            BNE     .CONT4F
+000004C0                           464                            ; CALC DOWN
+000004C0  3400                     465                            MOVE.W  D0,D2      ; X
+000004C2  3601                     466                            MOVE.W  D1,D3      ; Y
+000004C4                           467                  
+Line 468 ERROR: Undefined symbol
+000004C4  0643 BD16                468                            ADD.W  #CELSIZE,D3
+000004C8  4EB9 000008D2            469                            JSR     CALCDIS_INKY
+000004CE  3543 0006                470                            MOVE.W  D3,6(A2)
+000004D2                           471                  
+Line 472 ERROR: Symbol value differs between first and second pass
+000004D2                           472  .CONT4F                   ; WE HAVE THE VALID DISTANCES, NOW HE WILL GO
+000004D2                           473                            ; THRU THE SHORTENEST PATH
+000004D2  4EB9 000009FA            474                            JSR FIND_MAX_INKY
+Line 475 ERROR: Undefined symbol
+000004D8  33C1 005455B8            475                            MOVE.W  D1,(INKY_DIR)
+Line 476 ERROR: Undefined symbol
+000004DE  0C79 BD16 005455B8       476                            CMP.W   #FRIGHTENED,(INKY_FRIGHTENED_TIMER)
+000004E6  6E00 011A                477                            BGT     .BC_TIME  
+Line 478 ERROR: Symbol value differs between first and second pass
+000004EA                           478  .DONEF      
+000004EA                           479                            ; CHECK BOTTOM RIGHT
+Line 480 ERROR: Undefined symbol
+000004EA  3439 004DBD16            480                            MOVE.W  (INKY_POS_Y),D2
+Line 481 ERROR: Undefined symbol
+000004F0  3639 004DBD16            481                            MOVE.W  (INKY_POS_X),D3
+Line 482 ERROR: Comma expected
+000004F6                           482                            ADD.W   #PACRAD-1,D2
+Line 483 ERROR: Comma expected
+000004F6                           483                            ADD.W   #PACRAD-1,D3
+000004F6  4EB9 00000748            484                            JSR     CHECK_COLLISIONS_INKY
+000004FC                           485                
+000004FC                           486                            ; CHECK IF PACMAN KILLED INKY
+000004FC                           487                            ; D0 = INKY X
+000004FC                           488                            ; D1 = INKY Y
+Line 489 ERROR: Undefined symbol
+000004FC  3039 004DBD16            489                            MOVE.W  (INKY_POS_X),D0
+Line 490 ERROR: Undefined symbol
+00000502  3239 004DBD16            490                            MOVE.W  (INKY_POS_Y),D1
+00000508                           491                            ; D2 = PACMAN X
+00000508                           492                            ; D3 = PACMAN Y
+Line 493 ERROR: Undefined symbol
+00000508  3439 004DBD16            493                            MOVE.W  (PAC_POS_X),D2
+Line 494 ERROR: Undefined symbol
+0000050E  3639 004DBD16            494                            MOVE.W  (PAC_POS_Y),D3
+00000514                           495      
+00000514                           496                            ; ABSOLUTE DISTANCE
+00000514  9042                     497                            SUB.W   D2,D0      ; D0 = |INKY X - PACMAN X|
+00000516  4A40                     498                            TST.W   D0
+00000518  6A00 0088                499                            BPL     .CHECK_YF
+0000051C  4440                     500                            NEG.W   D0
+0000051E                           501      
+Line 502 ERROR: Symbol value differs between first and second pass
+0000051E                           502  .CHECK_YF
+0000051E  9243                     503                            SUB.W   D3,D1      ; D1 = |INKY Y - Pac-Man Y|
+00000520  4A41                     504                            TST.W   D1
+00000522  6A00 0088                505                            BPL     .SUM_DISTF
+00000526  4441                     506                            NEG.W   D1
+00000528                           507      
+Line 508 ERROR: Symbol value differs between first and second pass
+00000528                           508  .SUM_DISTF
+00000528  D240                     509                            ADD.W   D0,D1
+0000052A                           510      
+0000052A                           511                            ; COLLISION
+Line 512 ERROR: Undefined symbol
+0000052A  B27C BD16                512                            CMP.W   #PACRAD,D1
+0000052E  6C00 00CE                513                            BGE     .NO_COLLISIONF
+00000532                           514                            ; TELEPORT BACK TO HIS HOME
+00000532                           515                            ; REPRODUCE SOUND
+Line 516 ERROR: Undefined symbol
+00000532  1E3C 0016                516                            MOVE.B  #SNDEATGHOS,D7
+00000536  4E43                     517                            TRAP    #3
+Line 518 ERROR: Undefined symbol
+00000538  33FC BD16 005455B8       518                            MOVE.W  #INKY_START_X,(INKY_POS_X)
+Line 519 ERROR: Undefined symbol
+00000540  33FC BD16 005455B8       519                            MOVE.W  #INKY_START_Y,(INKY_POS_Y)
+Line 520 ERROR: Undefined symbol
+00000548  06B9 000000C8 005455B8   520                            ADD.L  #200,(CURRENT_SCORE)
+Line 521 ERROR: Undefined symbol
+00000552  4279 004DBD16            521                            CLR.W   (INKY_IS_BLUE)
+Line 522 ERROR: Undefined symbol
+00000558  33FC 0002 005455B8       522                            MOVE.W  #2,(INKY_SPEED)
+Line 523 ERROR: Undefined symbol
+00000560  23FC 004DBD16 005455B8   523                            MOVE.L  #LIGHT_BLUE,(INKY_COLOR)
+Line 524 ERROR: Undefined symbol
+0000056A  33FC 0001 005455B8       524                            MOVE.W  #1,(INKY_ESTADO)
+Line 525 ERROR: Undefined symbol
+00000572  33FC 0002 005455B8       525                            MOVE.W  #2,(INKY_DIR)    
+Line 526 ERROR: Symbol value differs between first and second pass
+0000057A                           526  .NO_COLLISIONF
+0000057A  6000 01C6                527                            BRA     .MEGADONE
+Line 528 ERROR: Symbol value differs between first and second pass
+0000057E                           528  .BC_TIME  
+Line 529 ERROR: Undefined symbol
+0000057E  4279 004DBD16            529                            CLR.W   (INKY_IS_BLUE)          
+Line 530 ERROR: Undefined symbol
+00000584  33FC 0002 005455B8       530                            MOVE.W  #2,(INKY_SPEED)
+Line 531 ERROR: Undefined symbol
+0000058C  23FC 004DBD16 005455B8   531                            MOVE.L  #LIGHT_BLUE,(INKY_COLOR)
+Line 532 ERROR: Undefined symbol
+00000596  4279 004DBD16            532                            CLR.W   (INKY_FRIGHTENED_TIMER)
+0000059C  6000 01A4                533                            BRA .MEGADONE
+Line 534 ERROR: Symbol value differs between first and second pass
+000005A0                           534  .IS_HOME
+Line 535 ERROR: Undefined symbol
+000005A0  4279 004DBD16            535                            CLR.W   (INKY_IS_BLUE)
+Line 536 ERROR: Undefined symbol
+000005A6  3039 004DBD16            536                            MOVE.W  (INKY_POS_X),D0
+Line 537 ERROR: Undefined symbol
+000005AC  3239 004DBD16            537                            MOVE.W  (INKY_POS_Y),D1
+000005B2                           538                            
+000005B2                           539                            ; MOVE FORWARD
+Line 540 ERROR: Undefined symbol
+000005B2  0C79 0001 005455B8       540                            CMP.W   #1,(INKY_DIR)
+000005BA  6700 00A2                541                            BEQ     .MVLEFTH
+Line 542 ERROR: Undefined symbol
+000005BE  0C79 0002 005455B8       542                            CMP.W   #2,(INKY_DIR)
+000005C6  6700 00A0                543                            BEQ     .MVUPH
+Line 544 ERROR: Undefined symbol
+000005CA  0C79 0003 005455B8       544                            CMP.W   #3,(INKY_DIR)
+000005D2  6700 009E                545                            BEQ     .MVRIGHTH
+000005D6  6000 00A4                546                            BRA     .MVDOWNH
+000005DA                           547             
+Line 548 ERROR: Symbol value differs between first and second pass
+000005DA                           548  .MVLEFTH                  SUB.W   (INKY_SPEED),D0
+000005DA  6000 00A6                549                            BRA     .CONTH
+000005DE                           550      
+Line 551 ERROR: Symbol value differs between first and second pass
+000005DE                           551  .MVUPH                    SUB.W   (INKY_SPEED),D1
+000005DE  6000 00A2                552                            BRA     .CONTH
+000005E2                           553      
+Line 554 ERROR: Symbol value differs between first and second pass
+000005E2                           554  .MVRIGHTH                 ADD.W   (INKY_SPEED),D0
+000005E2  6000 009E                555                            BRA     .CONTH
+000005E6                           556                  
+Line 557 ERROR: Symbol value differs between first and second pass
+000005E6                           557  .MVDOWNH                  ADD.W   (INKY_SPEED),D1
+Line 558 ERROR: Symbol value differs between first and second pass
+000005E6                           558  .CONTH
+Line 559 ERROR: Undefined symbol
+000005E6  33C0 005455B8            559                            MOVE.W  D0,(INKY_POS_X)
+Line 560 ERROR: Undefined symbol
+000005EC  33C1 005455B8            560                            MOVE.W  D1,(INKY_POS_Y)
+000005F2                           561                            
+Line 562 ERROR: Undefined symbol
+000005F2  0C79 0002 005455B8       562                            CMP.W   #2,(INKY_ESTADO)
+000005FA  6700 0112                563                            BEQ     .LEAVING_HOME
+Line 564 ERROR: Undefined symbol
+000005FE  0C79 0003 005455B8       564                            CMP.W   #3,(INKY_ESTADO)
+00000606  6700 011A                565                            BEQ     .LEFT_HOME
+0000060A                           566  
+Line 567 ERROR: Undefined symbol
+0000060A  0C79 0150 005455B8       567                            CMP.W  #336,(INKY_POS_Y)
+00000612  6D00 00A2                568                            BLT    .DOWN_HOUSE
+00000616  6000 00A6                569                            BRA    .CHECK_U_H
+Line 570 ERROR: Symbol value differs between first and second pass
+0000061A                           570  .DOWN_HOUSE     
+Line 571 ERROR: Undefined symbol
+0000061A  33FC 0004 005455B8       571                            MOVE.W #4,(INKY_DIR)
+00000622                           572                  
+Line 573 ERROR: Symbol value differs between first and second pass
+00000622                           573  .CHECK_U_H                CMP.W  #368,(INKY_POS_Y)
+00000622  6E00 00AA                574                            BGT    .UP_HOUSE
+00000626  6000 00AE                575                            BRA    .CHKMIDH
+0000062A                           576  
+Line 577 ERROR: Symbol value differs between first and second pass
+0000062A                           577  .UP_HOUSE     
+Line 578 ERROR: Undefined symbol
+0000062A  33FC 0002 005455B8       578                            MOVE.W #2,(INKY_DIR)
+00000632                           579                  
+Line 580 ERROR: Symbol value differs between first and second pass
+00000632                           580  .CHKMIDH                  ; IF IF MIDDLE AND IF TIME OUT
+Line 581 ERROR: Undefined symbol
+00000632  0C79 0160 005455B8       581                            CMP.W  #352,(INKY_POS_Y)
+0000063A  6600 0106                582                            BNE    .MEGADONE
+Line 583 ERROR: Undefined symbol
+0000063E  0C79 0001 005455C4       583                            CMP.W  #1,(INKY_ESTADO) ; TIME OUT
+00000646  6600 00FA                584                            BNE    .MEGADONE
+0000064A                           585                  
+Line 586 ERROR: Undefined symbol
+0000064A  33FC 0003 005455B8       586                            MOVE.W  #3,(INKY_DIR)
+Line 587 ERROR: Undefined symbol
+00000652  0C79 0198 005455B8       587                            CMP.W   #408,(INKY_POS_X)
+0000065A  6D00 00E6                588                            BLT     .MEGADONE
+Line 589 ERROR: Undefined symbol
+0000065E  33FC 0002 005455B8       589                            MOVE.W  #2,(INKY_ESTADO)
+00000666  6000 00DA                590                            BRA     .MEGADONE
+0000066A                           591                  
+Line 592 ERROR: Symbol value differs between first and second pass
+0000066A                           592  .LEAVING_HOME
+Line 593 ERROR: Undefined symbol
+0000066A  33FC 0002 005455B8       593                           MOVE.W  #2,(INKY_DIR)
+Line 594 ERROR: Undefined symbol
+00000672  33FC 0003 005455B8       594                           MOVE.W  #3,(INKY_ESTADO)
+0000067A  6000 00C6                595                           BRA     .MEGADONE
+0000067E                           596  
+Line 597 ERROR: Symbol value differs between first and second pass
+0000067E                           597  .LEFT_HOME
+Line 598 ERROR: Undefined symbol
+0000067E  0C79 BD16 005455B8       598                           CMP.W   #BLINKY_START_Y,(INKY_POS_Y)
+00000686  6E00 00BA                599                           BGT     .MEGADONE
+Line 600 ERROR: Undefined symbol
+0000068A  33FC 0001 005455B8       600                           MOVE.W  #1,(INKY_DIR)
+Line 601 ERROR: Undefined symbol
+00000692  33FC 0004 005455B8       601                           MOVE.W  #4,(INKY_ESTADO)
+0000069A  6000 00A6                602                           BRA     .MEGADONE
+0000069E                           603  
+Line 604 ERROR: Symbol value differs between first and second pass
+0000069E                           604  .MEGADONE
+0000069E                           605      
+0000069E  4C9F 01FF                606                            MOVEM.W (A7)+,D0-D7/A0
+000006A2  4E75                     607                            RTS
+000006A4                           608  ; -----------------------------------------------------------------------------
+Line 609 ERROR: Symbol value differs between first and second pass
+000006A4                           609  CHECK_COLLISIONS_INKY
+000006A4                           610  ; CHECK COLLISIONS.
+000006A4                           611  ; INPUT    : D2 - Y
+000006A4                           612  ;            D3 - X
+000006A4                           613  ; OUTPUT   : D4 - 1: INTERSECTION - 0: NO INTERSECTION
+000006A4                           614  ; MODIFIES : NONE
+000006A4                           615  ; -----------------------------------------------------------------------------
+000006A4  48E7 F000                616                            MOVEM.L D0-D3,-(A7)
+000006A8                           617                            ; IN D2 --> YM
+Line 618 ERROR: Undefined symbol
+000006A8  0442 BD16                618                            SUB.W   #MAP_START_Y,D2
+Line 619 ERROR: Undefined symbol
+000006AC  84FC BD16                619                            DIVU    #CELSIZE,D2
+000006B0  5342                     620                            SUBQ.W  #1,D2
+000006B2                           621                            ; IN D3 --> XM
+Line 622 ERROR: Undefined symbol
+000006B2  0443 BD16                622                            SUB.W   #MAP_START_X,D3
+Line 623 ERROR: Undefined symbol
+000006B6  86FC BD16                623                            DIVU    #CELSIZE,D3
+000006BA  5343                     624                            SUBQ.W  #1,D3
+000006BC                           625                  
+Line 626 ERROR: Undefined symbol
+000006BC  41F9 004DBD16            626                            LEA.L   MAPDATA,A0
+Line 627 ERROR: Undefined symbol
+000006C2  C4FC BD16                627                            MULU    #MAPWITH,D2                  
+000006C6  D443                     628                            ADD.W   D3,D2
+000006C8  D0C2                     629                            ADD.W   D2,A0
+000006CA  4242                     630                            CLR.W   D2
+000006CC  1410                     631                            MOVE.B  (A0),D2
+000006CE                           632                  
+000006CE  C4FC 0006                633                            MULU    #6,D2
+000006D2  2242                     634                            MOVE.L  D2,A1
+000006D4  4EE9 077C                635                            JMP     .JUMPLIST(A1)
+Line 636 ERROR: Symbol value differs between first and second pass
+000006D8                           636  .JUMPLIST:   
+000006D8  4EF9 000007EC            637                            JMP     .RETURN
+000006DE  4EF9 000007A6            638                            JMP     .IS_WALL
+000006E4  4EF9 000007EC            639                            JMP     .RETURN
+000006EA  4EF9 000007EC            640                            JMP     .RETURN
+000006F0  4EF9 000007AC            641                            JMP     .ISPORTAL
+000006F6  4EF9 000007E6            642                            JMP     .IS_INTER
+000006FC  4EF9 000007E6            643                            JMP     .IS_INTER
+Line 644 ERROR: Symbol value differs between first and second pass
+00000702                           644  .IS_WALL
+00000702  7802                     645                            MOVE.L  #2,D4
+00000704  6000 00E6                646                            BRA     .RETURN
+Line 647 ERROR: Symbol value differs between first and second pass
+00000708                           647  .ISPORTAL
+00000708                           648                            ; TELEPORT INKY TO THE OTHER SIDE OF THE MAP
+Line 649 ERROR: Undefined symbol
+00000708  303C BD16                649                            MOVE.W  #PORTAL_RIGHT_X,D0
+Line 650 ERROR: Undefined symbol
+0000070C  B079 004DBD16            650                            CMP.W   (INKY_POS_X),D0
+00000712                           651      
+00000712  6D00 00BC                652                            BLT     .RSIDE
+00000716                           653                  
+00000716                           654                            ; TELEPORT TO RIGHT SIDE
+Line 655 ERROR: Invalid syntax
+00000716                           655                            MOVE.W  #PORTAL_RIGHT_X+CELSIZE,D0
+Line 656 ERROR: Undefined symbol
+00000716  33C0 005455B8            656                            MOVE.W  D0,(INKY_POS_X)
+Line 657 ERROR: Undefined symbol
+0000071C  33FC 0001 005455B8       657                            MOVE.W  #1,(INKY_DIR)
+00000724  6000 00C6                658                            BRA     .RETURN   
+00000728                           659                  
+Line 660 ERROR: Symbol value differs between first and second pass
+00000728                           660  .RSIDE
+00000728                           661                            ; TELEPORT TO LEFT SIDE
+Line 662 ERROR: Comma expected
+00000728                           662                            MOVE.W  #PORTAL_LEFT_X-CELSIZE,D0
+Line 663 ERROR: Undefined symbol
+00000728  33C0 005455B8            663                            MOVE.W  D0,(INKY_POS_X)
+Line 664 ERROR: Undefined symbol
+0000072E  33FC 0003 005455B8       664                            MOVE.W  #3,(INKY_DIR)
+00000736  6000 00B4                665                            BRA     .RETURN
+0000073A                           666                  
+Line 667 ERROR: Symbol value differs between first and second pass
+0000073A                           667  .IS_INTER
+0000073A  7801                     668                            MOVE.L  #1,D4
+0000073C  6000 00B0                669                            BRA     .FINISH
+Line 670 ERROR: Symbol value differs between first and second pass
+00000740                           670  .RETURN
+00000740  7800                     671                            MOVE.L  #0,D4
+Line 672 ERROR: Symbol value differs between first and second pass
+00000742                           672  .FINISH            
+00000742  4CDF 000F                673                            MOVEM.L (A7)+,D0-D3
+00000746  4E75                     674                            RTS         
+00000748                           675  ; -----------------------------------------------------------------------------
+Line 676 ERROR: Symbol value differs between first and second pass
+00000748                           676  GETMAPCOORDS_INKY
+00000748                           677  ; RETURN MAP ROW AND COLUMN.
+00000748                           678  ; INPUT    : D0 - X
+00000748                           679  ;            D1 - Y
+00000748                           680  ; OUTPUT   : D0 - X
+00000748                           681  ;            D1 - Y
+00000748                           682  ; MODIFIES : NONE
+00000748                           683  ; -----------------------------------------------------------------------------
+Line 684 ERROR: Undefined symbol
+00000748  0441 BD16                684                            SUB.W   #MAP_START_Y,D1
+0000074C                           685                            ; IN D1 --> YM
+Line 686 ERROR: Undefined symbol
+0000074C  82FC BD16                686                            DIVU    #CELSIZE,D1
+00000750  5341                     687                            SUBQ.W  #1,D1
+00000752                           688                  
+Line 689 ERROR: Undefined symbol
+00000752  0440 BD16                689                            SUB.W   #MAP_START_X,D0
+00000756                           690                            ; IN D0 --> XM
+Line 691 ERROR: Undefined symbol
+00000756  80FC BD16                691                            DIVU    #CELSIZE,D0
+0000075A  5340                     692                            SUBQ.W  #1,D0
+0000075C                           693                  
+0000075C  4E75                     694                            RTS
+0000075E                           695                  
+0000075E                           696  ; -----------------------------------------------------------------------------
+Line 697 ERROR: Symbol value differs between first and second pass
+0000075E                           697  MAPGET_INKY
+0000075E                           698  ; RETURN MAP TILE.
+0000075E                           699  ; INPUT    : D2 - X
+0000075E                           700  ;            D3 - Y
+0000075E                           701  ; OUTPUT   : D4 - 1: WALL - 0: NO WALL
+0000075E                           702  ; MODIFIES : NONE
+0000075E                           703  ; -----------------------------------------------------------------------------
+0000075E  48E7 3080                704                            MOVEM.L D2-D3/A0,-(A7)
+Line 705 ERROR: Undefined symbol
+00000762  41F9 004DBD16            705                            LEA.L   MAPDATA,A0
+Line 706 ERROR: Undefined symbol
+00000768  C6FC BD16                706                            MULU    #MAPWITH,D3                  
+0000076C  D642                     707                            ADD.W   D2,D3
+0000076E  D0C3                     708                            ADD.W   D3,A0
+00000770  4243                     709                            CLR.W   D3
+00000772  1810                     710                            MOVE.B  (A0),D4
+00000774  4CDF 010C                711                            MOVEM.L (A7)+,D2-D3/A0
+00000778  4E75                     712                            RTS
+0000077A                           713                            
+0000077A                           714  ; -----------------------------------------------------------------------------
+Line 715 ERROR: Symbol value differs between first and second pass
+0000077A                           715  MODE_UPDATE_INKY
+0000077A                           716  ; UPDATE MODES.
+0000077A                           717  ; INPUT    : NONE
+0000077A                           718  ; OUTPUT   : NONE
+0000077A                           719  ; MODIFIES : NONE
+0000077A                           720  ; -----------------------------------------------------------------------------
+0000077A                           721                            ; CHECK IF WE HAVE REACHED 6 CHANGES
+Line 722 ERROR: Undefined symbol
+0000077A  0C79 BD16 005455B8       722                            CMP.W   #MAX_MODE_SWITCH, (INKY_MODE_SWITCH_COUNT)
+00000782                           723                            ; IF WE HAVE REACHED 6 CHANGES WE KEEP ON 
+00000782                           724                            ; CHASE MODE FOR THE REST OF THE GAME
+00000782  6C00 0132                725                            BGE     .PERM 
+00000786                           726                            ; CHECK IF CHASE IS ON
+Line 727 ERROR: Undefined symbol
+00000786  0C79 0001 005455B8       727                            CMP.W   #1, (INKY_CHASE_ON)
+0000078E  6700 00BE                728                            BEQ     .IN_C_MODE
+00000792                           729                            ; CHECK IF SCATTER IS ON
+Line 730 ERROR: Undefined symbol
+00000792  0C79 0001 005455B8       730                            CMP.W   #1, (INKY_SCATER_ON)
+0000079A  6700 00C8                731                            BEQ     .IN_S_MODE
+0000079E                           732                            ; IF NOTHING IS ON THEN GO TO END
+0000079E  6000 0130                733                            BRA     .END
+000007A2                           734      
+Line 735 ERROR: Symbol value differs between first and second pass
+000007A2                           735  .IN_C_MODE
+000007A2                           736                            ; IF CHASE IS ON
+000007A2                           737                            ; ++ THE CHASE TIMER
+Line 738 ERROR: Undefined symbol
+000007A2  5279 005455B8            738                            ADDQ.W  #1, (INKY_CHASETIMER)
+000007A8                           739                            ; IF TIMER IS BIGGER THAN #CHASE
+Line 740 ERROR: Undefined symbol
+000007A8  0C79 BD16 005455B8       740                            CMP.W   #CHASE, (INKY_CHASETIMER)
+000007B0  6E00 00C8                741                            BGT     .SW_TO_S_MODE
+000007B4                           742                            ; IF NOT WE END UPDATE
+000007B4  6000 011A                743                            BRA     .END
+000007B8                           744      
+Line 745 ERROR: Symbol value differs between first and second pass
+000007B8                           745  .IN_S_MODE
+000007B8                           746                            ; IF SCATTER IS ON
+000007B8                           747                            ; ++ TIMER 
+Line 748 ERROR: Undefined symbol
+000007B8  5279 005455B8            748                            ADDQ.W  #1, (INKY_SCATERTIMER)
+000007BE                           749                            ; IF TIMER IS BIGGER THAN #SCATTER
+Line 750 ERROR: Undefined symbol
+000007BE  0C79 BD16 005455B8       750                            CMP.W   #SCATER, (INKY_SCATERTIMER)
+000007C6  6E00 00D0                751                            BGT     .SW_TO_C_MODE
+000007CA                           752                            ; IF NOT END UPDATE
+000007CA  6000 0104                753                            BRA     .END
+000007CE                           754      
+Line 755 ERROR: Symbol value differs between first and second pass
+000007CE                           755  .SW_TO_S_MODE
+000007CE                           756                            ; SCATTER IS NOW ON
+Line 757 ERROR: Undefined symbol
+000007CE  33FC 0001 005455B8       757                            MOVE.W  #1, (INKY_SCATER_ON)
+000007D6                           758                            ; IF SCATTER IS ON CHASE IS OFF AND ITS TIMER IS 0
+Line 759 ERROR: Undefined symbol
+000007D6  4279 004DBD16            759                            CLR.W   (INKY_CHASE_ON)
+Line 760 ERROR: Undefined symbol
+000007DC  4279 004DBD16            760                            CLR.W   (INKY_SCATERTIMER)
+000007E2                           761          
+000007E2                           762                            ; IF WE EVER ENTER THIS CODE PART IS 
+000007E2                           763                            ; BECAUSE WE MADE 1 SWITCH
+000007E2                           764                            ; MODE_SWITCH_COUNT++
+Line 765 ERROR: Undefined symbol
+000007E2  5279 005455B8            765                            ADDQ.W  #1, (INKY_MODE_SWITCH_COUNT)
+000007E8                           766                  
+000007E8  6000 00E6                767                            BRA     .END
+000007EC                           768      
+Line 769 ERROR: Symbol value differs between first and second pass
+000007EC                           769  .SW_TO_C_MODE
+000007EC                           770                            ; CHASE IS NOW ON
+Line 771 ERROR: Undefined symbol
+000007EC  33FC 0001 005455B8       771                            MOVE.W  #1, (INKY_CHASE_ON)
+000007F4                           772                            ; IF CHASE IS ON SCATTER IS OFF AND ITS TIMER IS 0
+Line 773 ERROR: Undefined symbol
+000007F4  4279 004DBD16            773                            CLR.W   (INKY_SCATER_ON)
+Line 774 ERROR: Undefined symbol
+000007FA  4279 004DBD16            774                            CLR.W   (INKY_CHASETIMER)
+00000800                           775          
+00000800                           776                            ; IF WE EVER ENTER THIS CODE PART IS 
+00000800                           777                            ; BECAUSE WE MADE 1 SWITCH
+00000800                           778                            ; MODE_SWITCH_COUNT++
+Line 779 ERROR: Undefined symbol
+00000800  5279 005455B8            779                            ADDQ.W  #1, (INKY_MODE_SWITCH_COUNT)
+00000806                           780      
+00000806  6000 00C8                781                            BRA     .END
+0000080A                           782      
+Line 783 ERROR: Symbol value differs between first and second pass
+0000080A                           783  .PERM
+0000080A                           784                            ; IF WE ENTER THIS PART OF THE CODE THERE 
+0000080A                           785                            ; IS NO MORE SWITHCING IN BETWEN MODES
+0000080A                           786                            ; SO CHASES IS ON AND SCATER OFF 
+0000080A                           787                            ; SCATER TIMER 0
+0000080A                           788                            ; AND CHASE TIMER 0
+Line 789 ERROR: Undefined symbol
+0000080A  33FC 0001 005455B8       789                            MOVE.W  #1, (INKY_CHASE_ON)
+Line 790 ERROR: Undefined symbol
+00000812  4279 004DBD16            790                            CLR.W   (INKY_SCATER_ON)
+Line 791 ERROR: Undefined symbol
+00000818  4279 004DBD16            791                            CLR.W   (INKY_CHASETIMER)
+Line 792 ERROR: Undefined symbol
+0000081E  4279 004DBD16            792                            CLR.W   (INKY_SCATERTIMER)
+Line 793 ERROR: Symbol value differs between first and second pass
+00000824                           793  .END
+00000824  4E75                     794                            RTS
+00000826                           795                             
+00000826                           796  ; -----------------------------------------------------------------------------
+Line 797 ERROR: Symbol value differs between first and second pass
+00000826                           797  CALCDIS_INKY
+00000826                           798  ; CALC DIS TO TARGET.
+00000826                           799  ; INPUT    : D2 - X
+00000826                           800  ;            D3 - Y
+00000826                           801  ; OUTPUT   : D3 - EUCYDEAN DISTANCE TO TARGET
+00000826                           802  ; MODIFIES : NONE
+00000826                           803  ; -----------------------------------------------------------------------------
+00000826  48A7 E000                804                            MOVEM.W  D0-D2,-(A7)
+0000082A                           805                  
+0000082A                           806                            ; IF IS BLUE IS ON WE SET PACMAN AS THE TARGET
+Line 807 ERROR: Undefined symbol
+0000082A  0C79 0001 005455B8       807                            CMP.W   #1, (INKY_IS_BLUE)
+00000832  6700 0150                808                            BEQ     .SET_PAC_TAR
+00000836                           809                            ; IF CHASE IS ON WE SET PACMAN AS THE TARGET
+Line 810 ERROR: Undefined symbol
+00000836  0C79 0001 005455B8       810                            CMP.W   #1, (INKY_CHASE_ON)
+0000083E  6700 00BE                811                            BEQ     .SET_C_TAR
+00000842                           812                            ; IF SCATTER IS ON WE SET INKY'S HOME AS THE TARGET
+Line 813 ERROR: Undefined symbol
+00000842  0C79 0001 005455B8       813                            CMP.W   #1, (INKY_SCATER_ON)
+0000084A  6700 012C                814                            BEQ     .SET_S_TAR
+0000084E                           815                            ; IF NONE OF THEM ARE ON WE SET THE TARGET TO PACMAN
+0000084E  6000 0144                816                            BRA     .DEFAULT_TARGET
+00000852                           817      
+Line 818 ERROR: Symbol value differs between first and second pass
+00000852                           818  .SET_C_TAR
+Line 819 ERROR: Undefined symbol
+00000852  3039 004DBD16            819                            MOVE.W  (PAC_POS_X),D0
+Line 820 ERROR: Undefined symbol
+00000858  3239 004DBD16            820                            MOVE.W  (PAC_POS_Y),D1
+0000085E                           821                  
+0000085E                           822                            ; DOUBLE THE DISTANCE FROM BLINKY TO PACMAN
+Line 823 ERROR: Undefined symbol
+0000085E  0C79 0001 005455B8       823                            CMP.W   #1,(PAC_FACE)
+00000866  6700 00CA                824                            BEQ     .ADDLEFT
+Line 825 ERROR: Undefined symbol
+0000086A  0C79 0002 005455B8       825                            CMP.W   #2,(PAC_FACE)
+00000872  6700 00C6                826                            BEQ     .ADDUP
+Line 827 ERROR: Undefined symbol
+00000876  0C79 0003 005455B8       827                            CMP.W   #3,(PAC_FACE)
+0000087E  6700 00C2                828                            BEQ     .ADDRIGHT
+00000882  6000 00C6                829                            BRA     .ADDDOWN
+00000886                           830                  
+Line 831 ERROR: Symbol value differs between first and second pass
+00000886                           831  .ADDLEFT
+00000886  0440 0020                832                            SUB.W   #32,D0
+0000088A  6000 00C6                833                            BRA     .CALCVEC
+Line 834 ERROR: Symbol value differs between first and second pass
+0000088E                           834  .ADDUP
+0000088E  0441 0020                835                            SUB.W   #32,D1
+00000892  6000 00BE                836                            BRA     .CALCVEC
+Line 837 ERROR: Symbol value differs between first and second pass
+00000896                           837  .ADDRIGHT
+00000896  0640 0020                838                            ADD.W   #32,D0
+0000089A  6000 00B6                839                            BRA     .CALCVEC
+Line 840 ERROR: Symbol value differs between first and second pass
+0000089E                           840  .ADDDOWN
+0000089E  0641 0020                841                            ADD.W   #32,D1
+000008A2                           842                  
+000008A2  6000 00AE                843                            BRA     .CALCVEC
+000008A6                           844                  
+Line 845 ERROR: Symbol value differs between first and second pass
+000008A6                           845  .CALCVEC                  MOVE.W  D0,D4
+000008A6  3A01                     846                            MOVE.W  D1,D5
+000008A8                           847  
+Line 848 ERROR: Undefined symbol
+000008A8  3C39 004DBD16            848                            MOVE.W  (BLINKY_POS_X),D6
+000008AE  9846                     849                            SUB.W   D6,D4
+Line 850 ERROR: Undefined symbol
+000008B0  3E39 004DBD16            850                            MOVE.W  (BLINKY_POS_Y),D7
+000008B6  9A47                     851                            SUB.W   D7,D5
+000008B8                           852                            
+000008B8                           853                            ; DOUBLE THE VECTORS
+000008B8  D844                     854                            ADD.W   D4,D4
+000008BA  DA45                     855                            ADD.W   D5,D5
+000008BC                           856                      
+Line 857 ERROR: Undefined symbol
+000008BC  3039 004DBD16            857                            MOVE.W  (BLINKY_POS_X),D0
+000008C2  D044                     858                            ADD.W   D4,D0
+000008C4  D245                     859                            ADD.W   D5,D1
+000008C6  6000 00D4                860                            BRA     .DISLOGIC
+000008CA                           861      
+Line 862 ERROR: Symbol value differs between first and second pass
+000008CA                           862  .SET_S_TAR
+Line 863 ERROR: Undefined symbol
+000008CA  303C BD16                863                            MOVE.W  #INKY_HOME_X, D0
+Line 864 ERROR: Undefined symbol
+000008CE  323C BD16                864                            MOVE.W  #INKY_HOME_Y, D1
+000008D2  6000 00C8                865                            BRA     .DISLOGIC
+000008D6                           866                  
+Line 867 ERROR: Symbol value differs between first and second pass
+000008D6                           867  .SET_PAC_TAR
+Line 868 ERROR: Undefined symbol
+000008D6  3039 004DBD16            868                            MOVE.W  (PAC_POS_X),D0
+Line 869 ERROR: Undefined symbol
+000008DC  3239 004DBD16            869                            MOVE.W  (PAC_POS_Y),D1
+000008E2  6000 00B8                870                            BRA     .DISLOGIC
+000008E6                           871      
+000008E6                           872      
+Line 873 ERROR: Symbol value differs between first and second pass
+000008E6                           873  .DEFAULT_TARGET
+Line 874 ERROR: Undefined symbol
+000008E6  303C BD16                874                            MOVE.W  #INKY_HOME_X, D0
+Line 875 ERROR: Undefined symbol
+000008EA  323C BD16                875                            MOVE.W  #INKY_HOME_Y, D1
+000008EE                           876      
+Line 877 ERROR: Symbol value differs between first and second pass
+000008EE                           877  .DISLOGIC
+Line 878 ERROR: Undefined symbol
+000008EE  33C0 005455B8            878                            MOVE.W  D0,(INKY_TARGET_X)
+Line 879 ERROR: Undefined symbol
+000008F4  33C1 005455B8            879                            MOVE.W  D1,(INKY_TARGET_Y)
+000008FA                           880                  
+000008FA                           881                            ; ABSOLUTE DISTANCE
+000008FA  9440                     882                            SUB.W   D0,D2
+000008FC  4A42                     883                            TST.W   D2
+000008FE  6A00 00B2                884                            BPL     .CHKY
+00000902  4442                     885                            NEG.W   D2
+00000904                           886      
+Line 887 ERROR: Symbol value differs between first and second pass
+00000904                           887  .CHKY                     SUB.W   D1,D3
+00000904  4A43                     888                            TST.W   D3
+00000906  6A00 00B4                889                            BPL     .SUM
+0000090A  4443                     890                            NEG.W   D3
+0000090C                           891                  
+Line 892 ERROR: Symbol value differs between first and second pass
+0000090C                           892  .SUM                      ADD.W   D2,D3
+0000090C  4C9F 0007                893                            MOVEM.W  (A7)+,D0-D2
+00000910  4E75                     894                            RTS            
+00000912                           895                            
+00000912                           896  ; -----------------------------------------------------------------------------
+Line 897 ERROR: Symbol value differs between first and second pass
+00000912                           897  FIND_MIN_INKY
+00000912                           898  ; FIND MIN DISTANCE.
+00000912                           899  ; INPUT    : NONE
+00000912                           900  ; OUTPUT   : D1 - INDEX
+00000912                           901  ; MODIFIES : NONE
+00000912                           902  ; -----------------------------------------------------------------------------
+00000912  48E7 3F00                903                            MOVEM.L D2-D7,-(A7) 
+00000916                           904                            
+00000916                           905                            ; INDEX = 1
+00000916  7201                     906                            MOVEQ   #1, D1
+00000918  267C 00000000            907                            MOVE.L  #0,A3
+Line 908 ERROR: Undefined symbol
+0000091E  362B BD16                908                            MOVE.W  INKY_EUCYDEAN_DIS(A3),D3
+00000922  303C 0001                909                            MOVE.W  #1,D0
+00000926                           910      
+00000926                           911      
+Line 912 ERROR: Symbol value differs between first and second pass
+00000926                           912  .LOOP
+00000926  548B                     913                            ADDQ.L  #2,A3
+00000928  5241                     914                            ADDQ.W  #1,D1
+0000092A  B27C 0005                915                            CMP.W   #5,D1
+0000092E  6700 00C2                916                            BEQ     .OUT
+00000932                           917      
+Line 918 ERROR: Undefined symbol
+00000932  382B BD16                918                            MOVE.W  INKY_EUCYDEAN_DIS(A3),D4
+00000936                           919                            
+00000936                           920                            ; COMPARE
+00000936  B843                     921                            CMP     D3,D4
+00000938  6E00 009E                922                            BGT     .LOOP
+0000093C  3604                     923                            MOVE.W  D4,D3
+0000093E  3001                     924                            MOVE.W  D1,D0
+00000940  6000 0096                925                            BRA     .LOOP 
+Line 926 ERROR: Symbol value differs between first and second pass
+00000944                           926  .OUT        
+00000944  3200                     927                            MOVE.W  D0,D1
+00000946                           928      
+00000946  4CDF 00FC                929                            MOVEM.L (A7)+,D2-D7
+0000094A                           930                            ; RETURN INDEX
+0000094A  4E75                     931                            RTS
+0000094C                           932                 
+0000094C                           933  ; -----------------------------------------------------------------------------
+Line 934 ERROR: Symbol value differs between first and second pass
+0000094C                           934  FIND_MAX_INKY
+0000094C                           935  ; FIND MAX DISTANCE.
+0000094C                           936  ; INPUT    : NONE
+0000094C                           937  ; OUTPUT   : D1 - INDEX
+0000094C                           938  ; MODIFIES : NONE
+0000094C                           939  ; -----------------------------------------------------------------------------
+0000094C                           940      
+0000094C  48E7 3F00                941                            MOVEM.L D2-D7,-(A7) 
+00000950                           942                        
+00000950                           943                            ; INDEX = 1
+00000950  7201                     944                            MOVEQ   #1, D1
+00000952  267C 00000000            945                            MOVE.L  #0,A3
+Line 946 ERROR: Undefined symbol
+00000958  362B BD16                946                            MOVE.W  INKY_EUCYDEAN_DIS(A3),D3
+0000095C  303C 0001                947                            MOVE.W  #1,D0
+00000960                           948      
+00000960                           949      
+Line 950 ERROR: Symbol value differs between first and second pass
+00000960                           950  .LOOP
+00000960  548B                     951                            ADDQ.L  #2,A3
+00000962  5241                     952                            ADDQ.W  #1,D1
+00000964  B27C 0005                953                            CMP.W   #5,D1
+00000968  6700 00BE                954                            BEQ     .OUT
+0000096C                           955      
+Line 956 ERROR: Undefined symbol
+0000096C  382B BD16                956                            MOVE.W  INKY_EUCYDEAN_DIS(A3),D4
+00000970                           957                            
+00000970                           958                            ; COMPARE
+00000970  B843                     959                            CMP     D3,D4
+00000972  6D00 009A                960                            BLT     .LOOP
+00000976  3604                     961                            MOVE.W  D4,D3
+00000978  3001                     962                            MOVE.W  D1,D0
+0000097A  6000 0092                963                            BRA     .LOOP 
+Line 964 ERROR: Symbol value differs between first and second pass
+0000097E                           964  .OUT        
+0000097E  3200                     965                            MOVE.W  D0,D1
+00000980                           966      
+00000980  4CDF 00FC                967                            MOVEM.L (A7)+,D2-D7
+00000984                           968                            ; RETURN INDEX
+00000984  4E75                     969                            RTS     
+00000986                           970  ; -----------------------------------------------------------------------------
+Line 971 ERROR: Symbol value differs between first and second pass
+00000986                           971  INKY_PLOT
+00000986                           972  ; PLOTS INKY.
+00000986                           973  ; INPUT    : NONE
+00000986                           974  ; OUTPUT   : NONE
+00000986                           975  ; MODIFIES : NONE
+00000986                           976  ; -----------------------------------------------------------------------------
+00000986                           977      
+00000986  48E7 F800                978                            MOVEM.L D0-D4,-(A7)   
+0000098A                           979                  
+Line 980 ERROR: Undefined symbol
+0000098A  0C79 0001 005455B8       980                            CMP.W   #1,(INKY_IS_BLUE)
+00000992  6600 00B8                981                            BNE     .NOPUEDE
+Line 982 ERROR: Undefined symbol
+00000996  0C79 0004 005455B8       982                            CMP.W   #4,(INKY_ESTADO)
+0000099E  6C00 00D4                983                            BGE     .DRAW_S
+Line 984 ERROR: Symbol value differs between first and second pass
+000009A2                           984  .NOPUEDE
+Line 985 ERROR: Undefined symbol
+000009A2  0C79 0001 005455B8       985                            CMP.W   #1,(INKY_DIR)
+000009AA  6700 00E8                986                            BEQ     .DRAW_L
+Line 987 ERROR: Undefined symbol
+000009AE  0C79 0002 005455B8       987                            CMP.W   #2,(INKY_DIR)
+000009B6  6700 00FC                988                            BEQ     .DRAW_U
+Line 989 ERROR: Undefined symbol
+000009BA  0C79 0003 005455B8       989                            CMP.W   #3,(INKY_DIR)
+000009C2  6700 0110                990                            BEQ     .DRAW_R
+000009C6  6000 012C                991                            BRA     .DRAW_D
+000009CA                           992              
+Line 993 ERROR: Symbol value differs between first and second pass
+000009CA                           993  .DRAW_S                   BTST.B  #4,(SCRCYCCT)
+000009CA  6700 00BE                994                            BEQ     .SCA2
+Line 995 ERROR: Undefined symbol
+000009CE  41F9 004DBD16            995                            LEA     SCARED,A0
+000009D4  6000 013A                996                            BRA     .DRAW
+Line 997 ERROR: Symbol value differs between first and second pass
+000009D8                           997  .SCA2
+Line 998 ERROR: Undefined symbol
+000009D8  41F9 004DBD16            998                            LEA     SCARED2,A0
+000009DE  6000 0130                999                            BRA     .DRAW
+Line 1000 ERROR: Symbol value differs between first and second pass
+000009E2                          1000  .DRAW_L
+Line 1001 ERROR: Undefined symbol
+000009E2  0839 0004 005455B8      1001                            BTST.B  #4,(SCRCYCCT)
+000009EA  6700 00BE               1002                            BEQ     .LFT2
+Line 1003 ERROR: Undefined symbol
+000009EE  41F9 004DBD16           1003                            LEA     I_LEFT,A0
+000009F4  6000 011A               1004                            BRA     .DRAW
+Line 1005 ERROR: Symbol value differs between first and second pass
+000009F8                          1005  .LFT2                     LEA     I_LEFT2,A0
+000009F8  6000 0116               1006                            BRA     .DRAW
+000009FC                          1007                            
+Line 1008 ERROR: Symbol value differs between first and second pass
+000009FC                          1008  .DRAW_U
+Line 1009 ERROR: Undefined symbol
+000009FC  0839 0004 005455B8      1009                            BTST.B  #4,(SCRCYCCT)
+00000A04  6700 00C4               1010                            BEQ     .U2
+Line 1011 ERROR: Undefined symbol
+00000A08  41F9 004DBD16           1011                            LEA     I_UP,A0
+00000A0E  6000 0100               1012                            BRA     .DRAW
+Line 1013 ERROR: Symbol value differs between first and second pass
+00000A12                          1013  .U2                       LEA     I_UP2,A0
+00000A12  6000 00FC               1014                            BRA     .DRAW
+Line 1015 ERROR: Symbol value differs between first and second pass
+00000A16                          1015  .DRAW_R
+Line 1016 ERROR: Undefined symbol
+00000A16  0839 0004 005455B8      1016                            BTST.B  #4,(SCRCYCCT)
+00000A1E  6700 00CA               1017                            BEQ     .RH2
+Line 1018 ERROR: Undefined symbol
+00000A22  41F9 004DBD16           1018                            LEA     I_RIGHT,A0
+00000A28  6000 00E6               1019                            BRA     .DRAW
+Line 1020 ERROR: Symbol value differs between first and second pass
+00000A2C                          1020  .RH2
+Line 1021 ERROR: Undefined symbol
+00000A2C  41F9 004DBD16           1021                            LEA     I_RIGHT2,A0
+00000A32  6000 00DC               1022                            BRA     .DRAW
+Line 1023 ERROR: Symbol value differs between first and second pass
+00000A36                          1023  .DRAW_D            
+00000A36                          1024  
+Line 1025 ERROR: Undefined symbol
+00000A36  0839 0004 005455B8      1025                            BTST.B  #4,(SCRCYCCT)
+00000A3E  6700 00CA               1026                            BEQ     .DW2          
+Line 1027 ERROR: Undefined symbol
+00000A42  41F9 004DBD16           1027                            LEA     I_DOWN,A0
+00000A48  6000 00C6               1028                            BRA     .DRAW
+Line 1029 ERROR: Symbol value differs between first and second pass
+00000A4C                          1029  .DW2
+Line 1030 ERROR: Undefined symbol
+00000A4C  41F9 004DBD16           1030                            LEA     I_DOWN2,A0
+00000A52                          1031  
+Line 1032 ERROR: Symbol value differs between first and second pass
+00000A52                          1032  .DRAW                     ; INT J
+Line 1033 ERROR: Undefined symbol
+00000A52  3E39 004DBD16           1033                            MOVE.W  (INKY_POS_Y),D7
+Line 1034 ERROR: Undefined symbol
+00000A58  0447 BD16               1034                            SUB.W   #PACRAD,D7
+00000A5C  760F                    1035                            MOVE.L  #15,D3
+00000A5E                          1036  
+Line 1037 ERROR: Symbol value differs between first and second pass
+00000A5E                          1037  .LOOP1       
+00000A5E                          1038                            ; INT I
+Line 1039 ERROR: Undefined symbol
+00000A5E  3C39 004DBD16           1039                            MOVE.W  (INKY_POS_X),D6
+Line 1040 ERROR: Undefined symbol
+00000A64  0446 BD16               1040                            SUB.W   #PACRAD,D6
+00000A68  780F                    1041                            MOVE.L  #15,D4
+Line 1042 ERROR: Symbol value differs between first and second pass
+00000A6A                          1042  .LOOP2
+00000A6A                          1043                            ;SET FILL COLOR
+00000A6A  2218                    1044                            MOVE.L (A0)+,D1
+00000A6C  0801 0008               1045                            BTST   #8,D1
+00000A70  6700 00D0               1046                            BEQ    .NEXT
+00000A74  103C 0050               1047                            MOVE.B  #80,D0
+00000A78  4E4F                    1048                            TRAP #15
+00000A7A                          1049              
+00000A7A                          1050                            ;DRAW PIXEL
+00000A7A  2206                    1051                            MOVE.L  D6,D1
+00000A7C  3407                    1052                            MOVE.W  D7,D2
+00000A7E  103C 0052               1053                            MOVE.B  #82,D0
+00000A82  4E4F                    1054                            TRAP    #15
+00000A84                          1055              
+Line 1056 ERROR: Symbol value differs between first and second pass
+00000A84                          1056  .NEXT                     ADD.W   #1,D6
+00000A84  51CC 00A2               1057                            DBRA    D4, .LOOP2
+00000A88  5247                    1058                            ADD.W   #1,D7
+00000A8A  51CB 0090               1059                            DBRA    D3, .LOOP1
+00000A8E                          1060                  
+00000A8E                          1061                            ;DEBUG
+Line 1062 ERROR: Undefined symbol
+00000A8E  0C79 0001 005455B8      1062                            CMP.W   #1,(DEBUG)
+00000A96  6600 00F4               1063                            BNE     .NODEBUG 
+00000A9A                          1064                            ; SET PEN COLOR
+00000A9A  103C 0050               1065                            MOVE.B  #80,D0
+Line 1066 ERROR: Undefined symbol
+00000A9E  223C 004DBD16           1066                            MOVE.L  #LIGHT_BLUE,D1
+00000AA4  4E4F                    1067                            TRAP #15
+00000AA6                          1068                            ; DEFINE COORDINATES
+Line 1069 ERROR: Undefined symbol
+00000AA6  3239 004DBD16           1069                            MOVE.W  (INKY_TARGET_X),D1
+Line 1070 ERROR: Undefined symbol
+00000AAC  0441 BD16               1070                            SUB.W   #PACRAD,D1
+Line 1071 ERROR: Undefined symbol
+00000AB0  3439 004DBD16           1071                            MOVE.W  (INKY_TARGET_Y),D2
+Line 1072 ERROR: Undefined symbol
+00000AB6  0442 BD16               1072                            SUB.W   #PACRAD,D2
+00000ABA  3601                    1073                            MOVE.W  D1,D3
+Line 1074 ERROR: Undefined symbol
+00000ABC  0643 BD16               1074                            ADD.W   #PACRAD,D3
+00000AC0  3802                    1075                            MOVE.W  D2,D4
+Line 1076 ERROR: Undefined symbol
+00000AC2  0644 BD16               1076                            ADD.W   #PACRAD,D4
+00000AC6                          1077                  
+00000AC6                          1078                            ; DRAW TARGET 
+00000AC6  103C 005B               1079                            MOVE.B  #91,D0
+00000ACA  4E4F                    1080                            TRAP    #15
+00000ACC                          1081      
+Line 1082 ERROR: Symbol value differs between first and second pass
+00000ACC  4CDF 001F               1082  .NODEBUG                  MOVEM.L (A7)+,D0-D4
+00000AD0                          1083      
+00000AD0  4E75                    1084                            RTS
+00000AD2                          1085  
+00000AD2                          1086  
+00000AD2                          1087  
+00000AD2                          1088  
+00000AD2                          1089  
+00000AD2                          1090  
+00000AD2                          1091  
+00000AD2                          1092  
+00000AD2                          1093  
+00000AD2                          1094  
+00000AD2                          1095  
+00000AD2                          1096  
+00000AD2                          1097  
+Line 1098 WARNING: END directive missing, starting address not set
+
+335 errors detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+CALCDIS_INKY        8D2
+CALCDIS_INKY:ADDDOWN  94A
+CALCDIS_INKY:ADDLEFT  932
+CALCDIS_INKY:ADDRIGHT  942
+CALCDIS_INKY:ADDUP  93A
+CALCDIS_INKY:CALCVEC  952
+CALCDIS_INKY:CHKY   9B2
+CALCDIS_INKY:DEFAULT_TARGET  994
+CALCDIS_INKY:DISLOGIC  99C
+CALCDIS_INKY:SET_C_TAR  8FE
+CALCDIS_INKY:SET_PAC_TAR  984
+CALCDIS_INKY:SET_S_TAR  978
+CALCDIS_INKY:SUM    9BC
+CHECK_COLLISIONS_INKY  748
+CHECK_COLLISIONS_INKY:FINISH  7EE
+CHECK_COLLISIONS_INKY:ISPORTAL  7AC
+CHECK_COLLISIONS_INKY:IS_INTER  7E6
+CHECK_COLLISIONS_INKY:IS_WALL  7A6
+CHECK_COLLISIONS_INKY:JUMPLIST  77C
+CHECK_COLLISIONS_INKY:RETURN  7EC
+CHECK_COLLISIONS_INKY:RSIDE  7D0
+FIND_MAX_INKY       9FA
+FIND_MAX_INKY:LOOP  A0E
+FIND_MAX_INKY:OUT   A28
+FIND_MIN_INKY       9C4
+FIND_MIN_INKY:LOOP  9D8
+FIND_MIN_INKY:OUT   9F2
+GETMAPCOORDS_INKY   7F4
+INKY_INIT           0
+INKY_PLOT           A30
+INKY_PLOT:DRAW      B10
+INKY_PLOT:DRAW_D    AF4
+INKY_PLOT:DRAW_L    A94
+INKY_PLOT:DRAW_R    AD4
+INKY_PLOT:DRAW_S    A74
+INKY_PLOT:DRAW_U    AB4
+INKY_PLOT:DW2       B0A
+INKY_PLOT:LFT2      AAA
+INKY_PLOT:LOOP1     B1C
+INKY_PLOT:LOOP2     B28
+INKY_PLOT:NEXT      B42
+INKY_PLOT:NODEBUG   B8C
+INKY_PLOT:NOPUEDE   A4C
+INKY_PLOT:RH2       AEA
+INKY_PLOT:SCA2      A8A
+INKY_PLOT:U2        ACA
+INKY_UPDATE         5E
+INKY_UPDATE:BC_TIME  602
+INKY_UPDATE:CALCDOWN  2BC
+INKY_UPDATE:CALCDOWNF  532
+INKY_UPDATE:CALCRIGHT  2A0
+INKY_UPDATE:CALCRIGHTF  516
+INKY_UPDATE:CALCUP  284
+INKY_UPDATE:CALCUPF  4FA
+INKY_UPDATE:CHECK_U_H  6BE
+INKY_UPDATE:CHECK_Y  320
+INKY_UPDATE:CHECK_YF  5A2
+INKY_UPDATE:CHKDOWN  1C6
+INKY_UPDATE:CHKMAPDOWN  232
+INKY_UPDATE:CHKMAPDOWNF  4A8
+INKY_UPDATE:CHKMAPRIGHT  218
+INKY_UPDATE:CHKMAPRIGHTF  48E
+INKY_UPDATE:CHKMAPUP  1FE
+INKY_UPDATE:CHKMAPUPF  474
+INKY_UPDATE:CHKMIDH  6D6
+INKY_UPDATE:CHKRIGHT  1B6
+INKY_UPDATE:CHKUP   1A4
+INKY_UPDATE:CONT    FC
+INKY_UPDATE:CONT2   1D4
+INKY_UPDATE:CONT2F  44A
+INKY_UPDATE:CONT3   24C
+INKY_UPDATE:CONT3F  4C2
+INKY_UPDATE:CONT4   2D8
+INKY_UPDATE:CONT4F  54E
+INKY_UPDATE:CONTF   3BA
+INKY_UPDATE:CONTH   682
+INKY_UPDATE:DONE    2E4
+INKY_UPDATE:DONEF   566
+INKY_UPDATE:DOWN_HOUSE  6B6
+INKY_UPDATE:FRIGHTENED_MODE  34A
+INKY_UPDATE:IS_HOME  624
+INKY_UPDATE:LEAVING_HOME  70E
+INKY_UPDATE:LEFT_HOME  722
+INKY_UPDATE:MEGADONE  742
+INKY_UPDATE:MVDOWN  F6
+INKY_UPDATE:MVDOWNF  3B4
+INKY_UPDATE:MVDOWNH  67C
+INKY_UPDATE:MVLEFT  D8
+INKY_UPDATE:MVLEFTF  396
+INKY_UPDATE:MVLEFTH  65E
+INKY_UPDATE:MVRIGHT  EC
+INKY_UPDATE:MVRIGHTF  3AA
+INKY_UPDATE:MVRIGHTH  672
+INKY_UPDATE:MVUP    E2
+INKY_UPDATE:MVUPF   3A0
+INKY_UPDATE:MVUPH   668
+INKY_UPDATE:NO_COLLISION  346
+INKY_UPDATE:NO_COLLISIONF  5FE
+INKY_UPDATE:SUM_DIST  32A
+INKY_UPDATE:SUM_DISTF  5AC
+INKY_UPDATE:UP_HOUSE  6CE
+MAPGET_INKY         80A
+MODE_UPDATE_INKY    826
+MODE_UPDATE_INKY:END  8D0
+MODE_UPDATE_INKY:IN_C_MODE  84E
+MODE_UPDATE_INKY:IN_S_MODE  864
+MODE_UPDATE_INKY:PERM  8B6
+MODE_UPDATE_INKY:SW_TO_C_MODE  898
+MODE_UPDATE_INKY:SW_TO_S_MODE  87A

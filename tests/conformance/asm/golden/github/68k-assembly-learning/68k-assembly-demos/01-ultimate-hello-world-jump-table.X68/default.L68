@@ -1,0 +1,270 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:27:23 AM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      :
+00000000                             3  * Written by :
+00000000                             4  * Date       :
+00000000                             5  * Description:
+00000000                             6  *-----------------------------------------------------------
+00001000                             7      ORG    $1000
+00001000                             8  START:                  ; first instruction of program
+00001000                             9  
+00001000                            10  BounceSpriteLoop:
+00001000  4EB9 00001024             11      JSR     JumpToColourStateHandler
+00001006                            12      
+00001006  4EB9 0000103C             13      JSR     DisplayBackgroundSprite
+0000100C  4EB9 00001070             14      JSR     MoveSprite
+00001012  4EB9 00001056             15      JSR     DisplayForegroundSprite
+00001018                            16      
+00001018  4EB9 000010CC             17      JSR     WaitABit
+0000101E  60E0                      18      BRA     BounceSpriteLoop
+00001020                            19  
+00001020  FFFF FFFF                 20      SIMHALT                     ; halt simulator
+00001024                            21  
+00001024                            22  JumpToColourStateHandler:
+00001024  1039 0000121B             23      MOVE.B  ColourState,D0
+0000102A  4880                      24      EXT.W   D0
+0000102C  E548                      25      LSL.W   #2,D0
+0000102E  41F9 00001220             26      LEA     ColourStateTable,A0
+00001034  2470 0000                 27      MOVE.L  0(A0,D0.W),A2
+00001038  4E92                      28      JSR     (A2)
+0000103A  4E75                      29      RTS
+0000103C                            30      
+0000103C                            31  DisplayBackgroundSprite:
+0000103C  4EB9 000011C0             32      JSR     SetCursorPosition
+00001042  4EB9 000011F2             33      JSR     MoveColourToD1
+00001048  4EB9 000011D8             34      JSR     SetSpriteColour
+0000104E  4EB9 000011E4             35      JSR     OutputSprite
+00001054  4E75                      36      RTS
+00001056                            37      
+00001056                            38  DisplayForegroundSprite:
+00001056  4EB9 000011C0             39      JSR     SetCursorPosition
+0000105C  223C 0000FF00             40      MOVE.L  #$0000FF00,D1
+00001062  4EB9 000011D8             41      JSR     SetSpriteColour
+00001068  4EB9 000011E4             42      JSR     OutputSprite
+0000106E  4E75                      43      RTS
+00001070                            44      
+00001070                            45  MoveSprite:
+00001070  41F9 0000121C             46      LEA     Sprite,A0
+00001076  1028 0000                 47      MOVE.B  SPRITE_X(A0),D0
+0000107A  D028 0002                 48      ADD.B   SPRITE_DX(A0),D0    ;move col 
+0000107E  1140 0000                 49      MOVE.B  D0,SPRITE_X(A0)
+00001082                            50  
+00001082  B03C 0000                 51      CMP.B   #0,D0               ;if sprite is on left edge, bounce
+00001086  6700 000E                 52      BEQ     NegateX
+0000108A  B03C 0045                 53      CMP.B   #69,D0              ;if sprint is on right edge, bounce
+0000108E  6700 0006                 54      BEQ     NegateX
+00001092  6000 000C                 55      BRA     ContinueX
+00001096                            56  NegateX:
+00001096  1028 0002                 57      MOVE.B  SPRITE_DX(A0),D0
+0000109A  4400                      58      NEG.B   D0
+0000109C  1140 0002                 59      MOVE.B  D0,SPRITE_DX(A0)
+000010A0                            60  ContinueX:
+000010A0  1028 0001                 61      MOVE.B  SPRITE_Y(A0),D0
+000010A4  D028 0003                 62      ADD.B   SPRITE_DY(A0),D0    ;move row
+000010A8  1140 0001                 63      MOVE.B  D0,SPRITE_Y(A0)
+000010AC                            64  
+000010AC  B03C 0000                 65      CMP.B   #0,D0               ;if sprite is on top edge, bounce
+000010B0  6700 000E                 66      BEQ     NegateY
+000010B4  B03C 001F                 67      CMP.B   #31,D0              ;if sprite is on bottom edge, bounce
+000010B8  6700 0006                 68      BEQ     NegateY
+000010BC  6000 000C                 69      BRA     ContinueY
+000010C0                            70  NegateY:
+000010C0  1028 0003                 71      MOVE.B  SPRITE_DY(A0),D0
+000010C4  4400                      72      NEG.B   D0
+000010C6  1140 0003                 73      MOVE.B  D0,SPRITE_DY(A0)
+000010CA                            74  ContinueY:
+000010CA  4E75                      75      RTS
+000010CC                            76      
+000010CC                            77  WaitABit:
+000010CC  303C 2710                 78      MOVE.W  #10000,D0
+000010D0                            79  WaitABitLoop:
+000010D0  5340                      80      SUBQ.W  #1,D0
+000010D2  66FC                      81      BNE     WaitABitLoop
+000010D4  4E75                      82      RTS
+000010D6                            83  
+000010D6                            84  ColourState0_RedUp:
+000010D6  5239 00001218             85      ADDQ.B  #1,Red
+000010DC  0C39 00FF 00001218        86      CMP.B   #255,Red
+000010E4  6600 0008                 87      BNE     State0Done
+000010E8  4EB9 000011A6             88      JSR     IncrementColourState
+000010EE                            89  State0Done:
+000010EE  4E75                      90      RTS
+000010F0                            91  
+000010F0                            92  ColourState1_GreenUp:
+000010F0  5239 00001219             93      ADDQ.B  #1,Green
+000010F6  0C39 00FF 00001219        94      CMP.B   #255,Green
+000010FE  6600 0008                 95      BNE     State1Done
+00001102  4EB9 000011A6             96      JSR     IncrementColourState
+00001108                            97  State1Done:
+00001108  4E75                      98      RTS
+0000110A                            99      
+0000110A                           100  ColourState2_RedDown:
+0000110A  5339 00001218            101      SUBQ.B  #1,Red
+00001110  0C39 0000 00001218       102      CMP.B   #0,Red
+00001118  6600 0008                103      BNE     State2Done
+0000111C  4EB9 000011A6            104      JSR     IncrementColourState
+00001122                           105  State2Done:
+00001122  4E75                     106      RTS
+00001124                           107      
+00001124                           108  ColourState3_BlueUp:
+00001124  5239 0000121A            109      ADDQ.B  #1,Blue
+0000112A  0C39 00FF 0000121A       110      CMP.B   #255,Blue
+00001132  6600 0008                111      BNE     State3Done
+00001136  4EB9 000011A6            112      JSR     IncrementColourState
+0000113C                           113  State3Done:
+0000113C  4E75                     114      RTS
+0000113E                           115  
+0000113E                           116  ColourState4_GreenDown:
+0000113E  5339 00001219            117      SUBQ.B  #1,Green
+00001144  0C39 0000 00001219       118      CMP.B   #0,Green
+0000114C  6600 0008                119      BNE     State4Done
+00001150  4EB9 000011A6            120      JSR     IncrementColourState
+00001156                           121  State4Done:
+00001156  4E75                     122      RTS
+00001158                           123  
+00001158                           124  ColourState5_RedUp:
+00001158  5239 00001218            125      ADDQ.B  #1,Red
+0000115E  0C39 00FF 00001218       126      CMP.B   #255,Red
+00001166  6600 0008                127      BNE     State5Done
+0000116A  4EB9 000011A6            128      JSR     IncrementColourState
+00001170                           129  State5Done:
+00001170  4E75                     130      RTS
+00001172                           131  
+00001172                           132  ColourState6_BlueDown:
+00001172  5339 0000121A            133      SUBQ.B  #1,Blue
+00001178  0C39 0000 0000121A       134      CMP.B   #0,Blue
+00001180  6600 0008                135      BNE     State6Done
+00001184  4EB9 000011A6            136      JSR     IncrementColourState
+0000118A                           137  State6Done:
+0000118A  4E75                     138      RTS
+0000118C                           139      
+0000118C                           140  ColourState7_RedDown:
+0000118C  5339 00001218            141      SUBQ.B  #1,Red
+00001192  0C39 0000 00001218       142      CMP.B   #0,Red
+0000119A  6600 0008                143      BNE     State7Done
+0000119E  4EB9 000011A6            144      JSR     IncrementColourState
+000011A4                           145  State7Done:
+000011A4  4E75                     146      RTS
+000011A6                           147  
+000011A6                           148  IncrementColourState:
+000011A6  5239 0000121B            149      ADD.B   #1,ColourState
+000011AC  0C39 0008 0000121B       150      CMP.B   #8,ColourState
+000011B4  6600 0008                151      BNE     SkipCycle
+000011B8  4239 0000121B            152      CLR.B   ColourState
+000011BE                           153  SkipCycle:
+000011BE  4E75                     154      RTS
+000011C0                           155  
+000011C0                           156  SetCursorPosition:
+000011C0  41F9 0000121C            157      LEA     Sprite,A0
+000011C6  1228 0000                158      MOVE.B  SPRITE_X(A0),D1 ;load col into low byte of d1
+000011CA  E149                     159      LSL.W   #8,D1           ;shift the low byte of d1 over to high byte
+000011CC  1228 0001                160      MOVE.B  SPRITE_Y(A0),D1 ;load row into low byte of d1
+000011D0  103C 000B                161      MOVE.B  #11,D0          ;load command to position cursor
+000011D4  4E4F                     162      TRAP    #15
+000011D6  4E75                     163      RTS
+000011D8                           164  
+000011D8                           165  SetSpriteColour:    
+000011D8  143C 0000                166      MOVE.B  #0,D2           ;set style
+000011DC  103C 0015                167      MOVE.B  #21,D0          ;set text colour code
+000011E0  4E4F                     168      TRAP    #15
+000011E2  4E75                     169      RTS
+000011E4                           170  
+000011E4                           171  OutputSprite:    
+000011E4  43F9 0000120C            172      LEA     Message,A1      ;hello world message
+000011EA  103C 000E                173      MOVE.B  #14,D0          ;load command to output text
+000011EE  4E4F                     174      TRAP    #15
+000011F0  4E75                     175      RTS
+000011F2                           176      
+000011F2                           177  MoveColourToD1:
+000011F2  7200                     178      MOVEQ   #0,D1
+000011F4  1239 0000121A            179      MOVE.B  Blue,D1
+000011FA  E189                     180      LSL.L   #8,D1
+000011FC  8239 00001219            181      OR.B    Green,D1
+00001202  E189                     182      LSL.L   #8,D1
+00001204  8239 00001218            183      OR.B    Red,D1
+0000120A  4E75                     184      RTS
+0000120C                           185  
+0000120C                           186  * Constants
+0000120C  =00000000                187  SPRITE_X    EQU     0
+0000120C  =00000001                188  SPRITE_Y    EQU     1
+0000120C  =00000002                189  SPRITE_DX   EQU     2
+0000120C  =00000003                190  SPRITE_DY   EQU     3
+0000120C                           191  
+0000120C                           192  * Variables
+0000120C= 48 65 6C 6C 6F 20 ...    193  Message     DC.B    'Hello World',0
+00001218= 00                       194  Red         DC.B    0
+00001219= 00                       195  Green       DC.B    0
+0000121A= 00                       196  Blue        DC.B    0
+0000121B= 00                       197  ColourState DC.B    0
+0000121C                           198  Sprite:
+0000121C= 00                       199              DC.B    0   ;x
+0000121D= 00                       200              DC.B    0   ;y
+0000121E= 01                       201              DC.B    1   ;dx
+0000121F= 01                       202              DC.B    1   ;dy
+00001220                           203  ColourStateTable:
+00001220= 000010D6                 204              DC.L    ColourState0_RedUp
+00001224= 000010F0                 205              DC.L    ColourState1_GreenUp
+00001228= 0000110A                 206              DC.L    ColourState2_RedDown
+0000122C= 00001124                 207              DC.L    ColourState3_BlueUp
+00001230= 0000113E                 208              DC.L    ColourState4_GreenDown
+00001234= 00001158                 209              DC.L    ColourState5_RedUp
+00001238= 00001172                 210              DC.L    ColourState6_BlueDown
+0000123C= 0000118C                 211              DC.L    ColourState7_RedDown
+00001240                           212  
+00001240                           213      END    START        ; last line of source
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+BLUE                121A
+BOUNCESPRITELOOP    1000
+COLOURSTATE         121B
+COLOURSTATE0_REDUP  10D6
+COLOURSTATE1_GREENUP  10F0
+COLOURSTATE2_REDDOWN  110A
+COLOURSTATE3_BLUEUP  1124
+COLOURSTATE4_GREENDOWN  113E
+COLOURSTATE5_REDUP  1158
+COLOURSTATE6_BLUEDOWN  1172
+COLOURSTATE7_REDDOWN  118C
+COLOURSTATETABLE    1220
+CONTINUEX           10A0
+CONTINUEY           10CA
+DISPLAYBACKGROUNDSPRITE  103C
+DISPLAYFOREGROUNDSPRITE  1056
+GREEN               1219
+INCREMENTCOLOURSTATE  11A6
+JUMPTOCOLOURSTATEHANDLER  1024
+MESSAGE             120C
+MOVECOLOURTOD1      11F2
+MOVESPRITE          1070
+NEGATEX             1096
+NEGATEY             10C0
+OUTPUTSPRITE        11E4
+RED                 1218
+SETCURSORPOSITION   11C0
+SETSPRITECOLOUR     11D8
+SKIPCYCLE           11BE
+SPRITE              121C
+SPRITE_DX           2
+SPRITE_DY           3
+SPRITE_X            0
+SPRITE_Y            1
+START               1000
+STATE0DONE          10EE
+STATE1DONE          1108
+STATE2DONE          1122
+STATE3DONE          113C
+STATE4DONE          1156
+STATE5DONE          1170
+STATE6DONE          118A
+STATE7DONE          11A4
+WAITABIT            10CC
+WAITABITLOOP        10D0

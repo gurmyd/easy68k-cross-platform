@@ -1,0 +1,31 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:30:40 AM
+
+00001000                             1      ORG $1000
+Line 2 ERROR: Undefined symbol
+00001000  3039 004DBD16              2      MOVE.W UNDEF,D0
+Line 3 ERROR: Invalid syntax
+00001006                             3      MOVE.W UNDEF+2,D0
+Line 4 ERROR: Comma expected
+00001006                             4      MOVE.W UNDEF-2,D0
+Line 5 ERROR: Invalid syntax
+00001006                             5      MOVE.W #UNDEF*2,D0
+Line 6 ERROR: Invalid syntax
+00001006                             6      MOVE.W (UNDEF+1),D0
+Line 7 ERROR: Undefined symbol
+00001006= F4F4                       7      DC.W UNDEF+1,5
+Line 8 ERROR: Undefined symbol
+00001008= 0007 0007                  8      DC.W 7,UNDEF
+Line 9 ERROR: Symbol value differs between first and second pass
+0000100C                             9  AFTER   NOP
+0000100C                            10      END $1000
+
+8 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+AFTER               1024

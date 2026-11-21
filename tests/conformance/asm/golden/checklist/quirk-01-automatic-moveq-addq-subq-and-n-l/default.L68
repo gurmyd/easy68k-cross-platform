@@ -1,0 +1,29 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:30:40 AM
+
+00001000                             1      ORG $1000
+00001000  7005                       2      MOVE.L #5,D0
+00001002  203C 00000005              3      MOVE.L #5.L,D0
+00001008  203C 00000005              4      MOVE.L #FWD,D0
+0000100E  5041                       5      ADD.W #8,D1
+00001010  5290                       6      ADDI.L #1,(A0)
+00001012  5749                       7      SUB.W #3,A1
+00001014  0640 0064                  8      ADD.W #100,D0
+00001018  C07C 0001                  9      AND.W #1,D0
+0000101C  70C8                      10      MOVEQ #200,D0
+Line 11 ERROR: Quick immediate data range exceeds 1 byte
+0000101E  702C                      11      MOVEQ #300,D0
+Line 12 ERROR: Comma expected
+00001020                            12      MOVE.L #5.W,D0
+00001020  =00000005                 13  FWD EQU 5
+00001020                            14      END $1000
+
+2 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+FWD                 5

@@ -1,0 +1,44 @@
+00000000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:27:59 AM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : macros
+00000000                             3  * Written by : Henry Wrightson
+00000000                             4  * Date       : 18/8/2026
+00000000                             5  * Type       : Include file
+00000000                             6  * Depends on : 
+00000000                             7  * Description: Macros
+00000000                             8  *-----------------------------------------------------------
+00000000                             9  
+00000000                            10  ;====================================================
+00000000                            11  ;======================= Macros =====================
+00000000                            12  ;====================================================
+00000000                            13  CacheRegisters macro
+00000000                            14      movem.l d0-d7/a0-a6,-(a7)
+00000000                            15      endm
+00000000                            16  
+00000000                            17  RestoreRegisters macro
+00000000                            18      movem.l (a7)+,d0-d7/a0-a6
+00000000                            19      endm
+00000000                            20  
+00000000                            21  CacheDataRegisters macro
+00000000                            22      movem.l d0-d7,-(a7)
+00000000                            23      endm
+00000000                            24  
+00000000                            25  RestoreDataRegisters macro
+00000000                            26      movem.l (a7)+,d0-d7
+00000000                            27      endm
+Line 28 WARNING: END directive missing, starting address not set
+
+No errors detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+CACHEDATAREGISTERS  52
+CACHEREGISTERS      0
+RESTOREDATAREGISTERS  75
+RESTOREREGISTERS    29

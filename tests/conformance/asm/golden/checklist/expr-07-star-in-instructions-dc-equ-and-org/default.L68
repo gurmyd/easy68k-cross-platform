@@ -1,0 +1,31 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:32:44 AM
+
+00001000                             1      ORG $1000
+00001000  41F8 1000                  2  START   LEA *,A0
+00001004  203C 00001004              3      MOVE.L  #*,D0
+0000100A  60FE                       4      BRA *
+0000100C  4EF8 1010                  5      JMP *+4
+00001010= 00001010 00001016          6      DC.L    *,*+2
+00001018= 0018                       7      DC.W    *-START
+0000101A  =0000101A                  8  HERE    EQU *
+0000101A  =0000001A                  9  SIZE    EQU *-START
+0000102A                            10      ORG *+16
+0000102A= 0000101A 0000001A ...     11  AFTER   DC.L    HERE,SIZE,*
+00001036                            12      ORG *
+00001036= 0006                      13      DC.W    2*3
+00001038= 2070                      14      DC.W    2**
+0000103A                            15      END START
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+AFTER               102A
+HERE                101A
+SIZE                1A
+START               1000

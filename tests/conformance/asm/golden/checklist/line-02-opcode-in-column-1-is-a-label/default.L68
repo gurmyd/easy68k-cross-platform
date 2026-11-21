@@ -1,0 +1,18 @@
+00000000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:29:09 AM
+
+00000000                             1  NOP
+00001000                             2      ORG $1000
+Line 3 ERROR: Invalid opcode
+00001000                             3  END START
+Line 4 WARNING: END directive missing, starting address not set
+
+1 error detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+NOP                 0

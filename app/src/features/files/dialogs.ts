@@ -1,0 +1,222 @@
+// The file dialogs of the application (ARCHITECTURE.md 3.8.5): the only place that opens one.
+//
+//   const paths = await ctx.fileDialogs.open({ title: 'Open File', filters, multiple: false });
+//   const path = await ctx.fileDialogs.save({ title: 'Save As', filters, defaultExt: '*.X68' });
+//
+// In a browser the port's own dialogs `file.open` and `file.save` (FileDialog.tsx) list the
+// mounted stores - the browser store, an opened folder - and show a button per provider
+// (providers.ts): "From this computer...", "Open folder...". When a provider with the id 'native'
+// is registered and available (the desktop app), its dialogs are used instead.
+//
+// save() resolves only after the overwrite question has been answered (contract: "overwrite
+// already confirmed"): an existing file gives `File exists! OK to overwrite?` (title `Caution!`,
+// Yes / No), and No abandons the save, as in the original (editor-ui §6.4). A request may carry
+// its own question in `overwritePrompt` (the Memory panel's `File exists! OK to replace?`, title
+// `Alert`), or null for none (docs/porting/errata/FS1.md, Contract).
+//
+// This file holds the service and the decisions of the dialogs' buttons as plain functions, so
+// that they are tested under Node; FileDialog.tsx draws them.
+//
+// Owner: FS1.
+
+import type {
+  AppContext,
+  DialogService,
+  FileDialogs,
+  FileFilter,
+  OpenRequest,
+  SaveRequest,
+  Vfs,
+  VPath,
+} from '../../contracts';
+import { basename, dirname, isVPath, resolveLexically, splitVPath } from '../../core/paths/winpath';
+import { OVERWRITE_TEXT, OVERWRITE_TITLE, applyDefaultExtension, invalidNameReason, matchesFilter } from './filters';
+import { NATIVE_PROVIDER_ID, createProviderRegistry, type ProviderRegistry } from './providers';
+import { chooseStartDir, locationOf } from './store';
+
+export const OPEN_DIALOG_ID = 'file.open';
+export const SAVE_DIALOG_ID = 'file.save';
+
+/** An overwrite question of the request's own (see the header); null = ask nothing. */
+export interface OverwritePrompt {
+  title: string;
+  text: string;
+}
+export type SaveRequestWithPrompt = SaveRequest & { overwritePrompt?: OverwritePrompt | null };
+
+/** What the dialog components receive. */
+export interface OpenDialogProps {
+  kind: 'open';
+  request: OpenRequest;
+  startDir: VPath | null;
+  registry: ProviderRegistry;
+}
+export interface SaveDialogProps {
+  kind: 'save';
+  request: SaveRequestWithPrompt;
+  startDir: VPath | null;
+  /** The suggested file name (from request.suggested). */
+  initialName: string;
+  registry: ProviderRegistry;
+}
+export type FileDialogProps = OpenDialogProps | SaveDialogProps;
+
+/** The file dialogs plus what the Files feature itself uses. */
+export interface FileDialogService extends FileDialogs {
+  readonly registry: ProviderRegistry;
+  /** The folder the last dialog ended in (the next one starts there). */
+  lastDir(): VPath | null;
+}
+
+export function createFileDialogService(ctx: AppContext, registry = createProviderRegistry()): FileDialogService {
+  let last: VPath | null = null;
+  const native = () => {
+    const provider = registry.get(NATIVE_PROVIDER_ID);
+    return provider && provider.available() ? provider : undefined;
+  };
+  return {
+    registry,
+    lastDir: () => last,
+    registerProvider: (provider) => registry.register(provider),
+
+    async open(request) {
+      const nativeProvider = native();
+      if (nativeProvider?.open) return nativeProvider.open(request);
+      const startDir = await chooseStartDir(ctx.vfs, [request.startDir, last]);
+      const props: OpenDialogProps = { kind: 'open', request, startDir, registry };
+      const result = await ctx.dialogs.open<OpenDialogProps, VPath[] | null>(OPEN_DIALOG_ID, props);
+      if (!result || result.length === 0) return null;
+      last = dirname(result[0] as VPath);
+      return result;
+    },
+
+    async save(request) {
+      const nativeProvider = native();
+      if (nativeProvider?.save) return nativeProvider.save(request);
+      const suggested = request.suggested && isVPath(request.suggested) ? request.suggested : undefined;
+      const startDir = await chooseStartDir(ctx.vfs, [suggested ? dirname(suggested) : undefined, last]);
+      const props: SaveDialogProps = {
+        kind: 'save',
+        request,
+        startDir,
+        initialName: suggested ? basename(suggested) : '',
+        registry,
+      };
+      const result = await ctx.dialogs.open<SaveDialogProps, VPath | null>(SAVE_DIALOG_ID, props);
+      if (!result) return null;
+      last = dirname(result);
+      return result;
+    },
+  };
+}
+
+// ---- the decisions of the dialogs' buttons -----------------------------------------------------------
+
+/** What pressing Open or Save (or Enter in the name field) does. */
+export type DialogStep =
+  | { kind: 'done'; paths: VPath[] }
+  | { kind: 'navigate'; dir: VPath }
+  | { kind: 'filter'; filter: FileFilter }
+  | { kind: 'error'; title: string; text: string }
+  | { kind: 'abandon' }
+  | { kind: 'nothing' };
+
+const hasWildcard = (name: string) => /[*?]/.test(name);
+
+/**
+ * The Open button: a selected file, or a typed name relative to the shown folder. A typed folder
+ * is entered, a typed pattern (*.ASM) becomes the filter, a name that does not exist is reported
+ * with the Windows dialog's text.
+ */
+export async function decideOpen(
+  vfs: Vfs,
+  dir: VPath,
+  typed: string,
+  selected: { path: VPath; kind: 'file' | 'dir' } | null,
+  title: string,
+): Promise<DialogStep> {
+  const name = typed.trim().replace(/^"(.*)"$/, '$1');
+  if (name === '') {
+    if (!selected) return { kind: 'nothing' };
+    return selected.kind === 'dir'
+      ? { kind: 'navigate', dir: selected.path }
+      : { kind: 'done', paths: [selected.path] };
+  }
+  if (hasWildcard(name))
+    return { kind: 'filter', filter: { label: name, patterns: name.split(';').map((p) => p.trim()) } };
+  const found = await vfs.resolve(dir, name);
+  if (found !== null) {
+    const stat = await vfs.stat(found).catch(() => null);
+    if (stat?.kind === 'dir') return { kind: 'navigate', dir: found };
+    if (stat?.kind === 'file') return { kind: 'done', paths: [found] };
+  }
+  return { kind: 'error', title, text: `${name}\nFile not found.\nCheck the file name and try again.` };
+}
+
+/**
+ * The Save button (editor-ui §6.4): the default extension rule, then the overwrite question.
+ * A typed folder is entered. The result path keeps the stored spelling of an existing file.
+ */
+export async function decideSave(
+  vfs: Vfs,
+  dialogs: Pick<DialogService, 'messageBox'>,
+  dir: VPath,
+  typed: string,
+  filterIndex: number,
+  request: SaveRequestWithPrompt,
+): Promise<DialogStep> {
+  const raw = typed.trim().replace(/^"(.*)"$/, '$1');
+  if (raw === '') return { kind: 'nothing' };
+  if (hasWildcard(raw))
+    return { kind: 'filter', filter: { label: raw, patterns: raw.split(';').map((p) => p.trim()) } };
+  const lexical = resolveLexically(dir, raw);
+  if (lexical === null || !locationOf(vfs, lexical)) {
+    return { kind: 'error', title: request.title, text: `${raw}\nThe file name is not valid.` };
+  }
+  // A typed folder is entered.
+  const asFolder = await vfs.resolve(dir, raw);
+  if (asFolder !== null && (await vfs.stat(asFolder).catch(() => null))?.kind === 'dir') {
+    return { kind: 'navigate', dir: asFolder };
+  }
+  const name = applyDefaultExtension(basename(lexical), request, filterIndex);
+  const reason = invalidNameReason(name);
+  if (reason) return { kind: 'error', title: request.title, text: `${name}\n${reason}` };
+  const folder = dirname(lexical);
+  const { mount, rel: folderRel } = splitVPath(folder);
+  const folderFound = folder === dir ? dir : folderRel === '' ? folder : await vfs.resolve(`/${mount}`, folderRel);
+  if (folderFound === null || (await vfs.stat(folderFound).catch(() => null))?.kind !== 'dir') {
+    return {
+      kind: 'error',
+      title: request.title,
+      text: `${raw}\nThe folder does not exist. Check the name and try again.`,
+    };
+  }
+  const existing = await vfs.resolve(folderFound, name);
+  const existingStat = existing !== null ? await vfs.stat(existing).catch(() => null) : null;
+  if (existing !== null && existingStat?.kind === 'dir') return { kind: 'navigate', dir: existing };
+  if (existing !== null && existingStat?.kind === 'file') {
+    const prompt =
+      request.overwritePrompt === undefined
+        ? { title: OVERWRITE_TITLE, text: OVERWRITE_TEXT }
+        : request.overwritePrompt;
+    if (prompt) {
+      const answer = await dialogs.messageBox({
+        title: prompt.title,
+        text: prompt.text,
+        icon: 'none',
+        buttons: ['Yes', 'No'],
+      });
+      if (answer !== 'Yes') return { kind: 'abandon' };
+    }
+    return { kind: 'done', paths: [existing] };
+  }
+  return { kind: 'done', paths: [`${folderFound}/${name}`] };
+}
+
+/** The entries a dialog lists for a folder under a filter: folders always, files that match. */
+export function visibleEntries<T extends { name: string; kind: 'file' | 'dir' }>(
+  entries: readonly T[],
+  filter: FileFilter | undefined,
+): T[] {
+  return entries.filter((entry) => entry.kind === 'dir' || matchesFilter(entry.name, filter));
+}

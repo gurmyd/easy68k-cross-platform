@@ -1,0 +1,21 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:30:02 AM
+
+00001000                             1      ORG $1000
+00001000  4E71                       2  ABCDEFGHIJKLMNOPQRSTUVWXY   NOP
+Line 3 WARNING: Label too long
+00001002  4E71                       3  .LOCALXX    NOP
+Line 4 ERROR: Undefined symbol
+00001004  6000 AD10                  4      BRA .LOCALXX
+00001008                             5      END $1000
+
+1 error detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+ABCDEFGHIJKLMNOPQRSTUVWXY  1000
+ABCDEFGHIJKLMNOPQRSTUVWXY:LOCALXX  1002

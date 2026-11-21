@@ -38,3 +38,6 @@
 /tests/corpus/**       -text
 /tests/**/golden/**    -text
 /tests/oracle/asm-cli/** -text
+
+# Third-party fonts and licence texts whose SHA-256 is recorded in sources.json: bytes.
+/tools/fonts-src/**     -text

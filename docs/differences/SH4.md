@@ -1,0 +1,28 @@
+# Differences introduced by SH4 (keyboard, mouse, Output panel)
+
+Deliberate differences from the original's I/O window that the Output panel and its keyboard and
+mouse handling introduce, beyond those section 1.4 of `docs/ARCHITECTURE.md` already lists (notes
+35, 36 and 44: the panel collapses instead of closing, full screen needs a user gesture in a
+browser and Esc leaves it in Safari and Firefox, Ctrl+Alt+O is taken from programs). The rows
+marked **program** can change what a 68000 program observes. DOC1 merges this file into
+`docs/DIFFERENCES.md`.
+
+| Where | Original | Port | Why |
+|---|---|---|---|
+| **program** - TRAP #15 task 19 on a keyboard layout other than US | The code of a key follows the layout: on an AZERTY keyboard the key labelled A is `$41`, on a QWERTZ keyboard the key labelled Z is `$5A`; punctuation keys have the layout's `VK_OEM` codes | The code follows the key's position on a US keyboard: the key labelled A on AZERTY is `$51`, the key labelled Z on QWERTZ is `$59`. Characters (tasks 2, 4, 5, 18) are not affected | Browsers report positions (`KeyboardEvent.code`) dependably and layouts only through the typed character (3.6, trap15-b §9.1). Erratum SH4-9 proposes the label for letters |
+| **program** - keys that have no entry in the table of trap15-b §9.1 (Windows / Command key, menu key, the extra key of ISO keyboards, F13 and up) | Recorded by task 19 with their Windows code; they raise the key interrupts of task 62 | Not reported as keys; no interrupt. A character they type still arrives | The table is the spec's list; code 0 must not be posted (erratum SH4-8) |
+| **program** - a character that Windows-1252 does not have (Greek, Cyrillic, emoji) | Windows delivers `?` (`$3F`) to an ANSI window | Nothing is delivered | 3.6 |
+| **program** - keys pressed while an input method composes text | The key code is `$E5` (`VK_PROCESSKEY`); the composed text arrives as characters | The key's own code is recorded; the composed text arrives as characters | The browser does not say more |
+| **program** - the paste chord on macOS | Shift+Insert: task 19 sees `$2D` | Cmd+V: task 19 sees `$56`. The pasted text is the same | No Insert key (1.3.6) |
+| **program** - Option + key on macOS | No such key. Alt + key on Windows types nothing | Types the character the Mac layout gives (Option+G is `$A9`); Option+Return types nothing | Option is how a Mac keyboard types `@`, `€`, `{` on many layouts, as AltGr does on Windows |
+| **program** - a key released while Command is held (macOS) | Does not occur | The key-up is delivered when Command is released, possibly later than the finger left the key | macOS sends no key-up in that case (3.6) |
+| **program** - text pasted with the browser's own Paste command (its menu), not with the chord | Does not exist | Arrives as typed characters, one after the other, so a multi-line text can fill several inputs | The original's "only the first line and the last character" rule belongs to its Shift+Insert handler, which the chord keeps |
+| **program** - mouse: the left button released outside the browser window after the browser lost the capture | Windows reports the release | The release is reported at the next mouse move over the surface | The browser reports nothing earlier |
+| **program** - coming back to the browser window from another application while the panel has the keyboard | The I/O window's key table is cleared only when the simulator's own windows change places (`FormActivate`); keys held while another application was in front stay as they were | The panel loses and regains the focus with the browser window, so the key table is cleared on the way back (`ioActivated`) | A page cannot tell the two cases apart; a key that went up while the browser was not looking would otherwise stay down for task 19 |
+| Touch | The I/O window has no touch handling; Windows turns touches into mouse messages | Whatever mouse events the browser makes of a touch (a tap is a click); no touch gestures of the port's own | trap15-b §8.1 item 7 |
+| Full screen | The display mode changes to the surface size; the window covers the monitor | The page (browser) or the window (desktop app) goes full screen; the surface is centred at the largest whole-number scale, black around it; dialogs and message boxes appear above it | 2.5 |
+| Full screen and the mode switch | Editor and simulator are separate programs | Leaving Simulator mode leaves full screen | The full-screen panel belongs to the simulator's workspace |
+| A program asks for full screen right after the user's Run | Enters at once | Enters at once while the browser still counts the user's key or click as a gesture (a few seconds); later it shows `Press any key or click to enter full screen` | A browser gives full screen only inside a user gesture (1.4 note 36) |
+| `View > Output Window` in full screen | Leaves full screen | Leaves full screen and gives the panel the keyboard | 1.3.4 |
+| Zoom at a display scale of 125 % or 150 % | The window is not scaled | `100%` and `200%` are whole numbers of CSS pixels, which are not whole numbers of screen pixels there: pixel columns of unequal width | 2.5 asks for whole-number scales; the pixels a program draws and reads back are not affected |
+| Focus mark | The window's title bar shows that it is active | An outline around the surface area while the program has the keyboard; the header strip says `Output`, the size and the zoom | 2.5, 2.11 |

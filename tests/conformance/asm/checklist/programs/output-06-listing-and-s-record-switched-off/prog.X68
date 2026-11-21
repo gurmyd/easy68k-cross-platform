@@ -1,0 +1,4 @@
+	ORG $1000
+	NOP
+	MOVE.B #300,D0
+	END $1000

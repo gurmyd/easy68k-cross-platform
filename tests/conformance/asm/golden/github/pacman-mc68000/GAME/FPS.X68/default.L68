@@ -1,0 +1,114 @@
+00000000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:28:47 AM
+
+00000000                             1  
+00000000                             2  ; -----------------------------------------------------------------------------
+00000000                             3  FPS_INIT
+00000000                             4  ; INITIALIZATE FPS.
+00000000                             5  ; INPUT    : NONE 
+00000000                             6  ; OUTPUT   : NONE
+00000000                             7  ; MODIFIES : NONE
+00000000                             8  ; -----------------------------------------------------------------------------
+Line 9 ERROR: Undefined symbol
+00000000  4279 004DBD16              9                            CLR.W   (FRAMECOUNT)
+Line 10 ERROR: Undefined symbol
+00000006  4279 004DBD16             10                            CLR.W   (FRAMEPRINT)
+0000000C  4E75                      11                            RTS
+0000000E                            12  
+0000000E                            13  ; -----------------------------------------------------------------------------
+0000000E                            14  FPS_UPDATE     
+0000000E                            15  ; UPDATES FPS.
+0000000E                            16  ; INPUT    : NONE 
+0000000E                            17  ; OUTPUT   : NONE
+0000000E                            18  ; MODIFIES : NONE
+0000000E                            19  ; -----------------------------------------------------------------------------
+0000000E  48E7 E000                 20                            MOVEM.L D0-D2,-(A7)
+00000012                            21              
+00000012                            22                            ; ADD FPS COUNT
+Line 23 ERROR: Undefined symbol
+00000012  5279 005455B8             23                            ADDQ    #1,(FRAMECOUNT)
+00000018                            24                            ; TRAP FOR TIME
+00000018  103C 0008                 25                            MOVE.B  #8,D0     
+0000001C  4E4F                      26                            TRAP    #15
+0000001E                            27                            ; TIME COMPARE
+0000001E  2401                      28                            MOVE.L  D1,D2            
+Line 29 ERROR: Undefined symbol
+00000020  2039 004DBD16             29                            MOVE.L  (TIME),D0        
+00000026  0680 00000064             30                            ADD.L   #100,D0          
+0000002C  9280                      31                            SUB.L   D0,D1            
+0000002E  B2BC 00000000             32                            CMP.L   #0,D1            
+00000034                            33  
+00000034  6D00 001A                 34                            BLT     .END
+00000038                            35                            
+00000038                            36                            ;UPDATE FPS
+Line 37 ERROR: Undefined symbol
+00000038  33F9 004DBD16 005455B8    37                            MOVE.W  (FRAMECOUNT),(FRAMEPRINT)
+Line 38 ERROR: Undefined symbol
+00000042  33FC 0000 005455B8        38                            MOVE.W  #0,(FRAMECOUNT)
+Line 39 ERROR: Undefined symbol
+0000004A  23C2 005455B8             39                            MOVE.L  D2,(TIME)
+00000050                            40  
+00000050                            41  .END      
+00000050  4CDF 0007                 42                            MOVEM.L (A7)+,D0-D2
+00000054  4E75                      43                            RTS
+00000056                            44              
+00000056                            45              
+00000056= 4D 41 58 20 46 50 ...     46  GOALFPS                   DC.B    'MAX FPS :',0
+00000060= 46 50 53 20 3A 00         47  ACTUALFPS                 DC.B    'FPS :',0
+00000066= 0000                      48                            DC.W    0
+00000068                            49  
+00000068                            50  ; -----------------------------------------------------------------------------
+00000068                            51  FPS_PLOT
+00000068                            52  ; PLOT FPS.
+00000068                            53  ; INPUT    : NONE 
+00000068                            54  ; OUTPUT   : NONE
+00000068                            55  ; MODIFIES : NONE
+00000068                            56  ; -----------------------------------------------------------------------------
+00000068                            57  
+00000068  48E7 C040                 58                            MOVEM.L D0-D1/A1,-(A7)
+0000006C                            59                          
+0000006C                            60                            ; SET FIRST LINE POSITION
+0000006C  103C 000B                 61                            MOVE.B  #11,D0
+00000070  323C 0201                 62                            MOVE.W  #$0201,D1
+00000074  4E4F                      63                            TRAP    #15
+00000076                            64              
+00000076                            65                            ; PRINT FIRST LINE
+00000076  43F8 0056                 66                            LEA     GOALFPS, A1
+0000007A  4281                      67                            CLR.L   D1
+Line 68 ERROR: Undefined symbol
+0000007C  323C BD16                 68                            MOVE.W  #FPS_TO_REACH,D1
+00000080  103C 0011                 69                            MOVE.B  #17,D0
+00000084  4E4F                      70                            TRAP    #15
+00000086                            71              
+00000086                            72                            ; SET SECOND LINE POSITION
+00000086  103C 000B                 73                            MOVE.B  #11,D0
+0000008A  323C 0202                 74                            MOVE.W  #$0202,D1
+0000008E  4E4F                      75                            TRAP    #15
+00000090                            76              
+00000090                            77                            ; PRINT SECOND LINE
+00000090  43F8 0060                 78                            LEA     ACTUALFPS,A1
+00000094  4281                      79                            CLR.L   D1
+Line 80 ERROR: Undefined symbol
+00000096  3239 004DBD16             80                            MOVE.W  (FRAMEPRINT),D1
+0000009C  103C 0011                 81                            MOVE.B  #17,D0
+000000A0  4E4F                      82                            TRAP    #15
+000000A2                            83              
+000000A2  4CDF 0203                 84                            MOVEM.L (A7)+,D0-D1/A1
+000000A6                            85              
+000000A6  4E75                      86                            RTS
+Line 87 WARNING: END directive missing, starting address not set
+
+9 errors detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+ACTUALFPS           60
+FPS_INIT            0
+FPS_PLOT            68
+FPS_UPDATE          E
+FPS_UPDATE:END      50
+GOALFPS             56

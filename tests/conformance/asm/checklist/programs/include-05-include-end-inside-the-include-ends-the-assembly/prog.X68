@@ -1,0 +1,4 @@
+	ORG $1000
+	INCLUDE e.x68
+	NOP
+	BOGUS

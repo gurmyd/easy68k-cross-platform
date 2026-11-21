@@ -1,0 +1,16 @@
+00000000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:29:51 AM
+
+00001000                             1      ORG $1000
+00001000  4E71                       2      NOP
+Line 3 ERROR: Label is not allowed
+00001002                             3  L   END $1000
+
+1 error detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------

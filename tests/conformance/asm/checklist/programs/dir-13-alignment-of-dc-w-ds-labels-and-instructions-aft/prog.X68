@@ -1,0 +1,13 @@
+	ORG $1000
+	DC.B 1
+W	DC.W 2
+	DC.B 3
+L	DS.W 1
+	DC.B 4
+B	DS.B 1
+N	NOP
+	DC.B 5
+Z	DS.W 0
+	DC.B 6
+	SIMHALT
+	END $1000

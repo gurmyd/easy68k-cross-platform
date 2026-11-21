@@ -1,0 +1,3 @@
+	NOP
+	END $1000
+	BOGUS

@@ -1,0 +1,169 @@
+00002000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:27:24 AM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title         : Tutorial 3 for EASy68k
+00000000                             3  * Written by    : Chuck Kelly
+00000000                             4  * Date Created  : May-06-2004
+00000000                             5  * Dec-25-2012 by CK, Uses SIMHALT
+00000000                             6  * Description   : 
+00000000                             7  *
+00000000                             8  * A simple number guessing game. The program generates a random number between 1 and 100
+00000000                             9  * and asks the player to guess the number. After each guess the program displays higher or lower
+00000000                            10  * until the player guesses the correct number.
+00000000                            11  *
+00000000                            12  * Demonstrates Structured Assembly, SECTION directive & Macros with EASy68K
+00000000                            13  *-----------------------------------------------------------
+00000000                            14      OPT     MEX         Expand macro calls
+00000000                            15      OPT     SEX         Expand structured statements
+00000000                            16  
+00000000  =00000000                 17  CODE    EQU     0
+00000000  =00000001                 18  TEXT    EQU     1
+00000000  =0000000D                 19  CR      EQU     $0D
+00000000  =0000000A                 20  LF      EQU     $0A
+00000000                            21  
+00000000                            22  
+00000000                            23      SECTION TEXT
+00000800                            24      ORG     $800        set the address for TEXT data
+00000800                            25  
+00000000                            26      SECTION CODE
+00002000                            27      ORG     $2000       set the address for program code
+00002000                            28  
+00002000                            29  PRINT   MACRO
+00002000                            30      lea     \1,a1
+00002000                            31      move.b  #14,d0
+00002000                            32      trap    #15
+00002000                            33      ENDM
+00002000                            34  
+00002000                            35  GETNUM  MACRO
+00002000                            36      move.b  #4,d0       get user guess in D1.L
+00002000                            37      trap    #15
+00002000                            38      ENDM
+00002000                            39  
+00002000                            40  *----------------------------------------------------
+00002000                            41  * Program execution begins here
+00002000                            42  *----------------------------------------------------
+00002000                            43  START
+00002000                            44  
+00002000                            45    repeat
+00002000                            46s _30000000
+00002000                            47m     PRINT instr_Msg     print instructions
+00002000  43F9 00000800             48m     LEA     INSTR_MSG,A1
+00002006  103C 000E                 49m     MOVE.B  #14,D0
+0000200A  4E4F                      50m     TRAP    #15
+0000200C                            51m     ENDM
+0000200C                            52  
+0000200C                            53      * generate random number for player to guess
+0000200C                            54      * Uses timer as random number generator. This may not be the best way to
+0000200C                            55      * generate a random number but it will work for this demonstration.
+0000200C                            56      * Trap code 8 returns time in hundredths of a second since midnight in D1.L
+0000200C                            57  
+0000200C  103C 0008                 58      move.b  #8,d0
+00002010  4E4F                      59      trap    #15
+00002012  C2BC 005FFFFF             60      and.l   #$5FFFFF,d1 prevent overflow in divu
+00002018  82FC 0064                 61      divu    #100,d1     time count / 100
+0000201C  4841                      62      swap    d1          swap upper and lower words of D1 to put remainder in low word
+0000201E  5241                      63      addq.w  #1,d1       d1.w contains number from 1 to 100
+00002020  3401                      64      move    d1,d2       d2 = d1
+00002022                            65  
+00002022                            66      repeat
+00002022                            67s _30000001
+00002022                            68m       PRINT enterMsg    Display 'enter guess' prompt
+00002022  43F9 00000865             69m     LEA     ENTERMSG,A1
+00002028  103C 000E                 70m     MOVE.B  #14,D0
+0000202C  4E4F                      71m     TRAP    #15
+0000202E                            72m     ENDM
+0000202E                            73m       GETNUM            get user guess in D1.L
+0000202E  103C 0004                 74m     MOVE.B  #4,D0       GET USER GUESS IN D1.L
+00002032  4E4F                      75m     TRAP    #15
+00002034                            76m     ENDM
+00002034                            77  
+00002034                            78        if d1 <ne> #0 then
+00002034  B27C 0000                 79s     CMP.W   #0,D1
+00002038  6700 003A                 80s     BEQ _00000000
+0000203C                            81          if d1 <hi> d2 then  if the player guessed hi
+0000203C  B242                      82s     CMP.W   D2,D1
+0000203E  6300 0012                 83s     BLS _00000001
+00002042                            84m           PRINT bigMsg      Display 'Too Big'
+00002042  43F9 0000089B             85m     LEA     BIGMSG,A1
+00002048  103C 000E                 86m     MOVE.B  #14,D0
+0000204C  4E4F                      87m     TRAP    #15
+0000204E                            88m     ENDM
+0000204E                            89          else
+0000204E  6000 0024                 90s     BRA _00000002
+00002052                            91s _00000001
+00002052                            92            if d1 <lo> d2 then    if the player guessed lo
+00002052  B242                      93s     CMP.W   D2,D1
+00002054  6400 0012                 94s     BHS _00000003
+00002058                            95m             PRINT smallMsg      Display 'Too Small'
+00002058  43F9 000008B5             96m     LEA     SMALLMSG,A1
+0000205E  103C 000E                 97m     MOVE.B  #14,D0
+00002062  4E4F                      98m     TRAP    #15
+00002064                            99m     ENDM
+00002064                           100            else                  The user guessed the number
+00002064  6000 000E                101s     BRA _00000004
+00002068                           102s _00000003
+00002068                           103m             PRINT goodMsg       Display 'Good Guess'
+00002068  43F9 0000087A            104m     LEA     GOODMSG,A1
+0000206E  103C 000E                105m     MOVE.B  #14,D0
+00002072  4E4F                     106m     TRAP    #15
+00002074                           107m     ENDM
+00002074                           108            endi
+00002074                           109s _00000004
+00002074                           110          endi
+00002074                           111s _00000002
+00002074                           112        endi
+00002074                           113s _00000000
+00002074                           114      until d1 <eq> #0 OR d1 <eq> d2 do
+00002074  B27C 0000                115s     CMP.W   #0,D1
+00002078  6704                     116s     BEQ.S   _30000002
+0000207A  B242                     117s     CMP.W   D2,D1
+0000207C  66A4                     118s     BNE _30000001
+0000207E                           119s _30000002
+0000207E                           120    until d1 <eq> #0 do
+0000207E  B27C 0000                121s     CMP.W   #0,D1
+00002082  6600 FF7C                122s     BNE _30000000
+00002086                           123  
+00002086  FFFF FFFF                124      SIMHALT
+0000208A                           125  
+00000800                           126      SECTION     TEXT
+00000800= 0D 0A                    127  instr_Msg   dc.b    CR,LF
+00000802= 2D 2D 2D 2D 2D 20 ...    128          dc.b    '----- Number guessing game -----',CR,LF
+00000824= 20 47 75 65 73 73 ...    129          dc.b    ' Guess the number from 1 to 100',CR,LF
+00000845= 20 45 6E 74 65 72 ...    130          dc.b    ' Enter a 0 to quit the game',CR,LF,CR,LF,0
+00000865                           131  
+00000865= 0D 0A 45 6E 74 65 ...    132  enterMsg    dc.b    CR,LF,'Enter your guess: ',0
+0000087A= 0D 0A 47 6F 6F 64 ...    133  goodMsg     dc.b    CR,LF,'Good guess, that is correct!',CR,LF,0
+0000089B= 0D 0A 59 6F 75 72 ...    134  bigMsg      dc.b    CR,LF,'Your guess is too big',CR,LF,0
+000008B5= 0D 0A 59 6F 75 72 ...    135  smallMsg    dc.b    CR,LF,'Your guess is too small',CR,LF,0
+000008D1                           136          
+000008D1                           137      END     START
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+BIGMSG              89B
+CODE                0
+CR                  D
+ENTERMSG            865
+GETNUM              42
+GOODMSG             87A
+INSTR_MSG           800
+LF                  A
+PRINT               0
+SMALLMSG            8B5
+START               2000
+TEXT                1
+_00000000           2074
+_00000001           2052
+_00000002           2074
+_00000003           2068
+_00000004           2074
+_30000000           2000
+_30000001           2022
+_30000002           207E

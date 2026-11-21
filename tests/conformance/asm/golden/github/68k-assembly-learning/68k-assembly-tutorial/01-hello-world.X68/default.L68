@@ -1,0 +1,104 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:28:07 AM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      :
+00000000                             3  * Written by :
+00000000                             4  * Date       :
+00000000                             5  * Description:
+00000000                             6  *-----------------------------------------------------------
+00001000                             7      ORG    $1000
+00001000                             8  START:                  ; first instruction of program
+00001000                             9  
+00001000                            10  * Put program code here
+00001000  43F9 00001094             11      lea     message,a1      ;hello world message
+00001006  183C 0001                 12      move.b  #1,d4           ;start moving down
+0000100A  1A3C 0001                 13      move.b  #1,d5           ;start moving right
+0000100E  1C3C 0000                 14      move.b  #0,d6           ;col
+00001012  1E3C 0005                 15      move.b  #5,d7           ;row
+00001016                            16  
+00001016                            17  LOOP:
+00001016  1206                      18      move.b  d6, d1          ;load row into low byte of d1
+00001018  E149                      19      lsl.w   #8, d1          ;shift the low byte of d1 over to high byte
+0000101A  1207                      20      move.b  d7, d1          ;load col into low byte of d1
+0000101C  103C 000B                 21      move.b  #11, d0         ;load command to position cursor
+00001020  4E4F                      22      trap    #15
+00001022                            23      
+00001022  7200                      24      move.l  #$00000000,d1   ;set colour to BLACK
+00001024  143C 0000                 25      move.b  #0, d2          ;set style
+00001028  103C 0015                 26      move.b  #21, d0         ;set text colour code
+0000102C  4E4F                      27      trap    #15
+0000102E                            28      
+0000102E  103C 000E                 29      move.b  #14, d0         ;load command to output text
+00001032  4E4F                      30      trap    #15
+00001034                            31      
+00001034  DC05                      32      add.b   d5, d6          ;move col 
+00001036  BC3C 0000                 33      cmp.b   #0, d6          ;if Hello World is all the way left, send it right
+0000103A  6700 000E                 34      beq     NEGATEX
+0000103E  BC3C 0045                 35      cmp.b   #69, d6         ;if Hello World is all the way right, send it left
+00001042  6700 0006                 36      beq     NEGATEX
+00001046  6000 0004                 37      bra     CONTINUEX
+0000104A                            38      NEGATEX:
+0000104A  4405                      39          neg.b   d5
+0000104C                            40      CONTINUEX:
+0000104C                            41      
+0000104C  DE04                      42      add.b   d4, d7          ;move row
+0000104E  BE3C 0000                 43      cmp.b   #0, d7          ;if Hello World is all the way up top, send it down
+00001052  6700 000E                 44      beq     NEGATEY
+00001056  BE3C 001F                 45      cmp.b   #31, d7         ;if Hello World is all the way at bottom, send it up
+0000105A  6700 0006                 46      beq     NEGATEY
+0000105E  6000 0004                 47      bra     CONTINUEY
+00001062                            48      NEGATEY:
+00001062  4404                      49          neg.b   d4
+00001064                            50      CONTINUEY:
+00001064                            51      
+00001064  1206                      52      move.b  d6, d1          ;load row into low byte of d1
+00001066  E149                      53      lsl.w   #8, d1          ;shift the low byte of d1 over to high byte
+00001068  1207                      54      move.b  d7, d1          ;load col into low byte of d1
+0000106A  103C 000B                 55      move.b  #11, d0         ;load command to position cursor
+0000106E  4E4F                      56      trap    #15
+00001070                            57      
+00001070  223C 0000FF00             58      move.l  #$0000ff00, d1  ;set colour to GREEN
+00001076  143C 0000                 59      move.b  #0, d2          ;no style
+0000107A  103C 0015                 60      move.b  #21, d0         ;set text colour
+0000107E  4E4F                      61      trap    #15
+00001080                            62          
+00001080  103C 000E                 63      move.b  #14, d0         ;load command to output text
+00001084  4E4F                      64      trap    #15
+00001086                            65        
+00001086  303C 2710                 66      move.w  #10000, d0
+0000108A                            67      LOOPWAIT:
+0000108A  5340                      68        subq.w    #1, d0
+0000108C  66FC                      69        bne       LOOPWAIT
+0000108E                            70        
+0000108E  6086                      71      bra     LOOP            ;loop
+00001090                            72      
+00001090  FFFF FFFF                 73      SIMHALT                 ; halt simulator
+00001094                            74  
+00001094                            75  * Put variables and constants here
+00001094= 48 65 6C 6C 6F 20 ...     76  message     dc.b    'Hello World',0
+000010A0= 00                        77  red         dc.b    0
+000010A1= 00                        78  green       dc.b    0
+000010A2= 00                        79  blue        dc.b    0
+000010A3                            80      
+000010A3                            81      END START        ; last line of source
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+BLUE                10A2
+CONTINUEX           104C
+CONTINUEY           1064
+GREEN               10A1
+LOOP                1016
+LOOPWAIT            108A
+MESSAGE             1094
+NEGATEX             104A
+NEGATEY             1062
+RED                 10A0
+START               1000

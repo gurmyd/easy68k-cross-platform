@@ -1,0 +1,492 @@
+// The document service: New, Open, Save, Save As, Reload, Close (ARCHITECTURE.md 3.9; editor-ui §6,
+// §12; 3.8.6 rule 3).
+//
+// DocumentManager implements the contract's DocumentService. It keeps the DocumentState of every
+// open document, mirrors them into AppState.documents (order = order of opening, 2.4), and keeps
+// their text in a DocumentRegistry (registry.ts). It touches no browser API: files, dialogs and the
+// file dialogs arrive as the contract's interfaces (DocumentServiceDeps).
+//
+// Behaviour, in the original's order (editor-ui §6), with the port's documented changes:
+//   - Open: missing file -> `File Access Error. ...`; a document with exactly this path open ->
+//     discarded (after the "already open" question if it is modified) and replaced in its tab;
+//     the extension decides source or list (.L68 and .S68, any case, are lists).
+//   - Save writes text + trailer (format.ts). Before writing over the file it compares the file's
+//     modification time with the one recorded at load or the last save and asks the question of
+//     3.8.6 if they differ. Characters without a Windows-1252 byte are asked about once per
+//     document (3.9.3).
+//   - Save As: the file dialog confirms an overwrite itself (FileDialogs.save); only an extension
+//     spelled exactly `.X68` turns a list into a source (mainS.cpp:190-201).
+//   - Close saves the document that is closing, and a cancelled or failed save cancels the close
+//     (1.4 note 3).
+//   - untitledN numbers increase by one per new document (1.4 note 15).
+//
+// Owner: E1. Runs under Node and in browsers (core/ rules, 3.1).
+
+import {
+  TabType,
+  type AppState,
+  type DialogService,
+  type DocDefaults,
+  type DocumentService,
+  type DocumentState,
+  type FileDialogs,
+  type SettingsService,
+  type Store,
+  type VPath,
+  type Vfs,
+} from '../../contracts';
+import { basename, extractFileExt } from '../paths/winpath';
+import { countUnmappable, decodeFile, encodeFile, looksLikeUtf8, stripTrailer, upperExt, UTF8_BANNER } from './format';
+import {
+  alreadyOpenQuestion,
+  changedOutsideQuestion,
+  closeQuestion,
+  fileAccessError,
+  loadFileError,
+  reloadQuestion,
+  SAVE_DEFAULT_EXT,
+  SAVE_FILTERS,
+  SAVE_TITLE,
+  unmappableQuestion,
+  writeError,
+} from './messages';
+import { DocumentRegistry } from './registry';
+
+export interface DocumentServiceDeps {
+  store: Store<AppState>;
+  settings: Pick<SettingsService, 'get'>;
+  dialogs: Pick<DialogService, 'messageBox' | 'toast'>;
+  vfs: Pick<Vfs, 'stat' | 'readFile' | 'writeFile'>;
+  fileDialogs: Pick<FileDialogs, 'open' | 'save'>;
+  /** Default: a new registry. */
+  registry?: DocumentRegistry;
+}
+
+/** The settings a document can change after it is open (E2: Insert/Replace; E4: Editor Options). */
+export type DocumentPatch = Partial<
+  Pick<DocumentState, 'insertMode' | 'tabType' | 'tabSize' | 'fontName' | 'fontSize'>
+>;
+
+/** A document to bring back from a draft (features/documents/drafts.ts). */
+export interface RestoredDocument {
+  state: DocumentState;
+  text: string;
+  /** The file's modification time recorded by the window that wrote the draft. */
+  mtime: number | null;
+}
+
+interface Entry {
+  state: DocumentState;
+  /** Modification time of the file when it was loaded or last saved; null = not known. */
+  mtime: number | null;
+  /** The user has accepted that characters without a Windows-1252 byte are saved as '?'. */
+  unmappableAccepted: boolean;
+}
+
+/** True for the extensions that open as list documents (editor-ui §6.3: `.L68`, `.S68`, any case). */
+export function isListPath(path: string): boolean {
+  const ext = upperExt(path);
+  return ext === '.L68' || ext === '.S68';
+}
+
+/** The kind after Save As (mainS.cpp:190-201): `.X68` exactly makes a source; otherwise unchanged. */
+export function kindAfterSaveAs(kind: DocumentState['kind'], path: string): DocumentState['kind'] {
+  return extractFileExt(path) === '.X68' ? 'source' : kind;
+}
+
+/** The Editor Options defaults that a new or loaded document starts with (editor-ui §6.3 step 3). */
+export function docDefaults(settings: Pick<SettingsService, 'get'>): DocDefaults {
+  const editor = settings.get().editor;
+  return {
+    fontName: editor.fontName,
+    fontSize: editor.fontSize,
+    tabType: editor.tabType,
+    tabSize: editor.fixedTabSize,
+  };
+}
+
+function reasonOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export class DocumentManager implements DocumentService {
+  readonly registry: DocumentRegistry;
+  private readonly deps: DocumentServiceDeps;
+  private readonly entries = new Map<string, Entry>();
+  private order: string[] = [];
+  private activeId: string | null = null;
+  private untitled = 0;
+  private nextId = 1;
+
+  constructor(deps: DocumentServiceDeps) {
+    this.deps = deps;
+    this.registry = deps.registry ?? new DocumentRegistry();
+    this.registry.subscribe((event) => {
+      if (event.kind !== 'updated' || !event.transaction.docChanged) return;
+      const entry = this.entries.get(event.id);
+      if (!entry) return;
+      entry.state = {
+        ...entry.state,
+        revision: entry.state.revision + 1,
+        modified: this.registry.isModified(event.id),
+      };
+      this.publish();
+    });
+  }
+
+  /* ---------------------------------------------------------------- reading */
+
+  list(): DocumentState[] {
+    return this.order.map((id) => (this.entries.get(id) as Entry).state);
+  }
+
+  active(): DocumentState | null {
+    return this.activeId === null ? null : (this.entries.get(this.activeId)?.state ?? null);
+  }
+
+  /** The state of one document, or null. */
+  get(id: string): DocumentState | null {
+    return this.entries.get(id)?.state ?? null;
+  }
+
+  text(id: string): string {
+    return this.registry.text(id);
+  }
+
+  /** The file's modification time recorded at load or the last save (drafts keep it). */
+  fileTime(id: string): number | null {
+    return this.entries.get(id)?.mtime ?? null;
+  }
+
+  /* ---------------------------------------------------------------- new and open */
+
+  /** editor-ui §12.1: `untitledN.x68` holding the template, not modified, Editor Options settings. */
+  newSource(): DocumentState {
+    const defaults = docDefaults(this.deps.settings);
+    const state = this.add(
+      {
+        path: null,
+        name: `untitled${++this.untitled}.x68`,
+        kind: 'source',
+        hasName: false,
+        ...defaults,
+        insertMode: true,
+      },
+      this.deps.settings.get().editor.template,
+      null,
+    );
+    this.activate(state.id);
+    return state;
+  }
+
+  async open(path: VPath): Promise<DocumentState | null> {
+    const { vfs, dialogs } = this.deps;
+    const stat = await vfs.stat(path).catch(() => null);
+    if (!stat || stat.kind !== 'file') {
+      await dialogs.messageBox(fileAccessError());
+      return null;
+    }
+    // editor-ui §6.2 step 2: every document with exactly this path (case-sensitive), last first.
+    let position: number | null = null;
+    for (const id of [...this.order].reverse()) {
+      const entry = this.entries.get(id);
+      if (!entry || entry.state.path !== path) continue;
+      if (entry.state.modified) {
+        const answer = await dialogs.messageBox(alreadyOpenQuestion(basename(path)));
+        if (answer !== 'Yes') {
+          this.activate(id);
+          return null;
+        }
+      }
+      position = this.order.indexOf(id);
+      this.discard(id);
+    }
+
+    let bytes;
+    try {
+      bytes = await vfs.readFile(path);
+    } catch {
+      await dialogs.messageBox(loadFileError());
+      return null;
+    }
+    const loaded = this.load(path, bytes);
+    const state = this.add(
+      {
+        path,
+        name: basename(path),
+        kind: loaded.kind,
+        hasName: true,
+        tabType: loaded.tabType,
+        tabSize: loaded.tabSize,
+        fontName: loaded.fontName,
+        fontSize: loaded.fontSize,
+        insertMode: true,
+      },
+      loaded.text,
+      stat.mtime,
+      position,
+    );
+    this.activate(state.id);
+    if (looksLikeUtf8(bytes)) dialogs.toast(UTF8_BANNER);
+    if (loaded.loadError) await dialogs.messageBox(loadFileError());
+    return state;
+  }
+
+  /* ---------------------------------------------------------------- save */
+
+  async save(id: string): Promise<boolean> {
+    const entry = this.entry(id);
+    if (!entry.state.hasName || entry.state.path === null) return this.saveAs(id);
+    return this.write(id, entry.state, true);
+  }
+
+  async saveAs(id: string): Promise<boolean> {
+    const entry = this.entry(id);
+    const request = {
+      title: SAVE_TITLE,
+      filters: [...SAVE_FILTERS],
+      defaultExt: SAVE_DEFAULT_EXT,
+      ...(entry.state.hasName && entry.state.path !== null ? { suggested: entry.state.path } : {}),
+    };
+    const target = await this.deps.fileDialogs.save(request);
+    if (target === null) return false;
+    const current = this.entry(id).state;
+    const renamed: DocumentState = {
+      ...current,
+      path: target,
+      name: basename(target),
+      kind: kindAfterSaveAs(current.kind, target),
+      hasName: true,
+    };
+    return this.write(id, renamed, false);
+  }
+
+  /** Writes the document as `target` describes it (its path, name and kind) and adopts that state. */
+  private async write(id: string, target: DocumentState, checkConflict: boolean): Promise<boolean> {
+    const { vfs, dialogs } = this.deps;
+    const entry = this.entry(id);
+    const path = target.path as VPath;
+
+    const doc = this.registry.state(id).doc;
+    const text = doc.toString();
+    const unmappable = countUnmappable(text);
+    if (unmappable > 0 && !entry.unmappableAccepted) {
+      if ((await dialogs.messageBox(unmappableQuestion(unmappable))) !== 'OK') return false;
+      entry.unmappableAccepted = true;
+    }
+
+    if (checkConflict && entry.mtime !== null) {
+      const now = await vfs.stat(path).catch(() => null);
+      if ((now?.mtime ?? null) !== entry.mtime) {
+        if ((await dialogs.messageBox(changedOutsideQuestion(target.name))) !== 'Yes') return false;
+      }
+    }
+
+    try {
+      await vfs.writeFile(path, encodeFile(target, text));
+    } catch (error) {
+      await dialogs.messageBox(writeError(path, reasonOf(error)));
+      return false;
+    }
+    const stat = await vfs.stat(path).catch(() => null);
+    if (!this.entries.has(id)) return true; // closed while the file was written
+    const after = this.entry(id);
+    after.mtime = stat?.mtime ?? null;
+    this.registry.markSaved(id, doc);
+    after.state = {
+      ...after.state,
+      path,
+      name: target.name,
+      kind: target.kind,
+      hasName: true,
+      modified: this.registry.isModified(id),
+    };
+    this.publish();
+    return true;
+  }
+
+  /* ---------------------------------------------------------------- reload and close */
+
+  /** editor-ui §6.5: the "is modified" question, then load the file into the same document. */
+  async reload(id: string): Promise<void> {
+    const { vfs, dialogs } = this.deps;
+    const entry = this.entry(id);
+    const { path, hasName, modified, name } = entry.state;
+    if (modified && hasName) {
+      if ((await dialogs.messageBox(reloadQuestion(name))) !== 'Yes') return;
+    }
+    if (!hasName || path === null || !this.entries.has(id)) return;
+    let bytes;
+    let stat;
+    try {
+      stat = await vfs.stat(path);
+      bytes = await vfs.readFile(path);
+    } catch {
+      await dialogs.messageBox(loadFileError());
+      return;
+    }
+    if (!this.entries.has(id)) return;
+    const loaded = this.load(path, bytes);
+    this.registry.replace(id, loaded.text);
+    const after = this.entry(id);
+    after.mtime = stat?.mtime ?? null;
+    after.state = {
+      ...after.state,
+      kind: loaded.kind,
+      tabType: loaded.tabType,
+      tabSize: loaded.tabSize,
+      fontName: loaded.fontName,
+      fontSize: loaded.fontSize,
+      modified: false,
+      revision: after.state.revision + 1,
+    };
+    this.publish();
+    if (looksLikeUtf8(bytes)) dialogs.toast(UTF8_BANNER);
+    if (loaded.loadError) await dialogs.messageBox(loadFileError());
+  }
+
+  /** editor-ui §6.6 with 1.4 note 3: Yes saves THIS document; a cancelled or failed save cancels. */
+  async close(id: string): Promise<boolean> {
+    const entry = this.entries.get(id);
+    if (!entry) return true;
+    if (entry.state.modified) {
+      this.activate(id);
+      const answer = await this.deps.dialogs.messageBox(closeQuestion(entry.state.name));
+      if (answer === 'Cancel' || (answer !== 'Yes' && answer !== 'No')) return false;
+      if (answer === 'Yes' && !(await this.save(id))) return false;
+    }
+    this.discard(id);
+    return true;
+  }
+
+  /** Closes every document in tab order with its prompt; Cancel in any prompt stops (editor-ui §1.3). */
+  async closeAll(): Promise<boolean> {
+    for (const id of [...this.order]) {
+      if (!(await this.close(id))) return false;
+    }
+    return true;
+  }
+
+  activate(id: string): void {
+    if (!this.entries.has(id) || this.activeId === id) return;
+    this.activeId = id;
+    this.publish();
+  }
+
+  /* ---------------------------------------------------------------- for other packages */
+
+  /** Changes settings of an open document (Insert/Replace, Editor Options). Text is not touched. */
+  update(id: string, patch: DocumentPatch): void {
+    const entry = this.entry(id);
+    const next = { ...entry.state, ...patch };
+    if ((Object.keys(patch) as (keyof DocumentPatch)[]).every((key) => entry.state[key] === next[key])) return;
+    entry.state = next;
+    this.publish();
+  }
+
+  /** Brings back a document from a draft (3.9.4): modified, with the draft's text and settings. */
+  restore(draft: RestoredDocument): DocumentState {
+    const { state } = draft;
+    let name = state.name;
+    if (!state.hasName) {
+      const used = new Set(this.list().map((doc) => doc.name));
+      while (used.has(name)) name = `untitled${++this.untitled}.x68`;
+      const number = /^untitled(\d+)\.x68$/.exec(name);
+      if (number) this.untitled = Math.max(this.untitled, Number(number[1]));
+    }
+    const restored = this.add(
+      {
+        path: state.path,
+        name,
+        kind: state.kind,
+        hasName: state.hasName,
+        tabType: state.tabType,
+        tabSize: state.tabSize,
+        fontName: state.fontName,
+        fontSize: state.fontSize,
+        insertMode: state.insertMode,
+      },
+      draft.text,
+      draft.mtime,
+      null,
+      true,
+    );
+    this.activate(restored.id);
+    return restored;
+  }
+
+  /* ---------------------------------------------------------------- internals */
+
+  /** What TTextStuff::LoadFile makes of a file's bytes (editor-ui §6.3). */
+  private load(path: VPath, bytes: Uint8Array) {
+    const defaults = docDefaults(this.deps.settings);
+    const text = decodeFile(bytes);
+    if (isListPath(path)) {
+      // List document: no trailer processing; TabType and TabSize keep their zero initial values;
+      // the font is the Editor Options font (editor-ui §6.3, textS.cpp:826-827).
+      return {
+        kind: 'list' as const,
+        text,
+        tabType: TabType.Assembly,
+        tabSize: 0,
+        fontName: defaults.fontName,
+        fontSize: defaults.fontSize,
+        loadError: false,
+      };
+    }
+    return { kind: 'source' as const, ...stripTrailer(text, defaults) };
+  }
+
+  private add(
+    fields: Omit<DocumentState, 'id' | 'modified' | 'revision'>,
+    text: string,
+    mtime: number | null,
+    position: number | null = null,
+    modified = false,
+  ): DocumentState {
+    const id = `doc-${this.nextId++}`;
+    this.registry.create(id, text, { modified });
+    const state: DocumentState = { id, ...fields, modified, revision: 0 };
+    this.entries.set(id, { state, mtime, unmappableAccepted: false });
+    if (position === null || position > this.order.length) this.order.push(id);
+    else this.order.splice(position, 0, id);
+    this.publish();
+    return state;
+  }
+
+  /** Removes a document without a question; the neighbour on the right (else the left) becomes active. */
+  private discard(id: string): void {
+    const index = this.order.indexOf(id);
+    if (index < 0) return;
+    this.order.splice(index, 1);
+    this.entries.delete(id);
+    this.registry.remove(id);
+    if (this.activeId === id) this.activeId = this.order[index] ?? this.order[index - 1] ?? null;
+    this.publish();
+  }
+
+  private entry(id: string): Entry {
+    const entry = this.entries.get(id);
+    if (!entry) throw new Error(`No open document has the id "${id}"`);
+    return entry;
+  }
+
+  private publish(): void {
+    const items = this.list();
+    const activeId = this.activeId;
+    this.deps.store.setState((state) => ({ ...state, documents: { items, activeId } }));
+  }
+}
+
+/** The DocumentManager behind `ctx.documents` (E2 and E4 reach the registry and `update` this way). */
+export function documentManagerOf(documents: DocumentService): DocumentManager {
+  if (!(documents instanceof DocumentManager)) {
+    throw new Error('ctx.documents is not the DocumentManager of core/documents (a stub service has no registry)');
+  }
+  return documents;
+}
+
+/** The registry of EditorStates behind `ctx.documents` (3.9.1). */
+export function documentRegistryOf(documents: DocumentService): DocumentRegistry {
+  return documentManagerOf(documents).registry;
+}

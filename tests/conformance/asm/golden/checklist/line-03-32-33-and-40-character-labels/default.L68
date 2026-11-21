@@ -1,0 +1,22 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:30:27 AM
+
+00001000                             1      ORG $1000
+00001000  4E71                       2  ABCDEFGHIJKLMNOPQRSTUVWXYZ012345    NOP
+Line 3 WARNING: Label too long
+00001002  4E71                       3  ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456   NOP
+Line 4 ERROR: Symbol defined more than once
+00001004  4E71                       4  ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCD    NOP
+00001006  60FA                       5      BRA ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456
+00001008                             6      END $1000
+
+1 error detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+ABCDEFGHIJKLMNOPQRSTUVWXYZ012345  1000
+ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456  1002

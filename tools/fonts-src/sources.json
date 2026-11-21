@@ -1,0 +1,121 @@
+{
+  "about": "Where every file in tools/fonts-src comes from. tools/make-font-atlases.mjs refuses a font file whose SHA-256 differs from this list. Downloaded 2026-11-20. Owner: T2.",
+  "archives": [
+    {
+      "name": "Liberation Fonts 2.1.5",
+      "project": "https://github.com/liberationfonts/liberation-fonts",
+      "url": "https://github.com/liberationfonts/liberation-fonts/files/7261482/liberation-fonts-ttf-2.1.5.tar.gz",
+      "sha256": "7191c669bf38899f73a2094ed00f7b800553364f90e2637010a69c0e268f25d0",
+      "licence": "SIL Open Font License 1.1 (liberation/LICENSE)",
+      "files": [
+        {
+          "path": "liberation/LiberationMono-Regular.ttf",
+          "from": "liberation-fonts-ttf-2.1.5/LiberationMono-Regular.ttf",
+          "sha256": "f2b83c763e8afd21709333370bed4774337fae82267937e2b5aea7e2fbd922c1"
+        },
+        {
+          "path": "liberation/LiberationMono-Bold.ttf",
+          "from": "liberation-fonts-ttf-2.1.5/LiberationMono-Bold.ttf",
+          "sha256": "bd62a0672d0b9b6710b01df434c80ad54fa5f0835207eb7b17b7a761463067bb"
+        },
+        {
+          "path": "liberation/LiberationMono-Italic.ttf",
+          "from": "liberation-fonts-ttf-2.1.5/LiberationMono-Italic.ttf",
+          "sha256": "605c01c711b44480a7508d349dfbf3264e81fa43d69e61cfa7d10b86e764c4d1"
+        },
+        {
+          "path": "liberation/LiberationSans-Regular.ttf",
+          "from": "liberation-fonts-ttf-2.1.5/LiberationSans-Regular.ttf",
+          "sha256": "76d04c18ea243f426b7de1f3ad208e927008f961dc5945e5aad352d0dfde8ee8"
+        },
+        {
+          "path": "liberation/LiberationSans-Bold.ttf",
+          "from": "liberation-fonts-ttf-2.1.5/LiberationSans-Bold.ttf",
+          "sha256": "788abee4c806d660e8aee46689dd8540cd4bb98da03dcc9d171ce3efd99a9173"
+        },
+        {
+          "path": "liberation/LiberationSans-Italic.ttf",
+          "from": "liberation-fonts-ttf-2.1.5/LiberationSans-Italic.ttf",
+          "sha256": "e5bae5c4cde31f22142753855f4f8fb86da6ff39955ed3c0a11248b0d16948b0"
+        },
+        {
+          "path": "liberation/LICENSE",
+          "from": "liberation-fonts-ttf-2.1.5/LICENSE",
+          "sha256": "93fed46019c38bbe566b479d22148e2e8a1e85ada614accb0211c37b2c61c19b"
+        },
+        {
+          "path": "liberation/AUTHORS",
+          "from": "liberation-fonts-ttf-2.1.5/AUTHORS",
+          "sha256": "b627404917ef824675cb24c32e2facd0b57650627955f3fc3d8a8863c5d0adfc"
+        }
+      ]
+    },
+    {
+      "name": "DejaVu Fonts 2.37",
+      "project": "https://github.com/dejavu-fonts/dejavu-fonts",
+      "url": "https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_2_37/dejavu-fonts-ttf-2.37.zip",
+      "sha256": "7576310b219e04159d35ff61dd4a4ec4cdba4f35c00e002a136f00e96a908b0a",
+      "licence": "Bitstream Vera Fonts licence and Arev Fonts licence; DejaVu changes are in the public domain (dejavu/LICENSE)",
+      "files": [
+        {
+          "path": "dejavu/DejaVuSansMono.ttf",
+          "from": "dejavu-fonts-ttf-2.37/ttf/DejaVuSansMono.ttf",
+          "sha256": "b4a6c3e4faab8773f4ff761d56451646409f29abedd68f05d38c2df667d3c582"
+        },
+        {
+          "path": "dejavu/DejaVuSansMono-Bold.ttf",
+          "from": "dejavu-fonts-ttf-2.37/ttf/DejaVuSansMono-Bold.ttf",
+          "sha256": "bce60f1b4421acd9ea51ba6623d7024ecbe6817a953e3654df62a5e6bdf8f769"
+        },
+        {
+          "path": "dejavu/DejaVuSansMono-Oblique.ttf",
+          "from": "dejavu-fonts-ttf-2.37/ttf/DejaVuSansMono-Oblique.ttf",
+          "sha256": "742097840c541870e8d6dc5c9b37bb1ceeea6c0dedd1d475faf903ef9df734b0"
+        },
+        {
+          "path": "dejavu/LICENSE",
+          "from": "dejavu-fonts-ttf-2.37/LICENSE",
+          "sha256": "7a083b136e64d064794c3419751e5c7dd10d2f64c108fe5ba161eae5e5958a93"
+        },
+        {
+          "path": "dejavu/AUTHORS",
+          "from": "dejavu-fonts-ttf-2.37/AUTHORS",
+          "sha256": "915a742f0b242ea43fcbef934b6d24353b51351470f71d8a8d00c751892fad50"
+        }
+      ]
+    },
+    {
+      "name": "Inconsolata 3.000",
+      "project": "https://github.com/googlefonts/Inconsolata",
+      "url": "https://github.com/googlefonts/Inconsolata/releases/download/v3.000/fonts_ttf.zip",
+      "sha256": "626e8ee07501dbb544b50aa59ac2e4b9ec86b810670158a59c7a3cbaf475548a",
+      "licence": "SIL Open Font License 1.1 (inconsolata/OFL.txt)",
+      "files": [
+        {
+          "path": "inconsolata/Inconsolata-Regular.ttf",
+          "from": "fonts/ttf/Inconsolata-Regular.ttf",
+          "sha256": "127875d255d4c5973ca57267a43bb9d1c04397e6c7d236984a595b6cdcb12b7c"
+        },
+        {
+          "path": "inconsolata/Inconsolata-Bold.ttf",
+          "from": "fonts/ttf/Inconsolata-Bold.ttf",
+          "sha256": "263faa57f6c00c43a04e77df7abd5cb5cd4aae9f93507002c1217e02641fc7e6"
+        }
+      ]
+    },
+    {
+      "name": "Inconsolata licence text (not in the release archive)",
+      "project": "https://github.com/googlefonts/Inconsolata",
+      "url": "https://raw.githubusercontent.com/googlefonts/Inconsolata/v3.000/OFL.txt",
+      "sha256": "5d362a6f8690517fd9a5573128a081d8bbbb2f92714cf00556e08fbbe9600426",
+      "licence": "SIL Open Font License 1.1",
+      "files": [
+        {
+          "path": "inconsolata/OFL.txt",
+          "from": "OFL.txt",
+          "sha256": "5d362a6f8690517fd9a5573128a081d8bbbb2f92714cf00556e08fbbe9600426"
+        }
+      ]
+    }
+  ]
+}

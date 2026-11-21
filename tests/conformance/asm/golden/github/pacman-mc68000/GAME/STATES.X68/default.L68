@@ -1,0 +1,118 @@
+00000000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:29:49 AM
+
+00000000                             1  ; =============================================================================
+00000000                             2  ; GAME STATE MANAGEMENT
+00000000                             3  ; =============================================================================
+00000000                             4  
+00000000                             5  ; -----------------------------------------------------------------------------
+00000000                             6  STAINIT
+00000000                             7  ; INITALIZES THE STATE MANAGER.
+00000000                             8  ; INPUT    - NONE
+00000000                             9  ; OUTPUT   - NONE
+00000000                            10  ; MODIFIES - NONE
+00000000                            11  ; -----------------------------------------------------------------------------
+Line 12 ERROR: Undefined symbol
+00000000  33FC BD16 005455B8        12                            MOVE.W  #STANONE,(STACUR)
+Line 13 ERROR: Undefined symbol
+00000008  4279 004DBD16             13                            CLR.W   (STANEXT)
+0000000E  4E75                      14                            RTS
+00000010                            15  
+00000010                            16  ; -----------------------------------------------------------------------------
+00000010                            17  STAUPD
+00000010                            18  ; PERFORMS STATE UPDATE AND INIT IF NECESSARY.
+00000010                            19  ; INPUT    - NONE
+00000010                            20  ; OUTPUT   - NONE
+00000010                            21  ; MODIFIES - NONE
+00000010                            22  ; -----------------------------------------------------------------------------
+00000010  48E7 8080                 23                            MOVEM.L D0/A0,-(A7)
+00000014  4280                      24                            CLR.L   D0
+Line 25 ERROR: Undefined symbol
+00000016  3039 004DBD16             25                            MOVE.W  (STANEXT),D0
+Line 26 ERROR: Undefined symbol
+0000001C  B079 004DBD16             26                            CMP.W   (STACUR),D0
+00000022  6700 0012                 27                            BEQ     .DOUPD
+00000026                            28                            ; IF STATE CHANGED, DO INIT
+Line 29 ERROR: Undefined symbol
+00000026  33C0 005455B8             29                            MOVE.W  D0,(STACUR)
+0000002C  E588                      30                            LSL.L   #2,D0
+0000002E  2040                      31                            MOVE.L  D0,A0
+00000030  2068 004E                 32                            MOVE.L  .INITBL(A0),A0
+00000034  4E90                      33                            JSR     (A0)
+00000036                            34                            ; IN ANY CASE, DO UPDATE
+00000036  4280                      35  .DOUPD                    CLR.L   D0
+Line 36 ERROR: Undefined symbol
+00000038  3039 004DBD16             36                            MOVE.W  (STACUR),D0
+0000003E  E588                      37                            LSL.L   #2,D0
+00000040  2040                      38                            MOVE.L  D0,A0
+00000042  2068 0062                 39                            MOVE.L  .UPDTBL(A0),A0
+00000046  4E90                      40                            JSR     (A0)
+00000048  4CDF 0101                 41                            MOVEM.L (A7)+,D0/A0
+0000004C  4E75                      42                            RTS
+0000004E                            43                            
+Line 44 ERROR: Undefined symbol
+0000004E= 0021F4F4 0021F4F4 ...     44  .INITBL                   DC.L    ISCINIT,INSINIT,GAMINIT,NEXTINIT,GOVINIT
+Line 45 ERROR: Undefined symbol
+00000062= 0021F4F4 0021F4F4 ...     45  .UPDTBL                   DC.L    ISCUPD,INSUPD,GAMUPD,NEXTUPD,GOVUPD
+00000076                            46  
+00000076                            47  ; -----------------------------------------------------------------------------
+00000076                            48  STAPLOT
+00000076                            49  ; PERFORMS STATE PLOT.
+00000076                            50  ; INPUT    - NONE
+00000076                            51  ; OUTPUT   - NONE
+00000076                            52  ; MODIFIES - NONE
+00000076                            53  ; -----------------------------------------------------------------------------
+00000076  48E7 8080                 54                            MOVEM.L D0/A0,-(A7)
+0000007A  4280                      55                            CLR.L   D0
+Line 56 ERROR: Undefined symbol
+0000007C  3039 004DBD16             56                            MOVE.W  (STACUR),D0
+00000082  E588                      57                            LSL.L   #2,D0
+00000084  2040                      58                            MOVE.L  D0,A0
+00000086  2068 0092                 59                            MOVE.L  .PLTTBL(A0),A0
+0000008A  4E90                      60                            JSR     (A0)
+0000008C  4CDF 0101                 61                            MOVEM.L (A7)+,D0/A0
+00000090  4E75                      62                            RTS
+00000092                            63                            
+Line 64 ERROR: Undefined symbol
+00000092= 000000A6 000000A6 ...     64  .PLTTBL                   DC.L    STAEMPTY,INSPLOT,GAMPLOT,NEXTPLOT,GOVPLOT
+000000A6                            65  
+000000A6                            66  ; -----------------------------------------------------------------------------
+000000A6                            67  STAEMPTY
+000000A6                            68  ; EMPTY SUBROUTINE FOR CASES WITH NOTHING TO DO.
+000000A6                            69  ; INPUT    - NONE
+000000A6                            70  ; OUTPUT   - NONE
+000000A6                            71  ; MODIFIES - NONE
+000000A6                            72  ; NOTE     - JUST A PLACEHOLDER. NOTHING TO DO.
+000000A6                            73  ; -----------------------------------------------------------------------------
+000000A6  4E75                      74                            RTS
+000000A8                            75  
+000000A8                            76  
+000000A8                            77  
+000000A8                            78  
+000000A8                            79  
+000000A8                            80  
+000000A8                            81  
+000000A8                            82  
+000000A8                            83  
+000000A8                            84  
+000000A8                            85  
+000000A8                            86  
+000000A8                            87  
+Line 88 WARNING: END directive missing, starting address not set
+
+10 errors detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+STAEMPTY            A6
+STAINIT             0
+STAPLOT             76
+STAPLOT:PLTTBL      92
+STAUPD              10
+STAUPD:DOUPD        36
+STAUPD:INITBL       4E
+STAUPD:UPDTBL       62

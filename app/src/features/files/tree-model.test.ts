@@ -1,0 +1,106 @@
+// The Files panel's tree (2.2, 3.8.6): rows, folders, live updates, keys.
+
+import { describe, expect, it } from 'vitest';
+import type { Bytes } from '../../contracts';
+import { MemoryBackend } from '../../fs/memory-backend';
+import { createVfs } from '../../fs/vfs';
+import { FilesTreeModel } from './tree-model';
+
+const ascii = (text: string): Bytes => Uint8Array.from(text, (c) => c.charCodeAt(0));
+
+async function setup() {
+  const vfs = createVfs();
+  const backend = new MemoryBackend({ mount: 'browser', kind: 'browser', label: 'My Programs' });
+  vfs.mount(backend);
+  await vfs.writeFile('/browser/demo/prog.X68', ascii('x'));
+  await vfs.writeFile('/browser/demo/sub/inc.X68', ascii('x'));
+  await vfs.writeFile('/browser/a.txt', ascii('x'));
+  const model = new FilesTreeModel(vfs);
+  await model.settled();
+  return { vfs, backend, model };
+}
+
+const shown = (model: FilesTreeModel) =>
+  model
+    .rows()
+    .map((row) => `${'  '.repeat(row.depth - 1)}${row.kind === 'file' ? '' : row.expanded ? '-' : '+'}${row.name}`);
+
+async function until(condition: () => boolean, what: string): Promise<void> {
+  const end = Date.now() + 3000;
+  while (!condition()) {
+    if (Date.now() > end) throw new Error(`timed out: ${what}`);
+    await new Promise((resolve) => setTimeout(resolve, 2));
+  }
+}
+
+describe('FilesTreeModel', { timeout: 60_000 }, () => {
+  it('shows the store expanded, folders first, and opens and closes folders', async () => {
+    const { model } = await setup();
+    expect(shown(model)).toEqual(['-My Programs', '  +demo', '  a.txt']);
+    await model.expand('/browser/demo');
+    expect(shown(model)).toEqual(['-My Programs', '  -demo', '    +sub', '    prog.X68', '  a.txt']);
+    model.collapse('/browser/demo');
+    expect(shown(model)).toEqual(['-My Programs', '  +demo', '  a.txt']);
+  });
+
+  it('reveal expands the way to a path and selects it', async () => {
+    const { model } = await setup();
+    await model.reveal('/browser/demo/sub/inc.X68');
+    expect(model.selected).toBe('/browser/demo/sub/inc.X68');
+    expect(shown(model)).toContain('      inc.X68');
+  });
+
+  it('a write and a remove anywhere (this window or another) update the listed folders', async () => {
+    const { vfs, backend, model } = await setup();
+    await model.expand('/browser/demo');
+    await vfs.writeFile('/browser/demo/new.X68', ascii('n'));
+    await until(() => shown(model).includes('    new.X68'), 'new file listed');
+    await backend.externalWrite('demo/other.X68', ascii('o')); // as another window would
+    await until(() => shown(model).includes('    other.X68'), 'external file listed');
+    model.select('/browser/demo/sub');
+    await vfs.remove('/browser/demo');
+    await until(() => !shown(model).some((row) => row.includes('demo')), 'folder gone');
+    expect(model.selected).toBe('/browser');
+  });
+
+  it('a store mounted later appears; one unmounted disappears', async () => {
+    const { vfs, model } = await setup();
+    const folder = new MemoryBackend({ mount: 'folder', kind: 'fsaccess', label: 'Folder: work' });
+    await folder.writeFile('w.X68', ascii('w'));
+    vfs.mount(folder);
+    await model.refreshAll();
+    await model.settled();
+    expect(shown(model)).toEqual(['-My Programs', '  +demo', '  a.txt', '-Folder: work', '  w.X68']);
+    vfs.unmount('folder');
+    await model.refreshAll();
+    expect(shown(model)).toEqual(['-My Programs', '  +demo', '  a.txt']);
+  });
+
+  it('keys follow the tree view pattern', async () => {
+    const { model } = await setup();
+    expect(model.keyAction('ArrowDown')).toEqual({ kind: 'select', path: '/browser' });
+    model.select('/browser');
+    expect(model.keyAction('ArrowDown')).toEqual({ kind: 'select', path: '/browser/demo' });
+    expect(model.keyAction('ArrowLeft')).toEqual({ kind: 'toggle', path: '/browser' });
+    model.select('/browser/demo');
+    expect(model.keyAction('ArrowRight')).toEqual({ kind: 'toggle', path: '/browser/demo' });
+    expect(model.keyAction('Enter')).toEqual({ kind: 'toggle', path: '/browser/demo' });
+    await model.expand('/browser/demo');
+    expect(model.keyAction('ArrowRight')).toEqual({ kind: 'select', path: '/browser/demo/sub' });
+    model.select('/browser/demo/prog.X68');
+    expect(model.keyAction('Enter')).toEqual({ kind: 'open', path: '/browser/demo/prog.X68' });
+    expect(model.keyAction('ArrowLeft')).toEqual({ kind: 'select', path: '/browser/demo' });
+    expect(model.keyAction('ArrowRight')).toBeNull();
+    expect(model.keyAction('Home')).toEqual({ kind: 'select', path: '/browser' });
+    expect(model.keyAction('End')).toEqual({ kind: 'select', path: '/browser/a.txt' });
+    expect(model.keyAction('x')).toBeNull();
+  });
+
+  it('collapsing a folder moves a selection inside it to the folder', async () => {
+    const { model } = await setup();
+    await model.expand('/browser/demo');
+    model.select('/browser/demo/prog.X68');
+    model.collapse('/browser/demo');
+    expect(model.selected).toBe('/browser/demo');
+  });
+});

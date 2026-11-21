@@ -1,0 +1,7 @@
+M	MACRO
+	NOP
+	ENDM
+	ORG $1000
+	M
+	OPT MEX
+	END $1000

@@ -1,0 +1,30 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:31:23 AM
+
+00001000                             1      ORG $1000
+00001000  4E71                       2      NOP
+00001002                             3      INCLUDE a.x68
+00001002  4E71                       4      NOP
+Line 5 ERROR: Invalid opcode
+00001004                             5      BOGUS
+00001004                             6      INCLUDE b.x68
+00001004  4E71                       7      NOP
+00001006  4E71                       8      NOP
+Line 9 ERROR: Invalid opcode
+00001008                             9      BOGUS3
+00001008                            10  -------------------- end include --------------------
+Line 11 ERROR: Invalid opcode
+00001008                            11      BOGUS2
+00001008                            12  -------------------- end include --------------------
+Line 13 ERROR: Immediate data exceeds 8 bits
+00001008  103C 002C                 13      MOVE.B #300,D0
+0000100C                            14      END $1000
+
+4 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------

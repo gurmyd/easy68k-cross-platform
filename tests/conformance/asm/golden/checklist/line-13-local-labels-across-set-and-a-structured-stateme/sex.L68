@@ -1,0 +1,44 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:32:10 AM
+
+00001000                             1      ORG $1000
+00001000  4E71                       2  MAIN    NOP
+00001002  4E71                       3  .a  NOP
+00001004  60FC                       4      BRA .a
+00001006  =00000001                  5  V   SET 1
+00001006  4E71                       6  .a  NOP
+00001008  60FC                       7      BRA .a
+0000100A  =00000002                  8  V   SET 2
+0000100A  4E71                       9  .b  NOP
+0000100C                            10      IF.W D0 <EQ> D1 THEN
+0000100C  B041                      11s     CMP.W   D1,D0
+0000100E  6600 0004                 12s     BNE _00000000
+00001012  4E71                      13  .c  NOP
+00001014                            14      ENDI
+00001014                            15s _00000000
+Line 16 ERROR: Undefined symbol
+00001014  6000 AD00                 16      BRA .b
+Line 17 ERROR: Undefined symbol
+00001018  6000 ACFC                 17      BRA .c
+0000101C  4E71                      18  NEXT    NOP
+0000101E  4E71                      19  .a  NOP
+00001020  60FC                      20      BRA .a
+00001022                            21      END MAIN
+
+2 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+MAIN                1000
+MAIN:A              1002
+NEXT                101C
+NEXT:A              101E
+V                   2
+V:A                 1006
+V:B                 100A
+V:C                 1012
+_00000000           1014

@@ -1,0 +1,21 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:31:24 AM
+
+00001000                             1      ORG $1000
+00001000  3200                       2  START   MOVE.W  D0,D1   tab separated
+00001002  3200                       3  START2  MOVE.W  D0,D1   space separated
+00001004= 61 09 62                   4      DC.B    'a  b'  tab inside a string
+00001008  4E71                       5      NOP
+0000100A  4E71                       6    NOP
+0000100C                             7      END START
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+START               1000
+START2              1002

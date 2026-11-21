@@ -1,0 +1,26 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:30:35 AM
+
+00000000                             1  * star comment
+00000000                             2  ; semicolon comment
+00000000                             3     * indented star
+00001000                             4      ORG $1000
+00001000                             5  L1 ; after label
+00001000                             6  L2 * after label
+00001000  4E71                       7      NOP anything goes here
+Line 8 ERROR: Comma expected
+00001002                             8      MOVE.L #1 + 2,D0
+Line 9 ERROR: Invalid syntax
+00001002                             9      NOP;x
+00001002                            10      END $1000
+
+2 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+L1                  1000
+L2                  1000

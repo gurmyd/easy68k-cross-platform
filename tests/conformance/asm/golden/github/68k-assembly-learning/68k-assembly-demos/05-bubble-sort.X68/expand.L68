@@ -1,0 +1,222 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:26:33 AM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : bubble-sort
+00000000                             3  * Written by : Henry Wrightson
+00000000                             4  * Date       : 12/8/2026
+00000000                             5  * Description: Bubble sort a list of strings into alphabetical order
+00000000                             6  *-----------------------------------------------------------
+00001000                             7      org     $1000
+00001000                             8      
+00001000                             9  ; d7=word count     d1=sorted to    d2=current word
+00001000                            10  ; a0=word list      a1=word index
+00001000                            11      
+00001000                            12  Start:
+00001000                            13  
+00001000  41F9 0000113E             14      lea     Words,a0
+00001006  43F9 0000116C             15      lea     WordIndex,a1
+0000100C                            16      
+0000100C  4EB9 00001044             17      jsr     CountWords
+00001012                            18      
+00001012  4EB9 000010AC             19      jsr     OutputUnsortedWords
+00001018  4EB9 00001028             20      jsr     SortWords
+0000101E  4EB9 000010BA             21      jsr     OutputSortedWords
+00001024                            22      
+00001024  6000 00D8                 23      bra.w   Finished
+00001028                            24  
+00001028                            25  SortWords:
+00001028  7200                      26      moveq   #0,d1
+0000102A                            27  .OuterLoop:
+0000102A  5241                      28      addq    #1,d1
+0000102C  B207                      29      cmp.b   d7,d1
+0000102E  6700 0012                 30      beq.w   .Finished
+00001032                            31      
+00001032  1407                      32      move.b  d7,d2
+00001034                            33      
+00001034                            34  .InnerLoop:
+00001034  B401                      35      cmp.b   d1,d2
+00001036  67F2                      36      beq.s   .OuterLoop
+00001038                            37    
+00001038  4EB9 0000105E             38      jsr     CompareWords
+0000103E                            39      
+0000103E  5342                      40      subq    #1,d2
+00001040  60F2                      41      bra.s   .InnerLoop
+00001042                            42  .Finished:
+00001042  4E75                      43      rts
+00001044                            44  
+00001044                            45  CountWords:                 ; count the number of words in a table
+00001044  2F08                      46      move.l  a0,-(sp)
+00001046  2F09                      47      move.l  a1,-(sp)
+00001048  7E00                      48      moveq   #0,d7
+0000104A                            49  .Loop:
+0000104A  4A10                      50      tst.b   (a0)
+0000104C  670A                      51      beq.s   .Done
+0000104E  22C8                      52      move.l  a0,(a1)+
+00001050  5247                      53      addq.w  #1,d7
+00001052                            54  .NextWord:                  ; move to the end of the word
+00001052  4A18                      55      tst.b   (a0)+
+00001054  66FC                      56      bne.s   .NextWord    
+00001056  60F2                      57      bra.s   .Loop
+00001058                            58  .Done:
+00001058  225F                      59      move.l  (sp)+,a1
+0000105A  205F                      60      move.l  (sp)+,a0
+0000105C  4E75                      61      rts
+0000105E                            62      
+0000105E                            63  CompareWords:               ; with d2 as the current word to sort, compare it with the previous word
+0000105E  3002                      64      move.w  d2,d0
+00001060  5340                      65      subq    #1,d0
+00001062                            66      
+00001062  E548                      67      lsl.w   #2,d0
+00001064  2871 0000                 68      movea.l (a1,d0.w),a4    ; current words letter
+00001068  5940                      69      subq    #4,d0
+0000106A  2671 0000                 70      movea.l (a1,d0.w),a3    ; previous words letter
+0000106E                            71  .Loop:                      ; loop through the letters of the words until a difference is found
+0000106E  1613                      72      move.b  (a3),d3         ; left letter
+00001070  1814                      73      move.b  (a4),d4         ; right letter
+00001072  1004                      74      move.b  d4,d0
+00001074  8003                      75      or.b    d3,d0           ; both letters are 0, end of word reached, both the same word, no change
+00001076  6732                      76      beq.s   .Done
+00001078                            77      
+00001078  B803                      78      cmp.b   d3,d4           ; both letters are the same, next letter
+0000107A  6728                      79      beq.s   .Next
+0000107C                            80      
+0000107C  4A03                      81      tst.b   d3              ; left letter is 0, left word is shorter, no change
+0000107E  672A                      82      beq.s   .Done
+00001080                            83      
+00001080  B604                      84      cmp.b   d4,d3           ; right letter is lower than left, no change
+00001082  6526                      85      blo.s   .Done
+00001084                            86  .Switch:                    ; failed all previous checks so words should be switched
+00001084  3002                      87      move.w  d2,d0
+00001086  5340                      88      subq    #1,d0           
+00001088  E548                      89      lsl.w   #2,d0           ; right word index
+0000108A  2831 0000                 90      move.l  (a1,d0.w),d4    ; cache right word index address in d4
+0000108E                            91      
+0000108E  5940                      92      subq    #4,d0           ; left word index
+00001090  2631 0000                 93      move.l  (a1,d0.w),d3    ; cache left word index address in d3
+00001094  2384 0000                 94      move.l  d4,(a1,d0.w)    ; move cached right word index address in d4 to left word index address
+00001098                            95      
+00001098  3002                      96      move.w  d2,d0
+0000109A  5340                      97      subq    #1,d0           
+0000109C  E548                      98      lsl.w   #2,d0           ; right word index
+0000109E  2383 0000                 99      move.l  d3,(a1,d0.w)    ; move cached left word index address in d3 to right word index address
+000010A2                           100  
+000010A2  6006                     101      bra.s   .Done
+000010A4                           102  .Next:
+000010A4  524B                     103      addq    #1,a3
+000010A6  524C                     104      addq    #1,a4
+000010A8  60C4                     105      bra.s   .Loop
+000010AA                           106  .Done:
+000010AA  4E75                     107      rts
+000010AC                           108  
+000010AC                           109  OutputUnsortedWords:
+000010AC  47F9 00001102            110      lea     MessageIntro,a3
+000010B2  4EB9 000010CE            111      jsr     OutputList
+000010B8  4E75                     112      rts
+000010BA                           113  
+000010BA                           114  OutputSortedWords:
+000010BA  4EB9 000010EE            115      jsr     OutputNewLine
+000010C0  47F9 0000111A            116      lea     MessageSortedList,a3
+000010C6  4EB9 000010CE            117      jsr     OutputList
+000010CC  4E75                     118      rts
+000010CE                           119      
+000010CE                           120  OutputList:    
+000010CE  2F09                     121      move.l  a1,-(sp)
+000010D0  2449                     122      movea.l a1,a2
+000010D2                           123  
+000010D2  224B                     124      movea.l a3,a1
+000010D4  700D                     125      moveq   #13,d0
+000010D6  4E4F                     126      trap    #15
+000010D8                           127      
+000010D8  7C00                     128      moveq   #0,d6
+000010DA                           129  .Loop:    
+000010DA  BC07                     130      cmp.b   d7,d6
+000010DC  670C                     131      beq.s   .Done    
+000010DE                           132  .Continue:
+000010DE  2252                     133      move.l  (a2),a1
+000010E0  700D                     134      moveq   #13,d0
+000010E2  4E4F                     135      trap    #15
+000010E4                           136      
+000010E4  584A                     137      addq    #4,a2
+000010E6  5246                     138      addq    #1,d6
+000010E8  60F0                     139      bra.s   .Loop
+000010EA                           140  .Done:
+000010EA  225F                     141      move.l  (sp)+,a1
+000010EC  4E75                     142      rts
+000010EE                           143  
+000010EE                           144  OutputNewLine:
+000010EE  7006                     145      moveq   #6,d0
+000010F0  123C 000D                146      move.b  #13,d1
+000010F4  4E4F                     147      trap    #15
+000010F6  123C 000A                148      move.b  #10,d1
+000010FA  4E4F                     149      trap    #15
+000010FC  4E75                     150      rts
+000010FE                           151      
+000010FE                           152  Finished:
+000010FE  FFFF FFFF                153      simhalt
+00001102                           154  
+00001102  =000000C8                155  MAX_WORDS           equ     200
+00001102= 54 68 69 73 20 69 73     156  MessageIntro        dc.b    'This is a list of words',0
+          20 61 20 6C 69 73 74  
+          20 6F 66 20 77 6F 72  
+          64 73 00              
+0000111A= 4E 6F 77 20 74 68 65     160  MessageSortedList   dc.b    'Now they are sorted alphabetically',0
+          79 20 61 72 65 20 73  
+          6F 72 74 65 64 20 61  
+          6C 70 68 61 62 65 74  
+          69 63 61 6C 6C 79 00  
+0000113D= 00                       165  Evener              dc.b    0
+0000113E                           166  
+0000113E                           167  Words:
+0000113E= 74 68 65 00              168      dc.b    'the',0
+00001142= 71 75 69 63 6B 00        169      dc.b    'quick',0
+00001148= 62 72 6F 77 6E 00        170      dc.b    'brown',0
+0000114E= 66 6F 78 00              171      dc.b    'fox',0
+00001152= 6A 75 6D 70 73 00        172      dc.b    'jumps',0
+00001158= 6F 76 65 72 00           173      dc.b    'over',0
+0000115D= 74 68 65 00              174      dc.b    'the',0
+00001161= 6C 61 7A 79 00           175      dc.b    'lazy',0
+00001166= 64 6F 67 00              176      dc.b    'dog',0
+0000116A= 00 00                    177      dc.b    $0,0
+0000116C                           178  
+0000116C                           179  WordIndex:
+0000116C                           180      ds.l    MAX_WORDS
+0000148C                           181  
+0000148C                           182      end     Start
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+COMPAREWORDS        105E
+COMPAREWORDS:DONE   10AA
+COMPAREWORDS:LOOP   106E
+COMPAREWORDS:NEXT   10A4
+COMPAREWORDS:SWITCH  1084
+COUNTWORDS          1044
+COUNTWORDS:DONE     1058
+COUNTWORDS:LOOP     104A
+COUNTWORDS:NEXTWORD  1052
+EVENER              113D
+FINISHED            10FE
+MAX_WORDS           C8
+MESSAGEINTRO        1102
+MESSAGESORTEDLIST   111A
+OUTPUTLIST          10CE
+OUTPUTLIST:CONTINUE  10DE
+OUTPUTLIST:DONE     10EA
+OUTPUTLIST:LOOP     10DA
+OUTPUTNEWLINE       10EE
+OUTPUTSORTEDWORDS   10BA
+OUTPUTUNSORTEDWORDS  10AC
+SORTWORDS           1028
+SORTWORDS:FINISHED  1042
+SORTWORDS:INNERLOOP  1034
+SORTWORDS:OUTERLOOP  102A
+START               1000
+WORDINDEX           116C
+WORDS               113E

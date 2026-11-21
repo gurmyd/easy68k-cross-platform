@@ -1,0 +1,18 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:32:27 AM
+
+00001000                             1      ORG $1000
+Line 2 ERROR: Invalid opcode
+00001000                             2  LBL BOGUS D0
+Line 3 ERROR: Undefined symbol
+00001000  6000 AD14                  3      BRA LBL
+00001004                             4      END $1000
+
+2 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------

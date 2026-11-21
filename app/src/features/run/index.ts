@@ -1,28 +1,45 @@
 // Feature "run": the simulator session, the Run-menu commands, the simulator status bar.
 //
-// STUB written by W3 (wave 0): an empty feature module, so that the shell runs before this
-// feature exists (ARCHITECTURE.md 3.12.3). SH8 owns this folder and replaces the body. The
-// exported names and the signature of the factory are contract (section 8, "Stubs"):
-// app/src/features/index.ts imports them by name.
+//   session.ts       createSimSession: the composition root of the window's simulator (3.1)
+//   commands.ts      File > Open / Open Data / Close / Exit, the Run menu, Options > Execution Speed
+//   alerts.ts        the engine's message boxes as modal boxes (4.4.4)
+//   startup.ts       start-up arguments and file associations (5.7)
+//   StatusBar.tsx    the status bar of Simulator mode (2.3)
+//   SpeedDialog.tsx  the dialog `sim.speed` (4.5.6)
+//   mirror.ts        AppState.sim, the store's mirror of the simulator (3.12.1)
 //
-// A feature module may contribute command handlers (`commands`), panels (`panels`), dialogs
-// (`dialogs`) and an `init` function that runs once after every service exists.
+// The run controller itself, the clocks, the timers and the UI bridge are framework-free and live
+// in app/src/core/run/.
 //
 // Owner: W3 > SH8.
 
-import type { AppContext, FeatureModule, SimSession } from '../../contracts';
-import type { SimSessionEnv } from '../../state/services';
-import { createInertSimSession } from '../../state/stub-services';
+import type { AppContext, FeatureModule } from '../../contracts';
+import { presentAlerts } from './alerts';
+import { SPEED_DIALOG_ID, commands } from './commands';
+import { runSessionOf } from './session';
+import { SpeedDialog } from './SpeedDialog';
+import { openAssociatedFiles, openStartupFile } from './startup';
+import { SimStatusBar } from './StatusBar';
 
-export const feature: FeatureModule = { id: 'run' };
+export { createSimSession } from './session';
 
-/**
- * The simulator session of this window (3.11.2), placed on the context as `sim`. Called once by
- * the bootstrap, last of all services. `env` carries what feature code may not import (3.1):
- * `env.engines` creates and releases simulator engines (app/src/engine), and
- * `env.createCachedSyncFiles` builds the cached file view of 3.8.4 (app/src/fs/sync/cached.ts).
- * STUB: a session without an engine, in which nothing runs.
- */
-export function createSimSession(ctx: AppContext, _env: SimSessionEnv): SimSession {
-  return createInertSimSession(ctx);
+function init(ctx: AppContext): () => void {
+  const report = (error: unknown): void => console.error('Simulator:', error);
+  const stopAlerts = presentAlerts({ controller: ctx.sim.controller, dialogs: ctx.dialogs, report });
+  const stopOpenFiles = ctx.platform.onOpenFiles((files) => void openAssociatedFiles(ctx, files).catch(report));
+  void openStartupFile(ctx).catch(report);
+  return () => {
+    stopAlerts();
+    stopOpenFiles();
+    // The session ends with the window: frames, timers and the engine instance.
+    runSessionOf(ctx.sim)?.dispose();
+  };
 }
+
+export const feature: FeatureModule = {
+  id: 'run',
+  commands,
+  panels: [{ id: 'status', title: 'Status bar', mode: 'simulator', component: SimStatusBar }],
+  dialogs: { [SPEED_DIALOG_ID]: SpeedDialog },
+  init,
+};

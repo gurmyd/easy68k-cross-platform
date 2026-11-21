@@ -1,0 +1,121 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:27:50 AM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : keyboard-input
+00000000                             3  * Written by : Henry Wrighson
+00000000                             4  * Date       : 14/8/2026
+00000000                             5  * Description: Read the cursor keys and output which have been pressed
+00000000                             6  *-----------------------------------------------------------
+00001000                             7      org     $1000
+00001000                             8  Start:
+00001000  45F9 000010D4              9      lea     Spinner,a2
+00001006                            10      
+00001006                            11  Loop:
+00001006  4EB9 00001064             12      jsr     Clear
+0000100C                            13      
+0000100C  7013                      14      moveq   #19,d0
+0000100E  223C 25272628             15      move.l  #$25<<24+$27<<16+$26<<8+$28,d1  ; check for keypress Left, Right, Up, Down    
+00001014  4E4F                      16      trap    #15
+00001016                            17  
+00001016  0801 0018                 18      btst.l  #24,d1
+0000101A  6600 0026                 19      bne     LeftKey
+0000101E                            20  
+0000101E  0801 0010                 21      btst.l  #16,d1
+00001022  6600 0024                 22      bne     RightKey
+00001026                            23      
+00001026  0801 0008                 24      btst.l  #8,d1
+0000102A  6600 0022                 25      bne     UpKey
+0000102E                            26      
+0000102E  0801 0000                 27      btst.l  #0,d1
+00001032  6600 0020                 28      bne     DownKey
+00001036                            29      
+00001036  4EB9 00001076             30      jsr     OutputSpinner
+0000103C  327C 10CE                 31      move    #MessageSpinner,a1
+00001040  601A                      32      bra.s   Output
+00001042                            33      
+00001042                            34  LeftKey:
+00001042  327C 10B6                 35      move    #MessageLeft,a1
+00001046  6014                      36      bra.s   Output
+00001048                            37  RightKey:
+00001048  327C 10BC                 38      move    #MessageRight,a1
+0000104C  600E                      39      bra.s   Output
+0000104E                            40  UpKey:
+0000104E  327C 10C2                 41      move    #MessageUp,a1
+00001052  6008                      42      bra.s   Output
+00001054                            43  DownKey:
+00001054  327C 10C8                 44      move    #MessageDown,a1
+00001058  6000 0002                 45      bra.w   Output
+0000105C                            46  Output:
+0000105C  103C 000D                 47      move.b  #13,d0
+00001060  4E4F                      48      trap    #15
+00001062  60A2                      49      bra.s   Loop
+00001064                            50  
+00001064                            51  Clear:
+00001064  700B                      52      moveq   #11,d0
+00001066  323C 0000                 53      move.w  #$0000,d1
+0000106A  4E4F                      54      trap    #15
+0000106C                            55      
+0000106C  700E                      56      moveq   #14,d0
+0000106E  327C 10A8                 57      move    #Message,a1
+00001072  4E4F                      58      trap    #15
+00001074  4E75                      59      rts
+00001076                            60  
+00001076                            61  OutputSpinner:        
+00001076  1039 000010D3             62      move.b  Trigger,d0
+0000107C  5340                      63      subq    #1,d0
+0000107E  13C0 000010D3             64      move.b  d0,Trigger
+00001084                            65      
+00001084  1232 0000                 66      move.b  0(a2,d0.w),d1
+00001088  103C 0006                 67      move.b  #6,d0
+0000108C  4E4F                      68      trap    #15
+0000108E                            69      
+0000108E  1039 000010D3             70      move.b  Trigger,d0
+00001094  4A00                      71      tst.b   d0
+00001096  6702                      72      beq.s   .Zero
+00001098  4E75                      73      rts
+0000109A                            74  .Zero
+0000109A  13FC 0004 000010D3        75      move.b  #4,Trigger
+000010A2  4E75                      76      rts
+000010A4                            77      
+000010A4  FFFF FFFF                 78      simhalt
+000010A8                            79  
+000010A8                            80  ; constants
+000010A8= 4B 65 79 20 70 72 ...     81  Message         dc.b    'Key pressed: ',0
+000010B6= 4C 65 66 74 20 00         82  MessageLeft     dc.b    'Left ',0
+000010BC= 52 69 67 68 74 00         83  MessageRight    dc.b    'Right',0
+000010C2= 55 70 20 20 20 00         84  MessageUp       dc.b    'Up   ',0
+000010C8= 44 6F 77 6E 20 00         85  MessageDown     dc.b    'Down ',0
+000010CE= 20 20 20 20 00            86  MessageSpinner  dc.b    '    ',0
+000010D3= 04                        87  Trigger         dc.b    4
+000010D4                            88  
+000010D4= 5C 2D 2F 7C               89  Spinner: dc.b '\','-','/','|'
+000010D8                            90  
+000010D8                            91      end     Start
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+CLEAR               1064
+DOWNKEY             1054
+LEFTKEY             1042
+LOOP                1006
+MESSAGE             10A8
+MESSAGEDOWN         10C8
+MESSAGELEFT         10B6
+MESSAGERIGHT        10BC
+MESSAGESPINNER      10CE
+MESSAGEUP           10C2
+OUTPUT              105C
+OUTPUTSPINNER       1076
+OUTPUTSPINNER:ZERO  109A
+RIGHTKEY            1048
+SPINNER             10D4
+START               1000
+TRIGGER             10D3
+UPKEY               104E

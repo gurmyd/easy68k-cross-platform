@@ -1,0 +1,4 @@
+	ORG	$1000
+LBL	MOVE.L	#1,D0	; comment
+A2345678901	NOP	x	y	z
+	END	$1000

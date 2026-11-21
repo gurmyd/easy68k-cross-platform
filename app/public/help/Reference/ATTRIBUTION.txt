@@ -1,0 +1,12 @@
+The pages in this folder are the 68000 reference pages that come with the help of
+EASy68K v5.16.1: the "68000 Reference Guide" by Jimmy Mardell (credited on the Credits page of the
+help), which in turn describes the Motorola M68000 Family Programmer's Reference Manual. The
+EASy68K distribution includes them under its general notice (the GNU General Public License,
+page "GNU General Public License"); the pages themselves carry no licence text of their own.
+
+They are third-party material and are kept in this folder alone so that they can be removed in
+one step: delete the folder "Reference" (and its entries in contents.hhc and index.hhk). The
+keyword table of the editor then falls back to the introduction page for the instruction names.
+
+The files are the originals except for the conversion to UTF-8 and the letter case of file
+references (see ../README.txt).

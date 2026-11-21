@@ -1,0 +1,270 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:27:03 AM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : bresenham-triangle-fill
+00000000                             3  * Written by : Henry Wrightson
+00000000                             4  * Date       : 16/8/2026
+00000000                             5  * Description: Create a filled triangle by walking along the
+00000000                             6  *            : Y-axis of a triangle with the Bresenham algorithm
+00000000                             7  *            : and recording the left and right most points to
+00000000                             8  *            : later go along that list and draw lines between them
+00000000                             9  *            : to create a filled triangle
+00000000                            10  *-----------------------------------------------------------
+00001000                            11      org     $1000
+00001000                            12  Start:
+00001000  23FC 00410028 00001266    13      move.l  #((65<<16)|40),trianglePoints
+0000100A  23FC 005A005A 0000126A    14      move.l  #((90<<16)|90),trianglePoints+4
+00001014  23FC 0028005A 0000126E    15      move.l  #((40<<16)|90),trianglePoints+8
+0000101E  6100 000A                 16      bsr     BuildBresenhamTriangle
+00001022  6100 01F8                 17      bsr     PlotScanLines
+00001026  6000 022A                 18      bra     Finish
+0000102A                            19      
+0000102A                            20  BuildBresenhamTriangle:  ; draw the triangle described by the three sets of (x,y) in trianglePoints
+0000102A  6100 0058                 21      bsr     ResetScanLines
+0000102E                            22      
+0000102E  2039 00001266             23      move.l  trianglePoints,d0   ; triangle point A
+00001034  3A00                      24      move.w  d0,d5       ; y0
+00001036  4840                      25      swap    d0
+00001038  3800                      26      move.w  d0,d4       ; x0
+0000103A  2039 0000126A             27      move.l  trianglePoints+4,d0 ; triangle point B
+00001040  3E00                      28      move.w  d0,d7       ; y0
+00001042  4840                      29      swap    d0
+00001044  3C00                      30      move.w  d0,d6       ; x0
+00001046  6100 00C2                 31      bsr     MarkLine    ; line A-B
+0000104A                            32      
+0000104A  2039 0000126A             33      move.l  trianglePoints+4,d0 ; triangle point B
+00001050  3A00                      34      move.w  d0,d5
+00001052  4840                      35      swap    d0
+00001054  3800                      36      move.w  d0,d4
+00001056  2039 0000126E             37      move.l  trianglePoints+8,d0 ; triangle point C
+0000105C  3E00                      38      move.w  d0,d7
+0000105E  4840                      39      swap    d0
+00001060  3C00                      40      move.w  d0,d6
+00001062  6100 00A6                 41      bsr     MarkLine    ; line B-C
+00001066                            42  
+00001066  2039 0000126E             43      move.l  trianglePoints+8,d0 ; triangle point C
+0000106C  3A00                      44      move.w  d0,d5
+0000106E  4840                      45      swap    d0
+00001070  3800                      46      move.w  d0,d4
+00001072  2039 00001266             47      move.l  trianglePoints,d0 ; triangle point A
+00001078  3E00                      48      move.w  d0,d7
+0000107A  4840                      49      swap    d0
+0000107C  3C00                      50      move.w  d0,d6
+0000107E  6100 008A                 51      bsr     MarkLine    ; line A-C
+00001082  4E75                      52      rts
+00001084                            53  
+00001084                            54  ResetScanLines:         ; fill the scanLineLeft with max value and scanLineRight with min value
+00001084  33FC FFFF 00001262        55      move.w  #$FFFF,scanLineMinY
+0000108C  33FC 0000 00001264        56      move.w  #$0000,scanLineMaxY
+00001094  2039 00001266             57      move.l  trianglePoints,d0   ; triangle point A
+0000109A  6100 0048                 58      bsr     StoreLowHighY
+0000109E  2039 0000126A             59      move.l  trianglePoints+4,d0 ; triangle point B
+000010A4  6100 003E                 60      bsr     StoreLowHighY
+000010A8  2039 0000126E             61      move.l  trianglePoints+8,d0 ; triangle point C
+000010AE  6100 0034                 62      bsr     StoreLowHighY
+000010B2                            63      
+000010B2  41F9 00001272             64      lea     scanLineLeft,a0
+000010B8  43F9 00001786             65      lea     scanLineRight,a1
+000010BE                            66      
+000010BE  3039 00001262             67      move.w  scanLineMinY,d0
+000010C4  D040                      68      add.w   d0,d0           ; y*2 cos the scanLine lists are words, 1 for each y
+000010C6  D0C0                      69      adda.w  d0,a0           ; shift the pointer along so it starts at MinY and not 0
+000010C8  D2C0                      70      adda.w  d0,a1
+000010CA                            71      
+000010CA  3039 00001264             72      move.w  scanLineMaxY,d0
+000010D0  9079 00001262             73      sub.w   scanLineMinY,d0
+000010D6                            74  .Loop
+000010D6  30FC FFFF                 75      move.w  #$ffff,(a0)+
+000010DA  32FC 0000                 76      move.w  #$0000,(a1)+
+000010DE  51C8 FFF6                 77      dbra    d0,.Loop
+000010E2  4E75                      78      rts
+000010E4                            79  
+000010E4                            80  StoreLowHighY:          ; store d0.w into scanLineMinY or scanLineMaxY if it's lower or higher
+000010E4  B079 00001262             81      cmp.w   scanLineMinY,d0
+000010EA  6400 000C                 82      bhs     .NotLowest
+000010EE  33C0 00001262             83      move.w  d0,scanLineMinY
+000010F4  6000 0012                 84      bra     .Done
+000010F8                            85  .NotLowest
+000010F8  B079 00001264             86      cmp.w   scanLineMaxY,d0
+000010FE  6300 0008                 87      bls     .Done
+00001102  33C0 00001264             88      move.w  d0,scanLineMaxY
+00001108                            89  .Done
+00001108  4E75                      90      rts
+0000110A                            91      
+0000110A                            92  MarkLine:               ; walk along a line from (d4,d5) to (d6,d7) using the Bresenham Algorithm and mark the points in the scanLine lists.
+0000110A                            93                          ; d2=e2  d3=error d4=x0  d5=y0  d6=x1  d7=y1
+0000110A  3006                      94      move.w  d6,d0       ; length of line on the x-axis as a positive
+0000110C  9044                      95      sub.w   d4,d0
+0000110E  6100 00BC                 96      bsr     PositiveD0
+00001112  33C0 0000125A             97      move.w  d0,dx
+00001118                            98      
+00001118  3007                      99      move.w  d7,d0       ; length of line on the y-axis as a negative
+0000111A  9045                     100      sub.w   d5,d0
+0000111C  6100 00B8                101      bsr     NegativeD0
+00001120  33C0 0000125C            102      move.w  d0,dy
+00001126                           103      
+00001126  33FC 0001 0000125E       104      move.w  #1,sx
+0000112E  B846                     105      cmp.w   d6,d4       ; if source x is lower than destination y then move left
+00001130  6500 000A                106      blo     .X0LessThanX1
+00001134  33FC FFFF 0000125E       107      move.w  #-1,sx
+0000113C                           108  .X0LessThanX1:
+0000113C  33FC 0001 00001260       109      move.w  #1,sy
+00001144  BA47                     110      cmp.w   d7,d5       ; if source y is lower than destination y then move down
+00001146  6500 000A                111      blo     .Y0LessThanY1
+0000114A  33FC FFFF 00001260       112      move.w  #-1,sy
+00001152                           113  .Y0LessThanY1:
+00001152  3639 0000125A            114      move.w  dx,d3       ; the position error how far from the line the current point is
+00001158  D679 0000125C            115      add.w   dy,d3
+0000115E  33C4 00001256            116      move.w  d4,x        ; start the line at x0,y0
+00001164  33C5 00001258            117      move.w  d5,y
+0000116A                           118  .Loop:
+0000116A  6174                     119      bsr.s   MarkPoint   ; mark point (x, y) in the list of scanLines
+0000116C                           120      
+0000116C  3403                     121      move.w  d3,d2       ; as the error is measured from the mid-point of the pixel, double it to keep it an integer
+0000116E  C5FC 0002                122      muls.w  #2,d2
+00001172                           123  .MoveX:
+00001172  B479 0000125C            124      cmp.w   dy,d2       ; only change the x position is dy is less than the error
+00001178  6D00 0024                125      blt     .MoveY
+0000117C  BC79 00001256            126      cmp.w   x,d6        ; if the end of the line on the x-axis has been reached stop
+00001182  6700 0046                127      beq     .EndLoop
+00001186  D679 0000125C            128      add.w   dy,d3       ; add dy to the error to correct it the other way
+0000118C  3039 00001256            129      move.w  x,d0        ; move along the x-axis in the direction of travel
+00001192  D079 0000125E            130      add.w   sx,d0
+00001198  33C0 00001256            131      move.w  d0,x
+0000119E                           132  .MoveY:
+0000119E  B479 0000125A            133      cmp.w   dx,d2       ; only move along the y-axis if dx is more than or equal to the error
+000011A4  6CC4                     134      bge     .Loop
+000011A6  BE79 00001258            135      cmp.w   y,d7        ; if the end of the line on the y-axis has been reached stop
+000011AC  6700 001C                136      beq     .EndLoop
+000011B0  D679 0000125A            137      add.w   dx,d3       ; add dx to the error to correct it the other way
+000011B6  3039 00001258            138      move.w  y,d0        ; move along the y-axis in the direction of travel
+000011BC  D079 00001260            139      add.w   sy,d0
+000011C2  33C0 00001258            140      move.w  d0,y
+000011C8  60A0                     141      bra     .Loop
+000011CA                           142  .EndLoop:
+000011CA  4E75                     143      rts
+000011CC                           144  
+000011CC                           145  PositiveD0:             ; convert d0 to a positive number
+000011CC  4A40                     146      tst.w   d0
+000011CE  6A00 0004                147      bpl     .Positive
+000011D2  4440                     148      neg.w   d0
+000011D4                           149  .Positive:
+000011D4  4E75                     150      rts
+000011D6                           151      
+000011D6                           152  NegativeD0:             ; convert d0 to a negative number
+000011D6  4A40                     153      tst.w   d0
+000011D8  6B00 0004                154      bmi     .Negative
+000011DC  4440                     155      neg.w   d0
+000011DE                           156  .Negative:
+000011DE  4E75                     157      rts
+000011E0                           158  
+000011E0                           159  MarkPoint:              ; store the x of the line points in the scanLineLeft or scanLineRight array if it's further left or right than what's there already
+000011E0  41F9 00001272            160      lea     scanLineLeft,a0
+000011E6  43F9 00001786            161      lea     scanLineRight,a1
+000011EC  3039 00001256            162      move.w  x,d0
+000011F2  3239 00001258            163      move.w  y,d1
+000011F8  D241                     164      add.w   d1,d1       ; y*2 to get the memory offset of the y coordinate
+000011FA                           165  
+000011FA  B070 1000                166      cmp.w   (a0,d1.w),d0
+000011FE  6400 000A                167      bhs     .NotLeft
+00001202  31B9 00001256 1000       168      move.w  x,(a0,d1.w)
+0000120A                           169  .NotLeft
+0000120A  B071 1000                170      cmp.w   (a1,d1.w),d0
+0000120E  6300 000A                171      bls     .NotRight
+00001212  33B9 00001256 1000       172      move.w  x,(a1,d1.w)
+0000121A                           173  .NotRight
+0000121A  4E75                     174      rts
+0000121C                           175  
+0000121C                           176  PlotScanLines:
+0000121C  41F9 00001272            177      lea     scanLineLeft,a0
+00001222  43F9 00001786            178      lea     scanLineRight,a1
+00001228                           179      
+00001228  3039 00001262            180      move.w  scanLineMinY,d0
+0000122E  D040                     181      add.w   d0,d0           ; double it cos we're adding a word for each MinY
+00001230  D0C0                     182      adda.w  d0,a0           ; shift the pointer along so it starts at MinY and not 0
+00001232  D2C0                     183      adda.w  d0,a1
+00001234                           184      
+00001234  3A39 00001262            185      move.w  scanLineMinY,d5
+0000123A                           186  .Loop
+0000123A  3218                     187      move.w  (a0)+,d1        ; start-x from the left scan line
+0000123C  3405                     188      move.w  d5,d2           ; start-y from the counter
+0000123E  3619                     189      move.w  (a1)+,d3        ; end-x from the right scan line
+00001240  3805                     190      move.w  d5,d4           ; end-y from the counter
+00001242                           191      
+00001242  7054                     192      moveq   #84,d0          ; draw the line between (d1,d2) and (d3,d4)
+00001244  4E4F                     193      trap    #15
+00001246                           194      
+00001246  5245                     195      addq    #1,d5           ; increment the y-coord
+00001248  BA79 00001264            196      cmp.w   scanLineMaxY,d5
+0000124E  63EA                     197      bls     .Loop
+00001250  4E75                     198      rts
+00001252                           199      
+00001252                           200  Finish:
+00001252  FFFF FFFF                201      simhalt
+00001256                           202  
+00001256                           203  ; constants
+00001256  =0000028A                204  RES_X           equ     650
+00001256  =0000028A                205  RES_Y           equ     650
+00001256                           206  
+00001256                           207  ; Bresenham variables
+00001256= 0000                     208  x               dc.w    0
+00001258= 0000                     209  y               dc.w    0
+0000125A= 0000                     210  dx              dc.w    0
+0000125C= 0000                     211  dy              dc.w    0
+0000125E= 0000                     212  sx              dc.w    0
+00001260= 0000                     213  sy              dc.w    0
+00001262= 0000                     214  scanLineMinY    dc.w    0
+00001264= 0000                     215  scanLineMaxY    dc.w    0
+00001266                           216  
+00001266                           217  trianglePoints  ds.l    3                   ; the three points of a triangle, (x=high byte, y=low byte)
+00001272                           218  scanLineLeft    ds.w    RES_Y               ; the start positions of the scan-lines needed to make the filled polygon. The offset is the y and the value is the x
+00001786                           219  scanLineRight   ds.w    RES_Y               ; the end positions of the scan-lines needed to make the filled polygon. The offset is the y and the value is the x
+00001C9A                           220  
+00001C9A                           221      end     Start
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+BUILDBRESENHAMTRIANGLE  102A
+DX                  125A
+DY                  125C
+FINISH              1252
+MARKLINE            110A
+MARKLINE:ENDLOOP    11CA
+MARKLINE:LOOP       116A
+MARKLINE:MOVEX      1172
+MARKLINE:MOVEY      119E
+MARKLINE:X0LESSTHANX1  113C
+MARKLINE:Y0LESSTHANY1  1152
+MARKPOINT           11E0
+MARKPOINT:NOTLEFT   120A
+MARKPOINT:NOTRIGHT  121A
+NEGATIVED0          11D6
+NEGATIVED0:NEGATIVE  11DE
+PLOTSCANLINES       121C
+PLOTSCANLINES:LOOP  123A
+POSITIVED0          11CC
+POSITIVED0:POSITIVE  11D4
+RESETSCANLINES      1084
+RESETSCANLINES:LOOP  10D6
+RES_X               28A
+RES_Y               28A
+SCANLINELEFT        1272
+SCANLINEMAXY        1264
+SCANLINEMINY        1262
+SCANLINERIGHT       1786
+START               1000
+STORELOWHIGHY       10E4
+STORELOWHIGHY:DONE  1108
+STORELOWHIGHY:NOTLOWEST  10F8
+SX                  125E
+SY                  1260
+TRIANGLEPOINTS      1266
+X                   1256
+Y                   1258

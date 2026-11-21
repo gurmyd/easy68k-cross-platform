@@ -1,0 +1,16 @@
+00001002 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:30:16 AM
+
+00001000                             1      ORG $1000
+00001000  4E71                       2      NOP
+Line 3 WARNING: Origin value is odd (Location counter set to next highest address)
+00001002                             3      END $1001
+
+No errors detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------

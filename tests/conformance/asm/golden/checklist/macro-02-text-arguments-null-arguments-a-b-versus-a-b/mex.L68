@@ -1,0 +1,52 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:30:59 AM
+
+00000000                             1  M   MACRO
+00000000                             2      DC.B NARG
+00000000                             3      DC.B '\1'
+00000000                             4      ENDM
+00001000                             5      ORG $1000
+00001000                             6m     M <1,2>
+00001000= 01                         7m     DC.B 1
+00001001= 31 2C 32                   8m     DC.B '1,2'
+00001004                             9m     ENDM
+00001004                            10m     M <A<B>C>
+00001004= 01                        11m     DC.B 1
+00001005= 41 3C 42 43 3E            12m     DC.B 'A<BC>'
+0000100A                            13m     ENDM
+0000100A                            14m     M <<GT>>
+0000100A= 01                        15m     DC.B 1
+0000100B= 3C 47 54 3E               16m     DC.B '<GT>'
+0000100F                            17m     ENDM
+0000100F                            18m     M 'IT''S'
+0000100F= 01                        19m     DC.B 1
+Line 20 ERROR: Invalid syntax
+00001010=                           20m     DC.B ''ITS''
+00001010                            21m     ENDM
+00001010                            22m     M A, B
+00001010= 02                        23m     DC.B 2
+00001011= 41                        24m     DC.B 'A'
+00001012                            25m     ENDM
+00001012                            26m     M A ,B
+00001012= 01                        27m     DC.B 1
+00001013= 41                        28m     DC.B 'A'
+00001014                            29m     ENDM
+00001014                            30m     M '',X
+00001014= 02                        31m     DC.B 2
+00001015=                           32m     DC.B ''
+00001015                            33m     ENDM
+00001015                            34m     M this is a comment
+00001015= 01                        35m     DC.B 1
+00001016= 54 48 49 53               36m     DC.B 'THIS'
+0000101A                            37m     ENDM
+0000101A                            38      END $1000
+
+1 error detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+M                   0

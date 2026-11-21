@@ -1,0 +1,26 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:30:08 AM
+
+00001000                             1      ORG $1000
+00001000  4E71                       2      NOP
+00000000=                            3      OFFSET 0
+00000000=                            4  F1  DS.W 1
+00000002=                            5  F2  DS.L 1
+00000006= 4E71                       6      NOP
+00001002                             7      ORG *
+00001002  4E71                       8  BACK    NOP
+Line 9 ERROR: Label is not allowed
+00001004                             9  LBL OFFSET 4
+00001004                            10      END $1000
+
+1 error detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+BACK                1002
+F1                  0
+F2                  2

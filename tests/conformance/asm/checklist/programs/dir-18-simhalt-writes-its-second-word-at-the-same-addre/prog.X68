@@ -1,0 +1,6 @@
+	ORG $1000
+	NOP
+	DC.B 1
+	SIMHALT
+	NOP
+	END $1000

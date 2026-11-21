@@ -1,0 +1,33 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:30:57 AM
+
+00000000  =00000005                  1  A   EQU 5
+Line 2 ERROR: Invalid size code
+00000000                             2  B   EQU.W 6
+Line 3 ERROR: Label required with this directive
+00000000                             3      EQU 7
+Line 4 ERROR: Forward references not allowed with this directive
+00000000                             4  C   EQU FWD
+00000000  =00000001                  5  D   EQU 1 JUNK
+Line 6 ERROR: Invalid syntax
+00000000                             6  E   EQU 1+
+00000000  =00000001                  7  S   SET 1
+00000000  =00000002                  8  S   SET S+1
+00000000  =00000009                  9  A   SET 9
+00001000                            10      ORG $1000
+00001000= 0002 0009                 11  FWD DC.W S,A
+00001004                            12      END $1000
+
+4 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+A                   9
+B                   6
+D                   1
+FWD                 1000
+S                   2

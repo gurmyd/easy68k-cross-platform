@@ -1,0 +1,28 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:30:24 AM
+
+00001000                             1      ORG $1000
+00001000                             2      INCLUDE crlf.x68
+00001000                             3  M   MACRO
+00001000                             4      NOP
+00001000                             5      ENDM
+00001000                             6m     M
+00001002                             7  -------------------- end include --------------------
+00001002                             8      INCLUDE lf.x68
+00001002= 0001                       9      DC.W 1
+00001004= 0002                      10      DC.W 2
+00001004= 0002                      11  -------------------- end include --------------------
+00001006                            12      INCLUDE z.x68
+00001006= 0003                      13      DC.W 3
+00001006= 0003                      14  -------------------- end include --------------------
+00001008                            15      END $1000
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+M                   0

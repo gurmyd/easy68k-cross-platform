@@ -1,0 +1,267 @@
+# The oracles that are too slow or too heavy for every push (ARCHITECTURE.md 6.1, 6.2.2, 7.4):
+# weekly and on demand.
+#
+#   wine        builds the Wine container (restored from the cache while the Dockerfile and the
+#               scripts are unchanged), fetches the official EASy68K v5.16.1 distribution, and
+#               - regenerates the goldens of the tracked sets with the official EDIT68K.exe
+#                 (npm run oracle:wine:asm) and, once work package T3 has written it, with the
+#                 official SIM68K.exe (npm run oracle:wine:sim);
+#               - fetches the `site` set (not redistributable, never committed), runs it through
+#                 the official editor and compares the hashes with tests/corpus/manifest.json;
+#               - runs the conformance tests against what it regenerated and over the site set.
+#   propose     opens a pull request when a tracked golden, the manifest or the report changed.
+#               It is the only job with write access, and it handles nothing but those files.
+#   singlestep  downloads the single-step CPU suites and re-checks the frozen baseline. Written
+#               for work package T4: it is skipped until tests/conformance/cpu/run-singlestep.mjs
+#               exists.
+#
+# The official programs are downloaded at run time into the runner's work folder, mounted
+# read-only into the container and run only there. They are never committed, cached or baked
+# into the image.
+#
+# Owner: work package T1.
+
+name: oracle
+
+on:
+  schedule:
+    # Weekly, Tuesday 03:41 UTC.
+    - cron: '41 3 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oracle-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FORCE_COLOR: '1'
+  ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  engines:
+    name: engines
+    uses: ./.github/workflows/engines.yml
+
+  wine:
+    name: wine (official EDIT68K.exe and SIM68K.exe)
+    needs: [engines]
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    env:
+      EASY68K_REQUIRE_ENGINES: ${{ needs.engines.outputs.available == 'asm sim' && '1' || '' }}
+      # Containers in parallel: one per core of the runner.
+      CONTAINERS: '4'
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Download engine-dist
+        if: needs.engines.outputs.available != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: engine-dist
+          path: engine/dist
+
+      # The image (2.4 GB) takes three minutes to build and changes only with these files.
+      - name: Restore the Wine image
+        id: image
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/oracle-wine/image.tar
+          key: oracle-wine-image-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/oracle/wine/Dockerfile', 'tests/oracle/wine/common/*.sh', 'tests/oracle/wine/common/*.py', 'tests/oracle/wine/asm/*.sh', 'tests/oracle/wine/asm/*.py', 'tests/oracle/wine/sim/*.sh', 'tests/oracle/wine/sim/*.py') }}
+      - name: Load the Wine image
+        if: steps.image.outputs.cache-hit == 'true'
+        run: docker load --input build/oracle-wine/image.tar
+      - name: Build the Wine image
+        if: steps.image.outputs.cache-hit != 'true'
+        run: |
+          npm run oracle:wine:build
+          mkdir -p build/oracle-wine
+          docker save --output build/oracle-wine/image.tar easy68k-oracle-wine
+
+      - name: Fetch the official EASy68K v5.16.1 distribution
+        run: node tests/oracle/wine/common/fetch-official.mjs
+
+      - name: Regenerate the assembler goldens of the tracked sets
+        run: npm run oracle:wine:asm -- --containers "$CONTAINERS"
+      - name: Regenerate the simulator goldens (T3)
+        if: ${{ !cancelled() && hashFiles('tests/oracle/wine/sim/regenerate.mjs') != '' }}
+        run: npm run oracle:wine:sim
+
+      - name: What changed
+        id: diff
+        if: ${{ !cancelled() }}
+        run: |
+          # Goldens, the manifest and the reports: everything a regeneration may write.
+          paths=(tests/corpus/manifest.json tests/conformance)
+          git add --all -- "${paths[@]}"
+          if git diff --cached --quiet -- "${paths[@]}"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "The official programs produced what the repository holds."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --cached --stat -- "${paths[@]}" | tail -50
+            mkdir -p build/oracle-wine/changed
+            git diff --cached --name-only --diff-filter=D -- "${paths[@]}" > build/oracle-wine/changed/deleted.txt
+            git diff --cached --name-only --diff-filter=d -z -- "${paths[@]}" |
+              tar --create --null --files-from=- --file build/oracle-wine/changed/files.tar
+          fi
+      - name: Upload the changed files
+        if: ${{ !cancelled() && steps.diff.outputs.changed == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: oracle-changed
+          path: |
+            build/oracle-wine/changed/files.tar
+            build/oracle-wine/changed/deleted.txt
+          retention-days: 14
+
+      - name: Fetch the site set
+        if: ${{ !cancelled() }}
+        run: node tools/fetch-site-examples.mjs
+      - name: The site set through the official assembler, compared with the manifest
+        if: ${{ !cancelled() }}
+        run: node tests/oracle/wine/asm/regenerate.mjs --sets site --check --containers "$CONTAINERS"
+
+      # Against the regenerated goldens, and over the site set when it was fetched.
+      - name: Conformance tests
+        if: ${{ !cancelled() }}
+        run: npm run test:conformance
+
+      - name: Upload the logs of the runs
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: oracle-wine-work
+          # Logs, job lists and the per-file reports. Not the outputs and not the screenshots of
+          # failures: both can show text of the site set, which may not be redistributed.
+          path: |
+            build/oracle-wine/asm/*/container-*.log
+            build/oracle-wine/asm/*/job/jobs.jsonl
+            build/reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  propose:
+    name: propose the regenerated goldens
+    needs: [wine]
+    if: ${{ !cancelled() && needs.wine.outputs.changed == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download the changed files
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: oracle-changed
+          path: build/oracle-changed
+      - name: Open a pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BRANCH: oracle/regenerated-${{ github.run_id }}
+        run: |
+          set -eu
+          # Only files below these folders are accepted from the artifact.
+          while IFS= read -r name; do
+            case "$name" in
+              tests/corpus/manifest.json|tests/conformance/*) ;;
+              *) echo "unexpected path in the artifact: $name" >&2; exit 1 ;;
+            esac
+          done < <(tar --list --file build/oracle-changed/files.tar)
+          tar --extract --file build/oracle-changed/files.tar
+          while IFS= read -r name; do
+            case "$name" in
+              tests/corpus/manifest.json|tests/conformance/*) git rm --quiet --ignore-unmatch -- "$name" ;;
+              '') ;;
+              *) echo "unexpected path in the list of deleted files: $name" >&2; exit 1 ;;
+            esac
+          done < build/oracle-changed/deleted.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -b "$BRANCH"
+          git add -- tests/corpus/manifest.json tests/conformance
+          git commit --quiet -m 'Regenerate the goldens of the official EASy68K (Wine oracle)'
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$BRANCH"
+          {
+            echo 'The weekly run of the Wine oracle got other results from the official EASy68K v5.16.1 programs than the repository holds.'
+            echo
+            echo "Run: $RUN_URL"
+            echo
+            echo 'Read `tests/conformance/asm/golden/REPORT.md` and the diff of `tests/corpus/manifest.json` first: a changed hash or count means that the automation, Wine or a tracked source changed, never the official programs. Do not merge before the cause is known.'
+            echo
+            echo 'Pull requests opened by a workflow do not start CI by themselves: close and reopen this one to run it.'
+          } > build/oracle-changed/body.md
+          gh pr create --base "${GITHUB_REF_NAME}" --head "$BRANCH" \
+            --title 'Wine oracle: regenerated goldens differ' --body-file build/oracle-changed/body.md
+
+  singlestep:
+    name: single-step CPU suites (frozen baseline)
+    needs: [engines]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      EASY68K_REQUIRE_ENGINES: ${{ needs.engines.outputs.available == 'asm sim' && '1' || '' }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Is the runner there yet
+        id: guard
+        run: |
+          if [ -f tests/conformance/cpu/run-singlestep.mjs ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "tests/conformance/cpu/run-singlestep.mjs does not exist yet (work package T4): nothing to do."
+          fi
+      - name: Set up Node
+        if: steps.guard.outputs.run == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        if: steps.guard.outputs.run == 'true'
+        run: npm ci
+      - name: Download engine-dist
+        if: steps.guard.outputs.run == 'true' && needs.engines.outputs.available != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: engine-dist
+          path: engine/dist
+      # The suites are never committed (6.2.4). The runner names the upstream commits it wants, so
+      # the downloaded data is good for as long as the runner's folder is unchanged.
+      - name: Restore the single-step data
+        if: steps.guard.outputs.run == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/singlestep
+          key: singlestep-${{ hashFiles('tests/conformance/cpu/**') }}
+      - name: Download the suites and re-check the frozen baseline
+        if: steps.guard.outputs.run == 'true'
+        run: node tests/conformance/cpu/run-singlestep.mjs

@@ -1,0 +1,4 @@
+	ORG $1001
+	NOP
+	OPT NOWAR
+	END

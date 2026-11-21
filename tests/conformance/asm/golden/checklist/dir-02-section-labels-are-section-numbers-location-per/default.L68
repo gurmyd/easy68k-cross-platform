@@ -1,0 +1,30 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:31:00 AM
+
+00001000                             1      ORG $1000
+00001000  4E71                       2      NOP
+00000000                             3  S1  SECTION 1
+00002000                             4      ORG $2000
+00002000  4E71                       5      NOP
+00001002                             6      SECTION 0
+00001002  4E71                       7      NOP
+00002002                             8      SECTION 1
+00002002  4E71                       9      NOP
+00002004                            10  S5  SECTION
+Line 11 ERROR: Invalid syntax
+00002004                            11      SECTION 16
+00000000                            12      SECTION 2 JUNK
+Line 13 ERROR: Label required with this directive
+00000000                            13      SECTION
+00000000                            14      END $1000
+
+2 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+S1                  1
+S5                  1

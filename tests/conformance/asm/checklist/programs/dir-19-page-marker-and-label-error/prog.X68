@@ -1,0 +1,6 @@
+	ORG $1000
+	NOP
+	PAGE
+L	PAGE
+	NOP
+	END $1000

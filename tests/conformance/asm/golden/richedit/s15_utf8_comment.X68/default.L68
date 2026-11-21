@@ -1,0 +1,19 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:34:20 AM
+
+00001000                             1      ORG     $1000
+00001000                             2  START:
+00001000                             3  * café – naïve “quotes” €
+00001000  4E71                       4      NOP
+00001002  FFFF FFFF                  5      SIMHALT
+00001006                             6      END     START
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+START               1000

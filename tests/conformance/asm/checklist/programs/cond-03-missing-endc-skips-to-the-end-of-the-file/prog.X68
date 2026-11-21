@@ -1,0 +1,5 @@
+	ORG $1000
+	NOP
+	IFNE 0
+	NOP
+	END $1000

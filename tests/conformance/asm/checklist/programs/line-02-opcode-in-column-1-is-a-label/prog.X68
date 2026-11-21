@@ -1,0 +1,3 @@
+NOP
+	ORG $1000
+END START

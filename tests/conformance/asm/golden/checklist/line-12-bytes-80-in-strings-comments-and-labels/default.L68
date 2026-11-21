@@ -1,0 +1,19 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:29:15 AM
+
+00001000                             1      ORG $1000
+00001000= E9 E8                      2      DC.B 'éè'   ; café
+00001002= 40E9                       3      DC.W 'Aé'
+00001004  303C 40E9                  4      MOVE.W #'Aé',D0
+Line 5 ERROR: Illegal symbol
+00001008                             5  ÉT  NOP
+00001008                             6      END $1000
+
+1 error detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------

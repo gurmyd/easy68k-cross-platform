@@ -1,0 +1,17 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:32:36 AM
+
+00001000                             1      ORG $1000
+00001000  4E71                       2      NOP
+Line 3 ERROR: Immediate data exceeds 8 bits
+00001002  103C 002C                  3      MOVE.B #300,D0
+00001006                             4      END $1000
+
+1 error detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------

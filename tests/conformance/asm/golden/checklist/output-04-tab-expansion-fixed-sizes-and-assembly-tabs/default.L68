@@ -1,0 +1,18 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:32:27 AM
+
+00001000                             1      ORG $1000
+00001000  7001                       2  LBL MOVE.L  #1,D0   ; comment
+00001002  4E71                       3  A2345678901 NOP x   y   z
+00001004                             4      END $1000
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+A2345678901         1002
+LBL                 1000

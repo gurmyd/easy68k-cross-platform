@@ -1,0 +1,5 @@
+	ORG $1000
+1ABC	NOP
+	@NOP
+	NOP
+	END $1000

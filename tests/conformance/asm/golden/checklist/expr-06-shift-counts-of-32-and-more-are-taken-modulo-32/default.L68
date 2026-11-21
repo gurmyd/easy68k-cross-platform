@@ -1,0 +1,18 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:30:26 AM
+
+00001000                             1      ORG $1000
+00001000= 00000001                   2      DC.L 1<<32
+00001004= 00000002                   3      DC.L 1<<33
+00001008= 40000000                   4      DC.L $80000000>>33
+0000100C= 80000000                   5      DC.L 1<<-1
+00001010                             6      END $1000
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------

@@ -1,0 +1,29 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:29:57 AM
+
+00001000                             1      ORG $1000
+00001000  4E71                       2  X   NOP
+00001002                             3      MEMORY ROM $8000,$8FFF
+00001002                             4      MEMORY READ $9000,$9FFF
+00001002                             5      MEMORY protected $A000,$AFFF
+00001002                             6      MEMORY INVALID $FF000000,$FFFFFFFF
+00001002                             7      MEMORY ROM $C000,$CFFF
+Line 8 ERROR: Label is not allowed
+00001002                             8  L   MEMORY READ 0,1
+Line 9 ERROR: Invalid syntax
+00001002                             9      MEMORY FOO 1,2
+Line 10 ERROR: Forward references not allowed with this directive
+00001002                            10      MEMORY ROM FWD,1
+00001002  4E71                      11  FWD NOP
+00001004                            12      END $1000
+
+3 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+FWD                 1002
+X                   1000

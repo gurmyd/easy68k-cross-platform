@@ -1,0 +1,2371 @@
+{
+ "about": "The example archives of the EASy68K web site (http://www.easy68k.com/easy68kexamples.htm): addresses and SHA-256 hashes only. The programs may not be redistributed (docs/porting/ground-truth.md 3.2); tools/fetch-site-examples.mjs downloads and checks them. Generated from a download of 2026-11-20.",
+ "archives": [
+  {
+   "category": "applications",
+   "name": "3Language",
+   "url": "http://www.easy68k.com/examples/3Language.zip",
+   "sha256": "1d95dcbeb77ba6d2eb262e38651b62ed844c6cb38bcd78aae4cb34ee146b24e5",
+   "bytes": 69473,
+   "files": [
+    {
+     "path": "The 3 Programming Language/caseinx.txt",
+     "sha256": "48163132c8dc872badd673d89a1ee6ddfac8b3099c2576ad29c62349c5696d0a",
+     "bytes": 742
+    },
+    {
+     "path": "The 3 Programming Language/Char.x68",
+     "sha256": "19a17b261a134706ea0e4b04043b837ff82fc3b52ea405eef72db750558fd7e9",
+     "bytes": 5602
+    },
+    {
+     "path": "The 3 Programming Language/Dic.x68",
+     "sha256": "69f4ce6b1f2fea5d4982161a138906bee9fe21bcfda72859eb620384c30803e5",
+     "bytes": 6110
+    },
+    {
+     "path": "The 3 Programming Language/Fil.x68",
+     "sha256": "97fe6897ae1552f2af427018620bb76b9a0447c90b0ad9b2156bc497cf1a32b1",
+     "bytes": 2867
+    },
+    {
+     "path": "The 3 Programming Language/Interp.x68",
+     "sha256": "7ad17614ca20e9514b79e09d299359473484000b8c6469bf413671a4db0f7888",
+     "bytes": 62560
+    },
+    {
+     "path": "The 3 Programming Language/Mov.x68",
+     "sha256": "2ae4e1f766640233a2e80b8a44c5cf35f1f886e42848aa54c2224819d92a56d2",
+     "bytes": 4305
+    },
+    {
+     "path": "The 3 Programming Language/Name Call.txt",
+     "sha256": "c119ca84b4af8f87dd7d46acb8d47b43984cf46c0b4bc09eac66dd4a43db0bde",
+     "bytes": 1524
+    },
+    {
+     "path": "The 3 Programming Language/Operators 64-16.txt",
+     "sha256": "4aabd843a79c8bcb0fefcd02330f496414fbe2db2345a57b0f40ce2af8269eb4",
+     "bytes": 27631
+    },
+    {
+     "path": "The 3 Programming Language/Prt.x68",
+     "sha256": "64b2bb2ba0c2862a138805322d8b601647336aa49ab45f9e844d35314a669eb3",
+     "bytes": 6221
+    },
+    {
+     "path": "The 3 Programming Language/ReadMe.txt",
+     "sha256": "33e0ead1ec39f1f94204266468439c680e784b1b02b200f5f67b0eb1c6e09ea6",
+     "bytes": 298
+    },
+    {
+     "path": "The 3 Programming Language/Reg.X68",
+     "sha256": "21310d3541e3829b49bf1c1f463f289c30cc1f8a8e345cbf953c4ab029a44a0c",
+     "bytes": 18592
+    },
+    {
+     "path": "The 3 Programming Language/Rel.X68",
+     "sha256": "0c20b46207a9d53e80bb0404b9b621096b9b5319201ebce4eb939ef6b33877c4",
+     "bytes": 10699
+    },
+    {
+     "path": "The 3 Programming Language/sieve.txt",
+     "sha256": "eec35614384909b750f79672b58355a25f93989bb073485562d3360545a9c0e2",
+     "bytes": 1811
+    },
+    {
+     "path": "The 3 Programming Language/Stk.x68",
+     "sha256": "4f2f0b1c0a4a4f809699004de866675b0eb7e37bcd1355960a58c80666b8d411",
+     "bytes": 13709
+    },
+    {
+     "path": "The 3 Programming Language/Str.x68",
+     "sha256": "61a60a56f02db8f9f88e521b94d5e0fea25ec8f389a8918ed7cb9451215cb0bf",
+     "bytes": 24044
+    },
+    {
+     "path": "The 3 Programming Language/syntax.rtf",
+     "sha256": "f24d1d15a76b42fe9de95952a8db9c6e484c1ca0fc8e0b29b6d864ed5772cc31",
+     "bytes": 6713
+    },
+    {
+     "path": "The 3 Programming Language/User Manual.rtf",
+     "sha256": "2fb17d5cddad2b5243075a38fbc73f0a499ca3466f8925771bf61b2ae60912b7",
+     "bytes": 38209
+    },
+    {
+     "path": "The 3 Programming Language/Vec.x68",
+     "sha256": "a249f3da6ce8e8335468ec4a12cfcac5dee332a578437a87113509cf63d1c7a5",
+     "bytes": 37419
+    }
+   ]
+  },
+  {
+   "category": "applications",
+   "name": "Tutor_EASy68K",
+   "url": "http://www.easy68k.com/examples/Tutor_EASy68K.zip",
+   "sha256": "462f19650b338ac27099c77f929c5165f4646816360d04f96903b8a25e5ce027",
+   "bytes": 50067,
+   "files": [
+    {
+     "path": "TUTOR_EASy68K.X68",
+     "sha256": "55e331cd540168b18a002a91614e773462ca5de7caadab81fc56943c432af8ad",
+     "bytes": 232441
+    }
+   ]
+  },
+  {
+   "category": "applications",
+   "name": "dumbterm",
+   "url": "http://www.easy68k.com/examples/dumbterm.zip",
+   "sha256": "11bdac0bd8d55dc02d88ead825273b10cb8e266b0c1b6200d03ddd887e63587c",
+   "bytes": 3705,
+   "files": [
+    {
+     "path": "dumbterm1_6.X68",
+     "sha256": "55e6f2b34ffec566e027e9b03a3258ac9e51c90ba24c03e9cc556db7fa0d6158",
+     "bytes": 15761
+    }
+   ]
+  },
+  {
+   "category": "applications",
+   "name": "ehbasic",
+   "url": "http://www.easy68k.com/examples/ehbasic.zip",
+   "sha256": "b1a15fc79f248177a7835bf9d45ee876abd26399e5d3bd979815415a5864635d",
+   "bytes": 70465,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "300e6c8e3cff53ecdc57dc003a2e2f9ba641d37e3ef97801fac49d7881cf4763",
+     "bytes": 725
+    },
+    {
+     "path": "Basic68k3.41.inc",
+     "sha256": "b9f4d01b7c56af85f5c9dcec44d5345b8d8d5efdbb3761f3f03bb39a4b4bd5b0",
+     "bytes": 6137
+    },
+    {
+     "path": "Basic68s3.52.x68",
+     "sha256": "e334deda9c9c5f446d9b66180cce15851e3c0ca4e838fd4965141a76b6e61979",
+     "bytes": 305489
+    }
+   ]
+  },
+  {
+   "category": "applications",
+   "name": "mhz",
+   "url": "http://www.easy68k.com/examples/mhz.zip",
+   "sha256": "46465ff608994ee8e037d53e2d432e26c71ce7fabaa0b87a961a5567fc25a508",
+   "bytes": 4277,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "MHz.x68",
+     "sha256": "6c3e2a6932b06158a77e81c4d33d784abed10a94644043bc16866d12c6cdb916",
+     "bytes": 11380
+    }
+   ]
+  },
+  {
+   "category": "applications",
+   "name": "pdp8sim",
+   "url": "http://www.easy68k.com/examples/pdp8sim.zip",
+   "sha256": "a833309260e49580f7e4aba1363753958364442304faf5c416228559c96b3ffc",
+   "bytes": 11500,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "pdp8sim.x68",
+     "sha256": "a980b3741ea004b2b40deb0b025d642bd7bcfb9e505719eb9a6c548a39045594",
+     "bytes": 47243
+    }
+   ]
+  },
+  {
+   "category": "codeLibrary",
+   "name": "68000ffp",
+   "url": "http://www.easy68k.com/examples/68000ffp.zip",
+   "sha256": "602a30eb570f3899e1a064cb952afbba129fdcbef84e67716b40e3bc62dcb8f8",
+   "bytes": 61696,
+   "files": [
+    {
+     "path": "CALC.ASM",
+     "sha256": "743a1ff20b037189278b19b4eafb2fdc3d53a07e25395d90d52119037a7d1857",
+     "bytes": 1085
+    },
+    {
+     "path": "CALC.X68",
+     "sha256": "a359cb648854f7fefce72de99245940aafa8ce102869e317018f4749896fccbd",
+     "bytes": 1065
+    },
+    {
+     "path": "DEMO.ASM",
+     "sha256": "1e07443265a502c2ccb1aa08cf526e5e95488db5f245303847cd806d2eba9bbe",
+     "bytes": 699
+    },
+    {
+     "path": "DEMO.X68",
+     "sha256": "307671238db4bf324d018179c567c46f21c96a6e614a3e8a86c1c190c6ef0c40",
+     "bytes": 665
+    },
+    {
+     "path": "FFP10TBL.X68",
+     "sha256": "6b067516583c920c1c7e0e7e6fcef94e2c1e510be8ccfd28233ecdd27cb8f65d",
+     "bytes": 5049
+    },
+    {
+     "path": "FFPABS.X68",
+     "sha256": "fecbffeae37672f5e858c9f013eac191ed59f151a157407dd0ddcf3c5aceaa5d",
+     "bytes": 3372
+    },
+    {
+     "path": "FFPADD.X68",
+     "sha256": "d427a471dbe18b60d789ff8641748190153551cd2278bb16c8246abe369cdae2",
+     "bytes": 11069
+    },
+    {
+     "path": "FFPAFP.X68",
+     "sha256": "4dfc24fdbeb19aa73786d1a1f25cbd2a6406b0bd0879d9b80ea20d04b8dd17fe",
+     "bytes": 13148
+    },
+    {
+     "path": "FFPARND.X68",
+     "sha256": "f068b4b901d51379d4d1c6547c9e5f0dd63a12e6c817e3d46140f492d2c5d31b",
+     "bytes": 7626
+    },
+    {
+     "path": "FFPATAN.X68",
+     "sha256": "2f156f268af43abad58031dbd201c53f7f6cb825d05d66c50546fd7d9a6603a9",
+     "bytes": 6228
+    },
+    {
+     "path": "FFPCALC.X68",
+     "sha256": "8274dccdd2842b5961c01697dcaee40627617c8604d8c98096e542d883a94c4c",
+     "bytes": 26091
+    },
+    {
+     "path": "FFPCMP.X68",
+     "sha256": "c5dde5a37ef84330d42be6e2318b25d56c3c0141f180efed25d21edf79d9713c",
+     "bytes": 4935
+    },
+    {
+     "path": "FFPCPYRT.X68",
+     "sha256": "7edbd0ec782338aa3f0694c22711217349275479436b3bf9c599756d7ebda523",
+     "bytes": 964
+    },
+    {
+     "path": "FFPDBF.X68",
+     "sha256": "723bc36b617096169be743431afe4b90d80b200649ed2305da2d65277c532ff0",
+     "bytes": 9113
+    },
+    {
+     "path": "FFPDEMO.X68",
+     "sha256": "3279aa588a712caf2efd342fd7f22d43b60b6604f020e55affae0ca2496d5ea8",
+     "bytes": 7418
+    },
+    {
+     "path": "FFPDIV.X68",
+     "sha256": "981844894381130460ef480ae473f190bf58a195e7737d5125d448c375ce2da1",
+     "bytes": 8516
+    },
+    {
+     "path": "FFPEXP.X68",
+     "sha256": "66daff3daa5e4332d92a74bc17dbce41593c7b444010a35e8adfffbdd0ee52e5",
+     "bytes": 10171
+    },
+    {
+     "path": "FFPFPA.X68",
+     "sha256": "5621700a034bd64cece7c60f845db0e4eeb129a55627f0d3c49a48cd0a3d5c4f",
+     "bytes": 9827
+    },
+    {
+     "path": "FFPFPI.X68",
+     "sha256": "ca489cc9c44812c1c06eaafe2d61288c7a2bf9e2243d58bffea703361382c5ad",
+     "bytes": 4784
+    },
+    {
+     "path": "FFPHTHET.X68",
+     "sha256": "8e796bed354d7640d0803f3bd0424a3fe80a2561494718e02af20398b15a4de9",
+     "bytes": 2429
+    },
+    {
+     "path": "FFPIFP.X68",
+     "sha256": "9bcf16652e446b86a7f61a51226daf775cce35e4e464d6ab3b46a227e076fe2d",
+     "bytes": 3550
+    },
+    {
+     "path": "FFPLOG.X68",
+     "sha256": "c865d0dc382a7d90f41f90375b7e7962cba8d3e886ef615808b39dfad7c1859a",
+     "bytes": 7869
+    },
+    {
+     "path": "FFPMUL.X68",
+     "sha256": "de4261e1aae14deb82dccbbc4bc1719c770f96420fe16061f4ee403c81708f55",
+     "bytes": 7043
+    },
+    {
+     "path": "FFPPWR.X68",
+     "sha256": "a81a3d1743842070cd0961e4abf8333a4bd3ae12e0c4b7f799459e73c1dd5249",
+     "bytes": 3595
+    },
+    {
+     "path": "FFPSIN.X68",
+     "sha256": "c26bad6a2128c27381dd01e7c495d7f0f6646ba18691abf7d5131c838dc8bca1",
+     "bytes": 14490
+    },
+    {
+     "path": "FFPSINH.X68",
+     "sha256": "e7d84ef10fd6b5e3e6f933f5bf13c36b87aec25c0aee5903922f83cfb205254d",
+     "bytes": 7527
+    },
+    {
+     "path": "FFPSQRT.X68",
+     "sha256": "ead3ad4ca37b43bd04f0b126c310da05432cea5450193d8314cb2c8a708351b5",
+     "bytes": 5768
+    },
+    {
+     "path": "FFPTHETA.X68",
+     "sha256": "4350dc38dc3fae9fcdb55e1f638a35c108a0f6eee04eb5cce23c3062a73730c8",
+     "bytes": 2526
+    },
+    {
+     "path": "FFPTNORM.X68",
+     "sha256": "f07ae08e3cbb7b6585bb6a41ac141a6b8d1e122cd02cfc5cfd200e91aa1931ae",
+     "bytes": 2158
+    },
+    {
+     "path": "IOEASY.X68",
+     "sha256": "31f6054f854a6ef9bc4a13803c277a7fcaa9f16c02461b52f7dd5b885a285fe6",
+     "bytes": 510
+    },
+    {
+     "path": "IOMECB.X68",
+     "sha256": "2fd158c549308d16b5cf1c847d7a082d4b6a19129689d5ce1cac1f1d7559235b",
+     "bytes": 1088
+    },
+    {
+     "path": "README.TXT",
+     "sha256": "7fc76f13b87780a6b85f59c4351e6f5e9a2d152959adfca9089a431f0eb2ccda",
+     "bytes": 8735
+    },
+    {
+     "path": "MECBDEMO.HEX",
+     "sha256": "479175e580ac708b0198566936654412f665dd3dae75239481ab448fc9d76e50",
+     "bytes": 9440
+    },
+    {
+     "path": "MECBCALC.HEX",
+     "sha256": "4dc79f765ed3318a67fb6b9d58967af1dc43ba6ead6916099a47ef0906b66316",
+     "bytes": 14724
+    }
+   ]
+  },
+  {
+   "category": "codeLibrary",
+   "name": "getstring",
+   "url": "http://www.easy68k.com/examples/getstring.zip",
+   "sha256": "740b23e47590c7dd07a9419c8bb1f10f2717996c045244e8f13efc96598ae91c",
+   "bytes": 2504,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "getstring.x68",
+     "sha256": "713eb1253961ddd08b0b3dae31c3eb0171c57925c45dbdfd9df64f2506257786",
+     "bytes": 6837
+    }
+   ]
+  },
+  {
+   "category": "codeLibrary",
+   "name": "keyboard",
+   "url": "http://www.easy68k.com/examples/keyboard.zip",
+   "sha256": "632e4d5224f251d920c21a328dd798a72c0c838be21897d0d3da50544815b466",
+   "bytes": 643016,
+   "files": [
+    {
+     "path": "Keyboard/NOTES/3A.wav",
+     "sha256": "9d04bcfba5999109145df9fbfbbce50da8a78cb7afbbc51c2283dff9315276fe",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/3AS.wav",
+     "sha256": "f760b99389067df8a4a233a20df365cbd5a3f9ab854525b23067b1a1bbd8419e",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/3B.wav",
+     "sha256": "1f6374e1b638dd8f666422352a34f23eaf3e086649b296a17f3f262f835c353f",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/3FS.wav",
+     "sha256": "c1b63cfdd69ed38ed2cf0cd73f8bff38f3305a5cda1d0ecac19a01778c6c6bfb",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/3G.wav",
+     "sha256": "6aeea2bb11838d9961b5ddab33cc65e620667c6c984c6680568f87e191064287",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/3GS.wav",
+     "sha256": "2c095802942e3af33d905bab07dd83330e166faa728d741d104a2f1ada88c3a5",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/4A.wav",
+     "sha256": "a9e2db546c7cab16207e862f1829e670b799d57609796007df2ab39c553ed7e7",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/4AS.wav",
+     "sha256": "81112b0b7c42204b824d3da735bdabbcf36b0aabfc94d345b77c0880b798b55c",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/4B.wav",
+     "sha256": "f6a4a6f5d910507f27a503d6d4e04fd607644a6f405a03d7ad9c4770392f51f5",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/4C.wav",
+     "sha256": "26a59cb4eef680ec667241c7b328dfd959a715d7f841cf2e49c4faef393cf484",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/4CS.wav",
+     "sha256": "5715387207ba53d0aa5fcac99f40ae9e734bb02f51278cb7d7b90ce24a52732b",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/4D.wav",
+     "sha256": "7fcd358f2091ac0b6a55e1cf8f31a99262119b9ec7fdf223813b6f71078b1869",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/4DS.wav",
+     "sha256": "203c83aeae74f4395a2810bcb5b300edd0167d602096b858c997f5bf009feaa0",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/4E.wav",
+     "sha256": "62d9577eafcc7dad34e389ee1f292960f756ddfa2416044f65cbbfe576fde495",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/4F.wav",
+     "sha256": "77200074f73e177ee8e2f566c2ff182dc4a2593a242af84eac7969e6a064cf23",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/4FS.wav",
+     "sha256": "7d3a13adc830a46586ed4371cbf1faa6d46d19ce5f1b9baea3eb2a3a8b443f4d",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/4G.wav",
+     "sha256": "1adff99b6de957644d207ac03d0e7a52cd48ebb509ded72d67ed54b7a4d25b58",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/4GS.wav",
+     "sha256": "73d04fa38dc17217a9864146a597fca80e80e2cca0394c36c8874c2a882f250c",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/5A.wav",
+     "sha256": "fe3e4df98fbd10c34a342e20da0ab9a7dce59a1bc5c612e884c6a3ddaaf950d1",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/5AS.wav",
+     "sha256": "18da532bd45a72aaa48be9e635e7e39ad4ee4b79b4c20b5b7badc04f6050c5a6",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/5B.wav",
+     "sha256": "1ccd08a21fb28b6f9a550accef82195ca19fe5de53b016fe97f0930f8cc0520b",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/5C.wav",
+     "sha256": "bf8242675f2c2c69d8b9b42bd9c9de714e267993313f4838651c99895845a936",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/5CS.wav",
+     "sha256": "1683a906af0486b2fc90659a5a43059968b56a57cfae7b088a82ae2e05603b48",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/5D.wav",
+     "sha256": "74956c7f678a3a175371e9308d7f150520d3f8bc03e4005431d47188d31a9f2f",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/5DS.wav",
+     "sha256": "9f0ded9e0a056b5df928b94cb26c37c7162d14b5a9cae828c5906572a344811d",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/5E.wav",
+     "sha256": "ab812643ea27f1dc946a1cf5c23864eb2f92e94f33d5105c2b453404b8b6de12",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/5F.wav",
+     "sha256": "1b4b3a8fe0be8a0d66eeb212f5f71d032444cccd2d548cd2d20cd30f8e67c705",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/5FS.wav",
+     "sha256": "ca7c7c9b30999495469fdcb9faf8b77f1d3eeff6ee94120db59bb3ee373f2a66",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/5G.wav",
+     "sha256": "4bba25f0836e7c98c62cb930af798f02ed93ad564d0cb3e4a6e45cacaebab9e1",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/5GS.wav",
+     "sha256": "d521baf56cfd17363a4309157f32826ea0813612b69805e6247096feac8a3a21",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/6C.wav",
+     "sha256": "cda24d28f0830520ae5fd26a2e9cc830fa7717031caca5ecf9b0defc981ec94e",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/6CS.wav",
+     "sha256": "ed6d65606dcd6558b9713ddad82a534746dea05c3cb9a46e3c6b4467a3b51433",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/6D.wav",
+     "sha256": "b0999c1dcd37cbc9530efafcb3b34d6aeaa7db4e2841f144e3f8d90690394ada",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/6DS.wav",
+     "sha256": "5d72ef1731fd55b736654f480a888c524e86becb0fa63a79d8e1c8822a2fd3f9",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/6E.wav",
+     "sha256": "497ef6e0e9b459c9110a94ca8ea1cdc46ae2bdf17990313731ea0fb2246ee391",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/NOTES/6F.wav",
+     "sha256": "ac1116b11fed9cd39125a11a336e3bd2201e4796ea56266a0a30be570dfb24dd",
+     "bytes": 17684
+    },
+    {
+     "path": "Keyboard/SOUND.X68",
+     "sha256": "34a9474f3f406c925c3afa5dfc63e1bd9819f611556f77307a79338516678847",
+     "bytes": 8158
+    }
+   ]
+  },
+  {
+   "category": "codeLibrary",
+   "name": "manometer",
+   "url": "http://www.monroeccc.edu/ckelly/Courses/Cis268/files/manometer.zip",
+   "mirrors": [
+    "https://web.archive.org/web/20140713050630id_/http://www.monroeccc.edu/ckelly/Courses/Cis268/files/manometer.zip"
+   ],
+   "sha256": "3e30751cddd20b7462bc48186b4fed716f91d6eeb72cda97504e65ff8dda5cfe",
+   "bytes": 1426,
+   "files": [
+    {
+     "path": "manometer.X68",
+     "sha256": "1ac0439c8215b05b108449e576bf3fec411871b5d9a863ab789e2254a6d3ea3a",
+     "bytes": 3884
+    }
+   ]
+  },
+  {
+   "category": "codeLibrary",
+   "name": "pjcalc",
+   "url": "http://www.monroeccc.edu/ckelly/Courses/Cis268/files/pjcalc.zip",
+   "mirrors": [
+    "https://web.archive.org/web/20140713070046id_/http://www.monroeccc.edu/ckelly/Courses/Cis268/files/pjcalc.zip"
+   ],
+   "sha256": "62cf26b790723498d17c33bcd89ddb25bb4dcc5a5bae3e6e790b8e9ea53d5a64",
+   "bytes": 1821,
+   "files": [
+    {
+     "path": "pjcalc.X68",
+     "sha256": "ca48568f399bf80fd6da9114576e907665e6085e2c3ed95cca009c5260d27335",
+     "bytes": 4425
+    }
+   ]
+  },
+  {
+   "category": "codeLibrary",
+   "name": "prime",
+   "url": "http://www.easy68k.com/examples/prime.zip",
+   "sha256": "03f72e990f22a63741457b75e2bdc370f8cb371935548851108b89bfd7e69f4f",
+   "bytes": 814,
+   "files": [
+    {
+     "path": "prime.X68",
+     "sha256": "85dbb19b76911ebeffe58f4c6e309e4f02836b2cd5979dd66dc994c50f8824f8",
+     "bytes": 1426
+    }
+   ]
+  },
+  {
+   "category": "codeLibrary",
+   "name": "random",
+   "url": "http://www.easy68k.com/examples/random.zip",
+   "sha256": "fb24f3e4e04a389cb0a79946d78708fcc614f50372fb19813ae6606393b204be",
+   "bytes": 2345,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "random.x68",
+     "sha256": "6ffd001c80a7c1165e39142e81de78cc2e647f00814f18bd2967c67ec371e9fd",
+     "bytes": 5920
+    }
+   ]
+  },
+  {
+   "category": "codeLibrary",
+   "name": "scroll",
+   "url": "http://www.easy68k.com/examples/scroll.zip",
+   "sha256": "c890291a58c6df65be3ab9c16d42fd208e2696ba01062f3842673794d2b7ecc6",
+   "bytes": 6431,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "7e8ad45fa0c6a5425b96bb05a6dd6f559e3312c4cc687c74fd335b58c7670f0d",
+     "bytes": 396
+    },
+    {
+     "path": "scroll.x68",
+     "sha256": "8dbaf24cecd9ec7d7b577776969d3724f331be91a2f2e9452b0f0c57e1bcf55f",
+     "bytes": 22265
+    }
+   ]
+  },
+  {
+   "category": "codeLibrary",
+   "name": "stringMacros",
+   "url": "http://www.easy68k.com/examples/stringMacros.zip",
+   "sha256": "849d2b6c9d57f56238280503d5a9a5677a4912b87bafc8a992e6985f39db303f",
+   "bytes": 1580,
+   "files": [
+    {
+     "path": "stringMacros.X68",
+     "sha256": "589b27d6eaa3d3f993e11ed1372c0c354dfd6a6fede846b150cf442e82688d3f",
+     "bytes": 6939
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "2048",
+   "url": "http://www.easy68k.com/examples/2048.zip",
+   "sha256": "3c7458f8117eaa10791412a80239ab7f6230213f2b8920e47480d39a3cb836e3",
+   "bytes": 5437,
+   "files": [
+    {
+     "path": "2048.X68",
+     "sha256": "fd91ced96a7f60a17f59955777cb3002ed3af133438709dbab420b2370e80d15",
+     "bytes": 21773
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "AirStrike",
+   "url": "http://www.easy68k.com/examples/AirStrike.zip",
+   "sha256": "e1d61a8af27a2dda1f96650a11477e578b28b66ce9d5a3d6c35fdcda0addcb51",
+   "bytes": 6701455,
+   "files": [
+    {
+     "path": "Air.L68",
+     "sha256": "14282150a864237a5ce6710d4fef688bb5df34e00058a7e5abc68601e05e0d2f",
+     "bytes": 556260
+    },
+    {
+     "path": "Air.S68",
+     "sha256": "1171b2a94bd871affe26f6311de9eb4454886d49e3a9e8386a3c0c6ab6bfc055",
+     "bytes": 45834
+    },
+    {
+     "path": "Air.X68",
+     "sha256": "d031733f771cd37cd9023359e45dc739cb938993994891fb000aa069ce79d56c",
+     "bytes": 129300
+    },
+    {
+     "path": "AirStrike.pdf",
+     "sha256": "aa24c7a295ea1e90939e87285489c99c9ab515a5b1c6be3b405348ca29aa2423",
+     "bytes": 532379
+    },
+    {
+     "path": "Civil.bmp",
+     "sha256": "d85eb63d787508a6d1f57265c812f4610732ebf7444f5a27035d69534a24f0c1",
+     "bytes": 1194
+    },
+    {
+     "path": "civil.wav",
+     "sha256": "8bffa39aa12c544ea133a5bf20360379c241672ebc4bf0fc0c5f3e179e1decb6",
+     "bytes": 11056
+    },
+    {
+     "path": "explosion.wav",
+     "sha256": "b5e7a02255fad971ecd9909eb56416fe707840fbd2cb1f79132623700bac4544",
+     "bytes": 29632
+    },
+    {
+     "path": "Game_Over.wav",
+     "sha256": "49adad2e146d0d6db48767c5bb99d306e67ef46df7fa91d680fe00afc8f8226d",
+     "bytes": 2620292
+    },
+    {
+     "path": "mechant.bmp",
+     "sha256": "b550f3fc52f308016aef7ca01e5e97f4c52bd45b5f8886324d175e56d9389064",
+     "bytes": 1566
+    },
+    {
+     "path": "Musique.wav",
+     "sha256": "0a6c398ffb36dff7647883b80cd393fff401122ac6002648bfc28a18c8b590d6",
+     "bytes": 7056204
+    },
+    {
+     "path": "scores.txt",
+     "sha256": "d2abab1cab1051ec07f6fefce21bbfd76efd8f66254c6f4ef2752ddee7bc446b",
+     "bytes": 11
+    },
+    {
+     "path": "tir.wav",
+     "sha256": "14f21a6d91a8ed54f392d7a7be379c1a446ba9126c02dc22a9201d54dd5f840d",
+     "bytes": 100916
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "AlienInvasion_Pucky_Protector",
+   "url": "http://www.easy68k.com/examples/AlienInvasion_Pucky_Protector.zip",
+   "sha256": "cd0b8ada2694175275b25515f005aa9eb139c66f1400fbacd8c2dfb0680dbe59",
+   "bytes": 3075636,
+   "files": [
+    {
+     "path": "AIinit.txt",
+     "sha256": "1d3dd5685c95bb366c466853f04c0b5441f91b1731357ffbf466f21405878e66",
+     "bytes": 4
+    },
+    {
+     "path": "AIscore1.txt",
+     "sha256": "e02b8df78b3d889186f36b37cbee8670d29fe693beb75ff5f1094e40fe381c05",
+     "bytes": 4
+    },
+    {
+     "path": "ALLGAMES4.1.X68",
+     "sha256": "dcb9402f7158ff1ec91dd15aa2581ce1dc6b8b3db8ad24cb51e042cef888b581",
+     "bytes": 1242388
+    },
+    {
+     "path": "birdsound.wav",
+     "sha256": "e8d3f75f7e964d57c708c5a7acee6dc749e055fc8b61516df14c2423fc4972c7",
+     "bytes": 199254
+    },
+    {
+     "path": "bomb.WAV",
+     "sha256": "4470fe0e38ec8fe502f1922ad134afd13da3fe6d9807e85ae8734e3c3b27447e",
+     "bytes": 5399
+    },
+    {
+     "path": "deffreem.wav",
+     "sha256": "de83bcf3592e23c13b6fed8ae11e80672c17f024e13d48e680a8d70b0a52fb9b",
+     "bytes": 55446
+    },
+    {
+     "path": "deflande.wav",
+     "sha256": "32ac1ca8722e7cbfd82d23c1944ab55ac2c1ef1e5387b45636082f85761a27e3",
+     "bytes": 9642
+    },
+    {
+     "path": "defshoot.wav",
+     "sha256": "efe4c6c054e93f8098ae834e47af8010f6ba17e18aab71078c9558135068fbdf",
+     "bytes": 156918
+    },
+    {
+     "path": "defstart.wav",
+     "sha256": "86553d084f31871d189cac0c0980b05edb597d302a131b125214c4958012bf4e",
+     "bytes": 32972
+    },
+    {
+     "path": "die2.wav",
+     "sha256": "3f3077344d96a3406d93e1dfb3dc72a0a9f2c986f2c5eb375305c3746364bed0",
+     "bytes": 322734
+    },
+    {
+     "path": "diephoen.wav",
+     "sha256": "361c98340ed1fda2579d9ab79a7cc6b27b288f042625293a991a8b9e31ea25ae",
+     "bytes": 497370
+    },
+    {
+     "path": "eatghost.wav",
+     "sha256": "b1d9d31d18d768536bf6fdb4ce79ce2db8e593f2235623f59f694fce7b32eae4",
+     "bytes": 6656
+    },
+    {
+     "path": "explosion.wav",
+     "sha256": "4ecbd8d4bcd73d49e5a7d68f3e0074f4f9a8518fae8b235aa96bf910c219a60f",
+     "bytes": 23584
+    },
+    {
+     "path": "gorf.wav",
+     "sha256": "88d0e6ac5d03a2adeacc81a12044c355dd5ad287735db87ecd92b3addaf8591c",
+     "bytes": 11103
+    },
+    {
+     "path": "gyruss2.wav",
+     "sha256": "dae3cdabf172ebf0c67e6248ca49a5a2a3d0e4bb82d244971632a62d04c20e0d",
+     "bytes": 203228
+    },
+    {
+     "path": "insert.wav",
+     "sha256": "f5ee7a6c5ed1b5954b7a44bfaefa4ededfc4adc2e94500c308531da22b410011",
+     "bytes": 5782
+    },
+    {
+     "path": "laser.wav",
+     "sha256": "d87910965c69f848a12f6bafb5668a9dbe64fd3195266455e719066847a512b2",
+     "bytes": 42304
+    },
+    {
+     "path": "pacintro.wav",
+     "sha256": "f767f13860fa7de0b4475529b0cd169f1adabb5983cd075aa81a51daa35da1b5",
+     "bytes": 910146
+    },
+    {
+     "path": "pacsound.wav",
+     "sha256": "2e3b995677e301202f73c6fb86e541d7b464994a604d132beb3635d36273a8e9",
+     "bytes": 135750
+    },
+    {
+     "path": "pelletsound.wav",
+     "sha256": "dd5b92857883c2e06a53b51c398e69e8acc6bf52240f7ec83303b24e15ea4469",
+     "bytes": 326262
+    },
+    {
+     "path": "phoenix1.wav",
+     "sha256": "f83767c7d246b0492c4159844b46eff0e4106ed2c4ce15941b930279b183c855",
+     "bytes": 230260
+    },
+    {
+     "path": "phoenstart.wav",
+     "sha256": "5cf959ab58f452960d4cefdc71874610faccc92e62e9d4ee563bded9d0f7d829",
+     "bytes": 938370
+    },
+    {
+     "path": "Protscore1.txt",
+     "sha256": "ef5a02cf7c4477cc9cd401deb8fec84f585f8ed692959e7866059aa8c9109e26",
+     "bytes": 4
+    },
+    {
+     "path": "pter.wav",
+     "sha256": "611ef3bd0e8206ae8fcacad6edc6e4b608a9467cfbd8d3c712798327b2963ddb",
+     "bytes": 9290
+    },
+    {
+     "path": "Puckscore1.txt",
+     "sha256": "3ed59197a84ba492a8ea5c473bc82f0598c7b1415bec092a652d01bb2e68542f",
+     "bytes": 4
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "FiveCardDraw",
+   "url": "http://www.easy68k.com/examples/FiveCardDraw.zip",
+   "sha256": "a0b00f2ef6e0294e92ee76b93ea68780703dbc5ee1c2c24b941ba69e0c5feccd",
+   "bytes": 11877,
+   "files": [
+    {
+     "path": "FiveCardDraw.X68",
+     "sha256": "878b08be74683f7d647cdc28ad7873aa3c59283b179ee408eb96dcfedab214a1",
+     "bytes": 69312
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "TextAdventure",
+   "url": "http://www.easy68k.com/examples/TextAdventure.zip",
+   "sha256": "28e43da0d192c170720ee2938b7fa9d225d738fbd1a1eed4d8736e7879c8b35f",
+   "bytes": 13230,
+   "files": [
+    {
+     "path": "TextAdventure.X68",
+     "sha256": "c42be1eaeb160313190a81511b0b454ecde9e537552f988a3b56133483ef0ea8",
+     "bytes": 54317
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "TicTacToe",
+   "url": "http://www.easy68k.com/examples/TicTacToe.zip",
+   "sha256": "83b92b3f1f79a8f4237e8da27d6e8e33351670caae668a3c5b194796aa953cb7",
+   "bytes": 3540,
+   "files": [
+    {
+     "path": "TicTacToe.X68",
+     "sha256": "aeea461afc74efd05660aeb7db1e3cb5d5e191338bce7b89012d1613a3585993",
+     "bytes": 20600
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "asteroids",
+   "url": "http://www.easy68k.com/examples/asteroids.zip",
+   "sha256": "9645aa0e36bd9dbd52f37e13be6227af4fa422fc18e503ec6b581b2c2b90d705",
+   "bytes": 85803,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "samples/beat1.wav",
+     "sha256": "42f76eea4adeb066bbcc23197de93d591016dd547ea744507aa5689a73f2a0fb",
+     "bytes": 1686
+    },
+    {
+     "path": "samples/beat2.wav",
+     "sha256": "9470a3c94135a4472d973716453bcd41cd767119b9591ecc656fb2c252914601",
+     "bytes": 1760
+    },
+    {
+     "path": "samples/lexplode.wav",
+     "sha256": "927db35f2afa24f1eee4d6d1b9b192524561ba3e3e0e1646c35b93f796bd61bd",
+     "bytes": 19078
+    },
+    {
+     "path": "samples/mexplode.wav",
+     "sha256": "9a2d4bdbbc9c98f71c8593818393ce1782e64adc9d100598cb8eb579ccc43c38",
+     "bytes": 21744
+    },
+    {
+     "path": "samples/pfire.wav",
+     "sha256": "8094373d5f56ad69b90fa994186819f9e99d97865bec58b0878b0c142f6c653c",
+     "bytes": 5478
+    },
+    {
+     "path": "samples/sexplode.wav",
+     "sha256": "13d90776312683ad328e06c3365d2ed2d71957866dd716e6923022ae150f95d5",
+     "bytes": 19158
+    },
+    {
+     "path": "samples/sfire.wav",
+     "sha256": "9da095ddced86030f64386a57a94ffb0f82129921156a28a4b06c9426db26f98",
+     "bytes": 5066
+    },
+    {
+     "path": "samples/extraship.wav",
+     "sha256": "f097b9782ea64a57ff307693b63eb1d38fa27f716d088939e5591a60c79f8178",
+     "bytes": 11184
+    },
+    {
+     "path": "samples/thrust.wav",
+     "sha256": "0f68012f55755d939387dd869845a0836023f1063dcf7a49bde2d015fb5d2de8",
+     "bytes": 750
+    },
+    {
+     "path": "samples/lgsaucer.wav",
+     "sha256": "c3014891de557c6522cb4d7400ae88c6599ec35b65e2a031bdb6ace59b7b5a54",
+     "bytes": 1901
+    },
+    {
+     "path": "samples/smsaucer.wav",
+     "sha256": "df9196e3f24c31a27555d5875831d173e64790682033c2d44f0994b5b53a7ac1",
+     "bytes": 1413
+    },
+    {
+     "path": "asteroids 1_0.x68",
+     "sha256": "ba07ef50654df6bb3d9861a330d37a52113066bcf5b476a79687b4983708553f",
+     "bytes": 138859
+    },
+    {
+     "path": "sounds.x68",
+     "sha256": "404964c64e6eacf5010d4d5645323f48accf5488e6eec603bcd14926af8ace39",
+     "bytes": 5593
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "ballbricks",
+   "url": "http://www.easy68k.com/examples/ballbricks.zip",
+   "sha256": "054a7befc8dd3251644790cae388907a0724675d14e6d218bf11753296e27bcc",
+   "bytes": 3507,
+   "files": [
+    {
+     "path": "ballBricks.X68",
+     "sha256": "6defd94e4e227c4a0796a5b9d66ee5c9fca96b6b0d451cd090c3c3459a932dbc",
+     "bytes": 13896
+    },
+    {
+     "path": "instructions.txt",
+     "sha256": "3fd37f2c0859a3396bc7407a92295f2b01599145948cb37fa39c4642c0b22b1a",
+     "bytes": 65
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "craps",
+   "url": "http://www.easy68k.com/examples/craps.zip",
+   "sha256": "519a9a584ea0da53739a15b698cd0222a7cf0658623774741767bf8b16eaf623",
+   "bytes": 115308,
+   "files": [
+    {
+     "path": "craps/craps.X68",
+     "sha256": "394847354388860df74b69b3d75fa08acc856857aeb291e6025898bb2c32ab17",
+     "bytes": 16474
+    },
+    {
+     "path": "craps/dice.wav",
+     "sha256": "bb6f1ad4dcf1e5439e608cebbe94c5f8e45552b23b07996049b3f612235b052e",
+     "bytes": 148472
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "easyzone",
+   "url": "http://www.easy68k.com/examples/easyzone.zip",
+   "sha256": "591dfa758e2bbe4b462b5c79d62f42376af0093c2a1780f065f36acd8fcd9648",
+   "bytes": 134512,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "0ba25a08b0c6d089b2eb9c687b98ee3a7b2d809041f8aeb776aeaf8db3b7dca5",
+     "bytes": 321
+    },
+    {
+     "path": "bonus.wav",
+     "sha256": "a262d600690898ecdcd79351310151106e5467807762668d2109ae6cffabcc76",
+     "bytes": 15336
+    },
+    {
+     "path": "bop.wav",
+     "sha256": "3094807be419150051dba176be03f1ac1e9e143d738be822c9ce81371c7d9688",
+     "bytes": 1132
+    },
+    {
+     "path": "explosion.wav",
+     "sha256": "4ecbd8d4bcd73d49e5a7d68f3e0074f4f9a8518fae8b235aa96bf910c219a60f",
+     "bytes": 23584
+    },
+    {
+     "path": "hit.wav",
+     "sha256": "a14b333ad802ae41133ade75da60a047a6fb9ca73a13866cad1527be8cf9405d",
+     "bytes": 2074
+    },
+    {
+     "path": "ping.wav",
+     "sha256": "7a6a21f87454c38fb8a7ffd227680a74d9e0d7667fb08807200503e4f4866de9",
+     "bytes": 11468
+    },
+    {
+     "path": "pxplosion.wav",
+     "sha256": "9f81627c0770eb5d257b499b0343900eee09902713fb8f844d6cb6db02deb46a",
+     "bytes": 14180
+    },
+    {
+     "path": "shot_e.wav",
+     "sha256": "9e781dac47cfddeb33c42df06f58562211d2beac0245432292cedb1cb96e40ca",
+     "bytes": 4116
+    },
+    {
+     "path": "shot_p.wav",
+     "sha256": "a7bffe39d8a611bd257097a70230ffe1140e3666e00ca3eb8c253294700ae7d8",
+     "bytes": 4116
+    },
+    {
+     "path": "warning.wav",
+     "sha256": "1aac326874383b19be729802319bd3e0a542cb1875fb153b10e4739eb4d50e6f",
+     "bytes": 27730
+    },
+    {
+     "path": "easyzone.x68",
+     "sha256": "63c09fa32b90628874f97b6106339a8e40d6c096fe36b7f1cf4e1ef28ee0b5f7",
+     "bytes": 184466
+    },
+    {
+     "path": "whip.wav",
+     "sha256": "d8f64d86905666b07d43a8254dec21d2a892d50271a402603f80b008bedeab9b",
+     "bytes": 4234
+    },
+    {
+     "path": "whipp.wav",
+     "sha256": "d7fe201939cbbb9e582fe697036ca1e5e6a584d2ce9af76dd95a038a4841e317",
+     "bytes": 4222
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "flip",
+   "url": "http://www.easy68k.com/examples/flip.zip",
+   "sha256": "ba7119fdb3e798a9231589f7da5bd464382fc9c36ed3c477b3212ddcfd2a6f39",
+   "bytes": 2099,
+   "files": [
+    {
+     "path": "FLIPV1.0.X68",
+     "sha256": "b9441057e1ea6e483dcb1ffb589aece753561385d938c74a32a4735617ca37e6",
+     "bytes": 13076
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "gravityPong",
+   "url": "http://www.easy68k.com/examples/gravityPong.zip",
+   "sha256": "24f8b5b641a0e450258c58f55a0c9d458f8b9b2be456b122a89d3ebbf1041ccb",
+   "bytes": 4405,
+   "files": [
+    {
+     "path": "GRAVITY PONG.X68",
+     "sha256": "7e0242214582ce7bbacfd57222353a514074b9b74efd205fbffeecc0ac9f26f1",
+     "bytes": 26126
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "invader",
+   "url": "http://www.easy68k.com/examples/invader.zip",
+   "sha256": "a54c936bd016d70a8b9ff41f83e2c5cb6de621afa8197d31b1c9b3fc7e095e31",
+   "bytes": 518440,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "draw.wav",
+     "sha256": "a2d052e959989d9ca7c4f2a5f646897f6bec8bbed8fd0650afee1cc803c141ce",
+     "bytes": 102634
+    },
+    {
+     "path": "background.x68",
+     "sha256": "846e840b57502628d6141d95ffb4899eedecb61bf6b3bf64b77554bb433394fe",
+     "bytes": 6286
+    },
+    {
+     "path": "display.x68",
+     "sha256": "90ac2db2936f6a00f0a733a45536584c9f27c97d13d1d2054779032d82ccb61b",
+     "bytes": 14049
+    },
+    {
+     "path": "invader1000.x68",
+     "sha256": "a0995e7076124918e390d37600a50dac23f64260591416bf8ed3d27c2ff001a6",
+     "bytes": 25909
+    },
+    {
+     "path": "keyboard.x68",
+     "sha256": "6952797e40caaa1b3b47b2bda0cf0b7d11be352c08454d1b9e74729f493ff799",
+     "bytes": 2987
+    },
+    {
+     "path": "random.x68",
+     "sha256": "2c058a4afc64bda160a915a810c17248acb83f8142ae97ce1e13ddd1b175d83a",
+     "bytes": 2061
+    },
+    {
+     "path": "sounds.x68",
+     "sha256": "e60f6c83e59fef81033f382721379a43645726a14f32cc909293519ef782bb8e",
+     "bytes": 3768
+    },
+    {
+     "path": "fire.wav",
+     "sha256": "1f6e52452fe9822a73643e651ea14b87c26ab13cad9e24c8ef4a3f444164b654",
+     "bytes": 3130
+    },
+    {
+     "path": "hitsaucer.wav",
+     "sha256": "63eacfe91c2f74bbe1d527fd2feaea1c6ed8cf29a901d965b990a6a37e6dc5f8",
+     "bytes": 9958
+    },
+    {
+     "path": "hitinvader.wav",
+     "sha256": "14f42855b941472c4fbdc403a2c3113860c459486535c60e33d9458f0e86a841",
+     "bytes": 5984
+    },
+    {
+     "path": "die1.wav",
+     "sha256": "843203f923c197baca7acb0f1d55a4b73b513b5941b29f5c706b18fa0fc19cbc",
+     "bytes": 69712
+    },
+    {
+     "path": "die2.wav",
+     "sha256": "608ab151d84fb0726f5200515d645abb342d7b47f37a345e91a76cff79f6c88e",
+     "bytes": 36636
+    },
+    {
+     "path": "die3.wav",
+     "sha256": "f63921c06b1f093a2f33f1f9732e50bbe88f6cd0261f7d9ef79bf7d637a1bfef",
+     "bytes": 23838
+    },
+    {
+     "path": "die4.wav",
+     "sha256": "c5bbcb168cef58d48cc426b7a7b7759df1d4087280852aae5cb63394bf41b26a",
+     "bytes": 13704
+    },
+    {
+     "path": "saucer.wav",
+     "sha256": "56e96599bc79a745e301429c93e0d92e2b1c6c093704416fa05d26b4511d87ee",
+     "bytes": 8864
+    },
+    {
+     "path": "life.wav",
+     "sha256": "82e264819fdb708e709a8af49e9cbc718482a02a0898454aa4b91e6ba4f54e9f",
+     "bytes": 38284
+    },
+    {
+     "path": "ammo.wav",
+     "sha256": "ff138a0a0093c4275de0d3f566dd53d8f210f1572f1ab9c8afdd5e7b11eba1ff",
+     "bytes": 52964
+    },
+    {
+     "path": "win.wav",
+     "sha256": "3e137ec542b160755d26185f088dd97cc4cf7c4a6acc754c0829eab441b44ead",
+     "bytes": 215350
+    },
+    {
+     "path": "invader.bmp",
+     "sha256": "6670a9562130abe75af25c2aa6d20ada768150e06b07dc0309bf5564de9f20b0",
+     "bytes": 50758
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "lightsout",
+   "url": "http://www.easy68k.com/examples/lightsout.zip",
+   "sha256": "b5bd3ef263dfb473757407987bc0796f818b00f8fbe325e03de192abb6e3f74e",
+   "bytes": 151992,
+   "files": [
+    {
+     "path": "click.wav",
+     "sha256": "ac762c49aaf0f0169d1bc1c68e5bd9db041dc49cd231be8c1f9cf8c81496752a",
+     "bytes": 2564
+    },
+    {
+     "path": "intro.wav",
+     "sha256": "23d28e5f49c90ece7d77ec0a6febee43e8f27ff1fbfb12a6062a6c8a19402b3b",
+     "bytes": 78104
+    },
+    {
+     "path": "start.wav",
+     "sha256": "6e01a1652ade979e15e32b81e1bdac29327583d71332fecb07b7c80b8977ed8e",
+     "bytes": 59140
+    },
+    {
+     "path": "lightsout.x68",
+     "sha256": "3c46b0ab47c17bdd7a40414f234a4a50431b4834778b031a30857bbfaf7a40d1",
+     "bytes": 52637
+    },
+    {
+     "path": "lightsout.bmp",
+     "sha256": "c1c5844b85415a0c1f0059a8068fac57d44a4d5bdc2c77fe690fa386f2ff3bae",
+     "bytes": 76974
+    },
+    {
+     "path": "mouse.x68",
+     "sha256": "0dceb3f9b4a38b37fb55492870ab240124fee91f001e248d2eaf710adc06b15f",
+     "bytes": 1928
+    },
+    {
+     "path": "random.x68",
+     "sha256": "c13749a0b6d59680688ac855af7365ca371d4c6cacdc2fa998187a5b5f1aae4c",
+     "bytes": 1450
+    },
+    {
+     "path": "destructions.txt",
+     "sha256": "1d9291276dc6dc58687d4c254a662029cb9d0169f443f69906289f020efa8860",
+     "bytes": 4741
+    },
+    {
+     "path": "sounds.x68",
+     "sha256": "ee4dfc71c25f8bd2ee18f8e2ab4ff349e7292e177c7e1650a085e6a5ccdd9591",
+     "bytes": 2305
+    },
+    {
+     "path": "simpsons.bmp",
+     "sha256": "42c9a882830c6d1ef224baa44d82210d144391b9ffbe4d566652cf0fe3564e4f",
+     "bytes": 76974
+    },
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "background.x68",
+     "sha256": "f16e7c6ba8e393e7b2d4f8e198a300dfdc58da4a360dbba922eec5101fafaa2c",
+     "bytes": 6157
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "mazeRun",
+   "url": "http://www.easy68k.com/examples/mazeRun.zip",
+   "sha256": "6d9a4af5e3821d7670a6b7ec9ca1fcabf6e4b61ff75d368066219e8b6f89d5ef",
+   "bytes": 5321,
+   "files": [
+    {
+     "path": "Maze Run V.1/Maze Run V.1.X68",
+     "sha256": "81c6a714b211e79aeac3e57a1a2c7983767a130b72302906c10e7367319c7cd8",
+     "bytes": 24009
+    },
+    {
+     "path": "Maze Run V.1/mazeHash.txt",
+     "sha256": "da4e3caaebdcf9aada1a51e9bfeab3210c12da57abd1e26f61615ec17cd22915",
+     "bytes": 2349
+    },
+    {
+     "path": "Maze Run V.1/title.txt",
+     "sha256": "162216c9c37ad19139ecaa70cfae4049fa612c451e9d596f6ac8682c8481c595",
+     "bytes": 1704
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "maze_runner",
+   "url": "http://www.easy68k.com/examples/maze_runner.zip",
+   "sha256": "4d6bfbf13a4a60bbadacc73f46eef9153a8e84c55db052d2dd40877c4cb280d5",
+   "bytes": 4880,
+   "files": [
+    {
+     "path": "maze_runner.X68",
+     "sha256": "aafc49a15a252d56fab447287cacf1693dc63f2623f9841898da707e17f18b17",
+     "bytes": 28947
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "memoryGame",
+   "url": "http://www.easy68k.com/examples/memoryGame.zip",
+   "sha256": "191885b5a9e9130071f40ca6ad319168b987556ee7a6ebe33b8a4b5f7e3a5d03",
+   "bytes": 5474,
+   "files": [
+    {
+     "path": "Memory Game.X68",
+     "sha256": "d3b1dd4d49d87aed0377c6dd8d24a8efce87620d3ee895cf02c6cfaed375e7c5",
+     "bytes": 30776
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "pelleteater",
+   "url": "http://www.easy68k.com/examples/pelleteater.zip",
+   "sha256": "888af22e7d1861da25c6c4b6742cdc8ccff586ed1949235cbd221f6e2199f174",
+   "bytes": 10868,
+   "files": [
+    {
+     "path": "Pellet Eater/Pellet Eater.L68",
+     "sha256": "f48e028c43411a3d74cae2f26c7e0febb0405a1462aa243b434324884d49fb2e",
+     "bytes": 30339
+    },
+    {
+     "path": "Pellet Eater/Pellet Eater.S68",
+     "sha256": "06ad5fffdff023f65ea7515918958ed31152eca118d43a7bedfcad2e43dd062f",
+     "bytes": 2398
+    },
+    {
+     "path": "Pellet Eater/Pellet Eater.X68",
+     "sha256": "52df0842ec00301ccb4374c651cbcc628aeee6f836a661d3c45e293b24533748",
+     "bytes": 9441
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "pong",
+   "url": "http://www.easy68k.com/examples/pong.zip",
+   "sha256": "258b3c2a520b0c75ce347b8707cf41658eee60ea05812f6bb8ad19b2696ff241",
+   "bytes": 2671,
+   "files": [
+    {
+     "path": "pong.X68",
+     "sha256": "fe6efa59774357546ca53fbd29508435017e730d91fd0b778b6ec27e805cc4e1",
+     "bytes": 11769
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "randomMaze",
+   "url": "http://www.easy68k.com/examples/randomMaze.zip",
+   "sha256": "06c6b88d4485cc684e9b44aed606592b49baa391b6edeae3ed2853257dd6b0fc",
+   "bytes": 3991,
+   "files": [
+    {
+     "path": "randomMaze.X68",
+     "sha256": "65c2f7662d46ccd963cd1b0caa3d56e3b3fe902f2dc19ec97fff5afd3f0bd7d0",
+     "bytes": 15904
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "slotorama2",
+   "url": "http://www.easy68k.com/examples/slotorama2.zip",
+   "sha256": "49f3ac4a3989399b09b91a4b590f91f69ba72f8d0b0ba492fee682f5bd314d71",
+   "bytes": 81432,
+   "files": [
+    {
+     "path": "slotorama2/cash_register2.wav",
+     "sha256": "19d4468902e4b23be715604110a9a1f47e9498950968ec5d86591c17c0def9be",
+     "bytes": 68600
+    },
+    {
+     "path": "slotorama2/jackpot.wav",
+     "sha256": "fec2bba55f3cdf3c86b5ecc5c48945bcd14bfe9be4673a4dc3ce2cc01a65ba88",
+     "bytes": 47442
+    },
+    {
+     "path": "slotorama2/slotorama2.X68",
+     "sha256": "0c933a0bf2e9382c7a890bfb7c50c4eb6276e9fe347d281cac61580cb43e8ab3",
+     "bytes": 67873
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "spacewar",
+   "url": "http://www.easy68k.com/examples/spacewar.zip",
+   "sha256": "769e4b158fd07d17856e80b0e87257adab96b8b7cd1889b69d1e84cfa2e55ff0",
+   "bytes": 61380,
+   "files": [
+    {
+     "path": "spacewar/engine1.wav",
+     "sha256": "8c61a8e7577a8920db2b677cabb21986b1490248607c8552cff6f892c4049049",
+     "bytes": 13836
+    },
+    {
+     "path": "spacewar/engine2.wav",
+     "sha256": "4cf01b5501f68805258f1ad6e39b196c2f9468c215c414b1553224ca5ac2866c",
+     "bytes": 13836
+    },
+    {
+     "path": "spacewar/explode.wav",
+     "sha256": "b84a506719ebf89916db70d6c658f81fd0781a6566b6a18ad6cccb7591108b7f",
+     "bytes": 26380
+    },
+    {
+     "path": "spacewar/spacewarV0.8.L68",
+     "sha256": "7ff2303c63d6dbea67d3c1d2487bdfa338c97d35be233a690518cb47e41b22c1",
+     "bytes": 60492
+    },
+    {
+     "path": "spacewar/spacewarV0.8.S68",
+     "sha256": "5e1d9948960ff0f55b9debf7f92a6e1084fdd77dfd9cc8820bf5ed7ae490f2ac",
+     "bytes": 7404
+    },
+    {
+     "path": "spacewar/spacewarV0.8.X68",
+     "sha256": "b884c35cc9c5940e012338f53c5d43454857ba64bcfa4f0bdf21ec9184a25844",
+     "bytes": 26637
+    },
+    {
+     "path": "spacewar/torpedoFire.wav",
+     "sha256": "03abcc4bb8753de524247d9b95fe3f24e4a36f9bb1037abb7612ebcbdcef6198",
+     "bytes": 1842
+    },
+    {
+     "path": "spacewar/torpedoHit.wav",
+     "sha256": "ccc54e7239592b4d1d271081da402128ad95f019c358584b6ad850ccd93b780f",
+     "bytes": 3628
+    }
+   ]
+  },
+  {
+   "category": "games",
+   "name": "tetris",
+   "url": "http://www.easy68k.com/examples/tetris.zip",
+   "sha256": "410eefc87616ee08d351118ca48e4a9994d4da19f6e983d0483eee6b918297b9",
+   "bytes": 5015,
+   "files": [
+    {
+     "path": "tetris.X68",
+     "sha256": "03f8fe6ebb2fde33c7b528b32e0c420c3498c1f91c4246b0321700d06056e3cb",
+     "bytes": 32826
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "band",
+   "url": "http://www.easy68k.com/examples/band.zip",
+   "sha256": "0d1f10b4725d7efb16e5a81a2675999ce27986a646a8fb5acd657e16eeba0b87",
+   "bytes": 3924,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "band.x68",
+     "sha256": "928c2c29358586f55f47e839a0a34f94ad6ab41023d0b61bb712d8bdb460dffb",
+     "bytes": 12795
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "bitmap",
+   "url": "http://www.easy68k.com/examples/bitmap.zip",
+   "sha256": "ee8bf80dcf339aa6dcaabec72d8fd0181b87693957d629df538836a2f63a8104",
+   "bytes": 19157,
+   "files": [
+    {
+     "path": "bitmap.x68",
+     "sha256": "930fb08b1d3dec463fbbe2a55ac1ca1a8eaa99799935d1212f295f7405dac43e",
+     "bytes": 47762
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "bmp_load",
+   "url": "http://www.easy68k.com/examples/bmp_load.zip",
+   "sha256": "c2666362dce92a41d02b866ac79b78c67734330adba57f8d434fd56bd1eabafc",
+   "bytes": 21798,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "bmp_load.x68",
+     "sha256": "da213c0877cb684d232a17f1cb0de8c050d604d97c6c1cc2bb0cb2f86ca4f1b1",
+     "bytes": 17608
+    },
+    {
+     "path": "logo_01.bmp",
+     "sha256": "fbd05bbe198232708e64a4309ac94159d98fdd7a24e72e114bec0b6a6614932c",
+     "bytes": 3870
+    },
+    {
+     "path": "logo_04.bmp",
+     "sha256": "a78ea77c5d2a7023eae0ee8d94e54a9b438d23d53d23c29e47ec635700374c34",
+     "bytes": 15350
+    },
+    {
+     "path": "logo_08.bmp",
+     "sha256": "95891a6dfcff50a028ec3d2ecf75a459b413924c8d39b872c93d15836489cbe3",
+     "bytes": 31542
+    },
+    {
+     "path": "logo_24.bmp",
+     "sha256": "761d7604632203a02bc6005ff348ad8f74bf288ce22b1c070edcacd77e860b19",
+     "bytes": 91446
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "bouncingBall",
+   "url": "http://www.easy68k.com/examples/bouncingBall.zip",
+   "sha256": "0dedb5b8801068fd97615662c967545dcf898bc2027970b4c21ea9956baaacbe",
+   "bytes": 1376,
+   "files": [
+    {
+     "path": "bouncingBall.X68",
+     "sha256": "464b5ca9c7ff6331bef11f2614d396669479021b4f0d4f84976a647ab4f055b0",
+     "bytes": 3189
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "cube",
+   "url": "http://www.easy68k.com/examples/cube.zip",
+   "sha256": "eccfdc2573aef5afeaa525531fbc45148223c05dd5f81b36f76cb4e305fc5dc1",
+   "bytes": 1373,
+   "files": [
+    {
+     "path": "cube.X68",
+     "sha256": "fdec056f6324d96c648d4517935e880bda524ea18b36dc1f6f6f4e3d14b9cc1c",
+     "bytes": 4441
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "digiclock",
+   "url": "http://www.easy68k.com/examples/digiclock.zip",
+   "sha256": "cba65ef81997bffa2bf7c4fcda309ab0cbc3b93d1f8efbb12d1e12f7711f4abb",
+   "bytes": 4816,
+   "files": [
+    {
+     "path": "digclock.x68",
+     "sha256": "174d13624ae6c20338f42161256bb34c17c179a584c33c8cd29ec21416bcf8e5",
+     "bytes": 14363
+    },
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "draw3d",
+   "url": "http://www.easy68k.com/examples/draw3d.zip",
+   "sha256": "37e6810b7a8cfffd131e7b38dffd3babb8c6e5c3dbae82c41a7254ce470c9926",
+   "bytes": 9879,
+   "files": [
+    {
+     "path": "draw3d.bas",
+     "sha256": "eae94031a6b36c2304e925a554d5f6614454bffdb9113ddb8e0f57160a3d6e2b",
+     "bytes": 8853
+    },
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "draw3d.x68",
+     "sha256": "7960bb99b821d012e51bdfc53ed9bbc4c756668622d22da80d6bd3022e0a0d08",
+     "bytes": 25148
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "evil",
+   "url": "http://www.easy68k.com/examples/evil.zip",
+   "sha256": "b721727d7d9d10f3f1b1e3c57a8ffc5d79753d5055f23ad66b3e9c70f006d597",
+   "bytes": 1443,
+   "files": [
+    {
+     "path": "EVIL.X68",
+     "sha256": "2ebdeb05460374fdee73352f6be69868a13de7f202b2a8efbadb4094e800dced",
+     "bytes": 3824
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "flame",
+   "url": "http://www.easy68k.com/examples/flame.zip",
+   "sha256": "d0cfb34b8065df86550da411788e100734bd20b5b44b4953acb7db895ecb4614",
+   "bytes": 6064,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "flame.x68",
+     "sha256": "7536ff69fbd11b3b72c016eb2a6f4c299755d7bea831bf2f4d0d3c1ceec533b4",
+     "bytes": 16425
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "fractal",
+   "url": "http://www.easy68k.com/examples/fractal.zip",
+   "sha256": "18283fb7e50da791fec491475274b2e7192e37708506896cb99111903d17bb6c",
+   "bytes": 11675,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "fractals.x68",
+     "sha256": "3746d299c4c7e86b8cb5e484b291eafe4ef4b60a5382aed150601e60af74508b",
+     "bytes": 37600
+    },
+    {
+     "path": "save.x68",
+     "sha256": "71e691aab6ce9445d74bc468924516deb9765ba129ccf9ffd668297a017f4789",
+     "bytes": 8903
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "land",
+   "url": "http://www.easy68k.com/examples/land.zip",
+   "sha256": "eba7c8ea6a409397ca9986528cf6240ede823b9737e78cc482dcd33413108d75",
+   "bytes": 8126,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "land.x68",
+     "sha256": "9b5edfd5cce2db1def08780770cdb87f9e029251194caca55f40ec6f77dff785",
+     "bytes": 20508
+    },
+    {
+     "path": "save.x68",
+     "sha256": "5581892c75d3ac094fd72233a23b0549805e3d9d93c20f8ed492809b14a146f1",
+     "bytes": 8874
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "lineArt",
+   "url": "http://www.easy68k.com/examples/lineArt.zip",
+   "sha256": "d124408864b07ab87abbfbd00471bbd22236edfa8d02d9ac12a01efaefc0781f",
+   "bytes": 1654,
+   "files": [
+    {
+     "path": "lineArt.X68",
+     "sha256": "fb4b726f217ce35cd7dbafad659495e075c027a4d72342aeeacbf129da6a26c1",
+     "bytes": 5204
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "matrix",
+   "url": "http://www.easy68k.com/examples/matrix.zip",
+   "sha256": "d91325267bd03dca39fdb964e56e9cf45bb1c6b24707feca339c0401bd97d0f7",
+   "bytes": 4701,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "matrix.x68",
+     "sha256": "6942ddb195cd6ab544a8e20e704f72529b52ea2dce137249a6e0e9cf1c965252",
+     "bytes": 14208
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "maze",
+   "url": "http://www.easy68k.com/examples/maze.zip",
+   "sha256": "858c0d6c53b34b8deeb9b8dbec7d1b66b837a494f17d10a5040b00fca6a4c646",
+   "bytes": 4992,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "maze.x68",
+     "sha256": "b4ad9838ea4442f691e0745448fe96663dcb756ef3766313a3d58691329fa711",
+     "bytes": 17652
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "paintv1",
+   "url": "http://www.easy68k.com/examples/paintv1.zip",
+   "sha256": "42ad7b33832e029132372feb060bbaf7e26ff2bb7f843bf16864f89bd252dbc1",
+   "bytes": 12313,
+   "files": [
+    {
+     "path": "paint_version_1.0.X68",
+     "sha256": "3fa40bf17366d9bb6080f4ea1959790fd0935e80ee22208e075add5863aabd2f",
+     "bytes": 22199
+    },
+    {
+     "path": "Project Description.rtf",
+     "sha256": "fd38958fccc9c6679d78250286a0340836e0c8149ac846ff4d30210d26f62e42",
+     "bytes": 52508
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "rain",
+   "url": "http://www.easy68k.com/examples/rain.zip",
+   "sha256": "f81019be9a67685897a465c50a824afc1dc1abada335f66f5d295b5cab0d172a",
+   "bytes": 3921,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "rain.x68",
+     "sha256": "a15952156b9d725910d1af2f037251510f016325d358af07b9b23b4177e3ce4d",
+     "bytes": 9979
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "rain2",
+   "url": "http://www.easy68k.com/examples/rain2.zip",
+   "sha256": "4925c74c3b0010bb929dca8b11bdabab1702f2a117a2ea541b7f5eec3ae8edba",
+   "bytes": 6214,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "rain2.x68",
+     "sha256": "f9f4850b5a5d27afb90540bbad5756ad86befb02ec45f91d360447a9c285777d",
+     "bytes": 16689
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "sierpinski",
+   "url": "http://www.easy68k.com/examples/sierpinski.zip",
+   "sha256": "266c12a54b7b27ce423f42e4e5dd360d6153ab4b7f1ebf8f9f83b69a76adb136",
+   "bytes": 1203,
+   "files": [
+    {
+     "path": "sierpinski.X68",
+     "sha256": "99c6f7180d8fe4d312e4bcba36b9a584b3a0b2ae33dddbba22edd055c054c1ac",
+     "bytes": 2884
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "stars",
+   "url": "http://www.easy68k.com/examples/stars.zip",
+   "sha256": "71025fdf42fe46f0abe8552058ae18e5015c484f4320b1d46f14fb7e55e197da",
+   "bytes": 7713,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "stars.x68",
+     "sha256": "d004c1bc3ac1f75fb5fef23b258a9483416e10ddd0c33c608aa5eaa67664bdfe",
+     "bytes": 27017
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "swarm",
+   "url": "http://www.easy68k.com/examples/swarm.zip",
+   "sha256": "310e792e854e247868856e0763d1acb8dae0d7ee39f43695aa85ea8b2cc30fa3",
+   "bytes": 8120,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "swarm.x68",
+     "sha256": "c321c9ab41a3ebd0515e79ca7ba9eed54dbdf0ae2255c9bbf2da5edd5d675df4",
+     "bytes": 33474
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "swarm3d",
+   "url": "http://www.easy68k.com/examples/swarm3d.zip",
+   "sha256": "e96141996e538c45b22da1b4dbef74edc8033681d38f49fad7cc6547c30eb758",
+   "bytes": 11053,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "swarm3d.x68",
+     "sha256": "7b5c0f4b88f3519e93e23c18c4269a3d7d3ebd346bf6d3df229d27f06f96fb40",
+     "bytes": 48512
+    }
+   ]
+  },
+  {
+   "category": "graphics",
+   "name": "volcano",
+   "url": "http://www.easy68k.com/examples/volcano.zip",
+   "sha256": "ef160e8fb723187741f2097c62d512c7afd418a9a650ee651b2e63c62dea9f9e",
+   "bytes": 8580,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "volcano.x68",
+     "sha256": "eec17ef9d81d836f4502e64853d919de1e07e453ecad0664566e5efb3537bc10",
+     "bytes": 32830
+    }
+   ]
+  },
+  {
+   "category": "hardware",
+   "name": "NetworkMessaging",
+   "url": "http://www.easy68k.com/examples/NetworkMessaging.zip",
+   "sha256": "aed6361866075ce5599e86faabd61fc20fba5901d7d5da8c93ed80a317a71105",
+   "bytes": 24412,
+   "files": [
+    {
+     "path": "Network Messaging/Client/ClientRead.X68",
+     "sha256": "b2feb50c93cf5912e780b025e3a3f3cd744bbb9a9a59d4b96e6ff7e8e1005395",
+     "bytes": 1062
+    },
+    {
+     "path": "Network Messaging/Client/ClientWrite.X68",
+     "sha256": "7615fdcb0a3baf79a7ad9fad62fb16922b0a767cde80f11ea14a0fbf55fabf29",
+     "bytes": 2601
+    },
+    {
+     "path": "Network Messaging/Client/MyClient.L68",
+     "sha256": "698b74cf3c2b253aab31c0a2bd9131cf515589b144175c62b872ed351c73304f",
+     "bytes": 29758
+    },
+    {
+     "path": "Network Messaging/Client/MyClient.S68",
+     "sha256": "7e1c92a272b4b79fedfd3e8bb9b7a9ef689b237077a8d4a21bacbd82eafb657c",
+     "bytes": 4220
+    },
+    {
+     "path": "Network Messaging/Client/MyClient.X68",
+     "sha256": "e0ef901b5dd53d5776ca9906f4bfbed853eb7227a3a38f3a050f51775726f262",
+     "bytes": 9046
+    },
+    {
+     "path": "Network Messaging/ReadMe.txt",
+     "sha256": "0d1e321eb2a5e6e266f60e6664d9b64c967ae8b098d4a1956776e2105330c944",
+     "bytes": 1664
+    },
+    {
+     "path": "Network Messaging/Server/message.txt",
+     "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+     "bytes": 0
+    },
+    {
+     "path": "Network Messaging/Server/MyServer.L68",
+     "sha256": "f3bd47f6c2fb105901967f63c8fd292651912108943338ad9200bd3187882e11",
+     "bytes": 25170
+    },
+    {
+     "path": "Network Messaging/Server/MyServer.S68",
+     "sha256": "918acdb944107a11f3296b1280bc27c604e6585c6ae9071ca7ce5896675a6979",
+     "bytes": 3348
+    },
+    {
+     "path": "Network Messaging/Server/MyServer.X68",
+     "sha256": "26593befd51a12f51372d3319051afa36cce7dd55f3950a0fadcdb190acbc9d6",
+     "bytes": 8334
+    },
+    {
+     "path": "Network Messaging/Server/ServerRead.X68",
+     "sha256": "afda24171a15b6be56d8a05165be31bbdb4df99aa96b5f394912e1036c2fc41d",
+     "bytes": 953
+    },
+    {
+     "path": "Network Messaging/Server/ServerWrite.X68",
+     "sha256": "c0f46695d5d5fcd3a02d4488bee9b86a9613f6fb6ea84b02c3354239fc1dc2a0",
+     "bytes": 722
+    }
+   ]
+  },
+  {
+   "category": "hardware",
+   "name": "RSAchat",
+   "url": "http://www.easy68k.com/examples/RSAchat.zip",
+   "sha256": "25ee4dba95c04a08fdf63728d8ce5cf5556fed5ef7b7926d1e956bdb79dacdcd",
+   "bytes": 20730,
+   "files": [
+    {
+     "path": "RSA CHAT/RSA CLIENT.L68",
+     "sha256": "7255dbc1f7eb68ff4894b5ecd227fac9fa8275835534088c6468fe61f5af3a6c",
+     "bytes": 23708
+    },
+    {
+     "path": "RSA CHAT/RSA CLIENT.S68",
+     "sha256": "d8c65b7c125b4510d2070ac7036033faec815dfca3770b2bde89fe80a2caa158",
+     "bytes": 2964
+    },
+    {
+     "path": "RSA CHAT/RSA CLIENT.X68",
+     "sha256": "f40d26a62621b38b06061990c8df81b65849d0f7c7b4074d133c72cd64d4ce52",
+     "bytes": 9378
+    },
+    {
+     "path": "RSA CHAT/RSA Server.L68",
+     "sha256": "97c385e22f3686c86776bee15c4c3a1c6e37bcb371101274d786da3a6b53f393",
+     "bytes": 21946
+    },
+    {
+     "path": "RSA CHAT/RSA Server.S68",
+     "sha256": "399a6668bf39c8070c2950b54252dfeba075f072146df5f41b47f1734bf2589f",
+     "bytes": 2708
+    },
+    {
+     "path": "RSA CHAT/RSA Server.X68",
+     "sha256": "68dccbf7fe1fbcbfc4b3fc606c1965910e9eb350dcb71a6cbf8ec5c8f6835901",
+     "bytes": 8950
+    }
+   ]
+  },
+  {
+   "category": "hardware",
+   "name": "ScrollText",
+   "url": "http://www.monroeccc.edu/ckelly/Courses/Cis268/files/ScrollText.zip",
+   "mirrors": [
+    "https://web.archive.org/web/20140713123333id_/http://www.monroeccc.edu/ckelly/Courses/Cis268/files/ScrollText.zip"
+   ],
+   "sha256": "2308630d41a148cfaa4b21288c5d5162ad502c053b7359d88659c30466499362",
+   "bytes": 2074,
+   "files": [
+    {
+     "path": "ScrollText.X68",
+     "sha256": "6cb71dda1ea7d556145d10fa71cf0d056efd4b35951029866c2aafb1ee37f024",
+     "bytes": 5943
+    }
+   ]
+  },
+  {
+   "category": "hardware",
+   "name": "echo68k",
+   "url": "http://www.easy68k.com/examples/echo68k.zip",
+   "sha256": "4919ca53468e59be0b85cc799b74333002ba6c0f9ae01bd2b5b9785c2b2c78f6",
+   "bytes": 4287,
+   "files": [
+    {
+     "path": "echo68k/echoClient.X68",
+     "sha256": "929ccf032a98036bbd9b5fa213d63d5fc506fda90e64d9a2a340cde010e813e4",
+     "bytes": 5505
+    },
+    {
+     "path": "echo68k/echoServer.X68",
+     "sha256": "9383fd0b41ac593f91d0b89dd32022cd5271833030820e509807d284675d8644",
+     "bytes": 6232
+    }
+   ]
+  },
+  {
+   "category": "hardware",
+   "name": "eights",
+   "url": "http://www.easy68k.com/examples/eights.zip",
+   "sha256": "829fd529e71d36df84fbdbb1224f6a84be34d09d75cab601add72c513c57ff51",
+   "bytes": 1241,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "eight_eights.x68",
+     "sha256": "8f781172f30453111350556bc9b16fe00d2d119894535f585fca61e70a93aa59",
+     "bytes": 2298
+    }
+   ]
+  },
+  {
+   "category": "hardware",
+   "name": "ledclock",
+   "url": "http://www.easy68k.com/examples/ledclock.zip",
+   "sha256": "b265f06a7d7d9aca921b09f0d6a5b0c3e1c2bfbe08c063c96a34f26599005d52",
+   "bytes": 2593,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "ledclock.x68",
+     "sha256": "88089e3580f4cc8ec3d70c0161e941bb0964d9ba9efdba28c2a21b604555195f",
+     "bytes": 6899
+    }
+   ]
+  },
+  {
+   "category": "hardware",
+   "name": "mousewindowsize",
+   "url": "http://www.easy68k.com/examples/mousewindowsize.zip",
+   "sha256": "bcec7acd9a3b6255a408cdb4aed334e6028d302eb86c042d2b4bbc2b8ea975fd",
+   "bytes": 2345,
+   "files": [
+    {
+     "path": "mouseWindowSize.X68",
+     "sha256": "d55d9a9f880e11b1c0093fedb8c41aeaba90fa4ea3f5759f44815d53b6481aca",
+     "bytes": 8284
+    }
+   ]
+  },
+  {
+   "category": "hardware",
+   "name": "printing",
+   "url": "http://www.easy68k.com/examples/printing.zip",
+   "sha256": "4c777cd0cbabf159b2552f720f813331e52a9a59d5f601a9251b2a36d238307e",
+   "bytes": 712,
+   "files": [
+    {
+     "path": "printing/printing.X68",
+     "sha256": "d2cc7982c7fed91c33b329ca43b570e51e8e0f0c3ee054e4601220d8d7ee7f67",
+     "bytes": 1218
+    }
+   ]
+  },
+  {
+   "category": "simulations",
+   "name": "Calculator",
+   "url": "http://www.easy68k.com/examples/Calculator.zip",
+   "sha256": "95db13df0a0c962232fd5e0c988205fe450e789110ac021cc10cca052085e894",
+   "bytes": 2299,
+   "files": [
+    {
+     "path": "Calculator.X68",
+     "sha256": "959549ac71095baa71b3a5357e7c89eb61327aea15fcf9298bcef8a6e6b3f6fe",
+     "bytes": 10807
+    }
+   ]
+  },
+  {
+   "category": "simulations",
+   "name": "KnightsTour",
+   "url": "http://www.easy68k.com/examples/KnightsTour.zip",
+   "sha256": "6999250c66551639be3bba5bc7dfae7e926eb6a4892575842addc93f5a5cf82a",
+   "bytes": 5187,
+   "files": [
+    {
+     "path": "Knights Tour.X68",
+     "sha256": "24877888cf287181d39a26ec59e0311de0de408396275384744d88401d7ff7ef",
+     "bytes": 23373
+    }
+   ]
+  },
+  {
+   "category": "simulations",
+   "name": "TowerOfHanoi",
+   "url": "http://www.easy68k.com/examples/TowerOfHanoi.zip",
+   "sha256": "4f9022d85bc8c08ed4cbd84fd210e5f1a0c9e3a0e59c81d9f6e25623566e5ef9",
+   "bytes": 1745,
+   "files": [
+    {
+     "path": "TowerOfHanoi.X68",
+     "sha256": "c3075c5525451e9a0d65324b2c50105414ce5d20eed00ac254555a3483526459",
+     "bytes": 4414
+    }
+   ]
+  },
+  {
+   "category": "simulations",
+   "name": "conwayslife",
+   "url": "http://www.easy68k.com/examples/conwayslife.zip",
+   "sha256": "fca478e1466d593130785c080f7c08af72f96b684f0dd7922c89694cb5cbe08b",
+   "bytes": 8637,
+   "files": [
+    {
+     "path": "ConwaysLifeV5_1.X68",
+     "sha256": "61e896ced4dbfff94dfcc13104054e210436466d1de0f7fa8a4be0f068139621",
+     "bytes": 29651
+    },
+    {
+     "path": "cross.lif",
+     "sha256": "9f0ad9c9b87978626beb8ec078ab059703bd713d2dc6f35c1664b6dec808a55c",
+     "bytes": 4095
+    },
+    {
+     "path": "easy68k.lif",
+     "sha256": "537b81a443382a89554c082bf29202f76cf372209ab4280415526acd38e28292",
+     "bytes": 4095
+    },
+    {
+     "path": "gliderGun.lif",
+     "sha256": "c74582491d8e782df7d8eacb456c2314d03b00efb34794365b09434d4d2dbe5a",
+     "bytes": 4095
+    },
+    {
+     "path": "oscillators.lif",
+     "sha256": "9f7de24a4aea4ae09097d29f2c7c5cd7e9c5eed1b5c25100c58345843fdf84e5",
+     "bytes": 4095
+    },
+    {
+     "path": "rocket.lif",
+     "sha256": "2774f2c8e284024909c74d4556dc434550265b9f2b217e34b135e1b958b59a80",
+     "bytes": 4095
+    }
+   ]
+  },
+  {
+   "category": "simulations",
+   "name": "fireworks",
+   "url": "http://www.easy68k.com/examples/fireworks.zip",
+   "sha256": "cd36ebb6baeeaa9eae3bdf72ec8f6829ee3dca29062fd95bc2b29611e4c1c0cd",
+   "bytes": 8350,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "fireworks.x68",
+     "sha256": "2157f8b25d9e9cc3a0e135b2d526104f88437ff2c7cfdd3f7df22296dcee312f",
+     "bytes": 30677
+    }
+   ]
+  },
+  {
+   "category": "simulations",
+   "name": "flashcards",
+   "url": "http://www.easy68k.com/examples/flashcards.zip",
+   "sha256": "6a1f5d04f0dd77e0850f6fee4bac4c9bbcad2da9185244a3e0f2015b85f8af22",
+   "bytes": 30782,
+   "files": [
+    {
+     "path": "FINAL PROJECT/.DS_Store",
+     "sha256": "3dc7b4a123ec5909d7015812de4a39b5b96a0e02fcf7fd6cc50aba2cfe92f48e",
+     "bytes": 6148
+    },
+    {
+     "path": "FINAL PROJECT/FINAL PROJECT.L68",
+     "sha256": "cc46c6dae1ec402582ad6d61656b5b5b665eedf4ee4b6ae755b84e73dccfb99c",
+     "bytes": 56667
+    },
+    {
+     "path": "FINAL PROJECT/FINAL PROJECT.S68",
+     "sha256": "69a263a7a9ec7a8d1a57fbd18da35d2843622bb44e630422002dee410a35edc4",
+     "bytes": 12806
+    },
+    {
+     "path": "FINAL PROJECT/FINAL PROJECT.X68",
+     "sha256": "0d9923fd699fa0ee23090b6e208dd8d1fe1e1006fdc2d964997b5dc8a0e57f56",
+     "bytes": 12690
+    },
+    {
+     "path": "FINAL PROJECT/numbnuts.wav",
+     "sha256": "b54e38788b29d9d4572043aedb1d27b46aa15fe77c8d708a995eec191e08a3e3",
+     "bytes": 14798
+    },
+    {
+     "path": "FINAL PROJECT/outstanding.wav",
+     "sha256": "e1d81dd9d800fb0cbd54bfaad288acec8d0fe67b0277d761cc5bf0c00f510e20",
+     "bytes": 3190
+    }
+   ]
+  },
+  {
+   "category": "simulations",
+   "name": "fungus",
+   "url": "http://www.easy68k.com/examples/fungus.zip",
+   "sha256": "cf13b0f239f3af6bdcb58d210fb95652d377a4dd6587644d8789e89668d3f130",
+   "bytes": 6864,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "fungus.x68",
+     "sha256": "b83b29a68045be46e7fa19c5460b272558dacc098eccad1a1dcb3bbccc22ea16",
+     "bytes": 24884
+    }
+   ]
+  },
+  {
+   "category": "simulations",
+   "name": "plants",
+   "url": "http://www.easy68k.com/examples/plants.zip",
+   "sha256": "7cf32bd6c9706a60cd859746102f7a084f6f9b32cf6250fcedb395e6b10c85fe",
+   "bytes": 6512,
+   "files": [
+    {
+     "path": "readme.txt",
+     "sha256": "07fb60979e50c357fba8551be64bd282c9578b934224601b9eb084f38aa240fe",
+     "bytes": 307
+    },
+    {
+     "path": "plants.x68",
+     "sha256": "d1026c6c7a57ce7d8857f937b3949607844a4ea883a089b5452d228a8d2f893b",
+     "bytes": 22570
+    }
+   ]
+  },
+  {
+   "category": "tutorials",
+   "name": "tutorial4",
+   "url": "http://www.easy68k.com/examples/tutorial4.zip",
+   "sha256": "54b326cedefae5b5b41d5e64c26d42bd8510ea766a8c3edd15d3096ba3dfc3a6",
+   "bytes": 1355,
+   "files": [
+    {
+     "path": "tutorial4.X68",
+     "sha256": "4ff36697ad5b29c425bf749b2294fdb71c8366e9f93b7108cddf802eaaf20fec",
+     "bytes": 4672
+    }
+   ]
+  }
+ ],
+ "skipped": [
+  {
+   "category": "games",
+   "name": "dragonballz",
+   "url": "http://www.easy68k.com/examples/dragonballz.zip",
+   "reason": "the file on the server (43,384,832 bytes) is cut off: it has no end-of-central-directory record and cannot be unpacked"
+  },
+  {
+   "category": "tutorials",
+   "name": "Cpp to 68K",
+   "url": "http://www.easy68k.com/examples/Cpp%20to%2068K.pdf",
+   "reason": "a PDF document, no program"
+  }
+ ]
+}

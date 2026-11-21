@@ -1,0 +1,16 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/21/2026 4:29:23 AM
+
+00001000                             1      ORG $1000
+Line 2 ERROR: Invalid opcode
+00001000                             2      BFTST D0{2:4}
+00001000                             3      END $1000
+
+1 error detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
