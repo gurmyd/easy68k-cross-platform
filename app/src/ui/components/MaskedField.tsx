@@ -9,6 +9,10 @@
 // mapped to the same rules or refused, so the text is always exactly `width`
 // characters.
 //
+// Home and End (with Shift: extend the selection) are handled here on every
+// system, as on Windows (masked.ts moveMaskedCaret); with Cmd or Ctrl held the
+// browser keeps them, so Cmd+Left / Cmd+Right work as on any Mac field.
+//
 // Controlled: `value` is the field text, onChange receives every new text at
 // once (the original's OnChange fires on every change, and several panels
 // act on it immediately: hardware §2.1, §3.6). onReject is called where the
@@ -32,7 +36,7 @@ import {
 import '../../styles/components.css';
 import './MaskedField.css';
 import { Caption } from './Caption';
-import { applyMaskedEdit, normalizeText, type MaskedConfig, type MaskedEdit } from './masked';
+import { applyMaskedEdit, moveMaskedCaret, normalizeText, type MaskedConfig, type MaskedEdit } from './masked';
 import { parseMnemonic } from './mnemonic';
 
 type InputProps = Omit<
@@ -179,6 +183,21 @@ export function MaskedField({
       event.preventDefault();
       if (event.shiftKey) cutToClipboard();
       else apply({ type: 'delete' });
+    } else if ((event.key === 'Home' || event.key === 'End') && !event.altKey) {
+      // Not left to the browser: on macOS it does not move the caret on Home / End.
+      event.preventDefault();
+      const input = event.currentTarget;
+      const next = moveMaskedCaret(
+        {
+          selStart: input.selectionStart ?? 0,
+          selEnd: input.selectionEnd ?? 0,
+          backward: input.selectionDirection === 'backward',
+        },
+        event.key === 'Home' ? 'start' : 'end',
+        event.shiftKey,
+        latest.current.config.width,
+      );
+      input.setSelectionRange(next.selStart, next.selEnd, next.backward ? 'backward' : 'forward');
     } else if (event.key.length === 1 && !event.altKey) {
       event.preventDefault();
       apply({ type: 'char', char: event.key });

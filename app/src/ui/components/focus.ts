@@ -18,8 +18,13 @@ export function tabbables(root: Element): HTMLElement[] {
   return all.filter((element) => {
     if (element.tabIndex < 0) return false;
     if (element.closest('[inert]')) return false;
+    // Disabled, also by a <fieldset disabled> around it (the selectors above miss that case).
+    if (element.matches(':disabled')) return false;
     // Not rendered (display: none, or inside a closed <details>).
     if (element.getClientRects().length === 0) return false;
+    // Rendered but invisible (visibility: hidden or collapse): it refuses the focus.
+    const view = element.ownerDocument.defaultView;
+    if (view && view.getComputedStyle(element).visibility !== 'visible') return false;
     // Of a radio group only the checked button (or the first) is a tab stop.
     if (element instanceof HTMLInputElement && element.type === 'radio' && element.name) {
       const group = all.filter(
@@ -34,16 +39,57 @@ export function tabbables(root: Element): HTMLElement[] {
 }
 
 /**
- * The index the focus wraps to when Tab (or Shift+Tab) leaves the ends of a
- * trapped list, or null when the browser's own move stays inside.
- * `current` is -1 when the focus is not on one of the elements.
+ * Where Tab (or Shift+Tab, `shift`) moves the focus in a modal dialog, which
+ * handles every Tab itself (docs/porting/errata/W2.md entry 13): the next (or
+ * previous) element of its list, wrapping at the ends; null when the list is
+ * empty. `current` is the index of the focused element in the list, or -1
+ * when the focus is on none of them; then `preceding` is the number of list
+ * elements that come before the focus in document order (0 when the focus is
+ * on the dialog itself or outside it, so Tab goes to the first element and
+ * Shift+Tab to the last).
  */
-export function trapIndex(count: number, current: number, shift: boolean): number | null {
+export function trapStep(count: number, current: number, shift: boolean, preceding = 0): number | null {
   if (count === 0) return null;
-  if (current < 0) return shift ? count - 1 : 0;
-  if (shift && current === 0) return count - 1;
-  if (!shift && current === count - 1) return 0;
-  return null;
+  if (current >= 0 && current < count) return shift ? (current - 1 + count) % count : (current + 1) % count;
+  const before = Math.min(Math.max(0, preceding), count);
+  if (shift) return before > 0 ? before - 1 : count - 1;
+  return before < count ? before : 0;
+}
+
+/**
+ * The indices of a modal dialog's list to try, in turn, for one Tab (or
+ * Shift+Tab): first the one `trapStep` gives, then on in the same direction,
+ * each element once. The dialog focuses them one after the other until one
+ * takes the focus, so an element that refuses it (removed or hidden in the
+ * meantime) does not hold the focus in place.
+ */
+export function trapOrder(count: number, current: number, shift: boolean, preceding = 0): number[] {
+  const first = trapStep(count, current, shift, preceding);
+  if (first === null) return [];
+  const order: number[] = [];
+  for (let i = 0; i < count; i++) order.push(shift ? (((first - i) % count) + count) % count : (first + i) % count);
+  return order;
+}
+
+/**
+ * True for a key pressed while an input method (IME) is composing text: the
+ * key belongs to the IME (Tab may pick a candidate), so a dialog leaves it alone.
+ * Browsers report such a keydown with `isComposing` or with the key code 229.
+ */
+export function isImeKey(event: { isComposing?: boolean; keyCode?: number }): boolean {
+  return event.isComposing === true || event.keyCode === 229;
+}
+
+/** The number of `list` elements (in document order) that come before `node` in the document. */
+export function countPreceding(list: readonly Element[], node: Node): number {
+  let count = 0;
+  for (const element of list) {
+    // An element that holds the focus inside it counts as before it (Tab moves on past it).
+    if (element !== node && element.contains(node)) return count + 1;
+    if (!(node.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_PRECEDING)) break;
+    count++;
+  }
+  return count;
 }
 
 /** The open modal dialogs, the top one last. Only the top one traps the focus. */

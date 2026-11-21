@@ -4,8 +4,10 @@
 // from it; the shell's dialog host (W3) decides where it is mounted.
 //
 // Modal (default): dims the workspace (backdrop at --z-modal), role=dialog
-// with aria-modal, focus trapped inside: Tab and Shift+Tab wrap, and focus
-// that escapes (a click elsewhere, a programmatic focus) is pulled back. Only
+// with aria-modal, focus trapped inside: the dialog moves the focus on every
+// Tab and Shift+Tab itself (its own list, wrapping at the ends; Safari would
+// skip buttons), Tab with the focus outside (on the body) brings it back in,
+// and focus that escapes (a click elsewhere, a programmatic focus) is pulled back. Only
 // the top-most modal dialog traps; a message box over a dialog works.
 // Modeless: floats at `anchor` above the workspace (--z-modeless) and does
 // not block it.
@@ -32,14 +34,16 @@ import {
 } from 'react';
 import './Dialog.css';
 import {
+  countPreceding,
   focusElement,
   focusOrigin,
+  isImeKey,
   pushModal,
   removeModal,
   tabbables,
   topModal,
   trackPressedControls,
-  trapIndex,
+  trapOrder,
 } from './focus';
 import { IconButton } from './IconButton';
 import { LayerContext } from './layer';
@@ -85,6 +89,38 @@ const TEXT_ENTRY =
 const OWNS_ENTER =
   'button, a[href], textarea, select, [data-e68-enter], [role=listbox], [role=grid], [role=menu], [role=menuitem]';
 
+/** Where the focus was last inside a modal dialog: the element and its index in the dialog's list then. */
+interface LastInside {
+  element: HTMLElement | null;
+  index: number;
+}
+
+/**
+ * Tab and Shift+Tab in a modal dialog: always to the next or previous element
+ * of the dialog's own list, wrapping at the ends. Not left to the browser,
+ * because Safari (macOS default setting) skips buttons and check boxes and
+ * would leave the dialog (docs/porting/errata/W2.md entry 13). An element
+ * that refuses the focus is passed over (`trapOrder`). When the focus is
+ * outside the dialog because the control that had it was disabled, hidden or
+ * removed, Tab goes on from where that control was.
+ */
+function moveTab(box: HTMLElement, from: Node, backward: boolean, last: LastInside): void {
+  const list = tabbables(box);
+  const current = list.indexOf(from as HTMLElement);
+  let preceding = 0;
+  if (current < 0) {
+    const gone = last.element;
+    if (box.contains(from) || !gone || list.includes(gone)) preceding = countPreceding(list, from);
+    else if (gone.isConnected && box.contains(gone)) preceding = countPreceding(list, gone);
+    else preceding = Math.min(Math.max(0, last.index), list.length);
+  }
+  for (const index of trapOrder(list.length, current, backward, preceding)) {
+    focusElement(list[index]);
+    if (document.activeElement === list[index]) return;
+  }
+  if (list.length === 0) focusElement(box);
+}
+
 export function Dialog({
   title,
   children,
@@ -102,7 +138,7 @@ export function Dialog({
   const titleId = useId();
   const [element, setElement] = useState<HTMLDivElement | null>(null);
   const ref = useRef<HTMLDivElement | null>(null);
-  const lastInside = useRef<HTMLElement | null>(null);
+  const lastInside = useRef<LastInside>({ element: null, index: -1 });
 
   // Focus in on open, back out on close.
   useLayoutEffect(() => {
@@ -137,13 +173,29 @@ export function Dialog({
       if (topModal() !== box) return;
       const target = event.target as Node | null;
       if (target && box.contains(target)) {
-        lastInside.current = target as HTMLElement;
+        lastInside.current = { element: target as HTMLElement, index: tabbables(box).indexOf(target as HTMLElement) };
         return;
       }
-      focusElement(lastInside.current?.isConnected ? lastInside.current : (tabbables(box)[0] ?? box));
+      const last = lastInside.current.element;
+      focusElement(last?.isConnected ? last : (tabbables(box)[0] ?? box));
+    };
+    // Tab while the focus is outside (on the body, which gets no focusin): back into the dialog.
+    // Inside, the box's own key handler moves the focus.
+    const onKeyDownOutside = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Tab' || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (isImeKey(event)) return;
+      if (topModal() !== box) return;
+      const target = event.target as Node | null;
+      if (target && box.contains(target)) return;
+      event.preventDefault();
+      moveTab(box, target ?? document.body, event.shiftKey, lastInside.current);
     };
     document.addEventListener('focusin', onFocusIn);
-    return () => document.removeEventListener('focusin', onFocusIn);
+    document.addEventListener('keydown', onKeyDownOutside);
+    return () => {
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('keydown', onKeyDownOutside);
+    };
   }, [inline, modal]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -153,14 +205,12 @@ export function Dialog({
     const target = event.target as HTMLElement;
 
     if (event.key === 'Tab' && modal) {
-      const list = tabbables(box);
-      const index = trapIndex(list.length, list.indexOf(target), event.shiftKey);
-      if (index !== null) {
-        event.preventDefault();
-        focusElement(list[index]);
-      } else if (list.length === 0) {
-        event.preventDefault();
-      }
+      // Ctrl / Cmd / Alt (Option) + Tab stay with the browser and the shell.
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      // A Tab that an input method (IME) is composing with belongs to the IME.
+      if (isImeKey(event.nativeEvent)) return;
+      event.preventDefault();
+      moveTab(box, target, event.shiftKey, lastInside.current);
       return;
     }
     if (event.key === 'Escape') {
