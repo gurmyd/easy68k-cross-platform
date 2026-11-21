@@ -1114,6 +1114,45 @@ async function uiPass(browser, name) {
       : `${Object.keys(after).length} vs ${Object.keys(before).length} entries`,
   );
   await second.page.screenshot({ path: join(outDir, `${name}-imported-store.png`) });
+
+  // Import > Folder... through the browser's chooser. A real browser asks "Upload N files to this
+  // site?" after the chooser has closed, so the window has the focus back seconds before the files
+  // arrive; the import once gave up after one second and dropped them without a word.
+  const folderDir = join(outDir, `${name}-folder-to-import`);
+  rmSync(folderDir, { recursive: true, force: true });
+  mkdirSync(join(folderDir, 'sub'), { recursive: true });
+  writeFileSync(join(folderDir, 'one.X68'), '\tORG\t$1000\r\nSTART:\tSIMHALT\r\n\tEND\tSTART\r\n');
+  writeFileSync(join(folderDir, 'sub', 'two.X68'), '* two\r\n');
+  const folderName = `${name}-folder-to-import`;
+  await second.page.locator('[data-e68-panel="files"] [role=treeitem]', { hasText: 'My Programs' }).click();
+  await second.page.locator('[data-e68-panel="files"] button[aria-label="Import..."]').click();
+  const [folderChooser] = await Promise.all([
+    second.page.waitForEvent('filechooser'),
+    second.page.getByRole('menuitem', { name: /Folder/ }).click(),
+  ]);
+  await second.page.evaluate(() => window.dispatchEvent(new window.Event('focus')));
+  await second.page.waitForTimeout(2500);
+  let folderError = '';
+  await folderChooser.setFiles(folderDir).catch((error) => {
+    folderError = String(error).slice(0, 160);
+  });
+  const wantOne = `/browser/${folderName}/one.X68`;
+  const wantTwo = `/browser/${folderName}/sub/two.X68`;
+  let withFolder = {};
+  for (let i = 0; i < 40; i++) {
+    withFolder = await storeContents(second.page);
+    if (wantOne in withFolder && wantTwo in withFolder) break;
+    await second.page.waitForTimeout(250);
+  }
+  check(
+    `${p} Import > Folder... keeps the folder's files when they arrive seconds after the chooser closed`,
+    wantOne in withFolder && wantTwo in withFolder,
+    folderError ||
+      Object.keys(withFolder)
+        .filter((key) => key.includes(folderName))
+        .join(', ') ||
+      'nothing of the folder was imported',
+  );
   check(`${p} import pass: no console errors`, second.errors.length === 0, second.errors.slice(0, 3).join(' | '));
   await fresh.close();
 }
