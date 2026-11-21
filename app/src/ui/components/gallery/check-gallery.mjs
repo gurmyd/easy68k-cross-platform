@@ -16,7 +16,7 @@
 // It lives here rather than in tests/ because W2 owns only app/src/styles and
 // app/src/ui/components; docs/requests/W2-gallery-check.md asks for a CI job.
 
-/* global console, process, document -- document: inside page.evaluate() callbacks, which run in the page */
+/* global console, process, document, window -- document, window: inside page.evaluate() callbacks, which run in the page */
 
 import { mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -56,6 +56,9 @@ function check(name, ok, detail = '') {
 
 async function openGallery(browser, theme, viewport = { width: 1280, height: 900 }) {
   const context = await browser.newContext({ viewport, reducedMotion: 'reduce' });
+  // Explicit limits: the machines that run this are often under heavy load.
+  context.setDefaultTimeout(30_000);
+  context.setDefaultNavigationTimeout(60_000);
   const page = await context.newPage();
   const errors = [];
   page.on('console', (message) => {
@@ -341,22 +344,100 @@ async function keyboardPass(browser, name) {
     `${remaining} ${a?.text}`,
   );
 
-  // Modal dialog (2.7, 2.11).
+  // Modal dialog (2.7, 2.11). The dialog moves the focus on every Tab and Shift+Tab itself
+  // (errata W2 entry 13): Safari with the macOS default setting skips buttons and check boxes, so a
+  // dialog that left the moves in the middle of its list to the browser lost the focus there. The
+  // checks below would catch that in any browser: a listener on window (after the dialog's handler)
+  // records whether each Tab was cancelled, and the visit order is compared with the dialog's
+  // controls as the page lists them.
+  await page.evaluate(() => {
+    window.__e68tabs = [];
+    window.addEventListener('keydown', (event) => {
+      if (event.key === 'Tab') window.__e68tabs.push(event.defaultPrevented);
+    });
+    window.__e68name = (el) => {
+      if (!el) return 'nothing';
+      if (el === document.body) return 'BODY';
+      const label =
+        el.getAttribute('aria-label') ??
+        (el.labels && el.labels[0] ? el.labels[0].textContent : null) ??
+        el.textContent ??
+        '';
+      const role = el.getAttribute('role');
+      const where = el.closest('[aria-modal=true]') ? '' : ' (outside the dialog)';
+      return `${el.tagName.toLowerCase()}${el.type && el.tagName === 'INPUT' ? `[${el.type}]` : ''}${
+        role ? `[${role}]` : ''
+      } "${label.trim().slice(0, 30)}"${where}`;
+    };
+  });
+  const focusName = () => page.evaluate(() => window.__e68name(document.activeElement));
+  const tabLog = () => page.evaluate(() => window.__e68tabs.splice(0));
+  const press = async (combo, count, names) => {
+    for (let i = 0; i < count; i++) {
+      await k(combo);
+      names.push(await focusName());
+    }
+  };
   await page.locator('[data-testid=open-modal]').click();
   a = await active(page);
   check(`${p} the modal dialog takes the focus (default button)`, a?.inDialog && a.text === 'OK', a?.text);
-  let escaped = false;
-  for (let i = 0; i < 12; i++) {
-    await k('Tab');
-    if (!(await active(page))?.inDialog) escaped = true;
+  // The dialog's dialogControls in document order: what Tab must visit, whatever the browser's own Tab does.
+  const dialogControls = await page.evaluate(() => {
+    const box = document.querySelector('[role=dialog][aria-modal=true]');
+    const candidates = box.querySelectorAll('button, input, select, textarea, a[href], [tabindex]');
+    return Array.from(candidates)
+      .filter((el) => el.tabIndex >= 0 && !el.disabled && el.getClientRects().length > 0)
+      .map((el) => window.__e68name(el));
+  });
+  const start = dialogControls.indexOf(await focusName());
+  const n = dialogControls.length;
+  console.log(`        dialog controls (${n}): ${dialogControls.join(', ')}`);
+  await tabLog();
+  const forward = [];
+  await press('Tab', n, forward);
+  const wantForward = dialogControls.map((_, j) => dialogControls[(start + 1 + j) % n]);
+  check(
+    `${p} Tab from the default button visits every control of the dialog once, in order`,
+    n >= 4 && start >= 0 && JSON.stringify(forward) === JSON.stringify(wantForward),
+    `expected ${wantForward.join(' > ')}; got ${forward.join(' > ')}`,
+  );
+  const backward = [];
+  await press('Shift+Tab', n, backward);
+  const wantBackward = dialogControls.map((_, j) => dialogControls[(((start - 1 - j) % n) + n) % n]);
+  check(
+    `${p} Shift+Tab visits them in the reverse order`,
+    n >= 4 && start >= 0 && JSON.stringify(backward) === JSON.stringify(wantBackward),
+    `expected ${wantBackward.join(' > ')}; got ${backward.join(' > ')}`,
+  );
+  const cancelled = await tabLog();
+  check(
+    `${p} the dialog handles every Tab and Shift+Tab itself (each key cancelled)`,
+    cancelled.length === 2 * n && cancelled.every(Boolean),
+    `cancelled per key: ${cancelled.map((c) => (c ? 'y' : 'n')).join('')}`,
+  );
+  const wandering = [];
+  await press('Tab', 12, wandering);
+  await press('Shift+Tab', 12, wandering);
+  check(
+    `${p} Tab and Shift+Tab stay inside the modal dialog`,
+    wandering.every((name) => dialogControls.includes(name)),
+    `focus went ${wandering.join(' > ')}`,
+  );
+  for (const [combo, want] of [
+    ['Tab', dialogControls[0]],
+    ['Shift+Tab', dialogControls[n - 1]],
+  ]) {
+    await page.evaluate(() => document.activeElement?.blur());
+    const blurred = await focusName();
+    await k(combo);
+    const got = await focusName();
+    check(
+      `${p} ${combo} with the focus on the body goes back into the dialog`,
+      blurred === 'BODY' && got === want,
+      `after blur the focus was on ${blurred}; ${combo} went to ${got}, expected ${want}`,
+    );
   }
-  for (let i = 0; i < 12; i++) {
-    await page.keyboard.down('Shift');
-    await k('Tab');
-    await page.keyboard.up('Shift');
-    if (!(await active(page))?.inDialog) escaped = true;
-  }
-  check(`${p} Tab and Shift+Tab stay inside the modal dialog`, !escaped);
+  await tabLog();
   await page.locator('body').click({ position: { x: 5, y: 300 }, force: true });
   a = await active(page);
   check(`${p} a click on the backdrop leaves the focus in the dialog`, a?.inDialog === true, a?.text);
@@ -448,7 +529,7 @@ async function keyboardPass(browser, name) {
   check(
     `${p} Delete leaves a 0 and keeps the caret`,
     a?.value === '00000000' && a.selStart === 0,
-    `${a?.value} @${a?.selStart}`,
+    `${a?.value} @${a?.selStart} (Home must put the caret at 0)`,
   );
   await k('End');
   const beforeEnd = await beeps();
@@ -457,8 +538,31 @@ async function keyboardPass(browser, name) {
   check(
     `${p} a key at the end of the field is refused`,
     a?.value === '00000000' && (await beeps()) === beforeEnd + 1,
-    a?.value,
+    `${a?.value} @${a?.selStart}`,
   );
+  // Home and End are the field's own on every system (errata W2 entry 12), with Shift too.
+  const selection = () =>
+    d0.evaluate((el) => `${el.value} [${el.selectionStart},${el.selectionEnd}] ${el.selectionDirection}`);
+  await d0.evaluate((el) => el.setSelectionRange(3, 3));
+  await k('Shift+Home');
+  let sel = await selection();
+  check(`${p} Shift+Home selects from the caret to the start`, sel === '00000000 [0,3] backward', sel);
+  await k('Shift+End');
+  sel = await selection();
+  check(`${p} Shift+End then selects from the same anchor to the end`, sel === '00000000 [3,8] forward', sel);
+  await k('Home');
+  sel = await selection();
+  check(`${p} Home drops the selection, caret at the start`, sel.startsWith('00000000 [0,0]'), sel);
+  if (process.platform === 'darwin') {
+    // The Mac's own keys stay the browser's: Cmd+Right / Cmd+Left go to the ends of the field.
+    await d0.evaluate((el) => el.setSelectionRange(3, 3));
+    await k('Meta+ArrowRight');
+    sel = await selection();
+    check(`${p} macOS: Cmd+Right moves the caret to the end`, sel.startsWith('00000000 [8,8]'), sel);
+    await k('Meta+ArrowLeft');
+    sel = await selection();
+    check(`${p} macOS: Cmd+Left moves the caret to the start`, sel.startsWith('00000000 [0,0]'), sel);
+  }
 
   const sr = page.locator('[data-testid=reg-sr]');
   await sr.focus();
@@ -569,7 +673,7 @@ async function main() {
 
   try {
     for (const name of browsers) {
-      const browser = await BROWSERS[name].launch();
+      const browser = await BROWSERS[name].launch({ timeout: 120_000 });
       try {
         for (const theme of THEMES) await themePass(browser, name, theme);
         await keyboardPass(browser, name);

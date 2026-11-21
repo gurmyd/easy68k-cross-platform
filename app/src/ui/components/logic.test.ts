@@ -3,7 +3,7 @@
 // focus trap, message-box answers.
 
 import { describe, expect, it } from 'vitest';
-import { trapIndex } from './focus';
+import { trapStep } from './focus';
 import { menuKeyAction, type MenuEntry, type MenuKeyEvent } from './menu-model';
 import { messageBoxEscapeResult } from './MessageBox';
 import { findMnemonic, findTypeahead, mnemonicKeyOf, parseMnemonic, stripMnemonic } from './mnemonic';
@@ -266,13 +266,39 @@ describe('virtual rows', () => {
 });
 
 describe('focus trap', () => {
-  it('wraps at the ends and lets the browser move inside', () => {
-    expect(trapIndex(3, 2, false)).toBe(0);
-    expect(trapIndex(3, 0, true)).toBe(2);
-    expect(trapIndex(3, 1, false)).toBeNull();
-    expect(trapIndex(3, -1, false)).toBe(0);
-    expect(trapIndex(3, -1, true)).toBe(2);
-    expect(trapIndex(0, -1, false)).toBeNull();
+  it('wraps at the ends', () => {
+    expect(trapStep(3, 2, false)).toBe(0);
+    expect(trapStep(3, 0, true)).toBe(2);
+    expect(trapStep(3, -1, false)).toBe(0);
+    expect(trapStep(3, -1, true)).toBe(2);
+    expect(trapStep(0, -1, false)).toBeNull();
+    expect(trapStep(0, -1, true)).toBeNull();
+  });
+
+  it('moves on every Tab itself, not only at the ends (Safari skips buttons; errata W2 entry 13)', () => {
+    // Every element once per round, in order; Shift+Tab the reverse.
+    const forward: number[] = [];
+    const backward: number[] = [];
+    let at = 2;
+    for (let i = 0; i < 5; i++) forward.push((at = trapStep(5, at, false) ?? -1));
+    at = 2;
+    for (let i = 0; i < 5; i++) backward.push((at = trapStep(5, at, true) ?? -1));
+    expect(forward).toEqual([3, 4, 0, 1, 2]);
+    expect(backward).toEqual([1, 0, 4, 3, 2]);
+    expect(trapStep(1, 0, false)).toBe(0);
+    expect(trapStep(1, 0, true)).toBe(0);
+  });
+
+  it('from a point between elements (focus on a non-tabbable element) goes to the neighbours of that point', () => {
+    // Two elements come before the focus: Tab goes to the third, Shift+Tab to the second.
+    expect(trapStep(5, -1, false, 2)).toBe(2);
+    expect(trapStep(5, -1, true, 2)).toBe(1);
+    // After the last one: Tab wraps to the first.
+    expect(trapStep(5, -1, false, 5)).toBe(0);
+    expect(trapStep(5, -1, true, 5)).toBe(4);
+    // Outside the dialog or on the dialog itself (nothing before): first / last.
+    expect(trapStep(5, -1, false, 0)).toBe(0);
+    expect(trapStep(5, -1, true, 0)).toBe(4);
   });
 });
 

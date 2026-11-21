@@ -4,8 +4,10 @@
 // from it; the shell's dialog host (W3) decides where it is mounted.
 //
 // Modal (default): dims the workspace (backdrop at --z-modal), role=dialog
-// with aria-modal, focus trapped inside: Tab and Shift+Tab wrap, and focus
-// that escapes (a click elsewhere, a programmatic focus) is pulled back. Only
+// with aria-modal, focus trapped inside: the dialog moves the focus on every
+// Tab and Shift+Tab itself (its own list, wrapping at the ends; Safari would
+// skip buttons), Tab with the focus outside (on the body) brings it back in,
+// and focus that escapes (a click elsewhere, a programmatic focus) is pulled back. Only
 // the top-most modal dialog traps; a message box over a dialog works.
 // Modeless: floats at `anchor` above the workspace (--z-modeless) and does
 // not block it.
@@ -32,6 +34,7 @@ import {
 } from 'react';
 import './Dialog.css';
 import {
+  countPreceding,
   focusElement,
   focusOrigin,
   pushModal,
@@ -39,7 +42,7 @@ import {
   tabbables,
   topModal,
   trackPressedControls,
-  trapIndex,
+  trapStep,
 } from './focus';
 import { IconButton } from './IconButton';
 import { LayerContext } from './layer';
@@ -84,6 +87,19 @@ const TEXT_ENTRY =
   'input:not([type=checkbox]):not([type=radio]):not([type=button]), textarea, select, [contenteditable="true"], [role=listbox], [role=grid], [role=combobox]';
 const OWNS_ENTER =
   'button, a[href], textarea, select, [data-e68-enter], [role=listbox], [role=grid], [role=menu], [role=menuitem]';
+
+/**
+ * Tab and Shift+Tab in a modal dialog: always to the next or previous element
+ * of the dialog's own list, wrapping at the ends. Not left to the browser,
+ * because Safari (macOS default setting) skips buttons and check boxes and
+ * would leave the dialog (docs/porting/errata/W2.md entry 13).
+ */
+function moveTab(box: HTMLElement, from: Node, backward: boolean): void {
+  const list = tabbables(box);
+  const current = list.indexOf(from as HTMLElement);
+  const index = trapStep(list.length, current, backward, current < 0 ? countPreceding(list, from) : 0);
+  focusElement(index === null ? box : list[index]);
+}
 
 export function Dialog({
   title,
@@ -142,8 +158,22 @@ export function Dialog({
       }
       focusElement(lastInside.current?.isConnected ? lastInside.current : (tabbables(box)[0] ?? box));
     };
+    // Tab while the focus is outside (on the body, which gets no focusin): back into the dialog.
+    // Inside, the box's own key handler moves the focus.
+    const onKeyDownOutside = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Tab' || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (topModal() !== box) return;
+      const target = event.target as Node | null;
+      if (target && box.contains(target)) return;
+      event.preventDefault();
+      moveTab(box, target ?? document.body, event.shiftKey);
+    };
     document.addEventListener('focusin', onFocusIn);
-    return () => document.removeEventListener('focusin', onFocusIn);
+    document.addEventListener('keydown', onKeyDownOutside);
+    return () => {
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('keydown', onKeyDownOutside);
+    };
   }, [inline, modal]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -153,14 +183,10 @@ export function Dialog({
     const target = event.target as HTMLElement;
 
     if (event.key === 'Tab' && modal) {
-      const list = tabbables(box);
-      const index = trapIndex(list.length, list.indexOf(target), event.shiftKey);
-      if (index !== null) {
-        event.preventDefault();
-        focusElement(list[index]);
-      } else if (list.length === 0) {
-        event.preventDefault();
-      }
+      // Ctrl / Cmd / Alt (Option) + Tab stay with the browser and the shell.
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      event.preventDefault();
+      moveTab(box, target, event.shiftKey);
       return;
     }
     if (event.key === 'Escape') {

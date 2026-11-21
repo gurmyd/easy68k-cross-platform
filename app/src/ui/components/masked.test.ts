@@ -9,6 +9,7 @@ import {
   applyMaskedEdit,
   blankText,
   formatMaskedValue,
+  moveMaskedCaret,
   normalizeText,
   parseMaskedText,
   type MaskedConfig,
@@ -207,5 +208,38 @@ describe('helpers', () => {
     expect(normalizeText('E0 0x1', ADDRESS_FIELD)).toBe('E00001');
     expect(normalizeText('123456789', INTERVAL_FIELD)).toBe('23456789');
     expect(normalizeText('101', SR_FIELD)).toBe('1010000000000000');
+  });
+});
+
+describe('Home and End (handled by the field on every system, errata W2 entry 12)', () => {
+  const sel = (selStart: number, selEnd: number, backward = false) => ({ selStart, selEnd, backward });
+
+  it('Home puts the caret before the first position, End after the last', () => {
+    expect(moveMaskedCaret(sel(2, 2), 'start', false, 8)).toEqual(sel(0, 0));
+    expect(moveMaskedCaret(sel(2, 2), 'end', false, 8)).toEqual(sel(8, 8));
+    expect(moveMaskedCaret(sel(0, 8), 'end', false, 8)).toEqual(sel(8, 8));
+    expect(moveMaskedCaret(sel(3, 5, true), 'start', false, 6)).toEqual(sel(0, 0));
+  });
+
+  it('Shift+Home and Shift+End select from the caret to that end', () => {
+    expect(moveMaskedCaret(sel(3, 3), 'start', true, 8)).toEqual(sel(0, 3, true));
+    expect(moveMaskedCaret(sel(3, 3), 'end', true, 8)).toEqual(sel(3, 8));
+    expect(moveMaskedCaret(sel(0, 0), 'start', true, 8)).toEqual(sel(0, 0));
+    expect(moveMaskedCaret(sel(8, 8), 'end', true, 8)).toEqual(sel(8, 8));
+  });
+
+  it('a selection keeps its anchor: Shift+End after Shift+Home turns it round, as on Windows', () => {
+    // Caret at 3, Shift+Home: [0,3] backward (anchor 3); Shift+End: [3,8].
+    const home = moveMaskedCaret(sel(3, 3), 'start', true, 8);
+    expect(moveMaskedCaret(home, 'end', true, 8)).toEqual(sel(3, 8));
+    // A forward selection [2,5] (anchor 2): Shift+Home gives [0,2] backward.
+    expect(moveMaskedCaret(sel(2, 5), 'start', true, 8)).toEqual(sel(0, 2, true));
+    // A backward selection [2,5] (anchor 5): Shift+End gives [5,8].
+    expect(moveMaskedCaret(sel(2, 5, true), 'end', true, 8)).toEqual(sel(5, 8));
+  });
+
+  it('keeps out-of-range selections inside the field', () => {
+    expect(moveMaskedCaret(sel(12, 12), 'start', true, 8)).toEqual(sel(0, 8, true));
+    expect(moveMaskedCaret(sel(-1, 3), 'end', true, 8)).toEqual(sel(0, 8));
   });
 });

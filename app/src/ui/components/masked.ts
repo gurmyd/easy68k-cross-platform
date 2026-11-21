@@ -149,6 +149,37 @@ function caret(text: string, at: number): MaskedState {
   return { text, selStart: at, selEnd: at };
 }
 
+/** A selection with its direction: `backward` when the moving end is selStart (Shift+Home, Shift+Left). */
+export interface MaskedSelection {
+  selStart: number;
+  selEnd: number;
+  backward: boolean;
+}
+
+/**
+ * Home and End (`to` 'start' / 'end'), with Shift when `extend`, as a text box
+ * on Windows does them: the caret goes before the first or after the last
+ * position; with Shift the selection runs from its anchor (the end that does
+ * not move) to that end of the field. The field does this itself on every
+ * system, because a browser on macOS does not move the caret of an input on
+ * Home or End (docs/porting/errata/W2.md entry 12). Cmd / Ctrl combinations
+ * are left to the browser.
+ */
+export function moveMaskedCaret(
+  selection: MaskedSelection,
+  to: 'start' | 'end',
+  extend: boolean,
+  width: number,
+): MaskedSelection {
+  const target = to === 'start' ? 0 : width;
+  if (!extend) return { selStart: target, selEnd: target, backward: false };
+  const start = Math.min(Math.max(0, Math.min(selection.selStart, selection.selEnd)), width);
+  const end = Math.min(Math.max(start, Math.max(selection.selStart, selection.selEnd)), width);
+  const anchor = selection.backward ? end : start;
+  if (target < anchor) return { selStart: target, selEnd: anchor, backward: true };
+  return { selStart: anchor, selEnd: target, backward: false };
+}
+
 /** Applies one user edit to a field (see the rules at the top of this file). */
 export function applyMaskedEdit(state: MaskedState, edit: MaskedEdit, config: MaskedConfig): MaskedResult {
   const width = config.width;

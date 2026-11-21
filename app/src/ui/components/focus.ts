@@ -34,16 +34,33 @@ export function tabbables(root: Element): HTMLElement[] {
 }
 
 /**
- * The index the focus wraps to when Tab (or Shift+Tab) leaves the ends of a
- * trapped list, or null when the browser's own move stays inside.
- * `current` is -1 when the focus is not on one of the elements.
+ * Where Tab (or Shift+Tab, `shift`) moves the focus in a modal dialog, which
+ * handles every Tab itself (docs/porting/errata/W2.md entry 13): the next (or
+ * previous) element of its list, wrapping at the ends; null when the list is
+ * empty. `current` is the index of the focused element in the list, or -1
+ * when the focus is on none of them; then `preceding` is the number of list
+ * elements that come before the focus in document order (0 when the focus is
+ * on the dialog itself or outside it, so Tab goes to the first element and
+ * Shift+Tab to the last).
  */
-export function trapIndex(count: number, current: number, shift: boolean): number | null {
+export function trapStep(count: number, current: number, shift: boolean, preceding = 0): number | null {
   if (count === 0) return null;
-  if (current < 0) return shift ? count - 1 : 0;
-  if (shift && current === 0) return count - 1;
-  if (!shift && current === count - 1) return 0;
-  return null;
+  if (current >= 0 && current < count) return shift ? (current - 1 + count) % count : (current + 1) % count;
+  const before = Math.min(Math.max(0, preceding), count);
+  if (shift) return before > 0 ? before - 1 : count - 1;
+  return before < count ? before : 0;
+}
+
+/** The number of `list` elements (in document order) that come before `node` in the document. */
+export function countPreceding(list: readonly Element[], node: Node): number {
+  let count = 0;
+  for (const element of list) {
+    // An element that holds the focus inside it counts as before it (Tab moves on past it).
+    if (element !== node && element.contains(node)) return count + 1;
+    if (!(node.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_PRECEDING)) break;
+    count++;
+  }
+  return count;
 }
 
 /** The open modal dialogs, the top one last. Only the top one traps the focus. */
