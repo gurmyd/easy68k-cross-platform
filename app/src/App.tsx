@@ -1,12 +1,17 @@
-// Placeholder page written by W0 (scaffolding). W3 owns this file and
-// replaces it with the application shell (ARCHITECTURE.md 9.1, section 8).
+// The root component (ARCHITECTURE.md 2.1). Owner: W3.
+//
+// `app` is the Application that bootstrap() built for this window: services, commands, and the
+// panels and dialogs of the features. The component tree below it is the shell (ui/shell), which
+// draws the window frame of section 2.1 and mounts the features' panels in its regions.
 
-export function App() {
+import type { Application } from './state/context';
+import { ApplicationProvider } from './state/context';
+import { Shell } from './ui/shell';
+
+export function App({ app }: { app: Application }) {
   return (
-    <main data-testid="placeholder">
-      <h1>EASy68K</h1>
-      <p>unofficial web and macOS port</p>
-      <p>Work in progress.</p>
-    </main>
+    <ApplicationProvider app={app}>
+      <Shell />
+    </ApplicationProvider>
   );
 }

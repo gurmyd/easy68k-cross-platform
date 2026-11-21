@@ -1,0 +1,45 @@
+/* RadioGroup (RadioGroup.tsx); the box rules come from Checkbox.css. Owner: W2. */
+
+.e68-radiogroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.e68-radiogroup__label {
+  color: var(--c-text-muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.e68-radiogroup__options {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.e68-radiogroup--horizontal .e68-radiogroup__options {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+}
+
+.e68-radio__circle {
+  border-radius: 50%;
+}
+
+.e68-radio__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c-on-accent);
+  opacity: 0;
+}
+
+.e68-checkbox__input:checked + .e68-radio__circle .e68-radio__dot {
+  opacity: 1;
+}
+
+.e68-checkbox__input:disabled:checked + .e68-radio__circle .e68-radio__dot {
+  background: var(--c-surface);
+}

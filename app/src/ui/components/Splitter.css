@@ -1,0 +1,71 @@
+/* Splitter (Splitter.tsx). Owner: W2.
+   The bar is 5 px wide for the pointer and draws a 1 px line; the line turns
+   accent while hovered, dragged or focused. */
+
+.e68-splitter {
+  position: relative;
+  z-index: var(--z-panel);
+  flex: none;
+  background: transparent;
+  touch-action: none;
+}
+
+.e68-splitter--vertical {
+  width: 5px;
+  margin: 0 -2px;
+  cursor: col-resize;
+}
+
+.e68-splitter--horizontal {
+  height: 5px;
+  margin: -2px 0;
+  cursor: row-resize;
+}
+
+.e68-splitter::before {
+  content: '';
+  position: absolute;
+  background: var(--c-border);
+  transition: background-color var(--motion-fast) ease;
+}
+
+.e68-splitter--vertical::before {
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 1px;
+}
+
+.e68-splitter--horizontal::before {
+  top: 2px;
+  right: 0;
+  left: 0;
+  height: 1px;
+}
+
+.e68-splitter:hover::before,
+.e68-splitter:active::before,
+.e68-splitter:focus-visible::before,
+.e68-splitter[data-e68-force~='hover']::before {
+  background: var(--c-accent);
+}
+
+.e68-splitter--vertical:hover::before,
+.e68-splitter--vertical:active::before,
+.e68-splitter--vertical:focus-visible::before {
+  left: 1px;
+  width: 3px;
+}
+
+.e68-splitter--horizontal:hover::before,
+.e68-splitter--horizontal:active::before,
+.e68-splitter--horizontal:focus-visible::before {
+  top: 1px;
+  height: 3px;
+}
+
+/* Keyboard focus: the accent bar plus the focus ring around the grip. */
+.e68-splitter:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 0;
+}

@@ -1,0 +1,126 @@
+/*
+ * Base styles (ARCHITECTURE.md 2.8). Owner: W2.
+ *
+ * A small reset, the body type, the focus ring and the reduced-motion rule.
+ * Component styles are in components.css and in the .css file next to each
+ * component in app/src/ui/components/.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  /* The app is a desktop-style application: no text size adjustment on
+     rotation, no tap highlight. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-md);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+ul,
+ol,
+dl,
+figure,
+fieldset {
+  margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+}
+
+fieldset {
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+legend {
+  padding: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+button {
+  cursor: default;
+}
+
+img,
+svg,
+canvas {
+  display: block;
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-mono);
+}
+
+::selection {
+  background: var(--c-selection);
+  color: var(--c-text);
+}
+
+/* Focus is always visible for keyboard users (2.11). Components that draw a
+   ring of their own (inset rings in lists and grids) override this, never
+   remove it. */
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* No interface animation for users who ask for reduced motion (2.11). The
+   Output panel's input prompt is program output and is not affected: it is
+   drawn on a canvas, not animated with CSS. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}

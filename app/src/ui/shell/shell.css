@@ -1,0 +1,312 @@
+/*
+ * The shell: window frame, workspace regions, mode switch, status bar
+ * (ARCHITECTURE.md 2.1-2.3, 2.8). Owner: W3.
+ *
+ * Only layout and the shell's own parts are styled here. Panels bring their own
+ * styles; menus, toolbars, tabs, separators and dialogs are the component kit's.
+ */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  overflow: hidden;
+}
+
+/* The `hidden` attribute must win over the display values set below. */
+.e68-shell [hidden] {
+  display: none !important;
+}
+
+.e68-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  background: var(--c-bg);
+}
+
+/* ---- header: menu row and toolbar row ---------------------------------- */
+
+.e68-shell__header {
+  flex: none;
+}
+
+.e68-shell__menurow {
+  display: flex;
+  align-items: center;
+  min-height: var(--h-menubar);
+  padding-right: var(--sp-2);
+  background: var(--c-panel);
+  border-bottom: 1px solid var(--c-border);
+}
+
+.e68-shell__grow {
+  flex: 1 1 auto;
+}
+
+.e68-shell__logging {
+  display: inline-flex;
+}
+
+/* ---- mode switch ------------------------------------------------------- */
+
+.e68-modeswitch {
+  display: inline-flex;
+  flex: none;
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+
+.e68-modeswitch__segment {
+  height: 20px;
+  padding: 0 var(--sp-3);
+  border: 0;
+  border-right: 1px solid var(--c-border-strong);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font-size: var(--fs-sm);
+}
+
+.e68-modeswitch__segment:last-child {
+  border-right: 0;
+}
+
+.e68-modeswitch__segment:hover {
+  background: var(--c-hover);
+}
+
+.e68-modeswitch__segment[aria-checked='true'] {
+  background: var(--c-accent);
+  color: var(--c-on-accent);
+}
+
+.e68-modeswitch__segment:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}
+
+/* ---- body: workspaces and the Help drawer ------------------------------- */
+
+.e68-shell__body {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.e68-shell__workspaces {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.e68-shell__workspace {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.e68-shell__exit {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  color: var(--c-text-muted);
+  font-size: var(--fs-lg);
+}
+
+/* ---- regions ------------------------------------------------------------ */
+
+.e68-region {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--c-surface);
+}
+
+/* A region shows its focus ring only when the region itself is focused (an empty panel). */
+.e68-region:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.e68-region--fill,
+.e68-region--grow {
+  flex: 1 1 0;
+}
+
+.e68-region--fixed,
+.e68-region--auto {
+  flex: none;
+}
+
+/* The placeholder title of a region whose feature does not exist yet. */
+.e68-region__title {
+  padding: var(--sp-1) var(--sp-2);
+  color: var(--c-text-muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.e68-region__failure {
+  padding: var(--sp-2);
+  color: var(--c-danger);
+}
+
+/* ---- two panes with a separator ----------------------------------------- */
+
+.e68-split {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.e68-split--horizontal {
+  flex-direction: column;
+}
+
+.e68-split__pane {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.e68-split--horizontal > .e68-split__pane {
+  flex-direction: column;
+}
+
+.e68-split__pane--sized {
+  flex: none;
+}
+
+.e68-split__pane--rest {
+  flex: 1 1 0;
+}
+
+/* ---- Editor mode --------------------------------------------------------- */
+
+.e68-editorws {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.e68-editorws__center {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ---- Simulator mode ------------------------------------------------------ */
+
+.e68-simws {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.e68-simws[data-narrow='true'] {
+  flex-direction: column;
+}
+
+.e68-simws__column {
+  display: flex;
+  flex: none;
+  min-width: 0;
+  min-height: 0;
+}
+
+.e68-simws__column--rest {
+  flex: 1 1 0;
+}
+
+.e68-simws__left,
+.e68-simws__right {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.e68-simws__left > .e68-region--auto {
+  min-height: 24px;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.e68-simws__output {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.e68-simws__output[data-collapsed='true'] {
+  flex: none;
+}
+
+.e68-simws__expand {
+  height: 24px;
+  padding: 0 var(--sp-2);
+  border: 0;
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-panel);
+  color: var(--c-text);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-align: left;
+}
+
+.e68-simws__expand:hover {
+  background: var(--c-hover);
+}
+
+/* ---- status bar ----------------------------------------------------------- */
+
+.e68-statusbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: var(--h-status);
+  background: var(--c-panel);
+  border-top: 1px solid var(--c-border);
+  color: var(--c-text);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.e68-statusbar__cell {
+  flex: none;
+  min-width: 56px;
+  padding: 0 var(--sp-2);
+  border-right: 1px solid var(--c-border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.e68-statusbar__cell--grow {
+  flex: 1 1 auto;
+  border-right: 0;
+}
+
+.e68-statusbar__cell--mono {
+  font-family: var(--font-mono);
+}

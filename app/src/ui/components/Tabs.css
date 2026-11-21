@@ -1,0 +1,128 @@
+/* Tabs (Tabs.tsx). Owner: W2. */
+
+.e68-tabs {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  background: var(--c-panel);
+  border-bottom: 1px solid var(--c-border);
+}
+
+.e68-tabs__list {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.e68-tabs__list::-webkit-scrollbar {
+  display: none;
+}
+
+.e68-tabs__end {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 0 var(--sp-2);
+}
+
+.e68-tabs__tab {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  max-width: 240px;
+  height: 30px;
+  padding: 0 var(--sp-3);
+  border-right: 1px solid var(--c-border);
+  color: var(--c-text-muted);
+  font-size: var(--fs-md);
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+
+.e68-tabs__tab:hover,
+.e68-tabs__tab[data-e68-force~='hover'] {
+  background: var(--c-hover);
+  color: var(--c-text);
+}
+
+.e68-tabs__tab:focus-visible,
+.e68-tabs__tab[data-e68-force~='focus'] {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.e68-tabs__tab[aria-selected='true'] {
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+
+/* The selected tab's accent bar (2.8: accent marks the active tab). */
+.e68-tabs__tab[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--c-accent);
+}
+
+.e68-tabs__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+
+/* Modified document (2.4). */
+.e68-tabs__dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.e68-tabs__close {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-right: -6px;
+  border-radius: var(--r-sm);
+  color: var(--c-text-muted);
+}
+
+.e68-tabs__close:hover {
+  background: var(--c-pressed);
+  color: var(--c-text);
+}
+
+/* Tool tabs: smaller, no right borders, the accent bar only. */
+.e68-tabs--tool .e68-tabs__tab {
+  height: 28px;
+  padding: 0 var(--sp-3);
+  border-right: 0;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.e68-tabs--tool .e68-tabs__tab[aria-selected='true'] {
+  background: transparent;
+}
+
+.e68-tabpanel {
+  min-width: 0;
+  min-height: 0;
+}
+
+.e68-tabpanel:focus-visible {
+  outline-offset: -2px;
+}

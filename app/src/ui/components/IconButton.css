@@ -1,0 +1,49 @@
+/* IconButton (IconButton.tsx). Owner: W2. */
+
+.e68-iconbutton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--c-text);
+  transition: background-color var(--motion-fast) ease;
+}
+
+.e68-iconbutton--normal {
+  width: var(--h-control);
+  height: var(--h-control);
+}
+
+.e68-iconbutton--small {
+  width: 20px;
+  height: 20px;
+}
+
+.e68-iconbutton:hover:not(:disabled),
+.e68-iconbutton[data-e68-force~='hover'] {
+  background: var(--c-hover);
+}
+
+.e68-iconbutton:active:not(:disabled),
+.e68-iconbutton[data-e68-force~='active'] {
+  background: var(--c-pressed);
+}
+
+.e68-iconbutton[data-e68-force~='focus'] {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.e68-iconbutton[aria-pressed='true'] {
+  background: var(--c-accent-soft);
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+}
+
+.e68-iconbutton:disabled {
+  color: var(--c-text-disabled);
+}

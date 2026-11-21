@@ -1,0 +1,47 @@
+/* SpinField (SpinField.tsx). Owner: W2. */
+
+.e68-spin {
+  flex: none;
+  padding-right: 0;
+  overflow: hidden;
+}
+
+.e68-spin__input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.e68-spin__buttons {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  width: 18px;
+  border-left: 1px solid var(--c-border);
+}
+
+.e68-spin__button {
+  display: flex;
+  flex: 1 1 50%;
+  align-items: center;
+  justify-content: center;
+  color: var(--c-text-muted);
+  user-select: none;
+}
+
+.e68-spin__button + .e68-spin__button {
+  border-top: 1px solid var(--c-border);
+}
+
+.e68-spin__button:hover {
+  background: var(--c-hover);
+  color: var(--c-text);
+}
+
+.e68-spin__button:active {
+  background: var(--c-pressed);
+}
+
+.e68-spin[data-disabled='true'] .e68-spin__button {
+  color: var(--c-text-disabled);
+  pointer-events: none;
+}

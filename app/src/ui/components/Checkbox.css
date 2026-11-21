@@ -1,0 +1,81 @@
+/* Checkbox (Checkbox.tsx) and the shared look of RadioGroup's buttons. Owner: W2. */
+
+.e68-checkbox {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 22px;
+  color: var(--c-text);
+  user-select: none;
+}
+
+/* The native input stays in place (screen readers, focus, clicks) but is invisible. */
+.e68-checkbox__input {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0;
+  opacity: 0;
+}
+
+.e68-checkbox__box {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-sm);
+  background: var(--c-surface);
+  color: var(--c-on-accent);
+  transition:
+    background-color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease;
+}
+
+.e68-checkbox__check {
+  opacity: 0;
+}
+
+.e68-checkbox:hover .e68-checkbox__input:not(:disabled) + .e68-checkbox__box,
+[data-e68-force~='hover'] > .e68-checkbox .e68-checkbox__box {
+  border-color: var(--c-text-muted);
+}
+
+.e68-checkbox__input:checked + .e68-checkbox__box {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+}
+
+.e68-checkbox__input:checked + .e68-checkbox__box .e68-checkbox__check {
+  opacity: 1;
+}
+
+.e68-checkbox__input:focus-visible + .e68-checkbox__box,
+[data-e68-force~='focus'] > .e68-checkbox .e68-checkbox__box {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.e68-checkbox__input:disabled + .e68-checkbox__box {
+  background: var(--c-panel);
+  border-color: var(--c-border);
+}
+
+.e68-checkbox__input:disabled:checked + .e68-checkbox__box {
+  background: var(--c-text-disabled);
+  border-color: transparent;
+  color: var(--c-surface);
+}
+
+.e68-checkbox__label {
+  white-space: pre-wrap;
+}
+
+.e68-checkbox[data-disabled='true'] .e68-checkbox__label {
+  color: var(--c-text-disabled);
+}

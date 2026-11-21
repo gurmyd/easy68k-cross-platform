@@ -1,0 +1,38 @@
+/* MenuBar (MenuBar.tsx). Owner: W2. */
+
+.e68-menubar {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  height: var(--h-menubar);
+  padding: 0 var(--sp-1);
+  background: var(--c-panel);
+}
+
+.e68-menubar__title {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 var(--sp-2);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--c-text);
+  font-size: var(--fs-md);
+  white-space: pre;
+  user-select: none;
+}
+
+.e68-menubar__title:hover:not([aria-disabled='true']),
+.e68-menubar__title[data-e68-force~='hover'] {
+  background: var(--c-hover);
+}
+
+.e68-menubar__title[data-open='true'] {
+  background: var(--c-accent);
+  color: var(--c-on-accent);
+}
+
+.e68-menubar__title[aria-disabled='true'] {
+  color: var(--c-text-disabled);
+}

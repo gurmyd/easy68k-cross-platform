@@ -1,0 +1,93 @@
+/* Dialog (Dialog.tsx). Owner: W2. */
+
+.e68-dialog__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-6);
+  background: var(--c-backdrop);
+  animation: e68-backdrop-in var(--motion-normal) ease-out;
+}
+
+.e68-dialog {
+  display: flex;
+  flex-direction: column;
+  min-width: 280px;
+  max-width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  background: var(--c-surface);
+  color: var(--c-text);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-dialog);
+  outline: none;
+}
+
+.e68-dialog--modal {
+  animation: e68-dialog-in var(--motion-normal) ease-out;
+}
+
+.e68-dialog--modeless {
+  position: fixed;
+  z-index: var(--z-modeless);
+}
+
+.e68-dialog--inline {
+  position: relative;
+  max-height: none;
+  animation: none;
+  box-shadow: var(--shadow-popup);
+}
+
+.e68-dialog__titlebar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--sp-2);
+  height: 34px;
+  padding: 0 var(--sp-2) 0 var(--sp-4);
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-panel);
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  user-select: none;
+}
+
+.e68-dialog__title {
+  flex: 1 1 auto;
+  overflow: hidden;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+
+.e68-dialog__body {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: var(--sp-4);
+}
+
+.e68-dialog__footer {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 1px solid var(--c-border);
+}
+
+@keyframes e68-backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes e68-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.99);
+  }
+}

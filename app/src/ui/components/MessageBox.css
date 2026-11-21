@@ -1,0 +1,42 @@
+/* MessageBox (MessageBox.tsx). Owner: W2. */
+
+.e68-messagebox {
+  min-width: 320px;
+  max-width: 520px;
+}
+
+.e68-messagebox__content {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  padding: var(--sp-1) 0;
+}
+
+.e68-messagebox__icon {
+  flex: none;
+}
+
+.e68-messagebox__icon--information,
+.e68-messagebox__icon--confirmation {
+  color: var(--c-accent);
+}
+
+.e68-messagebox__icon--warning {
+  color: var(--c-warning);
+}
+
+.e68-messagebox__icon--error {
+  color: var(--c-danger);
+}
+
+/* Verbatim: double spaces and line breaks of the original texts are kept. */
+.e68-messagebox__text {
+  align-self: center;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.e68-messagebox .e68-dialog__footer {
+  justify-content: center;
+}

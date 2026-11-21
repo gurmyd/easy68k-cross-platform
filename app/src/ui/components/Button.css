@@ -1,0 +1,105 @@
+/* Button (Button.tsx). Owner: W2. */
+
+.e68-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-width: 76px;
+  height: var(--h-control);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-sm);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font-size: var(--fs-md);
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+  transition:
+    background-color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease;
+}
+
+.e68-button--small {
+  min-width: 0;
+  height: 22px;
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-sm);
+  gap: var(--sp-1);
+}
+
+.e68-button:hover:not(:disabled),
+.e68-button[data-e68-force~='hover'] {
+  background: color-mix(in srgb, var(--c-text) 5%, var(--c-surface));
+  border-color: var(--c-text-muted);
+}
+
+.e68-button:active:not(:disabled),
+.e68-button[data-e68-force~='active'] {
+  background: color-mix(in srgb, var(--c-text) 11%, var(--c-surface));
+}
+
+.e68-button[data-e68-force~='focus'] {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.e68-button:disabled {
+  background: var(--c-panel);
+  border-color: var(--c-border);
+  color: var(--c-text-disabled);
+}
+
+/* Primary: the default button of a dialog. */
+.e68-button--primary {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: var(--c-on-accent);
+  font-weight: 600;
+}
+
+.e68-button--primary:hover:not(:disabled),
+.e68-button--primary[data-e68-force~='hover'] {
+  background: color-mix(in srgb, var(--c-accent) 88%, var(--c-text));
+  border-color: color-mix(in srgb, var(--c-accent) 88%, var(--c-text));
+}
+
+.e68-button--primary:active:not(:disabled),
+.e68-button--primary[data-e68-force~='active'] {
+  background: color-mix(in srgb, var(--c-accent) 78%, var(--c-text));
+}
+
+.e68-button--primary:disabled {
+  font-weight: 400;
+}
+
+/* Quiet: no frame until hovered (strips inside panels). */
+.e68-button--quiet {
+  min-width: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.e68-button--quiet:hover:not(:disabled),
+.e68-button--quiet[data-e68-force~='hover'] {
+  background: var(--c-hover);
+  border-color: transparent;
+}
+
+.e68-button--quiet:active:not(:disabled),
+.e68-button--quiet[data-e68-force~='active'] {
+  background: var(--c-pressed);
+}
+
+.e68-button--quiet:disabled {
+  background: transparent;
+  border-color: transparent;
+}
+
+/* Captions are verbatim ('Find  (F3)' has two spaces, section 0 rule 7). */
+.e68-button__caption {
+  display: inline-block;
+  line-height: 1.2;
+  white-space: pre;
+}

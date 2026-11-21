@@ -1,0 +1,58 @@
+/* ListBox (ListBox.tsx). Owner: W2. */
+
+.e68-listbox {
+  position: relative;
+  overflow-y: auto;
+  padding: 0;
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-sm);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font-size: var(--fs-md);
+}
+
+.e68-listbox:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -1px;
+  border-color: var(--c-accent);
+}
+
+.e68-listbox--mono {
+  font-family: var(--font-mono);
+}
+
+.e68-listbox[aria-disabled='true'] {
+  background: var(--c-panel);
+  border-color: var(--c-border);
+  color: var(--c-text-disabled);
+}
+
+.e68-listbox__option {
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 var(--sp-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+
+.e68-listbox__option:hover {
+  background: var(--c-hover);
+}
+
+/* Selected: soft tint when the list does not have the focus, accent fill when it has. */
+.e68-listbox__option[aria-selected='true'] {
+  background: var(--c-accent-soft);
+}
+
+.e68-listbox:focus .e68-listbox__option[aria-selected='true'] {
+  background: var(--c-accent);
+  color: var(--c-on-accent);
+}
+
+.e68-listbox__option[aria-disabled='true'] {
+  color: var(--c-text-disabled);
+}

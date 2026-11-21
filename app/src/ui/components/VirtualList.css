@@ -1,0 +1,23 @@
+/* VirtualList (VirtualList.tsx). Owner: W2. */
+
+.e68-vlist {
+  position: relative;
+  overflow: auto;
+  min-height: 0;
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+
+.e68-vlist__sizer {
+  position: relative;
+  min-width: 100%;
+}
+
+.e68-vlist__row {
+  position: absolute;
+  right: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  white-space: pre;
+}

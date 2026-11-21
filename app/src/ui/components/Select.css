@@ -1,0 +1,42 @@
+/* Select (Select.tsx). Owner: W2. */
+
+.e68-select {
+  position: relative;
+  flex: none;
+}
+
+.e68-select__control {
+  width: 100%;
+  height: 100%;
+  padding: 0 28px 0 var(--sp-2);
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  font-size: var(--fs-md);
+  appearance: none;
+  outline: none;
+}
+
+.e68-select__control:focus-visible {
+  outline: none;
+}
+
+/* The open list's options take the theme's colours where the platform allows. */
+.e68-select__control option {
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+
+.e68-select__chevron {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  margin-top: -7px;
+  color: var(--c-text-muted);
+  pointer-events: none;
+}
+
+.e68-select[data-disabled='true'] .e68-select__chevron {
+  color: var(--c-text-disabled);
+}

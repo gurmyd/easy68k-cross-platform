@@ -1,0 +1,32 @@
+/* MaskedField (MaskedField.tsx). Owner: W2. */
+
+.e68-masked {
+  flex: none;
+  height: 24px;
+}
+
+.e68-masked__input {
+  padding: 0 var(--sp-2);
+  caret-color: var(--c-accent);
+}
+
+/* The read-only decoration before the digits: the original's silver '00'
+   box (hardware §2.1), here a muted cell inside the same frame. */
+.e68-masked__prefix {
+  display: inline-flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 0 6px;
+  border-right: 1px solid var(--c-border);
+  border-radius: var(--r-sm) 0 0 var(--r-sm);
+  background: var(--c-panel);
+  color: var(--c-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-md);
+  user-select: none;
+}
+
+.e68-masked__label {
+  white-space: pre;
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,138 @@
+/*
+ * Design tokens (ARCHITECTURE.md 2.8). Owner: W2.
+ *
+ * Every colour, size and layer of the interface comes from here. Components
+ * never write a colour literal; they use these custom properties.
+ *
+ * Themes: the light values are on :root. The dark values apply under
+ * :root[data-theme="dark"]. The attribute is set by applyThemeSetting() in
+ * theme.ts: "light", "dark", or the system's preference when the setting is
+ * "system" (the default).
+ *
+ * The table of 2.8 is reproduced exactly, with two corrections and a few
+ * derived tokens. Both are recorded in docs/porting/errata/W2.md:
+ *   - --c-border-strong is darker in light and lighter in dark than 2.8 says,
+ *     because the values of 2.8 fail the 3:1 rule of 2.8 for field borders;
+ *   - the derived tokens below the table (--c-text-disabled, --c-hover, ...)
+ *     are additions built from the table's colours.
+ * contrast.test.ts checks every rule of 2.8 against this file.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* --- Colours (2.8) --------------------------------------------------- */
+  --c-bg: #f3f4f6; /* window background */
+  --c-surface: #ffffff; /* panels, dialogs, fields */
+  --c-panel: #f9fafb; /* toolbars, headers, status bar */
+  --c-border: #d1d5db; /* separators (decorative only) */
+  --c-border-strong: #818b98; /* field borders; 2.8 says #9CA3AF (erratum 1) */
+  --c-text: #111827; /* text */
+  --c-text-muted: #4b5563; /* secondary text */
+  --c-accent: #0b63ce; /* focus, active tab, changed registers */
+  --c-on-accent: #ffffff; /* text on accent */
+  --c-selection: #bfdbfe; /* selected listing row, editor selection */
+  --c-danger: #b42318; /* errors */
+  --c-warning: #b54708; /* warnings */
+  --c-ok: #067647; /* success */
+  --c-logging: #ffeb3b; /* LOGGING label background, text #000000 */
+  --c-logging-text: #000000;
+  --c-bp-on: #d92d20; /* gutter dot: breakpoint */
+  --c-bp-off: #12b76a; /* gutter dot: instruction row */
+  --c-stack-reg: #00ffff; /* stack mark: register (aqua) */
+  --c-stack-sp: #ffff00; /* stack mark: stack pointer (yellow) */
+  --c-stack-text: #000000; /* text on the two stack marks */
+
+  /* --- Derived colours (additions, erratum 2) ---------------------------- */
+  /* Disabled captions: 60 % of the muted text colour (2.8). Exempt from the
+     contrast rule, as disabled controls are in WCAG. */
+  --c-text-disabled: color-mix(in srgb, var(--c-text-muted) 60%, transparent);
+  /* Hover and pressed backgrounds of buttons, menu items and rows. */
+  --c-hover: color-mix(in srgb, var(--c-text) 7%, transparent);
+  --c-pressed: color-mix(in srgb, var(--c-text) 13%, transparent);
+  /* Accent tint behind the active item of a list that does not have focus. */
+  --c-accent-soft: color-mix(in srgb, var(--c-accent) 12%, var(--c-surface));
+  /* Outline of the instruction-row gutter dot: #12B76A alone is 2.6:1 on
+     white, below the 3:1 rule for interface graphics (erratum 3). */
+  --c-bp-off-edge: #067647;
+  --c-bp-on-edge: #b42318;
+  /* Layer under a modal dialog. */
+  --c-backdrop: rgb(17 24 39 / 0.32);
+  /* Shadow of popups (menus, tool-tips, toasts) and dialogs. */
+  --shadow-popup: 0 6px 20px rgb(17 24 39 / 0.16), 0 1px 3px rgb(17 24 39 / 0.12);
+  --shadow-dialog: 0 18px 48px rgb(17 24 39 / 0.24), 0 2px 6px rgb(17 24 39 / 0.12);
+
+  /* --- Type (2.8) -------------------------------------------------------- */
+  --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Courier New', Courier, 'Liberation Mono', 'DejaVu Sans Mono', monospace;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px; /* body */
+  --fs-lg: 15px;
+  --lh-body: 1.4;
+
+  /* --- Spacing, radius, heights (2.8) ------------------------------------ */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --r-sm: 3px;
+  --r-md: 6px;
+  --h-menubar: 28px;
+  --h-toolbar: 36px;
+  --h-control: 28px;
+  --h-status: 22px;
+
+  /* --- Focus (2.8): 2px solid accent, 1px offset, never removed ----------- */
+  --focus-ring: 2px solid var(--c-accent);
+  --focus-offset: 1px;
+
+  /* --- Stacking (2.8) ---------------------------------------------------- */
+  --z-panel: 1;
+  --z-modeless: 20;
+  --z-modal: 30;
+  --z-menu: 40;
+  --z-toast: 50;
+
+  /* --- Motion ------------------------------------------------------------ */
+  /* Interface transitions; set to 0s under prefers-reduced-motion (2.11). */
+  --motion-fast: 90ms;
+  --motion-normal: 160ms;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --c-bg: #111418;
+  --c-surface: #1b1f24;
+  --c-panel: #22272e;
+  --c-border: #373e47;
+  --c-border-strong: #6e7781; /* 2.8 says #545D68 (erratum 1) */
+  --c-text: #e6edf3;
+  --c-text-muted: #9da7b3;
+  --c-accent: #58a6ff;
+  --c-on-accent: #0d1117;
+  --c-selection: #1f4b7f;
+  --c-danger: #ff7b72;
+  --c-warning: #e3b341;
+  --c-ok: #56d364;
+  /* --c-logging, --c-bp-*, --c-stack-*: the same in both themes (2.8). */
+
+  --c-hover: color-mix(in srgb, var(--c-text) 8%, transparent);
+  --c-pressed: color-mix(in srgb, var(--c-text) 11%, transparent);
+  --c-accent-soft: color-mix(in srgb, var(--c-accent) 16%, var(--c-surface));
+  --c-bp-off-edge: #12b76a;
+  --c-bp-on-edge: #ff7b72; /* #D92D20 is 1.8:1 on the dark selection */
+  --c-backdrop: rgb(0 0 0 / 0.5);
+  --shadow-popup: 0 6px 20px rgb(0 0 0 / 0.45), 0 0 0 1px rgb(255 255 255 / 0.04);
+  --shadow-dialog: 0 18px 48px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.05);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0s;
+    --motion-normal: 0s;
+  }
+}
