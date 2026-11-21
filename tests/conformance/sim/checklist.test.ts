@@ -413,3 +413,319 @@ describe.skipIf(!enginesBuilt)('trap15-a §13 Input with typed keys (needs engin
     LONG,
   );
 });
+
+/** True when a message line reports a bus error (hardware §4.3 with exceptions off). */
+const busError = (outcome: Awaited<ReturnType<typeof runScenario>>) =>
+  outcome.messages.some((m) => /^Bus Error/i.test(m));
+
+describe.skipIf(!enginesBuilt)('hardware §13 interrupts and the memory map (needs engine/dist)', () => {
+  it(
+    'item 25: exceptions off, after "Illegal instruction found" an IRQ click resumes after the offending word',
+    async () => {
+      const p = await program([
+        '        ORG     $1000',
+        'START:  MOVEQ   #1,D6',
+        '        DC.W    $4AFC',
+        '        MOVEQ   #2,D7',
+        '        SIMHALT',
+        '        END     START',
+      ]);
+      const outcome = await runScenario({
+        program: p,
+        timeLimitMs: 2000,
+        actions: [{ atMs: 300, action: { kind: 'irq', level: 3 } }],
+      });
+      expect(outcome.messages.some((m) => /^Illegal instruction found at location/i.test(m))).toBe(true);
+      expect(outcome.registers.d[6]).toBe(1);
+      expect(outcome.registers.d[7]).toBe(2);
+      expect(outcome.end).toBe('halted');
+    },
+    LONG,
+  );
+
+  it(
+    'item 26: exceptions off, an IRQ latched during the run is taken at the end of TRAP #15 task 32/5, stacking the PC after the TRAP',
+    async () => {
+      const p = await program([
+        '        ORG     $1000',
+        'START:  MOVE    #$2000,SR',
+        '        MOVE.L  #200000,D2',
+        'LOOP:   SUBQ.L  #1,D2',
+        '        BNE     LOOP',
+        '        MOVE.B  #5,D1',
+        '        MOVE.B  #32,D0',
+        '        TRAP    #15',
+        'AFTER:  MOVEQ   #1,D7',
+        '        SIMHALT',
+        'HANDLER MOVE.L  2(SP),D5',
+        '        MOVEQ   #9,D6',
+        '        RTE',
+        '        ORG     $68',
+        '        DC.L    HANDLER',
+        '        END     START',
+      ]);
+      const outcome = await runScenario({
+        program: p,
+        timeLimitMs: 5000,
+        actions: [{ atInstruction: 1000, action: { kind: 'irq', level: 2 } }],
+      });
+      expect(outcome.registers.d[2]).toBe(0); // the click came while the loop ran
+      expect(outcome.registers.d[6]).toBe(9);
+      expect(outcome.registers.d[5]).toBe(addressOf(p, 'AFTER'));
+      expect(outcome.registers.d[7]).toBe(1);
+    },
+    LONG,
+  );
+
+  it(
+    'item 27: exceptions on, an SSP inside ROM: the handler is entered, the six stack bytes stay',
+    async () => {
+      const p = await program([
+        '        MEMORY  ROM $8000,$8FFF',
+        '        ORG     $1000',
+        'START:  LEA     $8100,SP',
+        'LOOP:   BRA     LOOP',
+        'HANDLER MOVEQ   #9,D6',
+        '        SIMHALT',
+        '        ORG     $80FA',
+        '        DC.B    1,2,3,4,5,6',
+        '        ORG     $68',
+        '        DC.L    HANDLER',
+        '        END     START',
+      ]);
+      const outcome = await runScenario({
+        program: p,
+        exceptions: true,
+        timeLimitMs: 2000,
+        actions: [{ atMs: 200, action: { kind: 'irq', level: 2 } }],
+        capture: [{ address: 0x80fa, length: 6 }],
+      });
+      expect(outcome.registers.d[6]).toBe(9);
+      expect([...(outcome.memory.get(0x80fa) ?? [])]).toEqual([1, 2, 3, 4, 5, 6]);
+      expect(outcome.registers.a[7]).toBe(0x8100 - 6);
+    },
+    LONG,
+  );
+
+  it(
+    'item 27: exceptions on, a 16-byte Read range right below the SSP: the IRQ handler is entered, 200 cycles on top of 78, SSP 62 bytes lower',
+    async () => {
+      const p = await program([
+        '        MEMORY  READ $80F0,$80FF',
+        '        ORG     $1000',
+        'START:  LEA     $8100,SP',
+        'HANDLER MOVEQ   #9,D6',
+        '        SIMHALT',
+        '        ORG     $68',
+        '        DC.L    HANDLER',
+        '        END     START',
+      ]);
+      // As in item 12: a click on the loaded, idle program runs one instruction, then the interrupt.
+      const outcome = await runScenario({
+        program: p,
+        start: false,
+        exceptions: true,
+        timeLimitMs: 2000,
+        actions: [{ atMs: 100, action: { kind: 'irq', level: 2 } }],
+      });
+      expect(outcome.registers.d[6]).toBe(9); // its own handler, not the bus-error vector
+      expect(outcome.registers.a[7]).toBe(0x8100 - 62);
+      // LEA (abs).L, the interrupt, four nested faults, the handler's MOVEQ (SIMHALT costs nothing).
+      expect(outcome.cycles).toBe(12 + 78 + 200 + 4);
+    },
+    LONG,
+  );
+
+  it(
+    'item 31: Read range: a write raises a bus error (vector $8 with exceptions on; message and halt with them off); reads work',
+    async () => {
+      const lines = (write: boolean) => [
+        '        MEMORY  READ $9000,$9FFF',
+        '        ORG     $1000',
+        'START:  MOVE.B  $9000,D3',
+        '        MOVEQ   #1,D6',
+        ...(write ? ['        MOVE.B  D3,$9000'] : []),
+        '        MOVEQ   #2,D7',
+        '        SIMHALT',
+        'BUSERR  MOVEQ   #8,D5',
+        '        SIMHALT',
+        '        ORG     $8',
+        '        DC.L    BUSERR',
+        '        ORG     $9000',
+        '        DC.B    $5A',
+        '        END     START',
+      ];
+      const read = await runScenario({ program: await program(lines(false)), timeLimitMs: 2000 });
+      expect(busError(read)).toBe(false);
+      expect(read.registers.d[3]).toBe(0x5a);
+      expect(read.registers.d[7]).toBe(2);
+      const off = await runScenario({ program: await program(lines(true)), timeLimitMs: 2000 });
+      expect(off.messages.some((m) => /^Bus Error: Instruction at .* accessing address /i.test(m))).toBe(true);
+      expect(off.registers.d[6]).toBe(1);
+      expect(off.registers.d[7]).toBe(0);
+      expect(off.end).toBe('halted');
+      const on = await runScenario({ program: await program(lines(true)), exceptions: true, timeLimitMs: 2000 });
+      expect(on.registers.d[5]).toBe(8);
+      expect(on.registers.d[7]).toBe(0);
+      expect(busError(on)).toBe(false);
+    },
+    LONG,
+  );
+
+  it(
+    'item 32: Invalid range: reads and writes in it raise a bus error; a long read 2 bytes below does not, a long write 2 bytes below does',
+    async () => {
+      const access = (instruction: string) => [
+        '        MEMORY  INVALID $A000,$AFFF',
+        '        ORG     $1000',
+        `START:  ${instruction}`,
+        '        MOVEQ   #2,D7',
+        '        SIMHALT',
+        '        END     START',
+      ];
+      const cases: [string, boolean][] = [
+        ['MOVE.B  $A000,D0', true],
+        ['MOVE.B  D0,$AFFF', true],
+        ['MOVE.L  $9FFE,D0', false],
+        ['MOVE.L  D0,$9FFE', true],
+      ];
+      for (const [instruction, faults] of cases) {
+        const outcome = await runScenario({ program: await program(access(instruction)), timeLimitMs: 2000 });
+        expect(busError(outcome), instruction).toBe(faults);
+        expect(outcome.registers.d[7], instruction).toBe(faults ? 0 : 2);
+      }
+    },
+    LONG,
+  );
+
+  it(
+    'item 33: Protected range: a Run started in supervisor mode can still access it from user mode; single-stepping the same code faults',
+    async () => {
+      const p = await program([
+        '        MEMORY  PROTECTED $9000,$9FFF',
+        '        ORG     $1000',
+        'START:  MOVE    #$0000,SR',
+        '        MOVE.B  $9000,D3',
+        '        MOVEQ   #2,D7',
+        '        SIMHALT',
+        '        END     START',
+      ]);
+      const run = await runScenario({ program: p, timeLimitMs: 2000 });
+      expect(busError(run)).toBe(false);
+      expect(run.registers.d[7]).toBe(2);
+      const stepped = await runScenario({
+        program: p,
+        start: false,
+        timeLimitMs: 2000,
+        actions: [
+          { atMs: 50, action: { kind: 'traceInto' } },
+          { atMs: 150, action: { kind: 'traceInto' } },
+          { atMs: 250, action: { kind: 'traceInto' } },
+          { atMs: 350, action: { kind: 'traceInto' } },
+        ],
+      });
+      expect(busError(stepped)).toBe(true);
+      expect(stepped.registers.d[7]).toBe(0);
+    },
+    LONG,
+  );
+});
+
+describe.skipIf(!enginesBuilt)('sim-ui §19 quirks that affect results (needs engine/dist)', () => {
+  it(
+    'Q3: a running program that reaches address 0 is paused there with no message; Run continues from address 0',
+    async () => {
+      const p = await program([
+        '        ORG     0',
+        'ZERO:   MOVEQ   #7,D7',
+        '        SIMHALT',
+        '        ORG     $1000',
+        'START:  MOVEQ   #1,D6',
+        '        JMP     ZERO',
+        '        END     START',
+      ]);
+      const paused = await runScenario({ program: p, timeLimitMs: 2000 });
+      const loaded = await runScenario({ program: p, start: false, timeLimitMs: 500 });
+      expect(paused.end).toBe('stopped');
+      expect(paused.registers.pc).toBe(0);
+      expect(paused.registers.d[6]).toBe(1);
+      expect(paused.registers.d[7]).toBe(0);
+      expect(paused.messages).toEqual(loaded.messages); // no message of its own
+      const resumed = await runScenario({
+        program: p,
+        timeLimitMs: 3000,
+        actions: [{ whenIdle: true, action: { kind: 'run' } }],
+      });
+      expect(resumed.registers.d[7]).toBe(7);
+      expect(resumed.end).toBe('halted');
+    },
+    LONG,
+  );
+
+  it(
+    'Q10: Rewind keeps memory; a file left open is forgotten without being closed (its buffered bytes are not written)',
+    async () => {
+      const p = await program([
+        '        ORG     $1000',
+        'START:  ADDQ.B  #1,COUNT',
+        '        MOVE.B  COUNT,D7',
+        '        LEA     NAME,A1',
+        '        MOVEQ   #52,D0',
+        '        TRAP    #15',
+        '        MOVE.L  D1,D6',
+        '        LEA     DATA,A1',
+        '        MOVEQ   #10,D2',
+        '        MOVEQ   #54,D0',
+        '        TRAP    #15',
+        '        SIMHALT',
+        "NAME:   DC.B    'open.bin',0",
+        "DATA:   DC.B    '0123456789'",
+        'COUNT:  DC.B    0',
+        '        END     START',
+      ]);
+      const outcome = await runScenario({
+        program: p,
+        parts: 'final', // the 512-byte stream buffer of 3.8.4 is the real ProgramFiles'
+        timeLimitMs: 5000,
+        actions: [
+          { whenIdle: true, action: { kind: 'rewind' } },
+          { atMs: 2000, action: { kind: 'run' } },
+        ],
+      });
+      expect(outcome.registers.d[7]).toBe(2); // COUNT kept its 1 across the Rewind
+      expect(outcome.files['open.bin']?.length).toBe(0); // created, written into the buffer, never closed
+    },
+    LONG,
+  );
+
+  it(
+    'Q24: Rewind writes its note to the output log only after the Log Output dialog was shown with a non-zero type',
+    async () => {
+      const p = await program([
+        '        ORG     $1000',
+        'START:  LEA     HELLO,A1',
+        '        MOVEQ   #14,D0',
+        '        TRAP    #15',
+        'LOOP:   BRA     LOOP',
+        "HELLO:  DC.B    'Hello',0",
+        '        END     START',
+      ]);
+      const note = '***** Reset Program Pressed *****';
+      const scenario: Scenario = {
+        program: p,
+        recipe: { kind: 'outlog' },
+        timeLimitMs: 2000,
+        actions: [{ atMs: 300, action: { kind: 'rewind' } }],
+      };
+      for (const parts of ['doubles', 'final'] as const) {
+        const silent = await runScenario({ ...scenario, parts });
+        const silentLog = String.fromCharCode(...(silent.outputLog ?? []));
+        expect(silentLog, parts).toContain('Hello');
+        expect(silentLog, parts).not.toContain(note);
+        const shown = await runScenario({ ...scenario, parts, logDialogShown: true });
+        expect(String.fromCharCode(...(shown.outputLog ?? [])), parts).toContain(`Hello\n${note}\n`);
+      }
+    },
+    LONG,
+  );
+});

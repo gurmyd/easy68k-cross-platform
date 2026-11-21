@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { firstDifference, renderMismatchReport, type KnownDifferences, type Mismatch } from './compare';
+import { firstDifference, OWNERS, renderMismatchReport, type KnownDifferences, type Mismatch } from './compare';
 import { assembleConformance, partsMode, runScenario, type AssembledConformance } from './harness';
 import {
   GOLDEN_DIR,
@@ -74,7 +74,8 @@ describe('known-differences.json', () => {
         artifactsOf(program as ConformanceProgram).some((a) => a.recipe === recipe && a.kind === kind),
         key,
       ).toBe(true);
-      expect(entry.owner, key).toBeTruthy();
+      // The engine or a host package: the party that acts on it (compare.ts OWNERS).
+      expect(Object.keys(OWNERS), key).toContain(entry.owner);
       expect(entry.summary.length, key).toBeGreaterThan(10);
     }
   });

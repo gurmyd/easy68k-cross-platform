@@ -159,5 +159,5 @@ y1..y2, both corners included.
 ## 5. Size of the tables
 
 `app/src/core/sim-host/surface/tables/` holds `dots.ts` (SH1's measured dots, 27,764 bytes) and
-`pens.ts` (the nibs, 45,887 bytes): 22,364 bytes together compressed with `gzip -9`, well under
+`pens.ts` (the nibs, 45,903 bytes): 22,374 bytes together compressed with `gzip -9`, well under
 the 300 kB of the work package. The ellipses need no table.

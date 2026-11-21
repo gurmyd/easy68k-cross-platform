@@ -32,7 +32,11 @@ export function firstDifference(expected: string, actual: string): FirstDifferen
   };
 }
 
-/** Owners a mismatch can be assigned to (ARCHITECTURE.md section 8). */
+/**
+ * Owners a mismatch can be assigned to (ARCHITECTURE.md section 8): the engine or a host package,
+ * the party that acts on it. A defect of the harness or its doubles is repaired, not listed; a
+ * result only Wine shows is listed with the package that acts if Windows agrees, and `unconfirmed`.
+ */
 export const OWNERS = {
   engine: 'the simulator engine (engine/sim, owner W4 for the binding)',
   W1: 'the null serial and network devices (W1)',
@@ -43,8 +47,6 @@ export const OWNERS = {
   SH7: 'hardware (SH7)',
   SH8: 'run controller (SH8)',
   U4: 'log service (U4)',
-  oracle: 'the Wine oracle itself (a property of Wine, not of the original)',
-  harness: 'the conformance harness or its doubles (T3)',
 } as const;
 export type Owner = keyof typeof OWNERS;
 
@@ -54,6 +56,8 @@ export interface KnownDifference {
   summary: string;
   /** Where it was reported (an errata entry, a request) or the evidence. */
   evidence?: string;
+  /** Set while the official result is known only under Wine: what would confirm it (a run on Windows). */
+  unconfirmed?: string;
 }
 
 /** `<program id>|<recipe>|<artifact kind>` -> the known difference, e.g. `trap15-a/a00-grid|report|result`. */
@@ -115,7 +119,7 @@ export function renderMismatchReport(
     );
     for (const m of list) {
       lines.push(
-        `| \`${m.program.id}\` | ${m.recipe} ${m.kind} | line ${m.difference.line} | \`${escapeCell(m.difference.expected)}\` | \`${escapeCell(m.difference.actual)}\` | ${escapeCell(m.known?.summary ?? '')} |`,
+        `| \`${m.program.id}\` | ${m.recipe} ${m.kind} | line ${m.difference.line} | \`${escapeCell(m.difference.expected)}\` | \`${escapeCell(m.difference.actual)}\` | ${escapeCell(m.known?.unconfirmed ? `Unconfirmed (Wine only): ${m.known.unconfirmed} ${m.known.summary}` : (m.known?.summary ?? ''))} |`,
       );
     }
     lines.push('');

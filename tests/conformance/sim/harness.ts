@@ -37,6 +37,7 @@ import {
 import { VIRTUAL_FRAME_MS } from '../../../app/src/core/run/clock';
 import { createHeadlessSession, type HeadlessSession } from '../../../app/src/core/run/headless';
 import { AtlasGlyphProvider } from '../../../app/src/core/sim-host/fonts/atlas-provider';
+import { defaultLogFileNames } from '../../../app/src/core/sim-host/log/format';
 import { createAsmEngine, createSimEngine, releaseSimEngine } from '../../../app/src/engine';
 import { TEST_ASM_OPTIONS, TEST_ASM_TIME } from '../../../app/src/engine/testing';
 import { MemoryBackend } from '../../../app/src/fs/memory-backend';
@@ -188,6 +189,12 @@ export interface Scenario {
   settings?: Partial<SimSettings>;
   /** Memory ranges copied into the outcome at the end. */
   capture?: { address: number; length: number }[];
+  /**
+   * Log recipes: the Log Output dialog is shown (and confirmed) before Log Start, so that the
+   * engine's snapshot of the log types is non-zero and Rewind/Reload notes reach the logs (sim-ui
+   * §13.5, Q24). Default false: the oracle never opens the dialog.
+   */
+  logDialogShown?: boolean;
   /** Called after every frame of virtual time (for checks of a state in the middle of a run). */
   onFrame?: (session: HeadlessSession, elapsedMs: number) => void;
 }
@@ -201,7 +208,7 @@ export interface Outcome {
   grid: { cols: number; rows: number };
   /** SHA-256 of the back buffer's pixels and its size. */
   surfaceHash: string;
-  /** Files of the program's folder after the run (doubles: every file; final: those the files part reports). */
+  /** Files of the program's folder after the run, by name: what storage has (bytes still buffered in an open stream of the real ProgramFiles are not there yet). */
   files: Record<string, Uint8Array>;
   execLog: Uint8Array | null;
   outputLog: Uint8Array | null;
@@ -264,11 +271,17 @@ export async function runScenario(scenario: Scenario): Promise<Outcome> {
   const outputType = recipe.kind === 'outlog' || (recipe.kind === 'log' && recipe.withOutput) ? 1 : 0;
   log?.setTypes(execType, outputType);
 
+  // With the real ProgramFiles, the program's folder is one synchronous view seeded with the
+  // folder's files, shared by every call of viewFor, and read back at the end (collect).
+  const view = doubles ? null : createFolderView(folder);
+  const folderBytes = (name: string): Uint8Array | null =>
+    files ? files.fileBytes(name) : viewFileBytes(view as MemorySyncFiles, name);
+
   const dialogAnswers = [...(scenario.dialogs ?? [])];
   session = await createHeadlessSession({
     engines: { create: createSimEngine, release: releaseSimEngine },
     vfs,
-    viewFor: () => new MemorySyncFiles(),
+    viewFor: () => view ?? new MemorySyncFiles(),
     glyphs,
     settings: {
       execLogType: execType,
@@ -297,6 +310,7 @@ export async function runScenario(scenario: Scenario): Promise<Outcome> {
     const { controller } = s;
     await controller.open(path, 'commandLine');
     if (recipe.kind !== 'report') {
+      if (scenario.logDialogShown) s.log.dialogShown();
       const started = await s.log.start();
       if (!started) throw new Error('Log Start did not start a log (the log part refused)');
       if (recipe.kind === 'outlog') controller.run();
@@ -326,7 +340,7 @@ export async function runScenario(scenario: Scenario): Promise<Outcome> {
         // A halted program can still be started again by an interrupt (STOP, sim-core 3.12): the
         // run ends when the result is complete, or after a second of idle virtual time.
         idleSince ??= elapsed;
-        const complete = endsWithMark(files?.fileBytes('result.bin') ?? null);
+        const complete = endsWithMark(folderBytes('result.bin'));
         const settled = (recipe.kind === 'report' && complete) || elapsed - idleSince >= IDLE_GRACE_MS;
         if (settled && (pending.length === 0 || pending.every((a) => a.atInstruction !== undefined))) {
           end = controller.snapshot.halted ? 'halted' : 'stopped';
@@ -347,7 +361,19 @@ export async function runScenario(scenario: Scenario): Promise<Outcome> {
       s.time.advance(VIRTUAL_FRAME_MS);
       scenario.onFrame?.(s, elapsed);
     }
-    const outcome = collect(s, end, alerts, files, log, wineGlyphs?.unknown);
+    let logs: { exec: Uint8Array | null; output: Uint8Array | null };
+    if (log) {
+      logs = { exec: Uint8Array.from(log.execBytes), output: Uint8Array.from(log.outputBytes) };
+    } else {
+      // The real LogService buffers and appends to the two files beside the program (sim-ui §13.1).
+      await s.log.flush();
+      const names = defaultLogFileNames(path);
+      const readLog = async (name: string, on: boolean) =>
+        on && (await vfs.stat(name)) ? new Uint8Array(await vfs.readFile(name)) : null;
+      logs = { exec: await readLog(names.exec, execType !== 0), output: await readLog(names.output, outputType !== 0) };
+    }
+    const folderFiles = files ? files.allFiles() : viewFiles(view as MemorySyncFiles);
+    const outcome = collect(s, end, alerts, folderFiles, logs, wineGlyphs?.unknown);
     for (const { address, length } of scenario.capture ?? []) {
       outcome.memory.set(address, s.engine.memory.slice(address, address + length));
     }
@@ -355,6 +381,36 @@ export async function runScenario(scenario: Scenario): Promise<Outcome> {
   } finally {
     s.dispose();
   }
+}
+
+/** The program's folder as one in-memory view for the real ProgramFiles, with the folder's files. */
+export function createFolderView(
+  folder: Readonly<Record<string, { data: Bytes; readOnly?: boolean }>>,
+): MemorySyncFiles {
+  const entries = Object.entries(folder);
+  return new MemorySyncFiles({
+    files: Object.fromEntries(entries.map(([name, file]) => [`${PROGRAM_DIR}/${name}`, file.data])),
+    readOnly: entries.filter(([, file]) => file.readOnly).map(([name]) => `${PROGRAM_DIR}/${name}`),
+  });
+}
+
+/** A file of the program's folder in the view, found as the program would name it; null if missing. */
+function viewFileBytes(view: MemorySyncFiles, name: string): Uint8Array | null {
+  const path = view.resolve(PROGRAM_DIR, name);
+  const size = path === null ? null : (view.stat(path)?.size ?? null);
+  if (path === null || size === null) return null;
+  return new Uint8Array(view.read(path, 0, size) ?? []);
+}
+
+/** Every file of the program's folder in the view, by its name as stored (the folder is flat). */
+function viewFiles(view: MemorySyncFiles): Record<string, Uint8Array> {
+  const result: Record<string, Uint8Array> = {};
+  for (const path of view.paths()) {
+    if (!path.startsWith(`${PROGRAM_DIR}/`)) continue;
+    const data = view.get(path);
+    if (data) result[path.slice(PROGRAM_DIR.length + 1)] = new Uint8Array(data);
+  }
+  return result;
 }
 
 function perform(session: HeadlessSession, action: PanelAction): void {
@@ -410,8 +466,8 @@ function collect(
   session: HeadlessSession,
   end: Outcome['end'],
   alerts: string[],
-  files: ConformanceFiles | null,
-  log: ConformanceLog | null,
+  files: Record<string, Uint8Array>,
+  logs: { exec: Uint8Array | null; output: Uint8Array | null },
   unknownFonts: Set<string> | undefined,
 ): Outcome {
   const { engine, text, surface } = session;
@@ -430,9 +486,9 @@ function collect(
     textRows: rows,
     grid: { cols: state.textCols, rows: state.textRows },
     surfaceHash: hash.digest('hex'),
-    files: files ? files.allFiles() : {},
-    execLog: log ? Uint8Array.from(log.execBytes) : null,
-    outputLog: log ? Uint8Array.from(log.outputBytes) : null,
+    files,
+    execLog: logs.exec,
+    outputLog: logs.output,
     registers: {
       d: [Reg.D0, Reg.D1, Reg.D2, Reg.D3, Reg.D4, Reg.D5, Reg.D6, Reg.D7].map(reg),
       a: [Reg.A0, Reg.A1, Reg.A2, Reg.A3, Reg.A4, Reg.A5, Reg.A6, Reg.A7].map(reg),

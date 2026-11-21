@@ -126,4 +126,26 @@ describe.skipIf(!enginesBuilt)('runScenario (needs engine/dist)', () => {
     const out = await runScenario({ program: printing, recipe: { kind: 'outlog' } });
     expect(text(out.outputLog)?.startsWith('EASy68K output log file: ')).toBe(true);
   }, 120_000);
+
+  // The real ProgramFiles and LogService (SH6, U4): result.bin and the two logs come back from the
+  // program's folder view and the vfs, the same bytes the doubles give.
+  it("with parts 'final', result.bin and the logs come from the real ProgramFiles and LogService", async () => {
+    const report = await assembleConformance(inline('instructions/p1-arith'));
+    const real = await runScenario({ program: report, parts: 'final' });
+    const twin = await runScenario({ program: report, parts: 'doubles' });
+    expect(real.reports).toEqual([]);
+    const result = real.files['result.bin'] ?? null;
+    expect(text(result)?.endsWith('END-OF-DUMP\r\n')).toBe(true);
+    expect(text(result)).toBe(text(twin.files['result.bin'] ?? null));
+
+    const logged = await assembleConformance(inline('logs/l04-print'));
+    const recipe = { kind: 'log', execType: 2, withOutput: true } as const;
+    const realLog = await runScenario({ program: logged, recipe, parts: 'final' });
+    const twinLog = await runScenario({ program: logged, recipe, parts: 'doubles' });
+    expect(text(realLog.execLog)?.startsWith('EASy68K execution log file: ')).toBe(true);
+    expect(maskArtifact('runlog', realLog.execLog as Uint8Array)).toEqual(
+      maskArtifact('runlog', twinLog.execLog as Uint8Array),
+    );
+    expect(text(realLog.outputLog)?.startsWith('EASy68K output log file: ')).toBe(true);
+  }, 240_000);
 });

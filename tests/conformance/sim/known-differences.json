@@ -20,8 +20,9 @@
     "evidence": "golden/trap15-a/a47-serial-without-port.result.bin line 1; docs/porting/errata/T3.md F5"
   },
   "trap15-b/b06-modes-above-15|report|result": {
-    "owner": "oracle",
-    "summary": "Drawing modes 18-23 (trap15-b 15 V8): under Wine the official program draws the red pixel unchanged for every one of them (Wine's SetROP2 refuses the values the table yields and keeps the copy mode); the port follows trap15-b 5.4 (mode 20 gives white, mode 22 the inverse of the pen, ...). Windows' answer is still open: run b06 on Windows (tests/conformance/windows-confirm/README.md).",
-    "evidence": "golden/trap15-b/b06-modes-above-15.result.bin lines 1-6; docs/porting/errata/T3.md F6"
+    "owner": "SH1",
+    "summary": "Drawing modes 18-23 (trap15-b 15 V8): under Wine the official program draws the red pixel unchanged for every one of them (Wine's SetROP2 refuses the values the table yields and keeps the copy mode); the port follows trap15-b 5.4 (mode 20 gives white, mode 22 the inverse of the pen, ...).",
+    "evidence": "golden/trap15-b/b06-modes-above-15.result.bin lines 1-6; docs/porting/errata/T3.md F6",
+    "unconfirmed": "run b06 on Windows (tests/conformance/windows-confirm/README.md). If Windows draws the pen unchanged as Wine does, SH1 (surface, the ROP2 table of trap15-b 5.4) changes modes 18-23 to keep the copy mode; if Windows follows trap15-b's table, this entry is a property of Wine and is removed by regenerating the golden on Windows."
   }
 }
