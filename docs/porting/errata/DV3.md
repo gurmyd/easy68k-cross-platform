@@ -269,6 +269,20 @@ and why. No entry concerns `app/src/contracts/`, so there is no **Contract** sec
   `document.visibilityState` stays `visible` while minimised (`backgroundThrottling: false`). Sizes:
   `EASy68K-<v>-arm64.dmg` 123,208,226 bytes, `-arm64-mac.zip` 119,759,537, `-x64.dmg` 129,079,052,
   `-x64-mac.zip` 125,636,363, the web zip 5,054,860, `engine-dist.zip` 110,508.
+- Run 44939698734 (commit 2c99d22, after the gate's restart, read job by job): every job passed
+  except `publish`, skipped as intended; 51 of 51 on each architecture, none skipped (35 unit,
+  1 prebuilt, 15 packaged: check 1 is the seven tests of `bundle.spec.ts`, check 2 the five of
+  `launch.spec.ts`, check 3 `association.spec.ts`, check 4 `quit.spec.ts`, check 5
+  `minimise.spec.ts`). Check 5: 3200 ms (arm64) and 3462 ms (x64) from F9 to Halted, minimised
+  536 ms and 1431 ms after F9, the program's clock 301 and 300 hundredths, first attempt each. The
+  Intel runner's margin under the 3.5 s limit is small (38 ms this run, 121 ms the run before);
+  the program itself takes 3.00 s, so the rest is the app's start of the run and the reading of
+  the status bar on a slow runner. If it ever fails there, read the printed figures before
+  touching the limit: 4.5.5 fixes it. Download sizes (bytes): `EASy68K-0.0.0-arm64.dmg`
+  123,211,188, `-arm64-mac.zip` 119,759,555, `-x64.dmg` 129,078,649, `-x64-mac.zip` 125,636,345,
+  `easy68k-cross-platform-web-0.0.0.zip` 5,054,839, `engine-dist.zip` 110,508, `SHA256SUMS.txt`
+  549; `sha256sum -c` OK for all six in the `checksums` job. The downloads' CDHash equals the
+  tested bundle's (arm64 `8090a158...`, x64 `f2a8e735...`).
 - `syspolicy_check distribution` also printed "Internal Xprotect Error: One or more files in your
   application triggered an Xprotect error" on both runners. It reads as a failure of the scan on
   the runner, not a detection (no malware name is given, and the same app passes Gatekeeper's

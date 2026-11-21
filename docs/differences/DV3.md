@@ -70,7 +70,7 @@ version is an item of the manual test (ARCHITECTURE.md 6.8, `docs/MANUAL-TEST-MA
 "First launch of the downloaded app: the Gatekeeper dialogs and the documented way through them").
 Whoever runs it corrects this section, and the README, with what the screen says.
 
-What GitHub's macOS runners have shown (release.yml run 44938987022, both architectures, through
+What GitHub's macOS runners have shown (release.yml runs 44938987022 and 44939698734, both architectures, through
 `desktop/scripts/check-downloads.mjs`): the app inside the `.zip` (unpacked with `ditto`) and inside
 the `.dmg` passes `codesign --verify --deep --strict` and is byte for byte the bundle the packaged
 checks tested (same CDHash); the `.dmg` holds the `Applications` link; the minimum is macOS 13.0.
