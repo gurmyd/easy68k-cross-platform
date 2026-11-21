@@ -1,0 +1,27 @@
+{
+  "logs/l14-percent-in-listing|log:2|runlog": {
+    "owner": "engine",
+    "summary": "Accepted difference. The original uses each listing row as a printf format string in the execution log (sim-ui 19 Q23): '100% sure: %d %x %%' came out as '100\\xc8\\x9bRure: 4730280 10 %' (stack contents). The port writes the row literally (engine/sim/PATCHES.md 11.7).",
+    "evidence": "golden/logs/l14-percent-in-listing.log2.RunLog.txt.gz line 8; docs/differences/T3.md"
+  },
+  "trap15-a/a31-files-zero-length|report|result": {
+    "owner": "engine",
+    "summary": "Task 54 with D2 = 0: the original gives D0.W = 0 (the Borland fwrite returns the item count for a zero item size; trap15-a 12 item 14, task 54 'UNVERIFIED'); the port gives 2 (C99 fwrite returns 0). trap15-a says to special-case D2 = 0 to match. Task 53 with D2 = 0 gives 2 in both.",
+    "evidence": "golden/trap15-a/a31-files-zero-length.result.bin line 1; docs/porting/errata/T3.md F3"
+  },
+  "trap15-a/a32-files-bounds|report|result": {
+    "owner": "engine",
+    "summary": "Task 53 with A1 = $2000 and D2 = $FFFFFFFF on a 10-byte file (the bounds test wraps): the original gives D0.W = 0 with D2 unchanged ($FFFFFFFF) and reads nothing (memory at $2000 unchanged) - the Borland fread returns the requested count; the port gives D0.W = 2. Measured under Wine (the RTL is in SIM68K.exe, the file system is Wine's); trap15-a 12 item 14.",
+    "evidence": "golden/trap15-a/a32-files-bounds.result.bin line 3; docs/porting/errata/T3.md F4"
+  },
+  "trap15-a/a47-serial-without-port|report|result": {
+    "owner": "W1",
+    "summary": "Task 40 with CID 16: the original gives D0.W = 1 (invalid CID, checked in TsimIO::initComm before the port is opened; trap15-a 13 Serial); the port gives 2 because NullSerial.initComm (core/sim-host/serial/null.ts) returns 2 for every CID. CID 0 with a missing port (2) and tasks 41-43 on an unopened CID (3) agree.",
+    "evidence": "golden/trap15-a/a47-serial-without-port.result.bin line 1; docs/porting/errata/T3.md F5"
+  },
+  "trap15-b/b06-modes-above-15|report|result": {
+    "owner": "oracle",
+    "summary": "Drawing modes 18-23 (trap15-b 15 V8): under Wine the official program draws the red pixel unchanged for every one of them (Wine's SetROP2 refuses the values the table yields and keeps the copy mode); the port follows trap15-b 5.4 (mode 20 gives white, mode 22 the inverse of the pen, ...). Windows' answer is still open: run b06 on Windows (tests/conformance/windows-confirm/README.md).",
+    "evidence": "golden/trap15-b/b06-modes-above-15.result.bin lines 1-6; docs/porting/errata/T3.md F6"
+  }
+}

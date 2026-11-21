@@ -1,0 +1,5 @@
+EASy68K output log file: 11/21/2026 5:04:41 PM
+
+Hello from the official simulator
+ABCDE
+-12345 BEEF       42done.

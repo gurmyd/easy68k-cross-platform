@@ -1,0 +1,104 @@
+# electron-builder configuration of the macOS app (ARCHITECTURE.md 1.1, 7.4-7.6). Owner: DV3.
+#
+#   npm run desktop:pack                 unpacked EASy68K.app for the host architecture
+#   npm run desktop:dist -- --arm64      .dmg and .zip for Apple Silicon (--x64: Intel)
+#
+# Both build the web app first (app/dist) and compile desktop/src (desktop/dist). The output goes
+# to desktop/release/ (git-ignored): mac-arm64/EASy68K.app for arm64, mac/EASy68K.app for x64.
+# release.yml adds -c.extraMetadata.version=<root package.json version>, so that the app and its
+# file names carry the port's one version number (7.5); desktop/package.json says 0.0.0.
+#
+# What goes into the app:
+#   app.asar               desktop/dist (the main process and the preload script), desktop's
+#                          package.json and its production dependencies (serialport)
+#   app.asar.unpacked      the .node file of serialport (native code cannot load from an archive)
+#   Resources/app/dist     the production build of app/ that app:// serves (desktop/src/main.ts
+#                          looks there first; docs/porting/errata/DV2.md entry 14)
+#
+# Fuses, native modules per architecture and the ad-hoc signature are done in
+# scripts/after-pack.mjs, in the order 7.6 requires; electron-builder itself neither flips fuses
+# (no electronFuses here) nor signs (mac.identity: null) unless release.yml passes a Developer ID.
+
+appId: io.github.easy68k-mac.app
+productName: EASy68K
+copyright: 'GPL-2.0-or-later. EASy68K is by Charles Kelly; this is an unofficial port.'
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - package.json
+  - dist/**/*.js
+  - '!dist/**/*.map'
+  # serialport: only the macOS binary (one file for both architectures; after-pack.mjs thins it),
+  # not the binaries of other systems or the C++ sources it was built from.
+  - '!**/node_modules/@serialport/bindings-cpp/prebuilds/{android,linux,win32}-*/**'
+  - '!**/node_modules/@serialport/bindings-cpp/{src,build}/**'
+  - '!**/node_modules/@serialport/bindings-cpp/binding.gyp'
+  - '!**/node_modules/node-addon-api/**'
+
+asar: true
+asarUnpack:
+  - '**/*.node'
+
+extraResources:
+  - from: ../app/dist
+    to: app/dist
+    filter:
+      - '**/*'
+
+# The N-API binary that serialport ships is used as it is (one file for both Mac architectures);
+# nothing is compiled, so no install script runs while packaging (root package.json allowScripts).
+npmRebuild: false
+nodeGypRebuild: false
+buildDependenciesFromSource: false
+
+electronLanguages:
+  - en
+
+afterPack: ./scripts/after-pack.mjs
+
+publish: null
+
+mac:
+  target:
+    - dmg
+    - zip
+  category: public.app-category.developer-tools
+  icon: ../app/public/icons/icon-512.png
+  # No minimumSystemVersion: the app keeps the LSMinimumSystemVersion of Electron's own Info.plist,
+  # the oldest macOS the Electron in use supports (docs/porting/errata/DV3.md entry 10). Check 1
+  # compares it with Electron's, and release.yml prints it into the release notes.
+  darkModeSupport: true
+  # Ad-hoc signature in scripts/after-pack.mjs (7.6). release.yml replaces null by the Developer ID
+  # when its optional secrets exist (section 11); then also the hardened runtime and notarisation.
+  identity: null
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  artifactName: EASy68K-${version}-${arch}-mac.${ext}
+  extendInfo:
+    NSHumanReadableCopyright: 'EASy68K - unofficial web and macOS port. GPL-2.0-or-later.'
+
+dmg:
+  artifactName: EASy68K-${version}-${arch}.${ext}
+  writeUpdateInfo: false
+
+# 5.7: the app opens .X68, .L68 and .S68 from Finder. Launch Services compares extensions without
+# regard to case; both spellings are listed for the systems that do not.
+fileAssociations:
+  - ext: [X68, x68]
+    name: EASy68K Source
+    description: 68000 assembly source
+    role: Editor
+    rank: Owner
+  - ext: [L68, l68]
+    name: EASy68K Listing
+    description: 68000 assembler listing
+    role: Editor
+    rank: Owner
+  - ext: [S68, s68]
+    name: EASy68K S-Record
+    description: 68000 program in S-record format
+    role: Viewer
+    rank: Owner

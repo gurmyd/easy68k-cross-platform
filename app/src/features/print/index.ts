@@ -1,15 +1,31 @@
-// Feature "print": Print and Printer Setup.
+// Feature "print": Print and Printer Setup of Editor mode (editor-ui §13; ARCHITECTURE.md 1.4
+// note 2). Owner: W3 > E6.
 //
-// STUB written by W3 (wave 0): an empty feature module, so that the shell runs before this
-// feature exists (ARCHITECTURE.md 3.12.3). E6 owns this folder and replaces the body. The
-// exported names are contract (section 8, "Stubs"): app/src/features/index.ts imports
-// them by name.
+//   commands  ed.file.print         the selection or the whole document through the system print
+//                                   dialog (Platform.print); enabled while a document is open
+//             ed.file.printerSetup  the same system print dialog (note 2); always enabled
+//   dialogs   `print.range`         All / Selection, asked only while the document has a selection
 //
-// A feature module may contribute command handlers (`commands`), panels (`panels`), dialogs
-// (`dialogs`) and an `init` function that runs once after every service exists.
-//
-// Owner: W3 > E6.
+// The print document itself is built by core/print; the steps are in print.ts.
 
 import type { FeatureModule } from '../../contracts';
+import { PRINT_RANGE_DIALOG_ID, printActiveDocument, printerSetup } from './print';
+import { PrintRangeDialog } from './PrintRangeDialog';
 
-export const feature: FeatureModule = { id: 'print' };
+export const feature: FeatureModule = {
+  id: 'print',
+  dialogs: { [PRINT_RANGE_DIALOG_ID]: PrintRangeDialog },
+  commands: {
+    'ed.file.print': {
+      enabled: (state) => state.documents.activeId !== null,
+      async run(ctx) {
+        await printActiveDocument(ctx);
+      },
+    },
+    'ed.file.printerSetup': {
+      async run(ctx) {
+        await printerSetup(ctx);
+      },
+    },
+  },
+};

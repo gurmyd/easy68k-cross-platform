@@ -1,0 +1,40 @@
+/* The Printer Output dialog (PrinterOutputDialog.tsx). Owner: SH6. */
+
+.e68-printer-output {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.e68-printer-output__page {
+  margin: 0;
+  padding: var(--sp-2);
+  min-height: calc(var(--fs-md) * 6);
+  max-height: 40vh;
+  overflow: auto;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+  white-space: pre;
+}
+
+.e68-printer-output__page:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.e68-printer-output__empty,
+.e68-printer-output__note {
+  margin: 0;
+  white-space: normal;
+  line-height: var(--lh-body);
+}
+
+.e68-printer-output__note {
+  color: var(--c-text-muted);
+  font-size: var(--fs-sm);
+}

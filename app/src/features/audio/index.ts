@@ -1,24 +1,47 @@
-// Feature "audio": sound.
+// Feature "audio": the window's audio backend (ARCHITECTURE.md 3.7).
 //
-// STUB written by W3 (wave 0): an empty feature module, so that the shell runs before this
-// feature exists (ARCHITECTURE.md 3.12.3). SH5 owns this folder and replaces the body. The
-// exported names and the signature of the factory are contract (section 8, "Stubs"): app/src/features/index.ts imports
-// them by name.
+// `createAudioBackend` makes the Web Audio backend (webaudio-backend.ts) that the bootstrap puts on
+// the context as `ctx.devices.audio`; the simulator session gives it to the sound device (the
+// TRAP #15 sound tasks, core/sim-host/audio/), and the simulator's and EASyBIN's beeps use it too.
+// The logic of the sound tasks is in core/sim-host/audio/ and does not depend on this backend.
 //
-// A feature module may contribute command handlers (`commands`), panels (`panels`), dialogs
-// (`dialogs`) and an `init` function that runs once after every service exists.
+// The run commands and the keys of the Output panel call `resume()` (3.7). `init` adds two more
+// occasions that cost nothing when the page plays no sound: a press of any key or pointer button in
+// the window, and the page becoming visible again, resume an audio context that exists or that a
+// playback is waiting for (Safari suspends audio in a background tab).
 //
 // Owner: W3 > SH5.
 
 import type { AppContext, AudioBackend, FeatureModule } from '../../contracts';
-import { createSilentAudioBackend } from '../../state/stub-services';
+import { createBrowserAudioOutput, WebAudioBackend } from './webaudio-backend';
 
-export const feature: FeatureModule = { id: 'audio' };
+/** Gestures that may unlock audio; listened to on the window in the capture phase. */
+const GESTURES = ['pointerdown', 'keydown'] as const;
+
+export const feature: FeatureModule = {
+  id: 'audio',
+  init(ctx: AppContext) {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    const backend = ctx.devices.audio;
+    const wake = () => {
+      if (backend instanceof WebAudioBackend) backend.resumeIfWanted();
+    };
+    const visible = () => {
+      if (document.visibilityState === 'visible') wake();
+    };
+    for (const type of GESTURES) window.addEventListener(type, wake, true);
+    document.addEventListener('visibilitychange', visible);
+    return () => {
+      for (const type of GESTURES) window.removeEventListener(type, wake, true);
+      document.removeEventListener('visibilitychange', visible);
+    };
+  },
+};
 
 /**
  * The audio backend of the browser (3.7), placed on the context as `devices.audio`. Called once
- * by the bootstrap. STUB: plays nothing.
+ * by the bootstrap. Where the page has no Web Audio (Node, tests) it plays nothing.
  */
 export function createAudioBackend(_ctx: AppContext): AudioBackend {
-  return createSilentAudioBackend();
+  return new WebAudioBackend(createBrowserAudioOutput(), () => performance.now());
 }

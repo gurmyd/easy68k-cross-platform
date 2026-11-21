@@ -1,0 +1,14 @@
+/* The editor's Find and Replace dialogs (editor-ui §14). Owner: E6. */
+
+.e68-find-dialog__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+}
+
+/* The labels of the two text boxes take the same width, so that the boxes line up. */
+.e68-find-dialog__body .e68-field-label__text {
+  min-width: 11ch;
+}

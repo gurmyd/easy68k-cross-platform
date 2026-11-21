@@ -1,15 +1,31 @@
-// Feature "breakpoints": the Break Points panel.
-//
-// STUB written by W3 (wave 0): an empty feature module, so that the shell runs before this
-// feature exists (ARCHITECTURE.md 3.12.3). U3 owns this folder and replaces the body. The
-// exported names are contract (section 8, "Stubs"): app/src/features/index.ts imports
-// them by name.
-//
-// A feature module may contribute command handlers (`commands`), panels (`panels`), dialogs
-// (`dialogs`) and an `init` function that runs once after every service exists.
+// Feature "breakpoints": the Break Points panel (ARCHITECTURE.md 2.6, note 40; sim-ui §12.2) and
+// View > Break Points.
 //
 // Owner: W3 > U3.
+//
+//   sim.view.breakpoints      shows the panel, brings its tab to the front and moves the focus
+//                             into its Registers grid (2.3).
+//
+// The grids and their rules are in core/breakpoints; the panel's state lives in one model per
+// window (model.ts), which sends the stored rows to the engine and empties the grids after a cold
+// start. The simple PC breakpoints of the listing gutter belong to sim-main (U1).
 
 import type { FeatureModule } from '../../contracts';
+import { showPanel } from '../../state/panels';
+import { BreakpointsPanel } from './BreakpointsPanel';
+import { breakpointsModelOf } from './model';
 
-export const feature: FeatureModule = { id: 'breakpoints' };
+export const feature: FeatureModule = {
+  id: 'breakpoints',
+  commands: {
+    'sim.view.breakpoints': {
+      run(ctx) {
+        showPanel(ctx, 'breakpoints');
+      },
+    },
+  },
+  panels: [{ id: 'breakpoints', title: 'Break Points', mode: 'simulator', component: BreakpointsPanel }],
+  init(ctx) {
+    return breakpointsModelOf(ctx).start();
+  },
+};

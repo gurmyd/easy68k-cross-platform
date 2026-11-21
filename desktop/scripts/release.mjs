@@ -1,0 +1,204 @@
+#!/usr/bin/env node
+// Steps of release.yml that are more than one shell line (ARCHITECTURE.md 7.4, 7.5, section 11).
+// Each prints what it decided; each fails with a message that says what to do.
+//
+//   node desktop/scripts/release.mjs version <GITHUB_REF>
+//       Prints the version to release: the root package.json's. On a tag push the tag must be
+//       v<that version> (7.5: one version number, in the root package.json).
+//   node desktop/scripts/release.mjs notes <version> <out-file> <minimum macOS>
+//       Writes the release notes: the download table (with the minimum macOS, the built app's
+//       LSMinimumSystemVersion) and the first-start steps for the ad-hoc signed app, taken from
+//       docs/differences/DV3.md (section 11: "every release note carries the exact steps").
+//   node desktop/scripts/release.mjs checksums <folder> <version>
+//       Checks that <folder> holds exactly the six release files of 7.4 for <version> and writes
+//       SHA256SUMS.txt next to them, in the format of `shasum -a 256` (`sha256sum -c` reads it).
+//
+// The functions are exported for tests/desktop/packaged/unit.spec.ts.
+//
+// Owner: DV3.
+
+// console and process are imported, not taken as globals: eslint.config.js gives Node's globals
+// only to desktop/**/*.{ts,mts} (docs/requests/DV3-eslint-node-globals.md).
+import console from 'node:console';
+import { createHash } from 'node:crypto';
+import process from 'node:process';
+import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { macOSName } from './packaging.mjs';
+
+const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+/** A semantic version as 7.5 uses it: X.Y.Z with an optional pre-release part. */
+const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+
+/**
+ * The version to release, from the root package.json's version and the Git ref of the run.
+ * A tag ref must be v<version>; any other ref (a manual run on a branch) releases <version>.
+ *
+ * @param {string} packageVersion  the root package.json's "version"
+ * @param {string} ref             GITHUB_REF ("refs/tags/v0.1.0", "refs/heads/main")
+ */
+export function releaseVersion(packageVersion, ref) {
+  if (!SEMVER.test(packageVersion)) {
+    throw new Error(`the root package.json's version "${packageVersion}" is not X.Y.Z`);
+  }
+  const tag = /^refs\/tags\/(.+)$/.exec(ref)?.[1];
+  if (tag !== undefined && tag !== `v${packageVersion}`) {
+    throw new Error(
+      `the tag ${tag} does not match the root package.json's version ${packageVersion}: set "version" to ` +
+        `${tag.replace(/^v/, '')} on the tagged commit, or tag the commit as v${packageVersion} (7.5)`,
+    );
+  }
+  return packageVersion;
+}
+
+/**
+ * The six files of a release (7.4), by name: two .dmg, two .zip, the engines and the web app.
+ * The names of the four app files are electron-builder's (electron-builder.yml artifactName).
+ *
+ * @param {string} version
+ */
+export function releaseFiles(version) {
+  return [
+    `EASy68K-${version}-arm64.dmg`,
+    `EASy68K-${version}-x64.dmg`,
+    `EASy68K-${version}-arm64-mac.zip`,
+    `EASy68K-${version}-x64-mac.zip`,
+    'engine-dist.zip',
+    `easy68k-mac-web-${version}.zip`,
+  ];
+}
+
+/**
+ * The text of SHA256SUMS.txt: one line per file, "<hex>  <name>", sorted by name, LF line ends,
+ * as `shasum -a 256` writes it and `sha256sum -c` / `shasum -a 256 -c` read it.
+ *
+ * @param {readonly { name: string, sha256: string }[]} entries
+ */
+export function checksumText(entries) {
+  return [...entries]
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+    .map(({ name, sha256 }) => {
+      if (!/^[0-9a-f]{64}$/.test(sha256)) throw new Error(`not a SHA-256 in hex: ${sha256}`);
+      if (/[\r\n\\]/.test(name)) throw new Error(`a file name with a line break or backslash: ${name}`);
+      return `${sha256}  ${name}\n`;
+    })
+    .join('');
+}
+
+/**
+ * What is wrong with a folder of release files, as messages; empty when it holds exactly the six.
+ *
+ * @param {readonly string[]} present  the file names in the folder
+ * @param {string} version
+ */
+export function releaseFileProblems(present, version) {
+  const expected = releaseFiles(version);
+  const problems = [];
+  for (const name of expected) if (!present.includes(name)) problems.push(`missing: ${name}`);
+  for (const name of present) {
+    if (!expected.includes(name) && name !== 'SHA256SUMS.txt') problems.push(`not a release file: ${name}`);
+  }
+  return problems;
+}
+
+/** Marks around the first-start section of docs/differences/DV3.md that the notes copy. */
+export const FIRST_START_BEGIN = '<!-- first-start:begin -->';
+export const FIRST_START_END = '<!-- first-start:end -->';
+
+/**
+ * The text between the first-start marks of a Markdown document, trimmed.
+ *
+ * @param {string} markdown
+ */
+export function firstStartSection(markdown) {
+  const begin = markdown.indexOf(FIRST_START_BEGIN);
+  const end = markdown.indexOf(FIRST_START_END);
+  if (begin < 0 || end < begin) {
+    throw new Error(`docs/differences/DV3.md has no section between ${FIRST_START_BEGIN} and ${FIRST_START_END}`);
+  }
+  return markdown.slice(begin + FIRST_START_BEGIN.length, end).trim();
+}
+
+/**
+ * The release notes (Markdown).
+ *
+ * @param {string} version
+ * @param {string} firstStart     the first-start section (firstStartSection)
+ * @param {string} minimumMacOS   the LSMinimumSystemVersion of the built app ("12.0"); it is
+ *                                Electron's own (electron-builder.yml sets none), read from the
+ *                                bundle by release.yml
+ */
+export function releaseNotes(version, firstStart, minimumMacOS) {
+  const macos = `macOS ${macOSName(minimumMacOS)} or later`;
+  const [arm64Dmg, x64Dmg, arm64Zip, x64Zip, engines, web] = releaseFiles(version);
+  return [
+    `EASy68K ${version} - unofficial web and macOS port of EASy68K v5.16.1.`,
+    '',
+    'This is a draft made by the release workflow. Publish it after the manual checks of',
+    '`docs/MANUAL-TEST-MAC.md` (ARCHITECTURE.md 6.8).',
+    '',
+    '## Downloads',
+    '',
+    '| File | For |',
+    '|---|---|',
+    `| \`${arm64Dmg}\` or \`${arm64Zip}\` | Macs with Apple silicon (M1 and later), ${macos} |`,
+    `| \`${x64Dmg}\` or \`${x64Zip}\` | Macs with an Intel processor, ${macos} |`,
+    `| \`${web}\` | the web app, to serve from any web server (or use the one on GitHub Pages) |`,
+    `| \`${engines}\` | the two WebAssembly engines, for contributors without Emscripten (\`npm run fetch:engines\`) |`,
+    '| `SHA256SUMS.txt` | SHA-256 of every file above (`shasum -a 256 -c SHA256SUMS.txt`) |',
+    '',
+    '## Opening the Mac app for the first time',
+    '',
+    firstStart,
+    '',
+  ].join('\n');
+}
+
+function sha256(path) {
+  return createHash('sha256').update(readFileSync(path)).digest('hex');
+}
+
+function main(argv) {
+  const [command, ...args] = argv;
+  if (command === 'version') {
+    const [ref = ''] = args;
+    const { version } = JSON.parse(readFileSync(join(REPO, 'package.json'), 'utf8'));
+    console.log(releaseVersion(version, ref));
+    return;
+  }
+  if (command === 'notes') {
+    const [version, out, minimumMacOS] = args;
+    if (!version || !out || !minimumMacOS) {
+      throw new Error('usage: release.mjs notes <version> <out-file> <minimum macOS of the app>');
+    }
+    const section = firstStartSection(readFileSync(join(REPO, 'docs', 'differences', 'DV3.md'), 'utf8'));
+    writeFileSync(out, releaseNotes(version, section, minimumMacOS));
+    console.log(`release notes for ${version} written to ${out}`);
+    return;
+  }
+  if (command === 'checksums') {
+    const [folder, version] = args;
+    if (!folder || !version) throw new Error('usage: release.mjs checksums <folder> <version>');
+    const present = readdirSync(folder).filter((name) => statSync(join(folder, name)).isFile());
+    const problems = releaseFileProblems(present, version);
+    if (problems.length) throw new Error(`${folder} is not a complete release:\n  ${problems.join('\n  ')}`);
+    const text = checksumText(releaseFiles(version).map((name) => ({ name, sha256: sha256(join(folder, name)) })));
+    writeFileSync(join(folder, 'SHA256SUMS.txt'), text);
+    process.stdout.write(text);
+    return;
+  }
+  throw new Error(
+    'usage: release.mjs version <ref> | notes <version> <out> <minimum macOS> | checksums <folder> <version>',
+  );
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  try {
+    main(process.argv.slice(2));
+  } catch (error) {
+    console.error(`release: ${/** @type {Error} */ (error).message}`);
+    process.exit(1);
+  }
+}

@@ -1,0 +1,344 @@
+# Builds, tests and drafts a release (ARCHITECTURE.md 7.4, 7.5, 6.7, section 11). Owner: DV3.
+#
+# Starts only on a version tag (v*) or by hand; never on an ordinary push. It creates a DRAFT
+# release; publishing it is a person's decision, after the manual checks of 6.8.
+#
+#   version    the version to release: the root package.json's; a tag must be v<that version>
+#   engines    the reusable engines.yml (artifact engine-dist)
+#   web        production build of app/ (relative base, so it can be served from any folder),
+#              zipped as easy68k-mac-web-<version>.zip; engine/dist zipped as engine-dist.zip
+#   mac        arm64 on macos-15, x64 on macos-15-intel: `npm run desktop:dist` (fuses, native
+#              module for the architecture, ad-hoc signature: desktop/scripts/after-pack.mjs), then
+#              the packaged-app checks 1-5 of 6.7 (and DV5's 6-8 once they exist) against exactly
+#              the bundle that goes into the .dmg and the .zip, with programs the real assembler
+#              made in the same job (tests/desktop/packaged)
+#   publish    the six files and SHA256SUMS.txt as a draft GitHub release, with the first-start
+#              steps of docs/differences/DV3.md in the notes; on a manual run only when
+#              `draft_release` is ticked (otherwise the run only builds and tests)
+#
+# Optional Developer ID (section 11). Without these repository secrets the app is signed ad hoc.
+# With MAC_CERTIFICATE_P12 (the .p12 of a "Developer ID Application" certificate, base64),
+# MAC_CERTIFICATE_PASSWORD and MAC_SIGN_IDENTITY (its name, "Developer ID Application: ... (TEAM)"),
+# electron-builder signs with it and the hardened runtime instead, and notarises when APPLE_ID,
+# APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID exist too. Nothing else changes.
+#
+# If GitHub withdraws the Intel runner (R-9): run the x64 entry on macos-15 as well; the checks then
+# run the x64 app under Rosetta 2 (install it first: softwareupdate --install-rosetta
+# --agree-to-license), with EASY68K_EXPECTED_ARCH=x64 as now.
+
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      draft_release:
+        description: 'Also create the draft GitHub release (unticked: build and test only)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FORCE_COLOR: '1'
+  # npm ci would download Electron for the runner (tools/install-electron.mjs); electron-builder
+  # downloads the Electron it packages itself, for the architecture it builds.
+  ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  version:
+    name: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: The version to release
+        id: version
+        run: |
+          version=$(node desktop/scripts/release.mjs version "$GITHUB_REF")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "### Release $version ($GITHUB_REF)" >> "$GITHUB_STEP_SUMMARY"
+
+  engines:
+    name: engines
+    uses: ./.github/workflows/engines.yml
+
+  web:
+    name: web
+    needs: [version, engines]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - name: Require both engines
+        if: needs.engines.outputs.available != 'asm sim'
+        env:
+          AVAILABLE: ${{ needs.engines.outputs.available }}
+        run: |
+          echo "::error title=Engines missing::engine-dist holds '${AVAILABLE}', not both engines; nothing is released."
+          exit 1
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Download engine-dist
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: engine-dist
+          path: engine/dist
+      - name: Production build of the web app
+        run: npm run build
+      - name: Zip the web app and the engines
+        run: |
+          mkdir -p release
+          cp -R app/dist "release/easy68k-mac-web-${VERSION}"
+          (cd release && zip -X -q -r "easy68k-mac-web-${VERSION}.zip" "easy68k-mac-web-${VERSION}")
+          rm -rf "release/easy68k-mac-web-${VERSION}"
+          # The engine files at the top level of the zip, as tools/fetch-engines.mjs reads it.
+          (cd engine/dist && zip -X -q ../../release/engine-dist.zip -- *)
+          ls -l release
+      - name: Upload the web and engine zips
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-web
+          path: release/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  mac:
+    name: mac-${{ matrix.arch }}
+    needs: [version, engines]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+            machine: arm64
+            folder: mac-arm64
+          - arch: x64
+            runner: macos-15-intel
+            machine: x86_64
+            folder: mac
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    outputs:
+      # Electron's own LSMinimumSystemVersion (electron-builder.yml sets none); the same Electron in
+      # both entries, and check 1 (bundle.spec.ts) fails if an entry's differs from Electron's.
+      minimum_macos: ${{ steps.minimum.outputs.version }}
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      EASY68K_REQUIRE_ENGINES: '1'
+      EASY68K_EXPECTED_ARCH: ${{ matrix.arch }}
+      EASY68K_PACKAGED_APP: desktop/release/${{ matrix.folder }}/EASy68K.app
+    steps:
+      - name: Require both engines
+        if: needs.engines.outputs.available != 'asm sim'
+        env:
+          AVAILABLE: ${{ needs.engines.outputs.available }}
+        run: |
+          echo "::error title=Engines missing::engine-dist holds '${AVAILABLE}', not both engines; nothing is released."
+          exit 1
+      - name: The runner's processor
+        env:
+          EXPECTED: ${{ matrix.machine }}
+        run: |
+          machine=$(uname -m)
+          sw_vers
+          echo "processor: $machine"
+          if [ "$machine" != "$EXPECTED" ]; then
+            echo "::error::this job builds and tests the ${EXPECTED} app on a ${EXPECTED} runner, got ${machine}"
+            exit 1
+          fi
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Download engine-dist
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: engine-dist
+          path: engine/dist
+      - name: Electron version
+        id: electron
+        run: echo "version=$(node -p "require('electron/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Restore the Electron and electron-builder downloads
+        id: downloads
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: electron-builder-${{ steps.electron.outputs.version }}-${{ hashFiles('package-lock.json') }}-${{ matrix.arch }}
+
+      - name: Build the app (npm run desktop:dist)
+        id: build
+        env:
+          ARCH: ${{ matrix.arch }}
+          MAC_CERTIFICATE_P12: ${{ secrets.MAC_CERTIFICATE_P12 }}
+          MAC_CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          MAC_SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          args=("--${ARCH}" "-c.extraMetadata.version=${VERSION}")
+          if [ -n "$MAC_CERTIFICATE_P12" ] && [ -n "$MAC_SIGN_IDENTITY" ]; then
+            echo "Signing with the Developer ID of the repository secrets (section 11)."
+            export CSC_LINK="$MAC_CERTIFICATE_P12" CSC_KEY_PASSWORD="$MAC_CERTIFICATE_PASSWORD"
+            args+=("-c.mac.identity=${MAC_SIGN_IDENTITY}" "-c.mac.hardenedRuntime=true"
+              "-c.mac.entitlements=build/entitlements.mac.plist" "-c.mac.entitlementsInherit=build/entitlements.mac.plist")
+            if [ -z "$APPLE_ID" ] || [ -z "$APPLE_APP_SPECIFIC_PASSWORD" ] || [ -z "$APPLE_TEAM_ID" ]; then
+              echo "::warning::no notarisation credentials: the app is signed with the Developer ID but not notarised"
+              args+=("-c.mac.notarize=false")
+            fi
+            echo "signature=developer-id" >> "$GITHUB_OUTPUT"
+          else
+            echo "No Developer ID secrets: the app is signed ad hoc (7.6, section 11)."
+            unset APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+            echo "signature=adhoc" >> "$GITHUB_OUTPUT"
+          fi
+          # hdiutil on GitHub's Mac runners now and then fails with "Resource busy": one more try.
+          for attempt in 1 2; do
+            if npm run desktop:dist -- "${args[@]}"; then break; fi
+            if [ "$attempt" = 2 ]; then exit 1; fi
+            echo "::warning::desktop:dist failed; trying once more"
+            rm -rf desktop/release
+          done
+          ls -l desktop/release
+
+      - name: Save the Electron and electron-builder downloads
+        if: steps.downloads.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: electron-builder-${{ steps.electron.outputs.version }}-${{ hashFiles('package-lock.json') }}-${{ matrix.arch }}
+
+      - name: Minimum macOS of the app
+        id: minimum
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          version=$(plutil -extract LSMinimumSystemVersion raw -o - "${EASY68K_PACKAGED_APP}/Contents/Info.plist")
+          echo "LSMinimumSystemVersion: ${version}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Minimum macOS (${ARCH}): ${version}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Packaged-app checks (6.7)
+        env:
+          EASY68K_EXPECT_SIGNATURE: ${{ steps.build.outputs.signature }}
+        run: npm run desktop:test -- packaged
+
+      # Screenshots, logs of every app start, the prebuilt programs and the report, for people to look at.
+      - name: Upload the packaged-app check results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-packaged-results-${{ matrix.arch }}
+          path: build/desktop-packaged/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload the .dmg and the .zip
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-mac-${{ matrix.arch }}
+          path: |
+            desktop/release/EASy68K-${{ env.VERSION }}-${{ matrix.arch }}.dmg
+            desktop/release/EASy68K-${{ env.VERSION }}-${{ matrix.arch }}-mac.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: publish (draft)
+    needs: [version, web, mac]
+    if: github.event_name == 'push' || inputs.draft_release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      MINIMUM_MACOS: ${{ needs.mac.outputs.minimum_macos }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Download the release files
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release
+      - name: Checksums and notes
+        run: |
+          node desktop/scripts/release.mjs checksums release "$VERSION"
+          node desktop/scripts/release.mjs notes "$VERSION" notes.md "$MINIMUM_MACOS"
+          {
+            echo "### SHA256SUMS.txt"
+            echo '```'
+            cat release/SHA256SUMS.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Create or update the draft release
+        run: |
+          tag="v${VERSION}"
+          if draft=$(gh release view "$tag" --json isDraft --jq .isDraft 2>/dev/null); then
+            if [ "$draft" != "true" ]; then
+              echo "::error::release ${tag} is already published; a published release is never changed by this workflow"
+              exit 1
+            fi
+            echo "Updating the existing draft ${tag}."
+            gh release upload "$tag" release/* --clobber
+            gh release edit "$tag" --notes-file notes.md
+          else
+            gh release create "$tag" release/* --draft --title "EASy68K ${VERSION}" --notes-file notes.md --target "$GITHUB_SHA"
+          fi
+          echo "Draft release ${tag}: publish it on GitHub after the manual checks (6.8)." >> "$GITHUB_STEP_SUMMARY"

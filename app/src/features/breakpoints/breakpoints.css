@@ -1,0 +1,77 @@
+/* The Break Points panel (BreakpointsPanel.tsx). Owner: U3. */
+
+.e68-bp {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--sp-3);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font-size: var(--fs-md);
+}
+
+/* Registers and Memory side by side when there is room, stacked otherwise. */
+.e68-bp__conditions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+
+.e68-bp__group {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: max-content;
+  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-panel);
+}
+
+.e68-bp__legend {
+  padding: 0 var(--sp-1);
+  font-weight: 600;
+}
+
+.e68-bp__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.e68-bp__builder {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-left: var(--sp-4);
+}
+
+/* An in-place editor fills its cell. */
+.e68-bp__editor {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* Expression texts keep their runs of blanks (sim-ui §12.2). */
+.e68-bp__text,
+.e68-bp__draft {
+  white-space: pre;
+}
+
+.e68-bp__draft {
+  display: inline-block;
+  min-width: 100%;
+  padding: 0 var(--sp-1);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-sm);
+  background: var(--c-surface);
+  color: var(--c-text);
+}

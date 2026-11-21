@@ -1,0 +1,3388 @@
+{
+  "wine": "wine-8.0 (Debian 8.0~repack-4)",
+  "official": {
+    "EDIT68K.exe": "8cd7760ef3eb089c07a039d7cfb77b38ca23b859690f44d94ef67cf1d2db513e",
+    "SIM68K.exe": "49cee94f462e799081f1b1b546c957fd5c37a54f7819cd84a1e17718c4d0d20e"
+  },
+  "updated": "2026-11-21",
+  "programs": {
+    "exceptions/e01-divide-by-zero": {
+      "sourceSha256": "466b5e3a0391c03b5b0a778a2f7c2d941a610e4a2930575c90f175a048608250",
+      "s68Sha256": "012a7bc512e03dc783444f77804c2d37657a6705c1bbe23d4b05d67a81e7bfc3",
+      "l68Sha256": "d551796335154e2f7ac3a044c6f32eea4299bcac24b4f6d5e6993f4d94359f7b",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 25.3,
+          "artifacts": {
+            "result": {
+              "sha256": "422e438d360e058b2a4c0c576c8131022f91333758494095dc4cf05048ec7035",
+              "bytes": 745
+            }
+          }
+        }
+      }
+    },
+    "exceptions/e02-chk": {
+      "sourceSha256": "3e8a7835ac8aa4399e26403a45531a962e97c393755ef13baa5b4be8b1593b65",
+      "s68Sha256": "e1b5838fdbff4227f3f1bc9e89c8334cf5b7eef443cf06b1d4e1d949ce4fa187",
+      "l68Sha256": "9332a35f9e9994a7b81482f4a0c888751eeca3f9fe9c9e5db9256f4fda880c55",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 26.04,
+          "artifacts": {
+            "result": {
+              "sha256": "167e8e3513520233b97c90e4fffe24912bdccf915c7ad8c6b06a0cca1473a3f3",
+              "bytes": 946
+            }
+          }
+        }
+      }
+    },
+    "exceptions/e03-trapv": {
+      "sourceSha256": "f2625f9c66c117035b774fb4eaf4e5f36cc79cda859284dd75dd355beeefe6d1",
+      "s68Sha256": "af3aa7cb454018899a9fa64c5097aa37f3f4e63574c986c9f375f7957a503e87",
+      "l68Sha256": "854ea8d49dab0a2e669144e9773cd1dbfe95d527a3051b93d57072bc681d86fa",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 24.03,
+          "artifacts": {
+            "result": {
+              "sha256": "d08d64338060f1137b41017392c526cad60d9ea1016591916de737e459987463",
+              "bytes": 271
+            }
+          }
+        }
+      }
+    },
+    "exceptions/e04-trap-vectors": {
+      "sourceSha256": "a5452e88d4e69b66139cdd51cac2f3408cfb614deac7ad3f7709fa82fc748891",
+      "s68Sha256": "af288c583645c12819943abc5f08961147dee1ed70f95bbef6f556c6100c15ba",
+      "l68Sha256": "fd28dbbc406b8bab7356949adc7c73af82a340ac1b760d9bb6b2147df1368184",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 27.11,
+          "artifacts": {
+            "result": {
+              "sha256": "07dc6d708dd34425d7547d6868ef96ad431e2ebaed51f59d8672aada62fb1322",
+              "bytes": 989
+            }
+          }
+        }
+      }
+    },
+    "exceptions/e05-illegal": {
+      "sourceSha256": "482e4e7f2b5fa948beaca4bee8829a019d3cc009c93a42e00732a123d72cc97b",
+      "s68Sha256": "e4cbcf769ab3499af7b7549d1a2f4541a0166492a3fdd65726d0661989fce64d",
+      "l68Sha256": "a5507d7ec36a3d1753dffa57cca035f86b502a1e852b72229bc6875fb312a4f0",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 26.18,
+          "artifacts": {
+            "result": {
+              "sha256": "185ea4a00a07471a0f94969cbe9ff81a669b2ecd15916c0aaa5d611a881274d9",
+              "bytes": 989
+            }
+          }
+        }
+      }
+    },
+    "exceptions/e06-privilege": {
+      "sourceSha256": "aa4c23b8aa3e03d1fd73ab21603d963d45a2995a87d9d4c43a88da2f040148b3",
+      "s68Sha256": "16e682e16fe732487a634d079edd2ca4e2b1526e36f1a609f0517740110fa25e",
+      "l68Sha256": "6114587c9876826f0e96184325229da3c1cd34d315400cc4de1a16680c8c7c53",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 27.75,
+          "artifacts": {
+            "result": {
+              "sha256": "86b9a52eba1affbb23f626573f79c110f195d3a2fd83074124552feba060dd1d",
+              "bytes": 1393
+            }
+          }
+        }
+      }
+    },
+    "exceptions/e07-line-a-line-f": {
+      "sourceSha256": "b6d0fe43dee948626c89ede9e0ccde72cd65458c19c90ecdb06fa8ca0bcceeb6",
+      "s68Sha256": "1e4cbafdd5629e24c7925117c5c218e30d537bb4603de554de97d9e73869cf9a",
+      "l68Sha256": "d89b7b0d907c150b6cff7ac912654dc755e364364d95905e7faf13646af9d6fd",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 32.83,
+          "artifacts": {
+            "result": {
+              "sha256": "293c7f1010306638981217420ed4fb0684088ff877556c61074266ba6a6bcfdd",
+              "bytes": 745
+            }
+          }
+        }
+      }
+    },
+    "exceptions/e08-address-error-read": {
+      "sourceSha256": "b6c8ff28818b9356ca8dc5a2a4447086d328465f19b0ae33e9f376206fe330d7",
+      "s68Sha256": "9ad1b6eb414756f2cee3bd1927ecbd43f3a830d1598a2a8802e3addc65f2c657",
+      "l68Sha256": "e09b2f98addc532f602a66f2326a8ee06c967019a86d5cf600c37d4691b25e8b",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 28.18,
+          "artifacts": {
+            "result": {
+              "sha256": "2734014019c823c77af1f0f8792f73bbff049216349e213843c6b64ed213fac5",
+              "bytes": 1018
+            }
+          }
+        }
+      }
+    },
+    "exceptions/e09-address-error-write": {
+      "sourceSha256": "13ef9e5826ebeca01c7448869359d95cfd91a523c9712747b2a57ca18732b0d1",
+      "s68Sha256": "0b75df46c07f61ed57e3e60acabf5e1a9aa986632acff83b57aa1cc2be983939",
+      "l68Sha256": "8aaa128aa72aaff35c4abdebe33777914fe12e0cf81f21a06c5870a48c0a4c6a",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 26.78,
+          "artifacts": {
+            "result": {
+              "sha256": "ac3fe8c33855234b407a86186b0ff2eab38197a4d3eb8d3a3f139edbe6f4e945",
+              "bytes": 852
+            }
+          }
+        }
+      }
+    },
+    "exceptions/e10-address-error-jump": {
+      "sourceSha256": "885aa2ed3a2dfade868cef88d20b0f25019e99e7126d4c2c84e38b189226def3",
+      "s68Sha256": "09450f5c5a6f3da58f142f3eed3c5a6dcade3644469a17e7a26688043219da13",
+      "l68Sha256": "7f46de84f2c9bdb483895c6bc00913cdfa974bc80a1e1b23761c2fbf884625c7",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 26.23,
+          "artifacts": {
+            "result": {
+              "sha256": "947bacadbe8387789bef9d6e985ff0e6e23fa3b11d6e33c07028095e52f35e30",
+              "bytes": 817
+            }
+          }
+        }
+      }
+    },
+    "exceptions/e11-bus-error-map": {
+      "sourceSha256": "95f319e3458b9d836331e7f739cc6e34ad3f6bb2df5cfd95d8d637da3239a3e0",
+      "s68Sha256": "0004130002f84a3af75479a3fa6a5f9550cb954700c38abd85a097484dbd503c",
+      "l68Sha256": "1b9ee7a5b1c66385265a1597a2d665410282c5d85cdb96a227ba95b98d45e0f1",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 29.27,
+          "artifacts": {
+            "result": {
+              "sha256": "42c90d6c552cf66f52fb4e99bc5ba74ff1a6ed15564ada59e7fd7f4fbbedf797",
+              "bytes": 1219
+            }
+          }
+        }
+      }
+    },
+    "exceptions/e12-trace-bit": {
+      "sourceSha256": "f648c629520c3d2c53ce485097b44ee9e811267f23d90cd2dd190bd99268dc7b",
+      "s68Sha256": "a161b933196f558e99e0f157ba2a170df6c48a2fe6a92995348a24c2ec102c7a",
+      "l68Sha256": "96a6123264429465b803e5c45637dfd998c6908096c5c098318f37c480bf8c8d",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 24.46,
+          "artifacts": {
+            "result": {
+              "sha256": "3841964bf169cb768025ae5d1cae9d947da48477dc41b45f53038bf3361e244f",
+              "bytes": 150
+            }
+          }
+        }
+      }
+    },
+    "exceptions/e13-rte-rtr-sr": {
+      "sourceSha256": "62426890a24e056ad319b5ec4abb2ea0ad0846c14fc883dc51f331643b530726",
+      "s68Sha256": "fbf51db00c1fe54e0c553babf62e75c4b252a7a489ae4f583289f84cd234ffad",
+      "l68Sha256": "10c079fa979802297077dae2c20332cb1989c13ed45001a0d191a78532ca3dd8",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 25.23,
+          "artifacts": {
+            "result": {
+              "sha256": "f026a843455300106f764c3e6757b06d82e58e8edf454c4ded2ee2502b8de3ed",
+              "bytes": 616
+            }
+          }
+        }
+      }
+    },
+    "exceptions/e14-stop-with-trace": {
+      "sourceSha256": "fb459333bf451196367d9883049e261905ad0e9c5d0f5a1d477d81fcd5594646",
+      "s68Sha256": "e3ff8105c594a0a24b551e3cc8604c52677c964f3345942aafe04bd612a3a379",
+      "l68Sha256": "ac278c541ce06191688dd3f28d69d69abc9e31e2c6cf83b015c613f73b11ac94",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 26.18,
+          "artifacts": {
+            "result": {
+              "sha256": "a765b5ce244512fd4b65bdd488e422088db353e26dc1bc272cf4f1f32fe039fc",
+              "bytes": 110
+            }
+          }
+        }
+      }
+    },
+    "exceptions/e15-addx-address-error": {
+      "sourceSha256": "f385c2fbc1d3b0de08daa3960627a78f9494d2a54477444bf10736560944c9bc",
+      "s68Sha256": "86d767fd0bb5e9792098cb4cebf9346aeae594f510ee9ba9fa3ba4613fe9ea85",
+      "l68Sha256": "90f3bf0c880bcb92b4846e6effb707513eaa52ec30ed9fd881bcb6df15ffe517",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 25.49,
+          "artifacts": {
+            "result": {
+              "sha256": "93fdb68791b7ba11579556948243d4c4d3778b4e0c858cb1cfbe8861002779e7",
+              "bytes": 390
+            }
+          }
+        }
+      }
+    },
+    "hardware/h01-device-bytes-at-start": {
+      "sourceSha256": "4afe8e822c84a5c16d3df4a92bbdbf79e8454006a31a41f511da37fb200de528",
+      "s68Sha256": "7f6237c607f9f6c33dd351898b9f7492f7008c5d8bd3ea2c7aac88c3884e823e",
+      "l68Sha256": "f988a1ff306374c1bce54a881908eb8ffe690bf660a75a633b8efc580f32f7d6",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 24.51,
+          "artifacts": {
+            "result": {
+              "sha256": "ed748abd10fcd36622cfc2a9cb89bc10d24384228235e3db53b24a276df47df8",
+              "bytes": 308
+            }
+          }
+        }
+      }
+    },
+    "hardware/h02-device-writes": {
+      "sourceSha256": "23b7975eec100bae207d28683c74f015ea4e65622ac47eaa17279f2bf29524fa",
+      "s68Sha256": "7f3730aeecf23e33a4d38d65b62634f139eb4a62f1e76ddd50474a6a9e1f6c7a",
+      "l68Sha256": "622163a25e548dd92d494cd1abdd458a381649a223eca863e58094b3eb91f123",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 24.39,
+          "artifacts": {
+            "result": {
+              "sha256": "107364493c6d9db95e048dbd507b41e689ccb7305deef6597ae0369389948ad3",
+              "bytes": 107
+            }
+          }
+        }
+      }
+    },
+    "hardware/h03-device-write-in-rom": {
+      "sourceSha256": "6e441aa21564d5451d8f1cc35ae2b02ec6985785f35cb8331e66d00e71a25a52",
+      "s68Sha256": "bedd57b6066a10cc7514073a70a6bef26a884be3d0e6484140b2cbb5a028c3f0",
+      "l68Sha256": "321a7b86ce5f8d0bc6a2722b90373e91cbe75f5358a5481ad4309f7a6bbbd4d8",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 24.54,
+          "artifacts": {
+            "result": {
+              "sha256": "b0b976495bba8001c213524f40a37bce1c338407fb241b0137a1310d45753ac7",
+              "bytes": 129
+            }
+          }
+        }
+      }
+    },
+    "hardware/h04-stop-auto-irq": {
+      "sourceSha256": "f0f1a653fb5ccb5cb0b773365a91acec36dce000b4d5090002657bc8221050a5",
+      "s68Sha256": "7a29d7837faedea75f06428722c8fe4c1aa8b1d84c028a178e95cf4a3bb2a61e",
+      "l68Sha256": "3ace1ce3cc5e9ad3ee71ddb67a39b79e9cf1ea5244bc0a6c5cc8ce7f1ca8fddc",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 26.41,
+          "artifacts": {
+            "result": {
+              "sha256": "32e8962ea93b01ac6b9be47267bcdaaa1f70011a00a29e0d8a4e4dda6169f7d9",
+              "bytes": 91
+            }
+          }
+        }
+      }
+    },
+    "hardware/h05-irq-held-by-mask": {
+      "sourceSha256": "6f7e6148cc7cd14c87e5e5d0a6b060d90a1dc7fdd5355e3cf3fb27fe7570bd5b",
+      "s68Sha256": "15ada776368cb8d65ef6f79947f9fe8b41a31eefc62eaf4ffc4bd2bc5b45cf3e",
+      "l68Sha256": "d71d0b81edb24331eb22ede4677b6865eef733421a8552478e5f3e87b3b299cf",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 23.46,
+          "artifacts": {
+            "result": {
+              "sha256": "67c00275c8184d5128c013677e760848922fb8fe8cc4cf01e37c4235b5483f60",
+              "bytes": 91
+            }
+          }
+        }
+      }
+    },
+    "hardware/h06-two-levels": {
+      "sourceSha256": "92453cfff68f90a023f539500497c88541fead4671a525f06cc1528909443403",
+      "s68Sha256": "e3eeaf7ee7f464a41085395f7d153a1b15de4ec70b8f1f3a0ec86186b4a3e807",
+      "l68Sha256": "683a1e06a8fab6143851b7c0ae073d393eb5b6812b991c5183d18241ba48de58",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 23.1,
+          "artifacts": {
+            "result": {
+              "sha256": "30c52691677a0f5465dffd933e4bbca68a9d221fccfc44107bb3f30091f986fa",
+              "bytes": 36
+            }
+          }
+        }
+      }
+    },
+    "hardware/h07-pending-irq-exceptions-later": {
+      "sourceSha256": "93be0ab849f233cd905d4dacdd2c9d627260b04c76c109326065a617cb2c6897",
+      "s68Sha256": "a3ef6c5c6802e25966e99e2dc3cb68b70d984cea991da201cc4ebda6ccfd068a",
+      "l68Sha256": "195e486adef27084662a1c019eb49b20a9c7b40ea77e8e382e2a4d9fe03eda43",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 23.92,
+          "artifacts": {
+            "result": {
+              "sha256": "fb9dfdcf98eeb73b5fc60aafee3cc0b190eddc5564c816c01b2b9b3cade4499b",
+              "bytes": 71
+            }
+          }
+        }
+      }
+    },
+    "hardware/h08-auto-irq-disable-then-enable": {
+      "sourceSha256": "a9accfeca3697cbefd84caa62d675ba40f6913f3e30d335af9043ec99c8b658a",
+      "s68Sha256": "bb78ce46b67958de1d075d9d6f3afcd282ebe639164e63016b5d4bae5c40c7b0",
+      "l68Sha256": "a8cabc8ff9ed783a840eec483fe29a5a7e8145ccd390b75faa8fb4e694125c7b",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 24.29,
+          "artifacts": {
+            "result": {
+              "sha256": "29c0b17db398496c7bb49801e2785977161e85c265846641481a4d00035d33a6",
+              "bytes": 34
+            }
+          }
+        }
+      }
+    },
+    "hardware/h09-irq-cycles-and-frame": {
+      "sourceSha256": "eed57736007feeffd4b0e843e4e0b0023e654e3930dbdb23bd967b836977c4d5",
+      "s68Sha256": "ea88f9f19327e66af0df3e444a77212ae82c9b880abedcdda57861702ad51172",
+      "l68Sha256": "54250f9462018eb34022ae452483d26449520ddbb9bc2a2feed8ef6592796f14",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 20.58,
+          "artifacts": {
+            "result": {
+              "sha256": "2dcb7a0404d1876eb0e3c1d5ed5262dc62c18ad8d9e874db4fc20c3c525dfe2c",
+              "bytes": 60
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-abcd": {
+      "sourceSha256": "d78aa3a7825efc4d6c62f69dbb7d9f332627438f6bc5bd1858f702fec9cc5013",
+      "s68Sha256": "4e212082e32b9f0331f604863d5ed0c15f112f7c9c42827f10157be5cf90105b",
+      "l68Sha256": "72a7f5f9321122aff838fdc037dccd33972cb4c94561553387790400b302c817",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 49.96,
+          "artifacts": {
+            "result": {
+              "sha256": "712ed0669803f97c89264fe9cd96fa112230c50106e870696381aaf8af77d5f3",
+              "bytes": 8461
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-add-mem": {
+      "sourceSha256": "28701821a424c81b3a1450d2fba479b19c1ef17ddebb65ae853912664ca75777",
+      "s68Sha256": "29f550089ceb805349ccc3f9f6c3b17d3c6cb5b9107c6dd848970a52739ec470",
+      "l68Sha256": "603d9a172836b82b7708d91aa5befcdec16e6515c384f9dd2c295c10a94b0d63",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 48.83,
+          "artifacts": {
+            "result": {
+              "sha256": "383a175509d4d3f07ed9e9bcf09db72c5356e65df9f18022ea543dd156b4c448",
+              "bytes": 8233
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-add-reg": {
+      "sourceSha256": "a9d95cfa39ca1fbe5e292cdfda990d8665620440d3dafcaafb3610713f6f1f6a",
+      "s68Sha256": "97e5290a6a23460bd78b9357aed8f5b62a83e8964642e2f749cd3a3daec5d12a",
+      "l68Sha256": "3d6a4a35bb1deea63f580c3303c12af7fa161f4418587af3a72b6ca76f67a628",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 44.76,
+          "artifacts": {
+            "result": {
+              "sha256": "7d0c0d2fd716d7e934eae28a982e696bddf9aff16ca0b994eb15c7721efd6265",
+              "bytes": 7753
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-adda-suba-cmpa": {
+      "sourceSha256": "f86fdca0a13390885858066872421e86b30ae96b44c20919652977be68d6a9e0",
+      "s68Sha256": "1f0d409d4544ffcfa24cb5dbbbc6c1837531e9cb75020f967022ff3c02de3060",
+      "l68Sha256": "5b666827b36012e08496946f00b2ca7ade2a379b3649e8a350940aeefc2470d5",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 45.82,
+          "artifacts": {
+            "result": {
+              "sha256": "eeb3a5506344921f74a69217672cab5a85fd1132317af5cc9a08797953e33209",
+              "bytes": 7753
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-addq-subq": {
+      "sourceSha256": "d10292fcfb94967516a2e1a0b9144967562ba9f17af4d396f64ca6378d777e0a",
+      "s68Sha256": "9758fcb3f9b128b35d0d503855daa56a4811bc7480fef8597d7368377f61c829",
+      "l68Sha256": "2a3cc78f4a6c99faa72e6c83f9184536e72fb661785f192516ec5fc483b21597",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 48.6,
+          "artifacts": {
+            "result": {
+              "sha256": "4b1df44c58353ff229086bcb5ca1cd2aa3fc41dffb390a3ca23e75d7e2f02ebe",
+              "bytes": 8461
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-addx-subx": {
+      "sourceSha256": "8ecb7c3ea12d60d13d599e28741162525e0478226187f939ce8765e2d6dfd70c",
+      "s68Sha256": "00905c07eca8471740f9ece23479941a2871f436e303b3b9400150c874a4440a",
+      "l68Sha256": "9fe08eaaac436e72fdea0d55f2555a3585d9c27a8e1e3dd23e905ace0c97d78a",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 50.23,
+          "artifacts": {
+            "result": {
+              "sha256": "b6ba60515928b3a47c4fc17ad2f781958c4bb420058569c4f31edd18d91ac951",
+              "bytes": 8815
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-and-mem": {
+      "sourceSha256": "24ff472d9bce7b5b0e28fe42af314964a955771ae7ab99985f33b240c13b1a23",
+      "s68Sha256": "0f6c39dbc5935555092db6203c8e72d7ef3190721fc28b8cbeb6eb038e6c8d55",
+      "l68Sha256": "591d54aeee0c263eec54fc92e13d5f06d05109d141fe1f60030162bc8a2b2ed1",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 47.15,
+          "artifacts": {
+            "result": {
+              "sha256": "18396cee40accac1b4b7f7d50e725998b7f3242d6ced73f30a34d66ed68aea7d",
+              "bytes": 8233
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-and-reg": {
+      "sourceSha256": "d7f05744537527d8e9f0d238199d58e827283ce02ae33be08ce46d1a04856a31",
+      "s68Sha256": "d610e9311d79c8ac468d45bf7034eb21aaf486782abf303a7bca36147ddeb69b",
+      "l68Sha256": "32e3559b0a0ef285ad1f2427e6a104b0cf41a3ebaa2134ef38bcbce8c3fd61af",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 44.76,
+          "artifacts": {
+            "result": {
+              "sha256": "71b589d237103fdde3bcb1fabea4daa3f1ae493eaa4bedf311f19dd64cd69596",
+              "bytes": 7753
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-asl": {
+      "sourceSha256": "57b92974bcb3a0dd18630812b8ddb4c8d51876d30b1396119804440173f36344",
+      "s68Sha256": "d363b8ce677f5fa6690cdd0b08487788b82fb9bb5365f39658ca8e6a13b91d3f",
+      "l68Sha256": "5905bb0257fcdcf532e5e55558975d70e8e4dc720d8683b4ce6bd2b8b6eb2ca9",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 44.04,
+          "artifacts": {
+            "result": {
+              "sha256": "fc36786af7ef15bb6a3ce9d1ae5058694dacaf799f535bde7c1839ea3175120c",
+              "bytes": 7753
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-asr": {
+      "sourceSha256": "deda7606b252151b8868ea8233abb19b8d4d322dc7fe6b4d89f0beee45e8f51c",
+      "s68Sha256": "193995eaa7067ffceb78b18e72926d07a74f86b941e71110ada63239afc8d11e",
+      "l68Sha256": "1e7b44cee0ef3ca9a33e222117d5849a45edb21d4a6140f0a392b9c9f3c8dc28",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 46.16,
+          "artifacts": {
+            "result": {
+              "sha256": "630f80f6d2979a4b7974d4544ab973aea5da1fb67b4c5800314ac89105cb0820",
+              "bytes": 7753
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-bcc": {
+      "sourceSha256": "7ceebb54fdfd22b6b5deca3f8b6e275f7e72df1404ee2d94bf5c66ebf875b3aa",
+      "s68Sha256": "d4406cd9c3cc889325564e1a3b9f29a2031aab65d129b7bbb97d04649e81c7c3",
+      "l68Sha256": "73b0b744ee1e5327e74b56107595a50e4c00f88586dd2f55717ed0bacab17bac",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 50.9,
+          "artifacts": {
+            "result": {
+              "sha256": "cdeafc01d6ffac02f49b9711d7e566b503f86ef9282419cb84e6dccb83f09f83",
+              "bytes": 10333
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-bchg": {
+      "sourceSha256": "108dc4b540b8e6ceb21f110fd674ae036cb71196003f1b84e6bcb82b1680c77e",
+      "s68Sha256": "de42c61cf088b719fd8140322c6c7a47524a7084dea03de0082368f0d9a6f045",
+      "l68Sha256": "9576d18928a8bade0465248b9bc362e7bc50a5f06e5488251efb12dd82f4bd32",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 44.91,
+          "artifacts": {
+            "result": {
+              "sha256": "e81aaf287950775fb4d725e4f2664ba3378e9432faa45608f42d94c60b043fc1",
+              "bytes": 7837
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-bclr": {
+      "sourceSha256": "7f640d4822c198cf442e0a8253cec84e07e9c08e279bcf0ab1a141d2e34eff8f",
+      "s68Sha256": "ce3367e4c3470ebdf7eb134b40d0ee541fe4c6fe6d8bb3764b270a68bdc3bf29",
+      "l68Sha256": "d77e1ffe4cdeaa23c4836d646a5d9aac2ddda7e07f713c16136903f89a6a6c71",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 46.81,
+          "artifacts": {
+            "result": {
+              "sha256": "6225313cd56989662d7b44f6f2b4cb53ecf44bc4691d35e5bdc99dbbace48c7d",
+              "bytes": 7837
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-bitfield-mem": {
+      "sourceSha256": "c28e602e64a859bcc264a438b9744fc2a0a2a475a1795f3cb717c1c0f44fa3c8",
+      "s68Sha256": "380db385e08561cdd37f21516bff100a54aa324f1d169db5f24321a9f77ee0cb",
+      "l68Sha256": "9c35f7ac5845a3fe1d008a510662fd4d434739ce1bc68df4afb9915bb39175c5",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 63.49,
+          "artifacts": {
+            "result": {
+              "sha256": "dea26df362b4d6c7699c2e272f863528c4d46a4bc934f5331fcd090ede4981e8",
+              "bytes": 13165
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-bitfield-reg": {
+      "sourceSha256": "ce373a1ae3dd2abf7e68529f2ace3bbe46f11f0b520c4e5b8636a92e904d905f",
+      "s68Sha256": "4cb971b598bed6c03560f6c5d8bbe1bb4c1be341f8a60875705e28c6a35869b5",
+      "l68Sha256": "ea48ba7881fea94225e0751445b9e4400280a451f0babb5f23387ceb617c0919",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 52.9,
+          "artifacts": {
+            "result": {
+              "sha256": "651156362695706985298ec8e836cf9c4452cb5c722655666126e7df5a49d323",
+              "bytes": 10333
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-bset": {
+      "sourceSha256": "8196a70c62d866b546078ae4a71122ae373ac4ea36123c85446527608a31d5b7",
+      "s68Sha256": "2e1f11ef1bf84c71b343a935107fe2ceeed4e767d6950de879d4630722d5afde",
+      "l68Sha256": "f08eb5d729bdb8890890e7e98e8e4a57706243ad480047cf9a39b515baefcc59",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 46.54,
+          "artifacts": {
+            "result": {
+              "sha256": "c65435239358c57ddfae40482ade7ba2dc05a85ead1fdb1d64828dd59d9f7fcc",
+              "bytes": 7837
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-btst": {
+      "sourceSha256": "849be286d6945035c2df4101c1aac28e0ad3a1d914f9688722a8f00660ab1fe6",
+      "s68Sha256": "ea213053e597b225344e3640e0303ccdff7d2c1463249877064617337946989f",
+      "l68Sha256": "66801afe355fca0558fecea4bfa2718a2f0a8e92c24b1dd168d380f619f64ce6",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 46.9,
+          "artifacts": {
+            "result": {
+              "sha256": "0c64e593e02975f35f9a76e408808d911cf58288fb57be1482227efe88fc919f",
+              "bytes": 7837
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-ccr-sr": {
+      "sourceSha256": "6d1c85aa8ef3010c7cccc26a36481173bc83cad3cd0a9073ea08ad0928c499a9",
+      "s68Sha256": "d87fa55fb33acb08e72b764d8e875d455f407f8da5a5ea72f4711bfa601c2ca7",
+      "l68Sha256": "e0f93c89207c27174cfbd154473a52454becfbebac9a017f148269936ddb85d1",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 43.3,
+          "artifacts": {
+            "result": {
+              "sha256": "c43aaeec4c9bf27e9be66aa89571d01dd4f06b7cb9ac0a9c3b5e5f456f426358",
+              "bytes": 6893
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-chk-in-bounds": {
+      "sourceSha256": "968e04be89f49c56bf5f09e0596afbd4985bb32c218aa31aaab4396054fe6ed9",
+      "s68Sha256": "70da050e36fdf16e1b2c0575ebf41effa75b818b0cafad84d15ee5d93e2f13c0",
+      "l68Sha256": "100d26a8357473468303ef42cfce2bf803b9dd5a656c9fed9eec157df9f29db0",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 39.96,
+          "artifacts": {
+            "result": {
+              "sha256": "d2e356ce0157c99b1903233b8a140253a19fe089c3e115f40bbd100ae492a098",
+              "bytes": 5881
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-cmp-mem": {
+      "sourceSha256": "81e5a903ca0433bc0c8bdda19d0d41a96f50a54d5e83ee8b2ee9536bf4adf298",
+      "s68Sha256": "34ed58ecea39fbd86edfa708c72d70aa98c86e008bb4e8ac1d782b37d91c51b3",
+      "l68Sha256": "987a6a6a492ee7d70ec2e10734b2ed01e0af46fae9423aea814c6b8bad35b414",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 46.13,
+          "artifacts": {
+            "result": {
+              "sha256": "fbb19cde3b73864811a16c2a3b2305fe79097b48726fdf66d4d57e2cf00ef638",
+              "bytes": 8233
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-cmp-reg": {
+      "sourceSha256": "9cfe02858c882a956cc05cdadd22c563e546ca333b9a52fa1b962b36ed5e1df3",
+      "s68Sha256": "eb52efad57774dd9c9c109427d870c8712d5b0d98648cb48e07c0d4bdf5c8ff6",
+      "l68Sha256": "29f8c4e1605a5677a5323af64c00746b2331327ff45e4223aa2491a5b80cd324",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 44.34,
+          "artifacts": {
+            "result": {
+              "sha256": "a1addf1d153ce44b751fa5b0dd91ff6096ff5cea8988950a068d85a26fe8501b",
+              "bytes": 7753
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-cmpm": {
+      "sourceSha256": "53f987052c6d6ecbe0f4223a5c0cdc9068e61dada1eba15f06935fcdb6c2e61c",
+      "s68Sha256": "b5cbb1603efadcb37a44b51e5ce48919552739ec1f8cef288218bfafc4eddcbd",
+      "l68Sha256": "089a28f4fb8a227f95f7f4e6c014106f4e24d32f76961a87b6a598a1c00105a9",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 43.3,
+          "artifacts": {
+            "result": {
+              "sha256": "35841d96b5e1b4cbcce5923d2350537f924cc796210ffd3986869f11b0702dae",
+              "bytes": 6589
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-dbcc": {
+      "sourceSha256": "fe386a48b6833b49722b859a95a061dbfd710e1cdd60579f65287ee766b91ac7",
+      "s68Sha256": "1c0f5e5932f9968848ab07eef46cc2cc32f8e79fcbe3d0361ec926adac87cedf",
+      "l68Sha256": "3c350d3a7fe1ede82129f12d94b002739d5a855952361aa2b4b0216ed40f76bb",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 50.76,
+          "artifacts": {
+            "result": {
+              "sha256": "e9d6918cb6627bdc616857896d189727183df4750bf245789c5a53840ee1cead",
+              "bytes": 10333
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-divs": {
+      "sourceSha256": "a72ad535c55da6325f52986b730ad59c36a76095ba68b57a6713b1dbe5e56efd",
+      "s68Sha256": "c2c07cf6c125a085a50171dc28e3b13e34e94ab25355ab133e064bcac2fea5b8",
+      "l68Sha256": "9292e3d4a869b91ecc31c92d4745ac5dbddfd34be3d2889b24368cff9525533a",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 46.68,
+          "artifacts": {
+            "result": {
+              "sha256": "8a9ca3639206a33a6cc78078aeb92c30201376519397f4b0ee781f0c10d21837",
+              "bytes": 7753
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-divu": {
+      "sourceSha256": "ecb933536d8dd4f5280196fd47b026085df406d7e9c2c85a80a33a620e1d2d18",
+      "s68Sha256": "3eb26e8630253c43d378de41c7a0546f0c857688be59772538994d82ac12471f",
+      "l68Sha256": "6ae5e94bedad340a532b83cb27f018b21486f3a979be8e9286a22d4dc4de02a3",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 44.99,
+          "artifacts": {
+            "result": {
+              "sha256": "8438eb7092b72906e46cc43e6b94da431fab17d7c79c15bdfbeba772024a4963",
+              "bytes": 7753
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-eor": {
+      "sourceSha256": "3782d3f1c0ea357b55583557ffaea89b33ac935bbd933c14dd6370fa21680efd",
+      "s68Sha256": "52efbb6d4d8365bfb464896532efa92e874c22d69b03984cc9f05fe0fcad627c",
+      "l68Sha256": "fb8b0b84de3d96790f8fba9a643545241de22989a89fbb5ab2f238bef8b28dcf",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 38.85,
+          "artifacts": {
+            "result": {
+              "sha256": "46f33201ba1f40b87936846c38ad690fbfe60b87d4fe0b6bc86cae5963befc01",
+              "bytes": 7348
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-exg": {
+      "sourceSha256": "1a0c5d2b29eab4857063f92a81516b1e1aba55c24d2ca32b866593bd75838e34",
+      "s68Sha256": "4be7a304d3147dff10551f295711929b25a8affd3072334f0a30d8ae7e31eb4c",
+      "l68Sha256": "fa40287c231a030c902c98431d387e8bf5e377dda01119353a4a7803704a82d0",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 26.57,
+          "artifacts": {
+            "result": {
+              "sha256": "cd7f2560b640b20df14719addda45e91d84fe0badf31d605a31849a03029802a",
+              "bytes": 873
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-ext-swap": {
+      "sourceSha256": "9e3ece502f6690d3991f0c6bd2b64552603dcf7ec623477d87deaf61f67b7ba3",
+      "s68Sha256": "c7a1f617ac454f4a87b35870384677e211909306ee8c3e3541141561259496d6",
+      "l68Sha256": "084e31ddb2f0b44b047472f56f36d1d88a22e99b81727c60e5dce515c2005f78",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 42.4,
+          "artifacts": {
+            "result": {
+              "sha256": "34d6196838937b3bd984ef44a2f4efc82a868aba3bbc589b997c3afb1b53b020",
+              "bytes": 6463
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-immediate": {
+      "sourceSha256": "059828c0d7da2c118e237cbc6660877cf6ec6ed2375292be7361d3411a486c4b",
+      "s68Sha256": "8cf5906a6760ac23c0462d86601fe372441bad432a4229d81801a65e3c6f2576",
+      "l68Sha256": "53eb307782456593df1f40bce3256004ad65f88832af6107fc9d439d0886a575",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 45.44,
+          "artifacts": {
+            "result": {
+              "sha256": "ed21aaa8f6be93c5232c4efe801b8117b253330bf1f79a5a49d75fd4046dc02a",
+              "bytes": 10105
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-jmp-jsr-rts": {
+      "sourceSha256": "6f87e91a99402306f7602604d6e5fe70a2a3c3963f4cee295e4bc14707372c2e",
+      "s68Sha256": "eb621230bde92d47954863c09887402c9b5fdcb297d64396bc2d0a8cc4d17598",
+      "l68Sha256": "4ab6a2ec81cc20b713bfe26a196e9928b80cda0b3894b3bc8eeee769e5c2e20c",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 28.02,
+          "artifacts": {
+            "result": {
+              "sha256": "8b9539741c8639ba951feea3091552ef0bda431066f87375b3a193a78e6f499a",
+              "bytes": 1733
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-lea-pea": {
+      "sourceSha256": "7df25b8ed268da85247e166586f62013d4936924a5a22761c6dbd3d11698ca39",
+      "s68Sha256": "08d8deb26c81cc83e917b41af79870c384cddf152c5fc6d5fe28d923f670518b",
+      "l68Sha256": "a8fab39f376c2670b86564a1ae1e5a858f793f269c769eaadd0ef6e4310b3605",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 29.18,
+          "artifacts": {
+            "result": {
+              "sha256": "383d25e16cc64389e82f7403745e7de957d101b3e29c07bcc376892cde241846",
+              "bytes": 2808
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-link-unlk": {
+      "sourceSha256": "5c66bf2288fb49b070bb5f3f68358e036225de8bbf628001876666f4f245e966",
+      "s68Sha256": "2c75d3ca2c076fd8ff7a4717f65903705d7010d576ebfaef4adb0468cdc04582",
+      "l68Sha256": "2a3fcaab181a301ba4b506827fcd98517d1b34cc44ae2ef8b895e9ef1f7d7ac3",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 24.75,
+          "artifacts": {
+            "result": {
+              "sha256": "676755c576fbbc303981a10c016bd041b4db2d6d2ce944fa450c25c0a0af0d5d",
+              "bytes": 873
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-lsl": {
+      "sourceSha256": "2805d015e71b8bc3dc6c0f4291c280089045bf2c9be1f98845b2db6dbfd29948",
+      "s68Sha256": "03ba9d77436233633fa6eda896c4f9a8f8612e9b5956f4e2c1daddd7f204f57f",
+      "l68Sha256": "df38def054e90df443425b6e43df009479f06d9aef9ccb86876c26cf1715311e",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 38.82,
+          "artifacts": {
+            "result": {
+              "sha256": "bbfe9a94405ca1e509497494ad61aa4ab2025ebda7eab7e0fa03186dc04ca511",
+              "bytes": 7753
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-lsr": {
+      "sourceSha256": "862c07c7df2c731298c5f6095239ad23614a46874de3b9a318fbfd85c88f92a3",
+      "s68Sha256": "2063375e6be1d5b0c02a4ca191e9ebe206bba34704dc2f5c4ccd6e7fa88df4ab",
+      "l68Sha256": "08bb14b8eb45a938a6806557fe583698abf9c4e0bee5c7dfbb3d5b3b0d25a77b",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 43.6,
+          "artifacts": {
+            "result": {
+              "sha256": "a6500a424adad47bc9a4a3e709f037787bb64be283d0f692724c8734b17fcd69",
+              "bytes": 7753
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-move-b": {
+      "sourceSha256": "4114a95932a2f12c6a344baeae3253537059ea49c3dc78ad47f6feeea7b3ece2",
+      "s68Sha256": "b6a48a2ed298ca88f93838ecf65882a63b5dc05ef1f8adaf4b48bb4732ab3169",
+      "l68Sha256": "220c3e639ecb716dcc2af63367e5f8e12626d4ed90f60b557e5f9d488baaa77f",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 59.61,
+          "artifacts": {
+            "result": {
+              "sha256": "6879b8fa3919a6e8cf115594dc4f9d96fb0a7de35b7f676eb3f6b6aae0822786",
+              "bytes": 13165
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-move-l": {
+      "sourceSha256": "b431585589c3f02f8a91b1bd9afac4c9c264b300729436e71463b5b9c372ab03",
+      "s68Sha256": "c3d7d4a10eb8a3b788cb69157818e12997874c44458b231402e3accceee96103",
+      "l68Sha256": "07347f53a0b0fcb1b773a7001ca3e8caa1e79de92ce4dc7f4e5eec0831175d39",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 58.71,
+          "artifacts": {
+            "result": {
+              "sha256": "b28ddfac7eb68209f2b046ebd35fe149745f2b98f16b4b41ca8d6de577ceab91",
+              "bytes": 13165
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-move-w": {
+      "sourceSha256": "0bf8240968f005361b27b125927d8df256ecf6cad2504838cdd147dcbdd9eaa7",
+      "s68Sha256": "406d4e355cf9d4863ef9d1f7e6113aa5c4ca2e5ca47e34a286d747a61351744a",
+      "l68Sha256": "3e83638280727663b99600a9cf7d85886650e6b82855bf70f23a0f8b196400e6",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 94.67,
+          "artifacts": {
+            "result": {
+              "sha256": "2cff591033e9aaee6e07151ae566880ade54691d6ceba64d01dbb7ebd2e1a6a1",
+              "bytes": 26317
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-movea": {
+      "sourceSha256": "953add0742d3cedc6eb592383aea62dd2fc69231cd7bf2f90bbe43a8a183e9df",
+      "s68Sha256": "6dab2e868c55afd83736fe0060167205a064b9c5481b446b5b85ecb078fb2acd",
+      "l68Sha256": "4bd3b453cd84837aa6cc987260da88c1307242180dfeef48637771cd22b14015",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 42.74,
+          "artifacts": {
+            "result": {
+              "sha256": "52db0ffa2476dd7c55fb95cc98c83d74ff199f59dff749b8a2c0d7edd4c2badd",
+              "bytes": 6589
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-movem": {
+      "sourceSha256": "389c31843ae490ba9e1352a23238c41cf95e8cbd9d7146e6bc00514ff60d3f6b",
+      "s68Sha256": "f5ac0ca7fbd9d2a217f9e260dc6b6a2e30a0be1d751f01af42c4bcd790495f99",
+      "l68Sha256": "25f60862eed9ab1133674f9e797b6732b2158b46736ceeff9c48fc45ee510ed9",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 30.12,
+          "artifacts": {
+            "result": {
+              "sha256": "8f369bc868bdba22c891ce2fd7fa364f2463e0b092d94d0b10b58642f58c5a3a",
+              "bytes": 3301
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-movep": {
+      "sourceSha256": "888f738fe1610d1e5007316049b278df49d31b4311522b8e92f1e29a70e15ae6",
+      "s68Sha256": "f88fc58decda1cd65a441922651f2a8144e37326fc7c79134d96c619f7e11e57",
+      "l68Sha256": "cd65d928f8a8a0c8a168257674a6332f6728db2fa0d84ac94d32a3c1e76a7d27",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 37.1,
+          "artifacts": {
+            "result": {
+              "sha256": "8cc9ef49e199eafef2acdbe04da0fca99d91b45b11731c7027a4934f32a7e4a8",
+              "bytes": 4397
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-moveq": {
+      "sourceSha256": "ac426a1664a947dc46731465dce8043202bf4d6b73dccb79a26171da7d347fe1",
+      "s68Sha256": "f569e5bb36d4448b2e3dbbeaa8431bc3b9da8d36d3c08289fe0851afc0413671",
+      "l68Sha256": "ea09ad42def4bcd2adfc724c17198f1da6bc0109f1874f6514d993f785ea7c99",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 35.67,
+          "artifacts": {
+            "result": {
+              "sha256": "01e397dbf19061ec2ae849370033e7c0ee895e16d7c5cb24c1c4f02f538adb6a",
+              "bytes": 5173
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-muls": {
+      "sourceSha256": "435185091fcd86b8b3d683c912a3cebc32a941d97be8dad890baba4548dd2977",
+      "s68Sha256": "13709f4f7324f1860e75621bec4fc60a54dd9a9251ec05e95f46afbf0329c465",
+      "l68Sha256": "34c752a3277f2894e3f9c259f22bc72490f4e46bbf6775de628b449f4d83fa72",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 46.45,
+          "artifacts": {
+            "result": {
+              "sha256": "7010391e33f7a4b8143beaf09ddcd5e1ec1055e58a8fcd57fdb40a45c08087e5",
+              "bytes": 8461
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-mulu": {
+      "sourceSha256": "068b927f88596d97eb895afdb201d0abbf909cad75fd80bcb91f77353ae5d39c",
+      "s68Sha256": "a5dea9184c6cbe78a30460a2eafffbe4dfe0451a7a912ad417c6cf782f35763a",
+      "l68Sha256": "d25626d9d06773c8e5cafaa2e284f07a539a7efd6258f5f1a63232f5963202e9",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 44.53,
+          "artifacts": {
+            "result": {
+              "sha256": "09e8cd4dfd4dde254b03ce924ab6632b644900307fc7b854f7d52ae74c1ac036",
+              "bytes": 8461
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-nbcd": {
+      "sourceSha256": "03ab6e3536860b3e17f3b6b5a2ecf7578c69a1cebd34ef4d764e41506f29dad5",
+      "s68Sha256": "4d01a43e621e0fcf2b8546f79326f4dc9ba6a6bdaa249629d6203d6b89bab0f1",
+      "l68Sha256": "98df6dc00f99280d0a9d9db0d6f3f5d086351c1a6903664d9b340fbbd89371dc",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 41.64,
+          "artifacts": {
+            "result": {
+              "sha256": "8f4ea5cfb53edf4b5c31fa4d5c03084177f516d7db31a328067ff0cb58d212c6",
+              "bytes": 7348
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-neg-negx": {
+      "sourceSha256": "04b9e82ad8e8154a4553f56b2b9f2d8d6a3569620f23fc87c3bad9b8443577a1",
+      "s68Sha256": "350597c402600a19562b1fb045c52f6baee1b4b6ef68bcb080756a88f6c7bd5f",
+      "l68Sha256": "3353ca02edfff3507970b68de9db54ea763eed2f7cc4c17df845f5f3c8eb543d",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 47.34,
+          "artifacts": {
+            "result": {
+              "sha256": "82adc23bb99b81899ecb3565ba483ed60fbc9023fdf7fd1007bcab04dffc7fa6",
+              "bytes": 8815
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-not-clr-tst": {
+      "sourceSha256": "81ac031e40936286b41fb81daea7eda0f5c80f3def982f0a6990334e85485d41",
+      "s68Sha256": "7a9de5917f5ef6c133ad64437ac9cf3ca54cff989f35ec514f720c34748d162d",
+      "l68Sha256": "dbccf496bc90910fca1cf59b564b5c1c267da373415801daf9d73611138bbdb4",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 44.54,
+          "artifacts": {
+            "result": {
+              "sha256": "6d722440afce742c1f85862547447758722d5da702983b3ad4bb8398feef8c54",
+              "bytes": 8815
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-or-mem": {
+      "sourceSha256": "27362c6ed7c4e02974be6457d5ec60aef2165fdef52e2698181355c2793ba6d9",
+      "s68Sha256": "7c95e54e87a613881e7a44f1099085acae79895ae3bcaffb4e81aace4285e136",
+      "l68Sha256": "b873060362cb707ee4226c4ba017ebf672515849f964f5b4cadfd42ba6c41b20",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 44.61,
+          "artifacts": {
+            "result": {
+              "sha256": "ca56921135b098fd371cc794e015a3baa7d730c215b8f7b80bacc91196b74f65",
+              "bytes": 8233
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-or-reg": {
+      "sourceSha256": "d454767f6b8ca7b64db51c30467f862f6da0f3439671a192c857685bd31413c7",
+      "s68Sha256": "90eaf62ec37af34bbb1f006ac9481efe491da557f656de4d15cc457c3cc41ee2",
+      "l68Sha256": "59667d32fa75a0ac73dc0b942ee7eb027558b0a8fa91da9265ebce62dcdca0ae",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 43.09,
+          "artifacts": {
+            "result": {
+              "sha256": "618e0fde21dd6e5126300c7162a1e2a91df16b12ae6c99995b0f6381fd9d9e88",
+              "bytes": 7753
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-rol": {
+      "sourceSha256": "02e2f9decb1fcf34df29fdafc3af1f885ece4d0ba35e0e0aafa36cfee06c7c07",
+      "s68Sha256": "122c7d7cbab8800756bca3c7efbb219ed0f120e89bfdf2138ae5c53b2e475c4f",
+      "l68Sha256": "d50de7153b65236d121da2ff38e724a92cbd133cf99495ca6643a269a947eaa9",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 47.95,
+          "artifacts": {
+            "result": {
+              "sha256": "c6a978bbce2af83315890141a3fef0e2cdbeb9d107825ffa6449f48912336d61",
+              "bytes": 7753
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-ror": {
+      "sourceSha256": "94c170b30d1506f91f207466debdf5c1a343191f2a2aa68cd95892e9e59e7808",
+      "s68Sha256": "a9b6dfdacae292bb99583ecd442ec7c74265d6c6264ce5332c9337bb23100664",
+      "l68Sha256": "ed3bada0df187f84e91835bdb39483327d0ab41619ad4beeaec1563ec54e8a45",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 43.73,
+          "artifacts": {
+            "result": {
+              "sha256": "cab5a9dc5e95d9ec93acca07d3b05c71e1acd537d16b04f8d4d195f7583f5fcc",
+              "bytes": 7753
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-roxl": {
+      "sourceSha256": "ecc37eacc21902e49780c9bb6efdbc6e23a4347c0f0a2aad1b7edbc0a4211df7",
+      "s68Sha256": "d71195f4ad4756a4d07746be4aef0aa05b005bbfcf4df474e72a99858ef9b9a6",
+      "l68Sha256": "5ca2e40acac7e68f11334fad8f6a9e944facb0399534cd8fc0b007829e08d1a1",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 41.07,
+          "artifacts": {
+            "result": {
+              "sha256": "44e4dc6fae967d5b00869546dde880c77fc995f568abbf9bcabc689ac9c115a3",
+              "bytes": 7753
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-roxr": {
+      "sourceSha256": "2be9f185ebb88200760046e7ad47ed0bd90b6b3a364f344cacf1cc6060019761",
+      "s68Sha256": "4bd7b797f0de807dd30938021d43f7b5e7efa61d6e5b90be5f892f6e656d3145",
+      "l68Sha256": "ddfeb4423a32fadba3b883f2ea9fbed90572e84cb37d522d3cdf1bd6e078018a",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 42.65,
+          "artifacts": {
+            "result": {
+              "sha256": "0f95357e9d8466335b33b2d17eedc9f447069e3964f50ed3db01970331dd71d5",
+              "bytes": 7753
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-sbcd": {
+      "sourceSha256": "dfb21b429936471f11a063f40d3d4b9de921076eb56a77e987a540689ab84525",
+      "s68Sha256": "6c450740ee22ab8b9348c706c904dac3443d6709f2bf370a63bd209620f90d4c",
+      "l68Sha256": "0cd87466e753ffb78cbbfa6c6d107d85c3b6ac5f6ff03d22eaf966f658700d31",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 48.08,
+          "artifacts": {
+            "result": {
+              "sha256": "e33c058602eb9e9e270d3ac76116eceb3a487fd2ced75da3bcbf51f089775a65",
+              "bytes": 8461
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-scc": {
+      "sourceSha256": "9e7fdaa4f286cd3e8e02ecaecc19eaabf6a94f9d2079e09957db13b6296d7604",
+      "s68Sha256": "fa7875adf9cb2c12dce90a1fe4a926750a897512d514a0df97f4815688f783b6",
+      "l68Sha256": "b855c592aa1d11f3b838f495a94c990b06a6cc2e70aefed05c1a0e38f05ab497",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 52.89,
+          "artifacts": {
+            "result": {
+              "sha256": "0e45a0c2f96c7c3040f286e84293eed57b78f774a73cb87a2280c77086c841fa",
+              "bytes": 11277
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-shift-mem": {
+      "sourceSha256": "dbe8f9145f04d3622f2cfc0d01fc8e53219141abb1f33feff96c27ffc6f3fb8f",
+      "s68Sha256": "838af970d4bb7b5a53cbc54717f2c3b42f0e9b7303b8737da01da5888d0315c9",
+      "l68Sha256": "96c200b7c92434f0e0377c104d3768e472037b44cc2794ac9a49b3b0d55b944f",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 52.09,
+          "artifacts": {
+            "result": {
+              "sha256": "d8a97380f523c5a392ddb7148b91f3fd73a3d45b3d52ad0f1821ea4facd5debd",
+              "bytes": 8781
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-sub-mem": {
+      "sourceSha256": "e3f384398c73976cb3fcefb88b1919792a686241e843e3bbeabac49795ebae0c",
+      "s68Sha256": "1c96351db396cf8a415fe70a4f82a76809a10cb0645f02a87451969171a20a7f",
+      "l68Sha256": "b301e5eb70832bf505e8dfef025154a3b8427f38b13feb24994016e6d50620df",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 49.13,
+          "artifacts": {
+            "result": {
+              "sha256": "acf0c285417796fd8c593a94712cb2766c8aced457295e150eac98b73c3d57d5",
+              "bytes": 8233
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-sub-reg": {
+      "sourceSha256": "73723a18ab944aebe0d03e335b37904c0739975dc6557ae2a32573c309fb776f",
+      "s68Sha256": "bfeee884af3da504bee87d32e265e2553ddf26eeef93fbe0ebcf421f2b5b8ea4",
+      "l68Sha256": "7776aba63982880db5429b97b7ae8183e5f1124db0611c9af4da088abed60c11",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 43.54,
+          "artifacts": {
+            "result": {
+              "sha256": "7a593453977a6b075059c436014995c7e784a0d41faaff92efbd15d5b840135b",
+              "bytes": 7753
+            }
+          }
+        }
+      }
+    },
+    "instructions/g-tas": {
+      "sourceSha256": "1df802ec540428dce6381bd133ce0e7486ce1017c2417e823407af30b5b76493",
+      "s68Sha256": "e42d37f52ccc6ef95bb7034850ee48b16a5305295b0fd00abbb41306a7b21f27",
+      "l68Sha256": "6063b596e4cb8b37a99389229ecc51bdd735ee43bd9e4c981c155a8b898ff478",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 41.69,
+          "artifacts": {
+            "result": {
+              "sha256": "32e412812626e0b972af1acb7fff575a84b5bc2341e8b5efcf48d4c4fdb850f9",
+              "bytes": 5881
+            }
+          }
+        }
+      }
+    },
+    "instructions/p1-arith": {
+      "sourceSha256": "d4802ceb05af5073d79744734f9b82fc49fd2945048a92199a5e359607e399a7",
+      "s68Sha256": "c922b8740547c287d949a854fe55bbde26c2e4557f81ce17425d141b44b75dab",
+      "l68Sha256": "dc132ba9cc32b25d3631b27ec0caa5376e4713d0356e4ac3246cfaf2276b1e46",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 28.25,
+          "artifacts": {
+            "result": {
+              "sha256": "8e1b0c50ab494f1c67e9b3f86e237cb2b32096d87bb69f7756bbda2576983255",
+              "bytes": 1018
+            }
+          }
+        }
+      }
+    },
+    "instructions/p2-bcd-shift": {
+      "sourceSha256": "8ec6949b13f93e47454fa04aa378f1be80403a228a13df02b4fcb5ce28b47941",
+      "s68Sha256": "7e64df99e3a0b841819239bbfb36ea6f98513c99abedc1bd084622445a5822fb",
+      "l68Sha256": "f8583bde4bcb55ae4a3d02a6f1a7ef741ab9e59d461dbbd385fb4e37f302d498",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 26.22,
+          "artifacts": {
+            "result": {
+              "sha256": "25d63416553fdcf6b8fe59b043b9e858c2f534adc36dca14fc47314356113b2d",
+              "bytes": 616
+            }
+          }
+        }
+      }
+    },
+    "instructions/p3-memory": {
+      "sourceSha256": "1f8225dc75e875a2dbe3a4220b5a3e32a6e0539d8b1c5ca545e84f759836aa3d",
+      "s68Sha256": "47ce7363b64b82c474341d5850d31df5f481dcf7d00b4ef331fdba9d8b5dc892",
+      "l68Sha256": "a48178a7741016d7903f75f584d93fe3b532ccdf6f5ac4542f27bbb4d2e684c6",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 26.23,
+          "artifacts": {
+            "result": {
+              "sha256": "710540863d4d73fa4b4dc6b78425105ce77612fb94bf5927e1138a14ca82e14c",
+              "bytes": 450
+            }
+          }
+        }
+      }
+    },
+    "instructions/p5-branches": {
+      "sourceSha256": "7479dc8db54d2a6b984b8b48f32067650be64bf99f14ef4750c1650f429d36b3",
+      "s68Sha256": "123ee54d72a0ceab0cb8c7a66ee5550d47fc0452a52c859ab7d00dc3cc434116",
+      "l68Sha256": "1f72142024edb7ea029f0e41b1e2a27e80db3a64ff9fa023102aa4202243c17a",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 30.55,
+          "artifacts": {
+            "result": {
+              "sha256": "f39f7a647070494bce03caf6842af093a203a283356edb5281a257af737efbe4",
+              "bytes": 415
+            }
+          }
+        }
+      }
+    },
+    "logs/l01-arith": {
+      "sourceSha256": "f1b41168b9d23a677946e840a66e618106c6a528d4b88af0b67c142478db4e8e",
+      "s68Sha256": "aed55c3f3c9a88c4e784e627aca7871ed301d92481d6c59bbf71918360e857a6",
+      "l68Sha256": "284574d906a5069538d697a7aeb0010178799f39c343ecfc0149190114a871b6",
+      "recipes": {
+        "log:2": {
+          "status": "ok",
+          "seconds": 33.37,
+          "artifacts": {
+            "runlog": {
+              "sha256": "da91058d9c3da962040cdf0bfe62e61e53e28aae58ed7773c5ac2ab1f2071ca8",
+              "bytes": 7925
+            }
+          },
+          "instructions": 23
+        },
+        "log:1": {
+          "status": "ok",
+          "seconds": 20.54,
+          "artifacts": {
+            "runlog": {
+              "sha256": "a611d18a0c235978234c97b0521deb82dcf7dd77de224928a5cffe6a21c3245e",
+              "bytes": 1899
+            }
+          },
+          "instructions": 23
+        },
+        "log:3": {
+          "status": "ok",
+          "seconds": 23.94,
+          "artifacts": {
+            "runlog": {
+              "sha256": "5a32506e9c39ae154b6ec5091e0a90e53ce3b4806203ef87c1f19f05aa1e84a6",
+              "bytes": 7971
+            }
+          },
+          "instructions": 23
+        }
+      }
+    },
+    "logs/l02-bcd-shift": {
+      "sourceSha256": "d3e2d6e93d0035075601daabbe166bc4d808a842a5d87a0749ec267d45aed874",
+      "s68Sha256": "88ae1d26775a8552ad4a6b579f86e87517b7f0eb340287378c794f9985d1d140",
+      "l68Sha256": "fb65fe5b9592db702a1157663d4f8a35abd8c7ffc2fd9124ec223830c137c168",
+      "recipes": {
+        "log:3": {
+          "status": "ok",
+          "seconds": 35.67,
+          "artifacts": {
+            "runlog": {
+              "sha256": "3a7f8c042acd5fcfe3d082d89c451d84650178536e907b67e22b3991c7548963",
+              "bytes": 9962
+            }
+          },
+          "instructions": 29
+        }
+      }
+    },
+    "logs/l03-memory": {
+      "sourceSha256": "e29cbbcd1cade35e769e50cb40d34a7b2e11b40a9c9274365d1112511546a389",
+      "s68Sha256": "fd9861d1090a0bc1dd9dcab44adebe268221a66b176d523e8ee0823e0d168e1a",
+      "l68Sha256": "2a0fa2eeeb94ac75d9ec9b8fb83261bd63d4c978b6afea83714b81d3fe4fe55d",
+      "recipes": {
+        "log:3": {
+          "status": "ok",
+          "seconds": 33.91,
+          "artifacts": {
+            "runlog": {
+              "sha256": "51c13a28a115eaee8311880eb054e98a3c60dcfff20a712c1991bda34c5b8642",
+              "bytes": 10221
+            }
+          },
+          "instructions": 30
+        }
+      }
+    },
+    "logs/l04-print": {
+      "sourceSha256": "cb319c1f1931646c7585be9da31c6b1187746d76addf66aa7306eb607c20a93c",
+      "s68Sha256": "a8c03e385779a0b8b075b24a4e8980a8907a8c574b5bd778b206ea6cca2f7726",
+      "l68Sha256": "bc756f7500017a24d91ca7b471b74505c48b529b52409f7bfae56386a938dfce",
+      "recipes": {
+        "log:2+out": {
+          "status": "ok",
+          "seconds": 38.95,
+          "artifacts": {
+            "runlog": {
+              "sha256": "f4511948af29016f2bd090c4bfceb51aa6b2a46f51274ebfd36a9ec529a1d3a6",
+              "bytes": 9554
+            },
+            "outlog": {
+              "sha256": "4e07cd3a6dfd73cfb693206b1e10826d6a7fa3ad88a194956c55d7ae9fb9cd21",
+              "bytes": 116
+            }
+          },
+          "instructions": 28
+        }
+      }
+    },
+    "logs/l05-branches": {
+      "sourceSha256": "b1fa967d41cb9c74366c74110271635fb3aa970b5d4df01f2674d5f45019c778",
+      "s68Sha256": "90e4c22d257a8e99d4cbe6dfb0e2c4aef375c9064c955356ce8d01a3be3b559f",
+      "l68Sha256": "fd4c1942372f234c364e36040b2eea3374c52c99ec5ab3c2de70e5a81effa651",
+      "recipes": {
+        "log:3": {
+          "status": "ok",
+          "seconds": 37.15,
+          "artifacts": {
+            "runlog": {
+              "sha256": "32bab4b3493cc0261ba246f31814af489520517c601a1c9ae2a504e06fbe2032",
+              "bytes": 21306
+            }
+          },
+          "instructions": 63
+        }
+      }
+    },
+    "logs/l06-sum-loop": {
+      "sourceSha256": "6ece877336cc9b8091c8d51e8feda772510f81e1d7df9f906fd9769b4e103d72",
+      "s68Sha256": "44c0a584d4cc964c71da80aac1168d76eefc9cef0ffa9bbe309dce4aa40c082b",
+      "l68Sha256": "bd317faa82b0d36731b51e2e267dda35df2465adbaf879e9b3c0555f019200db",
+      "recipes": {
+        "log:2": {
+          "status": "ok",
+          "seconds": 402.13,
+          "artifacts": {
+            "runlog": {
+              "sha256": "532e425c9dfbd64b25194b3bab433e52a8866ba725368ad92be02f62f98e7f55",
+              "bytes": 1507353
+            }
+          },
+          "instructions": 4504
+        }
+      }
+    },
+    "logs/l07-bubble-sort": {
+      "sourceSha256": "489ae2889127b889b4d00d478b2c40b4118aa5eb1ac7bad75b58ddd5fb568004",
+      "s68Sha256": "8ec0f52aabbc2a42cdecbe8521c0b2f55c11b872f32fac95dcc42f99f04da5b4",
+      "l68Sha256": "01064e24e8b77e8a4763c71c4d4bfdec4dbdb0bd8d65230507d36d2081c66a46",
+      "recipes": {
+        "log:1": {
+          "status": "ok",
+          "seconds": 161.78,
+          "artifacts": {
+            "runlog": {
+              "sha256": "797f97258ba4d30408bb96fddad07c65c612a690d2a4cdc74dd4da86659c1970",
+              "bytes": 107821
+            }
+          },
+          "instructions": 1457
+        }
+      }
+    },
+    "logs/l08-fibonacci-recursive": {
+      "sourceSha256": "a570c0ebdc1d87b41c4947e57a27a50e561663c7864d4bcc395da73a85f4fae3",
+      "s68Sha256": "3a9909373accf30c9bdfdfcbe9f110e8486213ddc321308d295003988a7670b8",
+      "l68Sha256": "974ab8922f7e31ebb2d1c8220df81a0bf111940f555c344526e959249b3bd992",
+      "recipes": {
+        "log:2": {
+          "status": "ok",
+          "seconds": 244.17,
+          "artifacts": {
+            "runlog": {
+              "sha256": "8d6ed68994bd3ab8303e2a28f04bc69caf916f44dd30ecbe60e07851661b9919",
+              "bytes": 764563
+            }
+          },
+          "instructions": 2295
+        }
+      }
+    },
+    "logs/l09-strings-and-output": {
+      "sourceSha256": "fe09545f551cb77f7c1860e42ce5e78497515505691cf06625be9b58f8835014",
+      "s68Sha256": "718938f3b0f2347177b4054c37f723c817594f1cec3c5ab80c8186e3dfa03a5e",
+      "l68Sha256": "5c4c9e41da188e6a455a2688086f619c16d7a6638a3bc439b9b3ea81f9aa4db9",
+      "recipes": {
+        "log:2+out": {
+          "status": "ok",
+          "seconds": 47.44,
+          "artifacts": {
+            "runlog": {
+              "sha256": "ab0e80f19caf1b5945a30469cdd68a270a1be5789629566061acd59cb11de58d",
+              "bytes": 72858
+            },
+            "outlog": {
+              "sha256": "c2d4618a47db828b2d5dd6bf2afc7bba08365e0cc042f4cf7bd957ef8da616a6",
+              "bytes": 91
+            }
+          },
+          "instructions": 217
+        }
+      }
+    },
+    "logs/l10-exceptions": {
+      "sourceSha256": "4e6915fcc10becf1a621d0d66cddc69807d4ba3c49f5a3f7c50f7ae8df2287f8",
+      "s68Sha256": "885d499d8ceab67a5cb3932c705738f0eebd8022709f7f8bdc472fb2e2d7624b",
+      "l68Sha256": "f47230b46e2a9a9d5eb856f0b7d98960e10336e37ae65b25b4eb5be3f0a3698b",
+      "recipes": {
+        "log:2": {
+          "status": "ok",
+          "seconds": 29.57,
+          "artifacts": {
+            "runlog": {
+              "sha256": "ac3bb2fba6c5fb802538c675ed5b06d6a564eb455f7d0df842389746a06f99d2",
+              "bytes": 8710
+            }
+          },
+          "instructions": 26
+        }
+      }
+    },
+    "logs/l11-bcd-counter": {
+      "sourceSha256": "195641929d8e6c942413b40955a58d3b4722ce4d602341207777172ff04cfd93",
+      "s68Sha256": "3a287620f816fc7e5e9b9fa6c10d688ff6c533d0a9a3fc615305041ee8789a82",
+      "l68Sha256": "057dc80eba92698027cd096dfe1405828c2191fe293bfbf78fc7bea804439d31",
+      "recipes": {
+        "log:3": {
+          "status": "ok",
+          "seconds": 190.68,
+          "artifacts": {
+            "runlog": {
+              "sha256": "0861ac3e2b603700f8e7cde76c402249c3c79a81b22a163b9dffc3331327ee4c",
+              "bytes": 534895
+            }
+          },
+          "instructions": 1606
+        }
+      }
+    },
+    "logs/l12-shift-patterns": {
+      "sourceSha256": "2d96857efd5c85badbe2ff83646704641e0f77025a3425be8d10db9c258c8f26",
+      "s68Sha256": "904d7bca4e2a67e8513b6aa7d4703078b7d9b936030ceae2881884446f680e58",
+      "l68Sha256": "c309d8209f4368df43f9bfdebe70e8a6cdf438e5627ba9054d77a21c504dc0bc",
+      "recipes": {
+        "log:1": {
+          "status": "ok",
+          "seconds": 274.15,
+          "artifacts": {
+            "runlog": {
+              "sha256": "0c991c28ccd7d8ea205663731eb8cb890571364e858effdd986cec8c992f7f16",
+              "bytes": 131192
+            }
+          },
+          "instructions": 2105
+        }
+      }
+    },
+    "logs/l13-movem-stack": {
+      "sourceSha256": "99660c3f96ee8ef401bf7a73e72820f5a667171e0287b8871a3115ef957c86d4",
+      "s68Sha256": "731233eb69133d6394e2c6344fcc9d0e5a131ea14ce4b3fd7d73898d08431ac2",
+      "l68Sha256": "ecf67ca1d20817616660c005b2ba768b9eb4ec790dd1e064bf58018695faf284",
+      "recipes": {
+        "log:2": {
+          "status": "ok",
+          "seconds": 163.54,
+          "artifacts": {
+            "runlog": {
+              "sha256": "b34f62a95dae0e7c48cdbe2e2d1aed58c1c6f925b2a5c56730399296fea60311",
+              "bytes": 540057
+            }
+          },
+          "instructions": 1606
+        }
+      }
+    },
+    "logs/l14-percent-in-listing": {
+      "sourceSha256": "9a6d09dcb9856c5724631d84666c5e713c40bce50a5600ffde7547f61bd76573",
+      "s68Sha256": "af0546a3e780a502136511559e65ecdfedabbe780fe9740f7446aed5f5a6ce84",
+      "l68Sha256": "275ff448489fbe8816c1f10b7dcb6f22dcb5f35d0d938129e47f123c442fb2b6",
+      "recipes": {
+        "log:2": {
+          "status": "ok",
+          "seconds": 27.18,
+          "artifacts": {
+            "runlog": {
+              "sha256": "5d5d142581ca164480e416d2cce73b569b6f281c125864f74092b37f2d945314",
+              "bytes": 1854
+            }
+          },
+          "instructions": 5
+        }
+      }
+    },
+    "logs/l15-org-backwards": {
+      "sourceSha256": "43e35ba58a3b157d9af696a04c14a9bfbb572ef32020da029f88c5f627b847ae",
+      "s68Sha256": "98b3a2287de1d752525e6780297ae64db50f71f3dcf02d96a61fdb9dfb90f485",
+      "l68Sha256": "00f661074078e05a0009dbebcfce6f0f9ddfee00de43cd8cfb6bd8d1d757ad1b",
+      "recipes": {
+        "log:2": {
+          "status": "ok",
+          "seconds": 27.86,
+          "artifacts": {
+            "runlog": {
+              "sha256": "1da61047baf729a93c36cba1c723432dabab7652c550780409e28d738cd4a505",
+              "bytes": 2482
+            }
+          },
+          "instructions": 8
+        }
+      }
+    },
+    "logs/l16-bitfield": {
+      "sourceSha256": "16438a601fc67672b361dc8ce247c962ae6e4d5af97c01f6bdf0988f36378b0b",
+      "s68Sha256": "effee3b5a4f173b44a4ef6f476a6247f5acd3abfb6487b3128107b06066dedc9",
+      "l68Sha256": "025e405b2bb04e341ad2ca34bd7ef3228a3ff1929bdbc01f2fba73fa75dad785",
+      "recipes": {
+        "log:2": {
+          "status": "ok",
+          "seconds": 41.32,
+          "artifacts": {
+            "runlog": {
+              "sha256": "9b900eac82b676f142a51dfdb8a3a367d9c9964a932f5921d03eee6edd691af3",
+              "bytes": 47715
+            }
+          },
+          "instructions": 145
+        }
+      }
+    },
+    "logs/l17-multiply-divide": {
+      "sourceSha256": "62e1e3ee62e08e14e02eddf95c43dd83e9cc9c7fa798df5519c194b44c782956",
+      "s68Sha256": "b7d4a463ab1b966378bfe89273ed0cf07b363d914c62ded0fd0cfc4268c9df41",
+      "l68Sha256": "cf6c522d4186e9052a236090c52c0241fde1003349811bf9d0215b369eb564f1",
+      "recipes": {
+        "log:1": {
+          "status": "ok",
+          "seconds": 200.19,
+          "artifacts": {
+            "runlog": {
+              "sha256": "45f54f22100c19c3694188b22b233740c8327e7c7c9ce41dce1b05261e5b15cf",
+              "bytes": 119741
+            }
+          },
+          "instructions": 1654
+        }
+      }
+    },
+    "logs/l18-numbers-output": {
+      "sourceSha256": "6e26345aab2e339cb7372c1dae62d88f6afd7b276393436cb36dab9923bb49a6",
+      "s68Sha256": "1e06fd82f61fd84f4924bfbc5e9c610561a63eddbb56aa03e1278d473c4ac1e8",
+      "l68Sha256": "0ddf80bf03ffa68dc628edeba8fd01d358d6eb9e01bdd2a6411bc8f8b0699dce",
+      "recipes": {
+        "log:1+out": {
+          "status": "ok",
+          "seconds": 94.51,
+          "artifacts": {
+            "runlog": {
+              "sha256": "328830523b3e14506237974aefc728a9e4b98331a9c46b3bc60ea6b2edf37ca3",
+              "bytes": 45278
+            },
+            "outlog": {
+              "sha256": "fa38d0f417bb2a6e535ede615d1760ee852fe32b83a0f714a45c6d5d8ed79829",
+              "bytes": 481
+            }
+          },
+          "instructions": 762
+        }
+      }
+    },
+    "logs/l19-memory-copy": {
+      "sourceSha256": "40d67e5fa5c5e2edd6bcc8efc5fe57fc3f8e9b596f681e88016c777cd627ed70",
+      "s68Sha256": "ef35205e163a9d596c5f701d9f01f645e8e487af4ea8a367a8a64061f3b4f628",
+      "l68Sha256": "8534183d3c6581616d43e0eb1f11d292425ed0029f578dcf6dd06cdc45359058",
+      "recipes": {
+        "log:3": {
+          "status": "ok",
+          "seconds": 61.46,
+          "artifacts": {
+            "runlog": {
+              "sha256": "b186d751f6975de2cdcd602e1ead4a38570705dec84b099bc0c1892f962f0df0",
+              "bytes": 150162
+            }
+          },
+          "instructions": 455
+        }
+      }
+    },
+    "logs/l20-subroutines": {
+      "sourceSha256": "7b1807205da346f8c4b7bd06883adef4ea02e06283bdf3477f50882fcadf2b61",
+      "s68Sha256": "40b17a99040a8eeb8574f524e9eca7c6e56f4dd4ffef421036df3ae0c33f4221",
+      "l68Sha256": "21f48aba3e8e878273395545d41cd4c1b25db385ed3d3824055b77ab9b14ef32",
+      "recipes": {
+        "log:2": {
+          "status": "ok",
+          "seconds": 95.25,
+          "artifacts": {
+            "runlog": {
+              "sha256": "3b4ebe67b75f50de2a164fc0aac04237cc77c3f00fae1d409a50cd5e5e9da893",
+              "bytes": 254796
+            }
+          },
+          "instructions": 802
+        }
+      }
+    },
+    "logs/l21-conditions": {
+      "sourceSha256": "a5ec215e49a4e00dd615b28da1a34b6be3f136f9253d9f9bb527cd1afa97de47",
+      "s68Sha256": "d12694eedcdfff6a6ce086d3cb3fd12ecd0bc0bc36069977333704fa36d018ab",
+      "l68Sha256": "363cd71c9d917274c514066a4cc3d49bf1a38492ddc49d0eb6e4952feef0e2b6",
+      "recipes": {
+        "log:2": {
+          "status": "ok",
+          "seconds": 61.3,
+          "artifacts": {
+            "runlog": {
+              "sha256": "3a52ba6acf4eb5d441c0a7162c297ce9e5ef6a1d490b57e2500e0ed123b2257e",
+              "bytes": 135306
+            }
+          },
+          "instructions": 418
+        }
+      }
+    },
+    "logs/l22-text-tasks": {
+      "sourceSha256": "1461518ae5835d97374f1b84f0b24d53c1963b7d644d4238f1af26b9a9ce2809",
+      "s68Sha256": "bd05e9b2933fc3d4ced5fd6a125262dcefbacbf7726026c19a3fac9e010d3187",
+      "l68Sha256": "0c539ee16c1bbdd568c9cf0178617c10aaf992c6354e62d47d64f125574cf145",
+      "recipes": {
+        "log:2+out": {
+          "status": "ok",
+          "seconds": 28.91,
+          "artifacts": {
+            "runlog": {
+              "sha256": "a8745cb9b46081fe5f2358d6d70b856b2f4bc614769cd623cf5e16cf03bea2d0",
+              "bytes": 8138
+            },
+            "outlog": {
+              "sha256": "d0d6f9d5a9cd7e39087188ab67848164d2c02497b2099b2afdc64270e8c72612",
+              "bytes": 81
+            }
+          },
+          "instructions": 25
+        }
+      }
+    },
+    "logs/l23-cycle-tasks": {
+      "sourceSha256": "6795ad4d2ff4b6e0498bee9f8e2c7f566fb605795069cc96ea24febc6276a2be",
+      "s68Sha256": "11526ffd7f6b68c8a86604e681f56009fab72de21d0d00a4bcd71297ad171b21",
+      "l68Sha256": "a2270cce7b532e16337ae7b3b70283d3862c781ba711b89699c7c7a736197e11",
+      "recipes": {
+        "log:2": {
+          "status": "ok",
+          "seconds": 51.43,
+          "artifacts": {
+            "runlog": {
+              "sha256": "d1fbfa42108d669d68212d4c2cbf1f81bdb7a1e7cfdec9eb5c948c612a9cce42",
+              "bytes": 83100
+            }
+          },
+          "instructions": 254
+        }
+      }
+    },
+    "logs/l24-long-loop": {
+      "sourceSha256": "c244a99559e645fd961bdaa6fad2bc2cfb29c34ab2f970466d69a85f7c5ddbf8",
+      "s68Sha256": "4d14f77fd432ff5dfcc8fd61344940763d89c72cf89e70b5472af9c504cd207b",
+      "l68Sha256": "3072c70c1c83beb3837bf7f478bb88530124d7677d29bda92479aeadb48c2fd4",
+      "recipes": {
+        "log:1": {
+          "status": "ok",
+          "seconds": 1807.03,
+          "artifacts": {
+            "runlog": {
+              "sha256": "da8df9dc29d91df585c0a1df23c5176dfcc2456c57cced657360c8f8902af81b",
+              "bytes": 1325211
+            }
+          },
+          "instructions": 18183
+        }
+      }
+    },
+    "logs/l25-long-sieve": {
+      "sourceSha256": "9d07eb0d08fc0e5595b2c510034d96ceed0bfd363a65e092f6e13b72f93247f8",
+      "s68Sha256": "1a8bae9b00b55ddcf5e5f1edc3e504727ee956c463eff45a4e7a5a0d5bcc417f",
+      "l68Sha256": "ea96a0b0a0fc6c44fd06d5311e44a7d270163157269a1288632a65b561d9f3a4",
+      "recipes": {
+        "log:1": {
+          "status": "ok",
+          "seconds": 1060.88,
+          "artifacts": {
+            "runlog": {
+              "sha256": "218231f041ccf8d1ee6dccfd053973b7e3b7194c1a298f7387d5dbcba00511ad",
+              "bytes": 797276
+            }
+          },
+          "instructions": 10918
+        }
+      }
+    },
+    "quirks/q01-listing-first-line-start": {
+      "sourceSha256": "e70e284ac43b5a9fb9d70fc9e41b98e1908e2de1ed80ca38cec06edce842cfe4",
+      "s68Sha256": "1203fc7a6e99e24eb0500ac0f9b9729fc166116f2dc1157a55660513447145ee",
+      "l68Sha256": "4d1247f717d7e2ab527d5c98f59a3ed430553446738ee689fa4f5b888eec8885",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 19.16,
+          "artifacts": {
+            "result": {
+              "sha256": "f8a1a1866283f2e8ab5cdd1c3f6f955e27358d189d3daa575ffc9f4468a24461",
+              "bytes": 214
+            }
+          }
+        }
+      }
+    },
+    "quirks/q02-simhalt-off": {
+      "sourceSha256": "0d3e9b07b2423b4f3f65555356083b8c8a3729837972be3f70092d9e81e96c06",
+      "s68Sha256": "97be8f097c8355bdcf38e69f83eb2e8f3ce8fd09a8619f8a3ba52364c446769c",
+      "l68Sha256": "a27e5cb3e296da295feeb47f8c64a122928bc42d9d953113c3ee3372b8b9840b",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 19.79,
+          "artifacts": {
+            "result": {
+              "sha256": "b5906efe0d7c12ce42cdcd28b357e27a626eeec8912b63c40283b4da8286c95f",
+              "bytes": 49
+            }
+          }
+        }
+      }
+    },
+    "quirks/q03-task9-halts": {
+      "sourceSha256": "488349a3f8439ef45f1ba829bc383a56dfbaab2c0c08b62dd41aefc8b1e3b682",
+      "s68Sha256": "717752d1570729392f8fd6166dc70a6aa7dca98daf6fa03b39f991b667fb2475",
+      "l68Sha256": "6d38b2be93771ce1f2a7fa9ff3d23837868214893301815f73d1c18a67c52b24",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 19.65,
+          "artifacts": {
+            "result": {
+              "sha256": "cd32ca0cb7857783e93c563c25dd071d7bab7c810461baa50e5e626bf648b9db",
+              "bytes": 214
+            }
+          }
+        }
+      }
+    },
+    "quirks/q04-lea-24-bit": {
+      "sourceSha256": "5df100d5bcf29894b61f044cd35a33c01e74ccd6d999d4c222ecf59f182f47a1",
+      "s68Sha256": "7e2840a1e99d25f15a2992b0f5ffd541b8e97f21e7d019f74aaf5cceff30f902",
+      "l68Sha256": "4ec9e051ebaf79565276a2bcee38921ba38b9989fb03e94149c59f1aab7b87dd",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 20.18,
+          "artifacts": {
+            "result": {
+              "sha256": "253c3971ff90de7eb314bbf0e1f81152e32b8bf1c4b899acdb99c874f8fe1b95",
+              "bytes": 214
+            }
+          }
+        }
+      }
+    },
+    "quirks/q05-link-a7-user-stack": {
+      "sourceSha256": "471b60ef8d5a5d05bfd5ae84d9b3fa41a3299287a6958aef5c60c7963c9181ad",
+      "s68Sha256": "c48665b3a3d3dace132a6a4129bfa741c0d071e4a01e5ffab35541541deb547d",
+      "l68Sha256": "da7c3cf86a9f70fb5cef18dc76a2ce4fecfb4ec7a6ab1d0f82b0407ce4ea8d16",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 21.01,
+          "artifacts": {
+            "result": {
+              "sha256": "1b061e82ef6621c22e9551ce5220731faf96673c49935023f519a7e38c6893b9",
+              "bytes": 415
+            }
+          }
+        }
+      }
+    },
+    "quirks/q06-memory-filled-ff": {
+      "sourceSha256": "e96ce80778dbd0ea012a040877f2ba58e52e5508fc40736bf83ecc06951d8ea2",
+      "s68Sha256": "5d9eb719eed396cf7bb49a76c25d2dc0c65459f588ed4282fd0467619226cb92",
+      "l68Sha256": "d017fdb8a55eb08de4ad1c01521f6276d4264f363985db19e3a03fbc509773f2",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 18.44,
+          "artifacts": {
+            "result": {
+              "sha256": "d4d494c7b20978b59a4a380bc2ee636977052e9bff3e63f3e5474fcaa1701542",
+              "bytes": 249
+            }
+          }
+        }
+      }
+    },
+    "quirks/q07-address-wrap-24-bit": {
+      "sourceSha256": "0df81629fd8c5903df681c53d178a44f772fe7881f5f24782591c7e0b061b0a2",
+      "s68Sha256": "65b0a44676a7089376444b76b7dacf8b849ea1c7fc356b8c130aedeed5c3406b",
+      "l68Sha256": "43692723dbc50ed90365a495db30a7b425efad32fc2fbc7cae1d303f8c99c3bb",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 25.27,
+          "artifacts": {
+            "result": {
+              "sha256": "22e65c2b90b4be93d9433c77261de484ef37a70b09b59fc98cf5750553bc3c6a",
+              "bytes": 249
+            }
+          }
+        }
+      }
+    },
+    "quirks/q08-exceptions-option-persists": {
+      "sourceSha256": "85cf3036a259e574e16bfe53dae90a130eadfb74bd52e1c0d2593267bbac538c",
+      "s68Sha256": "946b9ae3a9531950b1da519faba1985e405a1e51f8b236ea469868ba9e568c56",
+      "l68Sha256": "2cd5aa551d8b528c0c4fe81208b31f7123ca2ff9893499481788fb05deb429d7",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 23.4,
+          "artifacts": {
+            "result": {
+              "sha256": "3be072bb055a3c6cc0dbf7c2590f0cd17a8db77d77afa5c68c9e33815cb0b441",
+              "bytes": 36
+            }
+          }
+        }
+      }
+    },
+    "quirks/q09-bitfield-off-illegal": {
+      "sourceSha256": "7ce4e2fdbfba4d0d54ab50cdf99610d3738b7aac528b85f21843e7cd27e3aa6f",
+      "s68Sha256": "a5291d1042a37f37f9ba910583829711889f542bc9aec82959349daf2f81b239",
+      "l68Sha256": "ce862570e65c5483554ff4bab44b30d6e234a2a5d1baa26a7c003c1683b0d7e2",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 23.43,
+          "artifacts": {
+            "result": {
+              "sha256": "082bdd2957fd99b8f714b893aeed3d07cad490d0838e9d6051dc88b01af30f24",
+              "bytes": 214
+            }
+          }
+        }
+      }
+    },
+    "quirks/q10-bitfield-on": {
+      "sourceSha256": "95383f05df3d2c949cab88058423e176ec76c01a5d5798dd4a78942b9eae78a9",
+      "s68Sha256": "4ab61d89ac4827c73a6a0b9278475fd840a92c5295e048c69be54afc45ac2c25",
+      "l68Sha256": "98c6448e0626a505d459a54b9ec68a94b71324856552c5821084553ec6ba788d",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 23.12,
+          "artifacts": {
+            "result": {
+              "sha256": "acb0fae25bc69db6cbe8404576d5a9e7283ce62f3acc06edd627e585b20fdc1b",
+              "bytes": 214
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a00-grid-default-font": {
+      "sourceSha256": "0c489bbe80f1e01352afef596eaab6028b6646a018c258a8b559c1ad4aa6ece3",
+      "s68Sha256": "02a045cb4650d7932fe303a4da7af335b49cd22a879b088091fc04b196579129",
+      "l68Sha256": "125f87a87f35f4a8e3f64595f23cc19f95c728ba98bbc68c666352cbe00da403",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 23.85,
+          "artifacts": {
+            "result": {
+              "sha256": "2f3e7a5bd4a8cdbc6b30bda15e8d30f5c97151d216d7b2c2adcb89926a075164",
+              "bytes": 660
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a01-task14-at-home": {
+      "sourceSha256": "7a75bae3dbad0e8c1da7ace6ca8844bc6afde5fa0f5ce16252f99c757f07e8da",
+      "s68Sha256": "3011035a517cb4979822553f1c18b8f2f90e2d57328a6f171f8a57114fb07525",
+      "l68Sha256": "41efe5b85491fedd3de50123a1838edece63cab6e233b8bc93654d04dbcb6c42",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 21.66,
+          "artifacts": {
+            "result": {
+              "sha256": "7b8b771dac5c1eea13ff35ba16b2e866ce2e5d60d9d343873f38b51539b58bca",
+              "bytes": 237
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a02-task13-empty-string": {
+      "sourceSha256": "6cba9e7c1ce798c386595e4d12de999e3f2bb58096face19c174da947989ab15",
+      "s68Sha256": "217125cea25dced815f8b8cc0d380156db1a87557d5540a8e68f2017af3dde3e",
+      "l68Sha256": "32aa003382891184b24be5064def69d880adb7e92887dbd06ed35d8fcd673039",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 24.19,
+          "artifacts": {
+            "result": {
+              "sha256": "eeea7595e6de250d76034d44383248ed1a07a949024fd7506e304438ede4ba68",
+              "bytes": 244
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a03-task0-counts": {
+      "sourceSha256": "9ce675188d5a57410bd6bfd2540bcf68ce5a1cb0d681ca9659c7398496d8d86d",
+      "s68Sha256": "2d42a58950340de882a4429c33c6bee80a76f9afd14cdd03aa9428ab1949956e",
+      "l68Sha256": "881b6b7cec74ef3f2f6c0392bffe141a79f53ab2852635ffa1c98676471abc59",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 25.03,
+          "artifacts": {
+            "result": {
+              "sha256": "978b9b0ca7c85f26f2d371be7e3dc01ece3074626407645b35e6274e4a02017c",
+              "bytes": 516
+            }
+          }
+        },
+        "outlog": {
+          "status": "ok",
+          "seconds": 29.69,
+          "artifacts": {
+            "outlog": {
+              "sha256": "875007152708ca47c1867d43f505bcc783b78e3aab03579ef2d3eb856b5768df",
+              "bytes": 314
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a04-task1-counts": {
+      "sourceSha256": "72b1a850229e52d416d2f3bb20adba922f666043bcd6b105ae38cb92e919fc28",
+      "s68Sha256": "6984b995368c61610d02d799ed5fc81316b062e7699e3557ecdbc00019cc29d0",
+      "l68Sha256": "63bbfbbfaaea741d7801214bb4461159d306b1aa0f11ba4544932d3c80277f3c",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 24.91,
+          "artifacts": {
+            "result": {
+              "sha256": "aba0141c875b47164610c5937d7bf8be16c027d26dc1dd9f4cc5428a85e4cc9f",
+              "bytes": 295
+            }
+          }
+        },
+        "outlog": {
+          "status": "ok",
+          "seconds": 27.91,
+          "artifacts": {
+            "outlog": {
+              "sha256": "a0e2daa112b0db8e3b838791b68ce59a1758f8ad2d5901b1287213dfefce35f1",
+              "bytes": 310
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a05-task0-negative-count": {
+      "sourceSha256": "f9e9608f4781ca8a3ec505af3904651f94f44f70adb4f4573e3be7785e37c239",
+      "s68Sha256": "96ee0d8008f1629083ca643b051ddf3d4c1764eb096de242b2824daa86b47269",
+      "l68Sha256": "3a37ba8b49d161941025fb228139f3526ee3d96bd123c51ae508b87010c16d58",
+      "recipes": {
+        "outlog": {
+          "status": "ok",
+          "seconds": 39.2,
+          "artifacts": {
+            "outlog": {
+              "sha256": "e28f99d1c87b9757fa819e9fd94188efad7b1317ce68204540d59be8a6ab68eb",
+              "bytes": 1081
+            }
+          }
+        },
+        "report": {
+          "status": "ok",
+          "seconds": 15.71,
+          "artifacts": {
+            "result": {
+              "sha256": "6f00164a1d8a8684f53de02b7b3726b35c71ffcbdf744c3e4ae332781429d63f",
+              "bytes": 455
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a06-task6-cursor-controls": {
+      "sourceSha256": "4e81f7659fe8b925953c7444c7d1da82174aff467f3ed644680d11fe9cc63240",
+      "s68Sha256": "bfd59cacc842cdb164259fa3e937cebba36a3d326e3e1d838dd63f5beba110af",
+      "l68Sha256": "0559104192ec5ae71d24ec23022d0e29ed7325924abe76297cfa69e5a42c98cd",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 22,
+          "artifacts": {
+            "result": {
+              "sha256": "f3408859ca530f60f308a441560c7599938129a3e565c168c791d3722a47f1f9",
+              "bytes": 98
+            }
+          }
+        },
+        "outlog": {
+          "status": "ok",
+          "seconds": 25.63,
+          "artifacts": {
+            "outlog": {
+              "sha256": "8c46221333341d58fc3343c3670d47419cabee3bd1ea80e3e41f82cf6a729732",
+              "bytes": 57
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a07-task6-lf-last-row": {
+      "sourceSha256": "39366f277826a70d71f5befc2ed9e20062d92d66c07a775b05a515f63a451639",
+      "s68Sha256": "eee190536df92681e510128b63a5885d46f31862b4d21768be05a69552ff5965",
+      "l68Sha256": "521f3a0b040813526e5cc9897fca11a9950272850a39b5319f19cbe670752d45",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 21.54,
+          "artifacts": {
+            "result": {
+              "sha256": "3f8142b8745d36be238f98928a0bf5989cc4c77c4b2d023256b0afc73345419e",
+              "bytes": 138
+            }
+          }
+        },
+        "outlog": {
+          "status": "ok",
+          "seconds": 26.81,
+          "artifacts": {
+            "outlog": {
+              "sha256": "f3f3eed966a4a73867fd9986826deabef4a69297729116df17e63d1db126b307",
+              "bytes": 56
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a08-task6-vt-near-bottom": {
+      "sourceSha256": "ffc07ce0c73351d8d3c1c5d940f051e8f470f9350c8c7a9e1c38e8c63abc0e73",
+      "s68Sha256": "2275f8854bb0858c571c84abed78a64062eecd3b3cb5ccdd92ddfccc54104ca4",
+      "l68Sha256": "88e793d4f433f36c68d320724eb93d9d88169f1463af228cc4fd1104a7f394d4",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 25.01,
+          "artifacts": {
+            "result": {
+              "sha256": "9e10fb58ba8c6562085f4cfe199d2ec102f614c913e95c4e112d21cf14c7d2ba",
+              "bytes": 68
+            }
+          }
+        },
+        "outlog": {
+          "status": "ok",
+          "seconds": 28.03,
+          "artifacts": {
+            "outlog": {
+              "sha256": "79c79875503fb8dfd80a837238a90a0ff4bc1ed0b136ad6f1f3cfeb6352b6f4f",
+              "bytes": 52
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a09-task6-form-feed": {
+      "sourceSha256": "92df450e438686f3ff0278cbbe1cd85ed27eccad0be2e143036e5787da723d09",
+      "s68Sha256": "acc4caa59b5d0ccfde51a9cb0d0a840e269c5535e33549392553f06855b62c7b",
+      "l68Sha256": "44892afa81dc3f56d19a5b78328e10e1c6555b2fa8b212be631a1ca1b3ee9b9a",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 26.51,
+          "artifacts": {
+            "result": {
+              "sha256": "02956c8399574717cbc7740191e6ff1ff0c2cd3915af84535983b7131981c7a3",
+              "bytes": 306
+            }
+          }
+        },
+        "outlog": {
+          "status": "ok",
+          "seconds": 27.89,
+          "artifacts": {
+            "outlog": {
+              "sha256": "249ab3c7c9f1e842c97de317dd3df911e61e26f133fa856e7b19746ba0548044",
+              "bytes": 71
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a10-task6-ignored-and-high": {
+      "sourceSha256": "445d161fa4659e48af9bcd54a2b5214d9e89984c3a917c8b6919bfec5f771872",
+      "s68Sha256": "4f2eb747f61cd0c6e2472c01fb0044e994dd2e38cb973f2d71997e1239b67fb8",
+      "l68Sha256": "b383f87c00dd9082e755b32e46fe0bc00d37859c97b41fc9538f2583a7db3f10",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 24.09,
+          "artifacts": {
+            "result": {
+              "sha256": "dfd83cf1878ea93e2d644a633f786d049a8305fadee39ab3b0cc26d84b2ce0dc",
+              "bytes": 190
+            }
+          }
+        },
+        "outlog": {
+          "status": "ok",
+          "seconds": 26.72,
+          "artifacts": {
+            "outlog": {
+              "sha256": "94ca6bb442fbb810445254295dbc6fcdc8fdd48e1174824eb0ef797cebb532d2",
+              "bytes": 58
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a11-wrap-off-past-edge": {
+      "sourceSha256": "c91d26d95c36f75e30efc4e7424a2adab737c254dcbc66bfd105e9e683d0746e",
+      "s68Sha256": "aa7f871e22e8b0467f5923e835dd0aa346d76e5fef32a5ea02665f7216685a1c",
+      "l68Sha256": "7c198728490792ce97b7154a9b0c966e09a4d407826d898aabcaafe1d63f71ec",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 26.56,
+          "artifacts": {
+            "result": {
+              "sha256": "f2541d57fc65dd18d2091a28f4816fcfa51c303ae1acee3e64206d11bd4d6859",
+              "bytes": 547
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a12-task3-values": {
+      "sourceSha256": "215e01ea5dee84204b04d9dd7478a5f4b2ad56cec234bd7d6c2a659139259e97",
+      "s68Sha256": "ae804452f77a69bfc09dbde9b8fa0198287114bd9628eaa26f43706b92793dca",
+      "l68Sha256": "6a4f6531af53fc2074b93ed11d50e9b06405dc9b4d72a1fc46218f8dd43a866c",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 22.77,
+          "artifacts": {
+            "result": {
+              "sha256": "e3bb7f050953ecbcf1f7577a51e4554b61239a1205c2674955537c65785671ab",
+              "bytes": 357
+            }
+          }
+        },
+        "outlog": {
+          "status": "ok",
+          "seconds": 26.58,
+          "artifacts": {
+            "outlog": {
+              "sha256": "c05c9127c33bac0e20c79af1a4a105adcca0257aae1e83ab11ae365b75c184fe",
+              "bytes": 78
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a13-text-tasks": {
+      "sourceSha256": "30a0096038dc2fb1b148155214c55cb21b8439a6ac4e6803b1656df3f6d13acd",
+      "s68Sha256": "46e2c954651b3d62947f9da3c0b37749d8e64845b736f9e00cfaa30a0148324e",
+      "l68Sha256": "a33819f696dfa7954c155fa813ccb8b337ecda9fbb53795017f851c12217d2d4",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 26,
+          "artifacts": {
+            "result": {
+              "sha256": "872c2f00308ac7392fdfbb40cb95fdf3b2b318b622013eaecd64abb711de4276",
+              "bytes": 748
+            }
+          }
+        },
+        "outlog": {
+          "status": "ok",
+          "seconds": 28.34,
+          "artifacts": {
+            "outlog": {
+              "sha256": "4e07cd3a6dfd73cfb693206b1e10826d6a7fa3ad88a194956c55d7ae9fb9cd21",
+              "bytes": 116
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a14-task15-bases": {
+      "sourceSha256": "64a24053c72d66aa79e8aa9d2df6074d54c3c207f1a206cdfdb218cd01538f67",
+      "s68Sha256": "5adeaa65dbb24ae1a96daaaf39594fc0377665a75fbb4af1b68777e55a3717e9",
+      "l68Sha256": "7ec1b26c718f717fdfd53f5be26c15a39bd8277e2fc55c5c85c33f9894124d1c",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 25.32,
+          "artifacts": {
+            "result": {
+              "sha256": "54f5b16b4734090ae18d7de43a96ac0de08a71489cdc22aa903783222bda94fb",
+              "bytes": 351
+            }
+          }
+        },
+        "outlog": {
+          "status": "ok",
+          "seconds": 29.18,
+          "artifacts": {
+            "outlog": {
+              "sha256": "9a670863af7bcd545f65eebb997814f61ef568912d776c54aec1054840b47ec0",
+              "bytes": 120
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a15-task20-widths": {
+      "sourceSha256": "7f25c6890fd0b9eb32cca836873f6402aa38ebe65a1b70b8efc406cdd0e65486",
+      "s68Sha256": "4fbb359f30e7748ad5ff5d127e0b55437bfb249c02b0a6c1792b1577c4abbf18",
+      "l68Sha256": "53755f30ee6c3f8465b749eb328b3c099466f26a813be0cce5581e37a6fa2a66",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 23.35,
+          "artifacts": {
+            "result": {
+              "sha256": "20a474508601d03150369058bb34f5a91a7626bdf13d860250a5f47b785c30cb",
+              "bytes": 274
+            }
+          }
+        },
+        "outlog": {
+          "status": "ok",
+          "seconds": 28.74,
+          "artifacts": {
+            "outlog": {
+              "sha256": "71aea7d9d00f5eb6acb4599b3555db5d52c817accf7748614e0dcbd4eee6915f",
+              "bytes": 115
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a16-task17-string-number": {
+      "sourceSha256": "efcb3169b56932554e47504840db75f3f279776f0923ccb492faabb1c38cf82c",
+      "s68Sha256": "8614f1826dadda4fd3c7805ba867a2aac8290e6165f6c8f48923b2d4b5c7079c",
+      "l68Sha256": "7028076dbf6a291b0289615d5f67cef603b42cb5eb2efb99c3e5a2968637766e",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 25.84,
+          "artifacts": {
+            "result": {
+              "sha256": "5900d4090506b42f2acb89730e97507e9ce3f1000aa54c5d4c0c3ebdeda5b3b0",
+              "bytes": 295
+            }
+          }
+        },
+        "outlog": {
+          "status": "ok",
+          "seconds": 28.92,
+          "artifacts": {
+            "outlog": {
+              "sha256": "f9ab25e6fa981d22fc116ce44ffc524a7f5f10296393a486a6b64c7d5ae49a00",
+              "bytes": 64
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a17-task11-positions": {
+      "sourceSha256": "9c7dd8bdebe08135f0bc9fab28b54202db3e140780736e14ab241605c9005232",
+      "s68Sha256": "537916a57b004ef6881102940d668bcce15a072032c65f65b291c339171aaa0e",
+      "l68Sha256": "3d1abfeab02bf202524b6a563d9fa54676267c50d1b4b0c41ca971c972b12d03",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 25.49,
+          "artifacts": {
+            "result": {
+              "sha256": "3c47a2720f2f307c7d70b1b6a2cf08dc96b1818a014613cbbfeedcc90fe124e2",
+              "bytes": 232
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a18-task22-read-char": {
+      "sourceSha256": "6bbfbf064a3992a13510e2b1120bd057a2c2e5d9c2452647356b45ad7175e0af",
+      "s68Sha256": "96cd5744dff91db587096db57ec167cf8b445e953bb1860c75bc678b18ce81ac",
+      "l68Sha256": "58a28650ebb88d7e60a6ae87d2c9f3accc560c0c51ce2681a939a10339aa6ca4",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 23.07,
+          "artifacts": {
+            "result": {
+              "sha256": "5ac70145464aa2e84d31c6967329e81f7d0c975d0e81a808c71d6a6a23b4218f",
+              "bytes": 130
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a19-fill-colour-text-background": {
+      "sourceSha256": "4389c46ae2a16326de7c697697a678173d11574315e6b2a3c2a783193f99a282",
+      "s68Sha256": "85f6985b4db87b8d494a0721db48736c378414b8db1781964bb743e05ab21351",
+      "l68Sha256": "d477245d11989261abf3177ca11c763ec416dbc18c7692b52dd04dbff7126c6c",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 23.53,
+          "artifacts": {
+            "result": {
+              "sha256": "647d3a37ef3923e7cc4e71fe2c8f63a08a3239f04a4b789143da5a4cba513d46",
+              "bytes": 70
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a20-scroll-moves-graphics": {
+      "sourceSha256": "1359a239ec8c0f161c470819b4a8e96bb80cc828d320e5a6848ae00b2e0a1452",
+      "s68Sha256": "180fdced37c11e80e0f2b8cdbe89f0af3bc36a5fb3ce3a9b7608bcfc00d98e1c",
+      "l68Sha256": "cb2e5758ee186492c874ff0b6bdd114c70ad35b90772cec161ac7ed996b69ef3",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 26.48,
+          "artifacts": {
+            "result": {
+              "sha256": "df1dbe4758a3833d0979a218a49801ebf3d3f2c3a6385cba3de41875f8666bb5",
+              "bytes": 49
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a21-task8-around-delay": {
+      "sourceSha256": "83b32ace945a93a821a39dbace41c05ddb8558b3af158bf29a18cef3b6c2c8e8",
+      "s68Sha256": "880ac0f3c55c56e329c8a2d133454e1f43ae6b0594c6781b540a3f58410b9e0d",
+      "l68Sha256": "de946f89c6850e00603108c91ecc35842d2f9c0124431656403aa4c6e71c0a7a",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 25.75,
+          "artifacts": {
+            "result": {
+              "sha256": "f2e960d9ce1e4091073cceef0476eff06e1d929ef516bbc1d577508264f61869",
+              "bytes": 214
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a22-task30-31-cycles": {
+      "sourceSha256": "85020cdbb3b91652d3dcc87345bd93932d347146bb33a26d8a203856e86e716f",
+      "s68Sha256": "8fc5241fdf0a7270e684708d6355e6c3d90a723dd3e17e422e95400494a33d8e",
+      "l68Sha256": "ca44f094ceab584640e4a34f40571c69f234f2e7b113601ed7a2bffcfa3b7a8c",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 24.36,
+          "artifacts": {
+            "result": {
+              "sha256": "fb75cc58d46a1766ad0f05647978d2bcb0fbbd3924a7fc5f12f80a29b885adc0",
+              "bytes": 214
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a23-task32-values": {
+      "sourceSha256": "da7072ab635565538072b5fcbe2656c98136bbfa45908121d1d7cb818e96a49d",
+      "s68Sha256": "b9468e2947261b3e08a210cbf9719017ad8c37c7286a666e281739fb946c4040",
+      "l68Sha256": "240528282f7a4df1548f8c8a409ec5f2d10f584bcfa1b8c4b87c278ea4fec8d9",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 25.01,
+          "artifacts": {
+            "result": {
+              "sha256": "145c87d71b03bab5b6e79c2e6dea9107901534645d005ce82233e2f5244b1b58",
+              "bytes": 117
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a24-task33-window-size": {
+      "sourceSha256": "4a02464d1572ba2f898ab6f8670ea83404e2917a846d412c83eb0c32d2b90da4",
+      "s68Sha256": "d629c8621340b817585577e0a35110377196f6b34b521c7a5ebfe853e04628b2",
+      "l68Sha256": "e09bd8c6734d41192dbbe502c1499b28a808ce6d57b95b4412984e488eecec91",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 21.4,
+          "artifacts": {
+            "result": {
+              "sha256": "5cd9224616a117a2d55aadf20409e2381a7a3f4afd43416d5c9fa7bdbaadf37d",
+              "bytes": 135
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a25-task-number-byte": {
+      "sourceSha256": "f4bc197a4280b9cf30bb8efed2e57d3df33daed526881783419d29c8eb28dba8",
+      "s68Sha256": "4cb3e4f2a7cd2e24aee497e4cf5bedc0b426e1018de4f6e6a18469d11aaa4914",
+      "l68Sha256": "54bcf411593323a06976d1378e9e103aff2e060ee66263d5da2e4e29ae6f6919",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 23.73,
+          "artifacts": {
+            "result": {
+              "sha256": "3d57fea1578df91a926ccad5d910c66a106a3671c571feedf09ac4bcff29d28e",
+              "bytes": 247
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a26-unassigned-task-exception": {
+      "sourceSha256": "0fd8d3f1dca97439c46f8682ebfc093f8c01db19c0af0e5b0165b89507843b57",
+      "s68Sha256": "32f8b4aa592f67c7727b072d40209f1ed33f6aa0a13a86b67243689fb2d1bf37",
+      "l68Sha256": "336740cb262cc55de0ec9d5e1ff4b56512f61b49f82302cdfea67ff702270080",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 26.74,
+          "artifacts": {
+            "result": {
+              "sha256": "3acdc7c6ad49ca627a4bdbce46b68df6b03c181fb6edcda403c7d605151c37fc",
+              "bytes": 752
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a27-files-lowest-free-slot": {
+      "sourceSha256": "22ec9947c520e05cda9b2da93dbc312c101aa6312aea45accbc78c904d55edea",
+      "s68Sha256": "dcac773cc09282ed0a309b0aeb905ff5923c302ad803e1e7948f3d181035fe07",
+      "l68Sha256": "440ffd4b2100becca7072df432f85eb18e2b5cb0e0380900709f5eb0f92bc389",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 25.7,
+          "artifacts": {
+            "result": {
+              "sha256": "e332625da1bd57f7bc55e7f7fe8d391b62fa52722ac196f5bbf44ac138587142",
+              "bytes": 817
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a28-files-nine-opens": {
+      "sourceSha256": "160ae46cf7d87b8d9f108c2d49d01d4e07cc6dfbe54c902319bf991991db2dd1",
+      "s68Sha256": "a45394446112c0a2ad8668bef077137ca77d6d0acd79f586c11ef2e8983592b0",
+      "l68Sha256": "c808f1c97104c730effe0eb497498aa36d7ca3f5c598cfe23bcfae0db26ef898",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 28.43,
+          "artifacts": {
+            "result": {
+              "sha256": "af4bc24fb1cf213034ddb398b63eac614b0e266738133f7f4b1d0e7192b7805b",
+              "bytes": 1822
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a29-files-open-missing": {
+      "sourceSha256": "d628b937a4058614828f124be6e89707118f4951ead3db25ad8421ae8ef23acc",
+      "s68Sha256": "7289d2be6f892f933c130d5bd6f4cce4e1a37363f6628da5647732f5e4c84fe8",
+      "l68Sha256": "772ff3acf7dcc6ab784259f160cf3cc92220f27096e96a2547ebdd69b10c506c",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 24.98,
+          "artifacts": {
+            "result": {
+              "sha256": "fff84f67d2896a37a7c5cf6a7d19c3e54d2687f0bcdc3b33f222c3f6ca7e9763",
+              "bytes": 415
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a30-files-write-seek-read": {
+      "sourceSha256": "bb0a3aa71ed0d32c52c4997d4e2f20f3d382e15fad2a5548e426b4075e6e438a",
+      "s68Sha256": "4d9378bec79a9c49afe058fb0e34e7e89ad502faf1816579ab9af0d9de143efe",
+      "l68Sha256": "d6570b2dc6110a4e69aec63c3da05cf8945953f634b6ae2d1739afac109ec5b5",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 26.59,
+          "artifacts": {
+            "result": {
+              "sha256": "8917dd9f5970f4888c97e4591dd7ea04a55a8d5e613dbe7901466caeba79132c",
+              "bytes": 1112
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a31-files-zero-length": {
+      "sourceSha256": "1f956601e5d37a3b27cae01a42222cee3225776b8e0be3ab2ea9c7d89f7e2293",
+      "s68Sha256": "cb62ce7e835fa4a7cecc48602e10244513a6928824fa2f7286a7912b19557c45",
+      "l68Sha256": "f4acf984ba8f08c5c140235be62211591ae28617afcc8085d0a8ef16b1182951",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 26.2,
+          "artifacts": {
+            "result": {
+              "sha256": "826e7047ff7cf3e6e42ca831d04fb1ea885a72c9d9083569152ac10cf19f58a5",
+              "bytes": 616
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a32-files-bounds": {
+      "sourceSha256": "a27f366743872799b335c24dd7a57d4514d7cbfef02ab1043558b3c6d3a7e1d8",
+      "s68Sha256": "38eae04f2885d84ad836a19dd40d995134484a9bc41c3509e55202199cc9f8f1",
+      "l68Sha256": "77ef3a2284dbf10ebab1db2c582040386c4cc1d9c6758b5b9c866302c8372386",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 25.65,
+          "artifacts": {
+            "result": {
+              "sha256": "99793618436056cd9aaa63f044a1601df73f9c0206ae34f7a66b8a294c9579f3",
+              "bytes": 521
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a33-files-bad-fid": {
+      "sourceSha256": "8ae89013bb873386d3963fc5bc5c49f23121536ad404b34e057470d2d2a49f43",
+      "s68Sha256": "244cb7035688d80968a035df4ba59863e5b403a0f93d51333c5265ca2d43689d",
+      "l68Sha256": "980de04d9bc7e481c6e91f9835dd6ae5edc82c400d86a06f844d48921ef836be",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 29.06,
+          "artifacts": {
+            "result": {
+              "sha256": "e22b9d075839b27c6f6c917dcf898ba4d252ecec1342be595fd1917e6db128c5",
+              "bytes": 2425
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a34-files-seek-negative": {
+      "sourceSha256": "326f1903f6fa974c0cbfbfd143aa742c2eeb2ac973ba5a832d8b5c5f610d3c54",
+      "s68Sha256": "e7e8820ad1aac14a723fe23035e035325c4091ad79f895224bbdb696883c001b",
+      "l68Sha256": "7d39e5574e29bae7ca8ba98862bc07b4aaf64b484cb6dfd8a16eec06b6eac416",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 24.38,
+          "artifacts": {
+            "result": {
+              "sha256": "17c49cab40e806d253fb639c0a471f2e0e5c0f49d7303762aba76086940aab54",
+              "bytes": 616
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a35-files-exists-delete": {
+      "sourceSha256": "4476dc33dc23044f5085ff0177787f9291646493c6d67b07aa4acb0aed9dd3fa",
+      "s68Sha256": "8c304df37e49a935b706ed2090a5d780eb5fc46df17bb4255d574181e922e178",
+      "l68Sha256": "2af34756b7773e915f47c008f66399f5ee3f7a815203c100c43377883cf12023",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 28.18,
+          "artifacts": {
+            "result": {
+              "sha256": "15c431aff1d231e5ac0155127cbaf703bf200408fa9ac928abc293c383a6b149",
+              "bytes": 1018
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a36-files-close-all": {
+      "sourceSha256": "dbd6ddabdf9eadc30397d5023810968f38b81ffa3ec3638be985991f37274ce3",
+      "s68Sha256": "7d0f0f7b967a06617272eeb40f999140033313d8e7f0c16e9f5301d7b5d00638",
+      "l68Sha256": "16fe6f05793810ebbf279fbba1ae5bd9beb66e8511ac0ab2595aa3d558ea80b7",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 22.66,
+          "artifacts": {
+            "result": {
+              "sha256": "5dd711ac4e931942fd8a6b8af8f8f431ae54a58ea5532f87052867083245a8f4",
+              "bytes": 214
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a37-files-names": {
+      "sourceSha256": "924c9ab4f7d9d62273d1b9f8389880b405b84bf42bede1daba4c0cc93e7629bd",
+      "s68Sha256": "663f8cfc71fb7010160fa66ec2ecdabf911cc6d1d4efcec71b13811c8999ee75",
+      "l68Sha256": "197557365ab58b5fb1a9274c8b61abe147c26cbd38559a0af3182c960dbe7472",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 24.31,
+          "artifacts": {
+            "result": {
+              "sha256": "daf857b2fc4f47fa80480d9596c62f63fafe9da3818db25dfc7a145ebfedd233",
+              "bytes": 909
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a38-memory-map-invalid": {
+      "sourceSha256": "6daa2f5bdbd832dc34765e1681981a47a97a2dcc0116d7b1b8d055fdd37c5240",
+      "s68Sha256": "0498662b2f0aba1a0a7be493147068fcff71398be217e202a3ac607e0440aa4f",
+      "l68Sha256": "0eb68dc7fec34c646bbb734bd7c87f0c7b8c07a9ff3f9a2417e930c812356b58",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 25.96,
+          "artifacts": {
+            "result": {
+              "sha256": "37fc5be40eadddbf7bc5097704c3633b48c7f9c4d7c2534c83f3de6a776945e2",
+              "bytes": 537
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a39-memory-map-rom": {
+      "sourceSha256": "13fafd436ecc260769f22f8a23cb8c5d4b5045c9fb3e2c4a65e318361168d4d2",
+      "s68Sha256": "710d0e38c7a22c840227362c2517fed8b7261fa42c98a5e4eb8275aa2af3305b",
+      "l68Sha256": "bdbaaecb82bfec5bdbcbb62a083e013c1ab621509997fd6541fd512f28b9e7e4",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 25.18,
+          "artifacts": {
+            "result": {
+              "sha256": "f1778a4e7992cbd01538aa8380d1102e8901bfc6620c2a5db4b109edfad97835",
+              "bytes": 308
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a40-task25-scroll-rect": {
+      "sourceSha256": "28286972f2a02da2ba3de9105c6ea52b5822c1c6b13c560c4356bf680805635c",
+      "s68Sha256": "022da269f71b6a7318387c644797b8af1ae540227b3a7cbbe2e690113b470c9c",
+      "l68Sha256": "2351ba4d594ba7ae985563e36cd5748357db10fb8ce42e847e6e2426bfa2c9b7",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 29.94,
+          "artifacts": {
+            "result": {
+              "sha256": "46efeaca91e27eb0b529fdcb73316a5cf1bfb27b0c47b8328a0ff6413f9c88cc",
+              "bytes": 1837
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a41-task0-high-bytes": {
+      "sourceSha256": "f89169cd450f233f4b3d71285dba20ee7f421e24ac2d1e5abfa739cc94081585",
+      "s68Sha256": "f032870766c817a5027ee54971e75be01ea4b8b9c552bb8e846877c51410f601",
+      "l68Sha256": "aa4b433b71d50fff9fc72c87698e770605744ed2329a3c1fe0194d180fdcdc5e",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 24.1,
+          "artifacts": {
+            "result": {
+              "sha256": "e6787e040527538fa694df5dce74acb7a590ac89b9073264947c33c1e9b7ed3b",
+              "bytes": 141
+            }
+          }
+        },
+        "outlog": {
+          "status": "ok",
+          "seconds": 27.87,
+          "artifacts": {
+            "outlog": {
+              "sha256": "353393c4097cc6680304a19be520576ab446b0ea1e5a0d24661bfad251b292a1",
+              "bytes": 69
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a42-task11-clear": {
+      "sourceSha256": "c38a6644140f2f9334003c882ebe234458e793265e27a3ae20d888c22596e47a",
+      "s68Sha256": "8fabae0f6d702a8a7513f0f7ef1b344690cc37908f3a834033aae499ac864167",
+      "l68Sha256": "f9024dbe0f98241a46792d2bc9162480f9ca1e471326b3b345ee734e35798332",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 25.46,
+          "artifacts": {
+            "result": {
+              "sha256": "49b249cca77f23fa3d6cbe193b706566813670a707e7d4a588253cb7b179ae31",
+              "bytes": 862
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a43-task13-long-string": {
+      "sourceSha256": "f8009a467dde2ec041d2cefa69dc13927558ef39c9d57b2ade3439e6bf507b80",
+      "s68Sha256": "9ddacd6cf8a4dc8a7b61b8945ecbb843637e1e794c27c6275bf971a41b0f7231",
+      "l68Sha256": "31f22195c1b523526bb2c1a8f22de94639e6f0e3530b7916c72e3cc7d8cd091a",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 21.08,
+          "artifacts": {
+            "result": {
+              "sha256": "f00a63c705324f4464f0731a0458b41ddfe873d871359694e00da199f4aba479",
+              "bytes": 127
+            }
+          }
+        },
+        "outlog": {
+          "status": "ok",
+          "seconds": 26.12,
+          "artifacts": {
+            "outlog": {
+              "sha256": "9a49de3402a4540d812d93214e920021d72190a2ebacf8950747ec53e7af1e6a",
+              "bytes": 650
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a44-task7-no-key": {
+      "sourceSha256": "48ddbded2d1b1e37fda46d0774cf59bad0eab788589d2e1b7c1b9a50b362edfe",
+      "s68Sha256": "c45b8b1bb33d65aad9ac6434fde563f04e9d8c83be76fc8ce575cc286c8c4ef3",
+      "l68Sha256": "665ad55180eb044b2bb574313f280456591cd9efdc4644a32d9de5a02d9149a2",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 26.08,
+          "artifacts": {
+            "result": {
+              "sha256": "c1af44bd9d7e19f12d726450cd038759cf6aef95445681c2b8493d2bb5419a85",
+              "bytes": 214
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a45-settings-tasks-registers": {
+      "sourceSha256": "0e15ba4b0ae61c7c2027331eb300ba7a165c68d6f88383e309173703618cecac",
+      "s68Sha256": "46c7e47153ce871be077c8c6c65fdd533d8ddac5db5ddeca2827c95c68f3a885",
+      "l68Sha256": "3c11900728c23c3fef0ceaf842c1a716216fe1a1c3b0f54599386326fb1ae483",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 30.11,
+          "artifacts": {
+            "result": {
+              "sha256": "c94ab4e4ae51acca94699749d6684c97a100ba2b6a2c965e7362c0bab8bf23ce",
+              "bytes": 2425
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a46-task21-colour-keeps-grid": {
+      "sourceSha256": "97582d66456055b65c5f643e2a98210ddc5eb96ca18395338e9acf27bc8a4b68",
+      "s68Sha256": "a7e2783612cc0ec999f5a2bb3d323e4aacb92c602abbe1eb51a839d447d91aea",
+      "l68Sha256": "d90dd05a201d864ef16fe408feebb57ecf1c12d6a1d741fefc8e0f481fb2d868",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 24.72,
+          "artifacts": {
+            "result": {
+              "sha256": "42f4641d5ffe2bfc86fa77ad0f97dbcd6e1cacad4b1c271845897a76d5f77f9c",
+              "bytes": 285
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a47-serial-without-port": {
+      "sourceSha256": "3112905fe849fe25bfcbff34b4a3ab49a78c4063b6924b77abd64f48a1bb038b",
+      "s68Sha256": "d1d0141e2fce8e41d6e526a07e4bb187117c5ddb417a862446ec07688b4f8a55",
+      "l68Sha256": "eb41ae6e2c3c10308de818c14565f78e19d865a40b11ee928b7a653ca70ff0bf",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 27.17,
+          "artifacts": {
+            "result": {
+              "sha256": "54aee65f67ae6c233d8a33bbac3d2a6e69353f5325b569c50be9ee82fc5ce28e",
+              "bytes": 1018
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a48-task0-zero-count-nul": {
+      "sourceSha256": "e8a88c897f893a9249655c1e93aee403dca81c62151cd488135054a0e43fc3a0",
+      "s68Sha256": "e0814ca8a215a52d9eadfb6f95cb9ea0ec96a9a135a0f4b14275f8e2a206ef69",
+      "l68Sha256": "eef8f83ff5b51521b1ab84816dbf06cee8b86317e127b1a11c2b2629e8514863",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 20.62,
+          "artifacts": {
+            "result": {
+              "sha256": "be4416d64b5866b4e85c2a6182c84b1e250386824af6d93e5e2e4fbadf584c9e",
+              "bytes": 89
+            }
+          }
+        },
+        "outlog": {
+          "status": "ok",
+          "seconds": 26.35,
+          "artifacts": {
+            "outlog": {
+              "sha256": "b6bce3c9bca83ec6bef014a7fa3455467342591f862cf1b64081547f301c78fe",
+              "bytes": 53
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a49-cursor-negative-moves": {
+      "sourceSha256": "6d53f6c0f2f4499d87348f209b30da948dc3fc8cad0427ba640449232c9e98c0",
+      "s68Sha256": "d23a39cf940d8da52126979ac562f29745a89cbd6517f43f4d97011994006d92",
+      "l68Sha256": "5f3221a609bb2b0c4f2a1a7210dadf95429f506194286d29f8364a0690d4bfd0",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 20.78,
+          "artifacts": {
+            "result": {
+              "sha256": "2349e8465dad06b3ad5fc85861e01980b9e1d843dfc0fbc1c6d8d8724852e99f",
+              "bytes": 614
+            }
+          }
+        },
+        "outlog": {
+          "status": "ok",
+          "seconds": 27.74,
+          "artifacts": {
+            "outlog": {
+              "sha256": "00baed74c5259a93c1c0abbadd430a2b7bcdae73a934132f5ffaee9686f694c1",
+              "bytes": 124
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a50-sound-without-file": {
+      "sourceSha256": "002eb3bf446039304895bba8477f0f4831b4137456d8e0d3523624a15b729e56",
+      "s68Sha256": "6af9d2cc67fee9ff27c8d3cf9c4c2dcb6c64df797135ad3e7f36a301f3a5fee1",
+      "l68Sha256": "d800808bb0f21d300b0576a22608a862803f75cd6c753808ae63b79ac5f4da72",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 27.64,
+          "artifacts": {
+            "result": {
+              "sha256": "0a073702ebd29279d7dc93ffcf790e0c709405b54323559d2ad193eaa4cf698c",
+              "bytes": 1018
+            }
+          }
+        }
+      }
+    },
+    "trap15-b/b01-text-background-fill": {
+      "sourceSha256": "5ba26815aa6a9eb93a7f407bb33edd65bcf3185e77de9ba67edceb521c201538",
+      "s68Sha256": "e2d14b1ff4a1d1b5f5956b5a170026036932b3ded8a6bdd964784ab5df352c39",
+      "l68Sha256": "03be88cda2a5c6c88d4f5353695cad4f9bef4cf3ad5883994fb5f8f72f33cb36",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 23.3,
+          "artifacts": {
+            "result": {
+              "sha256": "6de6ce8ce6c91cc290c351c0363fb2bfd560c3da3d8528949c8e345b5c83532e",
+              "bytes": 47
+            }
+          }
+        }
+      }
+    },
+    "trap15-b/b02-textout-moves-pen": {
+      "sourceSha256": "638c2291880d464cc5297d295d92ee36ecc38137c04a4023d1e34c7840b820cd",
+      "s68Sha256": "7bacefb391e2e42fe82d5522c3f97ac8eb621854ba37e0172e2d9f83e3574fda",
+      "l68Sha256": "4f8d16add7e46e23f9308075f25f7bf5e67206fac3972f62d91f5d6c31e450ea",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 24.83,
+          "artifacts": {
+            "result": {
+              "sha256": "844e442da0bb678f2ca62b35ddbf16995d828b9c0fd9843b0a779b0770352c3f",
+              "bytes": 214
+            }
+          }
+        }
+      }
+    },
+    "trap15-b/b03-pixel-obeys-mode": {
+      "sourceSha256": "4e44cb2e144c4b95bc9653b53a5f6da235b77f6398b3fdd14c71805905050b25",
+      "s68Sha256": "8b78977d678d1622a6e08cd0ea0f5c506f161ae18920171025c30c0b1309d6ff",
+      "l68Sha256": "190550e434e2e3bb1f40a93e12b7cccffc067edc418e4d156d8b42335edec51f",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 24.3,
+          "artifacts": {
+            "result": {
+              "sha256": "5730f41d4cd1a33a662dec4a67b4a9bf9ddcfc05df5c5431e0c6df119fd8722e",
+              "bytes": 46
+            }
+          }
+        }
+      }
+    },
+    "trap15-b/b04-double-buffer-pen": {
+      "sourceSha256": "c634e56cddc4f6763dd1776d2516b43b2c724e2a30f5e8abf020b3fa2323ff0f",
+      "s68Sha256": "fe854114db37c60e9d68efac5178c42a3b03b7d8760c3a3145262d484d0acb59",
+      "l68Sha256": "4e9b2e41403781bac508a547776ec62c71f44da39a04e913c0bb35a6253d2f7f",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 24.76,
+          "artifacts": {
+            "result": {
+              "sha256": "ffd9017e7a92543ea695bd47e8b54235e7f4f2f174f7b019228c1781b881f682",
+              "bytes": 616
+            }
+          }
+        }
+      }
+    },
+    "trap15-b/b05-drawing-modes-0-15": {
+      "sourceSha256": "ea231cd420c6df5cc8ffee11eabfa5e3c63e97c26098bacd0075be497a821f99",
+      "s68Sha256": "173096e84a76dc02dfec18fc9f90fa60572e76227f02ca5330bfe3167b451218",
+      "l68Sha256": "703a2910026b8fd9a72f52b0fb13d6b886fbc253a3877ba62cff93b75e3b9200",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 33.25,
+          "artifacts": {
+            "result": {
+              "sha256": "2ca56214f3cf6a591daaaa848c2cd1ce7395611b3bf1ed0186ed5e63fc0358db",
+              "bytes": 3229
+            }
+          }
+        }
+      }
+    },
+    "trap15-b/b06-modes-above-15": {
+      "sourceSha256": "2fc96989ad757815ab637f3d742d39253b97a837b05f05fb5859d5b007b29937",
+      "s68Sha256": "d90e46fb2fb9e1d2be5ac8d380f9fdf0785e0b8a03a4c351e129c85e29efd39f",
+      "l68Sha256": "50c20326aab31e058f2e3c2728e9b5bb7e1ad43f3bc5437ea20b122a2a0df8af",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 29.48,
+          "artifacts": {
+            "result": {
+              "sha256": "cb3e4b01fc3106d3c69b48ae4d5a16a9722e965ec8c4b3a0aab827a654de7edc",
+              "bytes": 1219
+            }
+          }
+        }
+      }
+    },
+    "trap15-b/b07-rectangles": {
+      "sourceSha256": "6edd854c8f00870675f07cc966c79b31aa5cc816479dbbd229b0e8c3cdf46f96",
+      "s68Sha256": "31eb6ba52aa12223a091ed2854f39761c35b1384379c07c2ba69dc37f7276a23",
+      "l68Sha256": "47fb21890c5a234a0fd0823a15dfbf57d1ace6ef664dbf8a14103f373679ef48",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 26.07,
+          "artifacts": {
+            "result": {
+              "sha256": "e323989bbb9743a62dbd9e3cbc6d694057d53b4214466a3097d9837b58c40227",
+              "bytes": 146
+            }
+          }
+        }
+      }
+    },
+    "trap15-b/b08-ellipse-and-flood": {
+      "sourceSha256": "d21ed5efee3f934dcff7d35d9110f8ad0a86efc2e20809bf09dc0bb7d30a1412",
+      "s68Sha256": "b0c8394a2cd75cb5f6c42616a1e70faf3fabbf2cfd0e2115e12df24e3e9eba8f",
+      "l68Sha256": "b31297cd2269d25d5f502b28c102bbf8f19fa3c39ca0c6f6576cc6895a762f54",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 25.64,
+          "artifacts": {
+            "result": {
+              "sha256": "c2d78e7a7cec0ed067c4f0bc2fadff3147fcc5f68d5d2f590987b1624609cb5e",
+              "bytes": 139
+            }
+          }
+        }
+      }
+    },
+    "trap15-b/b09-lines-and-pen": {
+      "sourceSha256": "9a667cb344b4b541f9a9983700f801329c38be51532b93806b259067487a974b",
+      "s68Sha256": "7eb06e87017ee27e9ea280b5f0cc70ce45afed6f2fbad0a2043b7b81a7cc5ced",
+      "l68Sha256": "9e3bd66febe46a26ad4a5722e103b9bc241b1a88b0e09201c60b683a8a8d1b3e",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 25.23,
+          "artifacts": {
+            "result": {
+              "sha256": "3c12c4adc7c0fbf4154f7f0207548bec2ba168a611df122bf9412f9fa4b30c45",
+              "bytes": 553
+            }
+          }
+        }
+      }
+    },
+    "trap15-b/b10-pen-width": {
+      "sourceSha256": "044b3cfce71d1481712abe5247835432a69bd761b98341fff5667e420109c927",
+      "s68Sha256": "b1f16ec5444d64f576758540af2ec41307db49e0a415bad00b628e12653f6701",
+      "l68Sha256": "a07fcfa7a71a186e73282511e22ff1871b7c3e7700ae08d5f4771187eb341286",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 21.41,
+          "artifacts": {
+            "result": {
+              "sha256": "cfaa1098504072050e6eb0312ffdc05455a4d3aff5e745ac1e8878a61efaceae",
+              "bytes": 133
+            }
+          }
+        }
+      }
+    },
+    "trap15-b/b11-get-pixel-outside": {
+      "sourceSha256": "3351e88d5407058f1609eb130b852263f383f9a187bcde1acbfc453d5b96a85b",
+      "s68Sha256": "a63b75f08bdf2ad3449ca85666964525a04d17ed04c117e092f99c7586014548",
+      "l68Sha256": "c72baaf298658856e5cc2fd5e364fc16ad56a6c9724c4672ce1af2395a33c6cf",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 23.65,
+          "artifacts": {
+            "result": {
+              "sha256": "e82e6b5122f27c8bf069f61d791f274f305b0980e9420da9907b04d43e09e30e",
+              "bytes": 111
+            }
+          }
+        }
+      }
+    },
+    "trap15-b/b12-resize-clears-graphics": {
+      "sourceSha256": "48fd943b8497ba0fd2d40968e19bf14b695dab0f93594a9425c0fd3121cc914e",
+      "s68Sha256": "e920031d0624d40af59db5a5ec633f4555b5a0765ecd675b0be3f12b46de84ec",
+      "l68Sha256": "7cb4fe97a0352f567e1f00e179f28503d63a670c7bf6769026874cbe644e7c37",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 25.99,
+          "artifacts": {
+            "result": {
+              "sha256": "27e53c0dac040ffd27ee283cb92510fc117f782da0ff296811be982a2ccc3694",
+              "bytes": 265
+            }
+          }
+        }
+      }
+    },
+    "trap15-b/b13-colour-forms": {
+      "sourceSha256": "c149aaf500b22bab46b3cf47dbbf466ff8fb6cb203642a471eba8d5dc6270578",
+      "s68Sha256": "5dee685900685bcb912a9957cdd65049d17ba5ca036b0343ffaed0da678fa981",
+      "l68Sha256": "166996895828453cf5a621e4c8c1d50c84ff66f17a1912ef31da6a7132a89318",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 28.5,
+          "artifacts": {
+            "result": {
+              "sha256": "3df0c6907d156d124cc80fac8419818821822c45e447aff4fd8105e17fb8f47b",
+              "bytes": 1420
+            }
+          }
+        }
+      }
+    }
+  }
+}

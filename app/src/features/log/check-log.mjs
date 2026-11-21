@@ -1,0 +1,836 @@
+// Browser check of logging and the simulator options (ARCHITECTURE.md 9.4, U4). Owner: U4.
+//
+//   node app/src/features/log/check-log.mjs [--browser chromium|webkit|all] [--out <dir>]
+//
+// Starts the Vite dev server of app/ on a free port and drives the real application in headless
+// Chromium and WebKit (Playwright), with the key map of the system it runs on:
+//
+//   - Log Start and Log Stop are disabled at start-up and follow sim-ui §13.6; the LOGGING label;
+//   - Options > Log Output...: the modeless dialog with the original's texts, the memory range for
+//     type 3, OK enables Log Start and saves the two types;
+//   - Log Start, Trace Into to the halt, `Current Log Stopped.`: the execution log and the output
+//     log in the browser store, byte for byte (the example program of sim-ui §13.4);
+//   - the `Log File Options` question: Cancel (nothing starts, nothing is written), Append, Replace;
+//   - the Rewind and Reload notes after the dialog has been shown with the types selected;
+//   - Log Start while a program runs and the file exists, with the question open for seconds:
+//     every byte the program writes after the click is in the log;
+//   - the cost of a flush in the real browser store (IndexedDB) with a 30 MB log and a small one;
+//   - the Log panel; Auto Trace Options; Enable Exceptions and Enable Bit Field (saved at once,
+//     still set after a reload of the page); the three font dialogs; Fullscreen Options;
+//   - the dialogs pass an accessibility scan; screenshots in the light and the dark theme.
+//
+// The page object `window.__easy68k` (development builds only, main.tsx) is used to put the test
+// programs into the browser store, to read state for the comparisons, and to show the Log panel,
+// for which the menus have no command yet (docs/requests/U4-log-panel-command.md).
+//
+// Screenshots go to build/U4/log-check (git-ignored). Prints "N of M checks passed"; the exit code
+// is 0 only if every check passed and no page logged an error. Needs engine/dist (the programs are
+// assembled by the real assembler); without it the script says so, and with
+// EASY68K_REQUIRE_ENGINES=1 (CI) that is a failure.
+
+/* global console, process, document, window, performance, setTimeout -- the browser globals are used inside page.evaluate() callbacks */
+
+import { existsSync, mkdirSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { AxeBuilder } from '@axe-core/playwright';
+import { chromium, webkit } from '@playwright/test';
+import { createServer } from 'vite';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const appRoot = resolve(here, '../../..');
+const repoRoot = resolve(appRoot, '..');
+
+const args = process.argv.slice(2);
+const option = (name, fallback) => {
+  const index = args.indexOf(name);
+  return index >= 0 && args[index + 1] ? args[index + 1] : fallback;
+};
+const browserChoice = option('--browser', 'all');
+const outDir = resolve(option('--out', join(repoRoot, 'build', 'U4', 'log-check')));
+mkdirSync(outDir, { recursive: true });
+const BROWSERS = { chromium, webkit };
+const browsers = browserChoice === 'all' ? ['chromium', 'webkit'] : [browserChoice];
+
+const LOAD_TIMEOUT = 240_000;
+const UI_TIMEOUT = 20_000;
+
+let baseUrl = '';
+let failures = 0;
+const results = [];
+function check(name, ok, detail = '') {
+  results.push({ name, ok });
+  if (!ok) failures++;
+  console.log(`${ok ? '  ok  ' : '  FAIL'} ${name}${detail ? ` - ${detail}` : ''}`);
+}
+const notes = [];
+function note(text) {
+  notes.push(text);
+  console.log(`  note ${text}`);
+}
+
+// --- programs ------------------------------------------------------------------------------------
+
+/** The program of the execution-log examples of sim-ui §13.4 (MOVE.B at listing line 9). */
+const HELLO = [
+  '*-----------------------------------------------------------',
+  '* The program of the execution-log examples of sim-ui 13.4.',
+  '*-----------------------------------------------------------',
+  '*',
+  '*',
+  '*',
+  '    ORG     $1000',
+  'START:',
+  '    MOVE.B  #14,D0',
+  '    LEA     MSG,A1',
+  '    TRAP    #15',
+  '    SIMHALT',
+  '    ORG     $1012',
+  "MSG DC.B    'Hello',0",
+  '    END     START',
+];
+/** Writes "0\r\n1\r\n2\r\n..." for ever, counting in D2. */
+const COUNTER = [
+  '    ORG     $1000',
+  'START:',
+  '    MOVEQ   #0,D2',
+  'LOOP:',
+  '    MOVE.L  D2,D1',
+  '    MOVEQ   #3,D0',
+  '    TRAP    #15',
+  '    LEA     CRLF,A1',
+  '    MOVEQ   #14,D0',
+  '    TRAP    #15',
+  '    ADDQ.L  #1,D2',
+  '    BRA     LOOP',
+  'CRLF DC.B  13,10,0',
+  '    END     START',
+];
+const SOURCES = { hello: HELLO, count: COUNTER };
+
+/** The execution log of sim-ui §13.4, type 1, after its header. */
+const TYPE1_BODY = [
+  'PC=00001000  Code=103C 000E              Line=    9      MOVE.B  #14,D0',
+  'PC=00001004  Code=43F9 00001012          Line=   10      LEA     MSG,A1',
+  'PC=0000100A  Code=4E4F                   Line=   11      TRAP    #15',
+  'PC=0000100C  Code=FFFF FFFF              Line=   12      SIMHALT',
+]
+  .map((line) => `${line}\r\n`)
+  .join('');
+const EXEC_HEADER = /^EASy68K execution log file: \d{1,2}\/\d{1,2}\/\d{4}( \d{1,2}:\d\d:\d\d [AP]M)?\r\n\r\n/;
+const OUTPUT_HEADER = /^EASy68K output log file: \d{1,2}\/\d{1,2}\/\d{4}( \d{1,2}:\d\d:\d\d [AP]M)?\r\n\r\n/;
+
+function enginesBuilt() {
+  const dist = join(repoRoot, 'engine', 'dist');
+  return ['asm68k.wasm', 'asm68k-loader.mjs', 'sim68k.wasm', 'sim68k-loader.mjs'].every((file) =>
+    existsSync(join(dist, file)),
+  );
+}
+
+async function assemblePrograms() {
+  const { assemble } = await import(pathToFileURL(join(repoRoot, 'engine', 'asm', 'asm68k.mjs')).href);
+  const programs = {};
+  for (const [name, lines] of Object.entries(SOURCES)) {
+    const source = lines.map((line) => `${line}\r\n`).join('');
+    const files = new Map([[`${name}.X68`, Uint8Array.from(source, (ch) => ch.charCodeAt(0))]]);
+    const result = await assemble(`${name}.X68`, files, {}, new Date(2026, 0, 1));
+    if (result.errorCount > 0 || !result.sRecord || !result.listing) {
+      throw new Error(`The test program ${name} does not assemble: ${result.messages.map((m) => m.text).join('; ')}`);
+    }
+    programs[name] = { s68: [...result.sRecord], l68: [...result.listing] };
+  }
+  return programs;
+}
+
+// --- the page ------------------------------------------------------------------------------------
+
+const newContext = (browser, colorScheme = 'light') =>
+  browser.newContext({ viewport: { width: 1400, height: 900 }, reducedMotion: 'reduce', colorScheme });
+
+async function openPage(context) {
+  const page = await context.newPage();
+  const errors = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  page.on('pageerror', (error) => errors.push(String(error)));
+  await page.goto(baseUrl, { timeout: LOAD_TIMEOUT });
+  await waitForApp(page);
+  return { page, errors };
+}
+
+async function waitForApp(page) {
+  await page.waitForFunction(
+    () => window.__easy68k !== undefined && document.querySelector('.e68-shell') !== null,
+    undefined,
+    { timeout: LOAD_TIMEOUT },
+  );
+  await page.waitForFunction(() => window.__easy68k.ctx.store.getState().sim.phase !== 'loading', undefined, {
+    timeout: 60_000,
+  });
+}
+
+const SIM = '[data-e68-workspace="simulator"]';
+const toolbarButton = (page, id) => page.locator(`.e68-shell__toolbar [data-command="${id}"]`);
+const loggingLabel = (page) => page.locator('.e68-shell__toolbar .e68-toolbar__logging');
+const dialogNamed = (page, name) => page.getByRole('dialog', { name });
+const alertBox = (page) => page.locator('[role=alertdialog]');
+
+/** Opens a menu of the menu bar and chooses an item, with the mouse. */
+async function menu(page, title, item) {
+  await page.locator('.e68-shell__menubar [role=menuitem]', { hasText: new RegExp(`^${title}$`) }).click();
+  await page.locator('[role=menu][data-e68-menu] [role^=menuitem]', { hasText: item }).first().click();
+}
+
+/** The check mark of a menu item (aria-checked), read with the menu open, then the menu closed. */
+async function menuChecked(page, title, item) {
+  await page.locator('.e68-shell__menubar [role=menuitem]', { hasText: new RegExp(`^${title}$`) }).click();
+  const entry = page.locator('[role=menu][data-e68-menu] [role^=menuitem]', { hasText: item }).first();
+  const checked = await entry.getAttribute('aria-checked');
+  await page.keyboard.press('Escape');
+  return checked === 'true';
+}
+
+const setMode = (page, mode) => page.locator(`.e68-modeswitch [data-mode="${mode}"]`).click();
+
+const waitFor = (page, predicate, arg, timeout = UI_TIMEOUT) =>
+  page.waitForFunction(predicate, arg, { timeout }).then(
+    () => true,
+    () => false,
+  );
+
+/** Puts the programs into the browser store and opens one in the simulator (setup, not checked). */
+async function putPrograms(page, programs) {
+  await page.evaluate(async (all) => {
+    const { ctx } = window.__easy68k;
+    for (const [name, program] of Object.entries(all)) {
+      await ctx.vfs.writeFile(`/browser/logcheck/${name}.S68`, Uint8Array.from(program.s68));
+      await ctx.vfs.writeFile(`/browser/logcheck/${name}.L68`, Uint8Array.from(program.l68));
+    }
+  }, programs);
+}
+async function openProgram(page, name) {
+  await page.evaluate(
+    (file) => window.__easy68k.ctx.sim.controller.open(`/browser/logcheck/${file}.S68`, 'open'),
+    name,
+  );
+  await waitFor(page, () => window.__easy68k.ctx.store.getState().sim.phase !== 'loading', undefined);
+}
+
+const readText = (page, path) =>
+  page.evaluate(async (p) => {
+    const { ctx } = window.__easy68k;
+    if ((await ctx.vfs.stat(p)) === null) return null;
+    const bytes = await ctx.vfs.readFile(p);
+    let text = '';
+    for (const byte of bytes) text += String.fromCharCode(byte);
+    return text;
+  }, path);
+const writeText = (page, path, text) =>
+  page.evaluate(
+    ([p, t]) =>
+      window.__easy68k.ctx.vfs.writeFile(
+        p,
+        Uint8Array.from(t, (ch) => ch.charCodeAt(0)),
+      ),
+    [path, text],
+  );
+const removeFile = (page, path) =>
+  page.evaluate(async (p) => {
+    const { ctx } = window.__easy68k;
+    if ((await ctx.vfs.stat(p)) !== null) await ctx.vfs.remove(p);
+  }, path);
+const logState = (page) => page.evaluate(() => ({ ...window.__easy68k.ctx.sim.log.state }));
+const settled = (page) =>
+  page.evaluate(async () => {
+    const { log } = window.__easy68k.ctx.sim;
+    for (let i = 0; i < 20 && log.unsaved; i++) await log.flush();
+    return !log.unsaved;
+  });
+const enabled = async (page, id) => !(await toolbarButton(page, id).isDisabled());
+
+/** Presses one of the command's chords on the page's key map, preferring one with `prefer` in it. */
+async function pressCommandKey(page, id, prefer) {
+  const chords = await page.evaluate(async (command) => {
+    const { chordsOn } = await import('/src/commands/specs.ts');
+    return chordsOn(command, window.__easy68k.ctx.platform.os, false);
+  }, id);
+  const chord = chords.find((c) => c.includes(prefer)) ?? chords[0];
+  const parts = chord.split('+');
+  const key = parts.pop();
+  const MOD = { Ctrl: 'Control', Shift: 'Shift', Alt: 'Alt', Option: 'Alt', Cmd: 'Meta' };
+  await page.keyboard.press([...parts.map((m) => MOD[m] ?? m), key].join('+'));
+  return chord;
+}
+
+async function axe(page, label, p) {
+  const scan = await new AxeBuilder({ page })
+    .include('[role=dialog], [role=alertdialog]')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  check(
+    `${p} ${label} passes the accessibility scan`,
+    scan.violations.length === 0,
+    scan.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`).join('; '),
+  );
+}
+
+/** Answers the engine's `Current Log Stopped.` box with OK. */
+async function answerLogStopped(page, p) {
+  const box = alertBox(page);
+  const shown = await box
+    .waitFor({ timeout: UI_TIMEOUT })
+    .then(() => true)
+    .catch(() => false);
+  const text = shown ? await box.innerText() : '';
+  check(
+    `${p} the halt shows \`Current Log Stopped.\``,
+    shown && text.includes('Current Log Stopped.'),
+    text.replace(/\s+/g, ' '),
+  );
+  if (shown) await box.getByRole('button', { name: 'OK' }).click();
+  await box.waitFor({ state: 'detached', timeout: UI_TIMEOUT }).catch(() => {});
+}
+
+/** Trace Into with the toolbar until the program halts. */
+async function traceToHalt(page, steps) {
+  for (let i = 0; i < steps; i++) {
+    await toolbarButton(page, 'sim.run.traceInto').click();
+    await page.waitForTimeout(80);
+  }
+}
+
+// --- the parts -----------------------------------------------------------------------------------
+
+async function loggingPart(browser, name, programs) {
+  const p = `${name}/logging:`;
+  const context = await newContext(browser);
+  const { page, errors } = await openPage(context);
+  const shot = (label) => page.screenshot({ path: join(outDir, `${name}-${label}.png`) });
+  await setMode(page, 'simulator');
+  await putPrograms(page, programs);
+
+  check(
+    `${p} Log Start and Log Stop are disabled at start-up, no LOGGING label`,
+    !(await enabled(page, 'sim.run.logStart')) &&
+      !(await enabled(page, 'sim.run.logStop')) &&
+      (await loggingLabel(page).count()) === 0,
+  );
+
+  await openProgram(page, 'hello');
+  const names = await logState(page);
+  check(
+    `${p} Open sets the default names; Log Start stays disabled while both types are Disabled`,
+    names.execFileName === '/browser/logcheck/hello_RunLog.txt' &&
+      names.outputFileName === '/browser/logcheck/hello_OutLog.txt' &&
+      !(await enabled(page, 'sim.run.logStart')),
+    `${names.execFileName}, ${names.outputFileName}`,
+  );
+
+  // --- Options > Log Output...
+  await menu(page, 'Options', /^Log Output/);
+  const dialog = dialogNamed(page, 'Log Output');
+  await dialog.waitFor({ timeout: UI_TIMEOUT });
+  const texts = await dialog.innerText();
+  const wanted = [
+    'Execution Log File Name:',
+    'Execution Log Type',
+    'Disabled',
+    'Instruction only',
+    'Instruction and Registers',
+    'Instruction, Registers and Memory',
+    'Output Log File Name:',
+    'Output Log Type',
+    'Text Only',
+    'OK',
+    'Cancel',
+  ];
+  const missing = wanted.filter((text) => !texts.includes(text));
+  check(`${p} the Log Output dialog has the original's texts`, missing.length === 0, missing.join(', '));
+  check(
+    `${p} the Log Output dialog is modeless (no aria-modal) and shows the names`,
+    (await dialog.getAttribute('aria-modal')) !== 'true' &&
+      (await dialog.getByTestId('log-exec-name').inputValue()) === '/browser/logcheck/hello_RunLog.txt',
+  );
+  check(`${p} the memory range is hidden for Disabled`, (await dialog.getByTestId('log-mem-range').count()) === 0);
+  await dialog.getByRole('radio', { name: 'Instruction, Registers and Memory' }).check();
+  const memShown = (await dialog.getByTestId('log-mem-range').count()) === 1;
+  check(`${p} the memory range appears for type 3`, memShown);
+  await shot('log-output-type3');
+  await axe(page, 'the Log Output dialog', p);
+  await dialog.getByRole('radio', { name: 'Instruction only', exact: true }).check();
+  await dialog.getByRole('radio', { name: 'Text Only' }).check();
+  await dialog.getByRole('button', { name: 'OK' }).click();
+  await dialog.waitFor({ state: 'detached', timeout: UI_TIMEOUT });
+  const saved = await page.evaluate(() => window.__easy68k.ctx.settings.get().sim);
+  check(
+    `${p} OK enables Log Start and saves the two types`,
+    (await enabled(page, 'sim.run.logStart')) && saved.execLogType === 1 && saved.outputLogType === 1,
+    `exec ${saved.execLogType}, output ${saved.outputLogType}`,
+  );
+
+  // --- Log Start (no file yet), Trace Into to the halt
+  await removeFile(page, '/browser/logcheck/hello_RunLog.txt');
+  await removeFile(page, '/browser/logcheck/hello_OutLog.txt');
+  await toolbarButton(page, 'sim.run.logStart').click();
+  const logging = await loggingLabel(page)
+    .waitFor({ timeout: UI_TIMEOUT })
+    .then(() => true)
+    .catch(() => false);
+  check(
+    `${p} Log Start: LOGGING shown, Log Start disabled, Log Stop enabled`,
+    logging && !(await enabled(page, 'sim.run.logStart')) && (await enabled(page, 'sim.run.logStop')),
+  );
+  await shot('logging');
+  await traceToHalt(page, 4);
+  await answerLogStopped(page, p);
+  check(
+    `${p} after the halt: no LOGGING label, Log Start enabled, Log Stop disabled`,
+    (await loggingLabel(page).count()) === 0 &&
+      (await enabled(page, 'sim.run.logStart')) &&
+      !(await enabled(page, 'sim.run.logStop')),
+  );
+  await settled(page);
+  const exec = await readText(page, '/browser/logcheck/hello_RunLog.txt');
+  const output = await readText(page, '/browser/logcheck/hello_OutLog.txt');
+  check(
+    `${p} the execution log in the store is the example of sim-ui §13.4 (type 1), byte for byte`,
+    exec !== null && EXEC_HEADER.test(exec) && exec.replace(EXEC_HEADER, '') === TYPE1_BODY,
+    JSON.stringify(exec?.slice(0, 120)),
+  );
+  check(
+    `${p} the output log holds its header and Hello`,
+    output !== null && OUTPUT_HEADER.test(output) && output.replace(OUTPUT_HEADER, '') === 'Hello',
+    JSON.stringify(output),
+  );
+
+  // --- the Log panel (shown through the page object: no command opens it yet)
+  await page.evaluate(async () => {
+    const { showPanel } = await import('/src/state/panels.ts');
+    showPanel(window.__easy68k.ctx, 'log');
+  });
+  const panel = page.locator(`${SIM} [data-e68-panel="log"]`);
+  await panel.waitFor({ state: 'visible', timeout: UI_TIMEOUT });
+  await page.waitForTimeout(300);
+  const panelText = await panel.innerText();
+  check(
+    `${p} the Log panel shows the state, both names and the last lines`,
+    panelText.includes('Stopped') &&
+      panelText.includes('hello_RunLog.txt') &&
+      panelText.includes('hello_OutLog.txt') &&
+      panelText.includes('Line=   12      SIMHALT') &&
+      panelText.includes('Hello'),
+    panelText.replace(/\s+/g, ' ').slice(0, 200),
+  );
+  await shot('log-panel');
+
+  // --- the question: Cancel
+  await toolbarButton(page, 'sim.run.rewind').click();
+  await page.waitForTimeout(200);
+  const before = await readText(page, '/browser/logcheck/hello_RunLog.txt');
+  await toolbarButton(page, 'sim.run.logStart').click();
+  const question = dialogNamed(page, 'Log File Options');
+  await question.waitFor({ timeout: UI_TIMEOUT });
+  const qText = await question.innerText();
+  check(
+    `${p} Log File Options: \`Execution Log File exists!\`, Replace, Append, Cancel`,
+    qText.includes('Execution Log File exists!') &&
+      ['Replace', 'Append', 'Cancel'].every((b) => qText.includes(b)) &&
+      (await question.getAttribute('aria-modal')) === 'true',
+    qText.replace(/\s+/g, ' '),
+  );
+  await shot('log-file-options');
+  await axe(page, 'the Log File Options question', p);
+  await question.getByRole('button', { name: 'Cancel' }).click();
+  await question.waitFor({ state: 'detached', timeout: UI_TIMEOUT });
+  await page.waitForTimeout(200);
+  const afterCancel = await logState(page);
+  check(
+    `${p} Cancel: logging stays off, the engine is not logging, the file is unchanged`,
+    !afterCancel.logging &&
+      !(await page.evaluate(() => window.__easy68k.ctx.sim.engine.state().logging)) &&
+      (await loggingLabel(page).count()) === 0 &&
+      (await readText(page, '/browser/logcheck/hello_RunLog.txt')) === before &&
+      (await enabled(page, 'sim.run.logStart')),
+  );
+
+  // --- Append (execution log), Replace (output log); the notes after the dialog was shown
+  await menu(page, 'Options', /^Log Output/);
+  await dialog.waitFor({ timeout: UI_TIMEOUT });
+  await dialog.getByRole('button', { name: 'Cancel' }).click(); // shown with both types selected
+  await dialog.waitFor({ state: 'detached', timeout: UI_TIMEOUT });
+  await toolbarButton(page, 'sim.run.logStart').click();
+  await question.waitFor({ timeout: UI_TIMEOUT });
+  await question.getByRole('button', { name: 'Append' }).click();
+  const second = dialogNamed(page, 'Log File Options');
+  await waitFor(page, () => document.body.innerText.includes('Output Log File exists!'), undefined);
+  check(`${p} then the output log's question`, (await second.innerText()).includes('Output Log File exists!'));
+  await second.getByRole('button', { name: 'Replace' }).click();
+  await loggingLabel(page).waitFor({ timeout: UI_TIMEOUT });
+  await toolbarButton(page, 'sim.run.traceInto').click();
+  await page.waitForTimeout(150);
+  await toolbarButton(page, 'sim.run.rewind').click();
+  await page.waitForTimeout(150);
+  await toolbarButton(page, 'sim.run.reload').click();
+  await waitFor(page, () => window.__easy68k.ctx.store.getState().sim.phase === 'idle', undefined);
+  await page.waitForTimeout(150);
+  // Log Stop with the keyboard, from the Listing panel.
+  await page.locator(`${SIM} [data-e68-panel="listing"] [data-e68-panel-focus]`).focus();
+  const chord = await pressCommandKey(page, 'sim.run.logStop', 'Shift');
+  await waitFor(page, () => !window.__easy68k.ctx.sim.log.state.logging, undefined);
+  check(`${p} Log Stop with ${chord} stops the log`, !(await logState(page)).logging);
+  await settled(page);
+  const appended = await readText(page, '/browser/logcheck/hello_RunLog.txt');
+  const replaced = await readText(page, '/browser/logcheck/hello_OutLog.txt');
+  check(
+    `${p} Append kept the earlier execution log and added a header, an entry and both notes`,
+    appended !== null &&
+      appended.startsWith(before ?? '\u0000') &&
+      (appended.match(/EASy68K execution log file:/g) ?? []).length === 2 &&
+      appended.includes('\r\n***** Reset Program Pressed *****\r\n') &&
+      appended.includes('\r\n***** Reload Program Pressed *****\r\n'),
+    JSON.stringify(appended?.slice((before ?? '').length)),
+  );
+  check(
+    `${p} Replace started the output log afresh, with both notes as bare LF`,
+    replaced !== null &&
+      OUTPUT_HEADER.test(replaced) &&
+      replaced.replace(OUTPUT_HEADER, '') ===
+        '\n***** Reset Program Pressed *****\n\n***** Reload Program Pressed *****\n',
+    JSON.stringify(replaced),
+  );
+
+  // --- Log Start during a run, the file exists, the question stays open
+  await openProgram(page, 'count');
+  await writeText(page, '/browser/logcheck/count_OutLog.txt', 'an older log\r\n');
+  await page.evaluate(() => {
+    const { log } = window.__easy68k.ctx.sim;
+    log.applyDialog({ ...log.state, execType: 0, outputType: 1 });
+  });
+  await toolbarButton(page, 'sim.run.run').click();
+  await waitFor(page, () => window.__easy68k.ctx.sim.engine.getRegister(2) > 500, undefined);
+  await toolbarButton(page, 'sim.run.logStart').click();
+  await question.waitFor({ timeout: UI_TIMEOUT });
+  const d2Asked = await page.evaluate(() => window.__easy68k.ctx.sim.engine.getRegister(2));
+  await page.waitForTimeout(3000); // the user takes their time
+  const d2Later = await page.evaluate(() => window.__easy68k.ctx.sim.engine.getRegister(2));
+  check(`${p} the program stands still while the question is open`, d2Asked === d2Later, `D2 ${d2Asked} -> ${d2Later}`);
+  await question.getByRole('button', { name: 'Append' }).click();
+  await page.waitForTimeout(800);
+  await toolbarButton(page, 'sim.run.logStop').click();
+  await toolbarButton(page, 'sim.run.pause').click();
+  await settled(page);
+  const counted = (await readText(page, '/browser/logcheck/count_OutLog.txt')) ?? '';
+  const prefix = /^an older log\r\nEASy68K output log file: [^\r]*\r\n\r\n/;
+  const body = counted.replace(prefix, '');
+  // The program was held between two of its instructions: the log goes on exactly where the
+  // screen went on, with "q\r\n" or with the CR LF of q - 1 and then "q\r\n".
+  let expected = '';
+  const startsAt = body.startsWith('\r\n') ? d2Asked + 1 : d2Asked;
+  if (body.startsWith('\r\n')) expected += '\r\n';
+  const lines = body.slice(expected.length).split('\r\n');
+  lines.pop(); // the part after the last CR LF (maybe a number without its CR LF)
+  for (let i = 0; i < lines.length; i++) expected += `${startsAt + i}\r\n`;
+  const consecutive = lines.length > 10 && body.startsWith(expected);
+  check(
+    `${p} Log Start during a run: every byte written after the click is in the log`,
+    prefix.test(counted) && consecutive,
+    `${lines.length} lines, first ${JSON.stringify(body.slice(0, 24))}, question asked at D2 = ${d2Asked}`,
+  );
+
+  check(`${p} no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await context.close();
+}
+
+/** Flush cost in the real browser store: a 30 MB log against a small one. */
+async function flushPart(browser, name, programs) {
+  const p = `${name}/flush:`;
+  const context = await newContext(browser);
+  const { page, errors } = await openPage(context);
+  await setMode(page, 'simulator');
+  await putPrograms(page, programs);
+  await openProgram(page, 'hello');
+  // `dir`: a folder of its own, or the loaded program's folder, whose cached copy for the program
+  // (3.8.4, CachedSyncFiles) follows every change of the file.
+  const measure = (size, dir = '/browser/logcheck-big') =>
+    page.evaluate(
+      async ([bytes, folder]) => {
+        const { ctx } = window.__easy68k;
+        const { log } = ctx.sim;
+        const path = `${folder}/hello_OutLog.txt`;
+        await ctx.vfs.writeFile(path, new Uint8Array(bytes).fill(0x41));
+        log.applyDialog({ ...log.state, execType: 0, outputType: 1, outputFileName: path });
+        // The question is answered by the dialog; Append is pressed below by the check.
+        const started = log.start();
+        const deadline = performance.now() + 20000;
+        while (performance.now() < deadline) {
+          const button = [...document.querySelectorAll('[role=dialog] button')].find((b) => b.textContent === 'Append');
+          if (button) {
+            button.click();
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+        if (!(await started)) return null;
+        const chunk = new Uint8Array(8192).fill(0x42);
+        const times = [];
+        for (let i = 0; i < 30; i++) {
+          log.outputWrite(chunk);
+          const t0 = performance.now();
+          await log.flush();
+          times.push(performance.now() - t0);
+        }
+        log.stop();
+        await log.flush();
+        const size = (await ctx.vfs.stat(path))?.size ?? -1;
+        times.sort((a, b) => a - b);
+        return { median: times[15], size };
+      },
+      [size, dir],
+    );
+
+  let best = Infinity;
+  let detail = '';
+  for (let attempt = 0; attempt < 3 && best >= 2; attempt++) {
+    const small = await measure(1024);
+    const big = await measure(30 * 1024 * 1024);
+    if (!small || !big) {
+      detail = 'Log Start failed';
+      break;
+    }
+    const ratio = big.median / Math.max(small.median, 0.1);
+    best = Math.min(best, ratio);
+    detail = `small ${small.median.toFixed(2)} ms, 30 MB ${big.median.toFixed(2)} ms per flush (ratio ${ratio.toFixed(2)}); sizes ${small.size}, ${big.size}`;
+    note(`${p} ${detail}`);
+    if (big.size < 30 * 1024 * 1024 + 30 * 8192) detail += ' (the file is shorter than what was written)';
+  }
+  check(`${p} a 30 MB log costs the same per flush as a small one (IndexedDB)`, best < 3, detail);
+  // The same in the program's folder, where the log goes by default: reported, not judged here.
+  const smallThere = await measure(1024, '/browser/logcheck');
+  const bigThere = await measure(30 * 1024 * 1024, '/browser/logcheck');
+  if (smallThere && bigThere) {
+    note(
+      `${p} in the loaded program's folder: small ${smallThere.median.toFixed(2)} ms, 30 MB ${bigThere.median.toFixed(2)} ms per flush (the program's cached copy of the folder reads the whole file again after each append)`,
+    );
+  }
+  check(`${p} no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await context.close();
+}
+
+async function optionsPart(browser, name, colorScheme) {
+  const p = `${name}/options (${colorScheme}):`;
+  const context = await newContext(browser, colorScheme);
+  const { page, errors } = await openPage(context);
+  const shot = (label) => page.screenshot({ path: join(outDir, `${name}-${colorScheme}-${label}.png`) });
+  await setMode(page, 'simulator');
+
+  // --- Auto Trace Options
+  await menu(page, 'Options', /^Auto Trace Options/);
+  const auto = dialogNamed(page, 'Auto Trace Options');
+  await auto.waitFor({ timeout: UI_TIMEOUT });
+  const autoText = await auto.innerText();
+  const field = auto.getByRole('spinbutton');
+  check(
+    `${p} Auto Trace Options: interval 200 mSec, read-only, \`Disable display update\``,
+    autoText.includes('Auto Trace Interval') &&
+      autoText.includes('mSec') &&
+      autoText.includes('Disable display update') &&
+      (await field.inputValue()) === '200' &&
+      (await field.getAttribute('readonly')) !== null,
+  );
+  await shot('auto-trace');
+  await axe(page, 'the Auto Trace Options dialog', p);
+  await field.focus();
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await auto.getByRole('checkbox').check();
+  await auto.getByRole('button', { name: 'Cancel' }).click();
+  await auto.waitFor({ state: 'detached' });
+  let sim = await page.evaluate(() => window.__easy68k.ctx.settings.get().sim);
+  check(`${p} Cancel changes nothing`, sim.autoTraceIntervalMs === 200 && sim.disableDisplay === false);
+  await menu(page, 'Options', /^Auto Trace Options/);
+  await auto.waitFor({ timeout: UI_TIMEOUT });
+  await field.focus();
+  await page.keyboard.press('ArrowUp');
+  await auto.getByRole('checkbox').check();
+  await auto.getByRole('button', { name: 'OK' }).click();
+  await auto.waitFor({ state: 'detached' });
+  sim = await page.evaluate(() => window.__easy68k.ctx.settings.get().sim);
+  check(
+    `${p} OK saves the interval (step 10) and the check box`,
+    sim.autoTraceIntervalMs === 210 && sim.disableDisplay === true,
+    `${sim.autoTraceIntervalMs} ms, ${sim.disableDisplay}`,
+  );
+
+  // --- Enable Exceptions, Enable Bit Field: saved at once, still set after a reload
+  await menu(page, 'Options', /^Enable Exceptions/);
+  await menu(page, 'Options', /^Enable Bit Field Instructions/);
+  const engineOptions = () =>
+    page.evaluate(() => {
+      const { engine } = window.__easy68k.ctx.sim;
+      return [engine.getOption(0), engine.getOption(1)];
+    });
+  const [exc, bit] = await engineOptions();
+  check(
+    `${p} Enable Exceptions and Enable Bit Field: checked, the engine follows`,
+    (await menuChecked(page, 'Options', /^Enable Exceptions/)) &&
+      (await menuChecked(page, 'Options', /^Enable Bit Field/)) &&
+      exc === 1 &&
+      bit === 1,
+    `engine ${exc}, ${bit}`,
+  );
+  await page.reload({ timeout: LOAD_TIMEOUT });
+  await waitForApp(page);
+  await setMode(page, 'simulator');
+  sim = await page.evaluate(() => window.__easy68k.ctx.settings.get().sim);
+  const [exc2, bit2] = await engineOptions();
+  check(
+    `${p} both are still set after a reload of the page (saved at once)`,
+    sim.exceptions && sim.bitField && exc2 === 1 && bit2 === 1 && sim.autoTraceIntervalMs === 210,
+  );
+  await menu(page, 'Options', /^Enable Exceptions/);
+  await menu(page, 'Options', /^Enable Bit Field Instructions/);
+
+  // --- Output Window Font
+  await menu(page, 'Options', /^Output Window Font/);
+  const font = dialogNamed(page, 'Output Window Font');
+  await font.waitFor({ timeout: UI_TIMEOUT });
+  const fonts = await font.getByRole('listbox', { name: 'Font', exact: true }).getByRole('option').allInnerTexts();
+  check(
+    `${p} Output Window Font lists the five measured fonts`,
+    JSON.stringify(fonts) === JSON.stringify(['Fixedsys', 'Courier', 'Courier New', 'Lucida Console', 'Consolas']),
+    fonts.join(', '),
+  );
+  await font.getByRole('option', { name: 'Consolas' }).click();
+  const size = font.getByRole('spinbutton');
+  await size.fill('12');
+  await size.press('Tab');
+  await font.getByRole('listbox', { name: 'Font style' }).getByRole('option', { name: 'Bold', exact: true }).click();
+  await shot('output-font');
+  await axe(page, 'the Output Window Font dialog', p);
+  await font.getByRole('button', { name: 'OK' }).click();
+  await font.waitFor({ state: 'detached' });
+  const after = await page.evaluate(() => ({
+    saved: window.__easy68k.ctx.settings.get().sim.outputFont,
+    screen: window.__easy68k.ctx.sim.text.state.optionsFont,
+  }));
+  check(
+    `${p} OK saves name and size and gives the Output panel the font (TextScreen.setOptionsFont)`,
+    after.saved.name === 'Consolas' &&
+      after.saved.size === 12 &&
+      after.screen.name === 'Consolas' &&
+      after.screen.size === 12 &&
+      after.screen.bold === true,
+    JSON.stringify(after),
+  );
+
+  // --- Source Window Font, Printer Font
+  await menu(page, 'Options', /^Source Window Font/);
+  const source = dialogNamed(page, 'Source Window Font');
+  await source.waitFor({ timeout: UI_TIMEOUT });
+  await source.getByRole('option', { name: 'Lucida Console' }).click();
+  await source.getByRole('button', { name: 'OK' }).click();
+  await source.waitFor({ state: 'detached' });
+  await menu(page, 'Options', /^Printer Font/);
+  const printer = dialogNamed(page, 'Printer Font');
+  await printer.waitFor({ timeout: UI_TIMEOUT });
+  await printer.getByRole('textbox', { name: 'Font:' }).fill('Arial');
+  await printer.getByRole('button', { name: 'OK' }).click();
+  await printer.waitFor({ state: 'detached' });
+  sim = await page.evaluate(() => window.__easy68k.ctx.settings.get().sim);
+  check(
+    `${p} Source Window Font and Printer Font are saved`,
+    sim.listingFont.name === 'Lucida Console' && sim.printerFont.name === 'Arial',
+    `${sim.listingFont.name}, ${sim.printerFont.name}`,
+  );
+
+  // --- Fullscreen Options
+  await menu(page, 'Options', /^Fullscreen Options/);
+  const full = dialogNamed(page, 'Fullscreen Options');
+  await full.waitFor({ timeout: UI_TIMEOUT });
+  const fullText = await full.locator('p').textContent();
+  const screen = full.getByRole('textbox', { name: 'Screen number' });
+  const okButton = full.getByRole('button', { name: 'Ok' });
+  const okWithOne = (await screen.inputValue()) === '1' && !(await okButton.isDisabled());
+  await screen.fill('2');
+  const okWithTwo = !(await okButton.isDisabled());
+  check(
+    `${p} Fullscreen Options: the original's text (double spaces kept), Ok only for screen 1`,
+    fullText === 'Screen to use for fullscreen output window.  Primary screen = 1  Secondary screens = 2 and up.' &&
+      okWithOne &&
+      !okWithTwo,
+    JSON.stringify(fullText),
+  );
+  await shot('fullscreen-options');
+  await axe(page, 'the Fullscreen Options dialog', p);
+  await full.getByRole('button', { name: 'Cancel' }).click();
+  await full.waitFor({ state: 'detached' });
+
+  check(`${p} no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await context.close();
+}
+
+// --- run -----------------------------------------------------------------------------------------
+
+async function main() {
+  if (!enginesBuilt()) {
+    const required = process.env.EASY68K_REQUIRE_ENGINES === '1';
+    console.log(
+      `engine/dist is missing: run \`npm run build:engines\` first. ${required ? 'EASY68K_REQUIRE_ENGINES is 1: that is a failure.' : 'Nothing was checked.'}`,
+    );
+    process.exit(required ? 1 : 0);
+  }
+  const programs = await assemblePrograms();
+  const server = await createServer({
+    configFile: join(appRoot, 'vite.config.ts'),
+    root: appRoot,
+    logLevel: 'warn',
+    cacheDir: join(outDir, 'vite-cache'),
+    server: { port: 0, strictPort: false, host: '127.0.0.1', hmr: false, watch: null },
+  });
+  await server.listen();
+  const address = server.httpServer?.address();
+  if (typeof address !== 'object' || !address) throw new Error('The dev server has no address');
+  baseUrl = `http://127.0.0.1:${address.port}/`;
+  console.log(`Application: ${baseUrl}\nScreenshots: ${outDir}`);
+  try {
+    for (const name of browsers) {
+      const browser = await BROWSERS[name].launch();
+      try {
+        for (const [part, run] of [
+          ['logging', () => loggingPart(browser, name, programs)],
+          ['flush', () => flushPart(browser, name, programs)],
+          ['options light', () => optionsPart(browser, name, 'light')],
+          ['options dark', () => optionsPart(browser, name, 'dark')],
+        ]) {
+          console.log(`\n[${name}, ${part}]`);
+          try {
+            await run();
+          } catch (error) {
+            check(
+              `${name}/${part}: ran to the end`,
+              false,
+              String(error?.stack ?? error)
+                .split('\n')
+                .slice(0, 4)
+                .join(' | '),
+            );
+          }
+        }
+      } finally {
+        await browser.close();
+      }
+    }
+  } finally {
+    await server.close();
+  }
+  if (notes.length > 0) console.log(`\nNotes (not failures):\n${notes.map((text) => `  - ${text}`).join('\n')}`);
+  const passed = results.filter((r) => r.ok).length;
+  console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
+  process.exit(failures ? 1 : 0);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
