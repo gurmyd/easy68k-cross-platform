@@ -335,13 +335,18 @@ async function keyboardPass(browser, name) {
     JSON.stringify(controls),
   );
   await k('Delete');
-  await page.waitForTimeout(50);
+  // Tabs focuses the neighbour in the next animation frame, which a loaded runner can delay
+  // well past a fixed pause (WebKit on ubuntu-latest): wait for it, up to 3 s.
+  const waitStart = Date.now();
+  await page
+    .waitForFunction(() => document.activeElement?.getAttribute('role') === 'tab', null, { timeout: 3000 })
+    .catch(() => console.log(`        no tab had the focus ${Date.now() - waitStart} ms after Delete`));
   const remaining = await docTabs.locator('[role=tab]').count();
   a = await active(page);
   check(
     `${p} Delete closes the tab and focuses its neighbour`,
     remaining === 2 && a?.role === 'tab',
-    `${remaining} ${a?.text}`,
+    `${remaining} tabs left; focus on ${a?.tag} role=${a?.role} "${a?.text.slice(0, 30)}"`,
   );
 
   // Modal dialog (2.7, 2.11). The dialog moves the focus on every Tab and Shift+Tab itself
