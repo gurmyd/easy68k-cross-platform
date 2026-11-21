@@ -116,6 +116,9 @@ describe('the status bar', () => {
     const sim = (phase: AppState['sim']['phase'], halted = false) => runStateText({ phase, halted });
     expect(sim('idle')).toBe('Stopped');
     expect(sim('idle', true)).toBe('Halted');
+    // The engine's halt flag outlives Rewind and Open; once the commands are free it is 'Stopped'.
+    expect(runStateText({ phase: 'idle', halted: true, menuState: 1 })).toBe('Halted');
+    expect(runStateText({ phase: 'idle', halted: true, menuState: 0 })).toBe('Stopped');
     expect(sim('running')).toBe('Running');
     expect(sim('waitDelay')).toBe('Running');
     expect(sim('waitInput')).toBe('Waiting for input');

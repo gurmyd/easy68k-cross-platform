@@ -32,7 +32,7 @@
 /* global console, process, document, window, navigator, DataTransfer, ClipboardEvent, Navigator -- browser globals are used inside page.evaluate() callbacks */
 
 import { mkdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium, webkit } from '@playwright/test';
@@ -49,8 +49,11 @@ const option = (name, fallback) => {
 };
 const browserChoice = option('--browser', 'all');
 const outDir = resolve(option('--out', join(repoRoot, 'build', 'E2', 'editor-check')));
-if (!outDir.startsWith(join(repoRoot, 'build'))) {
-  console.error('--out must be a folder below build/');
+// path.relative, not a string prefix: Windows paths differ in drive-letter case ("c:\" / "C:\"),
+// which path.win32.relative ignores, and a prefix test would also accept siblings such as build-x.
+const fromBuild = relative(join(repoRoot, 'build'), outDir);
+if (fromBuild === '' || fromBuild === '..' || fromBuild.startsWith(`..${sep}`) || isAbsolute(fromBuild)) {
+  console.error(`--out must be a folder below ${join(repoRoot, 'build')} (given: ${outDir})`);
   process.exit(2);
 }
 mkdirSync(outDir, { recursive: true });

@@ -1,6 +1,6 @@
 # Requests of T2 (GDI capture, references, fonts)
 
-Status: item 1 applied before this gate (`/tools/fonts-src/** -text` is in `.gitattributes` since commit 539028a). Item 2 checked in gate I1 round 1: the steps match how the suites start; the GDI, twins and asm-CLI steps of `windows-oracles` now each run even when an earlier one failed. Item 3 declined: `@napi-rs/canvas` is still used by DV1's `app/src/features/pwa/icons/make-icons.mjs`.
+Status: item 1 applied before this gate (`/tools/fonts-src/** -text` is in `.gitattributes` since commit 539028a). Item 2 checked in gate I1 round 1: the steps match how the suites start; the GDI, twins and asm-CLI steps of `windows-oracles` now each run even when an earlier one failed. Item 3 declined: `@napi-rs/canvas` is still used by DV1's `app/src/features/pwa/icons/make-icons.mjs`. Item 6 applied in gate I1 round 3 as asked: the step "Upload the GDI capture report (T2)" (artifact `gdi-capture-report`) follows the GDI step of `windows-oracles`; the round-2 step "Upload the GDI capture of this run (T2)" (the whole `build/gdi-capture/run/`, only when the GDI step fails) stays.
 
 1. **`.gitattributes`: keep `tools/fonts-src/` byte-exact.** Add `/tools/fonts-src/** -text`.
    The folder holds third-party licence texts and font files whose SHA-256 is recorded in

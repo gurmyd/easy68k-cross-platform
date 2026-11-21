@@ -30,6 +30,13 @@ export type SimPhase = 'loading' | 'idle' | 'running' | 'waitInput' | 'waitDelay
  *  state (4.7.1), because the original starts a new simulator process for them. */
 export type LoadOrigin = 'open' | 'reload' | 'drop' | 'execute' | 'commandLine' | 'association';
 
+/** Options of RunController.open. Added at gate I1 round 3 (docs/porting/errata/W1.md, entry 13). */
+export interface LoadOptions {
+  /** The caller has just asked step 2's question with `confirmLoad(origin)` and the user chose OK
+   *  (or no question was needed): `open` skips step 2. Default false. */
+  confirmed?: boolean;
+}
+
 export interface ProgramInfo {
   path: VPath; // the file Reload loads (after Open Data: the data file, sim-ui Q11)
   title: string; // from host.caption()
@@ -59,7 +66,20 @@ export interface RunController {
   subscribe(listener: () => void): () => void;
 
   /* loads: each puts the controller into 'loading'; a request made during 'loading' is ignored */
-  open(path: VPath, origin: LoadOrigin): Promise<void>;
+  /** 4.7. `options` was added at gate I1 round 3 (docs/porting/errata/W1.md, entry 13); see
+   *  LoadOptions and confirmLoad. */
+  open(path: VPath, origin: LoadOrigin, options?: LoadOptions): Promise<void>;
+  /**
+   * Step 2 of 4.7 on its own: asks the `Caution` question exactly when `open(path, origin)` would
+   * ask it now (holding the program meanwhile), and resolves true when the load may go on (no
+   * question was needed, or OK) and false on Cancel. For a caller that must do something between
+   * the question and the load, as the original orders it: a dropped `.S68` in a browser is copied
+   * into the browser store only after OK (sim-ui §8.4; FS1). The caller then calls
+   * `open(path, origin, { confirmed: true })`. Added at gate I1 round 3 as an optional member
+   * (docs/porting/errata/W1.md, entry 13): a controller that has it honours `confirmed`, and a
+   * caller passes `confirmed` only to a controller that has it.
+   */
+  confirmLoad?(origin: LoadOrigin): Promise<boolean>;
   openData(path: VPath): Promise<void>;
   reload(): Promise<void>;
   close(): Promise<void>;

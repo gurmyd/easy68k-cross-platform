@@ -24,8 +24,10 @@
 //   - Exit shows `You can close this tab.`;
 //   - a program named in the URL is loaded and started, and the switches of the URL act without
 //     one (5.7; sim-ui §8.1);
-//   - a page that gets no display frames at all still runs its program and keeps delays exact
-//     (4.5.5).
+//   - a page that gets no display frames at all still runs its program at its speed and keeps
+//     delays exact (4.5.5);
+//   - the status bar says Halted after a halt, and Stopped once Rewind or Pause has made Run
+//     available again.
 //
 // Screenshots go to build/SH8/run-check (git-ignored). Exit code 0 = everything passed. The page
 // object `window.__easy68k` that the script uses exists in development builds only (main.tsx).
@@ -36,9 +38,9 @@
 // Nothing here depends on the operating system, and no check fails merely because the machine is
 // slow, busy or throttled: every wait is for a state; the figures that are times or rates are
 // measured several times, the best run counting; a delay is judged against how late the browser's
-// own timers were meanwhile, and the exact instruction rate only over a second of steady frames
-// (both were missed on the macOS runners of CI, whose Chromium fires timers 20 to 100 ms late and
-// delivers frames 120 ms apart, while WebKit there was exact).
+// own timers were meanwhile, and the instruction rate against what the frames the page really had
+// grant (both were missed on the macOS runners of CI, whose Chromium fires timers 20 to 100 ms late
+// and delivers frames 120 ms apart, while WebKit there was exact).
 
 /* global console, process, document, window, performance, setTimeout, Event -- the browser globals are used inside page.evaluate() callbacks, which run in the page */
 
@@ -174,11 +176,16 @@ const statusText = (page) =>
   page.evaluate(() => [...document.querySelectorAll('[data-e68-status]')].map((cell) => cell.textContent).join(' | '));
 const waitForPhase = (page, phase, timeout = UI_TIMEOUT) =>
   page.waitForFunction((wanted) => window.__easy68k.ctx.store.getState().sim.phase === wanted, phase, { timeout });
+/**
+ * Waits for a halt. The engine's halt flag alone does not say it: it stays set from one halt
+ * through Rewind and Open until the next run starts (sim-ui §9.9). A halt also makes the commands
+ * busy (menuState 1, §3.6), which Rewind, Open and Pause undo.
+ */
 const waitForHalt = (page, timeout = UI_TIMEOUT, polling = undefined) =>
   page.waitForFunction(
     () => {
       const state = window.__easy68k.ctx.store.getState().sim;
-      return state.phase === 'idle' && state.halted;
+      return state.phase === 'idle' && state.halted && state.menuState === 1;
     },
     undefined,
     waitOptions(timeout, polling),
@@ -288,6 +295,47 @@ function judgeDelays(runs) {
   };
 }
 
+/** Frames (or watchdog ticks) further apart than this count as unsteady; the governor's MAX_CATCHUP_MS. */
+const STEADY_GAP_MS = 50;
+/** The pace of the scheduler's watchdog once it has taken over: WATCHDOG_FRAME_MS of state/browser.ts. */
+const WATCHDOG_FRAME_MS = 1000 / 60;
+
+/**
+ * The verdict on the default speed over measurement windows of `{ executed, ms, granted, longest,
+ * exact }` (`granted`: what the governor's allowance rule grants for the frames, or watchdog ticks,
+ * the window really had: the time since the one before, at most STEADY_GAP_MS each, times 1000).
+ *
+ * What the product guarantees (ARCHITECTURE.md 4.2): the allowance never exceeds that grant, plus
+ * one cap of allowance carried into the window; and it executes the whole grant whenever the time
+ * budget of a frame (8 ms, or half the frame interval) suffices for it. At a million instructions
+ * per second a frame's grant is at most 50,000 instructions, which the engine executes in 8 ms on
+ * any machine that runs it at 6.25 million instructions per second or more; every CI runner and this
+ * PC do (the Maximum check). So one window in up to five must be exact (3 %), and a window can only
+ * fall short of it on a machine too slow or too loaded for that budget. When none is exact, the
+ * best window must still have executed half its grant, which rules out a governor that loses time,
+ * and the figures are printed so that the CI log alone tells the runner from the product.
+ */
+function judgeRate(windows) {
+  const rateOf = (run) => run.executed / (run.ms / 1000);
+  const share = (run) => (run.granted > 0 ? run.executed / run.granted : 0);
+  const describe = (run) =>
+    `${Math.round(rateOf(run)).toLocaleString('en-US')}/s, ${Math.round(100 * share(run))} % of the grant ` +
+    `of ${Math.round(run.granted).toLocaleString('en-US')} (longest gap ${Math.round(run.longest)} ms` +
+    `${run.slow !== undefined ? `, ${run.slow} of ${run.frames} gaps over ${STEADY_GAP_MS} ms` : ''})`;
+  const neverAbove = windows.every((run) => run.executed <= 1.03 * run.granted + 50_000);
+  const exact = windows.some((run) => run.exact);
+  const best = Math.max(...windows.map(share));
+  const notes = [];
+  if (!neverAbove) notes.push('a window executed more than the governor grants: the product is wrong');
+  if (!exact) {
+    notes.push(
+      `no window executed its whole grant (best ${Math.round(100 * best)} %): the engine's time budget per frame ` +
+        `was the limit. ${best >= 0.5 ? 'Accepted: at least half the grant.' : 'Below half the grant: a failure.'}`,
+    );
+  }
+  return { ok: neverAbove && (exact || best >= 0.5), detail: windows.map(describe).join('; '), notes };
+}
+
 /** The button of a command in the toolbar of the mode in front. */
 const toolbarButton = (page, id) => page.locator(`.e68-shell [role=toolbar] [data-command="${id}"]:visible`).first();
 
@@ -349,12 +397,10 @@ async function runPass(browser, name, programs) {
   // the engine at most 8 ms per frame: a frame that comes later than that - a busy machine, a hidden
   // page, a throttled browser - is deliberately not made up in full. `granted` is what the first
   // rule allows for the frames a window really had, and the program must have executed exactly that
-  // much (3 %) in one of up to five windows. Late frames can make the time budget the limit instead,
-  // so a browser that never delivers steady frames (Chromium on the macOS runners of CI: gaps of
-  // 120 ms in every window) need not show the exact rate: if no window had steady frames (no gap
-  // over 50 ms), the program must only never execute more than the rule grants, allowing for one
-  // cap of allowance carried into the window. That bound holds in every window everywhere.
-  const STEADY_GAP_MS = 50;
+  // much (3 %) in one of up to five windows; judgeRate says what may fall short of that and why.
+  // On a browser that delivers frames 120 ms apart (Chromium on the macOS runners of CI) the grant,
+  // and so the rate, is far below a million per second: that is the design (MAX_CATCHUP_MS), not a
+  // fault, and the check judges the rate against the grant, never against the wall clock.
   const windows = [];
   for (let i = 0; i < 5; i++) {
     const run = await page.evaluate(
@@ -366,6 +412,8 @@ async function runPass(browser, name, programs) {
           let steps = 0;
           let granted = 0;
           let longest = 0;
+          let frames = 0;
+          let slow = 0;
           const frame = (now) => {
             if (first === null) {
               first = now;
@@ -373,37 +421,24 @@ async function runPass(browser, name, programs) {
             } else {
               granted += Math.min(now - last, steadyGap) * 1000;
               longest = Math.max(longest, now - last);
+              frames++;
+              if (now - last > steadyGap) slow++;
             }
             last = now;
             if (now - first < 1000) window.requestAnimationFrame(frame);
-            else done({ executed: (engine.stepCount - steps) >>> 0, ms: now - first, granted, longest });
+            else done({ executed: (engine.stepCount - steps) >>> 0, ms: now - first, granted, longest, frames, slow });
           };
           window.requestAnimationFrame(frame);
         }),
       STEADY_GAP_MS,
     );
-    run.steady = run.longest <= STEADY_GAP_MS;
     run.exact = Math.abs(run.executed - run.granted) <= 0.03 * run.granted;
     windows.push(run);
     if (run.exact) break;
   }
-  const rateOf = (run) => run.executed / (run.ms / 1000);
-  const describe = (run) =>
-    `${Math.round(rateOf(run)).toLocaleString('en-US')}/s, ${Math.round((100 * run.executed) / run.granted)} % of the ` +
-    `grant (longest frame gap ${Math.round(run.longest)} ms)`;
-  const steadyWindows = windows.filter((run) => run.steady);
-  const neverAbove = windows.every((run) => run.executed <= 1.03 * run.granted + 50_000);
-  check(
-    `${p} the default speed is a million instructions per second of frame time`,
-    neverAbove && (windows.some((run) => run.exact) || steadyWindows.length === 0),
-    windows.map(describe).join('; '),
-  );
-  if (!windows.some((run) => run.exact)) {
-    console.log(
-      `  --   ${p} no window was exact and none had steady frames (every one had a gap over ${STEADY_GAP_MS} ms): ` +
-        'only checked that the program never runs faster than the governor grants',
-    );
-  }
+  const rate = judgeRate(windows);
+  check(`${p} the default speed is a million instructions per second of frame time`, rate.ok, rate.detail);
+  for (const note of rate.notes) console.log(`  --   ${p} ${note}`);
   const busy = await page.evaluate(() =>
     ['sim.run.run', 'sim.run.traceInto', 'sim.run.pause', 'sim.run.rewind'].map((id) =>
       window.__easy68k.ctx.commands.isEnabled(id),
@@ -507,8 +542,35 @@ async function runPass(browser, name, programs) {
   check(`${p} the status bar says Halted`, (await statusText(page)).startsWith('Halted'), await statusText(page));
   await page.screenshot({ path: join(outDir, `${name}-halted.png`) });
 
+  // --- after the halt, Rewind puts the commands back into the active state (sim-ui §3.6) while
+  //     the engine's own halt flag stays set until the next run (§9.9): the bar says Stopped.
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('sim.run.rewind'));
+  await page.waitForFunction(() => window.__easy68k.ctx.store.getState().sim.menuState === 0, undefined, {
+    timeout: UI_TIMEOUT,
+  });
+  const rewound = await sim(page);
+  const rewoundStatus = await statusText(page);
+  check(
+    `${p} after Rewind Run is enabled and the status bar says Stopped (integration scenario, wave 1)`,
+    rewoundStatus.startsWith('Stopped | PC=00001000') &&
+      (await page.evaluate(() => window.__easy68k.ctx.commands.isEnabled('sim.run.run'))),
+    `${rewoundStatus}; halted flag ${rewound.halted}, menuState ${rewound.menuState}`,
+  );
+  // And once more after a halt, with Pause (F6), which re-enables everything and resets nothing.
+  await pressInMainWindow(page, 'F9');
+  await waitForHalt(page);
+  check(`${p} the next halt says Halted again`, (await statusText(page)).startsWith('Halted'), await statusText(page));
+
   // --- Run To Cursor without a selected row: the box, and no run
   await pressInMainWindow(page, 'F6');
+  await page.waitForFunction(() => window.__easy68k.ctx.store.getState().sim.menuState === 0, undefined, {
+    timeout: UI_TIMEOUT,
+  });
+  check(
+    `${p} after Pause the status bar says Stopped`,
+    (await statusText(page)).startsWith('Stopped'),
+    await statusText(page),
+  );
   await page.evaluate(() => {
     const { ctx } = window.__easy68k;
     ctx.store.setState((state) => ({ ...state, sim: { ...state.sim, selectedRow: -1 } }));
@@ -874,19 +936,35 @@ async function startupPass(browser, name, programs) {
  * A page that gets no display frames: a hidden tab, a minimised or covered window (4.5.5). Here
  * requestAnimationFrame never calls back. The scheduler's watchdog then delivers the "frames"
  * from a timer, so the program keeps running, and a delay keeps exact time because its end has a
- * timer of its own. How fast the program runs meanwhile is reported, not judged: unused time is
- * made up only to 50 ms per tick (MAX_CATCHUP_MS), so it depends on how often the watchdog ticks.
- * (A real hidden tab is slower still: there the browser also slows the timers down.)
+ * timer of its own. The watchdog ticks at the pace of a display, so the program runs at its speed;
+ * the rate is judged against the ticks the page really had, as with frames (judgeRate). (A real
+ * hidden tab is slower: there the browser also slows the timers down, 4.5.5.)
  */
 async function noFramesPass(browser, name, programs) {
   const p = `${name}:`;
   const polling = 100;
   const context = await newContext(browser);
-  await context.addInitScript(() => {
+  await context.addInitScript((paceMs) => {
     let handle = 0;
     window.requestAnimationFrame = () => ++handle;
     window.cancelAnimationFrame = () => {};
-  });
+    // Records when the scheduler's watchdog delivers a "frame" (a timer of WATCHDOG_FRAME_MS,
+    // state/browser.ts), so that the rate below can be judged against the ticks the page really
+    // had, as the pass with frames judges it against the frames.
+    window.__sh8WatchdogTicks = [];
+    const platformSetTimeout = window.setTimeout.bind(window);
+    window.setTimeout = (callback, delayMs, ...rest) =>
+      typeof callback === 'function' && Math.abs(Number(delayMs) - paceMs) < 0.01
+        ? platformSetTimeout(
+            (...callbackArgs) => {
+              window.__sh8WatchdogTicks.push(performance.now());
+              return callback(...callbackArgs);
+            },
+            delayMs,
+            ...rest,
+          )
+        : platformSetTimeout(callback, delayMs, ...rest);
+  }, WATCHDOG_FRAME_MS);
   const { page, errors } = await openPage(context, '', polling);
   await prepare(page, programs, polling);
   const run = () => page.evaluate(() => window.__easy68k.ctx.commands.run('sim.run.run'));
@@ -900,18 +978,45 @@ async function noFramesPass(browser, name, programs) {
 
   await load(page, 'counter');
   await run();
-  const rate = await page.evaluate(async () => {
-    const { engine } = window.__easy68k.ctx.sim;
-    const t0 = performance.now();
-    const s0 = engine.stepCount;
-    await new Promise((r) => setTimeout(r, 2000));
-    return ((engine.stepCount - s0) >>> 0) / ((performance.now() - t0) / 1000);
-  });
+  // The watchdog stands in for the display at the pace of one (4.5.5, docs/requests/
+  // SH8-frame-watchdog.md), and each of its ticks is a frame to the governor. So the rule of the
+  // pass with frames holds here too: the program executes what the ticks it had grant, which is a
+  // million instructions per second while the timers keep the pace. Windows of two seconds, up to
+  // five, the first exact one ends the measurement.
+  const windows = [];
+  for (let i = 0; i < 5; i++) {
+    const measured = await page.evaluate(async (steadyGap) => {
+      const { engine } = window.__easy68k.ctx.sim;
+      const ticks = window.__sh8WatchdogTicks;
+      const t0 = performance.now();
+      const s0 = engine.stepCount;
+      const before = ticks.length;
+      await new Promise((r) => setTimeout(r, 2000));
+      const executed = (engine.stepCount - s0) >>> 0;
+      const ms = performance.now() - t0;
+      // The ticks of the window, each granting the time since the tick before it, capped.
+      let granted = 0;
+      let longest = 0;
+      let slow = 0;
+      for (let k = Math.max(before, 1); k < ticks.length; k++) {
+        const gap = ticks[k] - ticks[k - 1];
+        granted += Math.min(gap, steadyGap) * 1000;
+        longest = Math.max(longest, gap);
+        if (gap > steadyGap) slow++;
+      }
+      return { executed, ms, granted, longest, frames: ticks.length - before, slow };
+    }, STEADY_GAP_MS);
+    measured.exact = measured.granted > 0 && Math.abs(measured.executed - measured.granted) <= 0.03 * measured.granted;
+    windows.push(measured);
+    if (measured.exact) break;
+  }
+  const verdict = judgeRate(windows);
   check(
-    `${p} without display frames the program keeps running`,
-    rate > 0,
-    `${Math.round(rate).toLocaleString('en-US')} instructions per second (1,000,000 with frames)`,
+    `${p} without display frames the default speed is still a million instructions per second of watchdog time`,
+    verdict.ok,
+    verdict.detail,
   );
+  for (const note of verdict.notes) console.log(`  --   ${p} ${note}`);
   await page.evaluate(() => window.__easy68k.ctx.commands.run('sim.run.pause'));
   check(`${p} no frames: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   await context.close();

@@ -127,7 +127,7 @@ describe.skipIf(!enginesBuilt)('the hardware model in the real session (needs en
     s.controller.pause();
   });
 
-  it('a checked box with interval 500: about two ticks a second while running, every one handled, none after Pause', async () => {
+  it('a checked box with interval 500: 19 ticks in 10 s at 16 ms frames while running, every one handled, none after Pause', async () => {
     const s = await open('timer');
     s.controller.invoke((engine) => engine.setOption(SimOption.Exceptions, true));
     // The user: level 1 in the list, 500 in the interval box, check box 1, then Run.
@@ -142,11 +142,11 @@ describe.skipIf(!enginesBuilt)('the hardware model in the real session (needs en
     expect(s.hardware.view(s.engine).autoLabel).toBe('Automatic Enabled');
     s.time.advance(10_000);
     const handled = s.engine.readLong(0x3000);
-    // The real timers are checked once per 16 ms frame and schedule `now + interval` (4.5.3), so a
-    // 500 ms timer fires at 512, 1024 ...: 19 in 10 s instead of the 20 of a Windows timer
-    // (errata SH7.md item 6). 20 is accepted too, for a SoftTimer that keeps the period exact.
-    expect(handled).toBeGreaterThanOrEqual(19);
-    expect(handled).toBeLessThanOrEqual(20);
+    // The real timers are checked once per 16 ms frame and start each period when the late tick is
+    // handled (SoftTimer.check: due = now + interval), as a Windows timer does (measured on Windows
+    // 11, errata SH8.md entry 26), so a 500 ms timer fires at 512, 1024 ...: 19 in 10 s (errata
+    // SH7.md item 6).
+    expect(handled).toBe(19);
 
     s.controller.pause();
     s.time.advance(0);

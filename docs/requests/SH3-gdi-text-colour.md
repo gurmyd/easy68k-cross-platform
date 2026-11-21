@@ -1,6 +1,6 @@
 # Request from SH3 to T2: GDI reference cases for text in a colour with a non-zero top byte (gate I1)
 
-Status: open.
+Status: done (gate I1 round 3). T2 captured the ten cases in the suite `text` (errata T2 section 1 item 15); Windows agrees with the rule of trap15-b §4.6, and `gdi-references.test.ts` shows the port draws all ten as Windows does (errata SH3.md entry 17).
 
 Task 21 takes the text colour from `D1.L` as a VCL `TColor` (`Font->Color = (TColor)c`). The VCL
 selects a font colour with `SetTextColor(Handle, ColorToRGB(Font.Color))`, the same `ColorToRGB`

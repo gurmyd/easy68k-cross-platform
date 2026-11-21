@@ -38,6 +38,11 @@
 // - MENUS. While the focus is in the menu bar or an open menu, no command runs: letters and
 //   arrows belong to the menu, as on Windows. Alt+letter opens the menu with that access key on
 //   Windows and Linux (section 1.4 note 14); macOS has no menu access keys.
+// - CTRL EDITING KEYS ON macOS (rule K2). A Mac's browser treats only the Cmd forms of Undo, Cut,
+//   Copy, Paste and Select All as editing keys. On the macOS key map the dispatcher performs the
+//   Ctrl forms itself in a plain text field (an input or a textarea; text-field-edits.ts), before
+//   any other rule and also in a modal dialog, and cancels the key. The editor does the same in its
+//   own key map; the Output panel's field takes keys for the program and is left alone.
 //
 // A consumed event is cancelled (`preventDefault`) and stopped (`stopPropagation`), so no other
 // handler acts on a command chord a second time.
@@ -53,6 +58,7 @@ import {
   OUTPUT_PANEL_COMMANDS,
   TEXT_EDITING_COMMANDS,
 } from './tables/keys';
+import { textFieldEditChords, type TextFieldEdit } from './text-field-edits';
 
 /**
  * The element that takes keys for the running program carries this attribute (the Output panel's
@@ -81,6 +87,12 @@ export interface KeymapEnv {
   commands: Pick<CommandRegistry, 'isEnabled' | 'run'>;
   /** Opens the menu whose access key is `letter` (lower case); false when there is none. */
   openMenu?(letter: string): boolean;
+  /**
+   * Performs an editing key in the focused plain text field `target` (performTextFieldEdit). Only
+   * called on the macOS key map, for the Ctrl forms of rule K2; without it those keys are left to
+   * the browser as before.
+   */
+  editTextField?(edit: TextFieldEdit, target: unknown): void;
 }
 
 /** What the dispatcher did with a key-down. Returned for tests and diagnostics. */
@@ -97,6 +109,8 @@ export type KeyOutcome =
   | { kind: 'menu'; cancelled: boolean }
   /** A text-editing chord, left to the focused text field. */
   | { kind: 'text'; command: CommandId }
+  /** The Ctrl form of an editing key on macOS, performed in the focused plain text field (K2). */
+  | { kind: 'textEdit'; edit: TextFieldEdit }
   /** Step 3. */
   | { kind: 'run'; command: CommandId }
   /** Step 4, and the chords task 24 switched off. */
@@ -148,6 +162,11 @@ export function isTextEntry(target: unknown): boolean {
   return false;
 }
 
+/** True for an input or a textarea that takes text; not for editable content (the editor). */
+export function isPlainTextField(target: unknown): boolean {
+  return isTextEntry(target) && (target as ElementLike).isContentEditable !== true;
+}
+
 /** True while the element that has the focus takes keys for the running program (2.10). */
 export function hasProgramKeys(target: unknown): boolean {
   return Boolean(closest(target, PROGRAM_KEYS_SELECTOR));
@@ -161,6 +180,7 @@ export interface KeyDispatcher {
 export function createKeyDispatcher(env: KeymapEnv): KeyDispatcher {
   const bindings = buildBindings(env.os, env.desktop);
   const guarded: ReadonlySet<string> = new Set(env.os === 'mac' ? GUARDED_CHORDS.mac : GUARDED_CHORDS.win);
+  const textFieldEdits = textFieldEditChords(env.os, env.desktop);
 
   const cancel = (event: DispatchEvent) => {
     event.preventDefault();
@@ -174,6 +194,19 @@ export function createKeyDispatcher(env: KeymapEnv): KeyDispatcher {
       const chord = chordOf(event, env.os);
       if (chord === null) return { kind: 'none' };
       const isGuarded = guarded.has(chord);
+
+      // The Ctrl forms of the editing keys in a plain text field on macOS (K2), modal or not.
+      const edit = textFieldEdits.get(chord);
+      if (
+        edit !== undefined &&
+        env.editTextField !== undefined &&
+        isPlainTextField(event.target) &&
+        !hasProgramKeys(event.target)
+      ) {
+        cancel(event);
+        env.editTextField(edit, event.target);
+        return { kind: 'textEdit', edit };
+      }
 
       // 1. A modal dialog is open.
       if (env.isModalOpen()) {

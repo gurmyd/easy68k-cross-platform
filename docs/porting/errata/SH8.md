@@ -298,6 +298,15 @@ entry 28 and the lines marked "Gate I1, round 2" in its second round.
   frame arrives. The application uses W3's scheduler (entry 16), which has to change in the same
   way for the sentence about the desktop app to hold: `docs/requests/SH8-frame-watchdog.md`.
   The browser check reports the rate of a page without frames and does not judge it.
+- Gate I1, round 2: W3 applied the request (status line of `docs/requests/SH8-frame-watchdog.md`,
+  errata W3.md entry 32); it is no longer open. CI run 44919519853 measured without frames
+  1,000,650 / 1,004,000 instructions per second on Ubuntu, 1,002,543 / 1,001,499 on Windows,
+  516,053 (Chromium) / 991,031 (WebKit) on macOS, where Chromium's timers were 69 ms late.
+- Gate I1, round 3: `check-run.mjs` now judges that rate. It records when the watchdog's timer
+  (`WATCHDOG_FRAME_MS`) fires and requires what the frames pass requires: the program executes
+  what the ticks it really had grant (3 %, best of up to five windows of 2 s), never more. Where
+  the timers keep the pace that is a million per second (1,001,988 in Chromium on this PC); where
+  they are late (Chromium on the macOS runner) it is less, by the design of `MAX_CATCHUP_MS`.
 - Proposed text for 4.5.5: "... takes over whenever no frame has arrived for 250 ms and then
   calls the frame callbacks itself about 60 times per second until frames return."
 
@@ -323,6 +332,62 @@ entry 28 and the lines marked "Gate I1, round 2" in its second round.
   there is no difference to record beyond the resolution, which `docs/differences/SH8.md` already
   states (one display frame against 15.6 ms). `core/sim-host/hardware/session.test.ts` (SH7)
   accepts 19 or 20 and needs no change.
+- Gate I1, round 3: SH7 asked again (round-2 needs: "keep the period, or record the difference").
+  Declined for the reason above; `timers.test.ts` now pins the rule ("starts each period when the
+  late tick is handled": 19 ticks of a 500 ms timer in 10 s at 16 ms frames, at 512, 1024, 1536
+  ms), and the comment of `SoftTimer.check` names this entry. SH7's "exactly 20 interrupts in 10 s"
+  is therefore not a criterion the port should meet; ARCHITECTURE.md 4.5.3 already says "then
+  schedules now + interval".
+
+### 30. What the browser check of the run feature measures on a slow runner (4.2, 4.4.2, 4.5.5)
+
+- Found: CI run 44913261966 (round 1), Chromium on macos-latest: the default speed 618,792 to
+  785,397 instructions per second (frame gaps up to 133 ms), a task 23 delay of 50 units 52 to 55
+  hundredths by the program's own clock (59 to 61 without frames). WebKit on the same runner, and
+  both browsers on Ubuntu and Windows, were exact.
+- Product or runner: the runner, for each figure.
+  - Delay: its end is a timer of the page (4.4.2); when it fires the controller makes the program
+    continue in the same tick (`serviceDelay` then `runSlice`), so the program's task 8 sees the
+    time at which the browser fired the timer. Two reference timers of 500 ms set alongside showed
+    Chromium's timers on that runner 23 to 69 ms late (run 44919519853). The check therefore
+    allows 50 hundredths plus one, plus the reference timers' lateness, and never fewer than 50.
+    The port cannot end a delay earlier than the browser fires a timer.
+  - Speed: the governor grants at most `MAX_CATCHUP_MS` = 50 ms of instructions per frame (4.2), so
+    frames 100 to 133 ms apart give a rate well below a million by design. Run 44919519853 measured
+    766,641 per second there, 98 % of what the frames the page really had grant; WebKit on the same
+    runner 1,000,000 (100 %). The check judges the rate against that grant (3 %, one window in up
+    to five), never against the wall clock, and never lets the program execute more than it.
+    Carrying the allowance over long gaps (the scenario's suggestion) would contradict 4.2 ("the
+    allowance is capped after the addition") and was not done.
+  - Without frames: the same rule against the watchdog's ticks (entry 25).
+- The check prints, per window, the rate, the share of the grant, the longest gap and how many
+  gaps exceeded 50 ms, and for the delays how late the reference timers were, so that a failure in
+  CI can be told apart from the log alone. When no window is exact, at least half the grant is
+  required (a governor that loses time fails; a frame whose 8 ms budget did not suffice for its
+  50,000 instructions, seen once at 85 % in WebKit on this busy PC, does not).
+
+### 31. `confirmLoad(origin)`: the hold ends with the answer (4.7 step 2; errata W1.md entry 13)
+
+- Asked: `docs/requests/W1-load-confirm.md` item 1, so that FS1 can ask `Caution` before a dropped
+  `.S68` is copied into the browser store, as the original asks before it loads (sim-ui §8.4).
+- Does: `confirmLoad(origin)` asks exactly when `open(path, origin)` would (one function,
+  `needsCaution`, serves both), holds the program while the question is open, and resolves true
+  (no question, or OK) or false (Cancel; also when a load or another question is under way, which
+  `open` would ignore). `open(path, origin, { confirmed: true })` skips step 2.
+- Difference from `open` alone: there the controller goes to `loading` before the hold ends, so
+  the old program executes nothing after OK. With `confirmLoad` the hold ends with the answer and
+  a running program goes on while the caller copies the file, until its `open` call; a hold kept
+  past the answer would freeze the program for good if the caller then stopped (a cancelled
+  replace question, a failed copy). The copy takes milliseconds; no program can tell.
+
+### 32. The repaint counter `stackRedraw` (4.6; docs/requests/U2-stack-redraw-bit.md item 3)
+
+- Does: since the engine sends `RepaintBit.StackRedraw` with `Stack` for `StackFrm->Repaint()`
+  (W4, round 3), `repaintCounts` has a fifth counter `stackRedraw`, mirrored into
+  `AppState.sim.repaint.stackRedraw`. The cold start's repaint of every panel (`ALL_PANELS`) does
+  not include it: a cold start re-centres the Stack panel. The start-up of a new engine sends it
+  once (measured: `{ listing: 1, breakpoints: 0, memory: 1, stack: 1, stackRedraw: 1 }`), and loads
+  and traces do not.
 
 ### 28. A session or controller disposed before it starts stays inert (3.12.3, 4.7.1)
 
@@ -353,6 +418,24 @@ entry 28 and the lines marked "Gate I1, round 2" in its second round.
 - The drawing of 2.3 shows `Stopped`. During Auto Trace the simulator is idle between two ticks;
   the bar then says `Auto trace`. The other words are W3's (`Loading`, `Running`, `Waiting for
   input`, `Waiting`, `Halted`, `Stopped`).
+
+### 29. Status bar: `Halted` only while the halt keeps the commands busy (2.3; sim-ui §3.6, §9.9)
+
+- Says: 1.4 note 34, the status bar shows the run state; 2.3 draws `Stopped`. `AppState.sim.halted`
+  (W1) mirrors `RunSnapshot.halted`, which is the engine's `halt` flag.
+- Problem: that flag is set by a halt and cleared only when the next run starts (`runprog`,
+  sim-ui §9.2 step 1); `initSim()` (§9.9) leaves it alone. So after Rewind, after Open or Close
+  then Open, and after Pause, the flag was still set and the bar said `Halted` while Run was
+  enabled (integration scenario of gate I1, both browsers, every system: "Rewind: the status bar
+  no longer says Halted").
+- Does: `runStateText` says `Halted` when the simulator is idle, the flag is set and the commands
+  are busy (`menuState` 1: a halt calls `setMenuTrace`, §3.6); Rewind, Open and Pause put them back
+  into the active state, and the bar says `Stopped`. A caller that passes no `menuState` keeps the
+  former reading. Tests: `logic.test.ts` ("says Halted only while the halt keeps the commands
+  busy"); `check-run.mjs` ("after Rewind Run is enabled and the status bar says Stopped", "after
+  Pause the status bar says Stopped"). `AppState.sim.halted` itself stays the raw flag, as other
+  packages read it; for W3's tool-tip `HALTED_HINT` (`commands/menus.ts`), which has the same
+  problem, the same test applies (`phase === 'idle' && menuState === 1 && halted`).
 
 ### 21. The session starts its engine right after bootstrap (3.12.3, 4.7.1)
 

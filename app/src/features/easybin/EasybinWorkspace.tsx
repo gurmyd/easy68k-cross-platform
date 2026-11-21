@@ -12,10 +12,12 @@ import {
   useEffect,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
   type KeyboardEvent,
+  type ReactElement,
 } from 'react';
 import type { AppContext } from '../../contracts';
 import { byteForCodePoint } from '../../core/codec/cp1252';
@@ -25,6 +27,7 @@ import {
   FIELD_WIDTHS,
   SPLIT_ITEMS,
   hexText,
+  type EasybinFields,
   type EditableField,
   type Split,
   type ViewRow,
@@ -87,20 +90,58 @@ export function sameRow(a: ViewRow, b: ViewRow): boolean {
   );
 }
 
+/** A run of neighbouring cells drawn in one colour, as one span. */
+export interface CellRun<T> {
+  tone: T;
+  text: string;
+}
+
+function runs<T>(count: number, toneOf: (i: number) => T, textOf: (i: number) => string): CellRun<T>[] {
+  const result: CellRun<T>[] = [];
+  for (let i = 0; i < count; i++) {
+    const tone = toneOf(i);
+    const last = result.at(-1);
+    if (last && last.tone === tone) last.text += textOf(i);
+    else result.push({ tone, text: textOf(i) });
+  }
+  return result;
+}
+
+/**
+ * The hex column of a row as runs of one colour: each cell is its two digits and a space (5.2). One
+ * span per run instead of one per byte keeps the elements a redrawn row creates few (usually one).
+ */
+export function hexRuns(row: ViewRow): CellRun<ViewRow['tones'][number]>[] {
+  return runs(
+    row.hex.length,
+    (i) => row.tones[i] as ViewRow['tones'][number],
+    (i) => `${row.hex[i]} `,
+  );
+}
+
+/** The ASCII column of a row as runs: past the end of memory (`invalid`) or not; $7F as a box (5.3). */
+export function asciiRuns(row: ViewRow): CellRun<boolean>[] {
+  return runs(
+    row.ascii.length,
+    (i) => row.tones[i] === 'invalid',
+    (i) => (row.ascii[i] === '\x7f' ? DEL_GLYPH : (row.ascii[i] as string)),
+  );
+}
+
 const Row = memo(
   function Row({ row }: { row: ViewRow }) {
     return (
       <div className="e68-easybin__row" data-invalid={row.invalid ? 'true' : undefined}>
         <span className="e68-easybin__addr">{row.addressText}</span>
-        {row.hex.map((cell, i) => (
-          <span key={i} className={`e68-easybin__byte e68-easybin__byte--${row.tones[i]}`}>
-            {`${cell} `}
+        {hexRuns(row).map((run, i) => (
+          <span key={i} className={`e68-easybin__byte e68-easybin__byte--${run.tone}`}>
+            {run.text}
           </span>
         ))}
         <span className="e68-easybin__ascii">
-          {row.ascii.map((ch, i) => (
-            <span key={i} className={row.tones[i] === 'invalid' ? 'e68-easybin__byte--invalid' : undefined}>
-              {ch === '\x7f' ? DEL_GLYPH : ch}
+          {asciiRuns(row).map((run, i) => (
+            <span key={i} className={run.tone ? 'e68-easybin__byte--invalid' : undefined}>
+              {run.text}
             </span>
           ))}
         </span>
@@ -109,6 +150,39 @@ const Row = memo(
   },
   (previous, next) => sameRow(previous.row, next.row),
 );
+
+/** A drawn row: the rows it was made from and what was made (a React element in the view). */
+export interface DrawnRow<T> {
+  row: ViewRow;
+  item: T;
+}
+
+/**
+ * The rows to draw, reusing what was made for a row that draws the same at the same index: only a
+ * changed row gets a new item. A key typed changes one row, so one row element is created per key
+ * instead of one per visible row (React skips a reused element without calling anything; creating
+ * elements is the main cost of a key in a development build, see check-easybin.mjs).
+ */
+export function reuseRows<T>(
+  previous: readonly DrawnRow<T>[],
+  rows: readonly ViewRow[],
+  make: (row: ViewRow, index: number) => T,
+): DrawnRow<T>[] {
+  return rows.map((row, index) => {
+    const old = previous[index];
+    return old && sameRow(old.row, row) ? old : { row, item: make(row, index) };
+  });
+}
+
+/**
+ * The rows of the memory area. Redrawn only when the rows change (memory, the address, the number
+ * of rows, the colours), not when the cursor moves or a field that does not colour them changes.
+ */
+const Rows = memo(function Rows({ view }: { view: readonly ViewRow[] }) {
+  const drawn = useRef<DrawnRow<ReactElement>[]>([]);
+  drawn.current = reuseRows(drawn.current, view, (row, index) => <Row key={index} row={row} />);
+  return <>{drawn.current.map((d) => d.item)}</>;
+});
 
 /** A read-only value of the `S-Record File` group: `$`, an optional grey `00`, the digits. */
 function ReadOnlyValue({ label, value, zeroByte }: { label: string; value: string; zeroByte: boolean }) {
@@ -131,46 +205,10 @@ function ReadOnlyValue({ label, value, zeroByte }: { label: string; value: strin
   );
 }
 
-export function EasybinWorkspace() {
+/** The groups and the From / To / Size / fill strip: redrawn only when a field or the split changes. */
+const Controls = memo(function Controls({ fields, split }: { fields: EasybinFields; split: Split }) {
   const ctx = useAppContext();
-  const session = easybinOf(ctx);
-  const { model } = session;
-  const state = useSyncExternalStore(model.subscribe, model.getState);
-  const rowsRef = useRef<HTMLDivElement>(null);
-  const measureRef = useRef<HTMLDivElement>(null);
-  const [cell, setCell] = useState({ width: 8, height: 16 });
-  const [focused, setFocused] = useState(false);
-  const statusId = useId();
-
-  // The Row and Page buttons and the Address field's keys give the memory area the focus (6.2).
-  useEffect(() => {
-    session.focusRows = () => rowsRef.current?.focus({ preventScroll: true });
-    return () => {
-      session.focusRows = () => {};
-    };
-  }, [session]);
-
-  // Character cell and nRows = client height / row height (5.1).
-  useLayoutEffect(() => {
-    const rows = rowsRef.current;
-    const measure = measureRef.current;
-    if (!rows || !measure) return;
-    const update = () => {
-      const box = measure.getBoundingClientRect();
-      if (box.width === 0 || box.height === 0) return; // hidden with its mode: keep the old values
-      const size = { width: box.width / 10, height: box.height };
-      setCell((old) => (old.width === size.width && old.height === size.height ? old : size));
-      model.setRows(Math.floor(rows.clientHeight / size.height));
-    };
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(rows);
-    return () => observer.disconnect();
-  }, [model]);
-
-  const view = model.viewRows();
-  const { fields, split, row, col } = state;
-
+  const { model } = easybinOf(ctx);
   const field = (name: EditableField, label: string, ariaLabel: string, zeroByte: boolean) => {
     const value = fields[name];
     return (
@@ -189,54 +227,8 @@ export function EasybinWorkspace() {
     );
   };
 
-  // F1 is not handled here: the dispatcher binds it to `bin.help.help` in EASyBIN mode (tables/keys.ts).
-  const onAddressKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.defaultPrevented || event.nativeEvent.isComposing) return;
-    switch (event.key) {
-      case 'PageUp':
-      case 'PageDown':
-      case 'ArrowUp':
-      case 'ArrowDown':
-        event.preventDefault();
-        if (event.key === 'PageUp') model.pageUp();
-        else if (event.key === 'PageDown') model.pageDown();
-        else if (event.key === 'ArrowUp') model.rowUp();
-        else model.rowDown();
-        session.focusRows();
-        break;
-      case 'Enter':
-        event.preventDefault();
-        model.touch();
-        break;
-    }
-  };
-
-  const onRowsKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.defaultPrevented || event.nativeEvent.isComposing) return;
-    if (event.key === 'Dead' || event.key === 'Process' || event.key === 'Unidentified') return;
-    if (ARROWS.has(event.key)) {
-      event.preventDefault();
-      model.moveCursor(event.key as Parameters<typeof model.moveCursor>[0]);
-      return;
-    }
-    const byte = keyByte(event);
-    if (byte === null) return;
-    event.preventDefault();
-    if (byte === 'refuse' || model.typeByte(byte) === 'beep') beep(ctx);
-  };
-
-  const cursor = row < state.rows ? { row, col } : null;
-  const cursorInfo = (() => {
-    if (!cursor || !focused) return '';
-    const { address, hex } = model.cursorAddress();
-    const valid = address >>> 0 < 0x1000000;
-    if (!valid) return `Address ${hexText(address, 8)}, outside memory`;
-    const value = hexText(model.memory[address] as number, 2);
-    return `Address ${hexText(address, 8)}, value ${value}, ${hex ? 'hexadecimal' : 'character'} column`;
-  })();
-
   return (
-    <div className="e68-easybin" data-easybin-revision={state.revision}>
+    <>
       <div className="e68-easybin__top">
         <fieldset className="e68-easybin__group">
           <legend className="e68-easybin__legend">{CAPTIONS.s68Group}</legend>
@@ -305,23 +297,182 @@ export function EasybinWorkspace() {
           <Button caption={CAPTIONS.fill} size="small" onClick={() => void fillBytes(ctx)} />
         </span>
       </div>
+    </>
+  );
+});
+
+/** The Address field (6.1, 6.2). */
+const AddressLine = memo(function AddressLine({ address }: { address: string }) {
+  const ctx = useAppContext();
+  const session = easybinOf(ctx);
+  const { model } = session;
+
+  // F1 is not handled here: the dispatcher binds it to `bin.help.help` in EASyBIN mode (tables/keys.ts).
+  const onAddressKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.defaultPrevented || event.nativeEvent.isComposing) return;
+    switch (event.key) {
+      case 'PageUp':
+      case 'PageDown':
+      case 'ArrowUp':
+      case 'ArrowDown':
+        event.preventDefault();
+        if (event.key === 'PageUp') model.pageUp();
+        else if (event.key === 'PageDown') model.pageDown();
+        else if (event.key === 'ArrowUp') model.rowUp();
+        else model.rowDown();
+        session.focusRows();
+        break;
+      case 'Enter':
+        event.preventDefault();
+        model.touch();
+        break;
+    }
+  };
+
+  return (
+    <div className="e68-easybin__addressline">
+      <MaskedField
+        label={`${CAPTIONS.address} ${CAPTIONS.dollar}`}
+        aria-label="Address"
+        kind="hex"
+        width={Math.max(FIELD_WIDTHS.address, address.length)}
+        prefix={CAPTIONS.zeroByte}
+        value={address}
+        onChange={(text) => model.setField('address', text)}
+        onReject={() => beep(ctx)}
+        onKeyDown={onAddressKeyDown}
+        className="e68-easybin__field"
+      />
+    </div>
+  );
+});
+
+/** The Row and Page buttons (6.2). */
+const SideButtons = memo(function SideButtons() {
+  const ctx = useAppContext();
+  const session = easybinOf(ctx);
+  const { model } = session;
+  return (
+    <div className="e68-easybin__side">
+      <span className="e68-easybin__sidelabel">{CAPTIONS.row}</span>
+      <IconButton
+        icon="chevron-up"
+        label="Row up"
+        size="small"
+        onClick={() => {
+          model.rowUp();
+          session.focusRows();
+        }}
+      />
+      <IconButton
+        icon="chevron-down"
+        label="Row down"
+        size="small"
+        onClick={() => {
+          model.rowDown();
+          session.focusRows();
+        }}
+      />
+      <span className="e68-easybin__sidelabel">{CAPTIONS.page}</span>
+      <IconButton
+        icon="chevron-up"
+        label="Page up"
+        size="small"
+        onClick={() => {
+          model.pageUp();
+          session.focusRows();
+        }}
+      />
+      <IconButton
+        icon="chevron-down"
+        label="Page down"
+        size="small"
+        onClick={() => {
+          model.pageDown();
+          session.focusRows();
+        }}
+      />
+    </div>
+  );
+});
+
+export function EasybinWorkspace() {
+  const ctx = useAppContext();
+  const session = easybinOf(ctx);
+  const { model } = session;
+  const state = useSyncExternalStore(model.subscribe, model.getState);
+  const rowsRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
+  const [cell, setCell] = useState({ width: 8, height: 16 });
+  const [focused, setFocused] = useState(false);
+  const statusId = useId();
+
+  // The Row and Page buttons and the Address field's keys give the memory area the focus (6.2).
+  useEffect(() => {
+    session.focusRows = () => rowsRef.current?.focus({ preventScroll: true });
+    return () => {
+      session.focusRows = () => {};
+    };
+  }, [session]);
+
+  // Character cell and nRows = client height / row height (5.1).
+  useLayoutEffect(() => {
+    const rows = rowsRef.current;
+    const measure = measureRef.current;
+    if (!rows || !measure) return;
+    const update = () => {
+      const box = measure.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) return; // hidden with its mode: keep the old values
+      const size = { width: box.width / 10, height: box.height };
+      setCell((old) => (old.width === size.width && old.height === size.height ? old : size));
+      model.setRows(Math.floor(rows.clientHeight / size.height));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(rows);
+    return () => observer.disconnect();
+  }, [model]);
+
+  // The rows depend on memory (revision), the address, the number of rows and the colours; a cursor
+  // move changes none of them and draws no row (EasybinModel.gotoRC does not bump the revision).
+  const { fields, split, row, col } = state;
+  const view = useMemo(
+    () => model.viewRows(),
+    // the inputs of viewRows() in the state; revision counts every change of memory
+    [model, state.revision, state.memAddr, state.rows, split, fields.firstAddress, fields.outLength],
+  );
+
+  const onRowsKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented || event.nativeEvent.isComposing) return;
+    if (event.key === 'Dead' || event.key === 'Process' || event.key === 'Unidentified') return;
+    if (ARROWS.has(event.key)) {
+      event.preventDefault();
+      model.moveCursor(event.key as Parameters<typeof model.moveCursor>[0]);
+      return;
+    }
+    const byte = keyByte(event);
+    if (byte === null) return;
+    event.preventDefault();
+    if (byte === 'refuse' || model.typeByte(byte) === 'beep') beep(ctx);
+  };
+
+  const cursor = row < state.rows ? { row, col } : null;
+  const cursorInfo = (() => {
+    if (!cursor || !focused) return '';
+    const { address, hex } = model.cursorAddress();
+    const valid = address >>> 0 < 0x1000000;
+    if (!valid) return `Address ${hexText(address, 8)}, outside memory`;
+    const value = hexText(model.memory[address] as number, 2);
+    return `Address ${hexText(address, 8)}, value ${value}, ${hex ? 'hexadecimal' : 'character'} column`;
+  })();
+
+  return (
+    <div className="e68-easybin" data-easybin-revision={state.revision}>
+      <Controls fields={fields} split={split} />
 
       <div className="e68-easybin__main">
         <div className="e68-easybin__view">
-          <div className="e68-easybin__addressline">
-            <MaskedField
-              label={`${CAPTIONS.address} ${CAPTIONS.dollar}`}
-              aria-label="Address"
-              kind="hex"
-              width={Math.max(FIELD_WIDTHS.address, fields.address.length)}
-              prefix={CAPTIONS.zeroByte}
-              value={fields.address}
-              onChange={(text) => model.setField('address', text)}
-              onReject={() => beep(ctx)}
-              onKeyDown={onAddressKeyDown}
-              className="e68-easybin__field"
-            />
-          </div>
+          <AddressLine address={fields.address} />
           <div className="e68-easybin__header" aria-hidden="true">
             {`${' '.repeat(10)}${COLUMN_HEADER}`}
           </div>
@@ -357,9 +508,7 @@ export function EasybinWorkspace() {
             <div ref={measureRef} className="e68-easybin__row e68-easybin__measure" aria-hidden="true">
               WWWWWWWWWW
             </div>
-            {view.map((viewRow, index) => (
-              <Row key={index} row={viewRow} />
-            ))}
+            <Rows view={view} />
             {cursor && (
               <div
                 className="e68-easybin__cursor"
@@ -377,46 +526,7 @@ export function EasybinWorkspace() {
             </span>
           </div>
         </div>
-        <div className="e68-easybin__side">
-          <span className="e68-easybin__sidelabel">{CAPTIONS.row}</span>
-          <IconButton
-            icon="chevron-up"
-            label="Row up"
-            size="small"
-            onClick={() => {
-              model.rowUp();
-              session.focusRows();
-            }}
-          />
-          <IconButton
-            icon="chevron-down"
-            label="Row down"
-            size="small"
-            onClick={() => {
-              model.rowDown();
-              session.focusRows();
-            }}
-          />
-          <span className="e68-easybin__sidelabel">{CAPTIONS.page}</span>
-          <IconButton
-            icon="chevron-up"
-            label="Page up"
-            size="small"
-            onClick={() => {
-              model.pageUp();
-              session.focusRows();
-            }}
-          />
-          <IconButton
-            icon="chevron-down"
-            label="Page down"
-            size="small"
-            onClick={() => {
-              model.pageDown();
-              session.focusRows();
-            }}
-          />
-        </div>
+        <SideButtons />
       </div>
     </div>
   );

@@ -389,27 +389,44 @@ describe.skipIf(!enginesBuilt)('the commands of 4.8 (needs engine/dist)', { time
     await start();
     const { controller } = kit;
     // The start-up reset of the engine showed the main window, the Memory and the Stack window.
-    expect(controller.repaintCounts).toEqual({ listing: 1, breakpoints: 0, memory: 1, stack: 1 });
+    expect(controller.repaintCounts).toEqual({ listing: 1, breakpoints: 0, memory: 1, stack: 1, stackRedraw: 1 });
     expect(controller.viewRevision).toBe(1);
     await kit.open(counter); // a load also clears the Break Points window
-    expect(controller.repaintCounts).toEqual({ listing: 2, breakpoints: 1, memory: 2, stack: 2 });
+    expect(controller.repaintCounts).toEqual({ listing: 2, breakpoints: 1, memory: 2, stack: 2, stackRedraw: 1 });
     controller.traceInto(); // scrshow(): listing, memory, stack
-    expect(controller.repaintCounts).toEqual({ listing: 3, breakpoints: 1, memory: 3, stack: 3 });
+    expect(controller.repaintCounts).toEqual({ listing: 3, breakpoints: 1, memory: 3, stack: 3, stackRedraw: 1 });
     // A PC breakpoint set from the gutter repaints the listing only: a Stack panel the user has
     // scrolled is not re-centred by it.
     const before = controller.repaintCounts;
     controller.invoke((engine) => engine.setBreakpoint(0x1002));
-    expect(controller.repaintCounts).toEqual({ listing: 4, breakpoints: 1, memory: 3, stack: 3 });
+    expect(controller.repaintCounts).toEqual({ listing: 4, breakpoints: 1, memory: 3, stack: 3, stackRedraw: 1 });
     expect(controller.repaintCounts).not.toBe(before); // a new object when a counter has moved
     expect(controller.viewRevision).toBe(4); // one more with every repaint, whichever panel it names
     // The Run command shows the display once; the free run then repaints nothing until it stops.
     controller.run();
     const running = controller.repaintCounts;
-    expect(running).toEqual({ listing: 5, breakpoints: 1, memory: 4, stack: 4 });
+    expect(running).toEqual({ listing: 5, breakpoints: 1, memory: 4, stack: 4, stackRedraw: 1 });
     kit.time.advance(160);
     expect(controller.repaintCounts).toBe(running);
     controller.pause();
-    expect(controller.repaintCounts).toEqual({ listing: 6, breakpoints: 1, memory: 5, stack: 5 });
+    expect(controller.repaintCounts).toEqual({ listing: 6, breakpoints: 1, memory: 5, stack: 5, stackRedraw: 1 });
+  });
+
+  it('counts StackFrm->Repaint() as stackRedraw apart from a re-centre (U2-stack-redraw-bit.md)', async () => {
+    await start();
+    await kit.open(counter);
+    const { controller } = kit;
+    const before = controller.repaintCounts;
+    // A Hardware switch click: the original redraws the Stack window where it is (hardware.cpp
+    // StackFrm->Repaint()); the engine sends Stack | StackRedraw, so both counters move together.
+    controller.invoke((engine) => engine.switchClick(0));
+    const clicked = controller.repaintCounts;
+    expect(clicked.stackRedraw).toBe(before.stackRedraw + 1);
+    expect(clicked.stack - before.stack).toBe(clicked.stackRedraw - before.stackRedraw);
+    // A trace re-centres it (updateDisplay()): stack alone moves.
+    controller.traceInto();
+    expect(controller.repaintCounts.stack).toBe(clicked.stack + 1);
+    expect(controller.repaintCounts.stackRedraw).toBe(clicked.stackRedraw);
   });
 
   it('after a halt the run commands do nothing until Pause or Rewind (O-12)', async () => {

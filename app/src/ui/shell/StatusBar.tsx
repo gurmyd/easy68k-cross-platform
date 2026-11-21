@@ -10,8 +10,12 @@ import { Box, type AppState, type Mode } from '../../contracts';
 import { useAppState, useApplication } from '../../state/context';
 import { shallowEqual } from '../../state/store';
 
-/** The words for the simulator's state: the phase, and a halt while idle. */
-export function runStateText(sim: Pick<AppState['sim'], 'phase' | 'halted'>): string {
+/**
+ * The words for the simulator's state: the phase, and a halt while idle. `halted` is the engine's
+ * raw flag, which a reset leaves set until the next run; once the commands are free again
+ * (`menuState` 0, after Rewind, Reload or Open) the state is 'Stopped' (contracts/store.ts).
+ */
+export function runStateText(sim: Pick<AppState['sim'], 'phase' | 'halted'> & { menuState?: 0 | 1 }): string {
   switch (sim.phase) {
     case 'loading':
       return 'Loading';
@@ -24,7 +28,7 @@ export function runStateText(sim: Pick<AppState['sim'], 'phase' | 'halted'>): st
     case 'waitAlert':
       return 'Waiting';
     case 'idle':
-      return sim.halted ? 'Halted' : 'Stopped';
+      return sim.halted && sim.menuState !== 0 ? 'Halted' : 'Stopped';
   }
 }
 

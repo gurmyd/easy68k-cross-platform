@@ -562,6 +562,23 @@ async function stackPass(browser, programs, name, theme) {
     `${scrolled} -> ${middleAfter}`,
   );
 
+  // A Hardware switch click calls StackFrm->Repaint() (shim hardware.cpp), which redraws the Stack
+  // panel where the user scrolled it; only updateDisplay() re-centres (sim-ui §11.4, gate I1
+  // defect 9, docs/requests/U2-stack-redraw-bit.md). The engine sends Stack | StackRedraw for it.
+  const switched = await page.evaluate(async () => {
+    const { ctx } = window.__easy68k;
+    const before = { ...ctx.store.getState().sim.repaint };
+    await ctx.sim.controller.invoke((engine) => engine.switchClick(0));
+    await new Promise((resolve) => window.setTimeout(resolve, 200));
+    return { before, after: { ...ctx.store.getState().sim.repaint } };
+  });
+  const middleSwitched = await stackMiddle(page);
+  check(
+    `${p} a Hardware switch click (Repaint) redraws a scrolled Stack panel without re-centring it`,
+    middleSwitched?.startsWith('00007FFC: ') && switched.after.stackRedraw !== switched.before.stackRedraw,
+    `${middleAfter} -> ${middleSwitched}; repaint ${JSON.stringify(switched.before)} -> ${JSON.stringify(switched.after)}`,
+  );
+
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   await context.close();
 }

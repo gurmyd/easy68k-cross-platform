@@ -10,7 +10,9 @@ import {
   describePack,
   describeTsv,
 } from '../../oracle/gdi-capture/describe-difference';
+import { OTHER_FONT_BYTES } from '../../oracle/gdi-capture/machine-dependent';
 import { FONTS_DIR } from './fonts';
+import { GOLDEN_DIR } from './golden';
 import { decodeAtlas } from './pix';
 
 describe('what differs between a reference and a capture', () => {
@@ -34,6 +36,21 @@ describe('what differs between a reference and a capture', () => {
       '2 glyphs differ in 3 pixels: $41-$42',
       `1 advances differ: $41 ${reference.advances[0x41]}->9`,
     ]);
+  });
+
+  it('compares atlases of different glyph widths and counts the other-font glyphs apart', () => {
+    const file = 'bitmap/Courier-16-u.bin';
+    const reference = decodeAtlas(new Uint8Array(readFileSync(FONTS_DIR + file)));
+    // The same atlas as captured on Windows Server 10.0.26100 (CI run 44919519853): wider glyphs,
+    // because its fallback font draws the control bytes as wider boxes.
+    const runner = decodeAtlas(new Uint8Array(readFileSync(`${GOLDEN_DIR}windows-10.0.26100/Courier-16-u.bin`)));
+    expect(describeAtlas(reference, runner, OTHER_FONT_BYTES)).toEqual([
+      'every glyph and advance of the face itself is equal',
+      expect.stringMatching(/^24 other-font glyphs differ in \d+ pixels: \$00-\$08, \$0B, \$0E-\$1B$/),
+      'glyphs 15 wide; the reference has 9',
+    ]);
+    // Without the list the same glyphs count as glyphs of the face.
+    expect(describeAtlas(reference, runner)[0]).toMatch(/^24 glyphs differ in \d+ pixels: \$00-\$08, \$0B, \$0E-\$1B$/);
   });
 
   it('names the JSON paths that differ, with both values', () => {

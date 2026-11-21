@@ -8,6 +8,9 @@
 //              --replace-references-from-other-windows (let --write replace references captured on
 //              another Windows; see "Another Windows" in README.md)
 //              --as-windows "10.0.26100 cp1252 96dpi" (judge as that Windows; to try the policy)
+//              --from <dir> (judge a capture made elsewhere instead of capturing: the folder
+//              build/gdi-capture/run of another machine, e.g. CI's gdi-capture-run artifact;
+//              runs on any system, never writes the references; report in build/gdi-capture/review)
 //
 // What it produces (README.md next to this file has the details):
 //
@@ -19,9 +22,11 @@
 //   tools/fonts-src/windows-outline-metrics.tsv       what make-font-atlases.mjs needs from Windows
 //
 // The comparison is logical: the "capturedOn" record (Windows version, font smoothing) is ignored,
-// and so are the outputs that depend on the machine's theme or font smoothing (suites marked
-// `machine` in cases.ts, the theme's system colours in spots.json) unless --all is given. A file
-// is rewritten by --write only when its content changed, so two runs leave identical files.
+// and so are the outputs that depend on the machine's theme, font smoothing or fallback font (suites
+// marked `machine` in cases.ts, the theme's system colours in spots.json, and what the control bytes
+// $00-$08, $0B, $0E-$1B draw in the raster faces: machine-dependent.ts) unless --all is given. An
+// output that is equal only without those bytes is listed as such, with what differs. A file is
+// rewritten by --write only when its content changed, so two runs leave identical files.
 //
 // Another Windows (windows-policy.ts, README.md): the committed references are the standard. On
 // the Windows they were captured on, every difference fails. On another Windows the differences
@@ -34,7 +39,8 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { buildCapture, BUILD_DIR } from './build.mjs';
 import { fingerprint, judge, mayWrite, windowsIdentity } from './windows-policy.ts';
-import { describeAtlas, describeJson, describePack, describeTsv } from './describe-difference.ts';
+import { byteRanges, describeAtlas, describeJson, describePack, describeTsv } from './describe-difference.ts';
+import { canonicalAtlas, canonicalMetrics, canonicalSpots, OTHER_FONT_BYTES } from './machine-dependent.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '..', '..', '..');
@@ -51,11 +57,16 @@ const OTHER_WINDOWS = join(here, 'other-windows.json');
 // --as-windows <identity>: judge as if this machine were that Windows (to try the policy out).
 const asWindowsIndex = args.indexOf('--as-windows');
 const asWindows = asWindowsIndex >= 0 ? args[asWindowsIndex + 1] : undefined;
+// --from <dir>: review a capture made on another machine (README.md "Another Windows").
+const fromIndex = args.indexOf('--from');
+const from = fromIndex >= 0 ? resolve(args[fromIndex + 1] ?? '.') : undefined;
 const onlyIndex = args.indexOf('--only');
 const only = new Set(onlyIndex >= 0 ? (args[onlyIndex + 1] ?? '').split(',') : ['cases', 'spots', 'fonts']);
 
 const { generateCases, serializeCases, SUITES } = await import(pathToFileURL(join(GDI, 'cases.ts')).href);
 const { encodePack, decodePack, decodeAtlas } = await import(pathToFileURL(join(GDI, 'pix.ts')).href);
+
+const OTHER_FONT_BYTES_TEXT = byteRanges(OTHER_FONT_BYTES);
 
 const STYLE_NAMES = { '-': 'plain', b: 'bold', i: 'italic', u: 'underline', s: 'strikeOut' };
 
@@ -70,6 +81,11 @@ function exec(file, argv) {
       code === 0 ? resolvePromise(out) : reject(new Error(`${file} ${argv[0]} failed (exit ${code})\n${out}`)),
     );
   });
+}
+
+/** Runs the capture program, or with --from leaves the files of the given capture as they are. */
+function capture(exe, argv) {
+  return from ? Promise.resolve(`(${argv[0]}: the capture in ${from})\n`) : exec(exe, argv);
 }
 
 function tsvRows(text) {
@@ -93,22 +109,20 @@ function stringify(value, indent = '') {
   return `{\n${entries.join(',\n')}\n${indent}}`;
 }
 
-const withoutCapturedOn = (json) => {
-  const copy = JSON.parse(json);
-  delete copy.capturedOn;
-  return JSON.stringify(copy);
-};
-
 // ---------------------------------------------------------------------------------------------
 
 // Each output has a canonical form: what the comparison looks at (without capturedOn, independent
 // of compression and line ends). Two files are the same output when their canonical forms are equal.
-/** @type {{ path: string, bytes: Buffer | null, canon: (bytes: Buffer) => string, compared: boolean, note?: string }[]} */
+// `strict` (optional) is the form that keeps the other-font bytes (machine-dependent.ts): an output
+// whose canonical forms are equal and whose strict forms differ is reported as equal apart from them.
+/** @type {{ path: string, bytes: Buffer | null, canon: (bytes: Buffer) => string, compared: boolean, note?: string, strict?: (bytes: Buffer) => string }[]} */
 const artifacts = [];
-const add = (path, bytes, canon, compared = true, note = undefined) =>
-  artifacts.push({ path, bytes, canon, compared, note });
+const add = (path, bytes, canon, compared = true, note = undefined, strict = undefined) =>
+  artifacts.push({ path, bytes, canon, compared, note, strict });
 const sameBytes = (a, b) => Buffer.compare(a, b) === 0;
 const rawBytes = (b) => b.toString('base64');
+const atlasContent = (b) => canonicalAtlas(decodeAtlas(b), !all);
+const atlasStrict = (b) => canonicalAtlas(decodeAtlas(b), false);
 const packContent = (b) => {
   const p = decodePack(b);
   return JSON.stringify([p.suite, p.cases.map((c) => [c.id, c.pen, Buffer.from(c.pix).toString('base64')])]);
@@ -123,9 +137,17 @@ async function captureCases(exe, out) {
     cases = cases.concat(module.generateEllipseCases());
   }
   const listFile = join(out, 'cases.txt');
-  writeFileSync(listFile, serializeCases(cases));
+  if (!from) writeFileSync(listFile, serializeCases(cases));
+  else {
+    const missing = cases.filter((c) => !existsSync(join(out, 'pix', `${c.id}.pix`)));
+    if (missing.length)
+      throw new Error(
+        `--from: ${out} has no capture of ${missing.length} cases of today's list (first ${missing[0].id}); ` +
+          'it was captured with another case list. Use --only spots,fonts.',
+      );
+  }
   const started = Date.now();
-  process.stdout.write(await exec(exe, ['cases', listFile, out]));
+  process.stdout.write(await capture(exe, ['cases', listFile, out]));
   console.log(`  (${((Date.now() - started) / 1000).toFixed(1)} s)`);
   const capturedOn = JSON.parse(readFileSync(join(out, 'cases-info.json'), 'utf8')).capturedOn;
   const pens = new Map(
@@ -156,30 +178,24 @@ async function captureCases(exe, out) {
 }
 
 async function captureSpots(exe, out) {
-  process.stdout.write(await exec(exe, ['spots', out]));
+  process.stdout.write(await capture(exe, ['spots', out]));
   const json = readFileSync(join(out, 'spots.json'), 'utf8');
   JSON.parse(json); // must be valid
-  // System colours follow the theme: only indices 5, 8, 15 and those above 30 are compared.
-  const stable = (text) => {
-    const v = JSON.parse(text);
-    delete v.capturedOn;
-    if (!all) {
-      v.sysColors = v.sysColors.map((c, i) => ([5, 8, 15].includes(i) || i > 30 ? c : null));
-      for (const key of Object.keys(v.colourForms)) {
-        const n = parseInt(key, 16);
-        if (n & 0x80000000 && ![5, 8, 15].includes(n & 0xff) && (n & 0xff) <= 30) delete v.colourForms[key];
-      }
-    }
-    return JSON.stringify(v);
-  };
-  add(relative(repo, join(GOLDEN, 'spots.json')), Buffer.from(json.replaceAll('\r\n', '\n')), (b) =>
-    stable(b.toString()),
+  // System colours follow the theme: only indices 5, 8, 15 and those above 30 are compared; the cell
+  // the other-font bytes fill is the fallback font's (machine-dependent.ts).
+  add(
+    relative(repo, join(GOLDEN, 'spots.json')),
+    Buffer.from(json.replaceAll('\r\n', '\n')),
+    (b) => canonicalSpots(b.toString(), all),
+    true,
+    undefined,
+    (b) => canonicalSpots(b.toString(), all, false),
   );
 }
 
 async function captureFonts(exe, out) {
   const started = Date.now();
-  process.stdout.write(await exec(exe, ['fonts', out]));
+  process.stdout.write(await capture(exe, ['fonts', out]));
   console.log(`  (${((Date.now() - started) / 1000).toFixed(1)} s)`);
   const capturedOn = JSON.parse(readFileSync(join(out, 'fonts-info.json'), 'utf8')).capturedOn;
 
@@ -263,14 +279,26 @@ async function captureFonts(exe, out) {
       cells,
     },
   };
-  add(relative(repo, join(FONTS, 'metrics.json')), Buffer.from(stringify(metrics) + '\n'), (b) =>
-    withoutCapturedOn(b.toString()),
+  add(
+    relative(repo, join(FONTS, 'metrics.json')),
+    Buffer.from(stringify(metrics) + '\n'),
+    (b) => canonicalMetrics(b.toString(), !all),
+    true,
+    undefined,
+    (b) => canonicalMetrics(b.toString(), false),
   );
 
   // The raster atlases, and any committed atlas that is no longer produced.
   const produced = new Set(readdirSync(join(out, 'bitmap')));
   for (const file of produced)
-    add(relative(repo, join(FONTS, 'bitmap', file)), readFileSync(join(out, 'bitmap', file)), rawBytes);
+    add(
+      relative(repo, join(FONTS, 'bitmap', file)),
+      readFileSync(join(out, 'bitmap', file)),
+      atlasContent,
+      true,
+      undefined,
+      atlasStrict,
+    );
   if (existsSync(join(FONTS, 'bitmap'))) {
     for (const file of readdirSync(join(FONTS, 'bitmap'))) {
       if (file.endsWith('.bin') && !produced.has(file))
@@ -302,13 +330,17 @@ function referenceIdentity() {
  * What differs between a committed output and the fresh capture, in a few lines (describe-difference.ts),
  * so that a CI log on another Windows says what that Windows draws differently.
  */
-function describeDifference(artifact, old) {
+function describeDifference(artifact, old, strict = false) {
   try {
     const path = artifact.path.replaceAll('\\', '/');
     if (path.endsWith('.pixpack.gz')) return describePack(decodePack(old), decodePack(artifact.bytes));
-    if (path.endsWith('.bin')) return describeAtlas(decodeAtlas(old), decodeAtlas(artifact.bytes));
-    if (path.endsWith('.json'))
-      return describeJson(JSON.parse(artifact.canon(old)), JSON.parse(artifact.canon(artifact.bytes)));
+    if (path.endsWith('.bin'))
+      return describeAtlas(decodeAtlas(old), decodeAtlas(artifact.bytes), all ? [] : OTHER_FONT_BYTES);
+    if (path.endsWith('.json')) {
+      // A real difference is shown in the compared form; an other-font-only one in the strict form.
+      const form = strict && artifact.strict ? artifact.strict : artifact.canon;
+      return describeJson(JSON.parse(form(old)), JSON.parse(form(artifact.bytes)));
+    }
     if (path.endsWith('.tsv')) return describeTsv(artifact.canon(old), artifact.canon(artifact.bytes));
   } catch (error) {
     return [`(could not describe the difference: ${error.message})`];
@@ -316,9 +348,10 @@ function describeDifference(artifact, old) {
   return [];
 }
 
-function report(lines) {
+function report(lines, dir) {
   const text = lines.join('\n');
-  writeFileSync(join(BUILD_DIR, 'run', 'report.txt'), text + '\n');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'report.txt'), text + '\n');
   // On GitHub Actions the report also goes to the job summary, where the record can be copied.
   if (process.env.GITHUB_STEP_SUMMARY) {
     try {
@@ -331,16 +364,33 @@ function report(lines) {
 }
 
 async function main() {
-  if (process.platform !== 'win32') {
-    console.error('npm run oracle:gdi measures Windows GDI and runs on Windows only.');
+  if (from && write) {
+    console.error('--from reviews a capture made elsewhere and never writes the references.');
     process.exit(1);
   }
-  const exe = await buildCapture();
-  console.log(`built ${relative(repo, exe)}`);
-  const out = join(BUILD_DIR, 'run');
-  rmSync(out, { recursive: true, force: true });
-  mkdirSync(out, { recursive: true });
-  const info = (await exec(exe, ['info'])).trim();
+  if (!from && process.platform !== 'win32') {
+    console.error('npm run oracle:gdi measures Windows GDI and runs on Windows only (--from <dir> reviews a capture).');
+    process.exit(1);
+  }
+  let exe = null;
+  let out;
+  let info;
+  if (from) {
+    out = from;
+    const infoFile = ['fonts-info.json', 'cases-info.json'].map((f) => join(from, f)).find((f) => existsSync(f));
+    if (!infoFile) throw new Error(`--from: ${from} has neither fonts-info.json nor cases-info.json`);
+    info = JSON.stringify(JSON.parse(readFileSync(infoFile, 'utf8')).capturedOn);
+  } else {
+    exe = await buildCapture();
+    console.log(`built ${relative(repo, exe)}`);
+    out = join(BUILD_DIR, 'run');
+    rmSync(out, { recursive: true, force: true });
+    mkdirSync(out, { recursive: true });
+    info = (await exec(exe, ['info'])).trim();
+  }
+  // Where the report and the copies of differing files go (--from leaves the capture folder unchanged).
+  const reportDir = from ? join(BUILD_DIR, 'review') : out;
+  if (from) rmSync(reportDir, { recursive: true, force: true });
   console.log(`machine: ${info}`);
   const machine = asWindows ?? windowsIdentity(JSON.parse(info));
   const reference = referenceIdentity();
@@ -360,6 +410,7 @@ async function main() {
 
   const differences = [];
   const details = [];
+  const otherFontOnly = [];
   let written = 0;
   let identical = 0;
   for (const a of artifacts) {
@@ -385,13 +436,20 @@ async function main() {
           for (const line of lines) console.log(`              ${line}`);
           details.push(`${path}:`, ...lines.map((line) => `  ${line}`));
           // The captured file, for a person to compare (build/gdi-capture/run/differences/<path>).
-          const copy = join(out, 'differences', path);
+          const copy = join(reportDir, 'differences', path);
           mkdirSync(dirname(copy), { recursive: true });
           writeFileSync(copy, a.bytes);
         }
       }
     } else if (!same) {
       console.log(`  skipped   ${a.path}: ${status}, ${a.note ?? 'not compared'}`);
+    } else if (!write && a.strict && old !== null && a.bytes !== null && a.strict(old) !== a.strict(a.bytes)) {
+      // Equal apart from what the other-font bytes draw (machine-dependent.ts): listed, not a difference.
+      const path = a.path.replaceAll('\\', '/');
+      const lines = describeDifference(a, old, true);
+      console.log(`  same*     ${path} (equal apart from the other-font bytes)`);
+      for (const line of lines) console.log(`              ${line}`);
+      otherFontOnly.push(`${path}:`, ...lines.map((line) => `  ${line}`));
     }
   }
   const total = artifacts.length;
@@ -401,13 +459,31 @@ async function main() {
   }
   const records = existsSync(OTHER_WINDOWS) ? JSON.parse(readFileSync(OTHER_WINDOWS, 'utf8')) : {};
   const verdict = judge({ machine, reference: reference ?? machine, differences, records });
-  report([
-    `${total - differences.length} of ${total} outputs equal the committed references (${identical} byte for byte)`,
-    ...verdict.lines,
-    ...(details.length
-      ? ['', 'What differs (the captured files are in build/gdi-capture/run/differences/):', ...details]
-      : []),
-  ]);
+  report(
+    [
+      `${total - differences.length} of ${total} outputs equal the committed references (${identical} byte for byte` +
+        (otherFontOnly.length
+          ? `; ${otherFontOnly.filter((l) => !l.startsWith(' ')).length} apart from the other-font bytes)`
+          : ')'),
+      ...verdict.lines,
+      ...(details.length
+        ? [
+            '',
+            `What differs (the captured files are in ${relative(repo, join(reportDir, 'differences'))}):`,
+            ...details,
+          ]
+        : []),
+      ...(otherFontOnly.length
+        ? [
+            '',
+            `Equal apart from what the control bytes ${OTHER_FONT_BYTES_TEXT} draw, which Windows takes from a ` +
+              'fallback font that depends on the Windows (machine-dependent.ts; not compared, run with --all to compare it):',
+            ...otherFontOnly,
+          ]
+        : []),
+    ],
+    reportDir,
+  );
   if (verdict.fail) process.exit(1);
 }
 

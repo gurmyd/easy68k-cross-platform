@@ -142,6 +142,43 @@ fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`.
     selected; a typed existing folder is taken; a typed new name is created; a typed file is refused.
     The native provider's `chooseFolder(title)` (contracts/platform.ts) takes only the request's
     title, so a native folder dialog does not start in `startDir`.
+17. **`app.files.toggle` with `FilesRevealArg` (contracts/commands.ts, gate I1 round 2; round 3).**
+    With `{ reveal: VPath }` the handler shows the Files panel (never hides it) and reveals the path;
+    any other argument toggles as before. A hidden panel is not mounted, so it cannot take the
+    request at once: `features/files/reveal.ts` keeps the latest such request and hands it to the
+    panel when it mounts (also when the command is run in Simulator mode and the panel mounts on
+    the switch back to Editor mode). `revealInFilesPanel(ctx, path)` of FilesPanel.tsx keeps its
+    meaning (false when the panel is not mounted; nothing is kept). Help > Examples... can now call
+    `ctx.commands.run('app.files.toggle', { reveal: '/browser/Examples' })` (H1).
+18. **The download name of Export... in WebKit on Linux (gate I1 round 2 defect, round 3).** The
+    port names the whole-store export `My Programs.zip` (the store's label, 3.8.1) and keeps it.
+    CI run 44919519853 (commit c4d3dfa) records, through a wrapper of `HTMLAnchorElement.click`, the
+    `download` attribute the page sets: `My Programs.zip` in Chromium and WebKit on Ubuntu, macOS
+    and Windows (the Files check passed 134 of 134 on all three). Playwright's `download.suggestedFilename()` reports `My Programs.zip` everywhere except
+    WebKit on Ubuntu, which reports `My_Programs.zip`. Playwright's client passes WebKit's
+    `Playwright.downloadFilenameSuggested` value through unchanged (playwright-core 1.65.1,
+    lib/coreBundle.js), so the rewrite happens inside Playwright's WebKit build for Linux
+    (WebKitGTK/WPE); upstream WebKit's own filename sanitising (ResourceResponseSoup.cpp
+    `sanitizeFilename`, WebKitDownload.cpp) replaces only `/`, `\`, `"`, `~`, `*`, `:`, `<`, `>`,
+    `?`, `|` and control characters, not spaces, so the exact line is in Playwright's patches and was
+    not identified. Safari is the macOS WebKit, which reports `My Programs.zip`: a person using
+    Safari gets `My Programs.zip`. Decision: the name stays; check-files.mjs requires the page to
+    ask for exactly `My Programs.zip` in every browser and accepts the reported `My_Programs.zip`
+    only from WebKit on Linux; its detail names the browser build and the system.
+19. **The "store still opening" banner on a loaded machine (round 3).** A store whose database does
+    not answer says `My Programs is still opening...` until OPEN_TIMEOUT_MS (20 s) after opening
+    began, then gives up and says `Files are NOT being saved...` (fs/browser-backend.ts). On this PC
+    one WebKit run read the panel only after the 20 s had passed and failed the check although the
+    product did what it guarantees. check-files.mjs now records when the page first called
+    `indexedDB.open` and requires each reading to show the message that belongs to its time; its
+    detail lists every reading with its time and says when none came before the limit.
+20. **The Files check with FS2 present (round 3).** In Chromium FS2 (features/files-fsaccess)
+    replaces the provider `upload` ("From this computer...") with the system file picker and adds
+    "Open folder..." to the dialogs, as its design allows (providers.ts: one provider per id, a later
+    one replaces it). Playwright cannot answer the system picker, and `Open` no longer named one
+    button. check-files.mjs now runs its dialog pass with the File System Access API removed (what
+    WebKit and Firefox have, so FS1's own provider is tested in both browsers) and names buttons
+    exactly. FS2's check covers the Chromium pickers.
 
 ## Contract
 

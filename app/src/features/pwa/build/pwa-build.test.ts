@@ -149,6 +149,7 @@ describe('finishPwaBuild', () => {
 describe('pwaPlugin (app/vite.config.ts)', () => {
   type Hooks = {
     configResolved(config: { root: string; build: { outDir: string } }): void;
+    buildStart(): void;
     buildEnd(error?: Error): void;
     closeBundle: { order: string; sequential: boolean; handler(this: unknown, error?: Error): Promise<void> };
   };
@@ -179,6 +180,23 @@ describe('pwaPlugin (app/vite.config.ts)', () => {
     await expect(withError.closeBundle.handler.call({}, new Error('Transform failed'))).resolves.toBeUndefined();
     expect(listFiles(empty)).toEqual([]);
   });
+
+  // Gate I1 round 3: under `vite build --watch` the same plugin object serves every rebuild. The
+  // flag set by a failed build was never cleared, so the rebuild after the error was fixed ended
+  // without sw.js and without the manifest tags.
+  it('finishes a successful rebuild that follows a failed build (watch mode)', async () => {
+    const dir = fakeBuild();
+    const plugin = pluginFor(dir);
+    plugin.buildStart();
+    plugin.buildEnd(new Error('Transform failed'));
+    await plugin.closeBundle.handler.call({});
+    expect(listFiles(dir)).not.toContain(SW_FILE);
+    plugin.buildStart();
+    plugin.buildEnd();
+    await plugin.closeBundle.handler.call({ info: () => {} });
+    expect(readFileSync(join(dir, 'index.html'), 'utf8')).toContain(`name="${SW_META_NAME}"`);
+    expect(listFiles(dir)).toContain(SW_FILE);
+  }, 60_000);
 });
 
 describe('the web app manifest and the icons', () => {

@@ -27,6 +27,11 @@ export interface AppState {
     program: ProgramInfo | null;
     phase: SimPhase;
     menuState: 0 | 1; // 0 active, 1 busy (sim-ui §3.6)
+    /** The engine's raw halt flag (`RunSnapshot.halted`, `SimStateFlags.halt`), copied as it is.
+     *  A simulator reset (sim-ui §9.9: start-up, Open, Reload, Close, Rewind) does not clear it;
+     *  only the next run does. It therefore does not say whether the commands are blocked: that is
+     *  `menuState` (sim-ui §3.6). Text such as "Halted" in the status bar takes both into account
+     *  (docs/porting/errata/W1.md, entry 13). */
     halted: boolean;
     autoTrace: boolean;
     keyCommands: boolean;
@@ -48,10 +53,12 @@ export interface AppState {
      * re-reads its data, and the Stack panel re-centres, when its own counter moves.
      * `viewRevision` still moves with every one of them. Added at gate I1 as an optional member
      * (docs/porting/errata/W1.md, entry 11): while it is absent a panel falls back on `viewRevision`.
-     * `stackRedraw` (entry 12, docs/requests/U2-stack-redraw-bit.md) will count the original's
-     * `StackFrm->Repaint()`, after which the Stack panel redraws without re-centring, apart from
-     * `updateDisplay()`, which `stack` counts. The engine does not report that call yet, so nothing
-     * writes `stackRedraw` and `stack` moves for both; while it is absent, `stack` alone decides.
+     * `stackRedraw` (entries 12 and 13, docs/requests/U2-stack-redraw-bit.md) counts
+     * `RepaintBit.StackRedraw`, which the engine sends together with `RepaintBit.Stack` for the
+     * original's `StackFrm->Repaint()`; `updateDisplay()` sends `Stack` alone. So `stack` moves for
+     * both, and the Stack panel re-centres only when `stack` moved by more than `stackRedraw` did;
+     * otherwise it redraws where it is (sim-ui §11.4). While `stackRedraw` is absent (a session that
+     * does not count it yet), `stack` alone decides.
      */
     repaint?: { listing: number; breakpoints: number; memory: number; stack: number; stackRedraw?: number };
   };

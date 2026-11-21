@@ -206,9 +206,17 @@ export interface Box {
 export function outlineCells(
   metrics: Metrics,
   c: GdiCase,
-): { boxes: Box[]; pen: [number, number]; uncertain: (x: number, y: number) => boolean } | null {
+  widen: (style: number, cellHeight: number) => [left: number, right: number] = outlineWidening,
+): {
+  boxes: Box[];
+  pen: [number, number];
+  uncertain: (x: number, y: number) => boolean;
+  /** The pixels by which GDI may widen a cell (a part of `uncertain`): where the glyphs' ink can reach. */
+  widening: (x: number, y: number) => boolean;
+} | null {
   let font: FontRequest = { name: 'Fixedsys', size: 9, style: 0 };
   const boxes: Box[] = [];
+  const margins: [left: number, right: number][] = [];
   let pen: [number, number] = [0, 0];
   let line = false;
   for (const o of c.ops) {
@@ -224,15 +232,29 @@ export function outlineCells(
     // than the face's (Courier New 8, Lucida Console 10); its height is not measured.
     if (o.bytes.includes(0x7f) && o.bytes.every((b) => b === 0x7f || isZeroWidth(b))) return null;
     boxes.push({ x: o.x, y: o.y, w: layout.boxWidth, h: cell.rowHeight });
+    margins.push(widen(font.style, cell.rowHeight));
     pen = [o.x + layout.extent, o.y];
   }
-  // The widening grows with the size: up to a tenth of the cell height, at least 3 pixels.
   const inside = (x: number, y: number, widen: boolean) =>
-    boxes.some((b) => {
-      const m = widen ? Math.max(3, Math.ceil(b.h / 10)) : 0;
-      return x >= b.x - m && x < b.x + b.w + m && y >= b.y && y < b.y + b.h;
+    boxes.some((b, i) => {
+      const [left, right] = widen ? (margins[i] as [number, number]) : [0, 0];
+      return x >= b.x - left && x < b.x + b.w + right && y >= b.y && y < b.y + b.h;
     });
-  return { boxes, pen, uncertain: (x, y) => !inside(x, y, false) && (inside(x, y, true) || line) };
+  const widening = (x: number, y: number) => !inside(x, y, false) && inside(x, y, true);
+  return { boxes, pen, uncertain: (x, y) => widening(x, y) || (line && !inside(x, y, false)), widening };
+}
+
+/**
+ * How many pixels GDI may widen an outline cell by, on the left and on the right: the ink overhang of
+ * the first and last glyph. Measured with fresh captures (gate I1 round 3: Courier New, Lucida
+ * Console and Consolas at 0-40, 44-100 pt, 60 random strings of printable bytes per face, size and
+ * style): plain and bold stay within a tenth of the cell height (at least 3); italic leans further,
+ * on the right up to a third of the cell height (Lucida Console 29 pt: 13 of 39 rows; 90 pt: 32 of
+ * 120) and on the left one more pixel (Consolas 19 pt: 4).
+ */
+export function outlineWidening(style: number, cellHeight: number): [left: number, right: number] {
+  const base = Math.max(3, Math.ceil(cellHeight / 10));
+  return style === 2 ? [base + 1, Math.max(3, Math.ceil(0.35 * cellHeight))] : [base, base];
 }
 
 /** tmOverhang of GDI's style simulation for a raster face. */

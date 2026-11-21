@@ -23,21 +23,32 @@
 // Nothing waits a fixed time: every step waits for the state it expects (up to WAIT ms), so a slow
 // CI runner only makes the check slower. Nothing depends on the operating system.
 //
-// Without engine/dist (or with --without-engines, which answers every request for engine/dist with
-// 404) part 1 still runs and the expected engine-load errors are printed but not counted; part 2 is
-// skipped, or fails when EASY68K_REQUIRE_ENGINES=1.
+// Without engine/dist part 1 still runs and the expected engine-load errors are printed but not
+// counted; part 2 is skipped, or fails when EASY68K_REQUIRE_ENGINES=1. --without-engines behaves so
+// on a machine that has the engines, without touching engine/dist: the page's requests for
+// engine/dist get the answer a server without them gives, chosen by --engine-answer:
+//   vite (default)  what the Vite development server answers for a missing file (measured with
+//                   Vite 8): 404 to the module import, 200 text/html (its index.html) to fetch().
+//   html            200 text/html to every request, as a static host with a start-page fallback.
+//   404             404 to every request, as a plain static host.
+// Every answer to an engine/dist request is printed, so a failure can be read from a CI log alone.
 //
 // Screenshots go to build/SH7/hardware-check (git-ignored). Prints "N of M checks passed"; exit
 // code 0 = everything passed and no console error. "Failed to load resource ... Timeout was reached"
 // (WebKit, when the development server is slow to transform a module on a loaded machine) is printed
 // but not counted: a resource that really failed makes the checks of the panel fail instead.
+//
+// The development server uses a dependency cache of its own below --out, so checks running at the
+// same time do not share one. When it re-bundles its dependencies while the page loads (a fresh
+// cache, as on every CI runner), the page may get a 504 "Outdated Optimize Dep" or two copies of
+// React ("Invalid hook call"); the page is then loaded again, up to three times.
 
 /* global console, process, document, window, getComputedStyle, PointerEvent, setTimeout -- the browser globals are used inside page.evaluate() callbacks */
 
 import { existsSync, mkdirSync } from 'node:fs';
 import { createServer as createNetServer } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { URL, fileURLToPath, pathToFileURL } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
@@ -56,10 +67,16 @@ const outDir = resolve(option('--out', join(repoRoot, 'build', 'SH7', 'hardware-
 mkdirSync(outDir, { recursive: true });
 /**
  * --without-engines: behave as on a machine without engine/dist. Every request for a file of
- * engine/dist is answered 404 in the page and part 2 is skipped (or fails, see below). This proves
- * the run without engines on a machine that has them, without touching engine/dist.
+ * engine/dist gets the answer --engine-answer names (see the header) and part 2 is skipped (or
+ * fails, see below). This proves the run without engines on a machine that has them, without
+ * touching engine/dist.
  */
 const withoutEngines = args.includes('--without-engines');
+const engineAnswer = option('--engine-answer', 'vite');
+if (!['vite', 'html', '404'].includes(engineAnswer)) {
+  console.error(`--engine-answer must be vite, html or 404, not ${engineAnswer}`);
+  process.exit(2);
+}
 
 /** Part 2 needs both engines; without them it is skipped, or fails when EASY68K_REQUIRE_ENGINES=1. */
 const enginesBuilt =
@@ -107,15 +124,24 @@ const WAIT = 30_000;
 const isLoadTimeout = (text) => /Failed to load resource.*Timeout was reached/i.test(text);
 
 /**
+ * The browsers' messages about a file they could not load or use. Chromium: "Failed to load resource:
+ * ... 404" and, for a module answered with text/html, "Failed to load module script: Expected a
+ * JavaScript-or-Wasm module script but the server responded with a MIME type of "text/html"". WebKit:
+ * "Failed to load resource", "... is not a valid JavaScript MIME type", "Importing a module script
+ * failed". Neither names the file in the text; openApp appends the location's URL.
+ */
+const isLoadFailure = (text) =>
+  /Failed to load (resource|module script)|MIME type|Importing a module script failed/i.test(text);
+
+/**
  * Without engine/dist the simulator session cannot fetch its engine when Simulator mode opens: the
- * browser reports the failed requests of engine/dist (openApp appends the URL to the message) and the
- * session reports "The simulator engine could not be created". That is the expected outcome then, not
- * a defect of the panel, so it is printed but not counted. With the engines present it is counted.
+ * browser reports the failed requests of engine/dist and the session reports "The simulator engine
+ * could not be created". That is the expected outcome then, not a defect of the panel, so it is
+ * printed but not counted, but only when the message names a file of engine/dist (or is the
+ * session's own report). With the engines present it is counted.
  */
 const isMissingEngine = (text) =>
-  !enginesBuilt &&
-  ((/Failed to load resource/i.test(text) && isEngineFile(text)) ||
-    /simulator engine could not be created/i.test(text));
+  !enginesBuilt && ((isLoadFailure(text) && isEngineFile(text)) || /simulator engine could not be created/i.test(text));
 
 /** The "no console or page errors" check of a pass. */
 function reportErrors(prefix, errors) {
@@ -124,9 +150,14 @@ function reportErrors(prefix, errors) {
   const missing = errors.filter(isMissingEngine);
   const real = errors.filter((text) => !ignored(text));
   if (timeouts.length) console.log(`        not counted: ${timeouts.length} x "${timeouts[0]}"`);
-  if (missing.length) console.log(`        not counted (no engines): ${missing.length} x "${missing[0]}"`);
+  for (const text of missing) console.log(`        not counted (no engines): "${firstLine(text)}"`);
   check(`${prefix} no console or page errors`, real.length === 0, real.slice(0, 3).join(' | '));
+  // Every counted error in full, so that a failure on a CI runner can be read from its log alone.
+  for (const text of real.slice(3)) console.log(`        also counted: ${text}`);
 }
+
+/** The first line of a message (the stack follows on the next lines). */
+const firstLine = (text) => text.split('\n')[0];
 
 /** Waits until `fn(arg)` is true in the page; false instead of an exception when it never is. */
 const until = (page, fn, arg, timeout = WAIT) =>
@@ -159,7 +190,18 @@ async function openApp(browser) {
   if (withoutEngines) {
     await context.route(
       (url) => isEngineFile(url.pathname),
-      (route) => route.fulfill({ status: 404, contentType: 'text/plain', body: 'Not Found' }),
+      async (route) => {
+        // The answer of a server without engine/dist (see --engine-answer in the header). The Vite
+        // development server answers a module import (resource type "script") with 404 and a fetch()
+        // with its index.html.
+        const notFound =
+          engineAnswer === '404' || (engineAnswer === 'vite' && route.request().resourceType() === 'script');
+        if (notFound) await route.fulfill({ status: 404, contentType: 'text/plain', body: 'Not Found' });
+        else {
+          const index = await route.fetch({ url: baseUrl });
+          await route.fulfill({ status: 200, contentType: 'text/html', body: await index.text() });
+        }
+      },
     );
   }
   const page = await context.newPage();
@@ -167,37 +209,47 @@ async function openApp(browser) {
   pageErrors = errors;
   page.on('console', (message) => {
     if (message.type() !== 'error') return;
-    // Chromium's "Failed to load resource" names no URL; the location does.
+    // The browsers' messages about a file they could not load name no URL; the location does.
     const url = message.location()?.url ?? '';
     const text = message.text();
-    errors.push(/Failed to load resource/i.test(text) && url && !text.includes(url) ? `${text} (${url})` : text);
+    errors.push(isLoadFailure(text) && url && !text.includes(url) ? `${text} (${url})` : text);
   });
   page.on('pageerror', (error) => errors.push(String(error)));
   // When the development server finds a dependency it has not pre-bundled yet (a fresh cache on a
   // CI runner, or a file another package just saved), it bundles again and answers the requests of
-  // the page already loading with 504 "Outdated Optimize Dep". With hot reload off the page never
-  // recovers by itself, so it is loaded again; the second load gets the new bundles.
+  // the page already loading with 504 "Outdated Optimize Dep", or the page gets modules of the old
+  // and the new bundles and React stops with "Invalid hook call" (two copies of React). With hot
+  // reload off the page never recovers by itself, so it is loaded again; the next load gets the new
+  // bundles.
   let outdated;
   page.on('response', (response) => {
     if (response.status() === 504) outdated = true;
+    // Every answer to a request for engine/dist, for the CI log.
+    if (isEngineFile(new URL(response.url()).pathname)) {
+      const type = response.headers()['content-type'] ?? 'no content type';
+      console.log(`        engine/dist request: ${response.status()} ${type} ${response.url()}`);
+    }
   });
+  const reoptimized = () => outdated || errors.some((text) => /Invalid hook call/i.test(text));
   for (let attempt = 1; ; attempt++) {
     outdated = false;
     errors.length = 0;
     await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: LOAD_TIMEOUT });
     const started = Date.now();
     let ready = false;
-    while (!ready && !outdated && Date.now() - started < LOAD_TIMEOUT) {
+    while (!ready && !reoptimized() && Date.now() - started < LOAD_TIMEOUT) {
       ready = await page
         .evaluate(() => window.__easy68k !== undefined && document.querySelector('.e68-shell') !== null)
         .catch(() => false);
       if (!ready) await new Promise((wake) => setTimeout(wake, 250));
     }
-    if (ready) break;
-    if (!outdated || attempt >= 3) {
+    // A page that started but met an invalid hook call on the way is not trusted either.
+    if (ready && !reoptimized()) break;
+    if (!reoptimized() || attempt >= 3) {
       throw new Error(`the application did not start (attempt ${attempt}): ${errors.slice(0, 3).join(' | ')}`);
     }
-    console.log('        the development server bundled its dependencies again; loading the page again');
+    const why = outdated ? '504 Outdated Optimize Dep' : 'Invalid hook call';
+    console.log(`        the development server bundled its dependencies again (${why}); loading the page again`);
   }
   return { context, page, errors };
 }
@@ -272,9 +324,26 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 /** Screenshots of the panel: its upper part and, scrolled into view, the Memory Map group. */
 async function shoot(page, base) {
   await page.locator('.e68-hw__devices').scrollIntoViewIfNeeded();
-  await page.locator('.e68-hw').screenshot({ path: join(outDir, `${base}.png`) });
+  await screenshot(page.locator('.e68-hw'), `${base}.png`);
   await page.locator('.e68-hw__group--map').scrollIntoViewIfNeeded();
-  await page.locator('.e68-hw__group--map').screenshot({ path: join(outDir, `${base}-map.png`) });
+  await screenshot(page.locator('.e68-hw__group--map'), `${base}-map.png`);
+}
+
+/**
+ * One screenshot, tried twice. A screenshot is a record for a person, not a check: on a loaded
+ * machine WebKit once timed out taking one (locator.screenshot: Timeout 30000ms exceeded) while
+ * every check of the panel passed. A screenshot that fails twice is printed, not counted; what the
+ * panel shows is checked from the DOM.
+ */
+async function screenshot(locator, file) {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      await locator.screenshot({ path: join(outDir, file), timeout: WAIT });
+      return;
+    } catch (error) {
+      console.log(`        screenshot ${file} not taken (attempt ${attempt}): ${firstLine(String(error))}`);
+    }
+  }
 }
 
 /** Part 1: the panel in the application as it starts, before any program. */
@@ -628,6 +697,9 @@ async function main() {
     configFile: join(appRoot, 'vite.config.ts'),
     root: appRoot,
     logLevel: 'warn',
+    // A dependency cache of its own (see the header): checks running at the same time must not
+    // re-bundle each other's dependencies.
+    cacheDir: join(outDir, 'vite-cache'),
     // No hot reload: fourteen other packages edit files while this runs, and a reload would
     // remount the panel in the middle of a check.
     server: { port, strictPort: false, host: '127.0.0.1', hmr: false, watch: null },
@@ -636,11 +708,22 @@ async function main() {
   const address = server.httpServer?.address();
   baseUrl = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : port}/`;
   console.log(`Application: ${baseUrl}\nScreenshots: ${outDir}`);
+  // What decides the run, for a CI log.
+  console.log(
+    `System: ${process.platform} ${process.arch}, Node ${process.version}; engines: ${
+      enginesBuilt
+        ? 'engine/dist holds both engines'
+        : withoutEngines
+          ? `left out (--without-engines, --engine-answer ${engineAnswer})`
+          : 'engine/dist is missing'
+    }; EASY68K_REQUIRE_ENGINES=${process.env.EASY68K_REQUIRE_ENGINES ?? '(not set)'}`,
+  );
   const programs = enginesBuilt ? await assemblePrograms() : null;
   try {
     for (const name of browsers) {
       const browser = await BROWSERS[name].launch();
       try {
+        console.log(`\n${name} ${browser.version()}`);
         console.log(`\n[${name}, shell]`);
         await shellPass(browser, name);
         console.log(`\n[${name}, real engine]`);

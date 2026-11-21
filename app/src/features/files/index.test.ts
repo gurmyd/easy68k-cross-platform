@@ -2,7 +2,7 @@
 // panel's actions with their questions and messages, and a drop.
 
 import { describe, expect, it } from 'vitest';
-import type { Bytes, DialogInstance, MessageBoxRequest, OpenRequest, Platform } from '../../contracts';
+import type { Bytes, DialogInstance, FilesRevealArg, MessageBoxRequest, OpenRequest, Platform } from '../../contracts';
 import { writeZip } from '../../fs/zip';
 import { createFakePlatform, createTestApplication, type TestApplication } from '../../state/testing';
 import { deletePath, exportPath, importInto, newFolder, renamePath } from './actions';
@@ -10,6 +10,7 @@ import { handleDrop } from './drop';
 import { DROPPED_FOLDER_TITLE, createFileDialogs, dropDeps, feature } from './index';
 import { FOLDER_FILTER, type FileDialogService, type SaveDialogProps } from './dialogs';
 import { EDITOR_OPEN_FILTERS } from './filters';
+import { registerFilesRevealer } from './reveal';
 
 const ascii = (text: string): Bytes => Uint8Array.from(text, (c) => c.charCodeAt(0));
 const text = (bytes: Bytes): string => String.fromCharCode(...bytes);
@@ -46,6 +47,27 @@ describe('feature "files"', { timeout: 60_000 }, () => {
     expect(application.ctx.settings.get().app.layout.panels.files?.visible).toBe(false);
     void application.ctx.commands.run('app.files.toggle');
     expect(application.ctx.commands.isChecked('app.files.toggle')).toBe(true);
+    application.dispose();
+  });
+
+  it('app.files.toggle with FilesRevealArg shows the panel (never hides it) and reveals the path', async () => {
+    const application = app();
+    const { ctx } = application;
+    const revealed: string[] = [];
+    // The panel is shown and mounted: the path goes to it, and the panel stays shown.
+    const unregister = registerFilesRevealer(ctx, (path) => revealed.push(path));
+    await ctx.commands.run('app.files.toggle', { reveal: '/browser/Examples' } satisfies FilesRevealArg);
+    expect(ctx.commands.isChecked('app.files.toggle')).toBe(true);
+    expect(revealed).toEqual(['/browser/Examples']);
+    // Hidden and unmounted: the command shows it, and the path waits until the panel mounts.
+    await ctx.commands.run('app.files.toggle');
+    unregister();
+    expect(ctx.commands.isChecked('app.files.toggle')).toBe(false);
+    await ctx.commands.run('app.files.toggle', { reveal: '/browser/Examples/hello.X68' } satisfies FilesRevealArg);
+    expect(ctx.commands.isChecked('app.files.toggle')).toBe(true);
+    expect(revealed).toEqual(['/browser/Examples']);
+    registerFilesRevealer(ctx, (path) => revealed.push(path));
+    expect(revealed).toEqual(['/browser/Examples', '/browser/Examples/hello.X68']);
     application.dispose();
   });
 

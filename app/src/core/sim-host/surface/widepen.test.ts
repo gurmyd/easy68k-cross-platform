@@ -1,9 +1,15 @@
-// The wide-pen stroke. These tests hold for the stub (the band without caps) and for any stroke that
-// replaces it; the measured GDI strokes of trap15-b §6.2 are at the end, skipped until SH2 delivers.
+// Lines of a wide pen (widepen.ts), against what Windows GDI drew and widened. Owner: SH2.
+//
+// The polygons below are GDI's WidenPath read back with GetPath (28.4 fixed point, relative to the
+// line's start); the strokes are the figures of trap15-b §6.2. Whole lines in every direction and
+// drawing mode are compared with the committed captures by tests/conformance/gdi/surface.test.ts
+// (suites widelines, polylines, modes, clip, pens).
 
 import { describe, expect, it } from 'vitest';
+import { emitDot } from './raster';
+import { penDot } from './tables/dots';
 import { createRandom } from './testing';
-import { strokeWideLine } from './widepen';
+import { fillPolygons, strokeWideLine, widenSegment, type FixPoint } from './widepen';
 
 const CLIP = { left: 0, top: 0, right: 100, bottom: 40 };
 
@@ -30,12 +36,252 @@ function drawing(counts: Uint8Array, left: number, top: number, right: number, b
   return rows;
 }
 
+const pairs = (list: readonly (readonly [number, number])[]): FixPoint[] => list.map(([x, y]) => ({ x, y }));
+/** Without repeated points (GDI's path repeats a point where a line of length zero turns). */
+const distinct = (pts: readonly FixPoint[]) =>
+  pts.filter((p, i) => i === 0 || p.x !== pts[i - 1]!.x || p.y !== pts[i - 1]!.y);
+
+describe('widenSegment: the polygon GDI fills (WidenPath)', () => {
+  it('equals GDI for horizontal, diagonal and steep lines', () => {
+    const measured: [number, FixPoint, FixPoint, [number, number][]][] = [
+      [
+        7,
+        { x: 0, y: 0 },
+        { x: 160, y: 0 },
+        [
+          [0, -56],
+          [-39, -38],
+          [-55, 0],
+          [-39, 38],
+          [0, 56],
+          [160, 56],
+          [199, 38],
+          [215, 0],
+          [199, -38],
+          [160, -56],
+        ],
+      ],
+      [
+        7,
+        { x: 0, y: 0 },
+        { x: 160, y: 160 },
+        [
+          [40, -40],
+          [0, -55],
+          [-39, -38],
+          [-55, 0],
+          [-40, 40],
+          [120, 200],
+          [160, 215],
+          [199, 198],
+          [215, 160],
+          [200, 120],
+        ],
+      ],
+      [
+        3,
+        { x: 0, y: 0 },
+        { x: 48, y: 160 },
+        [
+          [24, -8],
+          [7, -23],
+          [-7, -23],
+          [-23, -7],
+          [-24, 8],
+          [24, 168],
+          [41, 183],
+          [55, 183],
+          [71, 167],
+          [72, 152],
+        ],
+      ],
+      [
+        2,
+        { x: 0, y: 0 },
+        { x: 160, y: 48 },
+        [
+          [8, -16],
+          [-7, -15],
+          [-15, 0],
+          [-8, 16],
+          [152, 64],
+          [167, 63],
+          [175, 48],
+          [168, 32],
+        ],
+      ],
+    ];
+    for (const [width, p0, p1, path] of measured) {
+      expect(widenSegment(width, p0, p1), `width ${width} to (${p1.x},${p1.y})`).toEqual(pairs(path));
+    }
+  });
+
+  it('breaks ties between two guide vertices as GDI does (vertical lines, a 45-degree tie)', () => {
+    expect(widenSegment(4, { x: 0, y: 0 }, { x: 0, y: 320 })).toEqual(
+      pairs([
+        [32, 8],
+        [31, -7],
+        [23, -23],
+        [7, -31],
+        [-7, -31],
+        [-23, -23],
+        [-32, -8],
+        [-32, 312],
+        [-31, 327],
+        [-23, 343],
+        [-7, 351],
+        [7, 351],
+        [23, 343],
+        [32, 328],
+      ]),
+    );
+    expect(widenSegment(4, { x: 0, y: 320 }, { x: 0, y: 0 })).toEqual(
+      pairs([
+        [-32, 328],
+        [-23, 343],
+        [-7, 351],
+        [7, 351],
+        [23, 343],
+        [31, 327],
+        [32, 312],
+        [32, -8],
+        [23, -23],
+        [7, -31],
+        [-7, -31],
+        [-23, -23],
+        [-31, -7],
+        [-32, 8],
+      ]),
+    );
+    // Width 59 towards (770, -638) pixels: two guide vertices are exactly equally far.
+    expect(widenSegment(59, { x: 0, y: 0 }, { x: 12320, y: -10208 })).toEqual(
+      pairs([
+        [-264, -392],
+        [-333, -332],
+        [-390, -263],
+        [-434, -182],
+        [-461, -94],
+        [-471, 0],
+        [-461, 94],
+        [-434, 182],
+        [-390, 263],
+        [-333, 332],
+        [-263, 390],
+        [-183, 434],
+        [-94, 461],
+        [0, 471],
+        [94, 461],
+        [183, 434],
+        [264, 392],
+        [12584, -9816],
+        [12653, -9876],
+        [12710, -9945],
+        [12754, -10026],
+        [12781, -10114],
+        [12791, -10208],
+        [12781, -10302],
+        [12754, -10390],
+        [12710, -10471],
+        [12653, -10540],
+        [12583, -10598],
+        [12503, -10642],
+        [12414, -10669],
+        [12320, -10679],
+        [12226, -10669],
+        [12137, -10642],
+        [12056, -10600],
+      ]),
+    );
+  });
+
+  it('a line of length zero is widened as a line pointing in +x', () => {
+    expect(distinct(widenSegment(6, { x: 0, y: 0 }, { x: 0, y: 0 }))).toEqual(
+      pairs([
+        [8, -48],
+        [-7, -47],
+        [-23, -39],
+        [-39, -23],
+        [-47, -7],
+        [-47, 7],
+        [-39, 23],
+        [-23, 39],
+        [-8, 48],
+        [7, 47],
+        [23, 39],
+        [39, 23],
+        [47, 7],
+        [47, -7],
+        [39, -23],
+        [23, -39],
+        [8, -48],
+      ]),
+    );
+  });
+
+  it('a line of length zero fills exactly the measured dot of its pen, for every width 2-255', () => {
+    // Two tables measured separately (tables/pens.ts and tables/dots.ts) agree.
+    const clip = { left: -200, top: -200, right: 200, bottom: 200 };
+    for (let width = 2; width <= 255; width++) {
+      const filled: string[] = [];
+      fillPolygons([widenSegment(width, { x: 0, y: 0 }, { x: 0, y: 0 })], clip, (y, a, b) =>
+        filled.push(`${y}:${a}..${b}`),
+      );
+      const dot: string[] = [];
+      emitDot(penDot(width), 0, 0, (y, a, b) => dot.push(`${y}:${a}..${b}`));
+      expect(filled, `width ${width}`).toEqual(dot);
+    }
+  });
+});
+
+describe('fillPolygons', () => {
+  it('takes a pixel whose centre is on a left or top edge, not one on a right or bottom edge', () => {
+    // The square from (16, 16) to (48, 48) in 1/16 pixel: pixel centres 1, 2 (3 is on the right edge).
+    const runs: string[] = [];
+    fillPolygons(
+      [
+        pairs([
+          [16, 16],
+          [48, 16],
+          [48, 48],
+          [16, 48],
+        ]),
+      ],
+      { left: 0, top: 0, right: 10, bottom: 10 },
+      (y, a, b) => runs.push(`${y}:${a}..${b}`),
+    );
+    expect(runs).toEqual(['1:1..2', '2:1..2']);
+  });
+
+  it('fills two contours by the nonzero rule: an inner contour in the same direction adds nothing', () => {
+    const outer = pairs([
+      [0, 0],
+      [160, 0],
+      [160, 160],
+      [0, 160],
+    ]);
+    const sameWay = pairs([
+      [48, 48],
+      [112, 48],
+      [112, 112],
+      [48, 112],
+    ]);
+    const count = (contours: FixPoint[][]) => {
+      let n = 0;
+      fillPolygons(contours, { left: 0, top: 0, right: 20, bottom: 20 }, (_y, a, b) => (n += b - a + 1));
+      return n;
+    };
+    expect(count([outer])).toBe(100);
+    expect(count([outer, sameWay])).toBe(100);
+    expect(count([outer, [...sameWay].reverse()])).toBe(100 - 16);
+  });
+});
+
 describe('strokeWideLine', () => {
   it('reports every pixel of a stroke exactly once, whatever the direction and the width', () => {
     const random = createRandom(6_2);
     for (let n = 0; n < 600; n++) {
       const [x1, y1, x2, y2] = [random.int(-10, 109), random.int(-10, 49), random.int(-10, 109), random.int(-10, 49)];
-      const counts = visits(x1, y1, x2, y2, random.int(2, 14));
+      const counts = visits(x1, y1, x2, y2, random.int(2, 255));
       expect(Math.max(...counts), `(${x1},${y1}) to (${x2},${y2})`).toBeLessThanOrEqual(1);
     }
   }, 60_000);
@@ -64,19 +310,6 @@ describe('strokeWideLine', () => {
     }
   }, 60_000);
 
-  it('a line of length zero is the round dot of the pen', () => {
-    expect(drawing(visits(10, 10, 10, 10, 5), 7, 7, 14, 14)).toEqual([
-      '.......',
-      '..###..',
-      '.#####.',
-      '.#####.',
-      '.#####.',
-      '..###..',
-      '.......',
-    ]);
-    expect(drawing(visits(10, 10, 10, 10, 2), 8, 8, 13, 13)).toEqual(['.....', '.....', '..#..', '.....', '.....']);
-  });
-
   it('a line that crosses the 16-bit coordinate space is clipped, not walked', () => {
     const counts = visits(-32768, -32768, 32767, 32767, 7);
     expect(counts[20 * CLIP.right + 20]).toBe(1);
@@ -84,10 +317,8 @@ describe('strokeWideLine', () => {
     expect(Math.max(...counts)).toBe(1);
   });
 
-  // The strokes GDI draws, measured (trap15-b §6.2): horizontal lines from x to x+10 at y = 5 with the
-  // widths 2, 3, 4, 5, 6, starting at x = 5, 25, 45, 65, 85. The stub lacks the round caps and, for
-  // even widths, leaves the start corner of the top row in. For SH2 to switch on.
-  it.skip('the measured strokes of trap15-b §6.2 (SH2: needs round caps)', () => {
+  it('draws the measured strokes of trap15-b §6.2', () => {
+    // Horizontal lines from x to x + 10 at y = 5 with the widths 2, 3, 4, 5, 6, from x = 5, 25, 45, 65, 85.
     const counts = new Uint8Array(CLIP.right * CLIP.bottom);
     [5, 25, 45, 65, 85].forEach((x, i) => {
       const one = visits(x, 5, x + 10, 5, i + 2);

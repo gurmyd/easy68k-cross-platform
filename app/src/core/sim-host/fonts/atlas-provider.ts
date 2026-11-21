@@ -235,6 +235,10 @@ export class AtlasGlyphProvider implements GlyphProvider, FallbackGlyphs {
     return this.fonts ? this.fonts.delInHighText(font) : null;
   }
 
+  monospacedOutline(font: FontSpec): boolean {
+    return this.fonts ? this.fonts.monospacedOutline(font) : false;
+  }
+
   /** The path of the atlas a font's glyphs come from, or null. For tests and for diagnosis. */
   atlasOf(font: FontSpec): string | null {
     return this.fonts ? this.fonts.atlasOf(font) : null;

@@ -26,8 +26,12 @@ import type {
   FileDialogs,
   FileSourceProvider,
   GlyphProvider,
+  LoadOptions,
+  LoadOrigin,
+  NativeFileDialogs,
   OutputDeviceDeps,
   Platform,
+  RunController,
   SaveRequest,
   SimEngine,
   SimHost,
@@ -156,6 +160,8 @@ const EXPORTS: Record<string, string[]> = {
     'RunController',
     'ControllerRequest',
     'SimSession',
+    // gate I1 round 3 (errata W1.md, entry 13)
+    'LoadOptions',
   ],
   'store.ts': ['Store', 'AppState', 'Mode', 'EditorMessage', 'AssembleSummary'], // 3.12.1
   'commands.ts': [
@@ -581,7 +587,7 @@ describe('engine mirror (3.2) against engine/sim/sim68k.mjs', () => {
       [
         contracts.RepaintBit,
         sim.Repaint as Record<string, number>,
-        // StackRedraw: ready for docs/requests/U2-stack-redraw-bit.md (errata W1.md, entry 12)
+        // StackRedraw: docs/requests/U2-stack-redraw-bit.md (errata W1.md, entries 12 and 13)
         {
           Listing: 'LISTING',
           Breakpoints: 'BREAKPOINTS',
@@ -661,12 +667,16 @@ const OPTIONAL_ADDITIONS = {
   simState: true satisfies StillValidWithout<AppState['sim'], 'repaint'>,
   simRepaint: true satisfies StillValidWithout<NonNullable<AppState['sim']['repaint']>, 'stackRedraw'>,
   simSession: true satisfies StillValidWithout<SimSession, 'printJobs' | 'onPrintJob'>,
-  glyphProvider: true satisfies StillValidWithout<GlyphProvider, 'textOverhang'>,
+  glyphProvider: true satisfies StillValidWithout<GlyphProvider, 'textOverhang' | 'delInHighText'>,
   outputDeviceDeps: true satisfies StillValidWithout<OutputDeviceDeps, 'message'>,
+  // round 3 (entry 13)
+  runController: true satisfies StillValidWithout<RunController, 'confirmLoad'>,
+  loadOptions: true satisfies StillValidWithout<LoadOptions, 'confirmed'>,
 };
 
-// Three methods gained an optional last parameter. A function with the parameters of wave one is
-// still an implementation, and a call with the arguments of wave one is still a call.
+// Five methods gained an optional last parameter. A function with the parameters of wave one (or of
+// round 1, for chooseFolder) is still an implementation, and a call with the old arguments is still
+// a call.
 const WAVE_ONE_SIGNATURES = {
   run: true satisfies Assignable<(id: string, arg?: unknown) => Promise<void>, CommandRegistry['run']>,
   toast: true satisfies Assignable<
@@ -674,6 +684,9 @@ const WAVE_ONE_SIGNATURES = {
     DialogService['toast']
   >,
   confirmBeforeUnload: true satisfies Assignable<(needed: boolean) => void, Platform['confirmBeforeUnload']>,
+  // round 3 (entry 13)
+  open: true satisfies Assignable<(path: string, origin: LoadOrigin) => Promise<void>, RunController['open']>,
+  chooseFolder: true satisfies Assignable<(title: string) => Promise<string | null>, NativeFileDialogs['chooseFolder']>,
 };
 const NEW_ARGUMENTS = {
   run: ['ed.help.help', 'options.htm', { allowInModal: true }] satisfies Parameters<CommandRegistry['run']>,
@@ -684,6 +697,13 @@ const NEW_ARGUMENTS = {
   toastAsBefore: ['Saved'] satisfies Parameters<DialogService['toast']>,
   confirmBeforeUnload: [true, 'documents'] satisfies Parameters<Platform['confirmBeforeUnload']>,
   confirmBeforeUnloadAsBefore: [false] satisfies Parameters<Platform['confirmBeforeUnload']>,
+  // round 3 (entry 13)
+  open: ['/browser/My Programs/Imported/a.S68', 'drop', { confirmed: true }] satisfies Parameters<
+    RunController['open']
+  >,
+  openAsBefore: ['/browser/a.S68', 'open'] satisfies Parameters<RunController['open']>,
+  chooseFolder: ['Copy the Examples to', '/disk/0/Users'] satisfies Parameters<NativeFileDialogs['chooseFolder']>,
+  chooseFolderAsBefore: ['Copy the Examples to'] satisfies Parameters<NativeFileDialogs['chooseFolder']>,
 };
 
 /** Where each addition is declared, as it is written in the contract file. */
@@ -700,6 +720,7 @@ const ADDED_DECLARATIONS: Record<string, string[]> = {
     'bindDeviceSources?(sources: DesktopDeviceSources): void;',
     'onFullScreenChange?(listener: (on: boolean) => void): () => void;',
     'confirmBeforeUnload(needed: boolean, who?: string): void;',
+    'chooseFolder(title: string, startDir?: VPath | null): Promise<VPath | null>;',
   ],
   'documents.ts': [
     'update?(id: string, patch: DocumentPatch): void;',
@@ -719,8 +740,16 @@ const ADDED_DECLARATIONS: Record<string, string[]> = {
   'run.ts': [
     'readonly printJobs?: readonly PrintJob[];',
     'onPrintJob?(listener: (job: PrintJob) => void): () => void;',
+    'open(path: VPath, origin: LoadOrigin, options?: LoadOptions): Promise<void>;',
+    'confirmLoad?(origin: LoadOrigin): Promise<boolean>;',
+    'export interface LoadOptions {',
+    'confirmed?: boolean;',
   ],
-  'devices.ts': ['textOverhang?(font: FontSpec): number;', 'message?: (text: string) => void;'],
+  'devices.ts': [
+    'textOverhang?(font: FontSpec): number;',
+    'message?: (text: string) => void;',
+    'delInHighText?(font: FontSpec): Glyph | null;',
+  ],
 };
 
 describe('additions of gate I1 (errata W1.md, entry 11)', () => {
@@ -729,7 +758,7 @@ describe('additions of gate I1 (errata W1.md, entry 11)', () => {
     for (const table of [OPTIONAL_ADDITIONS, WAVE_ONE_SIGNATURES]) {
       for (const [name, ok] of Object.entries(table)) expect(ok, name).toBe(true);
     }
-    expect(Object.keys(NEW_ARGUMENTS)).toHaveLength(6);
+    expect(Object.keys(NEW_ARGUMENTS)).toHaveLength(10);
   });
 
   for (const [file, declarations] of Object.entries(ADDED_DECLARATIONS)) {
@@ -757,6 +786,7 @@ describe('additions of gate I1 (errata W1.md, entry 11)', () => {
     expect(provider.chooseFolder).toBeUndefined();
     expect(request.overwritePrompt).toBeUndefined();
     expect(glyphs.textOverhang?.({} as never) ?? 0).toBe(0);
+    expect(glyphs.delInHighText?.({} as never) ?? null).toBeNull();
     expect(await fileDialogs.save(request)).toBeNull();
   });
 
@@ -782,10 +812,8 @@ describe('additions of gate I1 (errata W1.md, entry 11)', () => {
   it('fs/vfs.ts is the only implementation of Vfs in the repository', () => {
     const roots = ['app/src', 'desktop/src', 'tests'];
     const self = here('contracts.test.ts');
-    // `class X implements A, Vfs`, `const x: Vfs = {`, `{...} as Vfs`, `{...} satisfies Vfs`
-    const implementsVfs =
-      /\bimplements\s+(?:[\w.]+\s*,\s*)*Vfs\b(?![\w.])|:\s*Vfs\s*=\s*\{|\b(?:as|satisfies)\s+Vfs\b(?![\w.<])/;
     const found: string[] = [];
+    const details: string[] = [];
     for (const root of roots) {
       const dir = repo(root);
       if (!existsSync(dir)) continue;
@@ -793,14 +821,144 @@ describe('additions of gate I1 (errata W1.md, entry 11)', () => {
         if (!/\.(?:ts|tsx|mts|mjs)$/.test(entry) || /(?:^|[\\/])(?:node_modules|dist)[\\/]/.test(entry)) continue;
         const file = `${dir}/${entry}`.replace(/\\/g, '/');
         if (file === self.replace(/\\/g, '/')) continue;
-        if (implementsVfs.test(readFileSync(file, 'utf8'))) found.push(`${root}/${entry.replace(/\\/g, '/')}`);
+        const forms = vfsImplementationsIn(readFileSync(file, 'utf8'));
+        if (forms.length === 0) continue;
+        const name = `${root}/${entry.replace(/\\/g, '/')}`;
+        found.push(name);
+        details.push(`${name}: ${forms.join(' | ')}`);
       }
     }
-    expect(found).toEqual(['app/src/fs/vfs.ts']);
-    // and the pattern sees each of the forms it names
-    for (const form of ['class V implements Vfs {', 'class V implements A, Vfs {', 'const v: Vfs = {', '{} as Vfs;'])
-      expect(implementsVfs.test(form), form).toBe(true);
-    for (const form of ['vfs: Pick<Vfs, "stat">', 'Promise<Vfs>', 'implements VfsLike {'])
-      expect(implementsVfs.test(form), form).toBe(false);
+    // On a failure the message names each file and the text that made it count as a Vfs.
+    expect(found, details.join('\n')).toEqual(['app/src/fs/vfs.ts']);
   }, 30_000);
+
+  // Round 3 (review of round 2): the first pattern missed a factory with a return type, an arrow
+  // function, a generic heritage list and a later assignment. Each form below is one way to write a
+  // whole Vfs by hand.
+  it('the Vfs scanner sees every way of writing a Vfs by hand, and nothing else', () => {
+    const implementations = [
+      'class V implements Vfs {',
+      'class V implements A, Vfs {',
+      'class V implements Partial<Vfs>, Vfs {',
+      'class V implements Map<string, number>, contracts.Vfs {',
+      'const v = class implements Vfs {',
+      'const v: Vfs = {',
+      'const v: Vfs = ({',
+      'private readonly vfs: Vfs = {',
+      'const v: Vfs = new Fake();',
+      'let v: Vfs;  v = {',
+      'let v: Vfs\nv = ({ mount() {} } as never);',
+      '{} as Vfs;',
+      'x satisfies Vfs;',
+      'const v = <Vfs>{',
+      'function fakeVfs(): Vfs { return { mount() {} } as never; }',
+      'function fakeVfs(): Vfs {\n  const fake = 1;\n  return {\n    mount() {},\n  } as never;\n}',
+      'async function fakeVfs(): Promise<Vfs> { return {} as never; }',
+      'const make = (): Vfs => ({',
+      'const make = (): Vfs => new Fake();',
+      '  makeVfs(): Vfs {\n    return new Fake();\n  }',
+    ];
+    const notImplementations = [
+      'vfs: Pick<Vfs, "stat">',
+      'Promise<Vfs>',
+      'implements VfsLike {',
+      'class V implements Partial<Vfs> {',
+      'const vfs: Vfs = createVfs();',
+      'const vfs: Vfs = ctx.vfs;',
+      'const f = (vfs: Vfs, b: number) => b;',
+      'let vfs: Vfs;\nvfs = createVfs();',
+      'let vfs: Vfs;\nvfs = ctx.vfs;',
+      'function makeVfs(): Vfs {\n  const vfs = createVfs();\n  vfs.mount(new MemoryBackend());\n  return vfs;\n}',
+      'const makeVfs = (): Vfs => createVfs();',
+      'const make = (backend: B): Vfs => makeOther(backend);',
+      'function spy(vfs: Vfs): Vfs {\n  return new Proxy(vfs, {\n    get() {},\n  });\n}',
+      'function use(vfs: Vfs): void {',
+      'readonly vfs: Vfs;',
+      'type T = { vfs: Vfs };',
+      'x as VfsChange',
+      'function f(): VfsChange {',
+    ];
+    for (const form of implementations) expect(vfsImplementationsIn(form), form).not.toEqual([]);
+    for (const form of notImplementations) expect(vfsImplementationsIn(form), form).toEqual([]);
+  });
 });
+
+/**
+ * The places in `source` that write a whole `Vfs` by hand, as short excerpts; [] when there are
+ * none. A text scanner, not the TypeScript compiler (a unit test may import only test libraries,
+ * eslint.config.js), so it states its rules and the test above pins each of them:
+ * - a class whose `implements` list has `Vfs` (or `x.Vfs`) as one of its entries;
+ * - `as Vfs`, `satisfies Vfs`, `<Vfs>{`;
+ * - a variable or property typed `Vfs` whose value, given at once or assigned later in the same
+ *   file, is written here: an object literal, a class expression or `new X(...)`;
+ * - a function, method or arrow function whose return type is `Vfs` or `Promise<Vfs>` and that
+ *   returns a value written here.
+ * A value made elsewhere (`createVfs()`, `ctx.vfs`, a parameter, another function's result) is
+ * judged where it is made. `new Proxy(vfs, ...)` forwards to a real Vfs and is not written here.
+ */
+function vfsImplementationsIn(source: string): string[] {
+  if (!/\bVfs\b/.test(source)) return [];
+  const hits: string[] = [];
+  const excerpt = (at: number) => source.slice(at, at + 60).replace(/\s+/g, ' ');
+  /** The start of a value written here (see above), after `=`, `=>` or `return`. */
+  const writtenHere = String.raw`(?:\(\s*)*(?:\{|new\s+(?!Proxy\b)|class\b)`;
+  /** Splits a type list at its top-level commas (outside <...>, (...), {...}). */
+  const topLevel = (list: string) => {
+    const parts: string[] = [];
+    let depth = 0;
+    let start = 0;
+    for (let i = 0; i < list.length; i++) {
+      const ch = list[i];
+      if (ch === '<' || ch === '(' || ch === '{' || ch === '[') depth++;
+      else if (ch === '>' || ch === ')' || ch === '}' || ch === ']') depth--;
+      else if (ch === ',' && depth === 0) {
+        parts.push(list.slice(start, i).trim());
+        start = i + 1;
+      }
+    }
+    parts.push(list.slice(start).trim());
+    return parts;
+  };
+  /** The text from the brace at `open` to its partner (or to the end of the source). */
+  const block = (open: number) => {
+    let depth = 0;
+    for (let i = open; i < source.length; i++) {
+      if (source[i] === '{') depth++;
+      else if (source[i] === '}' && --depth === 0) return source.slice(open, i + 1);
+    }
+    return source.slice(open);
+  };
+
+  for (const m of source.matchAll(/\bimplements\s+([^{]+)\{/g)) {
+    if (topLevel(m[1] as string).some((entry) => /^(?:[\w$]+\.)*Vfs$/.test(entry))) hits.push(excerpt(m.index));
+  }
+  for (const m of source.matchAll(/\b(?:as|satisfies)\s+Vfs\b(?![\w$.<])|(?<![\w$]\s*)<Vfs>\s*\{/g))
+    hits.push(excerpt(m.index));
+  // name: Vfs = value   (variables, parameters with a default, class properties)
+  for (const m of source.matchAll(/([\w$]+)\s*[?!]?\s*:\s*Vfs\s*(=(?!>)|;|,|\n|$)/g)) {
+    const name = m[1] as string;
+    const values: string[] = [];
+    const rest = source.slice(m.index + m[0].length);
+    if (m[2] === '=') values.push(rest);
+    else if (/\b(?:let|var)\s+$/.test(source.slice(0, m.index))) {
+      // declared without a value: look for `name = ...` later in the file
+      for (const later of rest.matchAll(new RegExp(`(?<![\\w$.])${name.replace(/\$/g, '\\$')}\\s*=(?![=>])`, 'g')))
+        values.push(rest.slice(later.index + later[0].length));
+    }
+    // An object literal, a class expression or `new X(...)` is a Vfs written here; another value
+    // (`ctx.vfs`, `createVfs()`, a parameter) is a Vfs made elsewhere, where this scan judges it.
+    for (const value of values) {
+      if (new RegExp(String.raw`^\s*${writtenHere}`).test(value)) hits.push(excerpt(m.index));
+    }
+  }
+  // (...): Vfs {  /  (...): Promise<Vfs> {  /  (...): Vfs => body
+  for (const m of source.matchAll(/\)\s*:\s*(?:Promise\s*<\s*Vfs\s*>|Vfs)\s*(\{|=>)/g)) {
+    const after = m.index + m[0].length;
+    const returnsWrittenHere =
+      m[1] === '{'
+        ? new RegExp(String.raw`\breturn\s+${writtenHere}`).test(block(after - 1))
+        : new RegExp(String.raw`^\s*${writtenHere}`).test(source.slice(after));
+    if (returnsWrittenHere) hits.push(excerpt(m.index));
+  }
+  return hits;
+}

@@ -26,6 +26,7 @@ import {
   type KeyOutcome,
 } from './keymap';
 import { COMMAND_SPECS } from './specs';
+import type { TextFieldEdit } from './text-field-edits';
 
 /** A page element as far as the dispatcher looks at it. */
 function element(tagName: string, options: { type?: string; editable?: boolean; inside?: string[] } = {}) {
@@ -67,6 +68,7 @@ function harness(
     ran: [] as CommandId[],
     menusOpened: [] as string[],
     menuLetters: 'fepowh',
+    edits: [] as [TextFieldEdit, unknown][],
   };
   const dispatcher = createKeyDispatcher({
     os: options.os ?? 'windows',
@@ -84,6 +86,9 @@ function harness(
       if (!state.menuLetters.includes(letter)) return false;
       state.menusOpened.push(letter);
       return true;
+    },
+    editTextField: (edit, target) => {
+      state.edits.push([edit, target]);
     },
   });
   const send = (key: KeyEventLike, target: unknown = BUTTON, extra: Partial<DispatchEvent> = {}): Sent => {
@@ -446,6 +451,68 @@ describe('text-editing chords', () => {
     expect(onMac.send(mac('Cmd+V'), EDITOR).outcome.kind).toBe('text');
     expect(onMac.send(mac('Shift+Cmd+Z'), TEXT_FIELD).outcome.kind).toBe('text');
     expect(app.state.ran).toEqual([]);
+  });
+
+  // Rule K2 on macOS: a Mac's browser does not treat the Ctrl forms as editing keys (errata W3.md
+  // entry 34; reported by E2, errata E2.md entry 13).
+  it('on macOS the dispatcher performs the Ctrl forms itself in a plain text field, also in a dialog', () => {
+    const key = (letter: string, alt = false) => ({
+      key: alt ? 'Ω' : letter.toLowerCase(),
+      code: `Key${letter}`,
+      ctrlKey: true,
+      altKey: alt,
+      shiftKey: false,
+      metaKey: false,
+    });
+    const cases: [ReturnType<typeof key>, TextFieldEdit][] = [
+      [key('Z'), 'undo'],
+      [key('Z', true), 'redo'],
+      [key('X'), 'cut'],
+      [key('C'), 'copy'],
+      [key('V'), 'paste'],
+      [key('A'), 'selectAll'],
+    ];
+    for (const mode of ['editor', 'simulator', 'easybin'] as const) {
+      const app = harness({ os: 'mac', mode });
+      for (const target of [TEXT_FIELD, element('TEXTAREA'), DIALOG_FIELD]) {
+        for (const [event, edit] of cases) {
+          app.state.edits.length = 0;
+          if (target === DIALOG_FIELD) app.state.modal = true;
+          expect(app.send(event, target), `${mode} ${edit}`).toEqual({
+            outcome: { kind: 'textEdit', edit },
+            prevented: true,
+            stopped: true,
+          });
+          expect(app.state.edits).toEqual([[edit, target]]);
+          app.state.modal = false;
+        }
+      }
+      expect(app.state.ran).toEqual([]);
+    }
+  });
+
+  it('the Cmd forms, the editor, the Output panel and the other key maps are not affected', () => {
+    const onMac = harness({ os: 'mac', mode: 'editor' });
+    const ctrlC = { key: 'c', code: 'KeyC', ctrlKey: true, altKey: false, shiftKey: false, metaKey: false };
+    // The Cmd form is the browser's own editing key: left to the field.
+    expect(onMac.send({ ...ctrlC, ctrlKey: false, metaKey: true }, TEXT_FIELD).outcome.kind).toBe('text');
+    // The editor binds the Ctrl forms in its own key map (errata E2.md entry 13).
+    expect(onMac.send(ctrlC, EDITOR).outcome.kind).toBe('text');
+    // The Output panel's field takes the key for the running program.
+    expect(onMac.send(ctrlC, OUTPUT_TEXTAREA).outcome.kind).toBe('output');
+    // Not a text field: the chord runs the command like any other.
+    expect(onMac.send(ctrlC, BUTTON).outcome).toEqual({ kind: 'run', command: 'ed.edit.copy' });
+    // A check box is no text field.
+    expect(onMac.send(ctrlC, element('INPUT', { type: 'checkbox' })).outcome.kind).toBe('run');
+    expect(onMac.state.edits).toEqual([]);
+    // Windows and Linux: Ctrl is the platform's own key, the browser edits.
+    const onWindows = harness({ os: 'windows', mode: 'editor' });
+    expect(onWindows.send(ctrlC, TEXT_FIELD)).toEqual({
+      outcome: { kind: 'text', command: 'ed.edit.copy' },
+      prevented: false,
+      stopped: false,
+    });
+    expect(onWindows.state.edits).toEqual([]);
   });
 
   it('Shift+Insert from the keypad (0 with NumLock off) is the paste chord of a text field too', () => {

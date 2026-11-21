@@ -329,3 +329,44 @@ test('Rewind restores the start address and the registers but not memory', async
   assert.equal(sim.state().hardwareEnabled, true);
   assert.equal(sim.cmdTraceInto(), Status.STOPPED);
 });
+
+test('opening a program over another one drops the listing selection, as LB_RESETCONTENT does', async () => {
+  // OpenFile (SIM68Ku.cpp:289) calls ListBox1->Items->Clear(); the VCL sends
+  // LB_RESETCONTENT, after which ItemIndex is -1.  If the new program starts
+  // at the PC already displayed, the PC box does not change, regPCChange does
+  // not run, and so no row is selected until the next highlight().  Gate I1
+  // round 3: the port kept the old row (a row of the new listing that is not
+  // the PC).  sim-ui 6.4; PATCHES.md section 3.
+  const { sim, host } = await fresh();
+  sim.load(fixture('debug.S68'), fixture('debug.L68'), { name: 'debug.S68' });
+  const debugRow = sim.listingHighlight;
+  assert.equal(bytesToText(sim.listingLine(debugRow)).slice(0, 8), '00001000', 'a fresh load selects the PC row');
+  sim.clearAllBreakpoints();
+  sim.cmdRun();
+  assert.equal(drive(sim, host).reason, 'stopped');
+  sim.rewind();
+  assert.equal(sim.boxText(Box.PC), '00001000');
+
+  // A second program with the same start address: no row is selected.
+  sim.load(fixture('io.S68'), fixture('io.L68'), { name: 'io.S68' });
+  assert.equal(sim.boxText(Box.PC), '00001000');
+  assert.equal(sim.listingHighlight, -1, 'the old index does not survive the new listing');
+
+  // The same program again, without Close: the same.
+  const again = await fresh();
+  again.sim.load(fixture('debug.S68'), fixture('debug.L68'));
+  assert.equal(again.sim.listingHighlight, debugRow);
+  again.sim.load(fixture('debug.S68'), fixture('debug.L68'));
+  assert.equal(again.sim.listingHighlight, -1);
+
+  // The next step selects the PC row of the new listing as usual.
+  assert.equal(sim.cmdTraceInto(), Status.STOPPED);
+  const row = sim.listingHighlight;
+  assert.notEqual(row, -1);
+  assert.equal(bytesToText(sim.listingLine(row)).slice(0, 8), sim.boxText(Box.PC));
+
+  // Close (ListBox1->Clear()) has always dropped the selection.
+  sim.close();
+  assert.equal(sim.listingHighlight, -1);
+  assert.equal(sim.listingLineCount, 0);
+});

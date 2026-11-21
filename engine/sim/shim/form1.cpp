@@ -44,6 +44,12 @@ TMemo::TMemo() : Lines(new TStrings()), Font(new TFont(FONT_TARGET_MESSAGES)) {
 }
 
 TListBox::TListBox() : Items(new TStrings()), ItemIndex(-1), Font(new TFont(FONT_TARGET_LISTING)), Count(*this) {}
+// ListBox1->Items->Clear() (OpenFile) drops the selection as well: the VCL's
+// TListBoxStrings.Clear sends LB_RESETCONTENT, after which LB_GETCURSEL (that
+// is, ItemIndex) is -1.  Without this a second program opened over a first
+// one kept the old row selected when its PC text did not change, so no
+// highlight() ran (PATCHES.md section 3).
+static void listingItemsCleared() { Form1->ListBox1->ItemIndex = -1; }
 void TListBox::Clear() {
   Items->Clear();
   ItemIndex = -1;
@@ -80,6 +86,7 @@ TForm1::TForm1() {
   regPC->Text.changed = regPCChanged; // OnChange = regPCChange
   cyclesDisplay = new TLabel();
   ListBox1 = new TListBox();
+  ListBox1->Items->cleared = listingItemsCleared;
   HeadingsLbl = new TLabel();
   HeadingsLbl->Font->id = FONT_TARGET_HEADINGS;
   FontDialogSimIO = new TFontDialog(FONT_SOURCE_IO_DIALOG);

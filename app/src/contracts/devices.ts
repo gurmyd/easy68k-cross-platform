@@ -207,6 +207,14 @@ export interface GlyphProvider {
    * no overhang.
    */
   textOverhang?(font: FontSpec): number;
+  /**
+   * The glyph Windows draws for byte $7F inside a text that has a byte of $80 or above: without ink,
+   * as wide as the fallback font's glyph (an outline face measures it per atlas, errata SH3.md entry
+   * 25). Null for a font in which the byte keeps its own glyph (the raster faces) or whose font files
+   * do not say. Added at gate I1 round 3 as an optional member (docs/porting/errata/W1.md, entry
+   * 13): a provider without it draws the byte's own glyph.
+   */
+  delInHighText?(font: FontSpec): Glyph | null;
 }
 /**
  * Reads one file below app/public/fonts/ for the glyph provider of the application

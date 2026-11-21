@@ -44,8 +44,28 @@ type Listener = () => void;
  * every repaint. A move of `liveRevision` alone (a Memory-panel edit) never re-centres.
  */
 export function stackRecentreDue(before: AppState['sim'], now: AppState['sim']): boolean {
-  if (now.repaint !== undefined) return now.repaint.stack !== before.repaint?.stack;
+  if (now.repaint !== undefined) {
+    const stack = (now.repaint.stack ?? 0) - (before.repaint?.stack ?? 0);
+    // StackFrm->Repaint() sends the Stack bit together with the StackRedraw bit
+    // (docs/requests/U2-stack-redraw-bit.md; engine/sim/shim/misc.cpp): only the Stack bits that
+    // came without one are updateDisplay() calls. A session without the counter: every one is.
+    const redraw = stackRedrawCount(now) - stackRedrawCount(before);
+    return stack > redraw;
+  }
   return now.viewRevision !== before.viewRevision;
+}
+
+/**
+ * Whether the engine asked for the Stack window to be redrawn where it is (StackFrm->Repaint(): a
+ * Hardware switch or push button, sim-ui §11.4) and not re-centred. Only a session that counts
+ * `sim.repaint.stackRedraw` can say so; without the counter this is never true.
+ */
+export function stackRedrawDue(before: AppState['sim'], now: AppState['sim']): boolean {
+  return stackRedrawCount(now) !== stackRedrawCount(before) && !stackRecentreDue(before, now);
+}
+
+function stackRedrawCount(sim: AppState['sim']): number {
+  return sim.repaint?.stackRedraw ?? 0;
 }
 
 function validChoice(value: number): number {
@@ -71,6 +91,7 @@ export class StackPanelModel {
       const before = last;
       last = now;
       if (stackRecentreDue(before, now)) this.updateDisplay();
+      else if (stackRedrawDue(before, now)) this.displayStack();
       else if (now.liveRevision !== before.liveRevision && now.phase !== 'running') this.displayStack();
     });
     const offEngine = this.ctx.sim.onEngineReplaced(() => this.coldStart());

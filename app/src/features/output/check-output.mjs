@@ -1,6 +1,7 @@
 // Browser check of the Output panel (ARCHITECTURE.md 9.2, SH4 acceptance). Owner: SH4.
 //
 //   node app/src/features/output/check-output.mjs [--browser chromium|webkit|all] [--out <dir>]
+//        [--only <groups>] [--browser-server <ws address> --page-host <name>]
 //
 // Starts the Vite dev server of app/ on a free port and drives the REAL Output panel inside the
 // real shell, with the REAL simulator engine running 68000 programs, in headless Chromium and
@@ -18,8 +19,8 @@
 //
 // What it checks, once with the Windows key map and once with the macOS key map where they differ:
 //
-//   - the panel: header strip, canvas backing store = surface size at device pixel ratios 1, 2
-//     and 1.5, whole-number zoom without smoothing, the prompt overlay, the text mirror, the
+//   - the panel: header strip, canvas backing store = surface size at device pixel ratios 1, 2,
+//     1.25, 1.5 and 3, whole-number zoom without smoothing, the prompt overlay, the text mirror, the
 //     collapse button, an accessibility scan;
 //   - each rule of 2.9.4 with real key events: F9 runs and is not seen by task 19, its key-up is;
 //     F2, F4 and Shift+F2 are seen by task 19 and run nothing; Alt+Enter is seen by task 19 and by
@@ -82,6 +83,14 @@ const option = (name, fallback) => {
 const browserChoice = option('--browser', 'all');
 const outDir = resolve(option('--out', join(repoRoot, 'build', 'output-check')));
 mkdirSync(outDir, { recursive: true });
+
+// Diagnosis only: run the browsers elsewhere, for example WebKit for Linux in the Playwright
+// container on a Windows or macOS machine. --browser-server takes the ws:// address that
+// `npx playwright run-server` prints there; --page-host is the name under which that machine
+// reaches this one (host.docker.internal for Docker Desktop). The dev server then listens on
+// every interface instead of 127.0.0.1 only.
+const browserServer = option('--browser-server', '');
+const pageHost = option('--page-host', '127.0.0.1');
 
 const BROWSERS = { chromium, webkit };
 const browsers = browserChoice === 'all' ? ['chromium', 'webkit'] : [browserChoice];
@@ -1705,13 +1714,23 @@ async function fullScreenPass(browser, name) {
 
 // --- a device pixel ratio that is not a whole number --------------------------------------
 
-/** 2.5: "Device pixel ratio never changes the backing store" - also at 150 %, a common Windows setting. */
-async function fractionalRatioPass(browser, name) {
-  const ratio = 1.5;
+/**
+ * 2.5: "Device pixel ratio never changes the backing store" - also at ratios that are not whole
+ * numbers (125 % and 150 % are common Windows settings, 3 a common phone). What the product
+ * guarantees at any ratio: the canvas's backing store is the surface, pixel for pixel, and it is
+ * shown without smoothing. How a browser maps one CSS pixel onto 1.5 device pixels on screen is
+ * the browser's business (some columns are one device pixel wide, some two), so only this is
+ * checked on screen: no device pixel is a blend of the red pixel and the black around it.
+ *
+ * The pass prints enough to diagnose a failure from a CI log alone: how long the presenter took,
+ * the 3x3 pixels around the red pixel in the backing store, and where the canvas stands.
+ */
+async function fractionalRatioPass(browser, name, ratio) {
   const p = `${name}/ratio ${ratio}:`;
   const context = await newContext(browser, { deviceScaleFactor: ratio });
   const h = await openHarness(context);
   const { page, PICTURE } = h;
+  const { pixel, box } = PICTURE;
   await h.start('pictureProgram');
   await h.untilLong(PICTURE.drawn, 1);
   await page.locator('.e68-output__header select').selectOption('1');
@@ -1724,17 +1743,62 @@ async function fractionalRatioPass(browser, name) {
     canvas.width === 640 && canvas.height === 480 && canvas.cssWidth === 640 && canvas.cssHeight === 480,
     `${canvas.width}x${canvas.height} shown ${canvas.cssWidth}x${canvas.cssHeight}`,
   );
+  check(`${p} no smoothing (image-rendering: pixelated)`, canvas.rendering === 'pixelated', canvas.rendering);
   // The program has drawn; the presenter copies it to the canvas at its next animation frame.
-  await h.untilPresented(PICTURE.pixel.x, PICTURE.pixel.y, rgb(PICTURE.pixel.color));
-  const drawn = [
-    await h.canvasPixel(PICTURE.pixel.x, PICTURE.pixel.y),
-    await h.canvasPixel(PICTURE.pixel.x + 1, PICTURE.pixel.y),
-  ];
+  const started = Date.now();
+  const presented = await h.untilPresented(pixel.x, pixel.y, rgb(pixel.color));
+  const waited = Date.now() - started;
+  // The 3x3 pixels around the red pixel: only the centre is red, the rest black.
+  const around = [];
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) around.push(await h.canvasPixel(pixel.x + dx, pixel.y + dy));
+  }
+  const wanted = [0, 0, 0, 0, rgb(pixel.color), 0, 0, 0, 0];
   check(
     `${p} the canvas holds the pixels the program drew, unscaled`,
-    same(drawn, [rgb(PICTURE.pixel.color), 0]) && canvas.rendering === 'pixelated',
-    `${drawn.map(hex).join(' ')}, ${canvas.rendering}`,
+    same(around, wanted),
+    `3x3 around (${pixel.x},${pixel.y}): ${around.map(hex).join(' ')}; wanted ${wanted.map(hex).join(' ')}; ` +
+      `presented ${presented ? 'after' : 'NOT within'} ${waited} ms; canvas at ${canvas.left},${canvas.top}`,
   );
+  const corners = [
+    await h.canvasPixel(box.left, box.top),
+    await h.canvasPixel(box.right - 1, box.bottom - 1),
+    await h.canvasPixel(box.right, box.bottom),
+  ];
+  check(
+    `${p} the canvas holds the program's filled box, edges exact`,
+    same(corners, [rgb(box.color), rgb(box.color), 0]),
+    corners.map(hex).join(' '),
+  );
+  // On screen: how many device pixels the red pixel covers is the browser's business (see above),
+  // but without smoothing every device pixel around it has the colour of one of the surface pixels
+  // nearby (red, black, or the white of the text above) - a blend of two is what a student would
+  // see as a blurred picture.
+  const palette = new Set();
+  for (let y = Math.max(0, pixel.y - 2); y <= pixel.y + 5; y++) {
+    for (let x = Math.max(0, pixel.x - 2); x <= pixel.x + 5; x++) palette.add(await h.canvasPixel(x, y));
+  }
+  const x0 = Math.floor((canvas.left + pixel.x) * ratio);
+  const y0 = Math.floor((canvas.top + pixel.y) * ratio);
+  const span = Math.ceil(ratio) + 3;
+  const points = [];
+  for (let dy = -1; dy < span - 1; dy++) for (let dx = -1; dx < span - 1; dx++) points.push([x0 + dx, y0 + dy]);
+  const screen = await h.screenPixels(points);
+  const rows = [];
+  for (let row = 0; row < span; row++)
+    rows.push(
+      screen
+        .slice(row * span, (row + 1) * span)
+        .map(hex)
+        .join(' '),
+    );
+  check(
+    `${p} on screen the red pixel and its neighbours are whole surface pixels, not blended`,
+    screen.every((c) => palette.has(c)) && screen.includes(rgb(pixel.color)),
+    `device pixels from (${x0 - 1},${y0 - 1}), row by row: ${rows.join(' / ')}; ` +
+      `colours of the surface nearby: ${[...palette].map(hex).join(' ')}`,
+  );
+  await h.shot(`${name}-ratio${ratio}-fractional.png`);
   noErrors(p, h);
   await context.close();
 }
@@ -2281,7 +2345,9 @@ async function appPass(browser, name) {
 const PASSES = [
   ['panel', 'the panel, device pixel ratio 1', (browser, name) => presentationPass(browser, name, 1)],
   ['panel', 'the panel, device pixel ratio 2', (browser, name) => presentationPass(browser, name, 2)],
-  ['panel', 'the panel, device pixel ratio 1.5', fractionalRatioPass],
+  ['panel', 'the panel, device pixel ratio 1.25', (browser, name) => fractionalRatioPass(browser, name, 1.25)],
+  ['panel', 'the panel, device pixel ratio 1.5', (browser, name) => fractionalRatioPass(browser, name, 1.5)],
+  ['panel', 'the panel, device pixel ratio 3', (browser, name) => fractionalRatioPass(browser, name, 3)],
   ['panel', 'the panel: prompt, collapse, accessibility', panelPass],
   ['keys', 'keys, Windows key map', (browser, name) => keysPass(browser, name, 'windows')],
   ['keys', 'keys, macOS key map', (browser, name) => keysPass(browser, name, 'mac')],
@@ -2315,18 +2381,27 @@ async function main() {
     // The page must not reload while it is being checked, whatever is edited meanwhile; and the
     // cache of prepared dependencies is this run's own, so that other dev servers cannot swap it.
     cacheDir: join(outDir, '.vite'),
-    server: { port: await freePort(), strictPort: false, host: '127.0.0.1', hmr: false, watch: null },
+    server: {
+      port: await freePort(),
+      strictPort: false,
+      host: pageHost === '127.0.0.1' ? '127.0.0.1' : '0.0.0.0',
+      allowedHosts: [pageHost],
+      hmr: false,
+      watch: null,
+    },
   });
   await server.listen();
   const address = server.httpServer?.address();
   const port = typeof address === 'object' && address ? address.port : 0;
-  harnessUrl = `http://127.0.0.1:${port}/src/features/output/testing/harness.html`;
-  appUrl = `http://127.0.0.1:${port}/`;
+  harnessUrl = `http://${pageHost}:${port}/src/features/output/testing/harness.html`;
+  appUrl = `http://${pageHost}:${port}/`;
   console.log(`Harness: ${harnessUrl}\nApplication: ${appUrl}\nScreenshots: ${outDir}`);
 
   try {
     for (const name of browsers) {
-      const browser = await BROWSERS[name].launch();
+      const browser = browserServer
+        ? await BROWSERS[name].connect(browserServer.replace('{browser}', name))
+        : await BROWSERS[name].launch();
       try {
         useFakeFullscreen = false;
         const probe = await probeFullScreen(browser);

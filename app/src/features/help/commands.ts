@@ -1,9 +1,9 @@
 // The command handlers of the Help menus and of F1. Owner: H1.
 // ARCHITECTURE.md 1.3.2, 1.3.4, 1.5, 9.2 (H1); docs/porting/errata/W3.md entries 8 and 24.
 
-import type { AppContext, CommandHandler, CommandId, FileFilter } from '../../contracts';
+import type { AppContext, CommandHandler, CommandId, FileFilter, FilesRevealArg } from '../../contracts';
 import { ENTRY_PAGES, editorHelpPage, simulatorHelpPage, type EditorWordContext } from '../../core/help';
-import { panelOf, showPanel } from '../../state/panels';
+import { panelOf } from '../../state/panels';
 import { applicationBase } from './controller';
 import { copyExamples, examplesFolderExists, loadExampleList, WEB_EXAMPLES_DIR, type ExampleFetch } from './examples';
 import { editorHasFocus, readEditorWordContext } from './editor-context';
@@ -28,8 +28,9 @@ export async function showExamples(ctx: AppContext, fetchFn: ExampleFetch = brow
       if (!(await examplesFolderExists(ctx.vfs))) {
         await copyExamples(ctx.vfs, WEB_EXAMPLES_DIR, await loadExampleList(base, fetchFn), base, fetchFn);
       }
-      showPanel(ctx, 'files');
-      ctx.dialogs.toast(`The examples are in ${WEB_EXAMPLES_DIR} (Files panel).`);
+      // 5.8 "shows it in the Files panel": the Files feature's own command, with the typed argument
+      // that shows the panel (never hides it) and reveals the folder (errata W1.md 12.3).
+      await ctx.commands.run('app.files.toggle', { reveal: WEB_EXAMPLES_DIR } satisfies FilesRevealArg);
       return;
     }
     // Desktop: a folder chooser (FileDialogs.chooseFolder, added at gate I1). A file dialogs object

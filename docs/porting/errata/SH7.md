@@ -80,6 +80,13 @@ needed.
   were missed, so a late timer still fires once) would give 20; that is SH8's file and a change to
   the wording of 4.5.3, so it is left to SH8 and the gate.
 
+  Gate I1, round 3: withdrawn. SH8 measured a Windows `SetTimer` timer of 500 ms on Windows 11
+  (errata SH8.md entry 26): 19 ticks in 10 s, each period starting when the late tick is handled,
+  rounded up to the clock tick. So the original does not keep its period either, and the statement
+  above that it gives 20 was wrong; `due += period` would make the port differ. The session test now
+  pins the rule SH8 pinned in `timers.test.ts`: exactly 19 handled interrupts in 10 s at 16 ms
+  frames, none after Pause.
+
 ## 7. The browser check runs on the application's real session (gate I1)
 
 - Was: part 2 of `check-hardware.mjs` swapped the parts of the shell's inert session for the real
@@ -100,3 +107,29 @@ needed.
   `--without-engines` answers every request for `engine/dist` with 404 so the case can be run on a
   machine that has the engines. The auto-interrupt check box is now clicked with `locator.check()`
   on its input, since the kit's Checkbox passes pointer events to it (round 1 clicked the label).
+
+## 9. The browser check without engine/dist, measured on a real server (gate I1, round 3)
+
+- Was: the round-2 reviewer answered every engine/dist request with 200 text/html (his reading of
+  what the development server does, from a plain `fetch` probe) and Chromium then logged "Failed to
+  load module script: Expected a JavaScript-or-Wasm module script but the server responded with a
+  MIME type of "text/html"", which the check counted.
+- Measured: a scratch copy of the tree without `engine/dist` (`build/SH7/noeng`), Vite 8.3.8, both
+  browsers. The development server answers the module import of `sim68k-loader.mjs` with 404 (the
+  browser's request is a script request, which gets no index.html fallback) and the `fetch` of
+  `sim68k.wasm` with 200 text/html (its index.html). The check passed there unchanged (16 of 16 in
+  Chromium); the MIME message appears only with a server that answers module requests with HTML, as
+  a static host with a start-page fallback does.
+- Does: the MIME and module-import messages of both browsers ("Failed to load module script",
+  "... MIME type ...", "Importing a module script failed") are left out like "Failed to load
+  resource", and only when the message names a file of engine/dist (the location's URL is appended).
+  `--without-engines` now takes `--engine-answer vite|html|404`: `vite` (the default) reproduces the
+  measured answers, `html` the static host with a fallback, `404` a plain static host. All three
+  pass in both browsers, and the run in the copy without engines passes too (32 of 32). Every answer
+  to an engine/dist request, the system, the browser versions and every counted error are printed,
+  so a failure on a CI runner can be read from its log.
+- Also: the development server takes a dependency cache of its own below `--out`, the page is
+  loaded again (up to three times) when React reports an invalid hook call (two bundles of React
+  after a re-bundle with a fresh cache), not only after a 504, and a screenshot that times out is
+  tried once more and then printed, not counted (it is a record for a person; the panel's contents
+  are checked from the DOM).

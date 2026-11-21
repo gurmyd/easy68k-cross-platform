@@ -188,6 +188,18 @@ The observations of 10.3, checked against the module:
   `cmdRunToCursor`.
 - `writeBytes()` and `memory` change memory without any host call: no `hardwareUpdate`, no
   `memoryLivePaint`. A panel that pokes memory repaints the Hardware panel itself.
+- `listingHighlight` is -1 right after `load()`, until the next `highlight()` of the engine, whenever
+  the program starts at the PC already displayed (for example a second program opened over a
+  rewound first one, or the same program opened again without Close): the original's
+  `ListBox1->Items->Clear()` drops the selection and the unchanged PC box runs no `regPCChange`.
+  The next step, Go to PC or any change of the PC box selects the PC row. (Until gate I1 round 3 the
+  engine kept the old index, a row of the new listing that is not the PC; `docs/porting/errata/W4.md`
+  entry 9.)
+- `host.repaint(bits)`: `StackFrm->updateDisplay()` (redraw and re-centre on the selected register)
+  sends `RepaintBit.Stack`; `StackFrm->Repaint()` (redraw where it is: a Hardware switch click, a
+  push button, showing the Hardware window, its address commits) sends
+  `RepaintBit.Stack | RepaintBit.StackRedraw` (8 | 16). A host that counts both re-centres the Stack
+  window only when `Stack` came more often than `StackRedraw` (since gate I1 round 3; entry 10).
 
 ### 4.2 Assembler
 

@@ -42,7 +42,10 @@ export interface NativeFileDialogs {
   open(request: OpenRequest): Promise<VPath[] | null>;
   /** Appends request.defaultExt when the user typed no extension. macOS asks about overwriting itself. */
   save(request: SaveRequest): Promise<VPath | null>;
-  chooseFolder(title: string): Promise<VPath | null>;
+  /** `startDir` (added at gate I1 round 3, docs/porting/errata/W1.md, entry 13): the folder the
+   *  dialog opens in, a VPath of /disk, from `FolderRequest.startDir`. Optional; an implementation
+   *  that ignores it opens where the system chooses. */
+  chooseFolder(title: string, startDir?: VPath | null): Promise<VPath | null>;
 }
 /** A file or folder dropped on the window, as the main process names it (Platform.grantDroppedFile). */
 export interface DroppedEntry {

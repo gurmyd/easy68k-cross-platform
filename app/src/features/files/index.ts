@@ -3,7 +3,8 @@
 //
 //   createFileDialogs(ctx)   the FileDialogs service of the context (dialogs.ts); in a browser it
 //                            comes with the provider "From this computer..."
-//   feature.commands         app.files.toggle - shows or hides the Files panel
+//   feature.commands         app.files.toggle - shows or hides the Files panel; with { reveal }
+//                            (FilesRevealArg) shows it and reveals that path (reveal.ts)
 //   feature.panels           the Files panel of Editor mode (FilesPanel.tsx)
 //   feature.dialogs          file.open, file.save (FileDialog.tsx), files.name (NameDialog.tsx)
 //   feature.init             drops on the window (drop.ts), and the store's problems as messages
@@ -12,7 +13,7 @@
 
 import type { AppContext, FeatureModule, FileDialogs, FileSourceProvider, FolderRequest, VPath } from '../../contracts';
 import { onStoreProblem, storageProblem } from '../../fs/browser-backend';
-import { panelVisible, togglePanel } from '../../state/panels';
+import { panelVisible, showPanel, togglePanel } from '../../state/panels';
 import { NAME_DIALOG_ID } from './actions';
 import { carriesFiles, droppedItems, hasDom, pickFiles, readFileBytes } from './browser-io';
 import { createFileDialogService, OPEN_DIALOG_ID, SAVE_DIALOG_ID, type FileDialogService } from './dialogs';
@@ -22,6 +23,7 @@ import { FilesPanel } from './FilesPanel';
 import { NameDialog } from './NameDialog';
 import { EDITOR_OPEN_FILTERS, normalizeDefaultExt } from './filters';
 import { NATIVE_PROVIDER_ID, UPLOAD_PROVIDER_ID, canTakeDroppedFolder } from './providers';
+import { requestReveal, revealPathOf } from './reveal';
 import { IMPORTED_DIR, displayPath, importOne } from './store';
 
 /**
@@ -170,7 +172,17 @@ export const feature: FeatureModule = {
   id: 'files',
   commands: {
     'app.files.toggle': {
-      run: (ctx) => togglePanel(ctx, 'files'),
+      // With FilesRevealArg { reveal } (contracts/commands.ts): show the panel, never hide it, and
+      // reveal the path, also when the panel mounts only now. Without it: show or hide the panel.
+      run: (ctx, arg) => {
+        const reveal = revealPathOf(arg);
+        if (reveal === null) {
+          togglePanel(ctx, 'files');
+          return;
+        }
+        showPanel(ctx, 'files');
+        requestReveal(ctx, reveal, true);
+      },
       checked: (_state, ctx) => panelVisible(ctx, 'files'),
     },
   },

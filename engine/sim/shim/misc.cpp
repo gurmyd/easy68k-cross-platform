@@ -29,7 +29,12 @@ void TMemoryFrm::Repaint() { host_repaint(REPAINT_MEMORY); }
 static TStackFrm theStackFrm;
 TStackFrm *StackFrm = &theStackFrm;
 void TStackFrm::updateDisplay() { host_repaint(REPAINT_STACK); }
-void TStackFrm::Repaint() { host_repaint(REPAINT_STACK); }
+// Repaint() redraws the Stack window where it is; updateDisplay() also
+// re-centres it on the selected register (sim-ui 11.4).  Repaint() names both
+// bits, so a host that only knows REPAINT_STACK still redraws, and a host that
+// counts REPAINT_STACK_REDRAW can tell the two apart: re-centre only when the
+// STACK bit came more often than the STACK_REDRAW bit.
+void TStackFrm::Repaint() { host_repaint(REPAINT_STACK | REPAINT_STACK_REDRAW); }
 
 // ---- Auto Trace Options -----------------------------------------------------------
 TAutoTraceOptions::TAutoTraceOptions() : DisableDisplay(new TCheckBox()) {}

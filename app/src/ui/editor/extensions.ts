@@ -206,7 +206,8 @@ export const editorKeymap: readonly KeyBinding[] = [
 
 /**
  * The page's clipboard functions, for the clipboard keys below. The editor session provides them
- * (`session.clipboardEnv`, read at the moment of the key press); without them those keys do nothing.
+ * (`session.clipboardEnv`, read at the moment of the key press); without them those keys do nothing
+ * (and are still taken, so that no later binding of the same key, such as Ctrl-v's page down, runs).
  */
 export const clipboardKeysEnv = Facet.define<() => ClipboardEnv, (() => ClipboardEnv) | null>({
   combine: (values) => values[0] ?? null,
@@ -215,7 +216,10 @@ export const clipboardKeysEnv = Facet.define<() => ClipboardEnv, (() => Clipboar
 function clipboardKey(action: 'cut' | 'copy' | 'paste') {
   return (view: EditorView): boolean => {
     const env = view.state.facet(clipboardKeysEnv)?.();
-    if (!env) return false;
+    // Without the clipboard functions the key still counts as handled: returning false would let
+    // CodeMirror go on to the next binding of the same key, which on a Mac is standardKeymap's
+    // emacs-style Ctrl-v (page down). Such a key does nothing instead.
+    if (!env) return true;
     const target = { kind: 'editor', view } as const;
     if (action === 'paste') void pasteFromMenu(target, env);
     else void cutOrCopy(target, action, env);

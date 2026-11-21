@@ -38,6 +38,7 @@ import {
   type InputEvent68k,
   type ListingViewApi,
   type LoadKind,
+  type LoadOptions,
   type LoadOrigin,
   type LogServiceApi,
   type PendingAlert,
@@ -194,6 +195,12 @@ export interface RepaintCounts {
   readonly breakpoints: number;
   readonly memory: number;
   readonly stack: number;
+  /**
+   * `StackFrm->Repaint()`: the Stack window redraws where it is (`RepaintBit.StackRedraw`). The
+   * engine sends it together with `Stack`, so `stack` moves as well; the Stack panel re-centres
+   * only when `stack` moved more often (docs/requests/U2-stack-redraw-bit.md).
+   */
+  readonly stackRedraw: number;
 }
 
 /** Every panel a RepaintBit names. */
@@ -224,7 +231,7 @@ export class SimRunController implements RunController {
   private readonly replacedListeners = new Set<() => void>();
 
   private viewRev = 0;
-  private repaints: RepaintCounts = { listing: 0, breakpoints: 0, memory: 0, stack: 0 };
+  private repaints: RepaintCounts = { listing: 0, breakpoints: 0, memory: 0, stack: 0, stackRedraw: 0 };
   private liveRev = 0;
   private livePending = false;
   private dirty = false;
@@ -364,19 +371,51 @@ export class SimRunController implements RunController {
 
   /* ================================================================== loads (4.7) */
 
-  async open(path: VPath, origin: LoadOrigin): Promise<void> {
+  /**
+   * 4.7. With `options.confirmed` the caller has just asked step 2 with `confirmLoad(origin)` and
+   * got OK, and step 2 is skipped.
+   */
+  async open(path: VPath, origin: LoadOrigin, options?: LoadOptions): Promise<void> {
     await this.start();
     if (this.phaseNow === 'loading' || this.asking) return;
-    const active = this.phaseNow !== 'idle';
-    const ask =
-      (origin === 'drop' && this.programNow !== null) || ((origin === 'open' || origin === 'execute') && active);
-    if (ask) {
+    if (options?.confirmed !== true && this.needsCaution(origin)) {
       if (!(await this.confirmThenLoad())) return;
     } else {
       this.setPhase('loading');
     }
     this.publish();
     await this.load(path, origin);
+  }
+
+  /**
+   * Step 2 of 4.7 on its own (docs/requests/W1-load-confirm.md): asks the Caution question exactly
+   * when `open(path, origin)` would ask it now, with the program held while the question is open,
+   * and resolves true when the load may go on (no question needed, or OK), false on Cancel. A
+   * request made while a load or another question is under way is ignored, as `open` ignores it:
+   * false. The hold ends with the answer, so a program that was running goes on until the caller's
+   * `open(path, origin, { confirmed: true })` puts the controller into 'loading'.
+   */
+  async confirmLoad(origin: LoadOrigin): Promise<boolean> {
+    await this.start();
+    if (this.phaseNow === 'loading' || this.asking || this.disposed) return false;
+    if (!this.needsCaution(origin)) return true;
+    this.asking = true;
+    const release = this.hold();
+    let confirmed = false;
+    try {
+      confirmed = await this.deps.ui.confirmCaution();
+    } catch (error) {
+      this.deps.ui.report('The Caution question failed', error);
+    }
+    this.asking = false;
+    release();
+    return confirmed && !this.disposed;
+  }
+
+  /** Step 2 of 4.7: a drop with a program loaded, File > Open or Execute while one is active (sim-ui §8.4). */
+  private needsCaution(origin: LoadOrigin): boolean {
+    const active = this.phaseNow !== 'idle';
+    return (origin === 'drop' && this.programNow !== null) || ((origin === 'open' || origin === 'execute') && active);
   }
 
   async reload(): Promise<void> {
@@ -1256,13 +1295,14 @@ export class SimRunController implements RunController {
 
   /** The panels named by `bits` (RepaintBit) must re-read their data (4.6). */
   private repainted(bits: number): void {
-    const { listing, breakpoints, memory, stack } = this.repaints;
+    const { listing, breakpoints, memory, stack, stackRedraw } = this.repaints;
     const count = (counter: number, bit: number): number => ((bits & bit) !== 0 ? counter + 1 : counter);
     this.repaints = {
       listing: count(listing, RepaintBit.Listing),
       breakpoints: count(breakpoints, RepaintBit.Breakpoints),
       memory: count(memory, RepaintBit.Memory),
       stack: count(stack, RepaintBit.Stack),
+      stackRedraw: count(stackRedraw, RepaintBit.StackRedraw),
     };
     this.viewRev++;
     this.dirty = true;

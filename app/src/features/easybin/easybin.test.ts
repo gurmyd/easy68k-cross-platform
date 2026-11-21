@@ -9,7 +9,7 @@ import type { FileDialogs, OpenRequest, SaveRequest } from '../../contracts';
 import { TITLE } from '../../core/easybin';
 import { shellStateOf } from '../../state/shell';
 import { createFakePlatform, createTestApplication } from '../../state/testing';
-import { keyByte, sameRow } from './EasybinWorkspace';
+import { asciiRuns, hexRuns, keyByte, reuseRows, sameRow } from './EasybinWorkspace';
 import { ABOUT_DIALOG_ID, aboutBoxKey, openDropped } from './commands';
 import { feature } from './index';
 import { easybinOf } from './session';
@@ -337,6 +337,51 @@ describe('redrawing the memory rows', () => {
     model.setField('outLength', '000010');
     const coloured = model.viewRows();
     expect(coloured.map((row, i) => !sameRow(row, after[i] as (typeof after)[number])).filter(Boolean).length).toBe(1);
+  });
+
+  it('a typed byte makes one new row item; every other row keeps its item (one element per key, not one per row)', () => {
+    const { model } = start();
+    model.setRows(60);
+    model.ensureCursor();
+    let made = 0;
+    const make = (_row: unknown, index: number) => ({ index, serial: ++made });
+    const first = reuseRows([], model.viewRows(), make);
+    expect(made).toBe(60);
+    expect(model.typeByte(0x41)).not.toBe('beep');
+    const second = reuseRows(first, model.viewRows(), make);
+    expect(made).toBe(61);
+    expect(second.filter((d, i) => d !== first[i]).map((d) => d.item.index)).toEqual([0]);
+    // The same at the end of memory (the cost does not depend on the address).
+    model.setField('address', 'FFFFF0');
+    const third = reuseRows(second, model.viewRows(), make);
+    const madeBefore = made;
+    model.ensureCursor();
+    expect(model.typeByte(0x42)).not.toBe('beep');
+    reuseRows(third, model.viewRows(), make);
+    expect(made - madeBefore).toBe(1);
+    // A row is drawn as runs of one colour: the text is the original's, cell by cell.
+    model.setField('firstAddress', 'FFFFF4');
+    model.setField('outLength', '000004');
+    model.setSplit(2);
+    model.memory[0xfffff0] = 0x7f;
+    model.memory[0xfffff1] = 0x41;
+    model.touch();
+    const [last] = model.viewRows();
+    const lastRow = last as NonNullable<typeof last>;
+    expect(
+      hexRuns(lastRow)
+        .map((r) => r.text)
+        .join(''),
+    ).toBe(lastRow.hex.map((c) => `${c} `).join(''));
+    expect(hexRuns(lastRow).map((r) => r.tone)).toEqual(['gray', 'file0', 'file1', 'file0', 'file1', 'gray']);
+    expect(asciiRuns(lastRow)).toEqual([{ tone: false, text: '□A--------------' }]);
+    // The row past the end of memory: one run of 16 cells drawn as invalid.
+    const beyond = model.viewRows()[1] as NonNullable<typeof last>;
+    expect(asciiRuns(beyond)).toEqual([{ tone: true, text: '----------------' }]);
+    expect(hexRuns(beyond)).toEqual([{ tone: 'invalid', text: 'xx '.repeat(16) }]);
+    // Fewer rows: the list shrinks with them.
+    model.setRows(10);
+    expect(reuseRows(third, model.viewRows(), make)).toHaveLength(10);
   });
 });
 

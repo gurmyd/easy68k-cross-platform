@@ -430,6 +430,66 @@ describe.skipIf(!enginesBuilt)('loading (needs engine/dist)', { timeout: ENGINE_
       expect(kit.engineCalls().filter((name) => name === 'load')).toHaveLength(1);
       expect(asked()).toBe(1);
     });
+
+    describe('confirmLoad: step 2 on its own (docs/requests/W1-load-confirm.md)', () => {
+      it('with no program it resolves true without a question', async () => {
+        await start();
+        expect(await kit.controller.confirmLoad('drop')).toBe(true);
+        expect(asked()).toBe(0);
+      });
+
+      it('with a program it asks once, holds the program meanwhile and resolves the answer', async () => {
+        let answer = true;
+        await start({ caution: () => answer });
+        await kit.open(counter);
+        kit.controller.run();
+        const release = kit.block('caution');
+        kit.forgetEngineLog();
+        const asking = kit.controller.confirmLoad('drop');
+        await settle();
+        expect(kit.controller.held).toBe(true);
+        await kit.controller.open(KIT_PROGRAM_PATH, 'drop'); // a load request meanwhile is ignored
+        expect(kit.engineCalls()).not.toContain('load');
+        release();
+        expect(await asking).toBe(true);
+        expect(asked()).toBe(1);
+        expect(kit.controller.held).toBe(false);
+        expect(kit.controller.phase).toBe('running'); // nothing loads until the caller's open
+        answer = false;
+        expect(await kit.controller.confirmLoad('drop')).toBe(false);
+        expect(asked()).toBe(2);
+        expect(kit.controller.phase).toBe('running');
+      });
+
+      it('asks exactly when open would ask', async () => {
+        await start();
+        await kit.open(counter);
+        expect(await kit.controller.confirmLoad('open')).toBe(true); // stopped: no question
+        expect(await kit.controller.confirmLoad('reload')).toBe(true);
+        expect(asked()).toBe(0);
+        expect(await kit.controller.confirmLoad('drop')).toBe(true); // a program is loaded
+        expect(asked()).toBe(1);
+        kit.controller.run();
+        expect(await kit.controller.confirmLoad('open')).toBe(true);
+        expect(await kit.controller.confirmLoad('execute')).toBe(true);
+        expect(await kit.controller.confirmLoad('commandLine')).toBe(true);
+        expect(asked()).toBe(3);
+      });
+
+      it("open(path, 'drop', { confirmed: true }) asks nothing and loads", async () => {
+        await start();
+        await kit.open(counter);
+        kit.controller.run();
+        kit.forgetEngineLog();
+        await kit.controller.open(KIT_PROGRAM_PATH, 'drop', { confirmed: true });
+        expect(asked()).toBe(0);
+        expect(kit.engineCalls()).toContain('load');
+        expect(kit.controller.phase).toBe('idle');
+        // Without it the same request asks.
+        await kit.controller.open(KIT_PROGRAM_PATH, 'drop', { confirmed: false });
+        expect(asked()).toBe(1);
+      });
+    });
   });
 
   describe("the 'loading' phase (4.7 step 3)", () => {

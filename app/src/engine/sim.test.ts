@@ -291,6 +291,40 @@ describe.skipIf(!enginesBuilt)('createSimEngine with the real engine (needs engi
     });
   });
 
+  describe('the listing selection (listingHighlight) across loads', () => {
+    // OpenFile's ListBox1->Items->Clear() drops the selection, as the VCL's LB_RESETCONTENT does;
+    // with the PC box unchanged no highlight() follows, so no row is selected (sim-ui 6.4).
+    // Gate I1 round 3: the engine kept the old index, a row of the new listing that is not the PC.
+    const rowAddress = (test: TestEngine, row: number) => textOf(test.engine.listingLine(row)).slice(0, 8);
+
+    it('a program opened over a rewound one selects no row until the next step', async () => {
+      const test = await createTestEngine();
+      const engine = test.engine;
+      engine.load(fixture('debug.S68'), fixture('debug.L68'), { name: 'debug.S68', kind: 'open' });
+      expect(rowAddress(test, engine.listingHighlight)).toBe('00001000');
+      engine.clearAllBreakpoints();
+      runProgram(engine);
+      engine.rewind();
+      expect(engine.boxText(Box.PC)).toBe('00001000');
+      for (const kind of ['open', 'reload'] as const) {
+        engine.load(fixture('io.S68'), fixture('io.L68'), { name: 'io.S68', kind });
+        expect(engine.boxText(Box.PC), kind).toBe('00001000');
+        expect(engine.listingHighlight, kind).toBe(-1);
+      }
+      expect(engine.cmdTraceInto()).toBe(RunStatus.Stopped);
+      expect(engine.listingHighlight).toBeGreaterThan(-1);
+      expect(rowAddress(test, engine.listingHighlight)).toBe(engine.boxText(Box.PC));
+      test.release();
+    });
+
+    it('a fresh instance selects the PC row of the same program', async () => {
+      const test = await createTestEngine();
+      test.engine.load(fixture('io.S68'), fixture('io.L68'), { name: 'io.S68' });
+      expect(rowAddress(test, test.engine.listingHighlight)).toBe('00001000');
+      test.release();
+    });
+  });
+
   describe('the three facts of 3.2', () => {
     it('1. state survives load, and only a new instance is in start-up state', async () => {
       const test = await createTestEngine();

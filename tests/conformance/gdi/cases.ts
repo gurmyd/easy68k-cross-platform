@@ -99,6 +99,12 @@ export const SUITES: readonly { readonly name: string; readonly machine: boolean
     machine: true,
     about: 'outline-face text with visible glyphs (font smoothing); for looking at, not for comparing',
   },
+  {
+    name: 'text-outline-italic',
+    machine: true,
+    about:
+      'as text-outline, in italic: how far the slanted ink widens the cell (gate I1 review round 2); the ink outside the cell is smoothed',
+  },
 ];
 
 // ---------------------------------------------------------------------------------------------
@@ -1007,6 +1013,52 @@ function textOutlineZero(): GdiCase[] {
   return cases;
 }
 
+/** Strings of the suite text-outline-italic: wide and slanted glyphs at both ends of the cell. */
+export const OUTLINE_ITALIC_STRINGS: readonly (readonly number[])[] = [
+  ASCII('Wi Xp_'),
+  ASCII('%'),
+  [0xc4],
+  [0xe9, 0xc4, 0xe9],
+  [0xaf, 0x25],
+  [0x7e, 0xbe],
+  [0x09, 0xe9, 0xe9, 0x7f, 0x1d],
+];
+
+/**
+ * The suite text-outline-italic: OUTLINE_ITALIC_STRINGS in italic in the three monospaced outline
+ * faces, at sizes where a probe found the widest overhang (review round 2 of gate I1: Courier New
+ * and Lucida Console 24 pt italic; gate I1 round 3: Lucida Console 29 pt, Consolas 19 pt). Strings
+ * with $7F only at sizes with an outline atlas. Machine-dependent (the ink outside the cell is
+ * smoothed), so CI does not compare it on another Windows; golden.test.ts checks its cells.
+ */
+function textOutlineItalic(): GdiCase[] {
+  const suite = 'text-outline-italic';
+  const cases: GdiCase[] = [];
+  for (const name of ['Courier New', 'Lucida Console', 'Consolas']) {
+    for (const size of [8, 9, 12, 13, 19, 24, 29, 36, 72]) {
+      for (const bytes of OUTLINE_ITALIC_STRINGS) {
+        if (bytes.includes(0x7f) && ![8, 9, 12, 24, 36].includes(size)) continue;
+        const large = size >= 72;
+        cases.push({
+          id: `${suite}-${pad(cases.length)}`,
+          suite,
+          width: large ? 480 : 320,
+          height: large ? 140 : size >= 29 ? 70 : 40,
+          ops: [
+            { op: 'bg', color: 0x336699 },
+            { op: 'font', name, size, style: 2 },
+            { op: 'fill', color: 0x0000ff },
+            { op: 'fontcolor', color: 0x0000ff },
+            { op: 'moveto', x: 1, y: 1 },
+            { op: 'text', x: large ? 20 : 10, y: 4, bytes: [...bytes] },
+          ],
+        });
+      }
+    }
+  }
+  return cases;
+}
+
 /** Every case of 6.5.1 and 6.5.3, in suite order. Deterministic. */
 export function generateCases(): GdiCase[] {
   return [
@@ -1026,6 +1078,7 @@ export function generateCases(): GdiCase[] {
     ...textOutline(false),
     ...textOutlineZero(),
     ...textOutline(true),
+    ...textOutlineItalic(),
   ];
 }
 

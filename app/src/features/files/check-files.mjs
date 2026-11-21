@@ -104,8 +104,22 @@ function pretendWindows() {
 /** Another tab holding a version change, a stuck disk: IndexedDB.open never answers. */
 function hangIndexedDB() {
   IDBFactory.prototype.open = function () {
+    // When the application began to open its store: the store gives up OPEN_TIMEOUT_MS later.
+    if (window.__idbOpenAt === undefined) window.__idbOpenAt = performance.now();
     return {};
   };
+}
+
+/** A browser without the File System Access API (WebKit and Firefox have none). */
+function withoutFileSystemAccess() {
+  for (const key of ['showOpenFilePicker', 'showDirectoryPicker', 'showSaveFilePicker']) {
+    try {
+      delete window[key];
+      if (key in window) Object.defineProperty(window, key, { value: undefined, configurable: true });
+    } catch {
+      // A browser whose property cannot be removed keeps it; the check then reports what it sees.
+    }
+  }
 }
 
 /** Some private windows: IndexedDB exists but refuses to open. */
@@ -557,6 +571,8 @@ async function hangingPass(browser, name) {
   // modules arrived that slowly, while the other runs took about 3.5 s.
   let best = null;
   const timings = [];
+  const readings = [];
+  const OPEN_TIMEOUT_MS = 20_000; // fs/browser-backend.ts
   for (let attempt = 0; attempt < 3; attempt++) {
     const context = await newContext(browser);
     await context.addInitScript(hangIndexedDB);
@@ -576,30 +592,43 @@ async function hangingPass(browser, name) {
     timings.push(shownAfter);
     // Read at once: 20 s after opening began, the pending store gives way to the memory stand-in.
     await page.waitForSelector('[data-e68-panel="files"] [role=tree]');
-    const banner = await page
-      .locator('[data-e68-panel="files"] [role=alert]')
-      .innerText()
-      .catch(() => '');
-    const kind = await page.evaluate(
-      () => window.__easy68k.ctx.vfs.backends().find((b) => b.mount === 'browser')?.constructor.name,
-    );
+    // The banner and how long ago opening began, read together in the page.
+    const { banner, sinceOpen, kind } = await page.evaluate(() => ({
+      banner: document.querySelector('[data-e68-panel="files"] [role=alert]')?.innerText ?? '',
+      sinceOpen: window.__idbOpenAt === undefined ? null : Math.round(performance.now() - window.__idbOpenAt),
+      kind: window.__easy68k.ctx.vfs.backends().find((b) => b.mount === 'browser')?.constructor.name,
+    }));
+    readings.push({ sinceOpen, banner });
     if (best === null || shownAfter < best.shownAfter) {
       await page.screenshot({ path: join(outDir, `${name}-store-opening.png`) });
-      best = { errors, shownAfter, banner, kind };
+      best = { errors, shownAfter, kind };
     }
     await context.close();
-    if (best.shownAfter < 15_000) break;
+    if (best.shownAfter < 15_000 && readings.some((r) => r.sinceOpen !== null && r.sinceOpen < OPEN_TIMEOUT_MS)) break;
   }
-  const { errors, shownAfter, banner, kind } = best;
+  const { errors, shownAfter, kind } = best;
+  // What the product guarantees (fs/browser-backend.ts): until OPEN_TIMEOUT_MS (20 s) after opening
+  // began, the panel says the store is still opening; after that the store has given up and says
+  // that nothing is being kept. On a loaded machine the panel can be read only after the 20 s (a
+  // WebKit run on the shared PC: shown 7.8 s after load, read after the store had given up), and
+  // then the given-up message is the right one. Every reading must match its time; the detail lists
+  // them, and says so when no reading came before the limit.
+  const fits = (r) =>
+    r.sinceOpen !== null &&
+    (r.sinceOpen < OPEN_TIMEOUT_MS
+      ? r.banner.includes('still opening')
+      : r.banner.includes('Files are NOT being saved'));
+  const early = readings.filter((r) => r.sinceOpen !== null && r.sinceOpen < OPEN_TIMEOUT_MS).length;
+  const described = readings.map((r) => `${r.sinceOpen} ms: ${r.banner.slice(0, 40)}`).join(' | ');
   check(
     `${p} IndexedDB that never answers: the application is shown well before the 20 s time limit`,
     shownAfter < 15_000,
     `shown ${shownAfter} ms after the page loaded (attempts: ${timings.join(', ')} ms)`,
   );
   check(
-    `${p} IndexedDB that never answers: the Files panel says the store is still opening`,
-    banner.includes('still opening'),
-    banner.slice(0, 80),
+    `${p} IndexedDB that never answers: the Files panel says the store is still opening (or, after 20 s, that it gave up)`,
+    readings.length > 0 && readings.every(fits),
+    `${early ? '' : 'no reading before the 20 s limit on this run (machine loaded); '}read after opening began: ${described}`,
   );
   check(
     `${p} IndexedDB that never answers: a pending store stands at /browser`,
@@ -613,6 +642,10 @@ async function hangingPass(browser, name) {
 async function uiPass(browser, name) {
   const p = `${name}:`;
   const context = await newContext(browser);
+  // FS1's dialogs as a browser without the File System Access API has them (WebKit, Firefox): in
+  // Chromium FS2 (features/files-fsaccess) replaces "From this computer..." with the system picker,
+  // which Playwright cannot answer, and adds "Open folder..."; FS2's own check covers those.
+  await context.addInitScript(withoutFileSystemAccess);
   const { page, errors } = await openApp(context);
   await page.evaluate(async () => {
     const { vfs } = window.__easy68k.ctx;
@@ -682,7 +715,8 @@ async function uiPass(browser, name) {
   await page.screenshot({ path: join(outDir, `${name}-open-dialog.png`) });
   await scan(page, `${name} open dialog`);
   await dialog.getByLabel('File name:').fill('PROG.x68');
-  await dialog.getByRole('button', { name: 'Open' }).click();
+  // Exactly "Open": in Chromium FS2's provider adds a button "Open folder..." to the dialog.
+  await dialog.getByRole('button', { name: 'Open', exact: true }).click();
   await page.waitForFunction(() => window.__result !== undefined);
   check(
     `${p} Open dialog: a typed name opens the stored file`,
@@ -749,7 +783,7 @@ async function uiPass(browser, name) {
   );
   await dialog.getByLabel('File name:').fill('newprog');
   await page.screenshot({ path: join(outDir, `${name}-save-dialog.png`) });
-  await dialog.getByRole('button', { name: 'Save' }).click();
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
   await page.waitForFunction(() => window.__result !== undefined);
   check(
     `${p} Save dialog: the default extension .X68 is appended`,
@@ -759,7 +793,7 @@ async function uiPass(browser, name) {
   await saveRequest();
   await dialog.waitFor();
   await dialog.getByLabel('File name:').fill('prog');
-  await dialog.getByRole('button', { name: 'Save' }).click();
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
   const box = page.locator('[role=alertdialog]');
   await box.waitFor();
   const boxText = await box.innerText();
@@ -770,7 +804,7 @@ async function uiPass(browser, name) {
   );
   await page.screenshot({ path: join(outDir, `${name}-overwrite.png`) });
   await scan(page, `${name} overwrite question`);
-  await box.getByRole('button', { name: 'No' }).click();
+  await box.getByRole('button', { name: 'No', exact: true }).click();
   await page.waitForFunction(() => window.__result !== undefined);
   check(`${p} Save dialog: No abandons the save`, (await page.evaluate(() => window.__result)) === null);
   check(
@@ -802,7 +836,7 @@ async function uiPass(browser, name) {
   check(`${p} folder chooser: lists only the folders`, same(folderListed, ['inc']), JSON.stringify(folderListed));
   await page.screenshot({ path: join(outDir, `${name}-folder-chooser.png`) });
   await dialog.getByLabel('Folder name:').fill('INC');
-  await dialog.getByRole('button', { name: 'OK' }).click();
+  await dialog.getByRole('button', { name: 'OK', exact: true }).click();
   await page.waitForFunction(() => window.__result !== undefined);
   check(
     `${p} folder chooser: a typed existing folder is taken, not entered`,
@@ -812,7 +846,7 @@ async function uiPass(browser, name) {
   await chooseFolder();
   await dialog.waitFor();
   await listedOptions(dialog, ['inc']);
-  await dialog.getByRole('button', { name: 'OK' }).click();
+  await dialog.getByRole('button', { name: 'OK', exact: true }).click();
   await page.waitForFunction(() => window.__result !== undefined);
   check(
     `${p} folder chooser: OK with no name takes the folder shown`,
@@ -910,17 +944,44 @@ async function uiPass(browser, name) {
   const storeZip = join(outDir, `${name}-store.zip`);
   await storeDownload.saveAs(storeZip);
   const requestedNames = await page.evaluate(() => window.__downloadNames);
-  // WebKit on Linux (WebKitGTK) turns the spaces of a suggested download name into underscores
-  // itself (CI run 44913261966: "My_Programs.zip"); the name the page asked for is what FS1 controls.
+  // Playwright's WebKit build for Linux reports the spaces of the name as underscores (CI run
+  // 44913261966: "My_Programs.zip"); Chromium on Linux and WebKit on macOS and Windows report
+  // "My Programs.zip". Playwright passes WebKit's Playwright.downloadFilenameSuggested through
+  // unchanged, and the page's own download attribute is recorded above, so the check holds the
+  // application to the name it asks for and accepts only that one rewrite, only there (errata
+  // FS1.md, entry 18). The detail names the browser build so a CI log alone settles who renamed it.
   const suggested = storeDownload.suggestedFilename();
   check(
     `${p} Export... of the store root downloads "My Programs.zip"`,
     same(requestedNames, ['My Programs.zip']) &&
       (suggested === 'My Programs.zip' ||
         (name === 'webkit' && process.platform === 'linux' && suggested === 'My_Programs.zip')),
-    `page asked for ${JSON.stringify(requestedNames)}, the browser suggests ${JSON.stringify(suggested)}`,
+    `page asked for ${JSON.stringify(requestedNames)}, the browser suggests ${JSON.stringify(suggested)}` +
+      ` (${name} ${browser.version()} on ${process.platform})`,
   );
   const before = await storeContents(page);
+
+  // app.files.toggle with FilesRevealArg (Help > Examples... uses it): hide the panel, then ask for
+  // a path; the panel comes back with that path selected, and asking again never hides it.
+  const filesPanel = page.locator('[data-e68-panel="files"]');
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('app.files.toggle'));
+  await filesPanel.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
+  const hiddenFirst = !(await filesPanel.isVisible());
+  for (let i = 0; i < 2; i++) {
+    await page.evaluate(() => window.__easy68k.ctx.commands.run('app.files.toggle', { reveal: '/browser/demo/inc' }));
+  }
+  const revealed = await page
+    .locator('[data-e68-panel="files"] [role=treeitem][aria-selected=true]', { hasText: 'inc' })
+    .waitFor({ timeout: 5000 })
+    .then(() => true)
+    .catch(() => false);
+  check(
+    `${p} app.files.toggle { reveal } shows the hidden panel and selects the path`,
+    hiddenFirst && revealed && (await filesPanel.isVisible()),
+    `hidden first: ${hiddenFirst}, selected: ${JSON.stringify(
+      await page.locator('[data-e68-panel="files"] [role=treeitem][aria-selected=true]').allTextContents(),
+    )}`,
+  );
 
   // Dark theme screenshot and scan of the panel.
   await page.evaluate(() => window.__easy68k.ctx.commands.run('app.theme.set', 'dark'));

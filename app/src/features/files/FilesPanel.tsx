@@ -12,17 +12,15 @@ import { useAppContext } from '../../state/context';
 import { ContextMenu, Icon, IconButton, Menu, Toolbar, type MenuEntry } from '../../ui/components';
 import { deletePath, exportPath, folderFor, importInto, newFolder, renamePath } from './actions';
 import { downloadBytes, importItemsOf, pickFiles } from './browser-io';
+import { registerFilesRevealer, requestReveal } from './reveal';
 import { BROWSER_ROOT, locations } from './store';
 import { FilesTreeModel, type TreeRow } from './tree-model';
 import './files.css';
 
-/** Asks the panel of this window to show a path (after an import, Help > Examples...). */
-const revealRequests = new WeakMap<AppContext, (path: VPath) => void>();
+/** Asks the panel of this window to show a path (after an import, Help > Examples...). False if the
+ *  panel is not mounted; app.files.toggle with { reveal } also waits for it to mount (reveal.ts). */
 export function revealInFilesPanel(ctx: AppContext, path: VPath): boolean {
-  const reveal = revealRequests.get(ctx);
-  if (!reveal) return false;
-  reveal(path);
-  return true;
+  return requestReveal(ctx, path);
 }
 
 function rowId(base: string, path: VPath): string {
@@ -43,11 +41,11 @@ export function FilesPanel() {
     const created = new FilesTreeModel(ctx.vfs);
     setModel(created);
     const stop = created.subscribe(() => setVersion((v) => v + 1));
-    revealRequests.set(ctx, (path) => void created.reveal(path));
+    const unregister = registerFilesRevealer(ctx, (path) => void created.reveal(path));
     return () => {
       stop();
       created.dispose();
-      if (revealRequests.get(ctx)) revealRequests.delete(ctx);
+      unregister();
     };
   }, [ctx]);
 

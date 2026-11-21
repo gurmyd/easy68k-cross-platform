@@ -70,6 +70,22 @@ describe('SoftTimer', () => {
     expect(ticks).toEqual([1050, 1150]);
   });
 
+  it('starts each period when the late tick is handled, as a Windows timer does (errata SH8.md 26)', () => {
+    // Checked once per 16 ms frame, a 500 ms timer ticks every 512 ms: 19 ticks in 10 s, as the
+    // SetTimer timer measured on Windows 11 (mean periods of 504 and 506 ms, 19 ticks).
+    const time = new VirtualTime();
+    const ticks: number[] = [];
+    const soft = new SoftTimer(time, () => ticks.push(time.now()));
+    soft.intervalMs = 500;
+    soft.enabled = true;
+    for (let t = 0; t < 10_000; t += 16) {
+      time.advance(16);
+      soft.check(time.now());
+    }
+    expect(ticks).toHaveLength(19);
+    expect(ticks.slice(0, 3)).toEqual([512, 1024, 1536]);
+  });
+
   it('fires at most once per check', () => {
     const { time, soft, ticks } = timer();
     soft.intervalMs = 10;

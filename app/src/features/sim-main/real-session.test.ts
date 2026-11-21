@@ -284,10 +284,14 @@ describe.skipIf(!enginesBuilt)(
       await open('demo');
       model.selectRow(1);
       await open('demo');
-      // Whatever the engine selected (errata U1.md entry 8 on the engine's ItemIndex here), the
-      // panel shows it and no stale click survives the new rows.
+      // The panel shows the engine's row and no stale click survives the new rows.
       expect(selected()).toBe(app.ctx.sim.engine.listingHighlight);
       expect(selected()).not.toBe(1);
+      // OpenFile's ListBox1->Items->Clear() drops the selection, as the VCL's LB_RESETCONTENT does,
+      // and the unchanged PC text runs no highlight(): nothing is selected (errata U1.md entry 8,
+      // docs/requests/U1-listbox-clear-itemindex.md; the port kept row 6 before the shim change).
+      expect(app.ctx.sim.engine.listingHighlight).toBe(-1);
+      expect(selected()).toBe(-1);
     });
 
     it('the message area: load messages and trace lines arrive through the store', async () => {

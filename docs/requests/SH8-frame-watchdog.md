@@ -6,6 +6,10 @@ re-arms with `WATCHDOG_FRAME_MS` (1000 / 60 ms) until a frame arrives, which goe
 wait. Test: `app/src/state/services.test.ts` ("calls from a timer when no frame has arrived for 250 ms");
 errata W3.md entry 32. (Before: `check-run.mjs` measured about 175,000 instructions per second without
 display frames in Chromium and WebKit on Windows, 142,000 and 200,000 on the macOS runner.)
+Round 3 (W3): checked again and kept; the pace is decided in errata W3.md entry 32 (a call every
+1000 / 60 ms; gaps over 50 ms lose the excess by `MAX_CATCHUP_MS`, as 4.5.5 has it). Measured
+without frames: 1,004,366/s (Chromium) and 999,005/s (WebKit) here; on the macOS runner of run
+44919519853, 516,053/s in Chromium with timers 69 ms late, 991,031/s in WebKit.
 
 Addressed to: the shell engineer (`app/src/state/browser.ts`, W3's path), and for information to
 DV2 and DV3 (risk R-20: "a program that stops while the window is minimised").

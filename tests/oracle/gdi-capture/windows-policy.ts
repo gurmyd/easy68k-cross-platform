@@ -47,7 +47,12 @@ export interface Difference {
   path: string;
   fingerprint: string;
 }
-export type Records = Record<string, { differences?: Record<string, string> } | string>;
+/**
+ * other-windows.json. A record may say who reviewed which capture of that Windows (`reviewed`); a
+ * record with no differences states that the Windows was reviewed and must equal the references in
+ * every compared output.
+ */
+export type Records = Record<string, { differences?: Record<string, string>; reviewed?: string } | string>;
 
 export function judge({
   machine,
@@ -79,6 +84,7 @@ export function judge({
   );
   const entry = records[machine];
   const known = typeof entry === 'object' ? entry.differences : undefined;
+  if (typeof entry === 'object' && entry.reviewed) lines.push(`other-windows.json: ${entry.reviewed}`);
   if (!known) {
     if (differences.length === 0) {
       lines.push('Every compared output equals the references on this Windows as well.');
@@ -102,8 +108,10 @@ export function judge({
     );
   for (const p of gone) lines.push(`  agrees    ${p}: recorded as differing on this Windows, equal now`);
   lines.push(
-    `${differences.length - unexpected.length} of ${differences.length} differences are recorded for this Windows` +
-      (unexpected.length ? `; ${unexpected.length} are not: this Windows changed.` : '.'),
+    differences.length === 0 && gone.length === 0
+      ? 'Every compared output equals the references, as recorded for this Windows.'
+      : `${differences.length - unexpected.length} of ${differences.length} differences are recorded for this Windows` +
+          (unexpected.length ? `; ${unexpected.length} are not: this Windows changed.` : '.'),
   );
   if (unexpected.length || gone.length) lines.push('Its record, as of this run:', JSON.stringify(record, null, 2));
   return { fail: unexpected.length > 0, lines, record };

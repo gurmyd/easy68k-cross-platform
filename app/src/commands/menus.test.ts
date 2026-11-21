@@ -15,6 +15,7 @@ import {
   type ResolveEnv,
   type ResolvedItem,
   type ResolvedNode,
+  blockedByHalt,
 } from './menus';
 import { buildNativeMenu } from './native-menu';
 import { HALTED_HINT } from './tables/toolbars';
@@ -274,7 +275,7 @@ describe('resolveToolbar', () => {
 
   it('explains the disabled run commands after a halt (1.4 note 22)', () => {
     const state = initialAppState(defaultSettings());
-    const halted: AppState = { ...state, sim: { ...state.sim, halted: true } };
+    const halted: AppState = { ...state, sim: { ...state.sim, halted: true, phase: 'idle', menuState: 1 } };
     const enabled = (id: CommandId) =>
       ['sim.file.open', 'sim.run.pause', 'sim.run.rewind', 'sim.run.reload'].includes(id);
     const reasons = Object.fromEntries(
@@ -296,6 +297,25 @@ describe('resolveToolbar', () => {
         (item) => item.type !== 'button' || item.disabledReason === null,
       ),
     ).toBe(true);
+  });
+
+  // Integration scenario of gate I1 round 2 (docs/integration/wave1.md): the engine's halt flag
+  // stays set after Rewind or Open until the next run, so it is still set while that run goes on.
+  it('does not say "halted" while the next program runs or waits, nor once the commands are free', () => {
+    const state = initialAppState(defaultSettings());
+    const enabled = (id: CommandId) => ['sim.file.open', 'sim.run.pause'].includes(id);
+    const reasonsIn = (sim: Partial<AppState['sim']>) =>
+      resolveToolbar(
+        'simulator',
+        env({ state: { ...state, sim: { ...state.sim, halted: true, ...sim } }, enabled }),
+      ).flatMap((item) => (item.type === 'button' && item.disabledReason !== null ? [item.id] : []));
+    for (const phase of ['running', 'waitInput', 'waitDelay', 'waitHost', 'waitAlert', 'loading'] as const) {
+      expect(reasonsIn({ phase, menuState: 1 }), phase).toEqual([]);
+      expect(reasonsIn({ phase, menuState: 0 }), phase).toEqual([]);
+    }
+    expect(reasonsIn({ phase: 'idle', menuState: 0 })).toEqual([]);
+    expect(reasonsIn({ phase: 'idle', menuState: 1 })).toContain('sim.run.run');
+    expect(blockedByHalt({ ...state, sim: { ...state.sim, halted: false, phase: 'idle', menuState: 1 } })).toBe(false);
   });
 });
 

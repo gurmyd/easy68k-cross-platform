@@ -99,6 +99,16 @@ describe('mirrorSim', () => {
     expect(third.repaint).toEqual({ listing: 2, breakpoints: 1, memory: 1, stack: 1 });
   });
 
+  it('carries stackRedraw and takes a change of it alone as news', () => {
+    const counts = { listing: 1, breakpoints: 0, memory: 1, stack: 1, stackRedraw: 1 };
+    const first = mirrorSim(sim0(), live({ repaint: counts }));
+    expect(first.repaint).toEqual(counts);
+    expect(mirrorSim(first, live({ repaint: { ...counts } }))).toBe(first);
+    const clicked = mirrorSim(first, live({ repaint: { ...counts, stack: 2, stackRedraw: 2 } }));
+    expect(clicked.repaint).toEqual({ ...counts, stack: 2, stackRedraw: 2 });
+    expect(mirrorSim(clicked, live({ repaint: { ...counts, stack: 2, stackRedraw: 3 } })).repaint?.stackRedraw).toBe(3);
+  });
+
   it('leaves the listing selection to the Listing panel', () => {
     const sim = { ...sim0(), selectedRow: 12 };
     expect(mirrorSim(sim, live({ regsRevision: 1 })).selectedRow).toBe(12);
@@ -129,6 +139,23 @@ describe('status bar texts', () => {
     expect(state('idle', true)).toBe('Halted');
     expect(state('idle', false, true)).toBe('Auto trace');
     expect(state('running', false, true)).toBe('Running');
+  });
+
+  it('says Halted only while the halt keeps the commands busy (integration scenario, wave 1)', () => {
+    // The engine's halt flag stays set after Rewind, Open and Pause (sim-ui §9.9), which put the
+    // commands back into the active state (sim-ui §3.6): Run is enabled, so the program is not
+    // halted any more as far as the user can tell.
+    const text = (halted: boolean, menuState: 0 | 1) =>
+      runStateText({ phase: 'idle', halted, autoTrace: false, menuState });
+    expect(text(true, 1)).toBe('Halted'); // SIMHALT: everything but Pause, Rewind and Reload disabled
+    expect(text(true, 0)).toBe('Stopped'); // after Rewind, Open or Pause
+    expect(text(false, 0)).toBe('Stopped');
+    expect(text(false, 1)).toBe('Stopped'); // busy without a halt: Running in practice, never Halted
+    const state = initialAppState(DEFAULT_SETTINGS);
+    expect(statusCells({ ...state, sim: { ...state.sim, halted: true, menuState: 0 } }, '00001000').run).toBe(
+      'Stopped',
+    );
+    expect(statusCells({ ...state, sim: { ...state.sim, halted: true, menuState: 1 } }, '00001008').run).toBe('Halted');
   });
 
   it('names the speed setting', () => {

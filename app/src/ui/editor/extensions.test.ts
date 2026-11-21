@@ -145,7 +145,23 @@ describe('Ctrl+letter on macOS (rule K2, errata E2.md entry 13)', () => {
     expect(binding('Ctrl-a').run).toBe(selectAll);
   });
 
-  it('without the clipboard functions the clipboard keys are not taken', () => {
-    expect(binding('Ctrl-c').run!(fakeView('line1', 0, 5, null))).toBe(false);
+  it('without the clipboard functions the clipboard keys do nothing but are still taken', () => {
+    // Returning false would let CodeMirror run the next binding of the key: on a Mac that is
+    // standardKeymap's emacs-style Ctrl-v (cursorPageDown). Review of round 2, minor defect.
+    for (const mac of ['Ctrl-x', 'Ctrl-c', 'Ctrl-v']) {
+      const view = fakeView('line1\nline2', 0, 5, null);
+      expect(binding(mac).run!(view), mac).toBe(true);
+      expect(view.state.doc.toString(), mac).toBe('line1\nline2');
+      expect(view.state.selection.main.anchor, mac).toBe(0);
+      expect(view.state.selection.main.head, mac).toBe(5);
+    }
+  });
+
+  it('the macOS Ctrl clipboard bindings come before any other binding of the same key', () => {
+    // CodeMirror tries bindings of one key in order; the K2 bindings must be the first that match.
+    for (const mac of ['Ctrl-x', 'Ctrl-c', 'Ctrl-v', 'Ctrl-a', 'Ctrl-z']) {
+      const first = editorKeymap.findIndex((b) => b.mac === mac || b.key === mac);
+      expect(editorKeymap[first]!.mac, mac).toBe(mac);
+    }
   });
 });

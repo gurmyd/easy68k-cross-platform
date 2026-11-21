@@ -22,6 +22,9 @@
 //     real editor's; Ctrl+F4 is left to the browser on Windows and is Log Start on macOS. Where a
 //     key must reach a command whatever its real handler says right now, the check puts a
 //     recorder in its place for the time of the test (`commands.override`) and restores it;
+//   - rule K2 in plain text fields: on the macOS key map Ctrl+A, C, X, Z, Option+Z and V select,
+//     copy, cut, undo, redo and paste in an input, in two modes and in a modal dialog (the page
+//     does it; a Mac's browser does not), and on the Windows key map they are left to the browser;
 //   - no command runs while a modal dialog is open, from a key or from a toolbar button; message
 //     boxes return the pressed button; a modal dialog of Simulator mode holds the controller;
 //   - settings: a `storage` event updates a second page; two pages that write settings in turn,
@@ -889,6 +892,182 @@ async function keyboardPass(browser, name, os) {
   await context.close();
 }
 
+/**
+ * Rule K2 in plain text fields (errata W3.md entry 34). On the macOS key map the dispatcher
+ * performs Ctrl+A, C, X, Z, Option+Z and V itself in an input or textarea (a Mac's browser treats
+ * only the Cmd forms as editing keys), in every mode and in a modal dialog. Each check tests the
+ * effect (the selection, the field's value, the browser's own `copy` / `cut` event, the pasted text)
+ * and that the key was cancelled, so it passes only where the page did the work: on the macOS
+ * runner the browser does nothing for these keys by itself. On the Windows key map the keys are
+ * left to the browser (not cancelled), which edits on its own on Windows and Linux.
+ */
+async function textFieldKeysPass(browser, name, os) {
+  const p = `${name}/${os}:`;
+  const context = await newContext(browser, os);
+  if (name === 'chromium') {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: baseUrl.replace(/\/$/, '') });
+  }
+  const { page, errors } = await openApp(context);
+  // For a failure on a CI runner: the system the browser really runs on.
+  console.log(
+    `        runner: ${process.platform}; browser: ${await page.evaluate(() => navigator.userAgent)}; key map: ${await page.evaluate(() => window.__easy68k.ctx.platform.os)}`,
+  );
+  await page.evaluate(() => {
+    window.__clip = [];
+    const record = (event) => {
+      const field = event.target;
+      const text =
+        field && typeof field.value === 'string' ? field.value.slice(field.selectionStart, field.selectionEnd) : '';
+      window.__clip.push(`${event.type}:${text}`);
+    };
+    document.addEventListener('copy', record, true);
+    document.addEventListener('cut', record, true);
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.setAttribute('aria-label', 'check-shell K2 field');
+    input.dataset.checkK2 = '';
+    document.body.append(input);
+  });
+  const state = (selector = '[data-check-k2]') =>
+    page.evaluate((sel) => {
+      const field = document.querySelector(sel);
+      return {
+        value: field.value,
+        start: field.selectionStart,
+        end: field.selectionEnd,
+        clip: window.__clip.slice(),
+        focused: document.activeElement === field,
+      };
+    }, selector);
+  const show = (s) => `value=${JSON.stringify(s.value)} selection=${s.start}..${s.end} events=${s.clip.join(',')}`;
+  const field = page.locator('[data-check-k2]');
+
+  if (os !== 'mac') {
+    await setMode(page, 'editor');
+    await field.click();
+    await page.keyboard.type('abc def');
+    const left = [];
+    for (const combination of ['Control+KeyA', 'Control+KeyC', 'Control+KeyZ']) {
+      if ((await pressed(page, combination)) !== false) left.push(combination);
+    }
+    check(`${p} Ctrl+A, C and Z in a text field are left to the browser`, left.length === 0, left.join(', '));
+    check(`${p} no console or page errors (text fields)`, errors.length === 0, errors.slice(0, 3).join(' | '));
+    await context.close();
+    return;
+  }
+
+  for (const item of ['editor', 'simulator']) {
+    await setMode(page, item);
+    await page.evaluate(() => {
+      const input = document.querySelector('[data-check-k2]');
+      input.value = '';
+      window.__clip.length = 0;
+    });
+    await field.click();
+    await page.keyboard.type('abc def');
+    const selectAll = await pressed(page, 'Control+KeyA');
+    let s = await state();
+    check(
+      `${p} ${item}: Ctrl+A in a text field selects all of it`,
+      selectAll === true && s.start === 0 && s.end === 7 && s.value === 'abc def',
+      `cancelled=${selectAll} ${show(s)}`,
+    );
+    const copy = await pressed(page, 'Control+KeyC');
+    s = await state();
+    check(
+      `${p} ${item}: Ctrl+C in a text field copies the selection`,
+      copy === true && s.clip.includes('copy:abc def') && s.value === 'abc def',
+      `cancelled=${copy} ${show(s)}`,
+    );
+    await page.evaluate(() => document.querySelector('[data-check-k2]').setSelectionRange(4, 7));
+    const cut = await pressed(page, 'Control+KeyX');
+    s = await state();
+    check(
+      `${p} ${item}: Ctrl+X in a text field cuts the selection`,
+      cut === true && s.clip.includes('cut:def') && s.value === 'abc ',
+      `cancelled=${cut} ${show(s)}`,
+    );
+    const undo = await pressed(page, 'Control+KeyZ');
+    s = await state();
+    check(
+      `${p} ${item}: Ctrl+Z in a text field undoes the cut`,
+      undo === true && s.value === 'abc def',
+      `cancelled=${undo} ${show(s)}`,
+    );
+    const redo = await pressed(page, 'Control+Alt+KeyZ');
+    s = await state();
+    check(
+      `${p} ${item}: Ctrl+Option+Z in a text field redoes it`,
+      redo === true && s.value === 'abc ',
+      `cancelled=${redo} ${show(s)}`,
+    );
+  }
+
+  // Ctrl+V: the page asks the browser for the clipboard (note 45). Chromium has the permission
+  // here and must paste; another browser may refuse, and then the toast must say so.
+  await setMode(page, 'editor');
+  const clipboardSet = await page.evaluate(() =>
+    navigator.clipboard.writeText('D7').then(
+      () => true,
+      () => false,
+    ),
+  );
+  await field.click();
+  await page.evaluate(() => {
+    const input = document.querySelector('[data-check-k2]');
+    input.value = 'move.l ';
+    input.setSelectionRange(7, 7);
+  });
+  const paste = await pressed(page, 'Control+KeyV');
+  const outcome = await page
+    .waitForFunction(
+      () => {
+        if (document.querySelector('[data-check-k2]').value === 'move.l D7') return 'pasted';
+        return document.body.innerText.includes('Press Cmd+V to paste') ? 'toast' : false;
+      },
+      null,
+      { timeout: 10_000 },
+    )
+    .then((handle) => handle.jsonValue())
+    .catch(() => 'nothing within 10 s');
+  const pasted = await state();
+  check(
+    `${p} Ctrl+V in a text field pastes${name === 'chromium' ? '' : ', or says "Press Cmd+V to paste" when refused'}`,
+    paste === true && (name === 'chromium' ? outcome === 'pasted' : outcome === 'pasted' || outcome === 'toast'),
+    `cancelled=${paste} clipboard set=${clipboardSet} outcome=${outcome} ${show(pasted)}`,
+  );
+  await closeOverlays(page);
+
+  // In a modal dialog: a field inside a message box.
+  await page.evaluate(() => {
+    void window.__easy68k.ctx.dialogs.messageBox({ title: 'Check', text: 'K2', icon: 'information', buttons: ['OK'] });
+  });
+  await page.waitForSelector('[role=alertdialog][aria-modal=true]');
+  await page.evaluate(() => {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.setAttribute('aria-label', 'check-shell K2 dialog field');
+    input.dataset.checkK2Dialog = '';
+    document.querySelector('[role=alertdialog]').append(input);
+    window.__clip.length = 0;
+  });
+  await page.locator('[data-check-k2-dialog]').click();
+  await page.keyboard.type('xyz');
+  const dialogAll = await pressed(page, 'Control+KeyA');
+  const dialogCut = await pressed(page, 'Control+KeyX');
+  const inDialog = await state('[data-check-k2-dialog]');
+  check(
+    `${p} in a modal dialog: Ctrl+A and Ctrl+X in a text field select and cut`,
+    dialogAll === true && dialogCut === true && inDialog.value === '' && inDialog.clip.includes('cut:xyz'),
+    `cancelled=${dialogAll},${dialogCut} ${show(inDialog)}`,
+  );
+  await page.screenshot({ path: join(outDir, `${name}-mac-k2-dialog.png`) });
+  await closeOverlays(page);
+
+  check(`${p} no console or page errors (text fields)`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await context.close();
+}
+
 /** Modal dialogs: nothing runs, message boxes answer, the controller is held. */
 async function dialogPass(browser, name) {
   const p = `${name}:`;
@@ -1564,6 +1743,7 @@ async function main() {
           console.log(`\n[${name}, ${os} key map]`);
           await pass(`structure (${os})`, () => structurePass(browser, name, os));
           await pass(`keyboard (${os})`, () => keyboardPass(browser, name, os));
+          await pass(`text field keys (${os})`, () => textFieldKeysPass(browser, name, os));
         }
         console.log(`\n[${name}, dialogs]`);
         await pass('dialogs', () => dialogPass(browser, name));

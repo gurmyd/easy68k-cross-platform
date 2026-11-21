@@ -751,6 +751,24 @@ async function examplesPass(browser, name) {
         document.querySelector('[data-e68-panel="files"]') !== null,
     ),
   );
+  // 5.8: the folder is revealed there (app.files.toggle with FilesRevealArg, errata W1.md 12.3):
+  // the Files panel's selected row is the folder Examples.
+  const revealed = await page.evaluate(async () => {
+    const selectedTitle = () =>
+      document
+        .querySelector('[data-e68-panel="files"] [role="treeitem"][aria-selected="true"]')
+        ?.getAttribute('title') ?? null;
+    for (let waited = 0; waited <= 5000 && !/(^|[/\\])Examples$/.test(selectedTitle() ?? ''); waited += 100) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return selectedTitle();
+  });
+  check(
+    `${p} the Files panel reveals and selects the folder Examples`,
+    /(^|[/\\])Examples$/.test(revealed ?? ''),
+    `selected row: ${JSON.stringify(revealed)}`,
+  );
+  await page.screenshot({ path: join(outDir, `${name}-examples-files-panel.png`) });
   await page.evaluate(async () => {
     await window.__easy68k.ctx.vfs.writeFile('/browser/Examples/fileio.X68', new TextEncoder().encode('mine'));
   });

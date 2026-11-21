@@ -31,20 +31,39 @@ export function byteRanges(bytes: readonly number[]): string {
   return parts.join(', ');
 }
 
-/** Which glyphs and advances of a raster atlas differ. */
-export function describeAtlas(reference: AtlasView, captured: AtlasView): string[] {
-  const shape = (a: AtlasView) => `${a.cellWidth}x${a.cellHeight}, glyphs ${a.glyphWidth} wide`;
-  if (shape(reference) !== shape(captured)) return [`cell ${shape(captured)}; the reference has ${shape(reference)}`];
+/**
+ * Which glyphs and advances of a raster atlas differ. Atlases of the same cell whose glyph widths
+ * differ are compared pixel by pixel all the same (the glyph width only says how wide the widest
+ * glyph is). Glyphs of the bytes in `separately` (machine-dependent.ts OTHER_FONT_BYTES) are counted
+ * on a line of their own, so a log shows at once whether anything else differs.
+ */
+export function describeAtlas(reference: AtlasView, captured: AtlasView, separately: readonly number[] = []): string[] {
+  const cell = (a: AtlasView) => `${a.cellWidth}x${a.cellHeight}`;
+  const shape = (a: AtlasView) => `${cell(a)}, glyphs ${a.glyphWidth} wide`;
+  if (cell(reference) !== cell(captured)) return [`cell ${shape(captured)}; the reference has ${shape(reference)}`];
+  const width = Math.max(reference.glyphWidth, captured.glyphWidth);
+  const pixel = (a: AtlasView, g: Uint8Array, i: number) => {
+    const x = i % width;
+    const y = (i - x) / width;
+    return x < a.glyphWidth ? (g[y * a.glyphWidth + x] ?? 0) : 0;
+  };
   const glyphs: number[] = [];
+  const apart: number[] = [];
   const advances: string[] = [];
   let pixels = 0;
+  let apartPixels = 0;
   for (let ch = 0; ch < 256; ch++) {
     const a = reference.glyph(ch);
     const b = captured.glyph(ch);
     let n = 0;
-    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) n++;
-    if (n > 0) glyphs.push(ch);
-    pixels += n;
+    for (let i = 0; i < width * reference.cellHeight; i++) if (pixel(reference, a, i) !== pixel(captured, b, i)) n++;
+    if (separately.includes(ch)) {
+      if (n > 0) apart.push(ch);
+      apartPixels += n;
+    } else {
+      if (n > 0) glyphs.push(ch);
+      pixels += n;
+    }
     if (reference.advances[ch] !== captured.advances[ch])
       advances.push(
         `$${ch.toString(16).toUpperCase().padStart(2, '0')} ${reference.advances[ch]}->${captured.advances[ch]}`,
@@ -56,6 +75,12 @@ export function describeAtlas(reference: AtlasView, captured: AtlasView): string
     lines.push(
       `${advances.length} advances differ: ${advances.slice(0, 12).join(', ')}${advances.length > 12 ? ', ...' : ''}`,
     );
+  if (apart.length)
+    lines.push(`${apart.length} other-font glyphs differ in ${apartPixels} pixels: ${byteRanges(apart)}`);
+  if (reference.glyphWidth !== captured.glyphWidth)
+    lines.push(`glyphs ${captured.glyphWidth} wide; the reference has ${reference.glyphWidth}`);
+  if (lines.length && !glyphs.length && !advances.length)
+    lines.unshift('every glyph and advance of the face itself is equal');
   return lines.length ? lines : ['same glyphs and advances (the file differs elsewhere)'];
 }
 

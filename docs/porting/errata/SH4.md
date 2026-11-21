@@ -378,3 +378,44 @@ with task 2:
   panel changed: the frame-to-canvas path is what 2.5 asks for.
 - Not reproduced on this PC (525 of 525 before and after); the cause is read from the code and the
   CI log, and the repair removes the race rather than lengthening a pause.
+
+## Gate I1, round 3
+
+### 23. Device pixel ratios that are not whole numbers: reproduced, and the product is right
+
+- Asked: the round-1 failure of entry 22 (`webkit/ratio 1.5`, Ubuntu) might be a real defect: a
+  canvas that does not hold the program's pixels at a fractional ratio would show a student
+  blurred or wrong pixels.
+- Reproduced at ratios 1.25, 1.5, 2 and 3, in WebKit and Chromium, twice over: on this PC
+  (Windows WebKit), and with the browsers of Linux, in the Playwright container
+  `mcr.microsoft.com/playwright:v1.65.1-noble` (the same Playwright version, so the same WebKit
+  build as the Ubuntu runner), through the new diagnosis options `--browser-server` and
+  `--page-host`. At every ratio in both browsers the backing store is 640x480, the 3x3 pixels
+  around the red pixel are exactly the program's (red in the centre, black around), the green
+  box's corners are exact, and on screen every device pixel around the red pixel is a whole
+  surface colour (red, black, or the white of the text), never a blend. WebKit places the
+  canvas at a fractional CSS position at 1.25 and 1.5 (top 248.796875 and 248.65625), which is
+  a whole device pixel within WebKit's 1/64 layout unit; at 1.5 one surface pixel covers one or
+  two device pixels, as any nearest-neighbour scale by 1.5 must.
+- Cause of the round-1 failure: the version of commit 8611609 read the canvas without waiting
+  for the presenter's frame (entry 22). The repair of round 2 was proven by CI run 44919519853
+  (commit c4d3dfa): the Output panel check passed on Ubuntu, macOS and Windows.
+- Does now: the fractional pass runs at 1.25, 1.5 and 3 (2 and 1 are the full presentation
+  passes), fails if the frame never came ("presented NOT within ... ms"), and prints in the CI
+  log the 3x3 backing pixels, how long the presenter took, the canvas position, and the device
+  pixels on screen with the surface colours nearby. It checks, in addition, that no device pixel
+  on screen blends two surface colours - what the product guarantees with
+  `image-rendering: pixelated` at any ratio. How many device pixels one surface pixel covers at a
+  fractional ratio is the browser's business and is not checked.
+- Only the next CI run can prove: the new on-screen blend check on the macOS runner (WebKit and
+  Chromium) and on the Ubuntu runner outside a container.
+
+### 24. Entry 21 item 3 is automated (DV2)
+
+`tests/desktop/dev/output.spec.ts` (DV2) pastes `HELLO` with Cmd+V into a task 5 loop in the
+desktop app, checks `HO`, checks that the paste event came less than 150 ms
+(`PASTE_WAIT_MS.desktop`) after the key-down, pastes again with `sim.output.paste` through
+`Platform.pasteIntoFocus`, and checks `Platform.onFullScreenChange` and Alt+Enter in the window.
+All passed on macos-15 in CI run 44919519853 (job desktop-dev). Item 3 of entry 21 can leave the
+manual list; items 1 and 2 (real dead keys and input methods, the system's key repeat and the
+macOS accent menu) still need a person.

@@ -101,6 +101,13 @@ These keep further lines of the originals unchanged.
   `Form1->regSR->EditText[3] == '0'` or `Hardware->ROMChk->Checked = true`
   compile as they are. Assigning a `Checked` or `EditText` runs the same
   handler the VCL would run, and only when the value changes.
+  Clearing the listing's lines (`ListBox1->Items->Clear()`, in `OpenFile`)
+  also drops the list box's selection (`ItemIndex = -1`), as the VCL's
+  `TListBoxStrings.Clear` does by sending `LB_RESETCONTENT`; until gate I1
+  round 3 only `ListBox1->Clear()` did, so a program opened over another one
+  with the same start address kept the old row marked (`shim/form1.cpp`,
+  `listingItemsCleared`; test: loader.test.mjs, "opening a program over
+  another one ...").
   `shim/vcl/proto.h` and `opcodes.h` forward to `PROTO.H` / `OPCODES.H` (the
   originals include them in both spellings; that only works on a
   case-insensitive file system).

@@ -211,7 +211,9 @@ text references.
   - with italic, the overhang is left out when two or more bytes are drawn and the text has a
     zero-width byte (trailing ones included) or has `$7F` and a drawn byte other than `$7F`: the
     box is then the wider of the advances and the first advance plus the overhang;
-  - `$7F` in an outline face, in a text with a byte of `$80` or above: entry 25.
+  - `$7F` in an outline face, in a text with a byte of `$80` or above: entry 25;
+  - the fixed-pitch outline faces (Courier New, Lucida Console, Consolas) build the box another
+    way: entry 28.
 - Does: exactly those rules (`TextScreen.layout`, used by `drawText`; `charOut`, the echo and the
   prompt hand the surface one byte and take the same path), because T2's font data and T2's GDI
   references make them reproducible pixel for pixel; entry 27 has the numbers. The usual case, a
@@ -255,10 +257,12 @@ text references.
   SH1's `textOut` resolves the colour with the rule of §4.6 when it draws (SH1 erratum 4). Task 21,
   the Options colour, the echo and the prompt all take that path; `text-screen.test.ts` has nine
   colours with a non-zero top byte.
-- Not verified: the rule rests on the VCL and on §4.6, not on a capture of text on Windows. T2's
-  colour suites draw pixels, lines, rectangles and fills, no text.
-  `docs/requests/SH3-gdi-text-colour.md` asks T2 for text cases with such colours; if Windows
-  disagrees, `textColor` is the one place to change.
+- Verified (gate I1 round 3): T2 captured the ten colours of `docs/requests/SH3-gdi-text-colour.md`
+  (`$01000005 $0100000D $01000014 $0100FF05 $7F000007 $02336699 $80000005 $80000008 $8000000F
+  $FF336699`, Fixedsys 9, "AB"; errata T2 section 1 item 15) in the suite `text`, and Windows
+  agrees with the rule of §4.6 in all of them. `gdi-references.test.ts` replays them with every
+  other case of `text` and the port draws all ten pixel for pixel as Windows does (entry 27). The
+  request is done.
 
 ### 18. Three places where the original would fail and the port does not
 
@@ -349,7 +353,8 @@ text references.
 - Contract: `GlyphProvider` has no such method; it is the optional local interface
   `FallbackGlyphs` (`fonts/types.ts`), which `AtlasGlyphProvider` and `FontSet` implement.
   `TextScreen` draws the byte's own glyph with a provider that lacks it. Proposed:
-  `GlyphProvider.delInHighText?(font): Glyph | null`, beside `textOverhang`.
+  `GlyphProvider.delInHighText?(font): Glyph | null`, beside `textOverhang` (and, since entry 28,
+  `GlyphProvider.monospacedOutline?(font): boolean`).
 - Not reproduced: the glyph itself (another font's, anti-aliased) is left blank; its pixels are
   machine dependent and T2's `text-outline` suite draws the text in the fill colour.
 
@@ -380,14 +385,16 @@ text references.
 replay every text case of `tests/conformance/gdi/golden` as a 68000 program causes it - task 21 for
 font and colour, task 95 for the text - on the real `OutputDevice`, `TextScreen` and `Surface`
 with the application's `AtlasGlyphProvider` loading `app/public/fonts`, and compare with what GDI
-drew on Windows 11. Numbers at gate I1 round 2:
+drew on Windows 11. Numbers at gate I1 round 3 (round 2 in brackets where they differ):
 
 | Suite | What is compared | Result |
 |---|---|---|
-| `text` (raster faces: Fixedsys 0-121 pt, Courier 0-199 pt, five styles, every byte, random strings, every zero-width rule) | every pixel and the pen | 2,122 of 2,122 equal |
+| `text` (raster faces: Fixedsys 0-121 pt, Courier 0-199 pt, five styles, every byte, random strings, every zero-width rule) | every pixel and the pen | 2,132 of 2,132 equal (2,122: T2 added the ten text colours of entry 17) |
 | `text-outline`, Courier New, Lucida Console, Consolas (15 sizes, four styles) | cell rectangles and pen | 198 of 198 equal |
 | `text-outline`, the proportional substitute at the 11 sizes with an atlas (incl. size 0) | cell rectangles and pen | 88 of 88 equal |
 | `text-outline`, the proportional substitute at 1, 5, 100, 255 pt | pen | 16 of 32 equal, all within 2 % (entry 26) |
+| `text-outline-zero` (zero-width bytes and `$7F`, Courier New, Lucida Console, Consolas; entry 28), texts that draw something other than `$7F` | cell rectangles and pen | 336 of 336 equal (96 of 336 before entry 28) |
+| `text-outline-zero`, texts that draw only `$7F` | pen | 72 of 72 equal (cells: 60 of 72; the cell height is not measured, entry 28) |
 | `text-outline-glyphs` (outline faces with visible glyphs) | pen | 75 of 75 equal |
 | `text-control` (machine-dependent strings; not required) | every pixel and the pen | 44 of 252 equal (pictures 46, pens 217) |
 
@@ -408,3 +415,32 @@ The 208 `text-control` cases that differ, by T2's reason (`textUnmodelled` in `c
 
 These depend on the machine's font smoothing or on Windows' script itemization, which T2 did not
 model; the port keeps the rule of the ordinary case. `docs/differences/SH3.md` lists them.
+### 28. Zero-width bytes and `$7F` in the fixed-pitch outline faces (T2 erratum, section 2, "Outline faces, cells and pens"; gate I1 round 3)
+
+- Found by T2 in the review of gate I1 round 2 (suite `text-outline-zero`, 408 cases): in Courier
+  New, Lucida Console and Consolas Windows builds the opaque box from the widths it draws, not from
+  the rule of entry 14. A zero-width byte (`$09 $0A $0D $1C-$1F`) takes no room even when it is the
+  only byte, so a text of zero-width bytes only fills no cell; `$7F` is always drawn from a
+  fallback font and takes that glyph's width (`delInHighString`) in the box, also without a byte of
+  `$80` or above, where the pen still counts the face's advance (Courier New 9 `"A" $7F "B"`: box
+  18, pen 21). Consolas' `$0D` advances 0. The port had the rule of entry 14 there and differed from
+  Windows in 240 of the 336 modelled cases (the reviewer counted 312 of 408 with the 72 texts below).
+- Does: `FallbackGlyphs` (`fonts/types.ts`) has a new optional method `monospacedOutline(font)`,
+  which `FontSet` and `AtlasGlyphProvider` implement: true for an outline face (not a raster face
+  of the metric table) whose atlas is fixed-pitch (every byte `$20-$7E` as wide as the cell); the
+  proportional substitute of font numbers 5 and 7 is not. `TextScreen.layout` hands such a font to
+  `outlineLayout`: the box is the sum of the drawn glyphs, zero-width bytes are never drawn, `$7F`
+  is `delInHighText`; the pen follows entry 14 and entry 25 unchanged. Consolas' `$0D` needs nothing
+  of its own: its advance in the atlases is 0 at every size, which `gdi-references.test.ts` checks.
+  A character written at the cursor takes the same path for `$7F` (`textOutChar`), as charOut hands
+  Windows one byte. A provider without the method (the contract's `GlyphProvider` does not have it)
+  keeps the rules of entry 14.
+- Result: `text-outline-zero` 336 of 336 cases equal in cells and pens (96 before); the other text
+  suites are unchanged (entry 27 has all numbers, before and after). `gdi-references.test.ts` and
+  `check-text.mjs` now read the suite, and a test shows that the old rule fails it.
+- Not modelled (as in T2's model): a text that draws only `$7F` gets the fallback font's cell
+  height on Windows, which was not measured. The port fills the face's own height; the pens of all
+  72 such cases are Windows', and their cells in 60 (the 12 others are Courier New 8 and Lucida
+  Console 10, plain and bold, one row). In `docs/differences/SH3.md`.
+- Proportional substitute (Arial): not changed. T2 did not measure these rules there and lists the
+  zero-width bytes of Arial as not modelled.

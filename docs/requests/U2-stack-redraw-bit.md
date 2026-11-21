@@ -1,4 +1,6 @@
-Status (item 2, contracts, W1): half done at gate I1 round 2. `AppState.sim.repaint` has the optional counter `stackRedraw?: number` (`contracts/store.ts`). `RepaintBit.StackRedraw = 16` is not added yet: `RepaintBit` must equal the engine's `Repaint` object exactly (`contracts/contracts.test.ts` "engine mirror" and `engine/sim.test.ts` compare them), so it goes in with item 1 and the rebuild of `engine/dist`, in the same change, by whoever the gate gives item 1 to. The line is `export const RepaintBit = { Listing: 1, Breakpoints: 2, Memory: 4, Stack: 8, StackRedraw: 16 } as const;`; the mirror test's table already maps `StackRedraw` to `STACK_REDRAW`. Details: `docs/porting/errata/W1.md`, entry 12.
+Status (item 1, engine, W4): done at gate I1 round 3, with one difference: `StackFrm->Repaint()` sends `Repaint.STACK | Repaint.STACK_REDRAW` (8 | 16), not 16 in place of 8, so hosts that count only `Stack` behave as before; re-centre when `repaint.stack` moved by more than `repaint.stackRedraw`. The contracts line is asked for in `docs/requests/W4-repaint-stack-redraw.md` (same commit). Items 2 (contracts) and 3 (SH8) remain. Details: `docs/porting/errata/W4.md`, round 3. Item 3 (SH8): done at gate I1 round 3, after `RepaintBit.StackRedraw` appeared in the contracts: the controller counts it into `repaintCounts.stackRedraw` and the session mirrors it into `AppState.sim.repaint.stackRedraw` (`core/run/controller.ts`, `features/run/mirror.ts`; tests "counts StackFrm->Repaint() as stackRedraw apart from a re-centre" in `controller.commands.test.ts` and "carries stackRedraw" in `logic.test.ts`).
+
+Status (item 2, contracts, W1): done at gate I1 round 3. `RepaintBit` is `{ Listing: 1, Breakpoints: 2, Memory: 4, Stack: 8, StackRedraw: 16 }` (`contracts/engine.ts`), matching the engine's `Repaint.STACK_REDRAW` built in the same round; `AppState.sim.repaint.stackRedraw?` (round 2) is documented with the engine's encoding: `Repaint()` sends `Stack | StackRedraw`, `updateDisplay()` sends `Stack`, so the Stack panel re-centres only when `stack` moved by more than `stackRedraw`. The mirror tests (`contracts/contracts.test.ts`, `engine/sim.test.ts`) pass with the rebuilt `engine/dist`. Item 3 (SH8 counting the bit) is still open. Details: `docs/porting/errata/W1.md`, entry 13.
 
 # U2: tell the Stack panel a redraw (`StackFrm->Repaint()`) from a re-centre (`updateDisplay()`)
 
@@ -43,3 +45,25 @@ stays). Until then the remaining case is recorded in `docs/porting/errata/U2.md`
 
 Priority: low (no program-visible effect). It needs a rebuild of `engine/dist`, which only the gate
 may do.
+
+## Owners of the items (added by U2 at gate I1 round 3)
+
+The round-2 review found that items 1 and 3 had no named owner. They are:
+
+- Item 1: the simulator engine's owner (`engine/sim/shim/host.h`, `misc.cpp:32`, `sim68k.mjs`),
+  and the gate for the rebuild of `engine/dist`. In the same change the contracts engineer (W1)
+  adds `StackRedraw: 16` to `RepaintBit` (the mirror tests need both at once). At round 3 the
+  working tree already carried an uncommitted shim change: `REPAINT_STACK_REDRAW = 16` in
+  `host.h`, and `TStackFrm::Repaint()` sending `REPAINT_STACK | REPAINT_STACK_REDRAW`, that is
+  BOTH bits, so a host that only knows the Stack bit still redraws.
+- Item 3: SH8 (`features/run`, the session that counts the bits into `AppState.sim.repaint`):
+  count bit 16 into `repaint.stackRedraw`, as it counts the others. With the encoding above, a
+  `Repaint()` moves both `stack` and `stackRedraw`.
+- U2's part is done at round 3, ahead of items 1 and 3: `stackRecentreDue` in
+  `app/src/features/stack/model.ts` re-centres only when `repaint.stack` moved by more than
+  `repaint.stackRedraw` did, and the new `stackRedrawDue` redraws in place when only the
+  `Repaint()` pairs came. Without the counter the behaviour is unchanged. Unit tests in
+  `model.test.ts`. On the real session with the rebuilt engine and SH8's counter,
+  `check-memory-stack.mjs` scrolls the Stack panel, clicks Hardware switch 0 and finds the middle
+  row unchanged, with `repaint.stack` and `repaint.stackRedraw` both moved by one (passes in
+  Chromium and WebKit at round 3). Defect 9 is closed on U2's side.

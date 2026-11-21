@@ -25,11 +25,48 @@ import {
   OUTLINE_ZERO_ADVANCE,
   outlineAdvance,
   outlineCells,
+  outlineWidening,
   resolveColour,
   textExtent,
 } from './text-model';
 
 const T = 120_000;
+
+/**
+ * The first pixel ("x,y") of an outline-face reference that the cells do not explain, or null. Inside
+ * the cells only the fill colour; outside them the background, or the fill colour where GDI may widen
+ * a TrueType cell by the glyphs' ink overhang or draw underline and strike-out (errata T2 section 2,
+ * last item), or, only in the widening, the smoothed edge of the ink itself: a blend, channel by
+ * channel, of the background and the font colour.
+ */
+function outlineCellFailure(
+  image: { width: number; height: number; pixels: ArrayLike<number> },
+  cells: NonNullable<ReturnType<typeof outlineCells>>,
+  ink: number,
+): string | null {
+  const fill = 0x0000ff;
+  const back = 0x336699;
+  for (let y = 0; y < image.height; y++) {
+    for (let x = 0; x < image.width; x++) {
+      const inBox = cells.boxes.some((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h);
+      const got = (image.pixels[y * image.width + x] as number) & 0xffffff;
+      if (cells.uncertain(x, y) && (got === fill || (cells.widening(x, y) && isBlend(got, back, ink)))) continue;
+      if (got !== (inBox ? fill : back)) return `${x},${y}`;
+    }
+  }
+  return null;
+}
+
+/** Whether every channel of `colour` lies between that channel of `a` and of `b` (a smoothed edge). */
+function isBlend(colour: number, a: number, b: number): boolean {
+  for (const shift of [0, 8, 16]) {
+    const c = (colour >> shift) & 0xff;
+    const lo = Math.min((a >> shift) & 0xff, (b >> shift) & 0xff);
+    const hi = Math.max((a >> shift) & 0xff, (b >> shift) & 0xff);
+    if (c < lo || c > hi) return false;
+  }
+  return true;
+}
 
 describe('golden packs', () => {
   it(
@@ -466,32 +503,78 @@ describe('text references against the font data', () => {
     () => {
       const failures: string[] = [];
       let checked = 0;
-      for (const r of [...references('text-outline'), ...references('text-outline-zero')]) {
+      for (const r of [
+        ...references('text-outline'),
+        ...references('text-outline-zero'),
+        ...references('text-outline-italic'),
+      ]) {
         const cells = outlineCells(metrics, r.case);
         if (!cells) continue; // proportional face, or a width that is not known at this size
         checked++;
-        const fill = 0x0000ff;
-        const back = 0x336699;
-        for (let y = 0; y < r.image.height; y++) {
-          for (let x = 0; x < r.image.width; x++) {
-            const inBox = cells.boxes.some((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h);
-            const got = (r.image.pixels[y * r.image.width + x] as number) & 0xffffff;
-            // GDI widens a TrueType cell by the glyphs' ink overhang, and draws underline, strike-out
-            // and the smoothed ink edge outside it: those pixels may take any colour (errata T2
-            // section 2, last item).
-            if (cells.uncertain(x, y)) continue;
-            if (got !== (inBox ? fill : back)) {
-              failures.push(`${r.case.id} at ${x},${y}`);
-              y = r.image.height;
-              break;
-            }
-          }
-        }
+        let ink = 0;
+        for (const o of r.case.ops) if (o.op === 'fontcolor') ink = o.color;
+        const at = outlineCellFailure(r.image, cells, ink);
+        if (at) failures.push(`${r.case.id} at ${at}`);
         if (r.pen[0] !== cells.pen[0] || r.pen[1] !== cells.pen[1])
           failures.push(`${r.case.id}: pen ${r.pen}, expected ${cells.pen}`);
       }
       expect(checked).toBeGreaterThan(150);
       expect(failures.slice(0, 20)).toEqual([]);
+    },
+    T,
+  );
+
+  it(
+    'italic needs the wider margins: with a tenth of the cell on both sides text-outline-italic fails',
+    () => {
+      // Review round 2 of gate I1: Lucida Console 24 italic painted the fill 4 pixels beyond the cell.
+      const legacy = (_style: number, h: number): [number, number] => {
+        const m = Math.max(3, Math.ceil(h / 10));
+        return [m, m];
+      };
+      let failing = 0;
+      let checked = 0;
+      for (const r of references('text-outline-italic')) {
+        const cells = outlineCells(metrics, r.case, legacy);
+        if (!cells) continue;
+        checked++;
+        if (outlineCellFailure(r.image, cells, 0x0000ff)) failing++;
+      }
+      expect(checked).toBeGreaterThan(150);
+      expect(failing).toBeGreaterThan(10);
+    },
+    T,
+  );
+
+  it(
+    'outside the outline cells only the fill colour, and in the widening the smoothed ink edge, may appear',
+    () => {
+      // Review round 2 of gate I1: an earlier version let uncertain pixels take any colour.
+      const r = references('text-outline').find((c) => {
+        const cells = outlineCells(metrics, c.case);
+        return cells !== null && c.case.ops.some((o) => o.op === 'font' && o.style === 3);
+      });
+      if (!r) throw new Error('no underlined text-outline case');
+      const cells = outlineCells(metrics, r.case)!;
+      expect(outlineCellFailure(r.image, cells, 0x0000ff)).toBeNull();
+      const box = cells.boxes[0]!;
+      const paint = (x: number, y: number, colour: number) => {
+        const pixels = r.image.pixels.slice();
+        pixels[y * r.image.width + x] = colour;
+        return { ...r.image, pixels };
+      };
+      // A blend of background and ink: allowed next to the cell, not in the rows of the lines far from it.
+      const blend = 0x1d5899;
+      const [, right] = outlineWidening(3, box.h);
+      expect(cells.widening(box.x + box.w, box.y)).toBe(true);
+      expect(outlineCellFailure(paint(box.x + box.w, box.y, blend), cells, 0x0000ff)).toBeNull();
+      const far = box.x + box.w + right + 2;
+      expect(cells.uncertain(far, box.y) && !cells.widening(far, box.y)).toBe(true);
+      expect(outlineCellFailure(paint(far, box.y, blend), cells, 0x0000ff)).toBe(`${far},${box.y}`);
+      // Any other colour fails everywhere outside the cells, also in the widening.
+      expect(outlineCellFailure(paint(box.x + box.w, box.y, 0xff0000), cells, 0x0000ff)).toBe(
+        `${box.x + box.w},${box.y}`,
+      );
     },
     T,
   );

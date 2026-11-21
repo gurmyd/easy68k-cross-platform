@@ -115,8 +115,12 @@ export const Break = Object.freeze({
 });
 /** Values passed to host.menuState(). */
 export const Menu = Object.freeze({ ACTIVE: 0, TRACE: 1 });
-/** Bits passed to host.repaint(). */
-export const Repaint = Object.freeze({ LISTING: 1, BREAKPOINTS: 2, MEMORY: 4, STACK: 8 });
+/**
+ * Bits passed to host.repaint().  StackFrm->updateDisplay() (redraw and re-centre on the
+ * selected register) sends STACK; StackFrm->Repaint() (redraw where it is) sends
+ * STACK | STACK_REDRAW, so the Stack window re-centres only when STACK came more often.
+ */
+export const Repaint = Object.freeze({ LISTING: 1, BREAKPOINTS: 2, MEMORY: 4, STACK: 8, STACK_REDRAW: 16 });
 /** File open modes passed to host.fileOpen(). */
 export const FileMode = Object.freeze({ UPDATE: 0, READ: 1, CREATE: 2 });
 
@@ -166,7 +170,8 @@ export const FileMode = Object.freeze({ UPDATE: 0, READ: 1, CREATE: 2 });
  *   Name of the loaded program for the title bar. Original: Form1->Caption = name.
  * @property {(what: number) => void} [repaint]
  *   Repaint request, a combination of Repaint.* bits. Original: ListBox1->Repaint(),
- *   BreaksFrm->Repaint(), MemoryFrm->Repaint(), StackFrm->updateDisplay().
+ *   BreaksFrm->Repaint(), MemoryFrm->Repaint(), StackFrm->updateDisplay() (STACK),
+ *   StackFrm->Repaint() (STACK | STACK_REDRAW).
  * @property {(address: number) => void} [memoryLivePaint]
  *   A memory write at this address succeeded (only while Option.MEM_LIVE is on).
  *   Original: MemoryFrm->LivePaint(loc).

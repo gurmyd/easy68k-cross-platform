@@ -994,6 +994,75 @@ describe('the opaque box of a bold or italic raster font (measured: tests/oracle
     expect(rig.surface.overlay).toMatchObject({ width: 8, height: 16 });
   });
 
+  it('the fixed-pitch outline faces: the box is the widths drawn - zero-width bytes none, even alone; $7F the fallback width (errata T2 section 2)', () => {
+    const fonts = syntheticFonts();
+    rig.surface.setFillColor(BLUE);
+    for (const [number, name] of [
+      [3, 'Courier New'],
+      [4, 'Lucida Console'],
+      [6, 'Consolas'],
+    ] as const) {
+      for (const styleBits of [0, 1, 4, 8]) {
+        rig = createTextRig();
+        rig.surface.setFillColor(BLUE);
+        rig.text.setFontProperties(WHITE, (((number << 8) | 10) << 16) | styleBits);
+        const font = rig.text.state.font;
+        expect([name, styleBits, fonts.monospacedOutline(font)]).toEqual([name, styleBits, true]);
+        const cell = rig.text.state.colWidth;
+        const del = (fonts.delInHighText(font) as Glyph).advance;
+        expect(del).toBeLessThan(cell);
+        const run = (bytes: number[], y: number) => {
+          rig.text.drawText(Uint8Array.from(bytes), 100, y + 2);
+          let width = 0;
+          while (rig.surface.pixel(100 + width, y + 2) === BLUE) width++;
+          return { box: width, pen: rig.surface.state.backPen.x - 100 };
+        };
+        const where = `${name}, style bits ${styleBits}`;
+        const check = (bytes: number[], y: number, box: number, pen: number) =>
+          expect([where, bytes, run(bytes, y)]).toEqual([where, bytes, { box, pen }]);
+        check([0x0d], 0, 0, fonts.glyph(font, 0x0d).advance); // alone: no cell; the pen counts the advance
+        check([0x09, 0x0a, 0x1c], 20, 0, 3 * cell);
+        check([0x41, 0x0a, 0x42], 40, 2 * cell, 3 * cell);
+        check([0x41, 0x7f, 0x42], 60, 2 * cell + del, 3 * cell); // box: fallback width; pen: the face's
+        check([0x41, 0x7f, 0xe9], 80, 2 * cell + del, 2 * cell + del); // with a high byte both
+        check([0x41, 0x0d, 0xe9], 100, 2 * cell, 2 * cell); // zero-width counts nothing then
+      }
+    }
+  });
+
+  it('$7F written at the cursor in a fixed-pitch outline face takes the fallback width, as task 95 draws it', () => {
+    rig.surface.setFillColor(BLUE);
+    rig.text.setFontProperties(WHITE, 0x030a0000); // Courier New 10
+    const { colWidth, rowHeight } = rig.text.state;
+    const del = (syntheticFonts().delInHighText(rig.text.state.font) as Glyph).advance;
+    rig.text.charOut(0x7f);
+    expect(rig.surface.isFilled({ left: 0, top: 0, right: del, bottom: rowHeight }, BLUE)).toBe(true);
+    expect(rig.surface.pixel(del, 0)).toBe(BLACK);
+    expect(rig.text.state.col).toBe(1);
+    rig.text.charOut(0x41);
+    expect(rig.surface.pixel(colWidth, 0)).not.toBe(BLACK);
+    // the raster faces keep the byte's own glyph and cell
+    rig.text.setFontProperties(WHITE, 0);
+    rig.text.gotorc(2, 0);
+    rig.text.charOut(0x7f);
+    expectGlyphAt(0, 2 * rig.text.state.rowHeight, glyphOf(0x7f), WHITE, BLUE);
+  });
+
+  it('a provider that does not say that a face is a fixed-pitch outline face gets the rules of the raster faces', () => {
+    const fonts = syntheticFonts();
+    const legacy = createTextRig({
+      glyphs: {
+        ready: Promise.resolve(),
+        metrics: (font) => fonts.metrics(font),
+        glyph: (font, ch) => fonts.glyph(font, ch),
+      },
+    });
+    legacy.surface.setFillColor(BLUE);
+    legacy.text.setFontProperties(WHITE, 0x030a0000);
+    legacy.text.drawText(Uint8Array.of(0x0d), 100, 20);
+    expect(legacy.surface.pixel(100, 20)).toBe(BLUE); // one cell, as in a raster face
+  });
+
   it('a provider that knows no overhang (the contract has no such method) gives plain boxes', () => {
     const fonts = syntheticFonts();
     const plain = createTextRig({

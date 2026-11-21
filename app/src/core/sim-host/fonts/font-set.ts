@@ -122,6 +122,8 @@ interface ResolvedFont {
   source: string | null;
   /** The glyph of $7F in a text with a byte of $80 or above, when it is not the byte's own glyph. */
   delInHighText: Glyph | null;
+  /** A fixed-pitch outline face (see `FallbackGlyphs.monospacedOutline`). */
+  monospacedOutline: boolean;
   make(ch: number): Glyph;
   glyphs: (Glyph | undefined)[];
 }
@@ -232,6 +234,10 @@ export class FontSet implements GlyphProvider, FallbackGlyphs {
     return this.resolve(font).delInHighText;
   }
 
+  monospacedOutline(font: FontSpec): boolean {
+    return this.resolve(font).monospacedOutline;
+  }
+
   /** The path of the atlas a font's glyphs come from, or null when the set has none for its face.
    *  For tests and for diagnosis. */
   atlasOf(font: FontSpec): string | null {
@@ -278,6 +284,7 @@ export class FontSet implements GlyphProvider, FallbackGlyphs {
           overhang,
           source: native.path,
           delInHighText: null,
+          monospacedOutline: false,
           glyphs: [],
           make: (ch) => ruledGlyph(native, rule, style, ch),
         };
@@ -288,6 +295,7 @@ export class FontSet implements GlyphProvider, FallbackGlyphs {
           overhang,
           source: stored.path,
           delInHighText: null,
+          monospacedOutline: false,
           glyphs: [],
           make: (ch) => atlasGlyph(stored, ch),
         };
@@ -306,7 +314,15 @@ export class FontSet implements GlyphProvider, FallbackGlyphs {
         height: cell.rowHeight,
         coverage: new Uint8Array(cell.colWidth * cell.rowHeight),
       };
-      return { cell, overhang: 0, source: null, delInHighText: null, glyphs: [], make: () => empty };
+      return {
+        cell,
+        overhang: 0,
+        source: null,
+        delInHighText: null,
+        monospacedOutline: false,
+        glyphs: [],
+        make: () => empty,
+      };
     }
     const line = styled || (style !== 'underline' && style !== 'strikeOut') ? undefined : source[style];
     const scaledLine = line && scaleLine(line, cell.rowHeight, source.atlas.cellHeight);
@@ -328,6 +344,7 @@ export class FontSet implements GlyphProvider, FallbackGlyphs {
       overhang: 0,
       source: source.path,
       delInHighText,
+      monospacedOutline: !this.rasterFaces.has(entry.face) && fixedPitch(source.atlas),
       glyphs: [],
       make: (ch) => {
         const glyph = fittedGlyph(source, cell, ch, emRatio);
@@ -376,6 +393,16 @@ function nearestAtlas(candidates: readonly LoadedAtlas[], cell: CellMetrics): Lo
     }
   }
   return best;
+}
+
+/**
+ * Whether an atlas is of a fixed-pitch face: every printable ASCII byte ($20-$7E) is as wide as the
+ * cell. Courier New, Lucida Console and Consolas are; the proportional substitute of the misspelt
+ * name and of Terminal (Arial, trap15-b §5.7) is not.
+ */
+function fixedPitch(atlas: FontAtlas): boolean {
+  for (let ch = 0x20; ch < 0x7f; ch++) if (atlas.advances[ch] !== atlas.cellWidth) return false;
+  return true;
 }
 
 function compareRanks(a: readonly number[], b: readonly number[]): number {

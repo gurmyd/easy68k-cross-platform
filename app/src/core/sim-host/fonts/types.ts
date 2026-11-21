@@ -22,4 +22,13 @@ export interface FallbackGlyphs {
    * faces) or whose font files do not say.
    */
   delInHighText(font: FontSpec): Glyph | null;
+
+  /**
+   * True for a font whose face is one of the fixed-pitch outline faces (Courier New, Lucida
+   * Console, Consolas). Windows builds the opaque cell of a text in those faces from the widths it
+   * draws (docs/porting/errata/T2.md section 2, "Outline faces, cells and pens"): a zero-width byte
+   * takes no room even alone, and $7F always takes the width of `delInHighText`. Optional: a
+   * provider without it gets the rules of the raster faces.
+   */
+  monospacedOutline?(font: FontSpec): boolean;
 }

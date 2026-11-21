@@ -1,3 +1,7 @@
 {
-  "about": "Differences of the GDI capture on Windows versions other than the one the references were captured on (README.md, 'Another Windows'). Keyed by windowsIdentity(); each record maps an output to the fingerprint of what that Windows produces. A record is added by a person after looking at the differences; npm run oracle:gdi prints it when it meets an unrecorded Windows."
+  "about": "Differences of the GDI capture on Windows versions other than the one the references were captured on (README.md, 'Another Windows'). Keyed by windowsIdentity(); each record maps an output to the fingerprint of what that Windows produces. A record is added by a person after looking at the differences; npm run oracle:gdi prints it when it meets an unrecorded Windows. A record without differences says that the Windows was reviewed and must equal the references in every compared output.",
+  "10.0.26100 cp1252 96dpi": {
+    "reviewed": "Windows Server 10.0.26100 (GitHub's windows-latest), reviewed by T2 in gate I1 round 3 from the gdi-capture-run artifact of CI run 44919519853 (node tests/oracle/gdi-capture/run.mjs --from <artifact>): 24 outputs differed, all only in what the control bytes $00-$08, $0B, $0E-$1B draw (another fallback font; machine-dependent.ts); every advance, every other glyph pixel, the metric table, the primitives and the text suite were equal. Since those bytes are not compared, this Windows has no accepted difference.",
+    "differences": {}
+  }
 }

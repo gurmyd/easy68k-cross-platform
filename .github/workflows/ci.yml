@@ -35,7 +35,8 @@
 #   windows-oracles: asm CLI   tests/oracle/asm-cli/run.mjs         (T1)
 #   windows-oracles: engines   weekly schedule or manual run: Windows engine build vs Linux (7.3)
 #   desktop-dev                tests/desktop/dev/playwright.config.ts (DV2), and desktop/** or app/** changed
-#   windows-oracles uploads build/gdi-capture/run when the GDI step fails (for other-windows.json)
+#   windows-oracles uploads build/gdi-capture/run when the GDI step fails (for other-windows.json),
+#   and its report.txt and differences/ after every GDI step (gdi-capture-report)
 #
 # check and unit run on every push and pull request.
 #
@@ -431,7 +432,9 @@ jobs:
   # On GitHub (run 44913261966, the first with every check), whole jobs including set-up:
   # interface 7.2 min (Ubuntu), 10.8 (macOS), 6.9 (Windows); simulator 7.8, 9.6 and 6.8. The
   # longest steps were sim-main 3.4 min and output 2.4 on macOS. The limit of 45 minutes leaves
-  # room for four times that.
+  # room for four times that. Run 44919519853 (gate I1 round 2, with check:wave1 in `simulator`):
+  # interface 7.3 / 8.9 / 9.3 min (Ubuntu / macOS / Windows), simulator 9.7 / 13.2 / 10.9;
+  # check:wave1 took 2.1 / 2.7 / 2.5 min of that, sim-main 1.8 / 3.4 / 2.0.
   browser-checks:
     name: browser-checks (${{ matrix.os }}, ${{ matrix.group }})
     needs: [plan, engines]
@@ -636,6 +639,19 @@ jobs:
         with:
           name: gdi-capture-run
           path: build/gdi-capture/run/
+          if-no-files-found: ignore
+          retention-days: 14
+      # The short form of the same (T2-gdi-fonts.md item 6), on every run of the GDI step: the
+      # report and only the captured files that differ from the committed references (about 2 MB
+      # at most), so that a person can look at them without the 25 MB of the whole capture.
+      - name: Upload the GDI capture report (T2)
+        if: ${{ !cancelled() && needs.plan.outputs.gdi == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gdi-capture-report
+          path: |
+            build/gdi-capture/run/report.txt
+            build/gdi-capture/run/differences/
           if-no-files-found: ignore
           retention-days: 14
       # The 68000 single-step suite (about 200 MB) is cached by the hash of its manifest.

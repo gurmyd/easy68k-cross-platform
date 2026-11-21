@@ -34,6 +34,14 @@ async function until(condition: () => boolean, what: string): Promise<void> {
 }
 
 describe('FilesTreeModel', { timeout: 60_000 }, () => {
+  it('reveal of a path that does not exist selects no row and does not throw (FilesRevealArg)', async () => {
+    const { model } = await setup();
+    await expect(model.reveal('/browser/Examples/hello.X68')).resolves.toBeUndefined();
+    expect(model.selectedRow()).toBeNull();
+    await model.reveal('/browser/demo/sub');
+    expect(model.selectedRow()?.path).toBe('/browser/demo/sub');
+  });
+
   it('shows the store expanded, folders first, and opens and closes folders', async () => {
     const { model } = await setup();
     expect(shown(model)).toEqual(['-My Programs', '  +demo', '  a.txt']);

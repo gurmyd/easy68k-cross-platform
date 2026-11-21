@@ -81,7 +81,7 @@ const RUNS = [
   ['real-engine', 'the engine scenario, real surface and fonts'],
 ];
 /** The text suites of the GDI capture. */
-const SUITES = ['text', 'text-outline', 'text-outline-glyphs', 'text-control'];
+const SUITES = ['text', 'text-outline', 'text-outline-zero', 'text-outline-glyphs', 'text-control'];
 
 const PAGE_PATH = '__check-text.html';
 const PAGE = `<!doctype html>
@@ -279,6 +279,13 @@ async function main() {
     const measuredSizes = new Set([0, ...outlineIndex.atlases.filter((a) => a.face === 'Arial').map((a) => a.size)]);
     const fontOf = (reference) => replay.fontOfCase(reference.case);
     const outline = references['text-outline'];
+    // A text whose drawn bytes are all $7F gets the fallback font's cell height on Windows, which was
+    // not measured (docs/porting/errata/T2.md section 2): only its pen is compared.
+    const ZERO_WIDTH = [0x09, 0x0a, 0x0d, 0x1c, 0x1d, 0x1e, 0x1f];
+    const drawsOnlyDel = (reference) =>
+      reference.case.ops.some(
+        (o) => o.op === 'text' && o.bytes.includes(0x7f) && o.bytes.every((b) => b === 0x7f || ZERO_WIDTH.includes(b)),
+      );
     const groups = [
       ['text: raster faces, every pixel and the pen position', references.text, 'pixels', true],
       [
@@ -298,6 +305,18 @@ async function main() {
         outline.filter((r) => replay.isProportionalName(fontOf(r).name) && !measuredSizes.has(fontOf(r).size)),
         'pens',
         false,
+      ],
+      [
+        'text-outline-zero: zero-width bytes and $7F in Courier New, Lucida Console, Consolas, cell rectangles and pen positions',
+        references['text-outline-zero'].filter((r) => !drawsOnlyDel(r)),
+        'cells',
+        true,
+      ],
+      [
+        'text-outline-zero: texts that draw only $7F, pen positions (the cell height of the fallback font is not measured)',
+        references['text-outline-zero'].filter(drawsOnlyDel),
+        'pens',
+        true,
       ],
       [
         'text-outline-glyphs: outline faces with visible glyphs, pen positions',

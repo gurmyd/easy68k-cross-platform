@@ -50,7 +50,13 @@ function sameList<T>(a: readonly T[], b: readonly T[]): boolean {
 type Repaint = NonNullable<SimState['repaint']>;
 
 function sameRepaint(a: Repaint, b: Repaint): boolean {
-  return a.listing === b.listing && a.breakpoints === b.breakpoints && a.memory === b.memory && a.stack === b.stack;
+  return (
+    a.listing === b.listing &&
+    a.breakpoints === b.breakpoints &&
+    a.memory === b.memory &&
+    a.stack === b.stack &&
+    a.stackRedraw === b.stackRedraw
+  );
 }
 
 function sameOutput(a: SimState['output'], b: SimState['output']): boolean {

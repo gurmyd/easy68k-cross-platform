@@ -91,6 +91,11 @@ export class TextScreen implements TextScreenApi {
    * draws it from a fallback font there (the outline faces). Null: the byte's own glyph.
    */
   private delInHighText: Glyph | null = null;
+  /**
+   * The font in use is a fixed-pitch outline face (Courier New, Lucida Console, Consolas), whose
+   * opaque cell Windows builds from the widths it draws (see `layout`).
+   */
+  private monospacedOutline = false;
 
   constructor(private readonly deps: TextScreenDeps) {
     this.state = {
@@ -362,8 +367,12 @@ export class TextScreen implements TextScreenApi {
    *
    * The box travels as glyph advances (the surface fills exactly those), so what it has beyond the
    * drawn glyphs is one more glyph without ink.
+   *
+   * The fixed-pitch outline faces (Courier New, Lucida Console, Consolas) build the box differently;
+   * see `outlineLayout`.
    */
   private layout(text: Bytes): { glyphs: Glyph[]; extent: number } {
+    if (this.monospacedOutline) return this.outlineLayout(text);
     const provider = this.deps.glyphs;
     const font = this.state.font;
     const inText = text.length >= 2;
@@ -410,6 +419,51 @@ export class TextScreen implements TextScreenApi {
       box = Math.max(advances, (glyphs[0] as Glyph).advance + this.overhang);
     }
     if (box > advances) glyphs.push(emptyGlyph(box - advances, this.state.rowHeight));
+    return { glyphs, extent };
+  }
+
+  /**
+   * `layout` in a fixed-pitch outline face (Courier New, Lucida Console, Consolas), as measured on
+   * Windows (docs/porting/errata/T2.md section 2, "Outline faces, cells and pens"; the GDI suite
+   * text-outline-zero):
+   *
+   * - Opaque box: the sum of the widths Windows draws. A zero-width byte takes none, also when it is
+   *   the only byte (a text of zero-width bytes only fills no cell). $7F is always drawn from a
+   *   fallback font and takes that glyph's width (`delInHighText`), with or without a byte of $80
+   *   or above. These faces have no style overhang.
+   * - Pen: the rule of the other faces. Zero-width bytes count their advance unless the text has two
+   *   or more bytes and a byte of $80 or above; $7F counts the fallback width only in a text with a
+   *   byte of $80 or above and the face's advance otherwise (Courier New 9 "A" $7F "B": box 18, pen
+   *   21). Consolas' carriage return has an advance of 0 in the font files, as on Windows.
+   *
+   * Not modelled: a text that draws only $7F gets the fallback font's cell height on Windows, which
+   * was not measured; the port fills the face's.
+   */
+  private outlineLayout(text: Bytes): { glyphs: Glyph[]; extent: number } {
+    const provider = this.deps.glyphs;
+    const font = this.state.font;
+    let high = false;
+    for (let i = 0; i < text.length; i++) if ((text[i] as number) >= 0x80) high = true;
+    const leaveOutZeroWidth = high && text.length >= 2;
+    const fallbackDel = this.delInHighText;
+
+    const glyphs: Glyph[] = [];
+    let extent = 0;
+    for (let i = 0; i < text.length; i++) {
+      const byte = text[i] as number;
+      if (ZERO_WIDTH_BYTES.has(byte)) {
+        if (!leaveOutZeroWidth) extent += provider.glyph(font, byte).advance;
+        continue;
+      }
+      if (byte === DEL && fallbackDel) {
+        glyphs.push(fallbackDel);
+        extent += high ? fallbackDel.advance : provider.glyph(font, byte).advance;
+        continue;
+      }
+      const glyph = provider.glyph(font, byte);
+      glyphs.push(glyph);
+      extent += glyph.advance;
+    }
     return { glyphs, extent };
   }
 
@@ -466,7 +520,9 @@ export class TextScreen implements TextScreenApi {
     this.overhang = Math.max(0, this.deps.glyphs.textOverhang?.(s.font) ?? 0);
     this.overhangGlyph = this.overhang > 0 ? emptyGlyph(this.overhang, s.rowHeight) : null;
     // The contract's GlyphProvider does not have this; the port's own provider does.
-    this.delInHighText = (this.deps.glyphs as Partial<FallbackGlyphs>).delInHighText?.(s.font) ?? null;
+    const fallback = this.deps.glyphs as Partial<FallbackGlyphs>;
+    this.delInHighText = fallback.delInHighText?.(s.font) ?? null;
+    this.monospacedOutline = fallback.monospacedOutline?.(s.font) ?? false;
   }
 
   setTextWrap(on: boolean): void {
@@ -600,9 +656,16 @@ export class TextScreen implements TextScreenApi {
   }
 
   /** A TextOut of one character at (x, textY): `layout` for a text of one byte, which is its glyph
-   *  and the style overhang in the opaque box, whatever the byte. The pen moves by the advance. */
+   *  and the style overhang in the opaque box, whatever the byte - except $7F in a fixed-pitch
+   *  outline face, which takes the fallback glyph. The pen moves by the advance. */
   private textOutChar(x: number, ch: number, target: 'both' | 'window'): void {
     const s = this.state;
+    if (this.monospacedOutline && ch === DEL) {
+      // Windows draws $7F of these faces from a fallback font, also alone (see `outlineLayout`).
+      const { glyphs, extent } = this.outlineLayout(Uint8Array.of(ch));
+      this.deps.surface.textOut(x, s.textY, glyphs, extent, s.fontColor, target);
+      return;
+    }
     const glyph = this.deps.glyphs.glyph(s.font, ch);
     const glyphs = this.overhangGlyph ? [glyph, this.overhangGlyph] : [glyph];
     this.deps.surface.textOut(x, s.textY, glyphs, glyph.advance, s.fontColor, target);

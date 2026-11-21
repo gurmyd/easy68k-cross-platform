@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import type { FileDialogs, OpenRequest, SaveRequest } from '../../contracts';
+import type { FeatureModule, FileDialogs, OpenRequest, SaveRequest } from '../../contracts';
 import { panelVisible } from '../../state/panels';
 import { createFakePlatform, createTestApplication } from '../../state/testing';
 import { showExamples } from './commands';
@@ -103,10 +103,16 @@ describe('the shipped examples', { timeout: 60_000 }, () => {
 });
 
 describe('copying the examples', { timeout: 60_000 }, () => {
-  it('copies byte for byte into the browser store, once, and shows the Files panel', async () => {
-    const app = createTestApplication({ features: [feature] });
+  it('copies byte for byte into the browser store, once, and reveals the folder in the Files panel', async () => {
+    // The Files feature (FS1) is not imported here (3.12.3): a stand-in records the command.
+    const reveals: unknown[] = [];
+    const files: FeatureModule = {
+      id: 'files-stand-in',
+      commands: { 'app.files.toggle': { run: (_ctx, arg) => void reveals.push(arg) } },
+    };
+    const app = createTestApplication({ features: [feature, files] });
     await showExamples(app.ctx, publicFetch);
-    expect(panelVisible(app.ctx, 'files')).toBe(true);
+    expect(reveals).toEqual([{ reveal: '/browser/Examples' }]);
     const list = await app.ctx.vfs.list('/browser/Examples');
     expect(list.map((entry) => entry.name).sort()).toEqual(manifest.files.map((file) => file.name).sort());
     for (const file of manifest.files) {

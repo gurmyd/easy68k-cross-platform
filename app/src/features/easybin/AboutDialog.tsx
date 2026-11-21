@@ -4,7 +4,7 @@
 // a link); below them the port's notice, as in the editor's and simulator's About boxes. F1 while the
 // box is open shows the credits page (aboutBoxKey in commands.ts).
 
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import type { DialogProps } from '../../contracts';
 import { ABOUT } from '../../core/easybin';
 import { PORT_NAME, PORT_STATEMENT, PORT_SUBTITLE, portVersionFromTitle } from '../../core/help';
@@ -18,22 +18,16 @@ export function EasybinAboutDialog({ close }: DialogProps<Record<string, never>,
   const okButton = useRef<HTMLButtonElement>(null);
   const version = portVersionFromTitle(globalThis.document?.title ?? '');
 
-  // The original's form has KeyPreview: F1 anywhere in the box. The kit's Dialog takes no key
-  // handler, so the box listens on the window while it is open.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (!event.repeat && aboutBoxKey(ctx, event)) event.preventDefault();
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [ctx]);
-
   return (
     <Dialog
       title={ABOUT.windowTitle}
       width={480}
       onCancel={() => close(undefined)}
       initialFocus={okButton}
+      // The original's form has KeyPreview: F1 anywhere in the box (the kit's owner keys, errata W2 18).
+      onKeyDown={(event) => {
+        if (!event.repeat && aboutBoxKey(ctx, event)) event.preventDefault();
+      }}
       footer={<Button ref={okButton} caption={ABOUT.ok} isDefault onClick={() => close(undefined)} />}
     >
       <div className="e68-easybin-about">

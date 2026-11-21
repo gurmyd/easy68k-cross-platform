@@ -54,7 +54,11 @@ export class SoftTimer implements SoftTimerApi {
     if (value) this.restart();
   }
 
-  /** Called by the controller. Fires at most once per call, then schedules `now` + interval. */
+  /**
+   * Called by the controller. Fires at most once per call, then schedules `now` + interval: each
+   * period starts when the late tick is handled, as a Windows timer's does (measured on Windows 11,
+   * errata SH8.md entry 26), so a 500 ms timer checked once per frame gives 19 ticks in 10 s.
+   */
   check(now: number): void {
     if (!this.on || this.interval === 0 || now < this.due) return;
     this.due = now + this.period();

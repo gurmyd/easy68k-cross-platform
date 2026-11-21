@@ -175,9 +175,19 @@ export function resolveToolbar(mode: Mode, env: ResolveEnv): ResolvedToolbarItem
       id: node.id,
       icon: spec.icon ?? 'dot',
       label: shortcut ? `${hint} (${shortcut})` : hint,
-      disabledReason: !enabled && env.state.sim.halted && DISABLED_BY_HALT.includes(node.id) ? HALTED_HINT : null,
+      disabledReason: !enabled && blockedByHalt(env.state) && DISABLED_BY_HALT.includes(node.id) ? HALTED_HINT : null,
       enabled,
       pressed: spec.kind === 'check' ? env.commands.isChecked(node.id) : null,
     };
   });
+}
+
+/**
+ * True while the run commands are blocked because the program halted (1.4 note 22): the
+ * simulator is idle and busy (menuState 1, sim-ui §3.6) after a halt. `sim.halted` alone is the
+ * engine's raw flag, which a reset leaves set until the next run (contracts/store.ts), so it is
+ * still true while the next program runs.
+ */
+export function blockedByHalt(state: AppState): boolean {
+  return state.sim.halted && state.sim.phase === 'idle' && state.sim.menuState === 1;
 }

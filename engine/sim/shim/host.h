@@ -57,7 +57,10 @@ void host_save_settings(void);
 void host_caption(const char *text, int length);
 // Repaint requests: ListBox1->Repaint(), BreaksFrm->Repaint(),
 // MemoryFrm->Repaint(), StackFrm->updateDisplay() / Repaint().
-enum { REPAINT_LISTING = 1, REPAINT_BREAKPOINTS = 2, REPAINT_MEMORY = 4, REPAINT_STACK = 8 };
+// StackFrm->updateDisplay() (redraw and re-centre) sends REPAINT_STACK;
+// StackFrm->Repaint() (redraw where it is) sends REPAINT_STACK |
+// REPAINT_STACK_REDRAW.
+enum { REPAINT_LISTING = 1, REPAINT_BREAKPOINTS = 2, REPAINT_MEMORY = 4, REPAINT_STACK = 8, REPAINT_STACK_REDRAW = 16 };
 void host_repaint(int what);
 // MemoryFrm->LivePaint(addr) after a successful mem_put.  Only called while
 // the host has switched it on with sim_set_option(SIM_OPT_MEM_LIVE, 1).

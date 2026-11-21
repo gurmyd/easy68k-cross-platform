@@ -144,3 +144,12 @@ an output folder without `index.html` and threw `pwa-build: ... index.html does 
 replaced the build's own error in the report (seen when another package's file did not parse:
 the real `PARSE_ERROR` was hidden). The plugin now notes an error from `buildEnd` or the
 `closeBundle` argument and leaves a failed build alone; `pwa-build.test.ts` covers both paths.
+
+## 11. pwaPlugin() under `vite build --watch` (gate I1, round 3)
+
+The flag that round 2 added ("this build failed") was set in `buildEnd(error)` and never cleared.
+Under `vite build --watch` one plugin object serves every rebuild, so the rebuild after the error
+was fixed would have ended without `sw.js` and without the manifest tags. `buildStart()` now clears
+it. `pwa-build.test.ts` "finishes a successful rebuild that follows a failed build (watch mode)"
+failed before the change (the second build's `index.html` had no service-worker meta tag) and
+passes after it. The project makes no watch builds today, so nothing a user sees changed.

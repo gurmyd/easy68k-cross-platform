@@ -27,11 +27,11 @@
 //   `stamps` table (empty when nothing has been changed yet). A document WITHOUT one was written by
 //   something else (an older version of the port that never saw stamps, a tool, a person in the
 //   developer tools): when such a document is written while the window is open, it replaces what
-//   the window knows, as every write did before stamps existed. Each window stamps what such a
-//   document changed when it takes it in, and windows that took in the same write agree on the
-//   earliest of their times, so that a window that hears of it late cannot undo a change made after
-//   another window had it (errata W3 entry 28). The same text written twice is two writes, each
-//   with a mark of its own in the stamp table (errata W3 entry 31).
+//   the window knows, as every write did before stamps existed. Every window gives such a write
+//   the same stamp: a writer named after its text and the number of that write of the text, and
+//   the earliest time any window took it in, so that a window that hears of it late cannot undo a
+//   change made after another window had it. The rule, and why every window arrives at the same
+//   stamp whenever it opened, is errata W3 entry 33 (it replaces the counting of entries 28, 31).
 // - Where the storage can run a task a little later (`defer`), a window puts a missing setting
 //   back after a short pause rather than at once, and only if no window has put it back meanwhile:
 //   several windows that all know the missing setting then write it once, not once each.
@@ -473,19 +473,39 @@ export function createSettingsService(
   const listeners = new Set<() => void>();
 
   /**
-   * The documents without stamps this window has already taken in (normally none, or the one it
-   * found at start). Its own copy of the storage may still show one of them after a newer write
-   * has reached the window by an event; only one it has not seen is a new write from outside.
+   * The text of the last document this window saw: found at start, received, read from its own
+   * copy, or written by it. A document is taken in only when it differs from this one (errata W3
+   * entry 33): the window's copy holds the last document delivered to it or written by it, so a
+   * copy that differs from this text holds a write made in the window's own page (which raises no
+   * event there), and an event with this text repeats what the window has already seen.
    */
-  const seenUnstamped = new Set<string>();
+  let lastText: string | null = null;
 
   /**
-   * How many writes of each outside document (by the writer of its first write) this window has
-   * taken in, so that the n-th write of a text has the same writer in every window (errata W3
-   * entry 31). A window starts from the highest write named in the document it finds: it was not
-   * open for those, and will not hear of them.
+   * The highest write of each outside text (by the writer of its first write) this window knows
+   * of, so that the n-th write of a text has the same writer in every window (errata W3 entry 33).
+   * It counts the window's own take-ins and every outside writer named in a stamped document the
+   * window takes in: such a stamp was written after the write it names, which the window has
+   * therefore already taken in or was not open for.
    */
   const outsideWrites = new Map<string, number>();
+
+  /** Raises the counts of outside writes to the writers named in `stamps`. */
+  const noteOutsideWriters = (stamps: Stamps) => {
+    for (const [, writer] of stamps.values()) {
+      const parts = outsideGeneration(writer);
+      if (parts !== undefined)
+        outsideWrites.set(parts.base, Math.max(outsideWrites.get(parts.base) ?? 0, parts.generation));
+    }
+  };
+
+  /** Counts one more write of the outside text `text` and returns its writer. */
+  const countOutsideWrite = (text: string): string => {
+    const base = outsideWriter(text);
+    const generation = (outsideWrites.get(base) ?? 0) + 1;
+    outsideWrites.set(base, generation);
+    return outsideWriter(text, generation);
+  };
 
   const readText = (): string | null => {
     try {
@@ -496,6 +516,19 @@ export function createSettingsService(
     }
   };
 
+  /**
+   * The window's copy for a take-in. A copy that cannot be read counts as the last document seen:
+   * it shows nothing new, and a later read that works must not count an old document again.
+   */
+  const readCopy = (): string | null => {
+    try {
+      return storage.read();
+    } catch (error) {
+      onStorageError(error);
+      return lastText;
+    }
+  };
+
   const stampedOf = (parsed: Parsed): StampedDocument => ({
     document: parsed.settings as unknown as JsonObject,
     stamps: parsed.stamps,
@@ -503,14 +536,19 @@ export function createSettingsService(
 
   const firstText = readText();
   const first = parseSettings(firstText);
-  if (first.unstamped && firstText !== null) seenUnstamped.add(firstText);
-  for (const [, writer] of first.stamps.values()) {
-    const parts = outsideGeneration(writer);
-    if (parts !== undefined)
-      outsideWrites.set(parts.base, Math.max(outsideWrites.get(parts.base) ?? 0, parts.generation));
-  }
+  lastText = firstText;
+  noteOutsideWriters(first.stamps);
   /** Everything this window knows of the shared document, the stored layout included. */
   let known: StampedDocument = stampedOf(first);
+  if (first.unstamped && firstText !== null) {
+    // The first read is a take-in too (errata W3 entry 33): the window counts that write and
+    // records its mark, so that a later write of the same text gets the next number, as in the
+    // windows that heard of this one. It stamps no setting: it had nothing older to replace.
+    const writer = countOutsideWrite(firstText);
+    const stamps = new Map(known.stamps);
+    stamps.set(outsideMarkPath(writer), [Math.max(now(), 1), writer]);
+    known = { document: known.document, stamps };
+  }
   /** The highest version number seen in storage; written back unchanged. */
   let storedVersion = first.storedVersion;
   /** This window's own panel layout. */
@@ -537,11 +575,13 @@ export function createSettingsService(
     cancelRepair?.();
     cancelRepair = null;
     lastStored = known;
-    // The window's own copy now holds this write: a document without stamps found there later was
-    // written after it, even when it has the text of one taken in before.
-    seenUnstamped.clear();
+    const text = serializeSettings(known, storedVersion);
     try {
-      storage.write(serializeSettings(known, storedVersion));
+      storage.write(text);
+      // The window's own copy now holds this write: a document without stamps found there later was
+      // written after it, even when it has the text of one taken in before. A write that failed
+      // left the copy as it was, and the last document seen with it.
+      lastText = text;
     } catch (error) {
       onStorageError(error);
     }
@@ -578,33 +618,19 @@ export function createSettingsService(
    * same document, both count from the earlier time (alignOutsideStamps), so a window that
    * receives the document late cannot undo a change made after an earlier window took it in
    * (errata W3 entry 28). The writer also counts the writes of the same text (outsideWriter's
-   * generation), so a second write of it is not taken for the first. When the window already
-   * knows another window's stamp for this write, it heard of that window before the write itself:
-   * the write counts from that earlier time at once, and a setting this window knows to have been
-   * changed later keeps its value (errata W3 entry 31).
+   * generation), so a second write of it is not taken for the first (errata W3 entry 33). The
+   * writer is always one this window has not seen before (the count includes every outside writer
+   * it knows of), so the new stamp is later than every stamp it knows, and the document replaces
+   * all of the window's settings; the time moves back later, when another window's stamps of the
+   * same write arrive.
    */
   const replaceWith = (parsed: Parsed, text: string) => {
     storedVersion = Math.max(storedVersion, parsed.storedVersion);
-    const base = outsideWriter(text);
-    const generation = (outsideWrites.get(base) ?? 0) + 1;
-    outsideWrites.set(base, generation);
-    const writer = outsideWriter(text, generation);
-    let time = nextStamp()[0];
-    for (const [knownTime, knownWriter] of known.stamps.values()) {
-      if (knownWriter === writer) time = Math.min(time, knownTime);
-    }
-    const stamp: Stamp = [time, writer];
+    const stamp: Stamp = [nextStamp()[0], countOutsideWrite(text)];
     const document = structuredClone(parsed.settings as unknown as JsonObject);
     const stamps = new Map(known.stamps);
-    for (const path of changedPaths(known.document, document)) {
-      const previous = known.stamps.get(path);
-      if (previous !== undefined && compareStamps(previous, stamp) > 0) {
-        setAtPath(document, path, valueAtPath(known.document, path));
-      } else {
-        stamps.set(path, stamp);
-      }
-    }
-    stamps.set(outsideMarkPath(writer), stamp);
+    for (const path of changedPaths(known.document, document)) stamps.set(path, stamp);
+    stamps.set(outsideMarkPath(stamp[1]), stamp);
     known = { document, stamps };
     lastStored = stampedOf(parsed);
   };
@@ -612,6 +638,7 @@ export function createSettingsService(
   /** Takes in a document from storage or from another window; true when it lacked something. */
   const absorb = (parsed: Parsed): boolean => {
     storedVersion = Math.max(storedVersion, parsed.storedVersion);
+    noteOutsideWriters(parsed.stamps);
     const theirs = stampedOf(parsed);
     const { merged, mineWon } = mergeStamped(known, theirs);
     known = merged;
@@ -620,14 +647,15 @@ export function createSettingsService(
   };
 
   /**
-   * Takes in a stored text. `written` is true when another window has just written it (an event),
-   * false when it was read from this window's copy, which may be older than what the window knows.
-   * True when the text lacked something this window knows.
+   * Takes in a stored text, received by an event or read from this window's copy, unless it is the
+   * last document the window saw (errata W3 entry 33). True when the window knows something the
+   * text lacks and should write it back.
    */
-  const takeIn = (text: string | null, written: boolean): boolean => {
+  const takeIn = (text: string | null): boolean => {
+    if (text === lastText) return false;
+    lastText = text;
     const parsed = parseSettings(text);
-    if (parsed.unstamped && text !== null && (written || !seenUnstamped.has(text))) {
-      seenUnstamped.add(text);
+    if (parsed.unstamped && text !== null) {
       replaceWith(parsed, text);
       return false;
     }
@@ -638,6 +666,7 @@ export function createSettingsService(
     // The common case after a repair: the other window wrote exactly what this one knows.
     if (typeof text === 'string' && text === serializeSettings(known, storedVersion)) {
       lastStored = known;
+      lastText = text;
       return;
     }
     if (text === null) {
@@ -645,10 +674,11 @@ export function createSettingsService(
       const parsed = parseSettings(null);
       known = stampedOf(parsed);
       lastStored = known;
+      lastText = null;
       storedVersion = parsed.storedVersion;
       cancelRepair?.();
       cancelRepair = null;
-    } else if (text === undefined ? takeIn(readText(), true) : takeIn(text, true)) {
+    } else if (takeIn(text === undefined ? readCopy() : text)) {
       // The other window wrote without one of this window's newer settings: put it back.
       repair();
     }
@@ -662,7 +692,9 @@ export function createSettingsService(
     get: () => current,
 
     update(change) {
-      takeIn(readText(), false);
+      // Normally the copy holds the last document the window saw; when it differs, the window's
+      // own page wrote it, and it is taken in now. A write-back it calls for is part of this write.
+      takeIn(readCopy());
       const base = view();
       const next = change(structuredClone(base));
       const paths = changedPaths(base as unknown as JsonObject, next as unknown as JsonObject);

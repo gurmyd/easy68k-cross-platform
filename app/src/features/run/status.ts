@@ -9,8 +9,18 @@
 
 import type { AppState, SimSettings } from '../../contracts';
 
-/** The words for the simulator's state. */
-export function runStateText(sim: Pick<AppState['sim'], 'phase' | 'halted' | 'autoTrace'>): string {
+/**
+ * The words for the simulator's state.
+ *
+ * `halted` is the engine's raw halt flag, which stays set from SIMHALT until the next run starts:
+ * Rewind, Open and Pause leave it set (sim-ui §9.9) but put the commands back into the active
+ * state (sim-ui §3.6), and from then on Run is enabled. So the bar says Halted only while the
+ * commands are busy because of the halt (`menuState` 1); afterwards it says Stopped. A caller
+ * that passes no `menuState` gets the busy reading.
+ */
+export function runStateText(
+  sim: Pick<AppState['sim'], 'phase' | 'halted' | 'autoTrace'> & Partial<Pick<AppState['sim'], 'menuState'>>,
+): string {
   switch (sim.phase) {
     case 'loading':
       return 'Loading';
@@ -25,7 +35,7 @@ export function runStateText(sim: Pick<AppState['sim'], 'phase' | 'halted' | 'au
     case 'idle':
       // Auto Trace executes one instruction per timer tick; between two ticks the simulator is idle.
       if (sim.autoTrace) return 'Auto trace';
-      return sim.halted ? 'Halted' : 'Stopped';
+      return sim.halted && sim.menuState !== 0 ? 'Halted' : 'Stopped';
   }
 }
 

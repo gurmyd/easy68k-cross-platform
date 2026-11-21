@@ -76,6 +76,46 @@ The second CI run (run 44913261966, 21 Nov 2026) on 10.0.26100 found 24 outputs 
 Fixedsys 8x15 in all five styles, and the underline and strike-out atlases of Courier 8x13; the
 `text` suite was equal. That run printed no details yet; the next one does.
 
+### What another Windows may draw differently: the other-font bytes
+
+The third run (run 44919519853, gate I1 round 2) printed the details, and its capture (the
+`gdi-capture-run` artifact) was reviewed with `--from`. All 24 outputs differed only in what the
+control bytes `$00-$08 $0B $0E-$1B` draw. In the raster faces Windows takes these bytes from a
+fallback font, not from the face (trap15-b 6.7, "a narrow box"), and the fallback font depends on the
+Windows: Windows 11 10.0.26300 paints an anti-aliased box 4 pixels wide, Windows Server 10.0.26100 a
+box 6 pixels wide without anti-aliasing. So their glyph pixels in the atlases differ (and with them
+the atlases' `glyphWidth` and `blankBytes` in `metrics.json`), so does the length of their underline
+(`lineExceptions`) and the cell they fill between "A" and "B" (`spots.json` `controlBytes`), and four
+italic cells were marked `"ruleHolds": false` because the capture let these unsheared boxes decide
+whether the italic rule holds. Every advance (theirs included), every pixel of every other byte, the
+metric table, the primitives and every compared text suite were equal.
+
+The references never promised those pixels: the port draws these bytes blank (they are the atlases'
+`blankBytes`), and the text cases with them are the machine-dependent suite `text-control`. So the
+comparison now leaves them out (`machine-dependent.ts`, `OTHER_FONT_BYTES`), as it leaves out font
+smoothing and the theme:
+
+- an atlas is compared by its cell, all 256 advances and the pixels of every other byte;
+- `metrics.json` without the atlases' `glyphWidth`, and without these bytes in `blankBytes` and
+  `lineExceptions`; the metric table, the rules, every cell's native atlas, factors, line rows and
+  `ruleHolds` stay;
+- `spots.json` without the `cellRight` of these bytes (the pen after them stays);
+- `capture.cpp` decides whether a raster rule holds from the bytes the face draws
+  (`otherFontByte()`); on 10.0.26300 this leaves every output byte for byte as it was.
+
+An output that is equal only without these bytes is printed as `same*`, with what differs in them, so
+the log still shows another Windows' fallback font. `--all` compares them too. On another Windows the
+run is therefore green when everything the references guarantee is equal, and red when anything else
+differs. `other-windows.json` records 10.0.26100 as reviewed with no accepted difference.
+`tests/conformance/gdi/machine-dependent.test.ts` checks all this on every system against files of
+that run's capture (`tests/conformance/gdi/golden/windows-10.0.26100/`).
+
+`--from <dir>` judges a capture made elsewhere instead of capturing (any system; it never writes the
+references; the report goes to `build/gdi-capture/review/`). To review a CI run:
+
+    gh run download <run id> -n gdi-capture-run -D build/gdi-capture/ci
+    node tests/oracle/gdi-capture/run.mjs --from build/gdi-capture/ci
+
 ## Raster fonts
 
 GDI makes every size of a raster face from a few native sizes by whole-number pixel repetition
@@ -139,7 +179,14 @@ script itemization:
 
 In the outline faces GDI widens the opaque cell by the first and last glyph's ink overhang (1-2
 pixels at 8-18 pt, more at large sizes) and draws the TrueType underline below the cell. The port's
-cells are the advance boxes; `text-outline` comparisons leave those pixels out.
+cells are the advance boxes; `text-outline` comparisons leave those pixels out. How far
+(`outlineWidening` in `text-model.ts`, measured with fresh captures in gate I1 round 3): in plain and
+bold a tenth of the cell height, at least 3 pixels, on each side; in italic one pixel more on the left
+and on the right up to 0.35 of the cell height (Lucida Console 29 pt italic: 13 of 39 rows). In those
+pixels only the fill colour or the smoothed edge of the ink (a blend of background and font colour)
+may appear; in the rows of an underline or strike-out outside the cell only the fill colour. The
+machine-dependent suite `text-outline-italic` holds italic strings at the sizes with the widest
+overhang.
 
 ## Text strings in the monospaced outline faces
 

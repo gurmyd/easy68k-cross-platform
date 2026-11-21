@@ -32,6 +32,12 @@ import type {
 } from './contracts';
 import type { Os } from './commands/chords';
 import { installKeymap, type KeyOutcome } from './commands/keymap';
+import {
+  browserTextEditHost,
+  performTextFieldEdit,
+  type PlainTextField,
+  type TextEditHost,
+} from './commands/text-field-edits';
 import { buildNativeMenu } from './commands/native-menu';
 import { createCommandRegistry } from './commands/registry';
 import { shellCommands } from './commands/shell-commands';
@@ -219,6 +225,8 @@ export function bootstrap(env: BootstrapEnv): Application {
 
   // ---- keys and the native menu
   const menuAccess: Application['menuAccess'] = { open: null };
+  /** Made on the first Ctrl editing key of macOS in a text field: it needs the page's document. */
+  let textEditHost: TextEditHost | null = null;
   if (env.keyTarget) {
     disposers.push(
       installKeymap(
@@ -231,6 +239,11 @@ export function bootstrap(env: BootstrapEnv): Application {
           isModalOpen: () => dialogs.isModalOpen(),
           commands,
           openMenu: (letter) => menuAccess.open?.(letter) ?? false,
+          // The Ctrl editing keys of macOS in plain text fields (K2; errata W3.md entry 34).
+          editTextField: (edit, target) => {
+            textEditHost ??= browserTextEditHost(platform.pasteIntoFocus, (text) => dialogs.toast(text));
+            void performTextFieldEdit(edit, target as PlainTextField, textEditHost);
+          },
         },
         env.onKey,
       ),

@@ -3,7 +3,7 @@ import { createInertSimSession } from '../../state/stub-services';
 import { createTestApplication, type TestApplication } from '../../state/testing';
 import { ManualScheduler, createFakeEngine, createSessionDouble, type SessionDouble } from '../memory/session-double';
 import { feature } from '.';
-import { stackModelOf, stackRecentreDue } from './model';
+import { stackModelOf, stackRecentreDue, stackRedrawDue } from './model';
 
 function setup(): { app: TestApplication; session: SessionDouble; engine: ReturnType<typeof createFakeEngine> } {
   const engine = createFakeEngine({ fill: 0 });
@@ -96,6 +96,64 @@ describe('Stack panel model', { timeout: 60_000 }, () => {
       sim: { ...state.sim, viewRevision: state.sim.viewRevision + 1, repaint: { ...repaint, listing: 1, stack: 1 } },
     }));
     expect(model.getState().midAddr).toBe(0x1234);
+  });
+
+  // Defect 9 of gate I1 (docs/requests/U2-stack-redraw-bit.md): StackFrm->Repaint() (a Hardware
+  // switch or push button) sends the Stack bit together with the StackRedraw bit; it redraws the
+  // panel where the user scrolled it. updateDisplay() sends the Stack bit alone and re-centres.
+  it('with repaint.stackRedraw counted, a Repaint() redraws in place and updateDisplay() re-centres', () => {
+    const { app, engine } = setup();
+    const repaint = { listing: 0, breakpoints: 0, memory: 0, stack: 0, stackRedraw: 0 };
+    app.ctx.store.setState((state) => ({ ...state, sim: { ...state.sim, repaint } }));
+    const model = stackModelOf(app.ctx);
+    model.setRows(5);
+    model.setChoice(0);
+    engine.setRegisters({ a: [0x1234, 0, 0, 0, 0, 0, 0] });
+    model.updateDisplay();
+    model.scrollDown();
+    const scrolled = model.getState().midAddr;
+    expect(scrolled).not.toBe(0x1234);
+    const paints = model.getState().paints;
+    engine.writeBytes(scrolled, [0x5a]);
+    app.ctx.store.setState((state) => ({
+      ...state,
+      sim: {
+        ...state.sim,
+        viewRevision: state.sim.viewRevision + 1,
+        repaint: { ...repaint, stack: 1, stackRedraw: 1 },
+      },
+    }));
+    expect(model.getState().midAddr).toBe(scrolled);
+    expect(model.getState().paints).toBeGreaterThan(paints);
+    // Two calls folded into one store update: a Repaint() and an updateDisplay() re-centre.
+    app.ctx.store.setState((state) => ({
+      ...state,
+      sim: {
+        ...state.sim,
+        viewRevision: state.sim.viewRevision + 1,
+        repaint: { ...repaint, stack: 3, stackRedraw: 2 },
+      },
+    }));
+    expect(model.getState().midAddr).toBe(0x1234);
+  });
+
+  it('stackRecentreDue and stackRedrawDue on the counters', () => {
+    const { app } = setup();
+    const sim = { ...app.ctx.store.getState().sim, repaint: { listing: 0, breakpoints: 0, memory: 0, stack: 4 } };
+    // No stackRedraw counter (a session that does not count the bit): every Stack bit re-centres.
+    expect(stackRecentreDue(sim, { ...sim, repaint: { ...sim.repaint, stack: 5 } })).toBe(true);
+    expect(stackRedrawDue(sim, { ...sim, repaint: { ...sim.repaint, stack: 5 } })).toBe(false);
+    const counted = { ...sim, repaint: { ...sim.repaint, stackRedraw: 2 } };
+    const after = (stack: number, stackRedraw: number) => ({
+      ...counted,
+      repaint: { ...counted.repaint, stack, stackRedraw },
+    });
+    expect(stackRecentreDue(counted, after(5, 3))).toBe(false);
+    expect(stackRedrawDue(counted, after(5, 3))).toBe(true);
+    expect(stackRecentreDue(counted, after(5, 2))).toBe(true);
+    expect(stackRedrawDue(counted, after(5, 2))).toBe(false);
+    expect(stackRecentreDue(counted, after(4, 2))).toBe(false);
+    expect(stackRedrawDue(counted, after(4, 2))).toBe(false);
   });
 
   it('stackRecentreDue falls back on viewRevision while sim.repaint is absent', () => {

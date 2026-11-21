@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { start, run, runMessages, fixture } from './helpers.mjs';
-import { createSim, Reg, Status, Option, MapKind, Device } from '../sim68k.mjs';
+import { createSim, Reg, Status, Option, MapKind, Device, Repaint } from '../sim68k.mjs';
 import { HeadlessHost, drive } from './headless-host.mjs';
 
 const SWITCHES = 0xE00012, BUTTONS = 0xE00014;
@@ -283,4 +283,27 @@ test('a large Read-only range below the stack: the recursion guard stops it with
   sim.cmdRun();
   assert.equal(drive(sim, host).reason, 'stopped');
   assert.equal(sim.state().halt, true);
+});
+
+test('repaint bits: StackFrm->Repaint() sends STACK | STACK_REDRAW, updateDisplay() only STACK', async () => {
+  // The Hardware window redraws the Stack window with StackFrm->Repaint()
+  // (hardwareu.cpp: switch click, push button, FormShow); a register change
+  // re-centres it with updateDisplay() (sim-ui 11.4).  docs/requests/U2-stack-redraw-bit.md.
+  const bits = [];
+  const host = new HeadlessHost();
+  host.repaint = (what) => bits.push(what); // host methods are bound when the simulator is created
+  const sim = await createSim(host);
+  sim.load(fixture('debug.S68'), fixture('debug.L68'));
+  sim.setHardwareVisible(true);
+  bits.length = 0;
+  sim.switchClick(0);
+  assert.ok(bits.includes(Repaint.STACK | Repaint.STACK_REDRAW), `switch click: ${bits}`);
+  assert.ok(!bits.includes(Repaint.STACK), `switch click does not re-centre: ${bits}`);
+  bits.length = 0;
+  sim.pushButton(1, true);
+  assert.ok(bits.includes(Repaint.STACK | Repaint.STACK_REDRAW), `push button: ${bits}`);
+  bits.length = 0;
+  sim.setRegister(Reg.A0 + 7, 0x8000);
+  sim.cmdTraceInto();
+  assert.ok(bits.some((b) => (b & Repaint.STACK) !== 0 && (b & Repaint.STACK_REDRAW) === 0), `a step re-centres: ${bits}`);
 });

@@ -462,6 +462,14 @@ static const char* const FONT_NAMES[7] = {"Fixedsys", "Courier", "Courier New", 
 static const char* const STYLE_KEYS[5] = {"", "b", "i", "u", "s"};
 static const int OUTLINE_SIZES[12] = {8, 9, 10, 11, 12, 14, 16, 18, 24, 36, 48, 72};
 
+// The control bytes that Windows draws, in the raster faces, from a fallback font rather than from
+// the face: $00-$08, $0B, $0E-$1B. What they paint (and the length of their underline) depends on the
+// fallback font of the Windows at hand: Windows 11 10.0.26300 paints an anti-aliased narrow box,
+// Windows Server 10.0.26100 a wider box without anti-aliasing (CI run 44919519853). So they cannot
+// decide whether a raster rule holds; tests/oracle/gdi-capture/machine-dependent.ts has the same list
+// (OTHER_FONT_BYTES) and leaves them out of the comparison. Their advances are the face's and are kept.
+static bool otherFontByte(int c) { return c <= 8 || c == 11 || (c >= 14 && c <= 27); }
+
 struct Measured {
   int colWidth = 0, rowHeight = 0;
   std::string face;
@@ -761,12 +769,18 @@ static int runFonts(const std::string& outDir) {
       };
       const Native* native = nullptr;
       int kx = 0, ky = 0;
-      std::vector<int> failing(257, 0);
+      std::vector<int> failing;
+      // Bytes the face itself draws that the rule does not explain; the other-font bytes do not count.
+      auto own = [](const std::vector<int>& bytes) {
+        int n = 0;
+        for (int c : bytes) n += otherFontByte(c) ? 0 : 1;
+        return n;
+      };
       for (const Native& n : natives) {
         if (n.face != key.face || key.colWidth % n.cw || key.rowHeight % n.ch) continue;
         int nx = key.colWidth / n.cw, ny = key.rowHeight / n.ch;
         std::vector<int> f2 = unexplained(n, nx, ny);
-        if (f2.size() < failing.size()) {
+        if (!native || own(f2) < own(failing) || (own(f2) == own(failing) && f2.size() < failing.size())) {
           failing = f2;
           native = &n;
           kx = nx;
@@ -803,7 +817,8 @@ static int runFonts(const std::string& outDir) {
         for (int c : failing) failText += fmt(failText.empty() ? "%d" : ",%d", c);
       if (getenv("GDI_DEBUG") && native && !failing.empty())
         std::fprintf(stderr, "%s %s %dx%d: %s\n", key.face.c_str(), STYLE_KEYS[key.style], key.colWidth, key.rowHeight, failText.c_str());
-      bool same = native != nullptr && failing.empty();
+      // The rule holds when it explains every byte the face draws (otherFontByte: not the face's).
+      bool same = native != nullptr && own(failing) == 0;
       std::string result;
       std::string nativeFile = native ? native->file : "-";
       if (key.style == 0 && !same) {

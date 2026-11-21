@@ -185,8 +185,11 @@ export type HwDevice = (typeof HwDevice)[keyof typeof HwDevice];
 
 /** Shift-state bits of the mouse methods (the VCL's TShiftState; sim68k.mjs `Shift`). */
 export const ShiftBit = { Shift: 1, Alt: 2, Ctrl: 4, Left: 8, Right: 16, Middle: 32, Double: 64 } as const;
-/** Bits of SimHost.repaint() (sim68k.mjs `Repaint`). */
-export const RepaintBit = { Listing: 1, Breakpoints: 2, Memory: 4, Stack: 8 } as const;
+/** Bits of SimHost.repaint() (sim68k.mjs `Repaint`). The original's `StackFrm->updateDisplay()`
+ *  (redraw and re-centre) sends `Stack`; `StackFrm->Repaint()` (redraw where it is) sends
+ *  `Stack | StackRedraw`. `StackRedraw` was added at gate I1 round 3 with the engine's bit
+ *  (docs/requests/U2-stack-redraw-bit.md; docs/porting/errata/W1.md, entry 13). */
+export const RepaintBit = { Listing: 1, Breakpoints: 2, Memory: 4, Stack: 8, StackRedraw: 16 } as const;
 /** Modes of SimHost.fileOpen(): fopen "r+b", "rb", "w+b" (sim68k.mjs `FileMode`). */
 export const FileMode = { Update: 0, Read: 1, Create: 2 } as const;
 /** Arguments of SimHost.fontAssign(). */

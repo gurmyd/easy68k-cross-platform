@@ -6,6 +6,8 @@
 //   text                  raster faces (Fixedsys, Courier): every pixel and the pen position equal;
 //   text-outline          outline faces: the cell rectangles and the pen positions equal (the text
 //                         is drawn in the fill colour, so the glyphs do not show);
+//   text-outline-zero     as text-outline, for zero-width bytes and $7F in the fixed-pitch outline
+//                         faces (the cell from the widths Windows draws);
 //   text-outline-glyphs   outline faces with visible glyphs: the pen positions (the glyphs are
 //                         substitutes, 3.5.1, and are not compared).
 //
@@ -206,6 +208,82 @@ describe('task 95 against the GDI capture: the outline faces (suite text-outline
         }
       }
       expect(tooFar).toEqual([]);
+    },
+    LIMIT,
+  );
+});
+
+describe('task 95 against the GDI capture: zero-width bytes and $7F in the outline faces (suite text-outline-zero)', () => {
+  // Windows builds the cell of these faces from the widths it draws: a zero-width byte takes none,
+  // even alone, and $7F takes the fallback glyph's width (errata T2 section 2, "Outline faces,
+  // cells and pens"). A text that draws only $7F gets the fallback font's cell height on Windows,
+  // which nobody measured (errata T2, same item): its pen is compared, its picture is not.
+  const ZERO_WIDTH = [0x09, 0x0a, 0x0d, 0x1c, 0x1d, 0x1e, 0x1f];
+  const drawsOnlyDel = (reference: ReferenceCase) =>
+    reference.case.ops.some(
+      (o) => o.op === 'text' && o.bytes.includes(0x7f) && o.bytes.every((b) => b === 0x7f || ZERO_WIDTH.includes(b)),
+    );
+
+  it(
+    'Courier New, Lucida Console, Consolas: the cell rectangles and the pen positions are those of Windows',
+    () => {
+      const cases = suite('text-outline-zero');
+      // 408 when this was written: 3 faces, 4 styles; 11 strings at 8 and 10 pt, 6 also at 13 and 72 pt
+      expect(cases.length).toBeGreaterThanOrEqual(400);
+      const modelled = cases.filter((reference) => !drawsOnlyDel(reference));
+      expect(modelled.length).toBeGreaterThanOrEqual(330);
+      const score = scoreReplays(modelled, fonts, 'cells');
+      expect(differing(score)).toEqual([]);
+      expect(score.equal).toBe(modelled.length);
+
+      const onlyDel = cases.filter(drawsOnlyDel);
+      expect(onlyDel.length).toBeGreaterThanOrEqual(70);
+      expect(differing(scoreReplays(onlyDel, fonts, 'pens'))).toEqual([]);
+    },
+    LIMIT,
+  );
+
+  it(
+    'the fonts say what the pen needs: Consolas $0D advances 0 at every size and style, the zero-width bytes of the other faces a cell; every face is a fixed-pitch outline face',
+    () => {
+      for (const name of ['Courier New', 'Lucida Console', 'Consolas']) {
+        for (const size of [0, 1, 8, 10, 13, 24, 36, 72, 255]) {
+          for (let style = 0; style < 5; style++) {
+            const font = spec({ name, size, style });
+            const where = `${name} ${size} style ${style}`;
+            expect([where, fonts.monospacedOutline(font)]).toEqual([where, true]);
+            const advances = ZERO_WIDTH.map((byte) => fonts.glyph(font, byte).advance);
+            const cell = fonts.metrics(font).colWidth;
+            expect([where, advances]).toEqual([
+              where,
+              ZERO_WIDTH.map((b) => (name === 'Consolas' && b === 0x0d ? 0 : cell)),
+            ]);
+          }
+        }
+      }
+      for (const name of ['Fixedsys', 'Courier', TASK21_FONT_NAMES[5] as string, TASK21_FONT_NAMES[7] as string]) {
+        expect([name, fonts.monospacedOutline(spec({ name, size: 10, style: 0 }))]).toEqual([name, false]);
+      }
+    },
+    LIMIT,
+  );
+
+  it(
+    'the previous rule (a cell for zero-width bytes, the face advance for $7F) would fail here',
+    () => {
+      // A provider that does not say that the face is a fixed-pitch outline face gets the rules of the
+      // raster faces: the test above must see the difference.
+      const legacy = {
+        ready: fonts.ready,
+        metrics: fonts.metrics.bind(fonts),
+        glyph: fonts.glyph.bind(fonts),
+        textOverhang: fonts.textOverhang.bind(fonts),
+        delInHighText: fonts.delInHighText.bind(fonts),
+      };
+      const modelled = suite('text-outline-zero').filter((reference) => !drawsOnlyDel(reference));
+      const score = scoreReplays(modelled, legacy, 'cells');
+      expect(score.pensEqual).toBe(modelled.length);
+      expect(score.picturesEqual).toBeLessThan(modelled.length / 2);
     },
     LIMIT,
   );

@@ -15,10 +15,10 @@
 // The step is idempotent: running it again on the same folder gives the same files. That matters
 // because it runs in two ways:
 //
-//   - `node app/src/features/pwa/build/finish-build.mjs <outDir>` after `vite build` (pages.yml,
-//     and check-pwa.mjs), as long as the Vite configuration does not include it;
-//   - `pwaPlugin()` in app/vite.config.ts, at the end of every production build, once the
-//     integration gate has applied docs/requests/DV1-vite-plugin.md.
+//   - `pwaPlugin()` in app/vite.config.ts, at the end of every production build (applied at gate
+//     I1, docs/requests/DV1-vite-plugin.md);
+//   - `node app/src/features/pwa/build/finish-build.mjs <outDir>` after `vite build`, for a build
+//     made some other way, and as pages.yml's safety net (on a finished build it changes nothing).
 
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
@@ -200,6 +200,11 @@ export function pwaPlugin() {
     apply: 'build',
     configResolved(config) {
       outDir = resolve(config.root, config.build.outDir);
+    },
+    buildStart() {
+      // Every build starts clean: under `vite build --watch` this one plugin object serves every
+      // rebuild, and a failed build must not keep the next, successful one from being finished.
+      failed = false;
     },
     buildEnd(error) {
       if (error) failed = true;
