@@ -2,8 +2,10 @@
 
 An unofficial port of [EASy68K](http://www.easy68k.com/), the Motorola 68000 editor, assembler and simulator, so that it runs in a web browser and as a macOS app. The original runs only on Windows.
 
-> **Status: work in progress. There is nothing to download or use yet.**
-> This page will say so when that changes.
+> **Status: work in progress.**
+> A preview of the web version is online at <https://gurmyd.github.io/easy68k-mac/>. It is
+> unfinished: expect defects, and do not rely on it for coursework yet. There is no macOS app to
+> download yet. This page will say so when that changes.
 
 ## What it is
 
@@ -18,11 +20,12 @@ Planned:
 ## What works today
 
 - The assembler and the simulator core are the original's code compiled to WebAssembly. Their test suites pass on macOS, Linux and Windows on every push.
-- Checked against the official EASy68K v5.16.1 for Windows, run under Wine: all 420 error-free test programs assemble to byte-identical listing and S-record files, and 9 of 9 execution logs match. The scripts that make this comparison are not in the repository yet.
-- The application frame exists: menus, toolbars, the original's shortcuts, light and dark themes.
-- The editor, the simulator's panels and the macOS app are being built.
+- Checked against the official EASy68K v5.16.1 for Windows, run under Wine: all 420 error-free test programs assemble to byte-identical listing and S-record files, and 9 of 9 execution logs match. The comparison is in `tests/oracle/wine` and `tests/conformance`.
+- In the preview: the editor, Assemble, and the simulator with text and graphics output, keyboard input, the hardware window, memory and stack views, breakpoints, logging, sound and file access, plus the original's help pages and examples.
+- These parts have automated tests that run in Chrome's and Safari's engines on GitHub's macOS, Linux and Windows machines. They have not been through the last rounds of checking yet. Known defects are listed in `docs/integration/wave1.md`.
+- The macOS app exists as a development build that is tested on GitHub's macOS machines. The installer is not built yet.
 
-The automated tests run on GitHub's macOS machines. No person has tried it on a Mac yet.
+No person has tried it on a Mac yet.
 
 ## Credits
 

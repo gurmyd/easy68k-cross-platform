@@ -1,0 +1,116 @@
+# Deploys the web app to GitHub Pages (ARCHITECTURE.md 1.1, 7.4, 7.5). Owner: DV1.
+#
+# On every push to main (and on a manual run): the engines come from the reusable workflow
+# engines.yml as the artifact "engine-dist"; the production build of app/ is made with the
+# repository's Pages base path (for a project site "/<repository>/", from actions/configure-pages,
+# so nothing is hard-coded and a fork deploys under its own name); the PWA build step adds the
+# manifest tags and writes sw.js with the precache list of exactly this build; the folder is
+# uploaded as the Pages artifact and deployed with actions/deploy-pages.
+#
+# The PWA step is part of every production build: app/vite.config.ts runs pwaPlugin() since gate I1
+# (docs/requests/DV1-vite-plugin.md). The step "Offline support" below runs the same code once more
+# as a safety net; it is idempotent and changes nothing in a build the plugin has finished.
+#
+# The site is not deployed without both engines: a web app that cannot assemble or run is worse
+# than the previous deployment, which stays online when this workflow fails.
+#
+# To try the build locally (the server must serve app/dist under /easy68k-mac/):
+#   EASY68K_BASE=/easy68k-mac/ npm run build
+# In Git Bash on Windows, put MSYS_NO_PATHCONV=1 in front: otherwise MSYS rewrites the value
+# /easy68k-mac/ into a Windows path (C:/Program Files/Git/easy68k-mac/) before Vite sees it.
+# Or run npm run check:pwa, which builds and serves the site and drives two browsers through it.
+#
+# Pages must be set to "GitHub Actions" as its source in the repository settings.
+
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deployment at a time; a deployment in progress is not cancelled by a newer push.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  FORCE_COLOR: '1'
+  # No job here starts Electron (see ci.yml).
+  ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  engines:
+    name: engines
+    uses: ./.github/workflows/engines.yml
+
+  build:
+    name: build
+    needs: [engines]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - name: Require both engines
+        if: needs.engines.outputs.available != 'asm sim'
+        env:
+          AVAILABLE: ${{ needs.engines.outputs.available }}
+        run: |
+          echo "::error title=Engines missing::engine-dist holds '${AVAILABLE}', not both engines; the site is not deployed."
+          exit 1
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Download engine-dist
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: engine-dist
+          path: engine/dist
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - name: Production build
+        env:
+          # "/easy68k-mac" for a project site, "" for a user or organisation site.
+          EASY68K_BASE: ${{ steps.pages.outputs.base_path }}/
+        run: npm run build
+      # Safety net: pwaPlugin() in app/vite.config.ts has done this already; idempotent.
+      - name: Offline support (manifest tags, precache list, sw.js)
+        run: node app/src/features/pwa/build/finish-build.mjs app/dist
+      - name: Upload the Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: app/dist
+
+  deploy:
+    name: deploy
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
