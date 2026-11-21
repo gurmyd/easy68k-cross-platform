@@ -12,6 +12,9 @@
 //   node desktop/scripts/release.mjs checksums <folder> <version>
 //       Checks that <folder> holds exactly the six release files of 7.4 for <version> and writes
 //       SHA256SUMS.txt next to them, in the format of `shasum -a 256` (`sha256sum -c` reads it).
+//   node desktop/scripts/release.mjs verify <folder> <version>
+//       Checks that <folder> holds exactly the six files and a SHA256SUMS.txt that lists exactly
+//       them with their hashes (the publish job, before anything is uploaded).
 //
 // The functions are exported for tests/desktop/packaged/unit.spec.ts.
 //
@@ -66,7 +69,7 @@ export function releaseFiles(version) {
     `EASy68K-${version}-arm64-mac.zip`,
     `EASy68K-${version}-x64-mac.zip`,
     'engine-dist.zip',
-    `easy68k-mac-web-${version}.zip`,
+    `easy68k-cross-platform-web-${version}.zip`,
   ];
 }
 
@@ -100,6 +103,25 @@ export function releaseFileProblems(present, version) {
   for (const name of present) {
     if (!expected.includes(name) && name !== 'SHA256SUMS.txt') problems.push(`not a release file: ${name}`);
   }
+  return problems;
+}
+
+/**
+ * What is wrong with a release folder that SHA256SUMS.txt has been written for, as messages; empty
+ * when it holds exactly the six files and SHA256SUMS.txt, and the sums list exactly those six with
+ * their actual hashes (the publish job's check of what the checksums job made).
+ *
+ * @param {readonly string[]} present            the file names in the folder
+ * @param {string} version
+ * @param {string | null} sumsText               SHA256SUMS.txt, null when missing
+ * @param {(name: string) => string} hashOf      the SHA-256 (hex) of a file of the folder
+ */
+export function verifyProblems(present, version, sumsText, hashOf) {
+  const problems = releaseFileProblems(present, version);
+  if (sumsText === null) return [...problems, 'missing: SHA256SUMS.txt'];
+  if (problems.length) return problems;
+  const expected = checksumText(releaseFiles(version).map((name) => ({ name, sha256: hashOf(name) })));
+  if (sumsText !== expected) problems.push('SHA256SUMS.txt does not list exactly the six files with their hashes');
   return problems;
 }
 
@@ -189,8 +211,21 @@ function main(argv) {
     process.stdout.write(text);
     return;
   }
+  if (command === 'verify') {
+    const [folder, version] = args;
+    if (!folder || !version) throw new Error('usage: release.mjs verify <folder> <version>');
+    const present = readdirSync(folder).filter((name) => statSync(join(folder, name)).isFile());
+    const sumsPath = join(folder, 'SHA256SUMS.txt');
+    const sums = present.includes('SHA256SUMS.txt') ? readFileSync(sumsPath, 'utf8') : null;
+    const problems = verifyProblems(present, version, sums, (name) => sha256(join(folder, name)));
+    if (problems.length)
+      throw new Error(`${folder} is not the release SHA256SUMS.txt describes:\n  ${problems.join('\n  ')}`);
+    console.log(`${folder}: the six files of ${version} and SHA256SUMS.txt agree`);
+    return;
+  }
   throw new Error(
-    'usage: release.mjs version <ref> | notes <version> <out> <minimum macOS> | checksums <folder> <version>',
+    'usage: release.mjs version <ref> | notes <version> <out> <minimum macOS> | checksums <folder> <version> | ' +
+      'verify <folder> <version>',
   );
 }
 

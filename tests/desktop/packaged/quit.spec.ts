@@ -42,10 +42,13 @@ test('quit with a modified document asks first, and Cancel (Stay) keeps the app 
 
   // Modify the new document of Editor mode by typing into it.
   const editor = page.locator('[data-e68-panel="editor"] .cm-content').first();
+  // The editor's own status row (EditorStatusBar.tsx: position, Modified, Insert, ...), not the
+  // shell's status bar below it, which shows only the document's name in Editor mode.
+  const modified = page.locator('[data-e68-panel="editor"] .e68-editor__cell--modified').first();
   await editor.waitFor({ timeout: 60_000 });
   await editor.click();
   await page.keyboard.type('* modified', { delay: 30 });
-  await expect(page.locator('footer.e68-statusbar')).toContainText('Modified', { timeout: 30_000 });
+  await expect(modified).toHaveText('Modified', { timeout: 30_000 });
   await running.screenshot('modified');
 
   // Quit, as the application menu's Quit does (app.quit()). Not awaited: the main process is busy
@@ -75,6 +78,6 @@ test('quit with a modified document asks first, and Cancel (Stay) keeps the app 
   expect(running.alive(), 'the main process is still running').toBe(true);
   expect(nativeWindows(pid).length, 'the window is still open').toBeGreaterThan(0);
   expect(await page.evaluate(() => 6 * 7)).toBe(42);
-  await expect(page.locator('footer.e68-statusbar')).toContainText('Modified');
+  await expect(modified).toHaveText('Modified');
   await running.screenshot('still-running');
 });
