@@ -6,7 +6,15 @@
 // not reload, Ctrl+S does not save the page) is the manual browser shortcut table of 6.8: test
 // automation does not pass through the browser's own shortcut handling.
 
-import { expect, playwrightKey, test, type App, type KeyMap } from '../fixtures';
+import { expect, playwrightKey, recordPrints, test, type App, type KeyMap } from '../fixtures';
+
+// Ctrl+P prints: without this, Playwright's WebKit returns from the hidden print frame's print()
+// without `afterprint`, the frame keeps the keyboard focus, and the chords pressed next go to the
+// frame instead of the page (seen in CI run 44941673365 on all three systems). A real browser reports
+// `afterprint` when its print dialog closes; fixtures/printing.ts makes every browser do so.
+test.beforeEach(async ({ page }) => {
+  await recordPrints(page);
+});
 
 /** The chords of 2.9.3: F5, F6, F7, F10, Ctrl+O/S/P/F/G/R, and on macOS the Cmd forms but Cmd+R. */
 function guardedChords(keys: KeyMap): string[] {

@@ -2,39 +2,18 @@
 // §13). Owner: X1. The feature is E6's (wave 2): every test waits for it (fixtures/pending.ts).
 //
 // The web platform prints a prepared document from a hidden frame (platform/web.ts). The frame's
-// `print()` is replaced here, before the application loads, by one that records the document and
-// reports `afterprint`, so no print dialog opens and the content can be inspected.
+// `print()` is replaced by one that records the document and reports `afterprint`
+// (fixtures/printing.ts), so no print dialog opens and the content can be inspected.
 
-import { crlf, expect, nonBlackColours, requirePackage, test, type App } from '../fixtures';
+import { crlf, expect, nonBlackColours, printed as printedIn, recordPrints, requirePackage, test } from '../fixtures';
+import type { App } from '../fixtures';
 
-interface Printed {
-  title: string;
-  html: string;
-  text: string;
-}
-
-/** Runs in every frame: a child frame's print() records its document in the top window. */
-function recordPrints(): void {
-  if (window === window.top) return;
-  window.print = () => {
-    const top = window.top as unknown as { __printed?: unknown[] };
-    (top.__printed ??= []).push({
-      title: document.title,
-      html: document.documentElement.outerHTML,
-      text: document.body?.textContent ?? '',
-    });
-    setTimeout(() => window.dispatchEvent(new Event('afterprint')), 0);
-  };
-}
-
-const printed = (app: App) =>
-  app.page.evaluate(() => (window as unknown as { __printed?: unknown[] }).__printed ?? []) as Promise<Printed[]>;
+const printed = (app: App) => printedIn(app.page);
 
 const PAGE_MARKER = '<------------------------------ PAGE ------------------------------>';
 
 test.beforeEach(async ({ app, page }) => {
-  await page.addInitScript(recordPrints);
-  await app.open();
+  await recordPrints(page);
   await requirePackage(app, 'E6');
 });
 

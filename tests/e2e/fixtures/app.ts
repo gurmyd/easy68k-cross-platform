@@ -432,13 +432,24 @@ export class App implements ProbeHost {
     await this.button(dialog, button).click();
   }
 
-  /** Saves the active document under a new name in My Programs with File > Save As... */
-  async saveAs(name: string): Promise<void> {
+  /**
+   * Saves the active document under a new name in My Programs with File > Save As... and waits for
+   * the save to finish: the dialog closes before the file is written, and on a slow machine (GitHub's
+   * macOS runner) a command sent at once still saw the old name. The save is done when the active
+   * tab carries the new name and no longer shows the Modified dot.
+   */
+  async saveAs(name: string, index = 0): Promise<void> {
     await this.chooseMenu('File', 'Save As...');
     const dialog = this.dialog('Save As');
     await dialog.waitFor();
     await this.fileDialogName(dialog, name, 'Save');
     await expect(dialog).toBeHidden();
+    await expect
+      .poll(async () => {
+        const active = (await this.tabs(index)).find((tab) => tab.selected);
+        return active && { name: active.name, modified: active.modified };
+      })
+      .toEqual({ name, modified: false });
   }
 
   /** Opens files of My Programs with File > Open File... (the File name field takes one name). */
@@ -449,6 +460,9 @@ export class App implements ProbeHost {
     if (filter) await dialog.getByLabel('Files of type:').selectOption({ label: filter });
     await this.fileDialogName(dialog, name, 'Open');
     await expect(dialog).toBeHidden();
+    // The dialog closes before the file is read; wait until its document is the active one, or a
+    // test that types next types into the previous document (seen on GitHub's macOS runner).
+    await expect.poll(async () => (await this.tabs()).find((tab) => tab.selected)?.name).toBe(name);
   }
 
   // ---- other windows -------------------------------------------------------------------------

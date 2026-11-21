@@ -50,23 +50,23 @@ const ADDED: Record<string, string[]> = {
 
 const plain = (caption: string) => caption.replace(/&(.)/g, '$1');
 const accessKey = (caption: string) => /&(.)/.exec(caption)?.[1] ?? null;
+/** The access key a menu underlines: none on the macOS key map (1.3.2, note 14; the shell's menu bar). */
+const shownKey = (caption: string, keys: KeyMap) => (keys === 'mac' ? null : accessKey(caption));
 const shortcutOn = (row: Row, keys: KeyMap) => (keys === 'mac' ? row[2] : row[1]) ?? '';
 
 test.describe('menu bar', () => {
-  test('the six menus of the original, in order, with their access keys', async ({ app }) => {
+  test('the six menus of the original, in order, with their access keys (not shown on macOS)', async ({ app }) => {
     const titles = await app.page
       .locator('.e68-shell__menubar .e68-menubar__title')
       .evaluateAll((items) =>
         items.map((item) => [item.textContent, item.querySelector('.e68-mnemonic')?.textContent ?? null]),
       );
-    expect(titles).toEqual([
-      ['File', 'F'],
-      ['Edit', 'E'],
-      ['Project', 'P'],
-      ['Options', 'O'],
-      ['Window', 'W'],
-      ['Help', 'H'],
-    ]);
+    expect(titles).toEqual(
+      ['&File', '&Edit', '&Project', '&Options', '&Window', '&Help'].map((caption) => [
+        plain(caption),
+        shownKey(caption, app.keys),
+      ]),
+    );
   });
 
   for (const [title, rows] of Object.entries(MENUS)) {
@@ -79,7 +79,7 @@ test.describe('menu bar', () => {
       const keys = await menu
         .locator(':scope > [role^=menuitem]')
         .evaluateAll((items) => items.map((item) => item.querySelector('.e68-mnemonic')?.textContent ?? null));
-      expect(keys.slice(0, rows.length)).toEqual(rows.map(([caption]) => accessKey(caption)));
+      expect(keys.slice(0, rows.length)).toEqual(rows.map(([caption]) => shownKey(caption, app.keys)));
       const added = ADDED[title];
       if (added) expect(entries.slice(rows.length).map((e) => e.caption)).toEqual(added);
       await app.page.keyboard.press('Escape');

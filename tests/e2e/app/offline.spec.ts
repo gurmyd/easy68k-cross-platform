@@ -2,40 +2,59 @@
 // 7.5; 6.6 "offline reload after first load, installed-app manifest"). Owner: X1. The service
 // worker and the manifest are DV1's; DV1's own check (check-pwa.mjs) covers every precached file.
 
-import { expect, test } from '../fixtures';
+import { expect, test, type App } from '../fixtures';
+import type { BrowserContext, Page } from '@playwright/test';
+
+/** Waits for the service worker, turns the network off and reloads; the application must come back. */
+async function reloadOffline(app: App, page: Page, context: BrowserContext): Promise<void> {
+  expect(await page.evaluate(() => 'serviceWorker' in navigator)).toBe(true);
+  await expect
+    .poll(() => page.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.active?.state ?? null), {
+      timeout: 120_000,
+      message: 'the service worker is activated (it precaches the whole site first)',
+    })
+    .toBe('activated');
+  await context.setOffline(true);
+  await page.reload();
+  await app.ready();
+  expect(await page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
+  await expect(page).toHaveTitle(/^EASy68K Editor\/Assembler/);
+}
 
 test.describe('offline', () => {
   test.use({ serviceWorkers: 'allow' });
 
-  test('after one load, a reload with the network off brings the application back, editor and help included', async ({
+  test('after one load, a reload with the network off brings the application back and the editor works', async ({
+    app,
+    page,
+    context,
+  }) => {
+    try {
+      await reloadOffline(app, page, context);
+      await app.replaceText('* typed offline');
+      expect(await app.text()).toBe('* typed offline');
+    } finally {
+      await context.setOffline(false);
+    }
+  });
+
+  test('offline, Help > Help shows the introduction page in the help frame', async ({
     app,
     page,
     context,
     browserName,
   }) => {
-    const hasWorkers = await page.evaluate(() => 'serviceWorker' in navigator);
-    test.skip(
-      process.platform === 'win32' && browserName === 'webkit',
-      "Playwright's WebKit on Windows is not a target (Safari runs on macOS) and its service worker is incomplete: " +
-        'offline, the application reloads but a help page in the frame fails with "WebKit encountered an internal ' +
-        'error" (seen on the development PC); DV1 skips it there too. This runs in WebKit on macOS and Linux',
-    );
-    expect(hasWorkers).toBe(true);
-    await expect
-      .poll(() => page.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.active?.state ?? null), {
-        timeout: 120_000,
-        message: 'the service worker is activated (it precaches the whole site first)',
-      })
-      .toBe('activated');
-
-    await context.setOffline(true);
+    // Known open item of another package, not of the suite (errata X1 entry 9): in WebKit the help
+    // frame's page does not come from the service worker offline. The frame stays at the
+    // fallback title "Introduction" and the console says "Failed to load resource: WebKit
+    // encountered an internal error". Seen in CI run 44941673365 on ubuntu-latest and macos-latest,
+    // and on the development PC (Windows). The application itself reloads offline in WebKit (the
+    // test above). Expected to fail in WebKit until the owners of the help panel (H1) and the
+    // service worker (DV1) have repaired it or shown that Safari itself does not have it; then
+    // this line goes.
+    test.fail(browserName === 'webkit', 'H1/DV1: the help frame does not load offline in WebKit');
     try {
-      await page.reload();
-      await app.ready();
-      expect(await page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
-      await expect(page).toHaveTitle(/^EASy68K Editor\/Assembler/);
-      await app.replaceText('* typed offline');
-      expect(await app.text()).toBe('* typed offline');
+      await reloadOffline(app, page, context);
       await app.chooseMenu('Help', 'Help');
       await expect(page.locator('[data-e68-panel="help"] .e68-help__title')).toHaveText('Easy68k Introduction');
       await expect

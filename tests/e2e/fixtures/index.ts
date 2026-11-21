@@ -19,4 +19,5 @@ export {
 export type { FileSpec, MenuEntry, TabInfo } from './app';
 export { chordOf, chordsOf, hostKeyMap, modKey, playwrightKey, type KeyMap } from './keys';
 export { PENDING, pendingReason, requirePackage, type PendingPackage } from './pending';
+export { printed, recordPrints, type Printed } from './printing';
 export { TEMPLATE, TRAILER, trailer } from './texts';

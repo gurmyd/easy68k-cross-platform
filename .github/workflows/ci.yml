@@ -9,6 +9,8 @@
 #   job / step                 runs when this exists
 #   conformance                tests/conformance/*/vitest.config.ts or tests/parity/vitest.config.ts
 #   e2e                        tests/e2e/**/*.spec.ts or tests/a11y/**/*.spec.ts
+#   e2e-stability              the same, on a manual run or a push that changes tests/e2e/**
+#                              (ubuntu-latest, each browser, --repeat-each=20; 6.9 item 10)
 #   unit: integration step     tests/integration/*/vitest.config.ts (npm run test:integration; I1, I2, I3)
 #   browser-checks: one step per browser check script, each guarded by its file
 #     (the table of `checks` in the plan step; npm run check:<name>):
@@ -406,6 +408,74 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-${{ matrix.os }}-${{ matrix.browser }}
+          path: |
+            tests/playwright-report/
+            tests/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # 6.9 item 10: the end-to-end suites 20 times in a row without a failure on ubuntu-latest in each
+  # browser (no retries: tests/playwright.config.ts). About 20 times the e2e job, so not on every
+  # push: manual runs, and pushes whose commits change tests/e2e/** (docs/requests/X1-ci.md).
+  e2e-stability:
+    name: e2e stability (ubuntu-latest, ${{ matrix.browser }}, 20 repetitions)
+    needs: [plan, engines]
+    if: >-
+      needs.plan.outputs.e2e == 'true' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' &&
+        (contains(join(github.event.commits.*.modified, ' '), 'tests/e2e/') ||
+         contains(join(github.event.commits.*.added, ' '), 'tests/e2e/'))))
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      EASY68K_REQUIRE_ENGINES: ${{ needs.engines.outputs.available == 'asm sim' && '1' || '' }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Download engine-dist
+        if: needs.engines.outputs.available != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: engine-dist
+          path: engine/dist
+      - name: Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Restore Playwright browsers
+        id: browsers
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ steps.playwright.outputs.version }}-${{ runner.os }}-${{ runner.arch }}-${{ matrix.browser }}
+      - name: Install ${{ matrix.browser }}
+        if: steps.browsers.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Install the system libraries for ${{ matrix.browser }}
+        if: steps.browsers.outputs.cache-hit == 'true'
+        run: npx playwright install-deps ${{ matrix.browser }}
+      - name: Production build
+        run: npm run build
+      - name: End-to-end tests, 20 repetitions
+        run: npm run test:e2e -- --project ${{ matrix.browser }} --repeat-each=20 --reporter=dot,html
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report-stability-${{ matrix.browser }}
           path: |
             tests/playwright-report/
             tests/test-results/
