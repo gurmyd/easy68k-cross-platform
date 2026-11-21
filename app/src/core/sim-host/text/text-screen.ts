@@ -4,6 +4,8 @@
 // the exported names are contract (section 8, "Stubs"). This stub holds the start-up state of 3.3.2
 // with a Fixedsys 9 cell of 8 x 15 pixels (the default font at 96 DPI), draws nothing, and answers
 // getrc / getCharAt from that state.
+// Note: getrc and getCharAt therefore answer state-derived values, not the engine's default
+// (undefined); OutputDevice, the actual host part, still returns the engine's defaults.
 //
 // Owner: W1 > SH3.
 

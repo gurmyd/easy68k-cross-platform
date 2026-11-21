@@ -4,7 +4,8 @@
 // put the focus back afterwards. A Menu by itself shows `items` next to
 // `anchor`, takes the focus, and reports the user's decision:
 //   onSelect(entry)      an enabled item was chosen (click, Enter, Space, its access key);
-//   onClose(reason)      Escape, Tab, ArrowLeft / ArrowRight at the edge (for the menu bar).
+//   onClose(reason, backward)  Escape, Tab (backward: Shift+Tab), ArrowLeft / ArrowRight at
+//                        the edge (for the menu bar).
 // Keys: Up / Down (wrapping), Home / End, Enter / Space, Right opens a
 // sub-menu, Left or Escape closes one, a letter chooses the item with that
 // access key (or moves to the next item starting with it). Disabled items
@@ -43,7 +44,12 @@ export interface MenuProps {
   /** Underline access keys (Windows and Linux). Default true. */
   showMnemonics?: boolean;
   onSelect: (entry: MenuSelectable) => void;
-  onClose: (reason: MenuCloseReason) => void;
+  /**
+   * `backward` is true for Shift+Tab (reason 'tab'). For 'tab', returning true lets the browser's
+   * own Tab go on from wherever the handler put the focus (the menu bar does that); otherwise the
+   * key is cancelled.
+   */
+  onClose: (reason: MenuCloseReason, backward?: boolean) => boolean | void;
 }
 
 const SUBMENU_HOVER_MS = 220;
@@ -128,8 +134,14 @@ function MenuPopup({
     if (!ref.current?.contains(event.target as Node)) return;
     const action = menuKeyAction(items, active, event, isSubmenu);
     if (!action) return;
-    event.preventDefault();
     event.stopPropagation();
+    if (action.type === 'close') {
+      // Tab: the owner may let the browser's own Tab go on from where it put the focus.
+      const passOn = onClose(action.reason, event.shiftKey) === true && action.reason === 'tab';
+      if (!passOn) event.preventDefault();
+      return;
+    }
+    event.preventDefault();
     switch (action.type) {
       case 'focus':
         setSubmenu(null);
@@ -142,22 +154,19 @@ function MenuPopup({
         setActive(action.index);
         setSubmenu({ index: action.index, focus: 'first' });
         break;
-      case 'close':
-        onClose(action.reason);
-        break;
       case 'none':
         break;
     }
   };
 
-  const onSubmenuClose = (reason: MenuCloseReason) => {
+  const onSubmenuClose = (reason: MenuCloseReason, backward?: boolean) => {
     if (reason === 'escape') {
       const index = submenu?.index ?? -1;
       setSubmenu(null);
       itemRefs.current[index]?.focus({ preventScroll: true });
       return;
     }
-    onClose(reason);
+    return onClose(reason, backward);
   };
 
   const hoverItem = (index: number) => {

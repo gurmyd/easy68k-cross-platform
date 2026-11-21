@@ -13,7 +13,11 @@ export interface CommandSpec {
   hint?: string; // toolbar tool-tip
   kind: 'action' | 'check' | 'radio';
   /** notInOutput: the chords among them that the port added (K3, K5); they are not active while the
-   *  Output panel has the keyboard (2.9.4). */
+   *  Output panel has the keyboard (2.9.4).
+   *  win, mac and desktopOnly are read through chordsOn(id, os, desktop) and
+   *  isDesktopOnly(id, chord, os) of app/src/commands/specs.ts, never directly: desktopOnly is one
+   *  list for both key maps, and specs.ts knows which of its chords are desktop-only on Windows and
+   *  Linux alone (errata W3.md, entry 3). */
   keys: { win: string[]; mac: string[]; desktopOnly?: string[]; notInOutput?: string[] };
   suppressedByTask24: boolean; // one of the eleven of sim-ui §3.5
   icon?: string;

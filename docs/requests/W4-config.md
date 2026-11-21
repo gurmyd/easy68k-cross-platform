@@ -1,3 +1,5 @@
+Status: applied at the wave-0 gate, with two differences. (1) The suite runs in CI in the job `browser-checks` (ubuntu, macOS and Windows), not in the `e2e` job, as `npm run check:engine-browsers` (tools/check-engine-browsers.mjs: both browsers, `EASY68K_REQUIRE_BROWSERS=1`); `build/reports/engine-binding-browsers.json` is uploaded as the artifact `engine-binding-browsers-<os>`. (2) `browser.test.ts` now runs only when `EASY68K_BROWSERS` is set; unset (a plain `npm test`) it is skipped with the reason shown, so that parallel test runs start no browsers. Item 2: `eslint.config.js` allows `@playwright/test` and `vite` for `app/src/engine/browser.test.ts` only, and the file uses plain imports and the packages' types. Item 3: `@playwright/test` 1.65.1 is in `app`'s devDependencies (the lockfile changed only by that workspace entry and the root's `hasInstallScript`).
+
 # Request from W4: shared configuration for the engine binding's browser tests (gates)
 
 W4's acceptance (ARCHITECTURE.md 9.1) requires tests in Chromium and WebKit: the engine's fixtures,

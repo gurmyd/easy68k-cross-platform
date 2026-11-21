@@ -11,23 +11,26 @@
 // against `globalThis.easy68k`; the two results must be equal. A scenario may therefore use nothing
 // but its two parameters: no import of this file, no helper defined outside it.
 //
-// The browsers are those of `npx playwright install chromium webkit`. A browser that is not
-// installed is skipped, unless EASY68K_REQUIRE_BROWSERS=1 (then it is a failure). EASY68K_BROWSERS
-// chooses which to run: "chromium,webkit" (the default), one of them, or "none". This file takes
-// about twenty seconds; most of that is the 500 assemblies in WebKit. The memory figures of the
-// 200-cycle and 500-assembly tests are written to build/reports/engine-binding-browsers.json.
+// The suite runs only when EASY68K_BROWSERS names the browsers: "chromium,webkit" (or "all"), one
+// of them, or "none". Unset, it is skipped, so that a plain `npm test` starts no browser; `npm run
+// check:engine-browsers` runs it for both. The browsers are those of `npx playwright install
+// chromium webkit`. A browser that is not installed is skipped, unless EASY68K_REQUIRE_BROWSERS=1
+// (then it is a failure). This file takes about twenty seconds; most of that is the 500 assemblies
+// in WebKit. The memory figures of the 200-cycle and 500-assembly tests are written to
+// build/reports/engine-binding-browsers.json.
 //
-// Playwright and Vite are loaded with `import(name)` from a variable: the layer rule of
-// eslint.config.js allows unit tests only vitest, fake-indexeddb and node:* as literal imports
-// (docs/requests/W4-config.md asks for the two exceptions). Do not run this file with a coverage
-// tool that rewrites the code (istanbul): the scenarios must stay self-contained source text.
+// This is the one unit test that eslint.config.js lets import @playwright/test and vite. Do not
+// run it with a coverage tool that rewrites the code (istanbul): the scenarios must stay
+// self-contained source text.
 
 import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { createServer, type Server } from 'node:http';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { extname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { chromium, webkit, type Browser, type BrowserType, type Page } from '@playwright/test';
+import { build as viteBuild, createServer as createViteServer, type ViteDevServer } from 'vite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as contracts from '../contracts';
 import * as binding from './index';
@@ -294,69 +297,32 @@ const stress: Scenario<{ cycles: number; assemblies: number; s68: number[] }, St
   };
 };
 
-// ---- Playwright and Vite, as far as this file uses them -----------------------------------------
-
-interface PwPage {
-  goto(url: string): Promise<unknown>;
-  evaluate<T>(expression: string): Promise<T>;
-  on(event: 'console', listener: (message: { type(): string; text(): string }) => void): void;
-  on(event: 'pageerror', listener: (error: Error) => void): void;
-  on(event: 'requestfailed', listener: (request: { url(): string }) => void): void;
-  addInitScript(script: { content: string }): Promise<void>;
-  waitForFunction(expression: string, arg?: unknown, options?: { timeout?: number }): Promise<unknown>;
-  requestGC?(): Promise<void>;
-  close(): Promise<void>;
-}
-interface PwBrowser {
-  newPage(): Promise<PwPage>;
-  close(): Promise<void>;
-}
-interface PwBrowserType {
-  executablePath(): string;
-  launch(options?: { headless?: boolean; args?: string[] }): Promise<PwBrowser>;
-}
-interface ViteApi {
-  build(config: Record<string, unknown>): Promise<unknown>;
-  createServer(config: Record<string, unknown>): Promise<{
-    listen(): Promise<unknown>;
-    close(): Promise<void>;
-    httpServer: Server | null;
-    middlewares: { use(path: string, handler: (request: unknown, response: HttpResponse) => void): void };
-  }>;
-}
-interface HttpResponse {
-  setHeader(name: string, value: string): void;
-  end(body: string): void;
-}
+// ---- which browsers --------------------------------------------------------------------------------
 
 const repo = (file: string) => fileURLToPath(new URL(`../../../${file}`, import.meta.url));
 const enginesBuilt = ['asm68k.wasm', 'asm68k-loader.mjs', 'sim68k.wasm', 'sim68k-loader.mjs'].every((file) =>
   existsSync(repo(`engine/dist/${file}`)),
 );
 const required = process.env.EASY68K_REQUIRE_BROWSERS === '1';
-const wanted = (process.env.EASY68K_BROWSERS ?? 'chromium,webkit')
+/** Unset: the suite is not asked for (a plain `npm test`). */
+const browsersSetting = process.env.EASY68K_BROWSERS;
+const wanted = (browsersSetting ?? '')
   .split(',')
   .map((name) => name.trim())
-  .filter((name) => name !== '' && name !== 'none');
-
-async function optionalImport<T>(name: string): Promise<T | null> {
-  try {
-    return (await import(/* @vite-ignore */ name)) as T;
-  } catch {
-    return null;
-  }
-}
-const PLAYWRIGHT = '@playwright/test';
-const VITE = 'vite';
-const playwright = await optionalImport<Record<string, PwBrowserType>>(PLAYWRIGHT);
-const vite = await optionalImport<ViteApi>(VITE);
+  .flatMap((name) => (name === 'all' ? ['chromium', 'webkit'] : [name]))
+  .filter((name, index, names) => name !== '' && name !== 'none' && names.indexOf(name) === index);
+const NOT_ASKED =
+  'not asked for: set EASY68K_BROWSERS=all (or chromium, webkit) or run "npm run check:engine-browsers"';
+// A skipped test's title shows only with a verbose reporter, and Vitest drops the console output of
+// a skipped file; a line written to stderr shows with any reporter.
+if (browsersSetting === undefined) process.stderr.write(`src/engine/browser.test.ts skipped: ${NOT_ASKED}\n`);
+const BROWSERS: Record<string, BrowserType> = { chromium, webkit };
 
 /** Why a browser cannot be used here, or null. */
 function unavailable(name: string): string | null {
   if (!enginesBuilt) return 'engine/dist is missing';
-  if (!playwright || !vite) return 'Playwright or Vite cannot be imported';
-  const type = playwright[name];
-  if (typeof type?.executablePath !== 'function') return `Playwright has no browser "${name}"`;
+  const type = BROWSERS[name];
+  if (!type) return `no browser "${name}" here (chromium or webkit)`;
   try {
     return existsSync(type.executablePath()) ? null : `not installed (npx playwright install ${name})`;
   } catch (error) {
@@ -388,26 +354,21 @@ let built: Promise<Built> | undefined;
 /** Builds the harness with the application's Vite configuration and serves it; once per run. */
 function productionBuild(): Promise<Built> {
   built ??= (async () => {
-    if (!vite) throw new Error('Vite cannot be imported');
     const csp = (await import(/* @vite-ignore */ pathToFileURL(repo('tools/vite-csp-plugin.mjs')).href)) as {
       CONTENT_SECURITY_POLICY: string;
       META_TAG: string;
     };
     const dir = mkdtempSync(join(tmpdir(), 'easy68k-engine-'));
-    await vite.build({
+    await viteBuild({
       configFile: repo('app/vite.config.ts'),
       logLevel: 'error',
       plugins: [
         {
           name: 'easy68k-engine-harness',
-          resolveId: (id: string) => (id === ENTRY ? `\0${ENTRY}` : undefined),
-          load: (id: string) => (id === `\0${ENTRY}` ? ENTRY_SOURCE : undefined),
+          resolveId: (id) => (id === ENTRY ? `\0${ENTRY}` : undefined),
+          load: (id) => (id === `\0${ENTRY}` ? ENTRY_SOURCE : undefined),
           // The page: the policy first, exactly as the application's index.html carries it.
-          generateBundle(
-            this: { emitFile(file: { type: 'asset'; fileName: string; source: string }): void },
-            _options: unknown,
-            bundle: Record<string, { type: string; isEntry?: boolean; fileName: string }>,
-          ) {
+          generateBundle(_options, bundle) {
             const entry = Object.values(bundle).find((chunk) => chunk.type === 'chunk' && chunk.isEntry);
             if (!entry) throw new Error('the harness build has no entry chunk');
             this.emitFile({
@@ -461,7 +422,7 @@ function productionBuild(): Promise<Built> {
 }
 
 /** A page of the harness, with everything that goes wrong in it collected in `problems`. */
-async function openPage(browser: PwBrowser, url: string): Promise<{ page: PwPage; problems: string[] }> {
+async function openPage(browser: Browser, url: string): Promise<{ page: Page; problems: string[] }> {
   const page = await browser.newPage();
   const problems: string[] = [];
   page.on('console', (message) => {
@@ -480,7 +441,7 @@ async function openPage(browser: PwBrowser, url: string): Promise<{ page: PwPage
   return { page, problems };
 }
 
-function inPage<I, O>(page: PwPage, scenario: Scenario<I, O>, input: I): Promise<O> {
+function inPage<I, O>(page: Page, scenario: Scenario<I, O>, input: I): Promise<O> {
   return page.evaluate<O>(`(${scenario.toString()})(globalThis.easy68k, ${JSON.stringify(input)})`);
 }
 
@@ -546,7 +507,9 @@ const fixtures = (): FixtureInput[] =>
 // ---- the tests -----------------------------------------------------------------------------------
 
 describe('browsers for the engine binding', () => {
-  if (wanted.length === 0) {
+  if (browsersSetting === undefined) {
+    it.skip(NOT_ASKED, () => {});
+  } else if (wanted.length === 0) {
     it('none was asked for (EASY68K_BROWSERS)', () => {
       expect(wanted).toEqual([]);
     });
@@ -566,19 +529,19 @@ afterAll(async () => {
     writeFileSync(file, `${JSON.stringify(memoryReport, null, 2)}\n`);
   }
   if (built) await (await built).close();
-});
+}, 60_000);
 
 for (const name of wanted) {
   describe.skipIf(unavailable(name) !== null)(`the production build in ${name}`, () => {
     let site: Built;
-    let browser: PwBrowser;
-    let page: PwPage;
+    let browser: Browser;
+    let page: Page;
     let problems: string[];
     let memoryAtStart: Promise<number | null>;
 
     beforeAll(async () => {
       site = await productionBuild();
-      const type = (playwright as Record<string, PwBrowserType>)[name] as PwBrowserType;
+      const type = BROWSERS[name] as BrowserType;
       // --enable-precise-memory-info: performance.memory without its coarse rounding (Chromium).
       browser = await type.launch({
         headless: true,
@@ -588,9 +551,10 @@ for (const name of wanted) {
       memoryAtStart = childProcessMemory(); // read while the first tests run; it takes seconds on Windows
     }, 120_000);
 
+    // Closing a browser can take over 10 s (the default hook limit) on a busy machine.
     afterAll(async () => {
       await browser?.close();
-    });
+    }, 60_000);
 
     it('the build holds the six engine files as hashed assets, loaded by URL at run time', () => {
       const engineFiles = site.files
@@ -687,9 +651,9 @@ for (const name of wanted) {
       const processStart = await memoryAtStart;
       const result = await inPage(page, stress, input);
       // Ask the browser to collect, then look again.
-      await page.requestGC?.();
+      await page.requestGC();
       await page.evaluate('new Promise((resolve) => setTimeout(resolve, 200))');
-      await page.requestGC?.();
+      await page.requestGC();
       const after = await page.evaluate<{ simCollected: number; asmCollected: number }>('globalThis.easy68kStress');
       const processEnd = await childProcessMemory();
 
@@ -762,12 +726,11 @@ for (const name of wanted) {
 }
 
 describe.skipIf(wanted.every((name) => unavailable(name) !== null))('the Vite development server', () => {
-  let server: Awaited<ReturnType<ViteApi['createServer']>>;
+  let server: ViteDevServer;
   let url: string;
   let cacheDir: string;
 
   beforeAll(async () => {
-    if (!vite) throw new Error('Vite cannot be imported');
     cacheDir = mkdtempSync(join(tmpdir(), 'easy68k-engine-dev-'));
     const page = `<!doctype html><html><head><meta charset="UTF-8" /></head><body><script type="module">
 import * as binding from '/src/engine/index.ts';
@@ -776,7 +739,7 @@ import * as testing from '/src/engine/testing.ts';
 import * as contracts from '/src/contracts/index.ts';
 globalThis.easy68k = { ...binding, ...loader, ...testing, contracts };
 </script></body></html>`;
-    server = await vite.createServer({
+    server = await createViteServer({
       configFile: repo('app/vite.config.ts'),
       logLevel: 'error',
       // its own cache folder: a development server someone else is running keeps its own
@@ -786,7 +749,7 @@ globalThis.easy68k = { ...binding, ...loader, ...testing, contracts };
       plugins: [
         {
           name: 'easy68k-engine-harness',
-          configureServer(dev: Awaited<ReturnType<ViteApi['createServer']>>) {
+          configureServer(dev) {
             dev.middlewares.use('/engine-harness.html', (_request, response) => {
               response.setHeader('Content-Type', 'text/html');
               response.end(page);
@@ -804,13 +767,13 @@ globalThis.easy68k = { ...binding, ...loader, ...testing, contracts };
   afterAll(async () => {
     await server?.close();
     if (cacheDir) rmSync(cacheDir, { recursive: true, force: true });
-  });
+  }, 60_000);
 
   for (const name of wanted) {
     it.skipIf(unavailable(name) !== null)(
       `${name}: both engines load from /@fs/ URLs and run a program`,
       async () => {
-        const type = (playwright as Record<string, PwBrowserType>)[name] as PwBrowserType;
+        const type = BROWSERS[name] as BrowserType;
         const browser = await type.launch({ headless: true });
         try {
           const { page, problems } = await openPage(browser, url);

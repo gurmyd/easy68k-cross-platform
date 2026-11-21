@@ -1,3 +1,5 @@
+Status: applied at the wave-0 gate. Items 1 and 2 as asked; createSim() also accepts options.wasmModule. The interception in app/src/engine/loader.ts and the A2 read in sim.ts are removed.
+
 # Request from W4 to the simulator engine package (`engine/sim`)
 
 Found while binding `engine/sim/sim68k.mjs` and `engine/dist/sim68k-loader.mjs` to the application

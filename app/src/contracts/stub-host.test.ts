@@ -56,6 +56,8 @@ import { createVfs } from '../fs/vfs';
 
 const repo = (file: string) => fileURLToPath(new URL(`../../../${file}`, import.meta.url));
 const simBuilt = existsSync(repo('engine/dist/sim68k.wasm')) && existsSync(repo('engine/dist/sim68k-loader.mjs'));
+/** With EASY68K_REQUIRE_ENGINES=1 (CI) a missing engine/dist fails instead of skipping. */
+const enginesRequired = process.env.EASY68K_REQUIRE_ENGINES === '1';
 const fixtureDir = repo('engine/sim/test/fixtures');
 
 // ---- inert dependencies ------------------------------------------------------------------------
@@ -345,6 +347,13 @@ describe('stubs of section 3.3.1 and 3.1', () => {
     text.resetToStartup();
     expect(surface.back.width * surface.back.height).toBe(640 * 480);
   });
+});
+
+it.runIf(enginesRequired && !simBuilt)('engine/dist holds the simulator (EASY68K_REQUIRE_ENGINES=1)', () => {
+  expect.fail(
+    'EASY68K_REQUIRE_ENGINES is 1 but engine/dist/sim68k.wasm or sim68k-loader.mjs is missing: ' +
+      'run `npm run build:engines` first. Without the variable the engine tests are skipped.',
+  );
 });
 
 describe.skipIf(!simBuilt)(

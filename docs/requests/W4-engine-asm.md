@@ -1,3 +1,5 @@
+Status: applied at the wave-0 gate. Item 1: a failed instantiation, and any other failure to start an instance (the .wasm or the loader cannot be loaded), makes assemble() resolve with fatal "The assembler could not start: <reason>" (the text the binding used and the contract names), not "stopped abnormally". Item 2 as asked. The interception in app/src/engine/asm.ts is removed.
+
 # Request from W4 to the assembler engine package (`engine/asm`)
 
 Found while binding `engine/asm/asm68k.mjs` and `engine/dist/asm68k-loader.mjs` to the application

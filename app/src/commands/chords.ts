@@ -14,11 +14,15 @@
 // How the key of an event is named (2.9.1; rule K6 of section 1.3):
 //
 // - A LETTER comes from `KeyboardEvent.key` when that is a single ASCII letter. It follows the
-//   user's layout: Ctrl+Z is the key labelled Z on an AZERTY or QWERTZ keyboard too.
-// - With Alt held, or when `key` is not an ASCII letter, a letter comes from the key's POSITION
-//   (`KeyboardEvent.code`, `KeyA`..`KeyZ`). Option on a Mac and AltGr on Windows change the
-//   character (Option+O is `ø`), a dead key has no character (`Dead`), and Cyrillic or Greek
-//   layouts have no ASCII letters at all.
+//   user's layout: Ctrl+Z is the key labelled Z on an AZERTY or QWERTZ keyboard too. On the
+//   Windows and Linux key map this holds with Alt held as well: the original's accelerators are
+//   Windows virtual keys, which follow the label, so Ctrl+Alt+Z (Redo) is the key labelled Z on
+//   a German keyboard (docs/porting/errata/W3.md, entry 24).
+// - Otherwise a letter comes from the key's POSITION (`KeyboardEvent.code`, `KeyA`..`KeyZ`):
+//   when `key` is not an ASCII letter (AltGr on Windows types `@` or `€`, a dead key has no
+//   character (`Dead`), Cyrillic or Greek layouts have no ASCII letters at all), and on macOS
+//   for every chord with Option, which changes the character (Option+O is `ø`) or, on some
+//   layouts, gives another ASCII letter.
 // - Function keys, digits, punctuation and the named keys always come from the position.
 // - The numeric keypad is the exception: its positions (`Numpad0`..`Numpad9`, `NumpadDecimal`)
 //   have no fixed meaning. With NumLock off they are Insert, End, the arrows, Delete and so on,
@@ -159,10 +163,14 @@ export function normalizeChord(text: string): string {
   return join(modifiers, key);
 }
 
-/** The name of the key of an event, or null for a key that forms no chord (a modifier by itself). */
-export function keyNameOf(event: Pick<KeyEventLike, 'key' | 'code' | 'altKey'>): string | null {
+/**
+ * The name of the key of an event on the key map of `os`, or null for a key that forms no chord
+ * (a modifier by itself). `os` decides only how a letter with Alt held is named (see the top of
+ * this file): by its label on Windows and Linux, by its position on macOS.
+ */
+export function keyNameOf(event: Pick<KeyEventLike, 'key' | 'code' | 'altKey'>, os: Os): string | null {
   const { key, code } = event;
-  if (!event.altKey && /^[A-Za-z]$/.test(key)) return key.toUpperCase();
+  if ((!event.altKey || os !== 'mac') && /^[A-Za-z]$/.test(key)) return key.toUpperCase();
   const letter = /^Key([A-Z])$/.exec(code)?.[1];
   if (letter) return letter;
   if (FUNCTION_KEY.test(code)) return code;
@@ -181,9 +189,9 @@ export function keyNameOf(event: Pick<KeyEventLike, 'key' | 'code' | 'altKey'>):
   return null;
 }
 
-/** The chord of a key-down event in normal form, or null when the key forms none. */
-export function chordOf(event: KeyEventLike): string | null {
-  const key = keyNameOf(event);
+/** The chord of a key-down event on the key map of `os`, in normal form, or null when the key forms none. */
+export function chordOf(event: KeyEventLike, os: Os): string | null {
+  const key = keyNameOf(event, os);
   if (key === null) return null;
   const modifiers = new Set<Modifier>();
   if (event.ctrlKey) modifiers.add('Ctrl');

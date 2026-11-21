@@ -5,7 +5,7 @@
 // (features/output, owner SH4) asks this module what a key-down is before it does anything else.
 // The answer follows the four rules of 2.9.4, in order:
 //
-//  1. release   Ctrl+Alt+O (Ctrl+Option+O), by key position: run `sim.output.releaseKeyboard`.
+//  1. release   Ctrl+Alt+O (Ctrl+Option+O, by key position on macOS): run `sim.output.releaseKeyboard`.
 //               Nothing is delivered to the program. Works in every state, also after task 24.
 //  2. command   A menu shortcut in the ORIGINAL's spelling: the eleven commands that task 24 can
 //               switch off, and Find and Go to PC. Run the command if `enabled`; the key-down is
@@ -80,7 +80,7 @@ export function outputShortcuts(os: Os): { chord: string; id: KnownCommandId }[]
 
 /** What a key-down in the Output panel is (rules 1 to 4 above). */
 export function outputPanelKeyAction(event: KeyEventLike, env: OutputKeyEnv): OutputKeyAction {
-  const chord = chordOf(event);
+  const chord = chordOf(event, env.os);
   if (chord === null) return { kind: 'program', then: null };
 
   // 1. The release chord.

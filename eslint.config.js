@@ -10,7 +10,8 @@
 //   engine/             contracts/ and the two engine modules (engine/dist, engine/asm, engine/sim)
 //   fs/                 contracts/, core/paths, core/codec
 //   features/<x>/       contracts/, core/, state/, commands/, ui/components/;
-//                       never another feature by path
+//                       never another feature by path; features/files/ and
+//                       features/files-fsaccess/ also fs/
 //   ui/shell/           features only through features/index.ts
 //   everywhere in app/src: npm packages only from the closed runtime list of 3.1
 //
@@ -21,7 +22,8 @@
 // and `import('...')` with a literal. A Vite query (`?url`, `?raw`) is ignored.
 //
 // Unit tests (*.test.ts, *.test.tsx) may import across layers (a core test may
-// use the engine's test helpers, 6.4) and may use test libraries and node:*.
+// use the engine's test helpers, 6.4) and may use test libraries and node:*;
+// app/src/engine/browser.test.ts alone may also use @playwright/test and vite.
 // tests/lint/import-rules.test.ts checks that forbidden imports fail and
 // allowed ones pass.
 
@@ -47,6 +49,16 @@ const RUNTIME_PACKAGES = [
   '@codemirror/search',
 ];
 const isTestPackage = (name) => name === 'vitest' || name === 'fake-indexeddb' || name.startsWith('node:');
+/**
+ * Extra npm packages for single test files, by path from the repository. The engine binding's
+ * browser suite builds the binding with Vite and drives Chromium and WebKit with Playwright
+ * (docs/requests/W4-config.md); no other unit test may import them.
+ */
+const TEST_FILE_PACKAGES = {
+  [`${SRC}/engine/browser.test.ts`]: ['@playwright/test', 'vite'],
+};
+/** Features that are the user-interface halves of their own fs/ backends and may import fs/ (W3-layer-rule). */
+const FS_FEATURES = ['files', 'files-fsaccess'];
 
 /** `name` is `pkg` or a subpath of it. */
 const isPackage = (name, pkg) => name === pkg || name.startsWith(`${pkg}/`);
@@ -76,7 +88,14 @@ function layerOf(file) {
       return {
         name: 'features/<x>/',
         root: `features/${second}`,
-        allowed: ['contracts', 'core', 'state', 'commands', 'ui/components'],
+        allowed: [
+          'contracts',
+          'core',
+          'state',
+          'commands',
+          'ui/components',
+          ...(FS_FEATURES.includes(second) ? ['fs'] : []),
+        ],
         packages: RUNTIME_PACKAGES,
         feature: true,
       };
@@ -99,6 +118,7 @@ function checkImport(fileFromRepo, spec, isTest) {
     const allowed = layer ? layer.packages : RUNTIME_PACKAGES;
     if (allowed.some((pkg) => isPackage(clean, pkg))) return null;
     if (isTest && isTestPackage(clean)) return null;
+    if (isTest && (TEST_FILE_PACKAGES[fileFromRepo] ?? []).some((pkg) => isPackage(clean, pkg))) return null;
     if (isTest) return 'unit tests may import the runtime dependencies, vitest, fake-indexeddb and node:*';
     if (!layer) return `app/src may import only the runtime dependencies of ${DOC}`;
     if (layer.packages.length === 0) {

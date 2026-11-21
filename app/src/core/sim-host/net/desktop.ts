@@ -2,6 +2,7 @@
 //
 // STUB written by W1 (wave 0). DV4 replaces the body; the class name, the constructor signature and
 // the exported names are contract (section 8, "Stubs"). Until then it answers like NullNet.
+// Note: those are the null device's answers (no network), not the engine's defaults.
 //
 // Owner: W1 > DV4.
 

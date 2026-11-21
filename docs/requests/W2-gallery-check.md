@@ -1,3 +1,5 @@
+Status: items 1 and 2 applied at the wave-0 gate. `npm run check:gallery` exists; CI runs it in a job of its own, `browser-checks` (ubuntu, macOS and Windows; Chromium and WebKit; `EASY68K_REQUIRE_BROWSERS=1`), not in the `e2e` job, which stays off until `tests/e2e` has specs. Item 3 is for Q1 / X1.
+
 # Request from W2: run the gallery's browser check in CI (gates; Q1 and X1 for adoption)
 
 W2's acceptance (ARCHITECTURE.md 9.1) includes keyboard behaviour that follows 2.11 and an

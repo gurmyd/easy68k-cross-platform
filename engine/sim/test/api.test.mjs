@@ -66,6 +66,25 @@ test('instances are independent', async () => {
   assert.equal(b.sim.readByte(0x9000), 0xFF);
 });
 
+test('createSim({ wasmModule }): every instance comes from the compiled module, never from the file', async (t) => {
+  const wasmModule = await WebAssembly.compile(readFileSync(new URL('../dist/sim68k.wasm', root)));
+  const instantiate = t.mock.method(WebAssembly, 'instantiate');
+  const a = await createSim({}, { wasmModule, locateFile: () => { throw new Error('the file was asked for'); } });
+  const b = await createSim({}, { wasmModule });
+  assert.deepEqual(instantiate.mock.calls.map((c) => c.arguments[0]), [wasmModule, wasmModule]);
+  assert.notEqual(a.memory.buffer, b.memory.buffer, 'independent instances');
+  assert.equal(a.getRegister(Reg.SSP), 0x01000000, 'in start-up state');
+});
+
+test('createSim({ wasmModule }): an instance that cannot be created rejects createSim, and the next one works', async (t) => {
+  const wasmModule = await WebAssembly.compile(readFileSync(new URL('../dist/sim68k.wasm', root)));
+  const instantiate = t.mock.method(WebAssembly, 'instantiate', () => Promise.reject(new RangeError('Out of memory')));
+  await assert.rejects(createSim({}, { wasmModule }), /Out of memory/);
+  instantiate.mock.restore();
+  const sim = await createSim({}, { wasmModule });
+  assert.equal(sim.getRegister(Reg.SSP), 0x01000000);
+});
+
 test('a command that executes is refused while a step is suspended', async () => {
   const { sim } = await start('io', { caseNumber: 9 });
   sim.cmdRun();

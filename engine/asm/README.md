@@ -96,7 +96,10 @@ result.executeEnabled;
 - Every call runs in a **fresh WebAssembly instance** (the module is compiled
   once); the original keeps state between runs in globals.
 - Invalid arguments throw (`TypeError`, `RangeError`, or `Error` when the main
-  file is missing). Assembler problems never throw: they are messages.
+  file is missing). Assembler problems never throw: they are messages, or a
+  `fatal` result when the run ends abnormally or the engine cannot be started
+  (`The assembler could not start: ...`, for example when no WebAssembly
+  instance can be created).
 
 ### The result
 

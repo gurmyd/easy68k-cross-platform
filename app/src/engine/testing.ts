@@ -20,17 +20,9 @@ import {
   type AsmResult,
   type Bytes,
   type HostFiles,
-  type HostHardware,
-  type HostIoGraphics,
-  type HostIoText,
-  type HostLog,
-  type HostMain,
-  type HostNet,
-  type HostPrinter,
-  type HostSerial,
-  type HostSound,
   type SimEngine,
   type SimHost,
+  type SimHostParts,
 } from '../contracts';
 import { createAsmEngine } from './asm';
 import { createSimEngine, HOST_PART_DEFAULTS, releaseSimEngine, releaseThrough } from './sim';
@@ -41,20 +33,6 @@ import { createSimEngine, HOST_PART_DEFAULTS, releaseSimEngine, releaseThrough }
 export interface HostCall {
   method: keyof SimHost;
   args: unknown[];
-}
-
-/** The ten parts a host is composed of (the `SimHostParts` of 3.3.1). */
-export interface HostParts {
-  main: HostMain;
-  hardware: HostHardware;
-  log: HostLog;
-  files: HostFiles;
-  text: HostIoText;
-  graphics: HostIoGraphics;
-  sound: HostSound;
-  serial: HostSerial;
-  net: HostNet;
-  printer: HostPrinter;
 }
 
 export interface RecordingHost {
@@ -77,11 +55,11 @@ export interface RecordingHost {
  * A part given in `parts` replaces the recording methods of that part: its methods are called and
  * their results returned. Those calls are recorded as well.
  */
-export function createRecordingHost(parts: Partial<HostParts> = {}): RecordingHost {
+export function createRecordingHost(parts: Partial<SimHostParts> = {}): RecordingHost {
   const calls: HostCall[] = [];
   const host: Record<string, unknown> = {};
   for (const [partName, defaults] of Object.entries(HOST_PART_DEFAULTS)) {
-    const part = parts[partName as keyof HostParts] as Record<string, unknown> | undefined;
+    const part = parts[partName as keyof SimHostParts] as Record<string, unknown> | undefined;
     for (const [name, fallback] of Object.entries(defaults)) {
       const method = name as keyof SimHost;
       const real = part?.[name];
@@ -116,7 +94,7 @@ export interface TestEngine extends RecordingHost {
  * The real engine (engine/dist) with a recording host in which the given parts are replaced. The
  * calls the engine makes while it starts up are already in `calls`.
  */
-export async function createTestEngine(parts: Partial<HostParts> = {}): Promise<TestEngine> {
+export async function createTestEngine(parts: Partial<SimHostParts> = {}): Promise<TestEngine> {
   const recording = createRecordingHost(parts);
   const engine = await createSimEngine(recording.host);
   return { ...recording, engine, release: () => releaseSimEngine(engine) };

@@ -7,7 +7,8 @@
 //   Home / End        first / last menu
 //   a letter          open the menu with that access key ('&File' -> F)
 //   Escape            close the menu (focus back on its title); again: leave the menu bar
-//   Tab               close and leave
+//   Tab, Shift+Tab    close and leave: the focus goes to the next (previous) tab stop of the
+//                     page after (before) the menu bar, as Tab from the bar itself would
 // Choosing an item closes the menu, gives the focus back to where it was
 // before the menu bar was entered, and then calls the item's onSelect and the
 // bar's onSelect, in that order, so a command that moves the focus keeps it.
@@ -131,8 +132,9 @@ export function MenuBar({ menus, label, onSelect, showMnemonics = true, classNam
   const step = (from: number, key: 'ArrowLeft' | 'ArrowRight') =>
     moveIndex(menus.length, from, key, { orientation: 'horizontal', isSkipped: isDisabled }) ?? from;
 
-  const onMenuClose = (reason: MenuCloseReason) => {
-    if (!open) return;
+  /** True for Tab: the menu then lets the browser's own Tab go on (see 'tab' below). */
+  const onMenuClose = (reason: MenuCloseReason): boolean => {
+    if (!open) return false;
     switch (reason) {
       case 'escape':
         setOpen(null);
@@ -146,13 +148,18 @@ export function MenuBar({ menus, label, onSelect, showMnemonics = true, classNam
         break;
       }
       case 'tab':
+        // Tab (or Shift+Tab) in an open menu: close it, put the focus on the bar's title and let
+        // the browser's own Tab go on from there, so that the focus moves exactly as Tab from the
+        // bar would (to the next or previous tab stop in document order).
         setOpen(null);
-        restoreFocus();
-        break;
+        restoreTo.current = null;
+        focusTitle(open.index);
+        return true;
       case 'outside':
         setOpen(null);
         break;
     }
+    return false;
   };
 
   const onMenuSelect = (entry: MenuSelectable) => {

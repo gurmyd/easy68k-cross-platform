@@ -112,3 +112,23 @@ test('a source with no files to include still sees its own name as a file', asyn
   const r = await assemble('self.X68', { 'self.X68': src(['\tIFNE 0', '\tINCLUDE self.x68', '\tENDC', '\tDC.B 1', '\tEND 0']) }, {}, TIME);
   assert.equal(r.errorCount, 0);
 });
+
+test('an instance that cannot be created gives a fatal result, never a throw, a hang or an unhandled rejection', async (t) => {
+  const files = new Map([['prog.X68', src(['\tORG $1000', 'S\tMOVE.B #9,D0', '\tEND S'])]]);
+  assert.equal((await assemble('prog.X68', files, {}, TIME)).fatal, null, 'compiled and working first');
+  const unhandled = [];
+  const onUnhandled = (reason) => unhandled.push(reason);
+  process.on('unhandledRejection', onUnhandled);
+  t.after(() => process.off('unhandledRejection', onUnhandled));
+  const instantiate = t.mock.method(WebAssembly, 'instantiate', () => Promise.reject(new RangeError('Out of memory')));
+  const r = await assemble('prog.X68', files, {}, TIME);
+  instantiate.mock.restore();
+  assert.deepEqual(r, {
+    listing: null, listingName: 'prog.L68', sRecord: null, sRecordName: 'prog.S68',
+    messages: [], errorCount: 0, warningCount: 0, executeEnabled: false, dialogs: [], status: -1,
+    fatal: 'The assembler could not start: Out of memory',
+  });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.deepEqual(unhandled, []);
+  assert.equal((await assemble('prog.X68', files, {}, TIME)).fatal, null, 'the next assembly works');
+});

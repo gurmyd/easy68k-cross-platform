@@ -17,11 +17,12 @@ Planned:
 
 ## What works today
 
-- The simulator engine builds to WebAssembly and passes its own test suite.
-- The assembler engine is being ported.
-- The interface has not been started.
+- The assembler and the simulator core are the original's code compiled to WebAssembly. Their test suites pass on macOS, Linux and Windows on every push.
+- Checked against the official EASy68K v5.16.1 for Windows, run under Wine: all 420 error-free test programs assemble to byte-identical listing and S-record files, and 9 of 9 execution logs match. The scripts that make this comparison are not in the repository yet.
+- The application frame exists: menus, toolbars, the original's shortcuts, light and dark themes.
+- The editor, the simulator's panels and the macOS app are being built.
 
-Nothing has been tested on a Mac yet.
+The automated tests run on GitHub's macOS machines. No person has tried it on a Mac yet.
 
 ## Credits
 

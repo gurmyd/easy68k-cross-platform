@@ -11,6 +11,7 @@
 //   - macOS, Option held: the Option layer of the layout (Option+O is `ø`, Option+Z is `Ω`),
 //     or `Dead` for the dead keys of the US layout (Option+U, Option+E, Option+I, Option+N).
 //   - Windows, AltGr: reported as Ctrl+Alt with the AltGr character (German AltGr+Q is `@`).
+//     Ctrl+Alt + a key without an AltGr character reports the key's own letter in `key`.
 //   - QWERTZ and AZERTY: letters sit at other positions (German Z is at `KeyY`, French A at `KeyQ`).
 //   - Russian and Greek: no ASCII letters at all (`KeyO` gives `щ`, `KeyF` gives `φ`).
 //   - The numeric keypad with NumLock off: navigation keys at keypad positions (`Insert` at
@@ -109,8 +110,13 @@ export const WINDOWS_KEYPAD: KeyFixture[] = [
 export const WINDOWS_GERMAN: KeyFixture[] = [
   { name: 'Ctrl+Z (the key labelled Z, at the US Y position)', key: 'z', code: 'KeyY', ...CTRL, chord: 'Ctrl+Z' },
   { name: 'Ctrl+Y (the key labelled Y, at the US Z position)', key: 'y', code: 'KeyZ', ...CTRL, chord: 'Ctrl+Y' },
-  // Alt chords go by position (K6): Redo is the key at the US Z position, labelled Y here.
-  { name: 'Ctrl+Alt + key labelled Y', key: 'y', code: 'KeyZ', ...CTRL_ALT, chord: 'Ctrl+Alt+Z' },
+  // Ctrl+Alt+letter follows the label on Windows, like the original's virtual-key accelerators
+  // (errata/W3.md entry 24): Redo is the key labelled Z, wherever it sits.
+  { name: 'Ctrl+Alt + key labelled Z', key: 'z', code: 'KeyY', ...CTRL_ALT, chord: 'Ctrl+Alt+Z' },
+  { name: 'Ctrl+Alt + key labelled Y', key: 'y', code: 'KeyZ', ...CTRL_ALT, chord: 'Ctrl+Alt+Y' },
+  { name: 'Ctrl+Alt + key labelled C', key: 'c', code: 'KeyC', ...CTRL_ALT, chord: 'Ctrl+Alt+C' },
+  { name: 'Ctrl+Alt + key labelled U', key: 'u', code: 'KeyU', ...CTRL_ALT, chord: 'Ctrl+Alt+U' },
+  // AltGr characters have no letter in `key`: the position names the chord.
   { name: 'AltGr+Q (types @)', key: '@', code: 'KeyQ', ...CTRL_ALT, chord: 'Ctrl+Alt+Q' },
   { name: 'AltGr+E (types the euro sign)', key: '€', code: 'KeyE', ...CTRL_ALT, chord: 'Ctrl+Alt+E' },
   { name: 'Ctrl+Shift+. (types :)', key: ':', code: 'Period', ...CTRL_SHIFT, chord: 'Ctrl+Shift+.' },
@@ -121,7 +127,22 @@ export const WINDOWS_FRENCH: KeyFixture[] = [
   { name: 'Ctrl+A (at the US Q position)', key: 'a', code: 'KeyQ', ...CTRL, chord: 'Ctrl+A' },
   { name: 'Ctrl+Z (at the US W position)', key: 'z', code: 'KeyW', ...CTRL, chord: 'Ctrl+Z' },
   { name: 'Ctrl+M (at the US semicolon position)', key: 'm', code: 'Semicolon', ...CTRL, chord: 'Ctrl+M' },
-  { name: 'Ctrl+Alt + key labelled A', key: 'a', code: 'KeyQ', ...CTRL_ALT, chord: 'Ctrl+Alt+Q' },
+  { name: 'Ctrl+Alt + key labelled A', key: 'a', code: 'KeyQ', ...CTRL_ALT, chord: 'Ctrl+Alt+A' },
+  {
+    name: 'Ctrl+Alt + key labelled Z (at the US W position)',
+    key: 'z',
+    code: 'KeyW',
+    ...CTRL_ALT,
+    chord: 'Ctrl+Alt+Z',
+  },
+  {
+    name: 'Ctrl+Alt + key labelled W (at the US Z position)',
+    key: 'w',
+    code: 'KeyZ',
+    ...CTRL_ALT,
+    chord: 'Ctrl+Alt+W',
+  },
+  { name: 'AltGr + the key labelled 0 (types @)', key: '@', code: 'Digit0', ...CTRL_ALT, chord: 'Ctrl+Alt+0' },
 ];
 
 /** Windows, Russian layout: every letter key produces a Cyrillic letter. */
@@ -180,6 +201,9 @@ export const MAC_RUSSIAN: KeyFixture[] = [
   { name: 'Ctrl+O position (types щ)', key: 'щ', code: 'KeyO', ...CTRL, chord: 'Ctrl+O' },
   { name: 'Ctrl+Option+O position', key: 'щ', code: 'KeyO', ...CTRL_ALT, chord: 'Ctrl+Alt+O' },
 ];
+
+/** The lists of the macOS key map; every other list is of the Windows and Linux key map. */
+export const MAC_FIXTURES: KeyFixture[] = [...MAC_US, ...MAC_RUSSIAN];
 
 export const ALL_FIXTURES: KeyFixture[] = [
   ...WINDOWS_US,

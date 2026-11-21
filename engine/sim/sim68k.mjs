@@ -302,7 +302,9 @@ export const FileMode = Object.freeze({ UPDATE: 0, READ: 1, CREATE: 2 });
  * @property {(cid: number, data: Uint8Array) => ({result: number, sent?: number}|undefined)} [sendComm]
  *   Task 43: result for D0.W and the number of bytes sent for D1.B.
  *
- * @property {(settings: number, server: Uint8Array) => (number|undefined)} [createNetClient] Task 100; result for D0.L.
+ * @property {(settings: number, server: Uint8Array, serverAddress: number) => (number|undefined)} [createNetClient]
+ *   Task 100; result for D0.L. server is a copy of the string at serverAddress (A2 & $FFFFFF), a 68000
+ *   address: with a host name the host writes the resolved address back over the string there.
  * @property {(settings: number) => (number|undefined)} [createNetServer] Task 101; result for D0.L.
  * @property {(settings: number, dataAddress: number, remoteIP: Uint8Array) => ({result: number, count?: number}|undefined)} [sendNet]
  *   Task 102. dataAddress is a 68000 address. result for D0.L, count for D1.L.
@@ -399,6 +401,9 @@ function completeHost(host) {
  *   (bundlers, service workers).
  * @property {ArrayBuffer|Uint8Array} [wasmBinary]
  *   The contents of sim68k.wasm, if the caller fetched it itself.
+ * @property {WebAssembly.Module} [wasmModule]
+ *   sim68k.wasm already compiled: the simulator is a new instance of it, and
+ *   the file is neither fetched nor compiled again (Emscripten's instantiateWasm).
  * @property {(file: string) => string} [locateFile]
  *   Maps "sim68k.wasm" to a URL (Emscripten's locateFile).
  */
@@ -424,7 +429,17 @@ export async function createSim(host = {}, options = {}) {
   const moduleArg = { host: completeHost(host), simMemoryBase: 0 };
   if (options.wasmBinary) moduleArg.wasmBinary = options.wasmBinary;
   if (options.locateFile) moduleArg.locateFile = options.locateFile;
-  const module = await createModule(moduleArg);
+  const module = await new Promise((resolve, reject) => {
+    const wasmModule = options.wasmModule;
+    if (wasmModule) {
+      // A failed instantiation must reach the caller: the loader would wait for receive() for ever.
+      moduleArg.instantiateWasm = (imports, receive) => {
+        WebAssembly.instantiate(wasmModule, imports).then((instance) => receive(instance, wasmModule), reject);
+        return {};
+      };
+    }
+    createModule(moduleArg).then(resolve, reject);
+  });
   module.simMemoryBase = module._sim_memory();
   module._sim_boot();
   return new Sim68k(module);

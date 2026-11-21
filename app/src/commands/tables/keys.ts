@@ -23,8 +23,10 @@
 //       reserves Ctrl+F2..F8 unless the user has switched that off; the Ctrl form still works where
 //       the system delivers it (2.9.4 takes it in the Output panel on every platform).
 //   K5  F2 = next panel (for Ctrl+Tab), F4 = next mode. Both are additions.
-//   K6  A chord with Alt (Option) is matched by the position of the letter key; on macOS every
-//       command with such a chord also has one without Option, listed first.
+//   K6  A chord with Option is matched by the position of the letter key on macOS, and every
+//       command with such a chord also has one without Option, listed first. On Windows and Linux
+//       a Ctrl+Alt+letter chord follows the key's label like the original's accelerators, and
+//       its position only when the key types no ASCII letter (chords.ts; errata/W3.md entry 24).
 
 import type { CommandSpec } from '../../contracts';
 import type { KnownCommandId } from '../ids';
@@ -170,6 +172,20 @@ export const TEXT_EDITING_COMMANDS: readonly KnownCommandId[] = [
   'ed.edit.copy',
   'ed.edit.paste',
   'ed.edit.selectAll',
+];
+
+/**
+ * Commands of keys that the original handles in the editor control only: Insert (toggle Insert /
+ * Replace) and Ctrl+Shift+. / Ctrl+Shift+, (indent, outdent). Their handlers report themselves
+ * enabled only while the editor has the focus, as F1's context help does (errata/W3.md entry 8).
+ * While such a command is disabled and a text field outside the editor has the focus, the
+ * dispatcher leaves the key to that field instead of cancelling it (keymap.ts; errata/W3.md
+ * entry 25): in the original a text field of a dialog gets these keys itself.
+ */
+export const EDITOR_FOCUS_COMMANDS: readonly KnownCommandId[] = [
+  'ed.edit.toggleInsert',
+  'ed.edit.indent',
+  'ed.edit.outdent',
 ];
 
 /**

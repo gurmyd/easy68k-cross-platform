@@ -1,3 +1,5 @@
+Status: applied at the wave-0 gate (items 1-3; `SimHostParts` is in `contracts/host.ts`, errata W1.md entry 10. `engine/testing.ts` now uses it in place of its own `HostParts`, which is gone; errata W4.md.)
+
 # Request from W4 to W1: `app/src/contracts/` (comments and one declaration to share)
 
 The mirror tests of section 3.2 pass against both engine modules as the contracts are: **no

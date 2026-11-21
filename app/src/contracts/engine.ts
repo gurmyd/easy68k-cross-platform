@@ -65,9 +65,10 @@ export interface AsmResult {
   warningCount: number;
   executeEnabled: boolean; // state of the Execute button of the original's status dialog
   dialogs: AsmDialog[]; // in order
-  status: number; // the engine's own return value
+  status: number; // the engine's own return value; -1 when `fatal` is set
   /** null normally. Otherwise the run ended abnormally - the original would have ended the whole
-   *  editor process, or the instance failed - and the other fields are empty. */
+   *  editor process, the engine trapped, or no engine instance could be created ("The assembler
+   *  could not start: ...") - and the other fields are empty. */
   fatal: string | null;
 }
 
@@ -80,7 +81,10 @@ export interface AsmEngine {
    *    encodeForAssembler() produces it (3.9.3), not the stored file. The other entries are files as
    *    stored.
    *  timestamp: local date and time for the "Created On:" line; the engine formats it.
-   *  Every call runs in a fresh WebAssembly instance of the once-compiled module (assembler §1.8). */
+   *  Every call runs in a fresh WebAssembly instance of the once-compiled module (assembler §1.8).
+   *  Resolves for everything that can happen to a program. Rejects only for arguments this
+   *  comment forbids: a mainName that is not a key of `files`, a tabSize that is not an integer
+   *  from -99 to 99, an invalid Date. */
   assemble(
     mainName: string,
     files: ReadonlyMap<string, Bytes>,

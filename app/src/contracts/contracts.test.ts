@@ -72,6 +72,8 @@ const EXPORTS: Record<string, string[]> = {
     'HostNet',
     'HostPrinter',
     'SimHost',
+    // 3.3.1 (moved from core/sim-host/index.ts, docs/requests/W4-contracts.md)
+    'SimHostParts',
   ],
   'fs.ts': [
     // 3.8.1
@@ -126,6 +128,10 @@ const EXPORTS: Record<string, string[]> = {
     'AppContext',
     'PanelSpec',
     'FeatureModule',
+    // 3.12.3, moved from state/services.ts (docs/requests/W3-layer-rule.md, item 2)
+    'SimEngineFactory',
+    'SimSessionEnv',
+    'ServiceFactories',
     // 3.12.4
     'DialogProps',
     'DialogInstance',
@@ -414,6 +420,8 @@ const asmModuleUrl = new URL('../../../engine/asm/asm68k.mjs', import.meta.url).
 const loadSim = () => import(/* @vite-ignore */ simModuleUrl) as Promise<AnyModule>;
 const loadAsm = () => import(/* @vite-ignore */ asmModuleUrl) as Promise<AnyModule>;
 const asmBuilt = existsSync(repo('engine/dist/asm68k.wasm')) && existsSync(repo('engine/dist/asm68k-loader.mjs'));
+/** With EASY68K_REQUIRE_ENGINES=1 (CI) a missing engine/dist fails instead of skipping. */
+const enginesRequired = process.env.EASY68K_REQUIRE_ENGINES === '1';
 
 describe('contract files export the declarations of section 3', () => {
   it('has exactly the contract files of the W1 entry of 9.1', () => {
@@ -529,6 +537,13 @@ describe('assembler mirror (3.2) against engine/asm/asm68k.mjs', () => {
   it('AsmOptions has the keys of DEFAULT_OPTIONS', async () => {
     const { DEFAULT_OPTIONS } = (await loadAsm()) as { DEFAULT_OPTIONS: object };
     expect(sorted(Object.keys(DEFAULT_OPTIONS))).toEqual(sorted(Object.keys(ASM_OPTIONS_KEYS)));
+  });
+
+  it.runIf(enginesRequired && !asmBuilt)('engine/dist holds the assembler (EASY68K_REQUIRE_ENGINES=1)', () => {
+    expect.fail(
+      'EASY68K_REQUIRE_ENGINES is 1 but engine/dist/asm68k.wasm or asm68k-loader.mjs is missing: ' +
+        'run `npm run build:engines` first. Without the variable this check is skipped.',
+    );
   });
 
   it.skipIf(!asmBuilt)('AsmResult has the keys of a real assembly result (needs engine/dist)', async () => {

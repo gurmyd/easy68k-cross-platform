@@ -139,7 +139,30 @@ describe('step 3: a bound, enabled command runs and the event is cancelled', () 
       'editor',
       'ed.edit.undo',
     ],
-    ['QWERTZ: Redo goes by position', fixture(WINDOWS_GERMAN, 'Ctrl+Alt + key labelled Y'), 'editor', 'ed.edit.redo'],
+    [
+      'QWERTZ: Redo is Ctrl+Alt + the key labelled Z',
+      fixture(WINDOWS_GERMAN, 'Ctrl+Alt + key labelled Z'),
+      'editor',
+      'ed.edit.redo',
+    ],
+    [
+      'QWERTZ: Comment is Ctrl+Alt + the key labelled C',
+      fixture(WINDOWS_GERMAN, 'Ctrl+Alt + key labelled C'),
+      'editor',
+      'ed.edit.comment',
+    ],
+    [
+      'QWERTZ: Uncomment is Ctrl+Alt + the key labelled U',
+      fixture(WINDOWS_GERMAN, 'Ctrl+Alt + key labelled U'),
+      'editor',
+      'ed.edit.uncomment',
+    ],
+    [
+      'AZERTY: Redo is Ctrl+Alt + the key labelled Z',
+      fixture(WINDOWS_FRENCH, 'Ctrl+Alt + key labelled Z (at the US W position)'),
+      'editor',
+      'ed.edit.redo',
+    ],
     [
       'AZERTY: Ctrl + the key labelled A is Select All',
       fixture(WINDOWS_FRENCH, 'Ctrl+A (at the US Q position)'),
@@ -240,6 +263,20 @@ describe('step 3: a bound, enabled command runs and the event is cancelled', () 
     const sent = harness({ mode: 'editor' }).send(fixture(WINDOWS_GERMAN, 'AltGr+Q (types @)'), EDITOR);
     expect(sent.outcome).toEqual({ kind: 'none' });
     expect(sent.prevented).toBe(false);
+    const french = harness({ mode: 'editor' }).send(
+      fixture(WINDOWS_FRENCH, 'AltGr + the key labelled 0 (types @)'),
+      EDITOR,
+    );
+    expect(french).toEqual({ outcome: { kind: 'none' }, prevented: false, stopped: false });
+  });
+
+  it('QWERTZ and AZERTY: Ctrl+Alt at the US Z position is not Redo when its label is another letter', () => {
+    const app = harness({ os: 'windows', mode: 'editor' });
+    expect(app.send(fixture(WINDOWS_GERMAN, 'Ctrl+Alt + key labelled Y'), EDITOR).outcome).toEqual({ kind: 'none' });
+    expect(
+      app.send(fixture(WINDOWS_FRENCH, 'Ctrl+Alt + key labelled W (at the US Z position)'), EDITOR).outcome,
+    ).toEqual({ kind: 'none' });
+    expect(app.state.ran).toEqual([]);
   });
 });
 
@@ -445,6 +482,66 @@ describe('text-editing chords', () => {
     expect(isTextEntry(EDITOR)).toBe(true);
     expect(isTextEntry(BUTTON)).toBe(false);
     expect(isTextEntry(null)).toBe(false);
+  });
+});
+
+describe('editor keys: Insert, Ctrl+Shift+. and Ctrl+Shift+, (EDITOR_FOCUS_COMMANDS)', () => {
+  const editorFocus: CommandId[] = ['ed.edit.toggleInsert', 'ed.edit.indent', 'ed.edit.outdent'];
+  /** Their handlers are enabled only while the editor has the focus. */
+  const outsideEditor = (id: CommandId) => !editorFocus.includes(id);
+
+  it('reach a text field outside the editor while the command is disabled', () => {
+    const app = harness({ mode: 'editor', enabled: outsideEditor });
+    const keys: [KeyFixture, CommandId][] = [
+      [win('Insert'), 'ed.edit.toggleInsert'],
+      [fixture(WINDOWS_KEYPAD, 'keypad 0, NumLock off: Insert'), 'ed.edit.toggleInsert'],
+      [win('Ctrl+Shift+. (types >)'), 'ed.edit.indent'],
+      [win('Ctrl+Shift+, (types <)'), 'ed.edit.outdent'],
+      [fixture(WINDOWS_GERMAN, 'Ctrl+Shift+. (types :)'), 'ed.edit.indent'],
+    ];
+    for (const target of [TEXT_FIELD, element('TEXTAREA'), DIALOG_FIELD]) {
+      for (const [key, command] of keys) {
+        expect(app.send(key, target), key.name).toEqual({
+          outcome: { kind: 'text', command },
+          prevented: false,
+          stopped: false,
+        });
+      }
+    }
+    const onMac = harness({ os: 'mac', mode: 'editor', enabled: outsideEditor });
+    expect(onMac.send(mac('Ctrl+Shift+I'), TEXT_FIELD)).toEqual({
+      outcome: { kind: 'text', command: 'ed.edit.toggleInsert' },
+      prevented: false,
+      stopped: false,
+    });
+    expect(app.state.ran).toEqual([]);
+  });
+
+  it('run in the editor, where the handler is enabled', () => {
+    const app = harness({ mode: 'editor' });
+    expect(app.send(win('Insert'), EDITOR)).toEqual({
+      outcome: { kind: 'run', command: 'ed.edit.toggleInsert' },
+      prevented: true,
+      stopped: true,
+    });
+    expect(app.send(win('Ctrl+Shift+. (types >)'), EDITOR).outcome).toEqual({ kind: 'run', command: 'ed.edit.indent' });
+    expect(app.state.ran).toEqual(['ed.edit.toggleInsert', 'ed.edit.indent']);
+  });
+
+  it('are cancelled as before (step 4) when disabled and the focus is not in a text field', () => {
+    const app = harness({ mode: 'editor', enabled: outsideEditor });
+    expect(app.send(win('Insert'), BUTTON)).toEqual({
+      outcome: { kind: 'disabled', command: 'ed.edit.toggleInsert' },
+      prevented: true,
+      stopped: true,
+    });
+    expect(app.send(win('Ctrl+Shift+, (types <)'), BUTTON).outcome.kind).toBe('disabled');
+  });
+
+  it('other disabled commands are still cancelled in a text field', () => {
+    const app = harness({ mode: 'editor', enabled: () => false });
+    expect(app.send(win('F9'), TEXT_FIELD)).toMatchObject({ outcome: { kind: 'disabled' }, prevented: true });
+    expect(app.send(win('Ctrl+Alt+C'), TEXT_FIELD)).toMatchObject({ outcome: { kind: 'disabled' }, prevented: true });
   });
 });
 

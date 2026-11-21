@@ -42,7 +42,7 @@ reach the browser byte for byte as the engine packages built and tested them.
 
 | Where | What `new URL(..., import.meta.url)` becomes | Result |
 |---|---|---|
-| Vite development server | `/@fs/<repository>/engine/...` | The dev server serves the files. The two API modules pass through Vite's import analysis (harmless; see 5.2 for one warning it prints). |
+| Vite development server | `/@fs/<repository>/engine/...` | The dev server serves the files. The two API modules pass through Vite's import analysis without a warning (both mark their computed `import()` with `/* @vite-ignore */`). |
 | Vite production build | The file is copied to `dist/assets/` under a content-hashed name (`sim68k-<hash>.wasm`, `sim68k-loader-<hash>.mjs`, `sim68k-<hash>.mjs`, and the same three for `asm68k`), and the expression becomes `new URL('<hashed name>', import.meta.url)` | Six assets next to the application's own script. URLs are relative to that script, so the build works at any base path. |
 | Node (Vitest, tools) | a `file:` URL | Modules are imported from disk; the `.wasm` is read with `process.getBuiltinModule('node:fs/promises')` (no `import` of a Node module, which a browser bundle could not resolve, and none that the layer rule of `eslint.config.js` would refuse). |
 | Desktop app, `app://easy68k/...` | as the production build | See 2.4. |
@@ -55,24 +55,22 @@ reach the browser byte for byte as the engine packages built and tested them.
   (64 MiB of memory each). `releaseSimEngine()` drops the binding's reference to it.
 - Every `assemble()` runs in a new instance of the compiled assembler module (16 MiB, growing on
   demand); the assembler's own module does that (assembler §1.8).
-- `engineLoadInfo(name)` reports `{ compilations, instances, route }` for tests and for diagnosis.
+- `engineLoadInfo(name)` reports `{ compilations, instances }` for tests and for diagnosis
+  (`instances` counts the simulator's; the assembler's module creates its own and they are not counted).
 
-How an instance gets the compiled module depends on the loader:
+How an instance gets the compiled module: both loaders are built with Emscripten's
+`instantiateWasm` hook (`-sINCOMING_MODULE_JS_API` in each engine's `build.mjs`), so neither
+fetches nor compiles the `.wasm` itself.
 
-- The **assembler's** loader was built with Emscripten's `instantiateWasm` hook. `asm.ts` gives the
-  compiled module to `initAssembler({ wasmModule, loaderUrl })` and the module does the rest.
-- The **simulator's** loader was built without the hook: it accepts only the bytes of the `.wasm`
-  (`wasmBinary`) and calls `WebAssembly.instantiate(bytes, imports)` itself, which compiles again
-  for every instance. `loader.ts` therefore passes a 16-byte marker as the bytes and, for the
-  duration of that one loader call, answers `WebAssembly.instantiate(marker, imports)` with an
-  instance of the compiled module (`withInstantiateRoute`, `instantiateFrom`). The hook is offered
-  on every call as well, so the day the simulator's loader has it, it is used and the interception
-  is never reached. A test (`loader.test.ts`, "has no instantiateWasm hook yet") fails on that day
-  and says what to clean up. Request: 5.1.
+- **Assembler**: `asm.ts` gives the compiled module to `initAssembler({ wasmModule, loaderUrl })`
+  and the module's own hook does the rest. When an instance cannot be created, the module's
+  `assemble()` resolves with a `fatal` result (A1).
+- **Simulator**: `loader.ts` (`instantiateFrom`) passes the hook in the module argument of every
+  `createModule` call; it instantiates the compiled module, and a failure rejects `createModule`
+  with an `EngineLoadError` (S7). (`createSim()` in `sim68k.mjs` also accepts
+  `options.wasmModule` for the same purpose; the binding does not need it.)
 
-`withInstantiateRoute` replaces the global `WebAssembly.instantiate` only while one engine instance
-is being created or one assembly runs, lets every call it does not recognise through unchanged, runs
-its tasks strictly one after the other, and restores the function afterwards (also after a failure).
+The binding never replaces `WebAssembly.instantiate`.
 
 ### 2.2 What the page needs
 
@@ -135,10 +133,12 @@ All on Windows 11, 2026-11-20, against the real `engine/dist`:
 
 Neither engine needed a change to load in a browser.
 
-To repeat it: `npm test -- src/engine` (all of it, about 25 seconds), or
-`npm test -- src/engine/browser.test.ts` with `EASY68K_BROWSERS=chromium`, `webkit` or `none`, and
-`EASY68K_REQUIRE_BROWSERS=1` to fail instead of skip when a browser is not installed
-(`npx playwright install chromium webkit`).
+To repeat it: `npm test -- src/engine` runs the Node tests; the browser suite is skipped unless
+`EASY68K_BROWSERS` is set, so that a plain `npm test` starts no browser. `npm run
+check:engine-browsers` runs it in Chromium and WebKit with `EASY68K_REQUIRE_BROWSERS=1`, which fails
+instead of skipping when a browser is not installed (`npx playwright install chromium webkit`); to
+run one browser, `npm test -- src/engine/browser.test.ts` with `EASY68K_BROWSERS=chromium` or
+`webkit` (`all` means both).
 
 ## 4. Differences between the modules and section 3.2
 
@@ -155,9 +155,9 @@ mirror was not changed.** What differs is listed here.
 | # | Module | Section 3.2 / contract | What the binding does |
 |---|---|---|---|
 | S1 | Constant objects are named `Status`, `Option`, `Device`, `Shift`, `Repaint`, with keys in upper case (`WAIT_INPUT`) | `RunStatus`, `SimOption`, `HwDevice`, `ShiftBit`, `RepaintBit`, keys in mixed case (`WaitInput`) | Nothing at run time: the numbers are equal, and the binding passes numbers. Found by W1 (its erratum 1); the mirror test translates the names. |
-| S2 | `host.createNetClient(settings, server)`: the server string of task 100 arrives as a copy, without its 68000 address | `createNetClient(settings, server, serverAddress?)` (3.3.4) | `sim.ts` wraps this one host method and passes `A2 & $FFFFFF` as the third argument (`CODE9.CPP:1266` takes the string from there). It is the one place where the engine is read from inside a host call. Request: 5.1. |
+| S2 | `host.createNetClient(settings, server, serverAddress)`: a copy of the server string of task 100 and its 68000 address, `A2 & $FFFFFF` (`CODE9.CPP:1266`) | `createNetClient(settings, server, serverAddress?)` (3.3.4) | Nothing: passed on as it is. (Until the wave-0 gate the engine left the address out and `sim.ts` read register A2; request 5.1, applied.) |
 | S3 | No call to release an instance | `releaseSimEngine(engine)` | The application's `SimEngine` is a small forwarding object (`SimBinding`); release cuts its link to the engine's object. Afterwards every member throws `This simulator engine was released ...`. A Node test shows that the 64 MiB are then collected. |
-| S4 | The loader has no `instantiateWasm` hook | "every call gives an independent WebAssembly instance of the once-compiled module" | The interception of 2.1. Request: 5.1. |
+| S4 | The loader has Emscripten's `instantiateWasm` hook | "every call gives an independent WebAssembly instance of the once-compiled module" | `loader.ts` passes the hook (2.1). (Until the wave-0 gate the loader had no hook and `loader.ts` intercepted its `WebAssembly.instantiate(bytes)` call; request 5.1, applied.) |
 | S5 | Every host method is optional; a missing one answers with its `HOST_DEFAULTS` value | All 93 are required (W1, on purpose) | `createSimEngine` accepts a host with methods missing all the same and leaves them to the engine. Each method is bound to the host object, so `this` works in a host written as a class. |
 | S6 | `load()` throws a `TypeError` for a program that is not a `Uint8Array`, and an `Error` for an unknown `kind` | not stated | Passed on. |
 | S7 | A failure to create the instance | not stated | `createSimEngine` rejects with an `EngineLoadError` whose text includes what the loader printed. |
@@ -192,11 +192,11 @@ The observations of 10.3, checked against the module:
 
 | # | Module | Section 3.2 / contract | What the binding does |
 |---|---|---|---|
-| A1 | When `WebAssembly.instantiate` fails inside `assemble()` (out of memory, for example) the returned promise **never settles**, and the failure is an unhandled promise rejection | `fatal`: "the run ended abnormally ... or the instance failed" | `asm.ts` watches the module's instantiate call (`withInstantiateRoute`). On failure it resolves with a `fatal` result, `The assembler could not start: <reason>`, and answers the module with a promise that stays pending in place of the rejected one, so nothing is left unhandled. Request: 5.2. |
+| A1 | When no instance can be created for an assembly (out of memory, for example; also a `.wasm` or loader that cannot be loaded when the module finds them itself), `assemble()` resolves with a `fatal` result, `The assembler could not start: <reason>`; nothing is left unhandled | `fatal`: "the run ended abnormally ... or the instance failed" | Nothing: passed on. (Until the wave-0 gate the module's promise never settled in that case and `asm.ts` intercepted `WebAssembly.instantiate`; request 5.2, applied.) |
 | A2 | Invalid arguments reject: `Error` for a `mainName` that is not a key of `files`, `RangeError` for a `tabSize` outside -99..99 or an invalid `Date`, `TypeError` for wrong types | not stated | Passed on: these are the only rejections of `AsmEngine.assemble()`. Everything that can happen to a program, a trap inside the engine included, is a result. |
 | A3 | `files` may be a `Map` or a plain object, told apart with `instanceof Map` | `ReadonlyMap<string, Bytes>` | The binding passes `new Map(files)`. |
 | A4 | `tabType` accepts `'assembly'` / `'fixed'` as well as 0 / 1; `DEFAULT_OPTIONS.tabType` is `'fixed'` | `TabType` 0 / 1 | Numbers are passed. |
-| A5 | On a fatal result `status` is -1 | "the engine's own return value" | Passed on; the binding's own fatal result uses -1 too. |
+| A5 | On a fatal result `status` is -1 | "the engine's own return value" | Passed on. |
 | A6 | `initAssembler()` configures the module for the whole page | one `AsmEngine` per `createAsmEngine()` call | Every `AsmEngine` shares the one compiled module; `initAssembler` is called once. |
 
 Confirmed as section 3.2 states them (tests in `asm.test.ts`):
@@ -218,25 +218,23 @@ The observations of 10.3, checked against the module: the main source is the ent
 `executeEnabled` is true whenever there are no errors, also when no S-record was produced; `fatal` is
 a text; hidden warnings are still counted.
 
-## 5. What the engine packages are asked to change
+## 5. What the engine packages were asked to change
 
-Neither is needed for the application to work. Details: `docs/requests/W4-engine-sim.md`,
-`docs/requests/W4-engine-asm.md`.
+Both requests (`docs/requests/W4-engine-sim.md`, `docs/requests/W4-engine-asm.md`) were applied at
+the wave-0 gate, and the binding's workarounds for them were removed.
 
-### 5.1 `engine/sim`
+### 5.1 `engine/sim` (applied)
 
-1. `build.mjs`: add `instantiateWasm` to `-sINCOMING_MODULE_JS_API` (S4). Then `sim68k.mjs` can take
-   a compiled module, or the binding's hook is simply used.
-2. `shim/host-imports.js` and `sim68k.mjs`: pass the 68000 address of the server string to
-   `host.createNetClient` (S2), as `getLocalIP`, `sendNet` and `receiveNet` already receive
-   addresses.
+1. `build.mjs`: `instantiateWasm` is in `-sINCOMING_MODULE_JS_API` (S4); `createSim()` also accepts
+   `options.wasmModule`.
+2. `shim/host-imports.js` and `sim68k.mjs`: `host.createNetClient` receives the 68000 address of the
+   server string as its third argument (S2).
 
-### 5.2 `engine/asm`
+### 5.2 `engine/asm` (applied)
 
-1. `asm68k.mjs`, `newInstance()`: report a failed `WebAssembly.instantiate` (A1).
-2. `asm68k.mjs`, the `import(String(new URL(String(loaderLocation), import.meta.url)))` of
-   `newInstance()`: add `/* @vite-ignore */`. The Vite development server prints "The above dynamic
-   import cannot be analyzed by Vite" for it once per start.
+1. `asm68k.mjs`: a failed instantiation reaches `assemble()`, which resolves with a `fatal` result
+   (A1).
+2. `asm68k.mjs`: the computed `import()` of the loader carries `/* @vite-ignore */`.
 
 ## 6. For packages that use the binding
 
@@ -254,8 +252,8 @@ Neither is needed for the application to work. Details: `docs/requests/W4-engine
   time, not through the module graph: put `assets/*.mjs` and `assets/*.wasm` in the precache list.
 - **DV2 (desktop)**: section 2.4. `tests/desktop/dev` should check that both engines start under
   `app://`; W4 could not.
-- **DV4 (`DesktopNet`)**: `createNetClient` receives `serverAddress` (S2); with the engine as it is
-  today it is never `undefined` when task 100 runs.
+- **DV4 (`DesktopNet`)**: `createNetClient` receives `serverAddress` (S2) from the engine itself; it
+  is never `undefined` when task 100 runs.
 - **Tests of any package** (`import ... from '../engine/testing'`, relative to `app/src`):
 
 | Helper | Use |

@@ -16,7 +16,7 @@
 //     cancel the event and do nothing. The browser must not act on Ctrl+S, F6 and the like.
 //  5. Otherwise the event continues to the focused element.
 //
-// Four refinements, each with its reason:
+// Five refinements, each with its reason:
 //
 // - TEXT EDITING. Ctrl/Cmd+Z, X, C, V, A, Shift+Cmd+Z and Shift+Insert are the platform's own
 //   editing keys. While a text field or the editor has the focus the dispatcher leaves them
@@ -25,6 +25,10 @@
 //   the fields of the original do. The editor component binds undo, redo and select-all in its
 //   own key map. With the focus anywhere else (a toolbar button, a list) the chord runs the
 //   command like any other.
+// - EDITOR KEYS. Insert and Ctrl+Shift+. / , (EDITOR_FOCUS_COMMANDS) belong to the editor
+//   control in the original. Their handlers are enabled only while the editor has the focus;
+//   while they are disabled and a text field has the focus, the key is left to the field
+//   instead of being cancelled by step 4.
 // - TASK 24. While a program has switched key commands off, the chords of the eleven commands of
 //   sim-ui §3.5, and F1 and the panel cycle, do nothing in Simulator mode. They are still
 //   cancelled, so the browser does not act on them either.
@@ -44,6 +48,7 @@ import type { KnownCommandId } from './ids';
 import { COMMAND_SPECS, KEY_ORDER, chordsOn } from './specs';
 import {
   ALSO_IGNORED_AFTER_TASK_24,
+  EDITOR_FOCUS_COMMANDS,
   GUARDED_CHORDS,
   OUTPUT_PANEL_COMMANDS,
   TEXT_EDITING_COMMANDS,
@@ -166,7 +171,7 @@ export function createKeyDispatcher(env: KeymapEnv): KeyDispatcher {
     handle(event) {
       // Keys that an input method is composing with are text, never chords (Safari reports 229).
       if (event.isComposing === true || event.keyCode === 229) return { kind: 'composing' };
-      const chord = chordOf(event);
+      const chord = chordOf(event, env.os);
       if (chord === null) return { kind: 'none' };
       const isGuarded = guarded.has(chord);
 
@@ -198,13 +203,20 @@ export function createKeyDispatcher(env: KeymapEnv): KeyDispatcher {
         ) {
           return { kind: 'text', command: first };
         }
-        cancel(event);
         const switchedOff = mode === 'simulator' && !env.keyCommandsEnabled();
         const runnable = candidates.find(
           (id) =>
             !(switchedOff && (COMMAND_SPECS[id].suppressedByTask24 || ALSO_IGNORED_AFTER_TASK_24.includes(id))) &&
             env.commands.isEnabled(id),
         );
+        if (
+          runnable === undefined &&
+          isTextEntry(event.target) &&
+          candidates.every((id) => EDITOR_FOCUS_COMMANDS.includes(id))
+        ) {
+          return { kind: 'text', command: first };
+        }
+        cancel(event);
         if (runnable === undefined) return { kind: 'disabled', command: first };
         void env.commands.run(runnable);
         return { kind: 'run', command: runnable };

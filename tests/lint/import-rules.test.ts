@@ -60,6 +60,16 @@ const FORBIDDEN: [string, string][] = [
   ['app/src/core/x.ts', "export type T = import('../state/store').Store;"],
   ['app/src/engine/sim.ts', "import x from '../../../engine/dist/sub/x.mjs';"],
   ['app/src/main.tsx', "import x from '/src/x';"],
+  // The allowances below (fs/ for two features, Playwright and Vite for one test) do not leak.
+  ['app/src/features/editor/index.ts', "import { zip } from '../../fs/zip';"],
+  ['app/src/features/filesystem/index.ts', "import { zip } from '../../fs/zip';"],
+  ['app/src/features/files/index.ts', "import { pick } from '../files-fsaccess/pick';"],
+  ['app/src/features/files/index.ts', "import { web } from '../../platform/web';"],
+  ['app/src/engine/asm.test.ts', "import { chromium } from '@playwright/test';"],
+  ['app/src/core/x.test.ts', "import { build } from 'vite';"],
+  ['app/src/engine/browser.test.tsx', "import { build } from 'vite';"],
+  ['app/src/engine/browser.ts', "import { build } from 'vite';"],
+  ['app/src/engine/browser.test.ts', "import { x } from 'playwright-core';"],
 ];
 
 /** [file, code] pairs that must pass. */
@@ -89,6 +99,14 @@ const ALLOWED: [string, string][] = [
   [
     'app/src/core/run/controller.test.ts',
     "import { describe } from 'vitest';\nimport { readFileSync } from 'node:fs';\nimport { createTestEngine } from '../../engine/testing';",
+  ],
+  // features/files/ and features/files-fsaccess/ are the user-interface halves of fs/ (W3-layer-rule).
+  ['app/src/features/files/export/zip-dialog.ts', "import { zip } from '../../../fs/zip';"],
+  ['app/src/features/files-fsaccess/index.ts', "import { FsAccessBackend } from '../../fs/fsaccess-backend';"],
+  // The engine binding's browser suite drives Playwright and builds with Vite (W4-config).
+  [
+    'app/src/engine/browser.test.ts',
+    "import { chromium, type Page } from '@playwright/test';\nimport { build, type Plugin } from 'vite';",
   ],
 ];
 

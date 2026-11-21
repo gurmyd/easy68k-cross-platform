@@ -248,8 +248,10 @@ addToLibrary({
   },
 
   // ---- I/O window: network -----------------------------------------------------------
-  host_io_createNetClient__deps: ['$simHost', '$simCString', '$simPut32'],
-  host_io_createNetClient: (settings, server, result) => { simPut32(result, simHost().createNetClient(settings, simCString(server))); },
+  host_io_createNetClient__deps: ['$simHost', '$simCString', '$simAddress', '$simPut32'],
+  host_io_createNetClient: (settings, server, result) => {
+    simPut32(result, simHost().createNetClient(settings, simCString(server), simAddress(server)));
+  },
   host_io_createNetServer__deps: ['$simHost', '$simPut32'],
   host_io_createNetServer: (settings, result) => { simPut32(result, simHost().createNetServer(settings)); },
   host_io_sendNet__deps: ['$simHost', '$simAddress', '$simCString', '$simPut32'],

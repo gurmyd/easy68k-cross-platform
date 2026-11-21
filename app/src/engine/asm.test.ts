@@ -301,7 +301,7 @@ describe.skipIf(!asmBuilt)('createAsmEngine with the real engine (needs engine/d
       expect((await assemble('p.X68', files)).fatal).toBeNull(); // the next assembly is unaffected
     });
 
-    it('no instance can be created: the binding reports it (the module alone would never answer)', async () => {
+    it('no instance can be created: a fatal result, nothing unhandled, and the next assembly works', async () => {
       const unhandled: unknown[] = [];
       const onUnhandled = (reason: unknown) => unhandled.push(reason);
       process.on('unhandledRejection', onUnhandled);

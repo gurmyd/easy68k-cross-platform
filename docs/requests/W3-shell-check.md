@@ -1,3 +1,5 @@
+Status: items 1 and 2 applied at the wave-0 gate. `npm run check:shell` exists; CI runs it next to `check:gallery` in the job `browser-checks` (ubuntu, macOS and Windows; Chromium and WebKit; `EASY68K_REQUIRE_BROWSERS=1`), not in the `e2e` job, which stays off until `tests/e2e` has specs. Item 3 is for X1 / Q1.
+
 # Request from W3: run the shell's browser check in CI (gates; X1 and Q1 for adoption)
 
 W3's acceptance (ARCHITECTURE.md 9.1) includes items that only a browser can show: the chords of

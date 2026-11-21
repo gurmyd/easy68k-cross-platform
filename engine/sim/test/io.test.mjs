@@ -430,6 +430,22 @@ test('task 42 serial read: result code, count in D1.B, and the stale tail of the
   assert.equal(sim.getRegister(Reg.D0) & 0xFFFF, 3, 'port not initialised');
 });
 
+test('task 100: createNetClient gets the server string and its 68000 address (A2 & $FFFFFF)', async () => {
+  const { sim, host } = await start('io', { caseNumber: 0, host: { results: { createNetClient: () => 0x12345678 } } });
+  sim.writeBytes(0x5000, [0x68, 0x6F, 0x73, 0x74, 0x00]); // "host"
+  // MOVEA.L #$FF005000,A2 (the top byte is not part of the address) / MOVEQ #3,D1 / MOVEQ #100,D0 / TRAP #15
+  sim.writeBytes(0x3000, [0x24, 0x7C, 0xFF, 0x00, 0x50, 0x00, 0x72, 0x03, 0x70, 0x64, 0x4E, 0x4F, 0xFF, 0xFF, 0xFF, 0xFF]);
+  sim.setRegister(Reg.PC, 0x3000);
+  for (let i = 0; i < 4; i++) sim.cmdTraceInto();
+  const calls = host.callsOf('createNetClient');
+  assert.equal(calls.length, 1);
+  const [settings, server, serverAddress] = calls[0];
+  assert.equal(settings, 3, 'D1.L');
+  assert.equal(bytesToText(server), 'host', 'a copy of the string, without the NUL');
+  assert.equal(serverAddress, 0x5000, 'the address the original passes: &memory[A2 & ADDRMASK]');
+  assert.equal(sim.getRegister(Reg.D0), 0x12345678, 'the result goes to D0.L');
+});
+
 test('Option.MEM_LIVE: the host is told about every successful memory write', async () => {
   const { sim, host } = await start('debug');
   sim.clearAllBreakpoints();

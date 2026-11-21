@@ -124,8 +124,8 @@ export interface HostSerial {
 
 /** Network (trap15-b §12). Addresses are 68000 addresses; the host reads and writes engine.memory. */
 export interface HostNet {
-  /** Task 100. serverAddress is the 68000 address of the server string; the engine binding adds it
-   *  (see the note under 3.3.4). */
+  /** Task 100. serverAddress is the 68000 address of the server string (`A2 & $FFFFFF`); the engine
+   *  passes it (see the note under 3.3.4). */
   createNetClient(settings: number, server: Bytes, serverAddress?: number): number | undefined;
   createNetServer(settings: number): number | undefined; // task 101
   sendNet(settings: number, dataAddress: number, remoteIP: Bytes): { result: number; count?: number } | undefined;
@@ -160,3 +160,19 @@ export type SimHost = HostMain &
   HostSerial &
   HostNet &
   HostPrinter;
+
+/** The ten parts a host is composed of (3.3.1). createSimHost(parts) of core/sim-host/index.ts (SH8)
+ *  binds them into one SimHost; createRecordingHost / createTestEngine of app/src/engine/testing.ts
+ *  (W4) take some of them. Declared here so that both share one type (docs/requests/W4-contracts.md). */
+export interface SimHostParts {
+  main: HostMain;
+  hardware: HostHardware;
+  log: HostLog;
+  files: HostFiles;
+  text: HostIoText;
+  graphics: HostIoGraphics;
+  sound: HostSound;
+  serial: HostSerial;
+  net: HostNet;
+  printer: HostPrinter;
+}

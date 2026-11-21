@@ -1,3 +1,6 @@
+Status (item 1): applied at the wave-0 gate. `eslint.config.js` lets `features/files/**` and `features/files-fsaccess/**` import `fs/`; `tests/lint/import-rules.test.ts` has fixtures for both and for other features, which still may not.
+Status: items 2 and 3 applied at the wave-0 gate. Item 2: `SimEngineFactory`, `SimSessionEnv` and `ServiceFactories` are in `contracts/features.ts`, re-exported by `state/services.ts`. ARCHITECTURE.md 3.12.3 is not edited: the proposed text for item 2 and for item 3 is in errata W3.md, entries 10 and 11, for the architect to take in.
+
 # Request from W3: the layer rule and features that need `fs/`, `engine/` or `platform/` (gates, W1)
 
 Found while writing the bootstrap (ARCHITECTURE.md 3.12.3). Not needed by W3 itself; it concerns

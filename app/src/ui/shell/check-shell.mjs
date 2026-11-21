@@ -12,8 +12,10 @@
 //     handler is disabled;
 //   - the dispatcher cancels the chords of 2.9.3 (`defaultPrevented` on real key events);
 //   - key and code pairs of other keyboards (Option chords such as key 'ø' with code 'KeyO', a
-//     QWERTZ and a Russian layout, Insert on the numeric keypad) run the right commands; Ctrl+F4
-//     is left to the browser on Windows and is Log Start on macOS;
+//     QWERTZ, an AZERTY and a Russian layout, Insert on the numeric keypad) run the right
+//     commands; on Windows Ctrl+Alt+letter follows the key's label; Insert and Ctrl+Shift+. / ,
+//     run in the editor and are left to a plain text field; Ctrl+F4 is left to the browser on
+//     Windows and is Log Start on macOS;
 //   - no command runs while a modal dialog is open, from a key or from a toolbar button; message
 //     boxes return the pressed button; a modal dialog of Simulator mode holds the controller;
 //   - settings: a `storage` event updates a second page; the theme and the whole panel layout
@@ -340,6 +342,9 @@ async function structurePass(browser, name, os) {
   await context.close();
 }
 
+/** The commands of the editor's own keys (EDITOR_FOCUS_COMMANDS in app/src/commands/tables/keys.ts). */
+const EDITOR_FOCUS_IDS = ['ed.edit.toggleInsert', 'ed.edit.indent', 'ed.edit.outdent'];
+
 /** The chords of 2.9.3 and recorded key and code pairs. */
 async function keyboardPass(browser, name, os) {
   const p = `${name}/${os}:`;
@@ -397,7 +402,6 @@ async function keyboardPass(browser, name, os) {
     'ed.edit.comment',
     'ed.edit.uncomment',
     'ed.edit.findNext',
-    'ed.edit.toggleInsert',
     'ed.project.assemble',
     'sim.file.open',
     'sim.run.run',
@@ -406,6 +410,24 @@ async function keyboardPass(browser, name, os) {
     'sim.search.find',
   ];
   await registerRecorders(page, ids);
+  // The editor's own keys (Insert, Ctrl+Shift+. and ,): handlers enabled only while the editor
+  // has the focus, as E2's will be. A stand-in editor and a plain text field are added to the page.
+  await page.evaluate((list) => {
+    const field = document.createElement('input');
+    field.type = 'text';
+    field.setAttribute('aria-label', 'check-shell text field');
+    field.dataset.checkField = '';
+    const editor = document.createElement('div');
+    editor.contentEditable = 'true';
+    editor.setAttribute('aria-label', 'check-shell stand-in editor');
+    editor.dataset.checkEditor = '';
+    document.body.append(field, editor);
+    const { commands } = window.__easy68k;
+    const inEditor = () => Boolean(document.activeElement?.closest('[data-check-editor]'));
+    for (const id of list) {
+      if (!commands.hasHandler(id)) commands.register(id, { run: () => void window.__ran.push(id), enabled: inEditor });
+    }
+  }, EDITOR_FOCUS_IDS);
   await setMode(page, 'editor');
   const cmd = mac ? 'Meta' : 'Control';
   await page.keyboard.press(`${cmd}+KeyS`);
@@ -472,9 +494,25 @@ async function keyboardPass(browser, name, os) {
           { ...none, key: 'z', code: 'KeyY', ctrlKey: true },
           'ed.edit.undo',
         ],
+        // Ctrl+Alt+letter follows the label on Windows, as the original's accelerators do.
         [
-          'QWERTZ, Ctrl+Alt + the Z position: key y',
-          { ...none, key: 'y', code: 'KeyZ', ctrlKey: true, altKey: true },
+          'QWERTZ, Ctrl+Alt + the key labelled Z: key z, code KeyY',
+          { ...none, key: 'z', code: 'KeyY', ctrlKey: true, altKey: true },
+          'ed.edit.redo',
+        ],
+        [
+          'QWERTZ, Ctrl+Alt + the key labelled C: key c, code KeyC',
+          { ...none, key: 'c', code: 'KeyC', ctrlKey: true, altKey: true },
+          'ed.edit.comment',
+        ],
+        [
+          'QWERTZ, Ctrl+Alt + the key labelled U: key u, code KeyU',
+          { ...none, key: 'u', code: 'KeyU', ctrlKey: true, altKey: true },
+          'ed.edit.uncomment',
+        ],
+        [
+          'AZERTY, Ctrl+Alt + the key labelled Z: key z, code KeyW',
+          { ...none, key: 'z', code: 'KeyW', ctrlKey: true, altKey: true },
           'ed.edit.redo',
         ],
         [
@@ -494,12 +532,14 @@ async function keyboardPass(browser, name, os) {
         ],
         ['Ctrl+Alt+U', { ...none, key: 'u', code: 'KeyU', ctrlKey: true, altKey: true }, 'ed.edit.uncomment'],
         [
-          'Insert on the keypad (0 with NumLock off): key Insert, code Numpad0',
+          'Insert on the keypad (0 with NumLock off), in the editor: key Insert, code Numpad0',
           { ...none, key: 'Insert', code: 'Numpad0' },
           'ed.edit.toggleInsert',
+          '[data-check-editor]',
         ],
       ];
-  for (const [label, init, command] of pairs) {
+  for (const [label, init, command, where] of pairs) {
+    await page.locator(where ?? '.e68-modeswitch [data-mode="editor"]').focus();
     await page.evaluate(() => {
       window.__ran.length = 0;
     });
@@ -515,7 +555,72 @@ async function keyboardPass(browser, name, os) {
   if (mac) {
     const cancelled = await sendKey(page, { ...none, key: 'ø', code: 'KeyO', altKey: true });
     check(`${p} Option+O (key ø, code KeyO) is left to the page`, cancelled === false);
+  } else {
+    // The key at the US Z position is labelled Y (QWERTZ) or W (AZERTY): Ctrl+Alt on it is no
+    // command. AltGr characters (German AltGr+Q, French AltGr+à: @) stay text.
+    const notCommands = [
+      ['QWERTZ, Ctrl+Alt + the key labelled Y: key y, code KeyZ', { key: 'y', code: 'KeyZ' }],
+      ['AZERTY, Ctrl+Alt + the key labelled W: key w, code KeyZ', { key: 'w', code: 'KeyZ' }],
+      ['QWERTZ, AltGr+Q: key @, code KeyQ', { key: '@', code: 'KeyQ' }],
+      ['AZERTY, AltGr+à: key @, code Digit0', { key: '@', code: 'Digit0' }],
+    ];
+    for (const [label, keys] of notCommands) {
+      await page.locator('.e68-modeswitch [data-mode="editor"]').focus();
+      await page.evaluate(() => {
+        window.__ran.length = 0;
+      });
+      const cancelled = await sendKey(page, { ...none, ...keys, ctrlKey: true, altKey: true });
+      const result = await ran(page);
+      check(
+        `${p} ${label} runs nothing and is left to the page`,
+        cancelled === false && result.length === 0,
+        `cancelled=${cancelled} ran=${result.join(',')}`,
+      );
+    }
   }
+
+  // Insert and Ctrl+Shift+. / , belong to the editor control (EDITOR_FOCUS_COMMANDS). With
+  // handlers that are enabled only while the editor has the focus (the stand-in editor registered
+  // above), the keys run in the editor and reach a plain text field untouched; on a button they
+  // are cancelled as before (2.9.1 step 4).
+  const editorKeys = [
+    mac
+      ? ['Ctrl+Shift+I', { ...none, key: 'I', code: 'KeyI', ctrlKey: true, shiftKey: true }, 'ed.edit.toggleInsert']
+      : ['Insert', { ...none, key: 'Insert', code: 'Insert' }, 'ed.edit.toggleInsert'],
+    ['Ctrl+Shift+.', { ...none, key: '>', code: 'Period', ctrlKey: true, shiftKey: true }, 'ed.edit.indent'],
+    ['Ctrl+Shift+,', { ...none, key: '<', code: 'Comma', ctrlKey: true, shiftKey: true }, 'ed.edit.outdent'],
+  ];
+  for (const [label, init, command] of editorKeys) {
+    await page.locator('.e68-modeswitch [data-mode="editor"]').focus();
+    await page.evaluate(() => {
+      window.__ran.length = 0;
+    });
+    const onButton = await sendKey(page, init);
+    const onButtonRan = await ran(page);
+    check(
+      `${p} ${label} on a button outside the editor is cancelled and runs nothing`,
+      onButton === true && onButtonRan.length === 0,
+      `cancelled=${onButton} ran=${onButtonRan.join(',')}`,
+    );
+    for (const where of ['field', 'editor']) {
+      await page.locator(where === 'field' ? '[data-check-field]' : '[data-check-editor]').focus();
+      await page.evaluate(() => {
+        window.__ran.length = 0;
+      });
+      const cancelled = await sendKey(page, init);
+      const result = await ran(page);
+      check(
+        where === 'field'
+          ? `${p} ${label} in a text field outside the editor is left to the field`
+          : `${p} ${label} in the editor runs ${command}`,
+        where === 'field' ? cancelled === false && result.length === 0 : cancelled === true && same(result, [command]),
+        `cancelled=${cancelled} ran=${result.join(',')}`,
+      );
+    }
+  }
+  await page.evaluate(() => {
+    for (const element of document.querySelectorAll('[data-check-field], [data-check-editor]')) element.remove();
+  });
 
   // Ctrl+F4 (2.9.3): the browsers of Windows and Linux keep it (it closes the tab), so the page
   // leaves it alone; a browser on macOS delivers it, and there it is the original's Log Start.

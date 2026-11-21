@@ -6,7 +6,9 @@ import { describe, expect, it } from 'vitest';
 import { chordOf, formatChord, keyNameOf, normalizeChord, splitChord } from './chords';
 import {
   ALL_FIXTURES,
+  MAC_FIXTURES,
   MAC_US,
+  WINDOWS_FRENCH,
   WINDOWS_GERMAN,
   WINDOWS_KEYPAD,
   WINDOWS_RUSSIAN,
@@ -16,52 +18,75 @@ import {
 
 describe('chordOf', () => {
   it.each(ALL_FIXTURES.map((entry) => [entry.name, entry] as const))('%s', (_name, entry) => {
-    expect(chordOf(entry)).toBe(entry.chord);
+    expect(chordOf(entry, MAC_FIXTURES.includes(entry) ? 'mac' : 'windows')).toBe(entry.chord);
   });
 
   it('takes Option+O by position: the character is ø, the chord is Alt+O', () => {
     const event = fixture(MAC_US, 'Option+O (types ø)');
     expect(event.key).toBe('ø');
     expect(event.code).toBe('KeyO');
-    expect(chordOf(event)).toBe('Alt+O');
+    expect(chordOf(event, 'mac')).toBe('Alt+O');
   });
 
   it('follows the layout for a letter without Alt (QWERTZ: Ctrl+Z is the key labelled Z)', () => {
     const event = fixture(WINDOWS_GERMAN, 'Ctrl+Z (the key labelled Z, at the US Y position)');
     expect(event.code).toBe('KeyY');
-    expect(chordOf(event)).toBe('Ctrl+Z');
+    expect(chordOf(event, 'windows')).toBe('Ctrl+Z');
+  });
+
+  it('Windows and Linux: Ctrl+Alt+letter follows the label, like a virtual-key accelerator', () => {
+    for (const os of ['windows', 'linux'] as const) {
+      expect(chordOf(fixture(WINDOWS_GERMAN, 'Ctrl+Alt + key labelled Z'), os)).toBe('Ctrl+Alt+Z');
+      expect(chordOf(fixture(WINDOWS_GERMAN, 'Ctrl+Alt + key labelled Y'), os)).toBe('Ctrl+Alt+Y');
+      expect(chordOf(fixture(WINDOWS_FRENCH, 'Ctrl+Alt + key labelled Z (at the US W position)'), os)).toBe(
+        'Ctrl+Alt+Z',
+      );
+      // No ASCII letter in `key` (AltGr character, Cyrillic, dead key): the position.
+      expect(chordOf(fixture(WINDOWS_GERMAN, 'AltGr+Q (types @)'), os)).toBe('Ctrl+Alt+Q');
+      expect(chordOf(fixture(WINDOWS_RUSSIAN, 'Ctrl+Alt+C position (types с)'), os)).toBe('Ctrl+Alt+C');
+      const dead = { key: 'Dead', code: 'KeyU', ctrlKey: true, altKey: true, shiftKey: false, metaKey: false };
+      expect(chordOf(dead, os)).toBe('Ctrl+Alt+U');
+    }
+  });
+
+  it('macOS: an Option chord goes by position, even when the Option layer gives an ASCII letter', () => {
+    const optionLetter = { key: 'y', code: 'KeyZ', ctrlKey: true, altKey: true, shiftKey: false, metaKey: false };
+    expect(chordOf(optionLetter, 'mac')).toBe('Ctrl+Alt+Z');
+    expect(chordOf(optionLetter, 'windows')).toBe('Ctrl+Alt+Y');
+    // Without Option the label counts on macOS too.
+    expect(chordOf({ ...optionLetter, altKey: false }, 'mac')).toBe('Ctrl+Y');
   });
 
   it('follows the position when the layout has no ASCII letters', () => {
-    expect(chordOf(fixture(WINDOWS_RUSSIAN, 'Ctrl+O position (types щ)'))).toBe('Ctrl+O');
+    expect(chordOf(fixture(WINDOWS_RUSSIAN, 'Ctrl+O position (types щ)'), 'windows')).toBe('Ctrl+O');
   });
 
   it('names a keypad key by what it does while NumLock is off; a keypad digit forms no chord', () => {
     const insert = fixture(WINDOWS_KEYPAD, 'Shift + keypad 0, NumLock off: Shift+Insert');
     expect([insert.key, insert.code]).toEqual(['Insert', 'Numpad0']);
-    expect(chordOf(insert)).toBe('Shift+Insert');
-    expect(chordOf(fixture(WINDOWS_KEYPAD, 'keypad 0, NumLock off: Insert'))).toBe('Insert');
-    expect(chordOf(fixture(WINDOWS_KEYPAD, 'keypad 0, NumLock on: the digit 0'))).toBeNull();
-    expect(chordOf(fixture(WINDOWS_KEYPAD, 'Ctrl + keypad 1, NumLock on'))).toBeNull();
+    expect(chordOf(insert, 'windows')).toBe('Shift+Insert');
+    expect(chordOf(fixture(WINDOWS_KEYPAD, 'keypad 0, NumLock off: Insert'), 'windows')).toBe('Insert');
+    expect(chordOf(fixture(WINDOWS_KEYPAD, 'keypad 0, NumLock on: the digit 0'), 'windows')).toBeNull();
+    expect(chordOf(fixture(WINDOWS_KEYPAD, 'Ctrl + keypad 1, NumLock on'), 'windows')).toBeNull();
     // The keypad's Enter is Enter in either NumLock state.
-    expect(chordOf(fixture(WINDOWS_US, 'Alt+Enter on the keypad'))).toBe('Alt+Enter');
+    expect(chordOf(fixture(WINDOWS_US, 'Alt+Enter on the keypad'), 'windows')).toBe('Alt+Enter');
     // Only the keypad is named by `key`: any other position keeps its own name or has none.
-    expect(keyNameOf({ key: 'Insert', code: 'Period', altKey: false })).toBe('.');
-    expect(keyNameOf({ key: 'Insert', code: 'IntlBackslash', altKey: false })).toBeNull();
+    expect(keyNameOf({ key: 'Insert', code: 'Period', altKey: false }, 'windows')).toBe('.');
+    expect(keyNameOf({ key: 'Insert', code: 'IntlBackslash', altKey: false }, 'windows')).toBeNull();
   });
 
   it('names a key by its character when the event has no code at all', () => {
     const base = { ctrlKey: true, altKey: false, shiftKey: false, metaKey: false, code: '' };
-    expect(chordOf({ ...base, key: 's' })).toBe('Ctrl+S');
-    expect(chordOf({ ...base, key: 'F5' })).toBe('Ctrl+F5');
-    expect(chordOf({ ...base, key: 'Enter' })).toBe('Ctrl+Enter');
-    expect(chordOf({ ...base, key: 'Unidentified' })).toBeNull();
+    expect(chordOf({ ...base, key: 's' }, 'windows')).toBe('Ctrl+S');
+    expect(chordOf({ ...base, key: 'F5' }, 'windows')).toBe('Ctrl+F5');
+    expect(chordOf({ ...base, key: 'Enter' }, 'windows')).toBe('Ctrl+Enter');
+    expect(chordOf({ ...base, key: 'Unidentified' }, 'windows')).toBeNull();
   });
 
   it('gives no name to keys that are not part of any chord', () => {
-    expect(keyNameOf({ key: 'CapsLock', code: 'CapsLock', altKey: false })).toBeNull();
-    expect(keyNameOf({ key: 'Dead', code: 'Quote', altKey: false })).toBe("'");
-    expect(keyNameOf({ key: 'AudioVolumeUp', code: 'AudioVolumeUp', altKey: false })).toBeNull();
+    expect(keyNameOf({ key: 'CapsLock', code: 'CapsLock', altKey: false }, 'windows')).toBeNull();
+    expect(keyNameOf({ key: 'Dead', code: 'Quote', altKey: false }, 'windows')).toBe("'");
+    expect(keyNameOf({ key: 'AudioVolumeUp', code: 'AudioVolumeUp', altKey: false }, 'windows')).toBeNull();
   });
 });
 

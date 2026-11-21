@@ -177,8 +177,12 @@ describe('Tabs', () => {
       </>,
     );
     expect(out).toContain('role="tablist" aria-label="Documents"');
-    expect(out).toContain('id="docs-tab-a" role="tab" aria-selected="false" aria-controls="docs-panel-a"');
-    expect(out).toMatch(/id="docs-tab-b" role="tab" aria-selected="true"[^>]*tabindex="0"/);
+    // Only the selected tab names its panel: the other panels are not rendered (2.11, ARIA tabs pattern).
+    expect(out).toMatch(/id="docs-tab-a" role="tab" aria-selected="false" (?![^>]*aria-controls)[^>]*>/);
+    expect(out).toMatch(
+      /id="docs-tab-b" role="tab" aria-selected="true" aria-controls="docs-panel-b"[^>]*tabindex="0"/,
+    );
+    for (const [, id] of out.matchAll(/aria-controls="([^"]+)"/g)) expect(out).toContain(`id="${id}"`);
     expect(out).toContain('(modified)');
     expect(out).toContain('id="docs-panel-b" role="tabpanel" aria-labelledby="docs-tab-b"');
   });

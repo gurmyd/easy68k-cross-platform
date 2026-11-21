@@ -96,8 +96,9 @@
  * @property {AsmDialog[]} dialogs         Message boxes the original would have shown.
  * @property {number} status               assembleFile()'s return value (0, or 0x400 when the source could not be read).
  * @property {string | null} fatal         null normally. Otherwise the run ended abnormally (the original would have
- *                                         ended the editor process, or the WebAssembly instance trapped); the other
- *                                         fields are then empty.
+ *                                         ended the editor process, or the WebAssembly instance trapped), or it never
+ *                                         started ("The assembler could not start: ...": no instance could be
+ *                                         created); the other fields are then empty.
  */
 
 /** The defaults of AssembleOptions. */
@@ -296,16 +297,20 @@ async function newInstance() {
   const module = await getCompiled();
   if (!createModule) {
     createModule = (await (loaderLocation
-      ? import(String(new URL(String(loaderLocation), import.meta.url)))
+      ? import(/* @vite-ignore */ String(new URL(String(loaderLocation), import.meta.url)))
       : import('../dist/asm68k-loader.mjs'))).default;
   }
-  return createModule({
-    instantiateWasm(imports, receive) {
-      WebAssembly.instantiate(module, imports).then((instance) => receive(instance, module));
-      return {};
-    },
-    print() {},
-    printErr() {},
+  // A failed instantiation (no memory for the instance, for example) must reach the caller: the
+  // loader itself would wait for receive() for ever.
+  return new Promise((resolve, reject) => {
+    createModule({
+      instantiateWasm(imports, receive) {
+        WebAssembly.instantiate(module, imports).then((instance) => receive(instance, module), reject);
+        return {};
+      },
+      print() {},
+      printErr() {},
+    }).then(resolve, reject);
   });
 }
 
@@ -391,7 +396,14 @@ export async function assemble(mainName, files, options = {}, timestamp = new Da
   if (!Number.isInteger(tabSize) || tabSize < -99 || tabSize > 99) throw new RangeError('options.tabSize must be an integer from -99 to 99');
   const time = timeParts(timestamp);
 
-  const M = await newInstance();
+  let M;
+  try {
+    M = await newInstance();
+  } catch (error) {
+    // The engine could not be started (the .wasm or its loader cannot be loaded, or the browser
+    // cannot create another instance): a fatal result, as for a trap. Assembler problems never throw.
+    return fatalResult(mainName, `The assembler could not start: ${error && error.message ? error.message : String(error)}`);
+  }
   const heap = () => M.HEAPU8;
   /** @param {Uint8Array} bytes @param {boolean} [nul] */
   const put = (bytes, nul = false) => {
@@ -467,15 +479,25 @@ export async function assemble(mainName, files, options = {}, timestamp = new Da
   } catch (error) {
     let exitCalled = false;
     try { exitCalled = M._ez_exit_called() !== 0; } catch { /* instance unusable */ }
-    return {
-      listing: null, listingName: changeFileExt(mainName, '.L68'),
-      sRecord: null, sRecordName: changeFileExt(mainName, '.S68'),
-      messages: [], errorCount: 0, warningCount: 0, executeEnabled: false, dialogs: [], status: -1,
-      fatal: exitCalled
-        ? 'The assembler called exit() ("INVALID EFFECTIVE ADDRESSING MODE!"); the original editor would have closed.'
-        : `The assembler stopped abnormally: ${error && error.message ? error.message : String(error)}`,
-    };
+    return fatalResult(mainName, exitCalled
+      ? 'The assembler called exit() ("INVALID EFFECTIVE ADDRESSING MODE!"); the original editor would have closed.'
+      : `The assembler stopped abnormally: ${error && error.message ? error.message : String(error)}`);
   }
+}
+
+/**
+ * The result of a run that ended abnormally or never started: `fatal` says why, every other field is empty.
+ * @param {string} mainName
+ * @param {string} fatal
+ * @returns {AssembleResult}
+ */
+function fatalResult(mainName, fatal) {
+  return {
+    listing: null, listingName: changeFileExt(mainName, '.L68'),
+    sRecord: null, sRecordName: changeFileExt(mainName, '.S68'),
+    messages: [], errorCount: 0, warningCount: 0, executeEnabled: false, dialogs: [], status: -1,
+    fatal,
+  };
 }
 
 /**

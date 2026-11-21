@@ -7,7 +7,9 @@
 // tab's `x` does for the mouse (the `x` itself is not a separate tab stop, so
 // that the tab list holds nothing but tabs); a middle click closes too.
 //
-// The panels are rendered by the caller with TabPanel and the same ids:
+// The caller renders the panel of the selected tab only, with TabPanel and the same ids; the
+// selected tab alone carries aria-controls (the ARIA Authoring Practices tabs pattern allows a
+// panel that is not rendered, as long as no tab points at it):
 //   <Tabs idBase="tools" items={...} selectedId={id} onSelect={setId} label="Tools" />
 //   <TabPanel idBase="tools" tabId={id}>...</TabPanel>
 
@@ -98,7 +100,9 @@ export function Tabs({
               id={tabId(idBase, item.id)}
               role="tab"
               aria-selected={selected}
-              aria-controls={tabPanelId(idBase, item.id)}
+              // Only the selected tab's panel is rendered (TabPanel), so only that tab names one:
+              // aria-controls must not point at an element that is not in the page.
+              aria-controls={selected ? tabPanelId(idBase, item.id) : undefined}
               aria-keyshortcuts={item.closable && onClose ? 'Delete' : undefined}
               tabIndex={index === tabStop ? 0 : -1}
               title={item.title}

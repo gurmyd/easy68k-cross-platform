@@ -53,11 +53,10 @@ export interface LoadedEngine {
 export interface EngineLoadInfo {
   /** Times the .wasm was compiled: 1 after the first use, however many instances exist. */
   compilations: number;
-  /** WebAssembly instances asked for from the compiled module. */
+  /** WebAssembly instances asked for from the compiled module through `createModule` (the simulator's).
+   *  The assembler's module creates its instances itself, from the same compiled module; they are not
+   *  counted here. */
   instances: number;
-  /** How the last instance got the compiled module: through the loader's `instantiateWasm` hook, or
-   *  by answering the loader's own `WebAssembly.instantiate(bytes)` call (see `instantiateFrom`). */
-  route: 'hook' | 'intercepted' | null;
 }
 
 /** Thrown when an engine cannot be loaded. `cause` is the underlying error. */
@@ -82,8 +81,8 @@ const ENGINE_FILES: Record<EngineName, EngineFiles> = {
 const ENGINE_TITLE: Record<EngineName, string> = { asm: 'assembler', sim: 'simulator' };
 
 const loadInfo: Record<EngineName, EngineLoadInfo> = {
-  asm: { compilations: 0, instances: 0, route: null },
-  sim: { compilations: 0, instances: 0, route: null },
+  asm: { compilations: 0, instances: 0 },
+  sim: { compilations: 0, instances: 0 },
 };
 
 const cache: Partial<Record<EngineName, Promise<LoadedEngine>>> = {};
@@ -96,12 +95,6 @@ export function engineFiles(name: EngineName): EngineFiles {
 /** A copy of the load counters of one engine. */
 export function engineLoadInfo(name: EngineName): EngineLoadInfo {
   return { ...loadInfo[name] };
-}
-
-/** Counts an instance of an engine's compiled module. The assembler's module creates its own. */
-export function countInstance(name: EngineName, route: NonNullable<EngineLoadInfo['route']>): void {
-  loadInfo[name].instances += 1;
-  loadInfo[name].route = route;
 }
 
 /**
@@ -190,109 +183,35 @@ function describe(error: unknown): string {
 
 // ---- instances from the compiled module -----------------------------------------------------------
 
-type Instantiate = (source: unknown, imports?: WebAssembly.Imports) => Promise<unknown>;
-
-/**
- * Decides about one `WebAssembly.instantiate(source, imports)` call made while a task of
- * `withInstantiateRoute` runs: return the promise to answer the caller with, or null to let the call
- * through unchanged. `original` is the real function.
- */
-export type InstantiateRoute = (
-  source: unknown,
-  imports: WebAssembly.Imports | undefined,
-  original: Instantiate,
-) => Promise<unknown> | null;
-
-let instantiateGate: Promise<void> = Promise.resolve();
-
-/**
- * Runs `task` while `WebAssembly.instantiate` is routed through `route`, then restores it. Tasks run
- * one at a time, so two of them never see each other's route (a task must therefore not start
- * another one and wait for it). Calls that `route` does not claim (returns null for) behave as
- * always.
- *
- * Why this exists: both engines call the global `WebAssembly.instantiate` from inside their own
- * modules, where the binding has no other way to take part. The simulator's loader can only be given
- * the bytes of the .wasm, which it compiles again for every instance (`instantiateFrom` answers that
- * call with an instance of the compiled module); and the assembler's module does not notice when
- * creating an instance fails (asm.ts watches for that). Both needs are requests to the engine
- * packages (docs/requests/); when they are met this function can go.
- */
-export function withInstantiateRoute<T>(route: InstantiateRoute, task: () => Promise<T>): Promise<T> {
-  const run = instantiateGate.then(async () => {
-    const original = WebAssembly.instantiate as Instantiate;
-    const real: Instantiate = (source, imports) => original.call(WebAssembly, source, imports);
-    const routed: Instantiate = (source, imports) => route(source, imports, real) ?? real(source, imports);
-    WebAssembly.instantiate = routed as typeof WebAssembly.instantiate;
-    try {
-      return await task();
-    } finally {
-      if ((WebAssembly.instantiate as unknown) === routed) {
-        WebAssembly.instantiate = original as typeof WebAssembly.instantiate;
-      }
-    }
-  });
-  instantiateGate = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  return run;
-}
-
-/** Stands in for the bytes of the .wasm in `moduleArg.wasmBinary`; `instantiateFrom` recognises its copy. */
-const COMPILED_MARKER = Uint8Array.from('easy68k-compiled', (ch) => ch.charCodeAt(0));
-
-function isCompiledMarker(source: unknown): boolean {
-  return (
-    source instanceof Uint8Array &&
-    source.length === COMPILED_MARKER.length &&
-    source.every((byte, index) => byte === COMPILED_MARKER[index])
-  );
-}
-
 /**
  * Wraps an Emscripten loader factory so that every instance comes from the compiled module `wasm`.
- *
- * A loader built with Emscripten's `instantiateWasm` hook (the assembler's) takes the compiled
- * module through that hook. The simulator's loader is built without it
- * (`-sINCOMING_MODULE_JS_API=wasmBinary,locateFile,print,printErr` in engine/sim/build.mjs): it
- * accepts only bytes and calls `WebAssembly.instantiate(bytes, imports)` itself. For such a loader
- * the factory passes a marker as the bytes and answers that one call with an instance of `wasm`.
- * Both are offered on every call and the loader uses the one it knows, so nothing here has to
- * change when the simulator's loader gains the hook.
+ * The loader is given Emscripten's `instantiateWasm` hook, which both engines' loaders accept
+ * (`-sINCOMING_MODULE_JS_API` in engine/asm/build.mjs and engine/sim/build.mjs), so it neither
+ * fetches nor compiles the .wasm. A failed instantiation rejects the returned promise with an
+ * `EngineLoadError`: the loader on its own would wait for `receive` for ever.
  */
 function instantiateFrom(name: EngineName, factory: ModuleFactory, wasm: WebAssembly.Module): ModuleFactory {
   return (moduleArg = {}) => {
     const complaints: string[] = [];
     let creating = true;
-    return withInstantiateRoute(
-      (source, imports, original) => {
-        if (!isCompiledMarker(source)) return null;
-        countInstance(name, 'intercepted');
-        // The loader expects what WebAssembly.instantiate(bytes) resolves to: { module, instance }.
-        return original(wasm, imports).then((instance) => ({ module: wasm, instance }));
-      },
-      () =>
-        new Promise<EmscriptenModule>((resolve, reject) => {
-          // Emscripten's module object is the argument itself: the engine's API module and the
-          // loader's import glue both keep using it, so the properties are added to it, not to a copy.
-          Object.assign(moduleArg, {
-            wasmBinary: COMPILED_MARKER,
-            instantiateWasm(
-              imports: WebAssembly.Imports,
-              receive: (instance: WebAssembly.Instance, module: WebAssembly.Module) => void,
-            ) {
-              countInstance(name, 'hook');
-              WebAssembly.instantiate(wasm, imports).then((instance) => receive(instance, wasm), reject);
-              return {};
-            },
-            // The loader reports a failed instantiation here before it rejects: kept for the error
-            // below. What the engine prints later (an abort while it runs) goes to the console.
-            printErr: (text: unknown) => (creating ? complaints.push(String(text)) : console.error(text)),
-          });
-          factory(moduleArg).then(resolve, reject);
-        }),
-    )
+    return new Promise<EmscriptenModule>((resolve, reject) => {
+      // Emscripten's module object is the argument itself: the engine's API module and the loader's
+      // import glue both keep using it, so the properties are added to it, not to a copy.
+      Object.assign(moduleArg, {
+        instantiateWasm(
+          imports: WebAssembly.Imports,
+          receive: (instance: WebAssembly.Instance, module: WebAssembly.Module) => void,
+        ) {
+          loadInfo[name].instances += 1;
+          WebAssembly.instantiate(wasm, imports).then((instance) => receive(instance, wasm), reject);
+          return {};
+        },
+        // The loader reports a failed start here before it rejects: kept for the error below. What
+        // the engine prints later (an abort while it runs) goes to the console.
+        printErr: (text: unknown) => (creating ? complaints.push(String(text)) : console.error(text)),
+      });
+      factory(moduleArg).then(resolve, reject);
+    })
       .catch((error: unknown) => {
         const detail = [describe(error), ...complaints].join('; ');
         throw new EngineLoadError(

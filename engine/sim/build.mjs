@@ -84,7 +84,7 @@ const LINK_FLAGS = [
   '-sEXPORTED_FUNCTIONS=_malloc,_free',
   // Module properties the caller may pass (CreateOptions in sim68k.mjs);
   // Emscripten ignores any that are not listed here.
-  '-sINCOMING_MODULE_JS_API=wasmBinary,locateFile,print,printErr',
+  '-sINCOMING_MODULE_JS_API=wasmBinary,locateFile,print,printErr,instantiateWasm',
   '-sEXPORTED_RUNTIME_METHODS=HEAPU8,HEAP8,HEAP16,HEAPU16,HEAP32,HEAPU32',
   '--js-library', join(shimDir, 'host-imports.js'),
 ];

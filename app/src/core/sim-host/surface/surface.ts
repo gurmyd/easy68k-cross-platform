@@ -3,6 +3,7 @@
 // STUB written by W1 (wave 0). SH1 replaces the body; the class name, the constructor signature and
 // the exported names are contract (section 8, "Stubs"). This stub keeps two black 640x480-or-larger
 // buffers and the default graphics state, draws nothing and returns the engine's defaults.
+// Exception: getXY answers the window pen of that state, not the engine's default (undefined).
 //
 // Owner: W1 > SH1.
 

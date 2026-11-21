@@ -47,8 +47,8 @@ chords and are checked in the desktop app (6.7).
 | Mac, Russian input source | Cmd + the O position, Ctrl + the O position, Ctrl+Option + the O position | `MAC_RUSSIAN` |
 | Windows or Linux, US | Ctrl+O, Ctrl+S, Ctrl+Z, Ctrl+Alt+Z, Ctrl+Alt+C, Ctrl+Alt+U, Ctrl+Alt+O, Ctrl+O with Caps Lock, F9, Ctrl+F9, Shift+F4, F1, Insert, Shift+Insert, Ctrl+Shift+. (period), Ctrl+Shift+, (comma), Alt+Enter, Alt + the keypad's Enter, Alt+F, A | `WINDOWS_US` |
 | the same, numeric keypad | NumLock off: 0, Shift+0, . (Del), 1 to 9, Ctrl+7; NumLock on: 0, Ctrl+1, . (decimal), + | `WINDOWS_KEYPAD` |
-| Windows, German (QWERTZ) | Ctrl + the key labelled Z, Ctrl + the key labelled Y, Ctrl+Alt + the key labelled Y, AltGr+Q, AltGr+E, Ctrl+Shift+. (period) | `WINDOWS_GERMAN` |
-| Windows, French (AZERTY) | Ctrl + the key labelled A, Ctrl + the key labelled Z, Ctrl + the key labelled M, Ctrl+Alt + the key labelled A | `WINDOWS_FRENCH` |
+| Windows, German (QWERTZ) | Ctrl + the key labelled Z, Ctrl + the key labelled Y, Ctrl+Alt + the keys labelled Z, Y, C and U, AltGr+Q, AltGr+E, Ctrl+Shift+. (period) | `WINDOWS_GERMAN` |
+| Windows, French (AZERTY) | Ctrl + the key labelled A, Ctrl + the key labelled Z, Ctrl + the key labelled M, Ctrl+Alt + the keys labelled A, Z and W, AltGr + the key labelled 0 (types @) | `WINDOWS_FRENCH` |
 | Windows, Russian | Ctrl + the positions of O, S, Z and F of a US keyboard, Ctrl+Alt + the C position, F7 | `WINDOWS_RUSSIAN` |
 | Windows, Greek | Ctrl + the positions of F, G and P of a US keyboard | `WINDOWS_GREEK` |
 
@@ -61,3 +61,8 @@ system's settings, switch to it, and press the key at the position named. The po
 The `key` characters of the five Windows lists agree with the layout tables Windows 11 uses
 (`KBDUS.DLL`, `KBDGR.DLL`, `KBDFR.DLL`, `KBDRU.DLL`, `KBDHE.DLL`), 23 values of 23. That confirms
 the characters, not what a browser puts into `key` while Ctrl is held, and nothing on macOS.
+
+The Ctrl+Alt presses of the German and French rows other than the first of each (the keys labelled
+Z, C and U; Z and W; AltGr + 0) were added at the gate after wave zero from the published layouts.
+They were not compared with the layout tables and matter most: on Windows the application takes
+the letter of a Ctrl+Alt chord from `key` (`docs/porting/errata/W3.md`, entry 24).

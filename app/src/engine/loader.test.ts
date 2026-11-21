@@ -11,7 +11,6 @@ import {
   EngineLoadError,
   loadEngine,
   loadEngineFrom,
-  withInstantiateRoute,
   type EmscriptenModule,
 } from './loader';
 
@@ -75,7 +74,6 @@ describe.skipIf(!enginesBuilt)('loadEngine (needs engine/dist)', () => {
 
   it('creates every simulator instance from the compiled module, never from bytes', async () => {
     const sim = await loadEngine('sim');
-    const original = WebAssembly.instantiate;
     const instantiate = vi.spyOn(WebAssembly, 'instantiate');
     const before = engineLoadInfo('sim').instances;
 
@@ -89,21 +87,24 @@ describe.skipIf(!enginesBuilt)('loadEngine (needs engine/dist)', () => {
     expect(new Set(memories).size).toBe(3);
     expect(memories.every((memory) => memory.byteLength === 64 * 1024 * 1024)).toBe(true);
     for (const module of modules) expect(call(module, '_sim_memory')).toBeGreaterThan(0);
-
-    instantiate.mockRestore();
-    expect(WebAssembly.instantiate).toBe(original); // the route was taken down again
   });
 
-  it("the simulator's loader has no instantiateWasm hook yet; the assembler's has", async () => {
-    // When this fails because the simulator's route became "hook", engine/sim/build.mjs has gained
-    // `instantiateWasm` (docs/requests/W4-engine-sim.md): update docs/ENGINE-BINDING.md and consider
-    // removing the interception in loader.ts.
-    await (await loadEngine('sim')).createModule(simModuleArg());
-    expect(engineLoadInfo('sim').route).toBe('intercepted');
-
-    const asm = await (await loadEngine('asm')).createModule();
-    expect(engineLoadInfo('asm').route).toBe('hook');
-    expect(call(asm, '_ez_alloc', 16)).toBeGreaterThan(0);
+  it("both loaders take the compiled module through Emscripten's instantiateWasm hook", async () => {
+    // engine/sim/build.mjs and engine/asm/build.mjs list instantiateWasm in -sINCOMING_MODULE_JS_API;
+    // a loader built without it ignores the hook and reads and compiles the .wasm itself. The counter
+    // goes up only inside the hook, and the only WebAssembly.instantiate call gets the compiled module.
+    for (const name of ['sim', 'asm'] as const) {
+      const engine = await loadEngine(name);
+      const instantiate = vi.spyOn(WebAssembly, 'instantiate');
+      const before = engineLoadInfo(name).instances;
+      const moduleArg: Record<string, unknown> = name === 'sim' ? simModuleArg() : {};
+      const module = await engine.createModule(moduleArg);
+      expect(engineLoadInfo(name).instances).toBe(before + 1);
+      expect(instantiate.mock.calls.map(([source]) => source)).toEqual([engine.wasm]);
+      expect(moduleArg).not.toHaveProperty('wasmBinary');
+      expect(call(module, name === 'sim' ? '_sim_memory' : '_ez_alloc', 16)).toBeGreaterThan(0);
+      instantiate.mockRestore();
+    }
   });
 
   it('reports an instance that cannot be created, and the next one works', async () => {
@@ -170,60 +171,5 @@ describe.skipIf(!enginesBuilt)('loadEngineFrom: what is said when an engine cann
     const engine = await loadEngineFrom('sim', engineFiles('sim'));
     expect(engineLoadInfo('sim').compilations).toBe(before + 1);
     expect(call(await engine.createModule(simModuleArg()), '_sim_memory')).toBeGreaterThan(0);
-  });
-});
-
-describe('withInstantiateRoute', () => {
-  const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
-
-  it('runs tasks one at a time and restores WebAssembly.instantiate after each, also after a failure', async () => {
-    const original = WebAssembly.instantiate;
-    const events: string[] = [];
-    const first = withInstantiateRoute(
-      () => null,
-      async () => {
-        events.push('first starts');
-        expect(WebAssembly.instantiate).not.toBe(original);
-        await tick();
-        events.push('first ends');
-        throw new Error('first failed');
-      },
-    );
-    const second = withInstantiateRoute(
-      () => null,
-      async () => {
-        events.push('second starts');
-        await tick();
-        events.push('second ends');
-        return 2;
-      },
-    );
-    await expect(first).rejects.toThrow('first failed');
-    expect(await second).toBe(2);
-    expect(events).toEqual(['first starts', 'first ends', 'second starts', 'second ends']);
-    expect(WebAssembly.instantiate).toBe(original);
-  });
-
-  it('a call the route does not claim goes to the real function', async () => {
-    const empty = Uint8Array.of(0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00);
-    const result = await withInstantiateRoute(
-      () => null,
-      () => WebAssembly.instantiate(empty),
-    );
-    expect(result.module).toBeInstanceOf(WebAssembly.Module);
-    expect(result.instance).toBeInstanceOf(WebAssembly.Instance);
-  });
-
-  it("gives the route the call and the real function; a claimed call gets the route's answer", async () => {
-    const seen: unknown[] = [];
-    const answer = await withInstantiateRoute(
-      (source, imports, real) => {
-        seen.push(source, imports, typeof real);
-        return source === 'mine' ? Promise.resolve('answered') : null;
-      },
-      () => (WebAssembly.instantiate as unknown as (s: unknown, i?: unknown) => Promise<unknown>)('mine', { env: {} }),
-    );
-    expect(answer).toBe('answered');
-    expect(seen).toEqual(['mine', { env: {} }, 'function']);
   });
 });

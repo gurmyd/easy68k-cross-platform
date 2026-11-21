@@ -2,17 +2,14 @@
 //
 // engine/sim/sim68k.mjs is plain JavaScript. This file loads it (loader.ts), gives the instance the
 // type `SimEngine`, and is the one place that absorbs a difference between the module and the
-// contract. Today there are two:
+// contract. Today there is one:
 //
-// - `createNetClient` (TRAP #15 task 100): the module passes the server string as a copy, without
-//   its 68000 address. The binding adds the address (register A2) as a third argument (3.3.4).
 // - `releaseSimEngine`: the module has no call for it. The binding drops its reference to the
 //   instance, and with it the last reference to the instance's 64 MiB of memory.
 //
 // Owner: W4.
 
 import {
-  Reg,
   type Box,
   type BreakCondition,
   type BreakExpression,
@@ -32,6 +29,7 @@ import {
   type LoadKind,
   type MapKind,
   type MapRow,
+  type Reg,
   type Registers,
   type RunStatus,
   type SimEngine,
@@ -216,11 +214,6 @@ class SimBinding implements SimEngine {
   /** Disconnects it; every later use throws. */
   static detach(binding: SimBinding): void {
     binding.#sim = null;
-  }
-
-  /** The engine's instance, or null before `attach` and after `detach`. */
-  static peek(binding: SimBinding): SimEngine | null {
-    return binding.#sim;
   }
 
   get #engine(): SimEngine {
@@ -456,28 +449,17 @@ export const SIM_ENGINE_MEMBERS: string[] = Object.getOwnPropertyNames(SimBindin
 const releasers = new WeakMap<object, () => void>();
 
 /**
- * The host as the engine gets it: every method of `host`, bound to it, with `createNetClient`
- * replaced by a function that adds the 68000 address of the server string.
- *
- * The engine calls `host.createNetClient(settings, server)`. The string is at `A2 & $FFFFFF` when
- * task 100 runs (CODE9.CPP:1266), so the binding reads register A2 while it forwards the call. This
- * is the one place where the engine is touched from inside a host call (3.3.4); the read has no side
- * effect. It goes away when the engine passes the address itself.
+ * The host as the engine gets it: every method of `host`, bound to it. The engine passes every
+ * argument of the contract itself, `createNetClient`'s 68000 address of the server string
+ * (`A2 & $FFFFFF`, CODE9.CPP:1266) included.
  */
-function bindHost(host: SimHost, binding: SimBinding): Partial<SimHost> {
+function bindHost(host: SimHost): Partial<SimHost> {
   const bound: Record<string, unknown> = {};
   const methods = host as unknown as Record<string, unknown>;
   for (const name of HOST_METHODS) {
     const method = methods[name];
     // A method the host lacks is left out: the engine then answers with its default.
     if (typeof method === 'function') bound[name] = (method as (...args: unknown[]) => unknown).bind(host);
-  }
-  if (typeof methods.createNetClient === 'function') {
-    bound.createNetClient = (settings: number, server: Bytes): number | undefined => {
-      const sim = SimBinding.peek(binding);
-      const serverAddress = sim ? sim.getRegister(Reg.A2) & 0x00ffffff : undefined;
-      return host.createNetClient(settings, server, serverAddress);
-    };
   }
   return bound as Partial<SimHost>;
 }
@@ -491,7 +473,7 @@ export async function createSimEngine(host: SimHost): Promise<SimEngine> {
   const engine = await loadEngine('sim');
   const { createSim } = engine.api as unknown as SimModule;
   const binding = new SimBinding();
-  const sim = await createSim(bindHost(host, binding), { createModule: engine.createModule });
+  const sim = await createSim(bindHost(host), { createModule: engine.createModule });
   SimBinding.attach(binding, sim);
   releasers.set(binding, () => SimBinding.detach(binding));
   return binding;

@@ -648,6 +648,7 @@ describe.skipIf(!enginesBuilt)('createSimEngine with the real engine (needs engi
       kept.release();
     });
 
+    // About 2 s alone, but over 5 s (Vitest's default limit) when several `npm test` run at once.
     it('200 consecutive releaseSimEngine / createSimEngine cycles succeed', async () => {
       let test = await createTestEngine();
       for (let cycle = 0; cycle < 200; cycle++) {
@@ -659,6 +660,6 @@ describe.skipIf(!enginesBuilt)('createSimEngine with the real engine (needs engi
       expect(test.engine.getRegister(Reg.SSP)).toBe(0x01000000);
       expect(engineLoadInfo('sim').compilations).toBe(1);
       test.release();
-    });
+    }, 60_000);
   });
 });

@@ -223,6 +223,69 @@ async function keyboardPass(browser, name) {
   const exitOut = await output(page);
   check(`${p} a letter inside a menu chooses its item (E&xit)`, exitOut.includes('ed.file.exit'), exitOut);
 
+  // Tab and Shift+Tab in an open menu close it, and the focus moves on from the menu bar in
+  // document order: to where Tab and Shift+Tab from the bar's own title go.
+  const firstTitle = page.locator('[data-testid=editor-menubar] [role=menuitem]').first();
+  const describeFocus = (f) => (f ? `${f.tag} ${f.testid ?? f.label ?? f.text}` : 'nothing');
+  const fromTitle = {};
+  for (const combo of ['Tab', 'Shift+Tab']) {
+    await firstTitle.focus();
+    await k(combo);
+    fromTitle[combo] = await active(page);
+  }
+  for (const combo of ['Tab', 'Shift+Tab']) {
+    await firstTitle.focus();
+    await k('ArrowDown');
+    await k(combo);
+    a = await active(page);
+    const stillOpen = await page.locator('[role=menu][data-e68-menu]:not(.e68-menu--inline)').count();
+    const expected = fromTitle[combo];
+    check(
+      `${p} ${combo} in an open menu closes it and moves on from the menu bar`,
+      stillOpen === 0 &&
+        a !== null &&
+        a.tag !== 'BODY' &&
+        expected?.tag !== 'BODY' &&
+        JSON.stringify(a) === JSON.stringify(expected),
+      `${stillOpen} open; focus on ${describeFocus(a)}, ${combo} from the title goes to ${describeFocus(expected)}`,
+    );
+  }
+
+  // The same with tab stops a hand-made list of focusable elements misjudges, next to the bar:
+  // after it a hidden button, a button in a disabled fieldset, a closed <details> (its summary is
+  // the next stop) and a later button with tabindex 3; before it a plaintext-only contenteditable.
+  await page.evaluate(() => {
+    const bar = document.querySelector('[data-testid=editor-menubar]');
+    const after = document.createElement('div');
+    after.setAttribute('data-probe', '');
+    after.innerHTML =
+      '<button style="visibility:hidden">hidden</button>' +
+      '<fieldset disabled><button>in disabled fieldset</button></fieldset>' +
+      '<details><summary data-testid="probe-summary">summary</summary><button>inside</button></details>' +
+      '<button tabindex="3">tabindex 3</button>';
+    const before = document.createElement('div');
+    before.setAttribute('data-probe', '');
+    before.innerHTML = '<div contenteditable="plaintext-only" data-testid="probe-editable">editable</div>';
+    bar.after(after);
+    bar.before(before);
+  });
+  for (const combo of ['Tab', 'Shift+Tab']) {
+    await firstTitle.focus();
+    await k(combo);
+    const expected = await active(page);
+    await firstTitle.focus();
+    await k('ArrowDown');
+    await k(combo);
+    a = await active(page);
+    const wanted = combo === 'Tab' ? 'probe-summary' : 'probe-editable';
+    check(
+      `${p} ${combo} in an open menu goes where the browser's Tab goes, past unusual tab stops`,
+      a?.testid === wanted && JSON.stringify(a) === JSON.stringify(expected),
+      `focus on ${describeFocus(a)}, ${combo} from the title goes to ${describeFocus(expected)}`,
+    );
+  }
+  await page.evaluate(() => document.querySelectorAll('[data-probe]').forEach((element) => element.remove()));
+
   // Context menu: Shift+F10 opens at the focused element, Escape gives the focus back.
   await page.locator('[data-testid=context-target]').focus();
   await page.keyboard.down('Shift');
@@ -256,6 +319,18 @@ async function keyboardPass(browser, name) {
   check(`${p} tabs Right wraps to the first tab`, a?.text.includes('demo.X68') && a.selected === 'true', a?.text);
   const tabStops = await docTabs.locator('[role=tab][tabindex="0"]').count();
   check(`${p} the tab list is one tab stop`, tabStops === 1, `${tabStops}`);
+  // aria-controls names a panel that is in the page, on the selected tab only (lazy panels).
+  const controls = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('[role=tab][aria-controls]')).map((tab) => ({
+      selected: tab.getAttribute('aria-selected'),
+      present: document.getElementById(tab.getAttribute('aria-controls') ?? '') !== null,
+    })),
+  );
+  check(
+    `${p} only selected tabs carry aria-controls, and it names a rendered panel`,
+    controls.length > 0 && controls.every((c) => c.selected === 'true' && c.present),
+    JSON.stringify(controls),
+  );
   await k('Delete');
   await page.waitForTimeout(50);
   const remaining = await docTabs.locator('[role=tab]').count();
