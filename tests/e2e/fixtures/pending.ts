@@ -7,7 +7,8 @@
 // without a handler is disabled, ARCHITECTURE.md 3.12.2). When the probe says the feature is there,
 // the test runs as an ordinary test and any failure is a real one, to be sent to the package's owner
 // by the integration gate (9.5). When it is not, the test is marked `test.fail()` and stops at once,
-// so a missing feature costs no time-outs.
+// so a missing feature costs no time-outs. Once a package is marked `landed` (it is built and
+// committed), its tests are never expected failures again: a missing feature is a regression.
 
 import { expect, test } from '@playwright/test';
 
@@ -22,19 +23,32 @@ interface Probe {
    * package has landed. Empty when the test supplies its own probe.
    */
   readonly commands: readonly string[];
+  /**
+   * The package is built and committed. Its tests are ordinary tests: when the probe finds the
+   * feature missing, the test fails as a regression instead of being an expected failure.
+   */
+  readonly landed: boolean;
 }
 
+// All four landed in wave 2 (ARCHITECTURE.md 9.4); the entries stay so that the probe still names
+// the package whose feature disappeared. A package of a later wave is added with `landed: false`.
 export const PENDING: Readonly<Record<PendingPackage, Probe>> = {
   E4: {
     feature: 'Assembler Options, Editor Options and Import/Export Settings',
     commands: ['ed.options.assembler', 'ed.options.editor'],
+    landed: true,
   },
   E5: {
     feature: 'Assemble Source, the Messages panel and the Assembler Status dialog',
     commands: ['ed.project.assemble'],
+    landed: true,
   },
-  E6: { feature: 'Find, Find And Replace and Print', commands: ['ed.edit.find', 'ed.edit.replace', 'ed.file.print'] },
-  FS2: { feature: 'the File System Access folder (Open folder...)', commands: [] },
+  E6: {
+    feature: 'Find, Find And Replace and Print',
+    commands: ['ed.edit.find', 'ed.edit.replace', 'ed.file.print'],
+    landed: true,
+  },
+  FS2: { feature: 'the File System Access folder (Open folder...)', commands: [], landed: true },
 };
 
 /** The reason text of an expected failure. */
@@ -56,10 +70,21 @@ export async function landed(host: ProbeHost, pkg: PendingPackage, custom?: () =
   return true;
 }
 
+/** The failure text when a package that has landed is missing from the page. */
+export function regressionReason(pkg: PendingPackage): string {
+  return `${pkg}: ${PENDING[pkg].feature} has landed, but its commands are disabled in the page`;
+}
+
+/** Whether a missing feature makes the test an expected failure (only while the package is pending). */
+export function expectedFailure(pkg: PendingPackage, ok: boolean): boolean {
+  return !ok && !PENDING[pkg].landed;
+}
+
 /**
- * Call at the start of a test of a pending feature, with the application open in Editor mode and
- * the start-up document active: while the feature is missing the test is marked as an expected
- * failure and ends at once; otherwise this does nothing.
+ * Call at the start of a test of a wave-2 feature, with the application open in Editor mode and
+ * the start-up document active. While the package is pending and the feature is missing, the test
+ * is marked as an expected failure and ends at once. Once the package has landed, a missing
+ * feature fails the test with `regressionReason`; otherwise this does nothing.
  */
 export async function requirePackage(
   host: ProbeHost,
@@ -67,6 +92,10 @@ export async function requirePackage(
   custom?: () => Promise<boolean>,
 ): Promise<void> {
   const ok = await landed(host, pkg, custom);
-  test.fail(!ok, pendingReason(pkg));
+  if (PENDING[pkg].landed) {
+    expect(ok, regressionReason(pkg)).toBe(true);
+    return;
+  }
+  test.fail(expectedFailure(pkg, ok), pendingReason(pkg));
   expect(ok, pendingReason(pkg)).toBe(true);
 }

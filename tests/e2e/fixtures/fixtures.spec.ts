@@ -5,7 +5,7 @@ import { expect, test } from '@playwright/test';
 import { COMMAND_IDS } from '../../../app/src/commands/ids';
 import { App, bytesOf, crlf, editorMenuOf, escapeRegExp, latin1, nonBlackColours, plainCaption } from './app';
 import { chordOf, chordsOf, hostKeyMap, modKey, navigatorPlatformOf, playwrightKey } from './keys';
-import { PENDING, landed, pendingReason, type PendingPackage } from './pending';
+import { PENDING, expectedFailure, landed, pendingReason, regressionReason, type PendingPackage } from './pending';
 import { TEMPLATE, TRAILER, trailer } from './texts';
 
 test.describe('keys', () => {
@@ -128,6 +128,15 @@ test.describe('pending packages', () => {
     for (const pkg of Object.keys(PENDING) as PendingPackage[]) {
       expect(pendingReason(pkg)).toMatch(new RegExp(`^${pkg}: `));
       expect(pendingReason(pkg)).toContain('turns itself on');
+    }
+  });
+
+  test('the wave-2 packages have landed: a missing feature is a failure, never an expected one', () => {
+    for (const pkg of ['E4', 'E5', 'E6', 'FS2'] as const) {
+      expect(PENDING[pkg].landed).toBe(true);
+      expect(expectedFailure(pkg, false)).toBe(false);
+      expect(expectedFailure(pkg, true)).toBe(false);
+      expect(regressionReason(pkg)).toMatch(new RegExp(`^${pkg}: .* has landed, but`));
     }
   });
 

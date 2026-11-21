@@ -14,7 +14,7 @@
 // Import... (a file chooser) or by dropping files, as a student does.
 
 import type { Download, Locator, Page } from '@playwright/test';
-import { expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { EDITOR_MENUS } from '../../../app/src/commands/tables/editor-menu';
 import { COMMAND_SPECS } from '../../../app/src/commands/specs';
 import type { KnownCommandId } from '../../../app/src/commands/ids';
@@ -467,14 +467,22 @@ export class App implements ProbeHost {
 
   // ---- other windows -------------------------------------------------------------------------
 
-  /** A second window (tab) of the same browser profile, sharing this window's storage. */
+  /**
+   * A second window (tab) of the same browser profile, sharing this window's storage. Loading a
+   * window costs as much as the test's first one (on a loaded machine, 40 s of 120 s in WebKit), so
+   * each extra window adds a minute to the test's time limit; no expectation waits any longer.
+   */
   async openWindow(query = ''): Promise<App> {
+    test.info().setTimeout(test.info().timeout + EXTRA_WINDOW_TIME);
     const page = await this.page.context().newPage();
     const other = new App(page, this.keys, this.family);
     await other.open(query);
     return other;
   }
 }
+
+/** What `App.openWindow` adds to the test's time limit for each extra window, in milliseconds. */
+export const EXTRA_WINDOW_TIME = 60_000;
 
 /** Reads a download completely. */
 export async function readDownload(download: Download): Promise<Uint8Array> {

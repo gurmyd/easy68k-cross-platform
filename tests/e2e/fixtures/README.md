@@ -54,7 +54,9 @@ listed at the top of that file.
 8. **Features still being built.** A test of a wave-2 feature starts with
    `await requirePackage(app, 'E5')` (or in `beforeEach`). While the package's command is disabled in
    the page, the test is marked `test.fail()` with the package id in the reason and stops at once;
-   once the feature lands, the same test runs as an ordinary test (`fixtures/pending.ts`).
+   once the feature lands, the same test runs as an ordinary test (`fixtures/pending.ts`). When the
+   package is built and committed, its entry in `PENDING` gets `landed: true`: from then on a
+   missing feature fails the test as a regression. E4, E5, E6 and FS2 have landed.
 9. **Long tests** get the configuration's limits (120 s per test, 15 s per expectation); a test that
    needs more says so with `test.setTimeout`.
 

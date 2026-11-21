@@ -95,6 +95,7 @@ jobs:
     outputs:
       conformance: ${{ steps.guards.outputs.conformance }}
       e2e: ${{ steps.guards.outputs.e2e }}
+      e2e_stability: ${{ steps.guards.outputs.e2e_stability }}
       integration: ${{ steps.guards.outputs.integration }}
       gallery: ${{ steps.guards.outputs.gallery }}
       shell: ${{ steps.guards.outputs.shell }}
@@ -201,9 +202,23 @@ jobs:
             browser_checks=false
           fi
 
+          # e2e-stability: manual runs, and pushes that change tests/e2e/** (6.9 item 10).
+          e2e_changed=true
+          if [ -n "$base" ] && [ "$base" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
+            if git diff --quiet "$base" HEAD -- tests/e2e; then e2e_changed=false; fi
+          fi
+          e2e_stability=false
+          if [ "$e2e" = true ]; then
+            case "$EVENT" in
+              workflow_dispatch) e2e_stability=true ;;
+              push) e2e_stability=$e2e_changed ;;
+            esac
+          fi
+
           {
             echo "conformance=$conformance"
             echo "e2e=$e2e"
+            echo "e2e_stability=$e2e_stability"
             echo "integration=$integration"
             for name in $check_names; do eval "echo \"$name=\$$name\""; done
             echo "browser_checks=$browser_checks"
@@ -218,7 +233,7 @@ jobs:
             echo "### Job guards"
             echo "| guard | runs |"
             echo "|---|---|"
-            for name in conformance e2e integration $check_names browser_checks gdi twins asm_cli engines_weekly windows_oracles desktop_dev; do
+            for name in conformance e2e e2e_stability integration $check_names browser_checks gdi twins asm_cli engines_weekly windows_oracles desktop_dev; do
               eval "value=\$$name"
               echo "| $name | $value |"
             done
@@ -420,12 +435,7 @@ jobs:
   e2e-stability:
     name: e2e stability (ubuntu-latest, ${{ matrix.browser }}, 20 repetitions)
     needs: [plan, engines]
-    if: >-
-      needs.plan.outputs.e2e == 'true' &&
-      (github.event_name == 'workflow_dispatch' ||
-       (github.event_name == 'push' &&
-        (contains(join(github.event.commits.*.modified, ' '), 'tests/e2e/') ||
-         contains(join(github.event.commits.*.added, ' '), 'tests/e2e/'))))
+    if: needs.plan.outputs.e2e_stability == 'true'
     strategy:
       fail-fast: false
       matrix:

@@ -15,6 +15,15 @@ suites themselves do not read `engine/dist`.
 
 ## 2. Requested: a stability job for 6.9 item 10 (20 repetitions on ubuntu-latest)
 
+Proven on the branch `gate2/x1`, whose `ci.yml` carries exactly what is needed: the job
+`e2e-stability` after `e2e`; a new output `e2e_stability` of `plan` (true on a manual run, and on
+a push whose diff from the previous head touches `tests/e2e`, computed with `git diff` as the
+desktop-dev guard does; false on the schedule); the output in the guard summary table; and two
+comment lines in the guard table at the top of the file. Apply those as they stand on the branch.
+The sketch below is the request as first written; its `if:` on `github.event.commits.*.modified`
+does not work (GitHub joins the nested arrays as "Array", so the job was skipped in run
+44944233135).
+
 The acceptance of X1 and 6.9 item 10 ask for 20 repetitions in a row without a failure on
 `ubuntu-latest` in each browser. No job runs that. Proposed, after `e2e` in `ci.yml`:
 
