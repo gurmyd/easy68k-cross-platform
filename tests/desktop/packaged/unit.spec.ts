@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import {
   adHocSigningOrder,
+  BUNDLE_ID,
   builderArchName,
   fuseConfig,
   isMachO,
@@ -26,6 +27,7 @@ import {
   signsAdHoc,
   thinOutputPath,
 } from '../../../desktop/scripts/packaging.mjs';
+import { cdHashOf } from '../../../desktop/scripts/check-downloads.mjs';
 import {
   checksumText,
   firstStartSection,
@@ -35,6 +37,7 @@ import {
   releaseFiles,
   releaseNotes,
   releaseVersion,
+  verifyProblems,
 } from '../../../desktop/scripts/release.mjs';
 import {
   cspViolationLines,
@@ -211,7 +214,7 @@ test.describe('release.mjs', () => {
       'EASy68K-0.3.1-arm64-mac.zip',
       'EASy68K-0.3.1-x64-mac.zip',
       'engine-dist.zip',
-      'easy68k-mac-web-0.3.1.zip',
+      'easy68k-cross-platform-web-0.3.1.zip',
     ]);
     expect(releaseFileProblems([...releaseFiles('1.2.3'), 'SHA256SUMS.txt'], '1.2.3')).toEqual([]);
     expect(releaseFileProblems(['engine-dist.zip', 'EASy68K-1.2.3-arm64.dmg.blockmap'], '1.2.3')).toEqual([
@@ -219,7 +222,7 @@ test.describe('release.mjs', () => {
       'missing: EASy68K-1.2.3-x64.dmg',
       'missing: EASy68K-1.2.3-arm64-mac.zip',
       'missing: EASy68K-1.2.3-x64-mac.zip',
-      'missing: easy68k-mac-web-1.2.3.zip',
+      'missing: easy68k-cross-platform-web-1.2.3.zip',
       'not a release file: EASy68K-1.2.3-arm64.dmg.blockmap',
     ]);
   });
@@ -272,6 +275,36 @@ test.describe('release.mjs', () => {
     }
   });
 
+  test('verify accepts exactly the six files with the SHA256SUMS.txt that describes them', () => {
+    const files = releaseFiles('0.0.1');
+    const hashOf = (name: string) => createHash('sha256').update(name).digest('hex');
+    const sums = checksumText(files.map((name) => ({ name, sha256: hashOf(name) })));
+    const all = [...files, 'SHA256SUMS.txt'];
+    expect(verifyProblems(all, '0.0.1', sums, hashOf)).toEqual([]);
+    expect(verifyProblems(files, '0.0.1', null, hashOf)).toEqual(['missing: SHA256SUMS.txt']);
+    expect(verifyProblems(all, '0.0.1', sums, (name) => hashOf(`${name}!`))).toEqual([
+      'SHA256SUMS.txt does not list exactly the six files with their hashes',
+    ]);
+    expect(verifyProblems(all.slice(1), '0.0.1', sums, hashOf)).toEqual(['missing: EASy68K-0.0.1-arm64.dmg']);
+
+    const folder = mkdtempSync(join(tmpdir(), 'easy68k-verify-'));
+    try {
+      for (const [index, name] of files.entries()) writeFileSync(join(folder, name), `file ${index}`);
+      const script = join(REPO, 'desktop', 'scripts', 'release.mjs');
+      const run = (...args: string[]) => spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
+      expect(run('verify', folder, '0.0.1').stderr).toContain('missing: SHA256SUMS.txt');
+      expect(run('checksums', folder, '0.0.1').status).toBe(0);
+      const ok = run('verify', folder, '0.0.1');
+      expect(ok.status, ok.stderr).toBe(0);
+      writeFileSync(join(folder, files[5] as string), 'changed after the sums were written');
+      const changed = run('verify', folder, '0.0.1');
+      expect(changed.status).toBe(1);
+      expect(changed.stderr).toContain('does not list exactly the six files with their hashes');
+    } finally {
+      rmSync(folder, { recursive: true, force: true });
+    }
+  });
+
   test('the release notes carry the first-start steps of docs/differences/DV3.md', () => {
     const doc = read('docs', 'differences', 'DV3.md');
     const section = firstStartSection(doc);
@@ -284,7 +317,7 @@ test.describe('release.mjs', () => {
     expect(notes).toContain('Intel processor, macOS 13 or later |');
     expect(notes).not.toContain('macOS 12');
     expect(() => releaseNotes('0.4.0', section, '')).toThrow(/not a macOS version/);
-    expect(notes).toContain('easy68k-mac-web-0.4.0.zip');
+    expect(notes).toContain('easy68k-cross-platform-web-0.4.0.zip');
     expect(notes).toContain(section);
     expect(() => firstStartSection('no marks')).toThrow(/first-start/);
     expect(firstStartSection(`a ${FIRST_START_BEGIN}\n x \n${FIRST_START_END} b`)).toBe('x');
@@ -316,6 +349,38 @@ test.describe('release.yml', () => {
     expect(workflow).toMatch(/^ {6}minimum_macos: \$\{\{ steps\.minimum\.outputs\.version \}\}$/m);
     expect(workflow).toMatch(/^ {6}MINIMUM_MACOS: \$\{\{ needs\.mac\.outputs\.minimum_macos \}\}$/m);
     expect(workflow).toContain('release.mjs notes "$VERSION" notes.md "$MINIMUM_MACOS"');
+  });
+
+  test('every run, with or without a release, yields SHA256SUMS.txt and the notes as artifacts', () => {
+    const job = (name: string) =>
+      new RegExp(`\\n {2}${name}:\\n([\\s\\S]*?)(?=\\n {2}\\S|$)`).exec(workflow)?.[1] ?? '';
+    const checksums = job('checksums');
+    expect(checksums).toMatch(/^ {4}needs: \[version, web, mac\]$/m);
+    expect(checksums, 'the checksums job runs on every run').not.toMatch(/^ {4}if:/m);
+    expect(checksums).not.toMatch(/contents: write/);
+    expect(checksums).toContain('release.mjs checksums release "$VERSION"');
+    expect(checksums).toMatch(/name: release-checksums\n {10}path: release\/SHA256SUMS\.txt/);
+    expect(checksums).toMatch(/name: draft-notes\n {10}path: notes\.md/);
+    const publish = job('publish');
+    expect(publish).toMatch(/^ {4}needs: \[version, checksums\]$/m);
+    expect(publish).toMatch(/^ {4}if: github\.event_name == 'push' \|\| inputs\.draft_release$/m);
+    expect(publish).toContain('release.mjs verify release "$VERSION"');
+    expect(publish, 'publish uploads the sums it checked, it does not write new ones').not.toContain(
+      'release.mjs checksums',
+    );
+    // The web zip the web job makes is the name releaseFiles() expects.
+    expect(workflow).toContain('zip -X -q -r "easy68k-cross-platform-web-${VERSION}.zip"');
+    expect(releaseFiles('1.0.0')).toContain('easy68k-cross-platform-web-1.0.0.zip');
+  });
+
+  test('the downloads are checked against the tested bundle before the checks run', () => {
+    const step = workflow.indexOf('node desktop/scripts/check-downloads.mjs desktop/release "$VERSION" "$ARCH"');
+    expect(step).toBeGreaterThan(0);
+    expect(step).toBeLessThan(workflow.indexOf('npm run desktop:test -- packaged'));
+    expect(cdHashOf('Identifier=x\nCDHash=0a1b2c3d4e5f60718293a4b5c6d7e8f901234567\nSignature=adhoc\n')).toBe(
+      '0a1b2c3d4e5f60718293a4b5c6d7e8f901234567',
+    );
+    expect(cdHashOf('CandidateCDHash sha256=abc\nSignature=adhoc')).toBeNull();
   });
 
   test('pins every action by commit hash', () => {
@@ -372,7 +437,7 @@ test.describe('facts.ts', () => {
   test('codesign --display of an ad-hoc and of a Developer ID signature', () => {
     const adhoc = [
       'Executable=/x/EASy68K.app/Contents/MacOS/EASy68K',
-      'Identifier=io.github.easy68k-mac.app',
+      'Identifier=org.easy68k-port.easy68k',
       'Format=app bundle with Mach-O thin (arm64)',
       'CodeDirectory v=20400 size=520 flags=0x2(adhoc) hashes=5+7 location=embedded',
       'Signature=adhoc',
@@ -380,14 +445,14 @@ test.describe('facts.ts', () => {
       'TeamIdentifier=not set',
     ].join('\n');
     expect(parseCodesignDisplay(adhoc)).toEqual({
-      identifier: 'io.github.easy68k-mac.app',
+      identifier: 'org.easy68k-port.easy68k',
       signature: 'adhoc',
       authorities: [],
       teamIdentifier: 'not set',
       flags: '0x2(adhoc)',
     });
     const signed = [
-      'Identifier=io.github.easy68k-mac.app',
+      'Identifier=org.easy68k-port.easy68k',
       'CodeDirectory v=20500 size=520 flags=0x10000(runtime) hashes=5+7 location=embedded',
       'Authority=Developer ID Application: Someone (ABCDE12345)',
       'Authority=Developer ID Certification Authority',
@@ -505,6 +570,16 @@ test.describe('electron-builder.yml', () => {
     expect(read('desktop', 'src', 'main.ts')).toContain("join(process.resourcesPath, 'app', 'dist')");
     expect(config).toMatch(/asarUnpack:\n {2}- '\*\*\/\*\.node'/);
     expect(config).toMatch(/^npmRebuild: false$/m);
+  });
+
+  test('the bundle identifier is the fixed one of packaging.mjs, and nothing names the old one', () => {
+    expect(/^appId: (\S+)$/m.exec(config)?.[1]).toBe(BUNDLE_ID);
+    // Valid for CFBundleIdentifier: letters, digits, hyphens and periods, reverse-DNS form.
+    expect(BUNDLE_ID).toMatch(/^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/);
+    expect(BUNDLE_ID).not.toMatch(/easy68k-mac|cross-platform/);
+    for (const file of ['bundle.spec.ts', 'facts.ts', 'harness.ts']) {
+      expect(read('tests', 'desktop', 'packaged', file), file).not.toContain('io.github.easy68k-mac');
+    }
   });
 
   test("the minimum macOS is left to Electron's Info.plist", () => {

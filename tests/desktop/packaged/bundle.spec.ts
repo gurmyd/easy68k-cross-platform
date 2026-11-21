@@ -8,7 +8,12 @@ import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { compareMacOSVersions, parseMacOSVersion, SHIPPED_FUSES } from '../../../desktop/scripts/packaging.mjs';
+import {
+  BUNDLE_ID,
+  compareMacOSVersions,
+  parseMacOSVersion,
+  SHIPPED_FUSES,
+} from '../../../desktop/scripts/packaging.mjs';
 import { machArchOf, minosFromOtool, parseCodesignDisplay, parseFusesRead } from './facts';
 import { IS_MAC, NOT_MAC, OUT_DIR, REPO, requirePackagedApp, rootVersion, tool, type PackagedApp } from './harness';
 
@@ -48,7 +53,7 @@ test('codesign --verify --deep --strict passes and the signature is ad hoc', () 
   expect(display.status, display.stderr).toBe(0);
   const signature = parseCodesignDisplay(display.stderr);
   console.log(`codesign --display: ${JSON.stringify(signature)}`);
-  expect(signature.identifier).toBe('io.github.easy68k-mac.app');
+  expect(signature.identifier).toBe(BUNDLE_ID);
   if (packaged.signature === 'adhoc') {
     expect(signature.signature).toBe('adhoc');
     expect(signature.flags).toMatch(/adhoc/);
@@ -122,7 +127,7 @@ test('the archive, its integrity hash, the file types and the version are in the
   // OnlyLoadAppFromAsar: no loose app folder with a package.json the app could load instead.
   expect(existsSync(join(packaged.resources, 'app', 'package.json'))).toBe(false);
   const info = infoPlist(packaged.app);
-  expect(info['CFBundleIdentifier']).toBe('io.github.easy68k-mac.app');
+  expect(info['CFBundleIdentifier']).toBe(BUNDLE_ID);
   expect(info['CFBundleName']).toBe('EASy68K');
   expect(info['CFBundleShortVersionString']).toBe(rootVersion());
   const integrity = info['ElectronAsarIntegrity'] as Record<string, { algorithm: string; hash: string }> | undefined;

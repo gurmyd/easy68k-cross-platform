@@ -1,5 +1,6 @@
 // Types of packaging.mjs for the TypeScript tests (tests/desktop/packaged). Owner: DV3.
 
+export declare const BUNDLE_ID: string;
 export declare const SHIPPED_FUSES: Readonly<{
   RunAsNode: false;
   EnableNodeCliInspectArguments: false;

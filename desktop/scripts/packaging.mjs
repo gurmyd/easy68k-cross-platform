@@ -10,6 +10,16 @@
 import process from 'node:process';
 
 /**
+ * The bundle identifier of the macOS app (CFBundleIdentifier; `appId` in electron-builder.yml,
+ * which tests/desktop/packaged/unit.spec.ts keeps equal to this). Fixed for good before the first
+ * release (docs/porting/errata/DV3.md entry 19): macOS keys the app's preferences file, its saved
+ * window state, its caches and the user's "Open With" choices for .X68, .L68 and .S68 by it, so a
+ * later change would orphan them. It names neither the repository (renamed once already) nor a
+ * person or account, and claims no domain anyone uses.
+ */
+export const BUNDLE_ID = 'org.easy68k-port.easy68k';
+
+/**
  * The fuses of the shipped app (7.6), by their names in @electron/fuses' FuseV1Options.
  * `true` = Enabled, `false` = Disabled. The first four are the ones 7.6 names. The last two are
  * additions (docs/porting/errata/DV3.md entries 5 and 9): with NODE_OPTIONS honoured,

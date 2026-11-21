@@ -19,7 +19,9 @@
 # scripts/after-pack.mjs, in the order 7.6 requires; electron-builder itself neither flips fuses
 # (no electronFuses here) nor signs (mac.identity: null) unless release.yml passes a Developer ID.
 
-appId: io.github.easy68k-mac.app
+# The bundle identifier, fixed for good (docs/porting/errata/DV3.md entry 19; packaging.mjs
+# BUNDLE_ID holds the same text and a unit test keeps the two equal).
+appId: org.easy68k-port.easy68k
 productName: EASy68K
 copyright: 'GPL-2.0-or-later. EASy68K is by Charles Kelly; this is an unofficial port.'
 

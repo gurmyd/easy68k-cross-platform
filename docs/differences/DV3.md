@@ -20,6 +20,8 @@ cannot or do not want to do this (for example on a Mac managed by your school, w
 may be locked), use the web version instead: it does the same in Safari or Chrome and needs no
 installation.
 
+The Mac app needs macOS 13 (Ventura) or later.
+
 **Install.** Download the `.dmg` for your Mac (`arm64` for Apple silicon, M1 and later; `x64` for
 Intel; Apple menu > About This Mac tells you which), open it and drag **EASy68K** into
 **Applications**. (Or download the `.zip`, which macOS unpacks into `EASy68K.app`, and move that
@@ -67,6 +69,15 @@ documentation and from reports of other ad-hoc signed apps, and the exact dialog
 version is an item of the manual test (ARCHITECTURE.md 6.8, `docs/MANUAL-TEST-MAC.md`, owner DOC1:
 "First launch of the downloaded app: the Gatekeeper dialogs and the documented way through them").
 Whoever runs it corrects this section, and the README, with what the screen says.
+
+What GitHub's macOS runners have shown (release.yml runs 44938987022 and 44939698734, both architectures, through
+`desktop/scripts/check-downloads.mjs`): the app inside the `.zip` (unpacked with `ditto`) and inside
+the `.dmg` passes `codesign --verify --deep --strict` and is byte for byte the bundle the packaged
+checks tested (same CDHash); the `.dmg` holds the `Applications` link; the minimum is macOS 13.0.
+With the quarantine mark a browser sets, Gatekeeper's assessment (`spctl --assess --type execute`)
+rejects the app, and `syspolicy_check distribution` reports "Notary Ticket Missing". So the block
+described above does happen, and it is the not-notarised block, not a broken signature. A runner
+cannot show the dialog itself; its exact wording stays an item of the manual test.
 
 ## 2. Two downloads instead of one
 
