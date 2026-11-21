@@ -262,6 +262,22 @@ export function registerSyncIpc(ipcMain: IpcMain, deps: SyncIpcDeps): void {
   ipcMain.on(DEVICE_REQUEST_CHANNEL, (event, channel: unknown, args: unknown) => {
     // Wrapped, so that a reply of `undefined` (no handler, or a host method's "no value") is a
     // reply too: a synchronous call whose returnValue is never set would block the page.
-    event.returnValue = { value: deps.trusted(event) ? answerDeviceRequest(event.sender, channel, args) : undefined };
+    const value = deps.trusted(event) ? answerDeviceRequest(event.sender, channel, args) : undefined;
+    // A device operation that finishes later (open, bind, connect, send, name lookup: DV4) returns
+    // a Promise; the page waits until it settles, as the original waits in the same system calls
+    // (3.3.4). A rejection is answered with `undefined`, so the page never hangs.
+    if (value instanceof Promise) {
+      value.then(
+        (settled: unknown) => {
+          event.returnValue = { value: settled };
+        },
+        (error: unknown) => {
+          console.error(`device call ${String(channel)} failed:`, error);
+          event.returnValue = { value: undefined };
+        },
+      );
+      return;
+    }
+    event.returnValue = { value };
   });
 }

@@ -66,6 +66,8 @@ import {
   vpathOfRealPath,
   withDefaultExtension,
 } from './security';
+import { registerNetDevices } from './net';
+import { registerSerialDevices } from './serial';
 import { registerSyncIpc } from './sync-ipc';
 import { AppWindows, denyAllPermissions, printDocument } from './windows';
 
@@ -222,6 +224,9 @@ async function answerDialog(event: IpcMainInvokeEvent, kind: unknown, request: u
 function registerIpc(): void {
   registerFsIpc(ipcMain, { grants, trusted, broadcast });
   registerSyncIpc(ipcMain, { grants, trusted, broadcast });
+  // The serial and network devices of the windows (DV4, 3.3.4), on the device channels above.
+  registerNetDevices({ testMode: testWindows !== null });
+  registerSerialDevices({ testMode: testWindows !== null });
 
   ipcMain.handle(STARTUP_CHANNEL, (event) => {
     const window = senderWindow(event);
