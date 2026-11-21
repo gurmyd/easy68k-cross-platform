@@ -4,20 +4,40 @@
     "summary": "Accepted difference. The original uses each listing row as a printf format string in the execution log (sim-ui 19 Q23): '100% sure: %d %x %%' came out as '100\\xc8\\x9bRure: 4730280 10 %' (stack contents). The port writes the row literally (engine/sim/PATCHES.md 11.7).",
     "evidence": "golden/logs/l14-percent-in-listing.log2.RunLog.txt.gz line 8; docs/differences/T3.md"
   },
-  "trap15-a/a31-files-zero-length|report|result": {
-    "owner": "engine",
-    "summary": "Task 54 with D2 = 0: the original gives D0.W = 0 (the Borland fwrite returns the item count for a zero item size; trap15-a 12 item 14, task 54 'UNVERIFIED'); the port gives 2 (C99 fwrite returns 0). trap15-a says to special-case D2 = 0 to match. Task 53 with D2 = 0 gives 2 in both.",
-    "evidence": "golden/trap15-a/a31-files-zero-length.result.bin line 1; docs/porting/errata/T3.md F3"
+  "trap15-a/a51-files-read-after-write|report|result": {
+    "owner": "SH6",
+    "summary": "Task 53 right after a task 54 on the same stream, without a seek (C leaves it undefined): the original's Borland run-time gives D0.W = 0 and D2 = 4 for a 4-byte read after writing 'ABCDE' (4 bytes of its buffer land in memory), and after the close the file holds 1 byte; the port commits the 5 bytes before the read (ARCHITECTURE.md 3.8.4), gives D0.W = 1 (end of file), and the file holds 'ABCDE'.",
+    "evidence": "golden/trap15-a/a51-files-read-after-write.result.bin lines 2, 4-6 (also the T3 review probe v4); docs/porting/errata/T3.md F7",
+    "unconfirmed": "run a51 on Windows (6.8; the C library is the Borland one inside SIM68K.exe, only the file system below it is Wine's). If Windows agrees, SH6 imitates the Borland stream state for a read that follows a write without a seek; if it does not, the golden is replaced by the Windows result."
   },
-  "trap15-a/a32-files-bounds|report|result": {
-    "owner": "engine",
-    "summary": "Task 53 with A1 = $2000 and D2 = $FFFFFFFF on a 10-byte file (the bounds test wraps): the original gives D0.W = 0 with D2 unchanged ($FFFFFFFF) and reads nothing (memory at $2000 unchanged) - the Borland fread returns the requested count; the port gives D0.W = 2. Measured under Wine (the RTL is in SIM68K.exe, the file system is Wine's); trap15-a 12 item 14.",
-    "evidence": "golden/trap15-a/a32-files-bounds.result.bin line 3; docs/porting/errata/T3.md F4"
+  "trap15-a/a52-files-write-after-read|report|result": {
+    "owner": "SH6",
+    "summary": "Task 54 right after a task 53 on the same stream, without a seek (write 'ABCDE', seek to 1, read 2, write 'X'): the original reports success (D0.W = 0) but the file is unchanged ('ABCDE') after the close; the port writes at the read position and the file is 'ABCXE'.",
+    "evidence": "golden/trap15-a/a52-files-write-after-read.result.bin line 7 (also the T3 review probe v5); docs/porting/errata/T3.md F7",
+    "unconfirmed": "run a52 on Windows (6.8). If Windows agrees, SH6 drops a write that follows a read without a seek as the Borland run-time does."
   },
-  "trap15-a/a47-serial-without-port|report|result": {
-    "owner": "W1",
-    "summary": "Task 40 with CID 16: the original gives D0.W = 1 (invalid CID, checked in TsimIO::initComm before the port is opened; trap15-a 13 Serial); the port gives 2 because NullSerial.initComm (core/sim-host/serial/null.ts) returns 2 for every CID. CID 0 with a missing port (2) and tasks 41-43 on an unopened CID (3) agree.",
-    "evidence": "golden/trap15-a/a47-serial-without-port.result.bin line 1; docs/porting/errata/T3.md F5"
+  "trap15-a/a53-files-past-end-then-read|report|result": {
+    "owner": "SH6",
+    "summary": "Write 'ABCDE', seek to 25, write 'X', then task 53 without a seek: the original's read gives D0.W = 0 (port: 1, end of file), its close gives D0.W = 2 (port: 0), a new stream then reads only 'ABCDE' (5 bytes; port: 26, the gap as zeros and 'X'), and task 57 on the file fails with 2 (the first stream is still open; port: 0).",
+    "evidence": "golden/trap15-a/a53-files-past-end-then-read.result.bin lines 2, 3, 5-8 (also the T3 review probe v1); docs/porting/errata/T3.md F7",
+    "unconfirmed": "run a53 on Windows (6.8). If Windows agrees, SH6 imitates the failed close and the lost bytes."
+  },
+  "trap15-a/a55-task0-negative-count-first|outlog|outlog": {
+    "owner": "engine",
+    "summary": "T4's defect report D1. Task 0 with D1.W = -1 on a 300-byte string as the first TRAP #15 of the program: the official program printed 255 'A' and then one byte $C0 after NOP and after MULU, and exactly 255 'A' after MOVE.L (SP)+ and after RTS (golden lines 3-6; the bytes after the 255th are residue of the host stack: undefined behaviour of strncpy without a NUL); the port prints exactly 255 every time (the engine's P24 ends the string at character 255 explicitly since gate I2). With other host calls before it (trap15-a/a05) the original printed exactly 255 in every case, like the port. Accepted: nothing a program can rely on (docs/porting/errata/T4.md D1, T3.md F1).",
+    "evidence": "golden/trap15-a/a55-task0-negative-count-first.OutLog.txt lines 3-4 (255 A + $C0), 5-6 (255 A); T4's probe d1probe4; docs/porting/errata/T3.md F1",
+    "unconfirmed": "the residue byte depends on the Borland code that ran before the TRAP, so Windows may print another byte or none; nothing to imitate either way."
+  },
+  "trap15-a/a58-files-devices|report|result": {
+    "owner": "SH6",
+    "summary": "The Windows device name NUL (trap15-a 13 Files, SH6 errata entry 8, item 8): in the official program task 52 on NUL, a write of 3 bytes, the close, task 59 and task 51 all give D0.W = 0 as in the port, but the read of 3 bytes after task 51 gives D0.W = 1 (end of file: NUL is a device that swallows what is written); the port creates an ordinary file NUL and reads back the 3 bytes (D0.W = 0).",
+    "evidence": "golden/trap15-a/a58-files-devices.result.bin line 6; docs/porting/errata/T3.md F8",
+    "unconfirmed": "Wine maps NUL to its null device as Windows does; run a58 on Windows (6.8) to confirm. If Windows agrees, SH6 treats NUL as an empty sink (the other device names, CON, PRN, AUX, COM1-9, LPT1-9, were not measured)."
+  },
+  "trap15-a/a59-files-buffer-edges|report|result": {
+    "owner": "SH6",
+    "summary": "The 512-byte stdio buffer (ARCHITECTURE.md 3.8.4, SH6 errata entry 12, item 1): one task 54 of exactly 512 bytes on a fresh stream leaves nothing visible to a second stream in the official program (the write fills the buffer and stays in it until another byte comes); the port writes it at once (512 visible). The rest agrees: 300 then 300 bytes leave 300 visible (the buffer is written when the second write does not fit), 511 + 1 leave 0, one more byte makes 512 visible, one write of 513 makes 513 visible. So the rule is: a write that fits into what is left of the buffer is copied into it, even when it fills it exactly; one that does not fit writes the buffer first and then goes out whole when it is 512 bytes or more.",
+    "evidence": "golden/trap15-a/a59-files-buffer-edges.result.bin line 3 (all seven lines for the rule); docs/porting/errata/T3.md F8"
   },
   "trap15-b/b06-modes-above-15|report|result": {
     "owner": "SH1",

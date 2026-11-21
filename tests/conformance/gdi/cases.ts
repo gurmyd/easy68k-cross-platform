@@ -51,6 +51,12 @@ export const SUITES: readonly { readonly name: string; readonly machine: boolean
   { name: 'polylines', machine: false, about: 'task 85 / 86 chains: pen position and end points, trap15-b 5.5, 6.1' },
   { name: 'widelines', machine: false, about: '2,000 lines of widths 2-14 (6.5.1), trap15-b 6.2' },
   {
+    name: 'widelines-ties',
+    machine: false,
+    about:
+      'wide lines in the directions where two guide vertices of the nib tie, which the random widelines suite missed (gate I2, SH2 review)',
+  },
+  {
     name: 'rects',
     machine: false,
     about: '10,000 rectangles, filled and unfilled, widths 0-12, cases A, B, C, trap15-b 6.3',
@@ -284,6 +290,59 @@ function widelines(): GdiCase[] {
     else if (kind <= 4) ops.push({ op: 'line', x1, y1, x2: x1, y2: r.int(-12, H + 12) });
     else ops.push({ op: 'line', x1, y1, x2: r.int(-12, W + 12), y2: r.int(-12, H + 12) });
     add(ops);
+  }
+  return cases;
+}
+
+/**
+ * The directions of SH2's gate I2 review in which the port's wide lines differed from GDI by one
+ * pixel or more (two guide vertices of the nib equally far, docs/porting/gdi-deviations.md section
+ * 3 step 5): [width, dx, dy]. Widths 16-37 lie beyond 6.5.1's range; the review found them too.
+ */
+export const TIE_DIRECTIONS: readonly (readonly [number, number, number])[] = [
+  [2, -1, 2],
+  [7, -16, 39],
+  [9, -7, 17],
+  [11, -13, 31],
+  [12, -7, 17],
+  [16, -2, 10],
+  [21, -2, 10],
+  [24, -2, 10],
+  [29, -2, 10],
+  [37, -2, 10],
+];
+
+/**
+ * Every tie direction and its opposite, as multiples k (k * |dx| and k * |dy| at most 40, k at
+ * most 4), centred at three neighbouring points so that the pixel grid falls differently.
+ */
+function widelinesTies(): GdiCase[] {
+  const cases: GdiCase[] = [];
+  for (const [w, dx, dy] of TIE_DIRECTIONS) {
+    for (const sign of [1, -1]) {
+      for (let k = 1; k <= 4 && k * Math.abs(dx) <= 40 && k * Math.abs(dy) <= 40; k++) {
+        const ex = sign * k * dx;
+        const ey = sign * k * dy;
+        for (const [cx, cy] of [
+          [32, 24],
+          [31, 23],
+          [33, 25],
+        ] as const) {
+          const x1 = cx - Math.trunc(ex / 2);
+          const y1 = cy - Math.trunc(ey / 2);
+          cases.push({
+            id: `widelines-ties-${pad(cases.length)}`,
+            suite: 'widelines-ties',
+            width: W,
+            height: H,
+            ops: [
+              { op: 'width', value: w },
+              { op: 'line', x1, y1, x2: x1 + ex, y2: y1 + ey },
+            ],
+          });
+        }
+      }
+    }
   }
   return cases;
 }
@@ -1065,6 +1124,7 @@ export function generateCases(): GdiCase[] {
     ...lines(),
     ...polylines(),
     ...widelines(),
+    ...widelinesTies(),
     ...rects(),
     ...pens(),
     ...floods(),

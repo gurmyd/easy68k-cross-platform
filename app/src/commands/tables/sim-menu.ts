@@ -68,6 +68,9 @@ export const SIM_MENUS: MenuTable[] = [
       command('sim.view.hardware'),
       command('sim.view.breakpoints'),
       command('sim.view.easybin'),
+      // added (1.5): the Log panel (docs/requests/U4-log-panel-command.md)
+      separator,
+      command('sim.view.log'),
     ],
   },
   {

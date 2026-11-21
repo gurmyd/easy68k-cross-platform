@@ -1,6 +1,6 @@
 # U3: the DataGrid's scrolling body and axe's `scrollable-region-focusable`
 
-Status: open (for W2, owner of `app/src/ui/components/DataGrid.tsx`)
+Status: done at gate I2 by W2 (the first option): the grid element, which holds the focus, is the scroll container and its header row is sticky; `height` still means the rows' area. axe finds no `scrollable-region-focusable` on such a grid any more (errata W2 entry 20). U3 may drop the "not counted (kit)" filter in `check-breakpoints.mjs`.
 
 ## What
 

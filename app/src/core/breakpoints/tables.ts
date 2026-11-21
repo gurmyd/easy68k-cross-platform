@@ -311,8 +311,10 @@ export function setEntry(tables: BreakpointTables, grid: GridId): ActionResult {
     case 'expressions': {
       const edit = tables.editing.expressions;
       if (!edit) return ok(tables);
-      if (expressionMissing(edit.draft)) return { tables, message: BREAKPOINT_MESSAGES.fieldsMissing };
+      // Set is disabled for an empty or incomplete expression (`setExprButtons`), so Enter, which
+      // stands for Set, must do nothing there: the disabled state is tested before the fields.
       if (!expressionComplete(edit.draft.tokens)) return ok(tables);
+      if (expressionMissing(edit.draft)) return { tables, message: BREAKPOINT_MESSAGES.fieldsMissing };
       return ok({ ...tables, editing, expressions: replaceAt(tables.expressions, edit.row, edit.draft) });
     }
   }

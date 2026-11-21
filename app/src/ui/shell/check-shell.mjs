@@ -11,8 +11,8 @@
 //   - the menus and toolbars on screen equal the command tables exactly (captions, access keys,
 //     shortcuts, separators, check marks); a command without a handler is disabled; a command with
 //     a handler is enabled exactly when its handler says so, also after the handler's answer
-//     changes. The commands of the tables that have no handler yet are listed (a note, not a
-//     failure: 3.12.2 makes that a failure at the end of wave 2);
+//     changes. The commands of the tables that have no handler yet are listed (a note here; the
+//     unit test bootstrap.test.ts fails for every one not in its list of owed handlers, gate I2);
 //   - the dispatcher cancels the chords of 2.9.3 (`defaultPrevented` on real key events), with the
 //     real handlers held back (`commands.observeRuns`) so that no real dialog opens;
 //   - key and code pairs of other keyboards (Option chords such as key 'ø' with code 'KeyO', a
@@ -922,6 +922,9 @@ async function textFieldKeysPass(browser, name, os) {
     };
     document.addEventListener('copy', record, true);
     document.addEventListener('cut', record, true);
+    // The input types of the field's changes, for a failure on a CI runner (errata W3.md entry 36).
+    window.__inputs = [];
+    document.addEventListener('input', (event) => window.__inputs.push(event.inputType || '?'), true);
     const input = document.createElement('input');
     input.type = 'text';
     input.setAttribute('aria-label', 'check-shell K2 field');
@@ -936,10 +939,12 @@ async function textFieldKeysPass(browser, name, os) {
         start: field.selectionStart,
         end: field.selectionEnd,
         clip: window.__clip.slice(),
+        inputs: window.__inputs.slice(-12),
         focused: document.activeElement === field,
       };
     }, selector);
-  const show = (s) => `value=${JSON.stringify(s.value)} selection=${s.start}..${s.end} events=${s.clip.join(',')}`;
+  const show = (s) =>
+    `value=${JSON.stringify(s.value)} selection=${s.start}..${s.end} events=${s.clip.join(',')} inputs=${s.inputs.join(',')}`;
   const field = page.locator('[data-check-k2]');
 
   if (os !== 'mac') {
@@ -962,6 +967,7 @@ async function textFieldKeysPass(browser, name, os) {
       const input = document.querySelector('[data-check-k2]');
       input.value = '';
       window.__clip.length = 0;
+      window.__inputs.length = 0;
     });
     await field.click();
     await page.keyboard.type('abc def');
@@ -1001,6 +1007,14 @@ async function textFieldKeysPass(browser, name, os) {
       redo === true && s.value === 'abc ',
       `cancelled=${redo} ${show(s)}`,
     );
+    // Two undos: the cut, then the typing before it (a value set by a script is where it starts).
+    const undoTwice = [await pressed(page, 'Control+KeyZ'), await pressed(page, 'Control+KeyZ')];
+    s = await state();
+    check(
+      `${p} ${item}: Ctrl+Z twice takes back the cut and then the typing`,
+      undoTwice.every((cancelled) => cancelled === true) && s.value === '',
+      `cancelled=${undoTwice.join(',')} ${show(s)}`,
+    );
   }
 
   // Ctrl+V: the page asks the browser for the clipboard (note 45). Chromium has the permission
@@ -1036,6 +1050,15 @@ async function textFieldKeysPass(browser, name, os) {
     paste === true && (name === 'chromium' ? outcome === 'pasted' : outcome === 'pasted' || outcome === 'toast'),
     `cancelled=${paste} clipboard set=${clipboardSet} outcome=${outcome} ${show(pasted)}`,
   );
+  if (outcome === 'pasted') {
+    const undoPaste = await pressed(page, 'Control+KeyZ');
+    const s = await state();
+    check(
+      `${p} Ctrl+Z takes back the paste`,
+      undoPaste === true && s.value === 'move.l ',
+      `cancelled=${undoPaste} ${show(s)}`,
+    );
+  }
   await closeOverlays(page);
 
   // In a modal dialog: a field inside a message box.
@@ -1060,6 +1083,13 @@ async function textFieldKeysPass(browser, name, os) {
     `${p} in a modal dialog: Ctrl+A and Ctrl+X in a text field select and cut`,
     dialogAll === true && dialogCut === true && inDialog.value === '' && inDialog.clip.includes('cut:xyz'),
     `cancelled=${dialogAll},${dialogCut} ${show(inDialog)}`,
+  );
+  const dialogUndo = await pressed(page, 'Control+KeyZ');
+  const undoneInDialog = await state('[data-check-k2-dialog]');
+  check(
+    `${p} in a modal dialog: Ctrl+Z takes back the cut`,
+    dialogUndo === true && undoneInDialog.value === 'xyz',
+    `cancelled=${dialogUndo} ${show(undoneInDialog)}`,
   );
   await page.screenshot({ path: join(outDir, `${name}-mac-k2-dialog.png`) });
   await closeOverlays(page);

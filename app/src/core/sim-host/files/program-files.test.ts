@@ -157,17 +157,61 @@ describe('ProgramFiles: write buffering', () => {
     expect(files.unsaved).toBe(false);
   });
 
-  it(`after ${STDIO_BUFFER} bytes the whole buffers are committed, the rest stays pending`, async () => {
+  // The rules measured on the original under Wine (docs/porting/errata/T3.md F2,
+  // tests/conformance/windows-confirm/stdio-buffer.X68; the engine test replays the program).
+  it(`byte by byte, ${STDIO_BUFFER} bytes become visible when the next byte arrives`, async () => {
     const { files, view } = await harness();
-    const w = files.fileOpen(name('big.bin'), FileMode.Create);
-    files.fileWrite(w, new Uint8Array(300).fill(1));
-    expect(view.stat('/memory/demo/big.bin')?.size).toBe(0);
-    files.fileWrite(w, new Uint8Array(300).fill(2));
-    expect(view.stat('/memory/demo/big.bin')?.size).toBe(512);
-    files.fileWrite(w, new Uint8Array(1100).fill(3));
-    expect(view.stat('/memory/demo/big.bin')?.size).toBe(1536);
+    const w = files.fileOpen(name('a.bin'), FileMode.Create);
+    const visible: [number, number][] = [];
+    let last = -1;
+    for (let written = 1; written <= 2100; written++) {
+      files.fileWrite(w, text('x'));
+      const size = view.stat('/memory/demo/a.bin')?.size ?? -1;
+      if (size !== last) visible.push([written, size]);
+      last = size;
+    }
+    expect(visible).toEqual([
+      [1, 0],
+      [513, 512],
+      [1025, 1024],
+      [1537, 1536],
+      [2049, 2048],
+    ]);
     files.fileClose(w);
-    expect(view.stat('/memory/demo/big.bin')?.size).toBe(1700);
+    expect(view.stat('/memory/demo/a.bin')?.size).toBe(2100);
+  });
+
+  it(`a write of ${STDIO_BUFFER} bytes or more goes out whole, after what was buffered`, async () => {
+    const { files, view } = await harness();
+    const w = files.fileOpen(name('b.bin'), FileMode.Create);
+    files.fileWrite(w, new Uint8Array(10).fill(1));
+    expect(view.stat('/memory/demo/b.bin')?.size).toBe(0);
+    files.fileWrite(w, new Uint8Array(1000).fill(2));
+    expect(view.stat('/memory/demo/b.bin')?.size).toBe(1010);
+    const c = files.fileOpen(name('c.bin'), FileMode.Create);
+    files.fileWrite(c, new Uint8Array(5000).fill(3));
+    expect(view.stat('/memory/demo/c.bin')?.size).toBe(5000);
+    const d = files.fileOpen(name('d.bin'), FileMode.Create);
+    files.fileWrite(d, new Uint8Array(STDIO_BUFFER).fill(4));
+    expect(view.stat('/memory/demo/d.bin')?.size).toBe(STDIO_BUFFER);
+    expect([...(view.get('/memory/demo/b.bin') ?? [])].slice(8, 12)).toEqual([1, 1, 2, 2]);
+  });
+
+  it('a small write that does not fit into the rest of the buffer pushes the buffer out first', async () => {
+    // Not measured on the original (300 + 300 is T3's open question; errata SH6.md entry 12).
+    const { files, view } = await harness();
+    const w = files.fileOpen(name('e.bin'), FileMode.Create);
+    files.fileWrite(w, new Uint8Array(300).fill(1));
+    files.fileWrite(w, new Uint8Array(212).fill(2)); // exactly fills the buffer
+    expect(view.stat('/memory/demo/e.bin')?.size).toBe(0);
+    files.fileWrite(w, new Uint8Array(1).fill(3));
+    expect(view.stat('/memory/demo/e.bin')?.size).toBe(512);
+    const f = files.fileOpen(name('f.bin'), FileMode.Create);
+    files.fileWrite(f, new Uint8Array(300).fill(1));
+    files.fileWrite(f, new Uint8Array(300).fill(2));
+    expect(view.stat('/memory/demo/f.bin')?.size).toBe(300);
+    files.fileClose(f);
+    expect(view.stat('/memory/demo/f.bin')?.size).toBe(600);
   });
 
   it('a seek and a read through the same stream commit its pending bytes', async () => {
@@ -180,6 +224,41 @@ describe('ProgramFiles: write buffering', () => {
     files.fileWrite(w, text('!'));
     expect(files.fileRead(w, 1)).toEqual(new Uint8Array(0)); // the read commits first
     expect(str(view.get('/memory/demo/s.txt'))).toBe('hello!');
+  });
+
+  it('a reading stream keeps the bytes it buffered; a seek or its own write forgets them', async () => {
+    const { files } = await harness({ '/memory/demo/d.bin': 'a'.repeat(100) });
+    const r = files.fileOpen(name('d.bin'), FileMode.Update);
+    expect(str(files.fileRead(r, 10))).toBe('a'.repeat(10));
+    // Another stream changes bytes 50-59 and closes.
+    const other = files.fileOpen(name('d.bin'), FileMode.Update);
+    files.fileSeek(other, 50, 0);
+    files.fileWrite(other, text('B'.repeat(10)));
+    files.fileClose(other);
+    expect(str(files.fileRead(r, 50))).toBe('a'.repeat(50)); // as the original (T3 F2)
+    expect(files.fileSeek(r, 50, 0)).toBe(50);
+    expect(str(files.fileRead(r, 10))).toBe('B'.repeat(10));
+    files.fileSeek(r, 0, 0);
+    files.fileRead(r, 1);
+    files.fileWrite(r, text('c')); // at offset 1; the buffer is forgotten
+    files.fileSeek(r, 0, 0);
+    expect(str(files.fileRead(r, 3))).toBe('aca');
+  });
+
+  it('the read buffer is refilled block by block; bytes added after its end are read', async () => {
+    const { files } = await harness({ '/memory/demo/big.bin': 'x'.repeat(1300) });
+    const r = files.fileOpen(name('big.bin'), FileMode.Update);
+    expect(files.fileRead(r, 700)?.length).toBe(700); // filled [0, 512), then [512, 1024), which it keeps
+    const w = files.fileOpen(name('big.bin'), FileMode.Update);
+    files.fileSeek(w, 1000, 0);
+    files.fileWrite(w, text('Y'));
+    files.fileSeek(w, 1250, 0);
+    files.fileWrite(w, text('Z'));
+    files.fileClose(w);
+    const rest = str(files.fileRead(r, 1000)) as string;
+    expect(rest.length).toBe(600);
+    expect(rest.indexOf('Y')).toBe(-1); // offset 1000 was in the buffer
+    expect(rest.indexOf('Z')).toBe(1250 - 700); // offset 1250 was not
   });
 
   it('a stream nobody closes keeps its bytes and its file until exit()', async () => {

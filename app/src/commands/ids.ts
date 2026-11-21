@@ -71,6 +71,7 @@ export const COMMAND_IDS = [
   'sim.view.hardware',
   'sim.view.breakpoints',
   'sim.view.easybin',
+  'sim.view.log',
   'sim.options.sourceFont',
   'sim.options.outputFont',
   'sim.options.printerFont',

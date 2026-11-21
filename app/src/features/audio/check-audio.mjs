@@ -23,7 +23,13 @@
 //          context runs again, a short sound whose time has passed meanwhile is not played late.
 //   2. The application itself: its audio backend is the Web Audio one; a click and a key on a page
 //      that has played nothing start no audio context; a key in the Output panel (one of the gestures
-//      of 3.7) starts one, and it runs.
+//      of 3.7) starts one, and it runs. Then graphicSound.X68 (the application's own example, assembled
+//      by the application's assembler and written with its three sounds into the browser store) is
+//      opened in the simulator and started with the Run button, three times: the real ProgramFiles
+//      give the sound device its files, the backend is asked to play 1.wav, 0.wav and roger.wav in
+//      that order, each when the one before has played for its duration by the page's clock, and no
+//      "not found" message appears. This step needs engine/dist: without it, it is skipped with a
+//      note, unless EASY68K_REQUIRE_ENGINES=1 (CI), where it fails.
 //
 // Timing is measured several times and the best run counts; each measured time is printed. A sound
 // must never free the player early (by the page's clock, to 1 ms); late by up to LATE_MS is allowed,
@@ -32,13 +38,14 @@
 //
 // Prints "N of M checks passed"; exit code 0 only if every check passed and no page logged an error.
 // Screenshots go to build/SH5/audio-check (git-ignored). Needs nothing but the pinned development
-// dependencies; it does not need engine/dist or a production build. On Linux, where a CI runner may
+// dependencies and no production build; engine/dist only for the graphicSound.X68 step. On Linux, where a CI runner may
 // have no audio device, a context that never runs is reported as a note and the steps that need it
 // are skipped; elsewhere it fails.
 
-/* global console, process, document, window, fetch, performance, setTimeout, navigator -- the browser globals are used inside page callbacks, which run in the page */
+/* global console, process, document, window, fetch, performance, setTimeout, navigator, requestAnimationFrame, URL -- the browser globals are used inside page callbacks, which run in the page */
 
-import { mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { Buffer } from 'node:buffer';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, webkit } from '@playwright/test';
@@ -419,6 +426,201 @@ async function checkBackendPage(browserName, page, pageResult) {
 
 // --- page 2: the application -------------------------------------------------------------------------
 
+/** The official example and its sounds, at the paths the application's store gives them here. */
+const PROGRAM_DIR = '/browser/sh5-audio-check';
+const PROGRAM_SOUNDS = ['0.wav', '1.wav', 'roger.wav'];
+
+/**
+ * In the page: assembles graphicSound.X68 (from the application's own examples) with the
+ * application's assembler and writes the .S68, the .L68 and its three sounds into the browser store,
+ * and counts what the application's audio backend is asked to play. Returns null when it worked,
+ * else what went wrong.
+ */
+function prepareGraphicSound({ dir, sounds }) {
+  return (async () => {
+    const { ctx } = window.__easy68k;
+    const fetchBytes = async (name) => {
+      const response = await fetch(new URL(`examples/${name}`, document.baseURI));
+      if (!response.ok) throw new Error(`examples/${name}: HTTP ${response.status}`);
+      return new Uint8Array(await response.arrayBuffer());
+    };
+    const source = await fetchBytes('graphicSound.X68');
+    const options = {
+      generateListing: true,
+      generateSRecord: true,
+      constantsExpanded: false,
+      bitFieldInstructions: true,
+      crossReference: true,
+      macrosExpanded: false,
+      structuredExpanded: false,
+      showWarnings: true,
+      tabType: 1,
+      tabSize: 4,
+    };
+    const result = await ctx.asm.assemble(
+      'sh5/graphicSound.X68',
+      new Map([['sh5/graphicSound.X68', source]]),
+      options,
+      new Date(2026, 0, 1),
+    );
+    if (result.fatal) return { fatal: result.fatal };
+    if (result.errorCount !== 0 || !result.sRecord || !result.listing) return { error: `${result.errorCount} errors` };
+    await ctx.vfs.mkdirp(dir);
+    await ctx.vfs.writeFile(`${dir}/graphicSound.S68`, result.sRecord);
+    await ctx.vfs.writeFile(`${dir}/graphicSound.L68`, result.listing);
+    const lengths = {};
+    for (const name of sounds) {
+      const bytes = await fetchBytes(name);
+      await ctx.vfs.writeFile(`${dir}/${name}`, bytes);
+      lengths[bytes.length] = name;
+    }
+    // What the sound device asks of the application's backend (the real one): which file, and when.
+    const audio = ctx.devices.audio;
+    const named = new Map();
+    const plays = [];
+    const load = audio.load.bind(audio);
+    const play = audio.play.bind(audio);
+    audio.load = (bytes) => {
+      const sound = load(bytes);
+      named.set(sound, lengths[bytes.length] ?? `${bytes.length} bytes`);
+      return sound;
+    };
+    audio.play = (sound, loop) => {
+      plays.push({ name: named.get(sound) ?? '?', at: performance.now(), loop });
+      return play(sound, loop);
+    };
+    // The longest gap between two display frames while the program runs (only printed: a runner
+    // may deliver no frames at all).
+    const frames = { last: 0, longest: 0, count: 0 };
+    const tick = (now) => {
+      if (frames.last) frames.longest = Math.max(frames.longest, now - frames.last);
+      frames.last = now;
+      frames.count++;
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+    // What the sound device's file reads cost: task 70 in the wait loop reads roger.wav at every try,
+    // as the original tests FileExists each time (only printed).
+    const reads = { count: 0, ms: 0 };
+    const files = ctx.sim.files;
+    const read = files.read.bind(files);
+    files.read = (name) => {
+      const started = performance.now();
+      const bytes = read(name);
+      reads.ms += performance.now() - started;
+      reads.count++;
+      return bytes;
+    };
+    window.__sh5Check = { plays, frames, reads };
+    return null;
+  })().catch((error) => ({ error: String(error && error.stack ? error.stack : error) }));
+}
+
+/**
+ * graphicSound.X68 in the application, as a student runs it: the program is opened in the simulator
+ * and started with the Run button. The real ProgramFiles (SH6) give the sound device its files from
+ * the browser store; the sounds must follow each other by their durations, by the page's clock.
+ */
+async function checkGraphicSound(browserName, page) {
+  const label = `${browserName}, application, graphicSound.X68`;
+  const prepared = await page.evaluate(prepareGraphicSound, { dir: PROGRAM_DIR, sounds: PROGRAM_SOUNDS });
+  if (prepared?.fatal?.startsWith('The assembler could not start')) {
+    // The engines are in engine/dist, which is built separately; CI requires them.
+    if (process.env.EASY68K_REQUIRE_ENGINES === '1') check(`${label}: the assembler starts`, false, prepared.fatal);
+    else note(`${label}: skipped, the engines are not built (${prepared.fatal})`);
+    return;
+  }
+  check(`${label}: assembled and written to the browser store`, prepared === null, JSON.stringify(prepared));
+  if (prepared !== null) return;
+
+  await page.locator('.e68-modeswitch [data-mode="simulator"]').click();
+  const durations = { one: 302.132, zero: 355.964 }; // parseWav of 1.wav and 0.wav (types.test.ts)
+  const runs = [];
+  for (let run = 0; run < RUNS; run++) {
+    await page.evaluate(async (path) => {
+      const { ctx } = window.__easy68k;
+      window.__sh5Check.plays.length = 0;
+      await ctx.sim.controller.open(path, 'open', { confirmed: true });
+    }, `${PROGRAM_DIR}/graphicSound.S68`);
+    await page.waitForFunction(() => window.__easy68k.ctx.store.getState().sim.phase === 'idle', null, {
+      timeout: 30_000,
+    });
+    await page.evaluate(() => {
+      Object.assign(window.__sh5Check.frames, { last: 0, longest: 0, count: 0 });
+      Object.assign(window.__sh5Check.reads, { count: 0, ms: 0 });
+    });
+    await page.locator('.e68-shell__toolbar [data-command="sim.run.run"]').click();
+    const halted = await waitUntil(
+      page,
+      () => {
+        const s = window.__easy68k.ctx.store.getState().sim;
+        return s.phase === 'idle' && s.halted && window.__sh5Check.plays.length >= 3;
+      },
+      30_000,
+    );
+    const outcome = await page.evaluate(() => {
+      const { ctx } = window.__easy68k;
+      const s = ctx.store.getState().sim;
+      const { plays, frames, reads } = window.__sh5Check;
+      return {
+        plays: plays.map((p) => ({ ...p })),
+        frames: { longest: frames.longest, count: frames.count },
+        reads: { ...reads },
+        messages: [...(s.messageLines ?? [])],
+        phase: s.phase,
+        halted: s.halted,
+      };
+    });
+    const at = Object.fromEntries(outcome.plays.map((p) => [p.name, p.at]));
+    runs.push({
+      halted,
+      names: outcome.plays.map((p) => p.name),
+      zeroAfter: (at['0.wav'] ?? NaN) - (at['1.wav'] ?? NaN),
+      rogerAfter: (at['roger.wav'] ?? NaN) - (at['0.wav'] ?? NaN),
+      frames: outcome.frames,
+      reads: outcome.reads,
+      messages: outcome.messages,
+    });
+  }
+  const times = runs.map((r) => `${r.zeroAfter.toFixed(1)}/${r.rogerAfter.toFixed(1)}`).join(', ');
+  check(
+    `${label}: runs to its end and plays 1.wav, 0.wav, roger.wav, each once`,
+    runs.every((r) => r.halted && r.names.join(',') === '1.wav,0.wav,roger.wav'),
+    runs.map((r) => `${r.halted ? 'halted' : 'not halted'} [${r.names.join(', ')}]`).join('; '),
+  );
+  check(
+    `${label}: no sound starts before the one before it has played for its duration`,
+    runs.every((r) => r.zeroAfter >= durations.one - 1 && r.rogerAfter >= durations.zero - 1),
+    `waits in ms (0.wav/roger.wav): ${times}`,
+  );
+  const overshoot = (r) => Math.max(r.zeroAfter - durations.one, r.rogerAfter - durations.zero);
+  const best = runs.reduce((a, b) => (overshoot(b) < overshoot(a) ? b : a));
+  check(
+    `${label}: and starts within ${LATE_MS} ms after it, best of ${runs.length}`,
+    overshoot(best) < LATE_MS,
+    `best run late by ${overshoot(best).toFixed(1)} ms`,
+  );
+  // The picture the program drew, to look at (the panel shows only part of it at this window size).
+  const picture = await page.evaluate(() => {
+    const canvas = document.querySelector('[data-e68-workspace="simulator"] [data-e68-panel="output"] canvas');
+    return canvas ? canvas.toDataURL('image/png') : null;
+  });
+  if (picture?.startsWith('data:image/png;base64,')) {
+    writeFileSync(join(outDir, `${browserName}-graphicSound-output.png`), Buffer.from(picture.split(',')[1], 'base64'));
+  } else note(`${label}: the Output panel has no canvas to save`);
+  const messages = runs.flatMap((r) => r.messages).filter((line) => /not found|Error loading/.test(line));
+  check(`${label}: the sound device found every file (no message)`, messages.length === 0, JSON.stringify(messages));
+  console.log(
+    `  info ${label}, per run: longest gap between display frames; the sound device's file reads (task 70 in the wait loop reads at every try): ${runs
+      .map(
+        (r) =>
+          `${r.frames.longest.toFixed(0)} ms over ${r.frames.count} frames; ${r.reads.count} reads, ${r.reads.ms.toFixed(0)} ms` +
+          ` (${r.reads.count ? ((r.reads.ms / r.reads.count) * 1000).toFixed(0) : 0} us each)`,
+      )
+      .join(' | ')}`,
+  );
+}
+
 /** Counts the audio contexts the page creates (an init script, before the application's code). */
 function countContexts() {
   const Original = window.AudioContext;
@@ -458,6 +660,7 @@ async function checkApplication(browserName, context, baseUrl) {
       note(
         `${browserName}, application: no Web Audio in this browser build; the steps with an audio context are skipped`,
       );
+      await checkGraphicSound(browserName, page);
       await page.screenshot({ path: join(outDir, `${browserName}-application.png`) });
       check(
         `${browserName}, application: no console or page errors`,
@@ -494,6 +697,7 @@ async function checkApplication(browserName, context, baseUrl) {
         JSON.stringify(states),
       );
     }
+    await checkGraphicSound(browserName, page);
     await page.screenshot({ path: join(outDir, `${browserName}-application.png`) });
   } catch (error) {
     check(`${browserName}, application: the steps ran`, false, String(error).split('\n')[0]);

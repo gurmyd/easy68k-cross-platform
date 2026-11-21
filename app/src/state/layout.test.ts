@@ -13,6 +13,7 @@ import {
   TOOL_PANELS,
   defaultPanelVisible,
   isPanelVisible,
+  messageListOf,
   messagesPaneHeight,
   splitFraction,
   splitPixels,
@@ -150,5 +151,34 @@ describe('the editor message list (editor-ui §7.3)', () => {
   it('can be dragged open while empty, down to the 5 px minimum', () => {
     expect(messagesPaneHeight({ messageCount: 0, assembled: false, dragged: 120 })).toBe(120);
     expect(messagesPaneHeight({ messageCount: 0, assembled: true, dragged: 1 })).toBe(5);
+  });
+});
+
+describe('messageListOf: the list of the active document, as the height rule sees it', () => {
+  const height = (state: Parameters<typeof messageListOf>[0], id: string | null) => {
+    const { count, assembled } = messageListOf(state, id);
+    return messagesPaneHeight({ messageCount: count, assembled, dragged: null });
+  };
+  const row = { line: 3, text: 'Invalid syntax', severity: 'error', file: null } as never;
+  const summary = { at: 1, errors: 0, warnings: 0 } as never;
+
+  it('5 px for a document no assembly has touched, and with no document', () => {
+    expect(height({ messages: {}, assemble: {} }, 'a')).toBe(5);
+    expect(height({ messages: {}, assemble: {} }, null)).toBe(5);
+  });
+
+  it('7 px for the assembled document after a clean assembly or Clear Error Messages', () => {
+    expect(height({ messages: { a: [] }, assemble: { a: summary } }, 'a')).toBe(7);
+  });
+
+  it("7 px for an include file's document after Clear Error Messages, without a summary of its own (errata E5.md 8)", () => {
+    expect(height({ messages: { inc: [row] }, assemble: {} }, 'inc')).toBe(87);
+    expect(height({ messages: { inc: [] }, assemble: {} }, 'inc')).toBe(7);
+  });
+
+  it('names the list so that a drag applies only until the list changes', () => {
+    const before = messageListOf({ messages: { a: [row] }, assemble: { a: summary } }, 'a').list;
+    const cleared = messageListOf({ messages: { a: [] }, assemble: { a: summary } }, 'a').list;
+    expect(before).not.toBe(cleared);
   });
 });

@@ -133,6 +133,21 @@ describe('editing a row (double-click or Enter)', () => {
     expect(setEntry(withToken, 'expressions').message).toBe(M.fieldsMissing);
   });
 
+  it('Set (Enter) on an empty or incomplete expression does nothing and shows no message', () => {
+    // Review of U3: Enter in an empty expression editor showed "Fields missing"; in the original
+    // Set is disabled there (setExprButtons), so nothing happens.
+    const base = startEdit(addRegister(emptyTables(), 0), 'expressions', 0);
+    const empty = setEntry(base, 'expressions');
+    expect(empty.message).toBeNull();
+    expect(empty.tables).toBe(base);
+    const noCount = updateExpressionDraft(base, { count: '' });
+    expect(setEntry(noCount, 'expressions').message).toBeNull();
+    const open = appendCondition(setBuilderField(base, 'register', '01'), 'reg').tables;
+    const hanging = appendSymbol(open, 'AND');
+    expect(setEntry(hanging, 'expressions').message).toBeNull();
+    expect(setEntry(hanging, 'expressions').tables.editing.expressions).not.toBeNull();
+  });
+
   it('a single click on another row of the grid hides the editors without storing', () => {
     let t = addRegister(emptyTables(), 0);
     t = updateRegisterDraft(startEdit(t, 'registers', 0), { register: 5 });

@@ -3,10 +3,10 @@
 //
 //   node app/src/features/pwa/check-pwa.mjs [--browser chromium|webkit|all] [--out <dir>] [--dist <dir>]
 //
-// It makes a production build of app/ with the base path /easy68k-mac/ (vite build, the same
+// It makes a production build of app/ with the base path /easy68k-cross-platform/ (vite build, the same
 // command as pages.yml; or takes an existing one with --dist), checks that the build it made was
 // already finished by pwaPlugin() in app/vite.config.ts, finishes its two copies (versions A and
-// B) with the PWA build step, and serves them with its own static server under /easy68k-mac/ only,
+// B) with the PWA build step, and serves them with its own static server under /easy68k-cross-platform/ only,
 // with GitHub Pages' cache header. A fixture file of this package is added to the build before the step, so that "a static
 // file of the build is available offline" does not depend on what app/public holds today. Then, in
 // headless Chromium and WebKit (Playwright):
@@ -58,7 +58,7 @@ const outDir = resolve(option('--out', join(repoRoot, 'build', 'pwa-check')));
 const givenDist = option('--dist', null);
 mkdirSync(outDir, { recursive: true });
 
-const BASE = '/easy68k-mac/';
+const BASE = '/easy68k-cross-platform/';
 const FIXTURE_URL = 'check/offline-fixture.txt';
 const FIXTURE = join(here, 'fixtures', 'offline-fixture.txt');
 const NOTICE = 'A new version is available.';

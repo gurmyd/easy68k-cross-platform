@@ -8,7 +8,7 @@
 // own class names and the hash. A change of the core that changes any single test's outcome
 // changes the hash of that file.
 //
-// Part of easy68k-mac, an unofficial port of EASy68K. GPL-2.0-or-later.
+// Part of easy68k-cross-platform, an unofficial port of EASy68K. GPL-2.0-or-later.
 
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';

@@ -64,7 +64,7 @@ async function download(options) {
   const repository = options.repo ?? process.env.GITHUB_REPOSITORY ?? repositoryFromGit();
   if (!repository)
     fail('cannot tell which GitHub repository to use: pass --repo owner/name (no "origin" remote found)');
-  const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'easy68k-mac-fetch-engines' };
+  const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'easy68k-cross-platform-fetch-engines' };
   if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   const api = `https://api.github.com/repos/${repository}/releases/${options.tag ? `tags/${options.tag}` : 'latest'}`;
   console.log(`fetch-engines: ${api}`);

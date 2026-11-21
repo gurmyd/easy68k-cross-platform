@@ -180,5 +180,5 @@ test('src/ differs from the original v5.16.1 files only by the changes listed in
     return;
   }
   assert.equal(r.status, 0, r.stdout);
-  assert.match(r.stdout, /43 changed regions in 22 files; 0 problems\./);
+  assert.match(r.stdout, /44 changed regions in 22 files; 0 problems\./);
 });

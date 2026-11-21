@@ -87,6 +87,12 @@ interface CachedFile {
   /** Counts the changes made through the view: a read from storage that started before a change
    *  must not replace the changed bytes. */
   generation: number;
+  /** Storage was changed by someone else (or a write failed) while the program had changes of its
+   *  own: the next write must replace the whole file, whatever storedSize says. */
+  rewrite: boolean;
+  /** The whole file as read() last returned it, until the bytes change (read() of the whole file is
+   *  what the sound device asks for at every try of a wait loop). */
+  whole: Bytes | null;
 }
 
 /** What one write to storage does; decided when the write starts (WriteBehind's getter). */
@@ -189,8 +195,12 @@ export class CachedSyncFiles implements SyncFiles {
       for (const found of listed.files) {
         seen.add(found.path);
         const cached = this.lookupFile(found.path);
-        if (cached && this.files.get(cached)?.dirty) continue; // the program's change wins
         const file = cached ? this.files.get(cached) : undefined;
+        if (cached && file?.dirty) {
+          // The program's change wins; if storage changed meanwhile it is written over it whole.
+          if (found.size !== file.storedSize || found.mtime !== file.mtime) this.storageReplaced(cached, file);
+          continue;
+        }
         if (file && file.size === found.size && file.mtime === found.mtime && file.readOnly === found.readOnly)
           continue;
         if (cached && this.behind.isPending(cached)) continue; // our own write is landing
@@ -231,6 +241,8 @@ export class CachedSyncFiles implements SyncFiles {
   read(path: VPath, position: number, count: number): Bytes | null {
     const file = this.fileAt(path);
     if (!file || !isCount(position) || !isCount(count)) return null;
+    // The whole file: the same copy every time until the bytes change (callers do not modify it).
+    if (position === 0 && count >= file.size) return (file.whole ??= file.buf.slice(0, file.size));
     const start = Math.min(position, file.size);
     return file.buf.slice(start, Math.min(start + count, file.size));
   }
@@ -249,6 +261,7 @@ export class CachedSyncFiles implements SyncFiles {
     }
     file.buf.set(data, position);
     file.size = Math.max(file.size, end);
+    file.whole = null;
     this.touched(this.lookupFile(path) as VPath, file, from);
     return true;
   }
@@ -261,6 +274,7 @@ export class CachedSyncFiles implements SyncFiles {
       const file = this.files.get(stored) as CachedFile;
       if (file.readOnly) return false;
       file.size = 0;
+      file.whole = null;
       this.touched(stored, file, 0);
       return true;
     }
@@ -276,6 +290,8 @@ export class CachedSyncFiles implements SyncFiles {
       dirty: false,
       dirtyFrom: Infinity,
       generation: 0,
+      rewrite: false,
+      whole: null,
     };
     this.putFile(created, file);
     // A removal of the same name that has not reached storage yet: the write below replaces it.
@@ -363,7 +379,12 @@ export class CachedSyncFiles implements SyncFiles {
       op = this.removals.delete(path) ? { kind: 'remove' } : { kind: 'none' };
     } else if (!file.dirty) {
       op = { kind: 'none' };
-    } else if (file.storedSize !== null && file.dirtyFrom >= file.storedSize && file.size > file.storedSize) {
+    } else if (
+      !file.rewrite &&
+      file.storedSize !== null &&
+      file.dirtyFrom >= file.storedSize &&
+      file.size > file.storedSize
+    ) {
       op = { kind: 'append', data: file.buf.slice(file.storedSize, file.size), size: file.size, file };
     } else {
       op = { kind: 'write', data: file.buf.slice(0, file.size), file };
@@ -371,6 +392,7 @@ export class CachedSyncFiles implements SyncFiles {
     if (file) {
       file.dirty = false;
       file.dirtyFrom = Infinity;
+      file.rewrite = false;
     }
     this.taken.set(path, op);
     return op.kind === 'write' || op.kind === 'append' ? op.data : EMPTY;
@@ -404,9 +426,10 @@ export class CachedSyncFiles implements SyncFiles {
     // Keep the change: the whole file is written again at the next settled().
     const file = this.files.get(path);
     if (file) {
+      // storedSize stays: storage may still hold the file, and a removal must reach it.
       file.dirty = true;
       file.dirtyFrom = 0;
-      file.storedSize = null;
+      file.rewrite = true;
       this.dirtyPaths.add(path);
     } else if (!this.removals.has(path)) {
       this.removals.add(path);
@@ -499,8 +522,13 @@ export class CachedSyncFiles implements SyncFiles {
       return; // gone again, or unreadable for now: the next change or revalidate() tries again
     }
     const now = this.lookupFile(found.path);
-    if (now && (this.files.get(now) as CachedFile).generation !== generation) return; // changed by the program
-    if (now && (this.files.get(now) as CachedFile).dirty) return;
+    const current = now ? (this.files.get(now) as CachedFile) : null;
+    if (current && (current.generation !== generation || current.dirty)) {
+      // Changed by the program meanwhile: its bytes win (errata SH6.md entry 5). Storage now holds
+      // someone else's version, so the program's must replace it whole, not be appended to it.
+      this.storageReplaced(now as VPath, current);
+      return;
+    }
     const stored = now ?? this.spell(found.path);
     if (!this.dirByFold.has(foldCase(dirname(stored)))) this.addDir(dirname(stored));
     this.unavailable.delete(foldCase(stored));
@@ -513,9 +541,20 @@ export class CachedSyncFiles implements SyncFiles {
       dirty: false,
       dirtyFrom: Infinity,
       generation: generation + 1,
+      rewrite: false,
+      whole: null,
     };
     if (now) this.files.set(now, file);
     else this.putFile(stored, file);
+  }
+
+  /** Someone else replaced a file the program has changed: write the program's version whole. */
+  private storageReplaced(path: VPath, file: CachedFile): void {
+    file.rewrite = true;
+    file.dirty = true;
+    file.dirtyFrom = 0;
+    this.dirtyPaths.add(path);
+    this.arm(path);
   }
 
   // ==================================================================== loading trees
@@ -554,6 +593,8 @@ export class CachedSyncFiles implements SyncFiles {
         dirty: false,
         dirtyFrom: Infinity,
         generation: 0,
+        rewrite: false,
+        whole: null,
       });
       count++;
       total += data.length;

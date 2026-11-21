@@ -1,6 +1,6 @@
 # Request from U4: a command that shows the Log panel (W3)
 
-Status: open.
+Status: items 1 and 2 done at gate I2 (W3): `sim.view.log` (mode simulator, kind action, caption `&Log`, no keys) is in `commands/ids.ts` and `specs.ts` and at the end of the simulator's View menu below a separator (`tables/sim-menu.ts`). Item 3 (the line in 1.5) is for the document's owner; recorded in errata W3.md, not edited by W3. U4 then added the handler below to `features/log/index.ts` (gate I2); the browser check opens the panel from View > Log.
 
 The Log panel (ARCHITECTURE.md 1.5, 2.4, 2.6) is registered by `features/log` under the panel id
 `log` and appears as the last tool tab once it is visible. Nothing in the interface makes it

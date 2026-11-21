@@ -122,6 +122,15 @@ export function measuredName(name: string): string | null {
   return MEASURED_FONTS.find((font) => font.toLowerCase() === folded) ?? null;
 }
 
+/**
+ * The name the dialog starts with. A saved or imported name (sim68K.dat may carry any outputFont,
+ * E4) is shown selected when it is a measured font in another spelling of case; one outside the
+ * list selects nothing, and OK stays disabled until a listed font is chosen (Cancel keeps it).
+ */
+export function initialFontName(target: FontTargetKind, name: string): string {
+  return target === 'printer' ? name : (measuredName(name) ?? name);
+}
+
 /** A plain font of the settings, as FontSpec. */
 export function plainSpec(font: { name: string; size: number }): FontSpec {
   return { name: font.name, size: font.size, bold: false, italic: false, underline: false, strikeOut: false };

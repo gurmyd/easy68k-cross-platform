@@ -64,7 +64,7 @@ code changes; the cache is named `easy68k-v-<version>`.
 
 Anything that is not a GET for a file of the list under the scope: `sw.js` itself, source maps,
 `https://api.github.com` (the update check of the About box, 7.5), other origins. A navigation to
-the scope itself (`/easy68k-mac/`, with any query such as `?open=` or `?example=`) is answered with
+the scope itself (`/easy68k-cross-platform/`, with any query such as `?open=` or `?example=`) is answered with
 `index.html`. URL paths are compared with percent-escapes decoded, so `Quick Reference.htm` and
 `Quick%20Reference.htm` are the same file. Range requests get the whole file (only `fetch()` reads
 the shipped `.wav` examples; the Output panel plays programs' sounds from `blob:` URLs).
@@ -102,7 +102,7 @@ launch queue would open an empty window for every double-clicked file. Left for 
 
 ## 7. pages.yml details
 
-- The base path comes from `actions/configure-pages` (`base_path`, `/easy68k-mac` for the project
+- The base path comes from `actions/configure-pages` (`base_path`, `/easy68k-cross-platform` for the project
   site, empty for a user site) plus `/`, as `EASY68K_BASE`; O-14's "nothing is hard-coded" holds
   for forks too.
 - The build job needs `pages: read` (configure-pages reads the site's settings) besides `contents:
@@ -110,7 +110,7 @@ launch queue would open an empty window for every double-clicked file. Left for 
 - It refuses to deploy unless `engines.yml` reports both engines: the previous deployment stays
   online rather than being replaced by a site that cannot assemble.
 - Trying the build step by hand in Git Bash on Windows needs `MSYS_NO_PATHCONV=1`: MSYS rewrites
-  `EASY68K_BASE=/easy68k-mac/` into `C:/Program Files/Git/easy68k-mac/` otherwise (noted in the
+  `EASY68K_BASE=/easy68k-cross-platform/` into `C:/Program Files/Git/easy68k-cross-platform/` otherwise (noted in the
   header of `pages.yml`; `check-pwa.mjs` passes the variable itself and is not affected).
 - Actions pinned by commit like ci.yml: `actions/configure-pages` v6.0.0
   (`45bfe0192ca1faeb007ade9deae92b16b8254a0d`), `actions/upload-pages-artifact` v5.0.0
@@ -153,3 +153,13 @@ was fixed would have ended without `sw.js` and without the manifest tags. `build
 it. `pwa-build.test.ts` "finishes a successful rebuild that follows a failed build (watch mode)"
 failed before the change (the second build's `index.html` had no service-worker meta tag) and
 passes after it. The project makes no watch builds today, so nothing a user sees changed.
+
+## 12. Gate I2 round 1: file handlers still waiting, now for one contract member
+
+Entry 6 stands, with a narrower reason. FS2 now has the step a launched file needs
+(`LinkedBackend.link(handle)` makes a `/linked/...` path that saves back), but `features/pwa` may not
+import `app/src/fs`, and no contract reaches it. Filed as `docs/requests/DV1-launch-files.md`
+(W1 first, then FS2, then DV1). X1's manifest test fails until then. The repository's new name
+(easy68k-cross-platform) is now used in `check-pwa.mjs` (the sub-path it serves under), the tests'
+example URLs, `sw.ts`'s comment and `pages.yml`'s comments; the build still takes the sub-path from
+`EASY68K_BASE` only.

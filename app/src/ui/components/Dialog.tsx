@@ -93,6 +93,11 @@ export interface DialogProps {
    * W2 entry 18).
    */
   onKeyDown?: (event: globalThis.KeyboardEvent) => void;
+  /**
+   * Where the button row sits: 'end' (default, at the right) or 'center' (the original's
+   * Assembler Status box). Added at gate I2 (errata W2 entry 21).
+   */
+  footerAlign?: 'end' | 'center';
 }
 
 // Remember pressed controls from the start, so the first dialog opened by a
@@ -196,6 +201,7 @@ export function Dialog({
   inline = false,
   className,
   onKeyDown: onOwnerKey,
+  footerAlign = 'end',
 }: DialogProps) {
   const titleId = useId();
   const [element, setElement] = useState<HTMLDivElement | null>(null);
@@ -260,6 +266,11 @@ export function Dialog({
     );
     if (!match) return;
     event.preventDefault();
+    // A group box's access key goes to the first control in the group, as in Windows (GroupBox).
+    if (match instanceof HTMLFieldSetElement) {
+      focusElement(tabbables(match)[0]);
+      return;
+    }
     focusElement(match);
     if (match instanceof HTMLButtonElement) match.click();
     else if (match instanceof HTMLInputElement && (match.type === 'checkbox' || match.type === 'radio')) match.click();
@@ -380,7 +391,11 @@ export function Dialog({
       </div>
       <LayerContext.Provider value={element}>
         <div className="e68-dialog__body">{children}</div>
-        {footer && <div className="e68-dialog__footer">{footer}</div>}
+        {footer && (
+          <div className="e68-dialog__footer" data-align={footerAlign === 'end' ? undefined : footerAlign}>
+            {footer}
+          </div>
+        )}
       </LayerContext.Provider>
     </div>
   );

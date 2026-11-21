@@ -35,6 +35,7 @@ import {
   type LogDeps,
   type LogDialogValues,
   type LogServiceApi,
+  type LogStartFailure,
   type LogState,
   type SimEngine,
   type VPath,
@@ -43,7 +44,7 @@ import { decode } from '../../codec/cp1252';
 import { dirname, isVPath, resolveLexically } from '../../paths/winpath';
 import { defaultLogFileNames, formatUsDateTime, outputLogHeader } from './format';
 
-export type { LogDeps, LogDialogValues, LogState } from '../../../contracts';
+export type { LogDeps, LogDialogValues, LogStartFailure, LogState } from '../../../contracts';
 
 /** A flush is due this long after the first byte that is not in storage yet (3.3.5). */
 export const FLUSH_INTERVAL_MS = 1000;
@@ -54,33 +55,21 @@ export const TAIL_NOTIFY_MS = 100;
 /** Bytes of each file kept in memory for the Log panel (2.6: the last 200 lines). */
 export const TAIL_BYTES = 256 * 1024;
 
-export type LogKind = 'exec' | 'output';
-
-/** Why the last Log Start left logging off for a file that could not be written. */
-export interface LogStartFailure {
-  kind: LogKind;
-  /** The name as the dialog shows it. */
-  fileName: string;
-}
-
-/** Members of the real service beyond `LogServiceApi`, read through the two functions below. */
-interface LogServiceExtras {
-  readonly startFailure?: LogStartFailure | null;
-  readonly writeError?: string | null;
-}
+export type LogKind = LogStartFailure['kind'];
 
 /**
  * Which file the last `start()` could not open, or null (it started, or the user cancelled). The
  * contract's `start()` resolves false for both; the Log Start command needs to know which, to show
- * the original's error box (sim-ui §13.3 step 4).
+ * the original's error box (sim-ui §13.3 step 4). The member is optional in the contract (errata
+ * W1.md): a service without it reports null.
  */
 export function logStartFailure(log: LogServiceApi): LogStartFailure | null {
-  return (log as LogServiceApi & LogServiceExtras).startFailure ?? null;
+  return log.startFailure ?? null;
 }
 
 /** The last failure of a flush, or null after a flush that succeeded (for the Log panel). */
 export function logWriteError(log: LogServiceApi): string | null {
-  return (log as LogServiceApi & LogServiceExtras).writeError ?? null;
+  return log.writeError ?? null;
 }
 
 function startupState(): LogState {

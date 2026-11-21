@@ -6,6 +6,8 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { OWN_KEYS_ATTRIBUTE, createKeyDispatcher, ownKeysSelector } from '../../commands/keymap';
+import { chordsOn } from '../../commands/specs';
 import { TabType, type AppContext, type EditorSettings, type FeatureModule, type Settings } from '../../contracts';
 import { COLOR1_STYLES, COLOR2_STYLES, DISABLED_STYLES, NO_COLOR_STYLES } from '../../core/highlight';
 import { DEFAULT_EDITOR_SETTINGS } from '../../core/settings/defaults';
@@ -17,6 +19,7 @@ import {
   ASSEMBLER_OPTIONS,
   BACKGROUND_ITEM,
   FONT_SIZES,
+  HELP_CHORD,
   INITIAL_COLORS_UI,
   NO_ITEM,
   SWATCHES,
@@ -30,6 +33,7 @@ import {
   clickSwatch,
   documentPatch,
   fontItemFor,
+  isHelpKey,
   needsSim68KQuestion,
   openingDraft,
   recheckRequired,
@@ -94,6 +98,34 @@ describe('Assembler Options: controls and texts (editor-ui §11.1)', () => {
       'Structured Expanded': false,
       'Macros Expanded': false,
     });
+  });
+
+  it('owns the Help key of every system, so the shell leaves F1 to the modeless dialog (E4-dialog-help-key.md)', () => {
+    for (const os of ['windows', 'mac', 'linux'] as const) {
+      expect(chordsOn('ed.help.help', os, false), os).toEqual([HELP_CHORD]);
+      const dispatcher = createKeyDispatcher({
+        os,
+        desktop: false,
+        mode: () => 'editor',
+        keyCommandsEnabled: () => true,
+        isModalOpen: () => false,
+        commands: { isEnabled: () => true, run: async () => {} },
+        openMenu: () => false,
+        editTextField: () => {},
+      });
+      const key = { key: 'F1', code: 'F1', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false };
+      expect(isHelpKey(key)).toBe(true);
+      // A check box inside the box marked data-e68-own-keys="F1", as AssemblerOptionsDialog marks it.
+      const insideDialog = {
+        tagName: 'INPUT',
+        type: 'checkbox',
+        isContentEditable: false,
+        closest: (selector: string) => (selector === ownKeysSelector(HELP_CHORD) ? {} : null),
+      };
+      const event = { ...key, target: insideDialog, preventDefault: () => {}, stopPropagation: () => {} };
+      expect(dispatcher.handle(event), os).toEqual({ kind: 'owned' });
+    }
+    expect(OWN_KEYS_ATTRIBUTE).toBe('data-e68-own-keys');
   });
 
   it('the Sim68K question text, title, icon and buttons', () => {
@@ -179,6 +211,17 @@ describe('Editor Options, General tab (editor-ui §11.2)', () => {
       tabType: TabType.Fixed,
       tabSize: 12,
     });
+  });
+
+  it("OK always makes the boxes' font and size the defaults, even untouched and over another window's change", () => {
+    // editorOptions.cpp:66-118 applies cbFont and cbSize on every OK; the boxes open on the active
+    // document's font (note 8), so they are part of the draft from the start (errata E4 entries 7, 8).
+    const otherWindow = { editor: { ...live(), fontName: 'Fixedsys', fontSize: 18 } };
+    const after = applyEditorDraft(otherWindow, openingDraft(DOC));
+    expect([after.editor.fontName, after.editor.fontSize]).toEqual(['Courier New', 11]);
+    // Settings the dialog did not touch keep the other window's value.
+    const tabs = applyEditorDraft({ editor: { ...live(), fixedTabSize: 9 } }, openingDraft(DOC));
+    expect(tabs.editor.fixedTabSize).toBe(9);
   });
 });
 

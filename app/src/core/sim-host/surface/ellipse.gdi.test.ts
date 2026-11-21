@@ -118,7 +118,7 @@ function compareWideDirect(): Result[] {
 }
 
 /** The measured figures of the suites without a pass threshold (docs/porting/gdi-deviations.md). */
-const BASELINE = { wideEqualSurface: 361, wideEqualWithMode: 496 } as const;
+const BASELINE = { wideEqualSurface: 496, wideEqualWithMode: 496 } as const;
 
 describe('ellipses against the GDI capture (6.5.2)', () => {
   it('every box size from 1 x 1 to 64 x 64, filled and unfilled, one-pixel pen: every pixel equal', () => {

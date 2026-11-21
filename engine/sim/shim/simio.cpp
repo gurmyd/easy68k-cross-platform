@@ -323,7 +323,7 @@ static struct {
   int dialog; // 0 = open, 1 = save
 } fileDialog;
 // The FileName properties of the two dialog components.  They persist between
-// calls, and the original reads OpenDialogIO->FileName in the save case too.
+// calls.
 static AnsiString OpenDialogIO_FileName, SaveDialogIO_FileName;
 
 void TsimIO::displayFileDialog(long *mode, int A1, int A2, int A3, short *result) {
@@ -374,7 +374,10 @@ void TsimIO::displayFileDialog(long *mode, int A1, int A2, int A3, short *result
       if (path[0] != '\0') // if file path present
         SaveDialogIO_FileName = AnsiString(path);
       else
-        OpenDialogIO_FileName = ""; // (sic: the original clears the OPEN dialog's name here)
+        // The original clears the OPEN dialog's name here (simIOu.cpp:541), so
+        // the Save dialog showed its name from the previous use.  Not
+        // reproduced (ARCHITECTURE.md 3.8.4; PATCHES.md section 5).
+        SaveDialogIO_FileName = "";
       fileDialog.dialog = 1;
       easy68k_host_request_pending = true;
       host_file_dialog(1, title, filter.c_str(), SaveDialogIO_FileName.c_str()); // SaveDialogIO->Execute()
@@ -394,7 +397,10 @@ void TsimIO::fileDialogReply(bool accepted, const char *chosen) {
     // Execute() returned true: the dialog's FileName is the chosen file.
     AnsiString &dialogFileName = (fileDialog.dialog == 0) ? OpenDialogIO_FileName : SaveDialogIO_FileName;
     dialogFileName = AnsiString(chosen ? chosen : "");
-    fileName = OpenDialogIO_FileName; // get filename (sic, also for the save dialog)
+    // The original measures OpenDialogIO->FileName here in the save case too
+    // (simIOu.cpp:544), so the overflow test used the wrong name.  Not
+    // reproduced (ARCHITECTURE.md 3.8.4; PATCHES.md section 5).
+    fileName = dialogFileName; // get filename
     int nameLength = fileName.Length();
     if (nameLength > 255) // limit length
       nameLength = 255;

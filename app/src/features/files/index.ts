@@ -22,8 +22,8 @@ import { FileDialog } from './FileDialog';
 import { FilesPanel } from './FilesPanel';
 import { NameDialog } from './NameDialog';
 import { EDITOR_OPEN_FILTERS, normalizeDefaultExt } from './filters';
-import { NATIVE_PROVIDER_ID, UPLOAD_PROVIDER_ID, canTakeDroppedFolder } from './providers';
-import { requestReveal, revealPathOf } from './reveal';
+import { NATIVE_PROVIDER_ID, UPLOAD_PROVIDER_ID, canTakeDroppedFolder, markImportingUpload } from './providers';
+import { forgetPendingReveal, requestReveal, revealPathOf } from './reveal';
 import { IMPORTED_DIR, displayPath, importOne } from './store';
 
 /**
@@ -41,7 +41,9 @@ export function createNativeProvider(ctx: AppContext): FileSourceProvider | null
     // The openers may pass the original's malformed '*.X68' (contracts/fs.ts SaveRequest.defaultExt);
     // the native dialog is given the plain extension, '.X68' (errata/FS1.md entry 9).
     save: (request) => native.save({ ...request, defaultExt: normalizeDefaultExt(request.defaultExt) }),
-    chooseFolder: (request: FolderRequest) => native.chooseFolder(request.title),
+    // FolderRequest.startDir reaches the native dialog (contracts/platform.ts, second argument).
+    chooseFolder: (request: FolderRequest) =>
+      request.startDir ? native.chooseFolder(request.title, request.startDir) : native.chooseFolder(request.title),
   };
 }
 
@@ -66,7 +68,7 @@ function askReplace(ctx: AppContext, title: string) {
 
 /** "From this computer...": <input type="file">, the chosen files copied into /browser/Imported (3.8.1). */
 export function createUploadProvider(ctx: AppContext): FileSourceProvider {
-  return {
+  return markImportingUpload({
     id: UPLOAD_PROVIDER_ID,
     label: 'From this computer...',
     available: () => hasDom() && ctx.vfs.backends().some((backend) => backend.mount === 'browser'),
@@ -82,7 +84,7 @@ export function createUploadProvider(ctx: AppContext): FileSourceProvider {
         return paths.length > 0 ? paths : null;
       });
     },
-  };
+  });
 }
 
 /**
@@ -108,10 +110,23 @@ export function dropDeps(ctx: AppContext): DropDeps {
     toast: (text) => ctx.dialogs.toast(text),
     importFile: (name, data) => importOne(ctx.vfs, IMPORTED_DIR, name, data, askReplace(ctx, 'Drop')),
     openDocument: (path) => ctx.documents.open(path),
-    openProgram: (path) => ctx.sim.controller.open(path, 'drop'),
+    openProgram: (path, confirmed) =>
+      confirmed ? ctx.sim.controller.open(path, 'drop', { confirmed: true }) : ctx.sim.controller.open(path, 'drop'),
+    ...confirmLoadDep(ctx),
     folderProviders: () => (service ? service.registry.available().filter(canTakeDroppedFolder) : []),
     ...desktopDropDeps(ctx),
   };
+}
+
+/**
+ * RunController.confirmLoad (contracts/run.ts, docs/requests/W1-load-confirm.md item 2): the drop
+ * asks `Caution` before it copies a dropped .S68, as the original asks before it loads. Absent for
+ * a controller without confirmLoad; the drop then keeps the older order (copy, then open asks).
+ */
+function confirmLoadDep(ctx: AppContext): Pick<DropDeps, 'confirmLoad'> {
+  const controller = ctx.sim.controller;
+  if (typeof controller.confirmLoad !== 'function') return {};
+  return { confirmLoad: () => controller.confirmLoad?.('drop') ?? Promise.resolve(true) };
 }
 
 /** The desktop app: dropped files are opened where they are on the disk (DV2 errata 4a). */
@@ -177,6 +192,7 @@ export const feature: FeatureModule = {
       run: (ctx, arg) => {
         const reveal = revealPathOf(arg);
         if (reveal === null) {
+          forgetPendingReveal(ctx); // the user's own toggle supersedes a reveal still waiting
           togglePanel(ctx, 'files');
           return;
         }

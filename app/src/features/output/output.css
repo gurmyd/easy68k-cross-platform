@@ -70,6 +70,12 @@
   overflow: auto;
 }
 
+/* The picture's scroll region itself has the focus (keyboard scrolling, not the program's keys). */
+.e68-output__viewport:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}
+
 /* The panel has the keyboard: every key goes to the program (2.9.4). */
 .e68-output[data-keys='true'] .e68-output__viewport {
   outline: var(--focus-ring);

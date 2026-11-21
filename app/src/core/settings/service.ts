@@ -470,6 +470,8 @@ export function createSettingsService(
 ): SettingsStore {
   const now = options.now ?? (() => storage.now?.() ?? 0);
   const writerId = options.writerId ?? randomWriterId();
+  /** When this window opened, by the clock of the stamps. */
+  const openedAt = now();
   const listeners = new Set<() => void>();
 
   /**
@@ -490,13 +492,39 @@ export function createSettingsService(
    */
   const outsideWrites = new Map<string, number>();
 
-  /** Raises the counts of outside writes to the writers named in `stamps`. */
+  /**
+   * How many writes of each outside text (by the writer of its first write) this window has seen
+   * itself: taken in from an event or from its copy, or, for the writes made before it opened, the
+   * count it found then. A write another window has already told it of (its mark is in a stamped
+   * document this window absorbed, so `outsideWrites` is ahead) is still delivered to this window
+   * later, as an event or in its copy; that delivery is the same write and is not taken in again
+   * (errata W3.md entry 39). Without this, a window whose read ran ahead of its pending events (two
+   * Chromium pages of one process share one storage cache) counted the write a second time, with
+   * a stamp later than a change the user had made since, and that change was lost.
+   */
+  const seenOutsideWrites = new Map<string, number>();
+
+  /**
+   * Raises the counts of outside writes to the writers named in `stamps`. A write first taken in
+   * before this window opened (its stamp is older) also counts as seen by this window: it was not
+   * open for that write, whose event therefore never comes (`seenOutsideWrites`).
+   */
   const noteOutsideWriters = (stamps: Stamps) => {
-    for (const [, writer] of stamps.values()) {
+    for (const [time, writer] of stamps.values()) {
       const parts = outsideGeneration(writer);
-      if (parts !== undefined)
-        outsideWrites.set(parts.base, Math.max(outsideWrites.get(parts.base) ?? 0, parts.generation));
+      if (parts === undefined) continue;
+      outsideWrites.set(parts.base, Math.max(outsideWrites.get(parts.base) ?? 0, parts.generation));
+      if (time < openedAt)
+        seenOutsideWrites.set(parts.base, Math.max(seenOutsideWrites.get(parts.base) ?? 0, parts.generation));
     }
+  };
+
+  /** True when `text`, a document without stamps, is a write this window already knows of. */
+  const alreadyKnownOutsideWrite = (text: string): boolean => {
+    const base = outsideWriter(text);
+    const seen = (seenOutsideWrites.get(base) ?? 0) + 1;
+    seenOutsideWrites.set(base, seen);
+    return (outsideWrites.get(base) ?? 0) >= seen;
   };
 
   /** Counts one more write of the outside text `text` and returns its writer. */
@@ -549,6 +577,8 @@ export function createSettingsService(
     stamps.set(outsideMarkPath(writer), [Math.max(now(), 1), writer]);
     known = { document: known.document, stamps };
   }
+  // The writes made before this window opened count as seen by it: their events never come.
+  for (const [base, count] of outsideWrites) seenOutsideWrites.set(base, count);
   /** The highest version number seen in storage; written back unchanged. */
   let storedVersion = first.storedVersion;
   /** This window's own panel layout. */
@@ -656,7 +686,7 @@ export function createSettingsService(
     lastText = text;
     const parsed = parseSettings(text);
     if (parsed.unstamped && text !== null) {
-      replaceWith(parsed, text);
+      if (!alreadyKnownOutsideWrite(text)) replaceWith(parsed, text);
       return false;
     }
     return absorb(parsed);

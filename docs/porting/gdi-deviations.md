@@ -11,9 +11,11 @@ GDI here was measured on Windows 11 (10.0.26300, 96 DPI), the machine of T2's re
 |---|---|---|---|---|
 | Ellipses, every box 1 x 1 to 64 x 64, one-pixel pen, filled (mode 6) and unfilled (XOR) | suite `ellipses`, `ellipse.gdi.test.ts` | 8,192 | **8,192** | 0 pixels |
 | Ellipses, random boxes with sides 65 to 1,200, one-pixel pen, filled, Copy | suite `ellipses-large`, `ellipse.gdi.test.ts` | 3,000 | **3,000** | 0 pixels |
-| Ellipses, pen widths 2 to 8, random boxes 1 to 100, filled and unfilled, Copy and XOR, through the Surface as it is today | suite `ellipses-wide`, `ellipse.gdi.test.ts` | 500 | 361 | 14 pixels (`ellipses-wide-00152`) |
-| the same, with the drawing mode passed to `rasterEllipse` (request `docs/requests/SH2-ellipse-mode.md`) | same test, second figure | 500 | **496** | 3 pixels (`ellipses-wide-00125`) |
+| Ellipses, pen widths 2 to 8, random boxes 1 to 100, filled and unfilled, Copy and XOR, through the Surface (which passes the drawing mode since gate I2, `docs/requests/SH2-ellipse-mode.md`) | suite `ellipses-wide`, `ellipse.gdi.test.ts` | 500 | **496** | 3 pixels (`ellipses-wide-00125`) |
+| the same, calling `rasterEllipse` directly with the mode | same test, second figure | 500 | **496** | 3 pixels (`ellipses-wide-00125`) |
 | Wide lines, widths 2-14 | T2's suite `widelines`, `tests/conformance/gdi/surface.test.ts` | 2,000 | **2,000** | 0 |
+| Pen nibs, widths 2-255, every vertex | T2's `nibs.test.ts` (golden `nibs.json`, `gdi-capture nibs`) | 254 | **254** | 0 |
+| Widened paths of the tie directions of gate I2 (WidenPath), every vertex | `widepen.test.ts` | 11 | **11** | 0 |
 | Wide lines in task 85/86 chains | T2's `polylines` | 56 | **56** | 0 |
 | Wide lines in the 16 drawing modes | T2's `modes` | 48 | **48** | 0 |
 | Wide lines across the edges, 16-bit extremes | T2's `clip` | 17 | **17** | 0 |
@@ -21,7 +23,7 @@ GDI here was measured on Windows 11 (10.0.26300, 96 DPI), the machine of T2's re
 | One-pixel ellipses in the 16 drawing modes | T2's `modes` | 96 | **96** | 0 |
 | One-pixel ellipses across the edges, 16-bit extremes, the 32768 sum rule | T2's `clip` | 93 | **93** | 0 |
 | One-point ellipses, widths 2-255 | T2's `pens` | 254 | **254** | 0 |
-| Wide-pen ellipses across the edges | T2's `clip` | 30 | 27 (30 with the request) | 4 pixels (`clip-00202`) |
+| Wide-pen ellipses across the edges | T2's `clip` | 30 | **30** | 0 |
 
 6.5.2's thresholds: the 8,192 small boxes every pixel equal - met; the 3,000 large boxes at least
 95 % every pixel equal and none beyond 0.5 % of its outline - met with 100 %; the wide-pen
@@ -35,28 +37,42 @@ against GDI's own flattening (FlattenPath, below): equal.
 
 ## 2. The deviations that remain
 
-1. **Filled wide-pen ellipses in Copy mode, through the Surface, until SH1 passes the mode.** GDI
-   draws a filled ellipse with a pen 2 or more wide in `R2_COPYPEN` from the flattened polygon,
-   and in every other case from the curve (section 3, step 6). The Surface does not tell
-   `rasterEllipse` the mode yet, so it always takes the curve. Effect: 1 to 14 pixels per such
-   ellipse, all within one pen width of the four points where the ellipse meets its box. Cured by
-   the one-line change of `docs/requests/SH2-ellipse-mode.md`.
-2. **Very flat or very narrow filled wide-pen ellipses in Copy**, with the mode passed: the box is
-   3 to 5 pixels in one direction (one of 11), widths 3-6. In the suite: four of the 500
-   (`ellipses-wide-00125`, `-00158`, `-00195`, `-00428`). The port draws 1 to 3 pen pixels more
-   than GDI, each one pixel outside GDI's outline at one of the two narrow ends (for example
-   `ellipses-wide-00195`, pen 3, box 3 x 75: the pixels one above the box's top centre and one
-   below its bottom centre). At those ends the flattened polygon turns by nearly 180 degrees
-   between two very short segments, and GDI's choice of the join there is not modelled exactly.
-   The verification of SH2 found the same kind outside the suite: Copy, filled, box 8,8-58,12
-   pen 6 (3 pixels); box 8,8-33,12 pen 3 in mode 158, which behaves as Copy (2 pixels); box
-   10,41-14,111 pen 6 (2 pixels).
-3. **Pens much wider than a narrow box, filled, Copy**, with the mode passed: 4 of 200 random
+Until gate I2 the Surface did not tell `rasterEllipse` the drawing mode, so filled wide-pen
+ellipses in Copy were widened from the curve instead of the flattened polygon (1 to 14 pixels each;
+`ellipses-wide` 361 of 500, T2's `clip-00202`, `-00217`, `-00230`). SH1 applied
+`docs/requests/SH2-ellipse-mode.md` at gate I2; that deviation is gone. The ones below remain, all
+with the mode passed, all through the real Surface.
+
+1. **Filled wide-pen ellipses in Copy whose box has an odd side of 3 to 11 pixels** (the polygon
+   path of section 3 step 6), pens 2-8. Systematic family of the second verification of SH2,
+   `v2-small-copy-f` (every box 1-12 x 1-12, pens 2-8): 889 of 1,008 equal; the 119 that differ
+   differ by 1 to 4 pixels, by pen 2: 2, 3: 19, 4: 46, 6: 46, 8: 6, and by the smaller side of the
+   box 2: 8, 3: 55, 5: 30, 7: 18, 9: 8. Examples: 3 x 3 pen 6 (4 pixels), 3 x 11 pen 2 (box 4,4-6,14:
+   the port adds the pixel one above the top centre), 7 x 10 and 12 x 9 pens 4 and 6 (1 pixel), 2 x 8
+   to 2 x 12 pen 8 (1 pixel). In the suite: four of the 500 (`ellipses-wide-00125`, `-00158`,
+   `-00195`, `-00428`; for example `ellipses-wide-00195`, pen 3, box 3 x 75: the pixels one above the
+   box's top centre and one below its bottom centre). The port draws 1 to 3 pen pixels more than
+   GDI, at one of the narrow ends, where the flattened polygon turns by nearly 180 degrees between
+   two very short segments; GDI's choice of the join there is not modelled exactly. Also found by
+   the first verification: box 8,8-58,12 pen 6 (3 pixels); box 8,8-33,12 pen 3 in mode 158, which
+   behaves as Copy (2 pixels); box 10,41-14,111 pen 6 (2 pixels). The same boxes unfilled are equal
+   except the tiny ones of item 4 (`v2-small-copy-u`: 999 of 1,008; the 9 are all boxes of item 4).
+2. **Mid-size pens, Copy** (second verification, family `v2-midpen`, pens 9-40 on boxes 13-120,
+   Copy and XOR, filled and unfilled): 296 of 300 equal. `v2-midpen-02336`, unfilled, box
+   37,37-134,67, pen 35: 4 pixels; `-02361` (box 41,41-104,70), `-02363` (41,41-97,64) and `-02600`
+   (41,41-149,62), filled, pen 39: 2 pixels each. (`-02382`, unfilled, box 25,25-37,98, pen 23,
+   which the verification listed, is equal since the tie rule of gate I2, section 3 step 5.)
+   Student-like boxes on a 320 x 240 surface (family `v2-student`, boxes 20-300 partly off the
+   surface, pens 2-30, eight modes): 298 of 300 equal; `v2-student-02027`, filled Copy
+   15,25-35,323, pen 6: 1 pixel (row 22, above the top); `-02034`, filled Copy 161,-18-208,153,
+   pen 25: 1 pixel.
+3. **Pens much wider than a narrow box, filled, Copy**: 3 of 200 random
    cases with widths 9-80 (verification of SH2, family `wide-big`): box 42,42-54,84 (13 x 43) pen
-   79, 16 pixels; box 39,39-55,174 (17 x 136) pen 73, 12 pixels; box 13,13-76,113 pen 21, 6
-   pixels; box 22,22-34,115 (13 x 94) pen 39, 4 pixels. The pen is wider than the box, the inner
-   side of the widened polygon folds over itself near the narrow ends, and the pixels differ there
-   (both more and fewer than GDI). The other 196 are equal.
+   79, 16 pixels; box 39,39-55,174 (17 x 136) pen 73, 12 pixels; box 22,22-34,115 (13 x 94) pen
+   39, 4 pixels. The pen is wider than the box, the inner side of the widened polygon folds over
+   itself near the narrow ends, and the pixels differ there (both more and fewer than GDI). The
+   other 197 are equal (box 13,13-76,113 pen 21, 6 pixels before, is equal since the tie rule of
+   gate I2).
 4. **Tiny boxes, 2 to 4 pixels with one side of 2 or 3, pens 3-20, every mode, filled and
    unfilled.** Each quarter of these boxes flattens to one segment, so the polygon is a diamond.
    Of the 285 boxes 1-4 x 1-4 (1 x 1 left out) with pens 2-20 in XOR (verification of SH2, family
@@ -75,12 +91,26 @@ against GDI's own flattening (FlattenPath, below): equal.
    100 one-to-three-point boxes; the four ends are now joined as two lines are
    (section 3, step 6), and `ellipse.test.ts` holds five of those GDI pictures.
 
-These are all the differences known. The verification's probes, with the mode passed and
-re-run after the repair: wide lines 15-255 (400), wide lines 2-14 across the edges (300), wide
-lines in task 85/86 chains (100), one-pixel ellipses of sides 1,201-60,000 (300), large one-pixel
-ellipses in other modes (300), across the edges (300), the 32/64-bit cracker boundary (63), the
-largest boxes (8), wide pens on huge boxes (40) and the 32768 sum rule (4): all equal. Not
-measured, and therefore not claimed: pen widths 9-255 on ellipses beyond these random samples.
+Wide lines have no remaining deviation that was measured. Before gate I2 they had one: a tie
+between two guide vertices of which one lies on the x axis went by the sign of dx, and GDI takes
+it by the sign of dy (section 3 step 5). It showed in the quadrants dx * dy < 0, for example width 2
+towards (-1,2) (1 pixel: task 84 from 32,32 to 31,34 drew (30,34) too), width 9 and 12 towards
+(-7,17) (14 and 15 pixels), width 7 towards (-16,39), width 11 towards (-13,31), and widths 16, 21,
+24, 29 and 37 towards (-2,10). Measured after the repair against GDI's own LineTo pixels, from
+(50,50) in Copy: every primitive direction (dx, dy coprime) in -40..40 for widths 2-14 (50,960
+lines), in -20..20 for widths 15-40 (26,624 lines) and in -10..10 for widths 41-255 (55,040 lines); and every
+direction in -40..40 that has a tie, widths 2-255 (1,420 lines): all equal. `widepen.test.ts`
+holds the eleven widened paths of these directions that T2's capture records.
+
+The scope of these figures, which is all that is claimed: the suites of section 1; the
+verifications' families named above; and the first verification's probes, re-run with the mode
+passed: wide lines 15-255 (400), wide lines 2-14 across the edges (300), wide lines in task 85/86
+chains (100), one-pixel ellipses of sides 1,201-60,000 (300), large one-pixel ellipses in other
+modes (300), across the edges (300), the 32/64-bit cracker boundary (63), the largest boxes (8),
+wide pens on huge boxes (40) and the 32768 sum rule (4): all equal; the second verification's
+`v2-multi` (100), `v2-large-wide` (200) and `v2-wline` (300): all equal. Not measured, and
+therefore not claimed: wide-pen ellipses beyond these samples; other deviations of the kinds
+above may exist outside them.
 
 ## 3. What GDI does, as the port reproduces it (a reader can check each step)
 
@@ -118,11 +148,15 @@ y1..y2, both corners included.
    **A line** P0 -> P1 becomes the polygon: P0 + offset(left), the nib vertices between left and
    right round the back of P0, P0 + offset(right), P1 + offset(right), the nib vertices round the
    front of P1, P1 + offset(left); left and right are the guide vertices furthest towards the
-   screen-left and screen-right of the direction (a tie between two goes to the later one in angle
-   order when dx > 0, or dx = 0 and dy > 0); a point counts as a line in +x. The polygon is filled
-   by the rule of step 4 (nonzero winding). Check: WidenPath + GetPath of the line equals this
-   polygon for 91,440 of 91,440 directions and widths measured, and its fill equals what LineTo
-   draws.
+   screen-left and screen-right of the direction; a tie between two goes to the later one in angle
+   order when one of the two nib vertices lies on the x axis (nib y = 0) and dy > 0, and otherwise
+   when dx > 0, or dx = 0 and dy > 0; a point counts as a line in +x. The polygon is filled by the
+   rule of step 4 (nonzero winding). Check: WidenPath + GetPath of a line of width 2 towards (-1, 2)
+   pixels is `(8,16) (15,0) (7,-15) (-8,-16) (-24,16) (-31,32) (-23,47) (-8,48)`: the tie between the
+   guide vertices (16,0) and (8,16) went to the later one, (8,16), although dx < 0. The fill of
+   this polygon equals what LineTo draws for every line of the sweeps in section 2 (the rule of the
+   x axis was found at gate I2: before it, the claim here of "91,440 of 91,440 directions" was
+   wrong for the directions listed there, which that sample did not contain).
 6. **Wide-pen ellipses.** The polygon of step 2 is widened as a closed figure: each segment moved
    by its offsets, the outer side of each vertex going round the guide vertices between the two
    segments' offsets, the inner side passing through the vertex. Where GDI widens the curve itself
@@ -147,14 +181,20 @@ y1..y2, both corners included.
   with the world transform scale 1/16, under which GetPath, FlattenPath and WidenPath return 28.4
   device coordinates unrounded. A pen of width 16w under that transform draws exactly what a pen of
   width w draws without it (checked on 65 lines). The nib of each width 2-255 is the union of the
-  cap vertices of 360 widened lines per width. The nib capture is not yet part of the committed
-  capture program (`docs/requests/SH2-gdi-nibs.md`).
+  cap vertices of 360 widened lines per width. Since gate I2 the committed capture program does
+  the same (`gdi-capture nibs`, T2, `docs/requests/SH2-gdi-nibs.md`): it writes
+  `tests/conformance/gdi/golden/nibs.json` with every nib and the widened paths of the tie
+  directions, and T2's `tests/conformance/gdi/nibs.test.ts` holds `tables/pens.ts` to it (254 of
+  254 equal).
+- The wide-line sweeps of section 2 drew each line with LineTo in a memory DC (the same scratch
+  probe) and compared every pixel with `strokeWideLine`.
 - Checks besides the suites, made with the same probe: 7,096 boxes' curves (GetPath);
   300 large and 51 boundary boxes' flattening; 400 large boxes' pixels; 410 random wide lines (the
   fill of GDI's own widened path equals what GDI draws); 600 wide-pen ellipses in Copy, XOR and MergePenNot (585 equal, section 2); 300 wide-pen
   ellipses' widened paths (300 equal fills).
-- The verification of SH2 (round 1) captured its own cases with T2's capture program (families
-  named in section 2); the figures there are from replaying those captures on the repaired code.
+- The verifications of SH2 (rounds 1 and 2) captured their own cases with T2's capture program
+  (families named in section 2); the figures there are from replaying those captures through the
+  Surface of gate I2.
 
 ## 5. Size of the tables
 

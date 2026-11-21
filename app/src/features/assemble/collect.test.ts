@@ -16,6 +16,7 @@ import {
   operandName,
   pathOfKey,
   scanIncludeNames,
+  win32Name,
 } from './collect';
 
 async function vfsWith(files: Record<string, string>): Promise<Vfs> {
@@ -24,6 +25,28 @@ async function vfsWith(files: Record<string, string>): Promise<Vfs> {
   for (const [path, text] of Object.entries(files)) await vfs.writeFile(path, bytesOf(text));
   return vfs;
 }
+
+describe('win32Name: the name as Win32 and the engine file layer open it', () => {
+  it('drops trailing dots and spaces of every component and keeps `.` and `..`', () => {
+    expect(win32Name('lib.x68.')).toBe('lib.x68');
+    expect(win32Name('lib.x68 . ')).toBe('lib.x68');
+    expect(win32Name('..\\Lib. /four.x68')).toBe('..\\Lib\\four.x68');
+    expect(win32Name('q\\..\\.\\lib.x68')).toBe('q\\..\\.\\lib.x68');
+    expect(win32Name('a\\\\b')).toBe('a\\b');
+  });
+  it('keeps what Vfs.resolve refuses refused: rooted names, drive letters, nothing left', () => {
+    expect(win32Name('\\lib.x68')).toBe('\\lib.x68');
+    expect(win32Name('C:\\lib.x68')).toBe('C:\\lib.x68');
+    expect(win32Name('. .')).toBe('');
+  });
+  it('collectFiles finds `lib.x68.` and a name with `..` after a folder that does not exist', async () => {
+    const vfs = await vfsWith({ '/browser/p/lib.x68': ' NOP\r\n', '/browser/top.x68': ' NOP\r\n' });
+    const main = bytesOf("    INCLUDE 'lib.x68.'\r\n    INCLUDE '..\\nothere\\..\\top.x68 '\r\n");
+    const collected = await collectFiles(vfs, '/browser/p/main.x68', main);
+    expect([...collected.files.keys()]).toEqual(['p/main.x68', 'p/lib.x68', 'top.x68']);
+    expect(collected.includes).toEqual(['/browser/p/lib.x68', '/browser/top.x68']);
+  });
+});
 
 describe('operandName (assembler §3.4.1)', () => {
   it('single quotes keep the case, double quotes and no quotes upper-case', () => {

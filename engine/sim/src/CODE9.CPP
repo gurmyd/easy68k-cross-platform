@@ -740,6 +740,9 @@ int TRAP()
         // the original stores the 0 up to 32768 bytes below buf (PATCHES.md)
         else if ((short)D[1] >= 0)
           buf[(short)D[1]] = '\0';      // terminate at D1 char
+        // [easy68k-mac] and for D1.W = $8000-$FFFF the string ends at char 255
+        // explicitly, not at whatever the compiler left in buf (PATCHES.md P24)
+        else buf[255] = '\0';
         // check memory map
         code = memoryMapCheck(Invalid, (A[1] & ADDRMASK), strlen(inStr));
         if (code == BUS_ERROR)        // if bus error caused by memory map

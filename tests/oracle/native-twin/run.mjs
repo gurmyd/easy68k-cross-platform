@@ -17,7 +17,7 @@
 // Writes build/native-twin/report.md (and appends a summary to $GITHUB_STEP_SUMMARY in CI). Exit
 // code 1 on any difference, build failure or baseline change.
 //
-// Part of easy68k-mac, an unofficial port of EASy68K. GPL-2.0-or-later.
+// Part of easy68k-cross-platform, an unofficial port of EASy68K. GPL-2.0-or-later.
 
 import { spawnSync } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -27,7 +27,7 @@ import { analyseFile, compareWithBaseline, readBaseline } from '../../conformanc
 import { ensureSuite, presentFiles } from '../../conformance/cpu/fetch-suite.mjs';
 import { readSuiteFile, scriptFor } from '../../conformance/cpu/singlestep.mjs';
 import { ASM_TWIN_VARIANTS, asmTwinPath, buildAsmTwin } from './build-asm-twins.mjs';
-import { SIM_TWIN_VARIANTS, buildSimTwin, simTwinPath } from './build-sim-twin.mjs';
+import { SIM_TWIN_VARIANTS, buildSimTwin, simTwinPath, simTwinState } from './build-sim-twin.mjs';
 import { compareAsm } from './compare-asm.mjs';
 import { compareSim } from './compare-sim.mjs';
 import { findVcvars32 } from './msvc.mjs';
@@ -63,7 +63,10 @@ async function main() {
   // ---- build ------------------------------------------------------------------------------
   log(`MSVC: ${findVcvars32()}`);
   for (const v of SIM_TWIN_VARIANTS) {
-    if (has('--skip-build') && existsSync(simTwinPath(v))) continue;
+    // --skip-build keeps only a twin built from today's sources; a stale one is rebuilt
+    const state = has('--skip-build') ? simTwinState(v) : 'missing';
+    if (state === 'current') continue;
+    if (state === 'stale') log(`sim-${v} was built from other sources than today's; rebuilding it`);
     try {
       log(`built ${await buildSimTwin(v)}`);
     } catch (error) {

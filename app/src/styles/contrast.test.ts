@@ -87,6 +87,9 @@ describe('tokens.css', () => {
       '--h-status': '22px',
       '--focus-ring': '2px solid var(--c-accent)',
       '--focus-offset': '1px',
+      // Additions (errata W2 entry 25): the same 2 px accent ring, drawn inside a panel.
+      '--focus-ring-inset': 'inset 0 0 0 2px var(--c-accent)',
+      '--focus-offset-inset': '-2px',
       '--z-panel': '1',
       '--z-modeless': '20',
       '--z-modal': '30',

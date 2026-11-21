@@ -39,7 +39,25 @@ owners" name a defect or a question that is not SH6's to change.
    (the editor, the Files panel, another window) replaces the cached bytes unless the program
    changed the file after the change was reported and before its bytes were read; then the
    program's bytes win and are written over it. `revalidate()` keeps a file the program has changed
-   and not written yet. Nothing is merged.
+   and not written yet. Nothing is merged. Since gate I2 "written over it" means the whole file:
+   when storage changed under a file the program has changed, the next write replaces the file
+   instead of appending to it (the review found storage left with `WXYZabc`, bytes of both
+   versions). A file whose write failed keeps what the view knew storage held, so a later removal
+   still reaches storage.
+
+5a. **Changes by others are read whole (gate I2, U4's note).** The `Vfs` has no ranged read and a
+    `VfsChange` does not say what changed, so every change another part makes to a cached file is
+    read whole: a 30 MB execution log in the program's folder that the log device appends to every
+    second is read again every second. Deferring the read for files the program has not opened was
+    considered and not done: the session waits for `whenCurrent()` at every change report
+    (`core/run/compose.ts`), so a deferred read would either be started at once anyway or make
+    Rewind wait, and 3.8.4 asks for the change "at once". The cheap answer needs the change itself
+    to say what was appended (requested in `docs/requests/SH6-append-change.md`).
+
+5b. **A whole-file read returns the same copy until the file changes (gate I2, SH5's note).** The
+    sound device reads the whole file at every try of task 70's wait loop. `read(path, 0, n)` with
+    `n` at least the size returns one cached copy, made again only after a write, a truncation or a
+    change by others. Callers must not modify it (none does: the engine and the sound device copy).
 
 6. **The journal (3.8.4; SH8 errata C8, left to SH6).** `localStorage` keeps one text per origin
    (`easy68k.sim.journal.v1`, SH8's key). SH6 keeps every window's part in it under a random
@@ -90,9 +108,23 @@ owners" name a defect or a question that is not SH6's to change.
     (`overwritePrompt: null`), as the original's Save dialog. The program's initial name gives the
     Save dialog's suggested file and the Open dialog's start folder; see Contract C1.
 
-12. **STDIO_BUFFER (3.8.4, O-15).** Implemented as the document says: whole multiples of 512 bytes are
-    committed as soon as that many are pending, the rest stays pending; reads are not buffered. T3
-    is asked to confirm (below).
+12. **STDIO_BUFFER (3.8.4, O-15): the original's rules, as T3 measured them (gate I2).** The document
+    says "whole multiples of 512 are committed as soon as that many are pending" and "reads are not
+    buffered", and SH6's acceptance says "after task 56, or after 512 bytes, the bytes are there".
+    T3 ran `tests/conformance/windows-confirm/stdio-buffer.X68` on the official SIM68K.exe under Wine
+    (docs/porting/errata/T3.md F2) and found otherwise; the port now follows the measurement:
+    - the buffer holds 512 bytes and is written when it is full **and another byte comes**: byte by
+      byte, nothing is visible after 512 bytes, 512 after the 513th, 1024 after the 1025th;
+    - a write of 512 bytes or more is not buffered: what was buffered goes first, then the write
+      whole (10 + 1000 bytes: 1010 visible; 5000 bytes: 5000; 600 bytes: 600);
+    - a reading stream buffers what it reads, 512 bytes at a time, and keeps returning those bytes
+      after another stream changed them; a seek, or a write through the same stream, empties it.
+    Not measured, chosen as the Borland `fwrite` most likely does (it copies a small write into the
+    buffer in one piece): a small write that does not fit into what is left of the buffer writes the
+    buffer first (300 + 300 bytes: 300 visible, not 512). Whether exactly 512 bytes in one write go
+    through (assumed, "512 or more" in T3's words) was not measured either. The engine test replays
+    stdio-buffer.X68 and compares the whole `result.bin` with the Wine result
+    (`program-files.engine.test.ts`); a second probe answering these two would settle them.
 
 ## Contract
 
@@ -101,8 +133,12 @@ C1. **`OpenRequest` cannot carry an initial file name, and `SaveRequest` no star
     request has only `startDir`, so the name is not preselected. A Save request without a name has
     no way to start in the program's current directory (`suggested` must name a file), so the Save
     dialog starts in the folder the last dialog ended in. Request (optional, no package depends on
-    it): `OpenRequest.initialName?: string` and `SaveRequest.startDir?: VPath`. Until then no adapter
-    is needed; the difference is recorded in `docs/differences/SH6.md`.
+    it): `OpenRequest.initialName?: string` and `SaveRequest.startDir?: VPath`. **Granted at gate I2**
+    (contracts/fs.ts). `programDialogRequest` now passes the program's file name as `initialName`
+    (the name part; the folder part is `startDir`) and, for Save without a name, the current
+    directory as `startDir`. FS1's dialog (`features/files/dialogs.ts`, `FileDialog.tsx`) does not
+    read either member yet; until it does, the Open field is empty and a nameless Save dialog starts
+    in the last folder used.
 
 C2. **No way for `ProgramFiles` to know the mount names a platform serves.** An absolute name is
     tested against the mounts the program has been given (entry 8). If a later package hands a
@@ -117,8 +153,10 @@ E1. **Task 53 with a count that wraps the bounds test (trap15-a task 53, §13 Fi
     gives `D0.W = 2`: `fread(buf, 1, 0xFFFFFFFF, fp)` reaches `hostFileRead` with a `size_t` that
     `shim/hostfile.cpp` casts to `int` (-1), `host_file_read` in `shim/host-imports.js` then computes
     `Math.min(data.length, -1)` and returns -1 whatever the host answers. `ProgramFiles` cannot repair
-    it from the host side. Test: `program-files.engine.test.ts`, "the Files checks of trap15-a §13"
-    (read, not asserted).
+    it from the host side. **Settled at gate I2:** T3 measured the original (T3.md F4: `D0.W = 0`,
+    D2 left at `$FFFFFFFF`, nothing read, so trap15-a's expectation was wrong too) and F3 (task 54
+    with `D2 = 0` gives 0); the engine owner reproduces both in `engine/sim/shim/hostfile.cpp`. The
+    engine test now asserts the original's values.
 
 E2. **The two defects of the task 58 Save branch (3.8.4: "they are not reproduced"; owner: the
     simulator engine).** `engine/sim/shim/simio.cpp` reproduces both: with an empty `(A3)` the Save
@@ -133,11 +171,9 @@ E3. **SH8 (`features/run/session.ts`):** `viewFor` creates one `CachedSyncFiles`
 
 ## What T3 is asked to confirm on the official binary (Wine driver)
 
-1. `stdio-buffer.X68` (6.8): after 10 bytes written and not closed, a second open of the file reads
-   end of file (`D0.W = 1`); after 600 bytes written in one task 54, a second stream reads 512 (the
-   port) or 600 (a large write bypasses the buffer) or 0; after 300 + 300 bytes in two task 54 calls,
-   512 or 0; a reading stream that read the file before another stream changed it: does it see the
-   old bytes (read buffering, which the port does not model)?
+1. `stdio-buffer.X68` (6.8): **answered at gate I2** (T3.md F2; entry 12 above): blocks of 512 on
+   the 513th byte, large writes whole, reads buffered. Still open: 300 + 300 bytes in two task 54
+   calls (the port: 300 visible), and one write of exactly 512 bytes (the port: 512 visible).
 2. The same file open in two slots at once (trap15-a §12 item 11), and task 52 on a file another slot
    holds open (the port allows both).
 3. After Rewind, task 57 on a file a forgotten slot still holds: `D0.W = 2` (the port), and a new
@@ -145,7 +181,8 @@ E3. **SH8 (`features/run/session.ts`):** `viewFor` creates one `CachedSyncFiles`
 4. How many Rewinds with a file left open it takes until task 51/52 fail because the Borland run-time
    has no free `FILE` (its stream table): the port never runs out.
 5. When the simulator exits, the forgotten streams' bytes are written in the order they were opened.
-6. Task 54 with `D2 = 0` (the port: 2) and task 53 with `A1 = $2000`, `D2 = $FFFFFFFF` on a 10-byte file.
+6. Task 54 with `D2 = 0` and task 53 with `A1 = $2000`, `D2 = $FFFFFFFF` on a 10-byte file:
+   **answered** (T3.md F3, F4; see E1).
 7. Names: `DATA.TXT.` and `data.txt ` open `data.txt`; a name with `?` or `*` gives 2 for tasks 51,
    52, 59.
 8. Task 52 on `NUL` and `CON` (Windows devices; the port creates ordinary files).

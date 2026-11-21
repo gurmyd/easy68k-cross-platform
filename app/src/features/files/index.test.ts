@@ -7,7 +7,8 @@ import { writeZip } from '../../fs/zip';
 import { createFakePlatform, createTestApplication, type TestApplication } from '../../state/testing';
 import { deletePath, exportPath, importInto, newFolder, renamePath } from './actions';
 import { handleDrop } from './drop';
-import { DROPPED_FOLDER_TITLE, createFileDialogs, dropDeps, feature } from './index';
+import { DROPPED_FOLDER_TITLE, createFileDialogs, createUploadProvider, dropDeps, feature } from './index';
+import { UPLOAD_PROVIDER_ID, isImportingUpload } from './providers';
 import { FOLDER_FILTER, type FileDialogService, type SaveDialogProps } from './dialogs';
 import { EDITOR_OPEN_FILTERS } from './filters';
 import { registerFilesRevealer } from './reveal';
@@ -149,6 +150,45 @@ describe('feature "files"', { timeout: 60_000 }, () => {
     application.dispose();
   });
 
+  it("the Open dialog's note describes the copy only for FS1's own 'upload' provider (FS2 replaces it in Chromium)", () => {
+    const application = app();
+    expect(isImportingUpload(createUploadProvider(application.ctx))).toBe(true);
+    // FS2's linking provider has the same id and label but does not copy into Imported.
+    const linking = { id: UPLOAD_PROVIDER_ID, label: 'From this computer...', available: () => true };
+    expect(isImportingUpload(linking)).toBe(false);
+    application.dispose();
+  });
+
+  it('a dropped .S68 in Simulator mode asks confirmLoad("drop") before the copy and opens it confirmed', async () => {
+    const application = app();
+    const { ctx } = application;
+    ctx.store.setState((state) => ({ ...state, mode: 'simulator' }));
+    const calls: string[] = [];
+    const controller = ctx.sim.controller as {
+      confirmLoad?: (origin: string) => Promise<boolean>;
+      open: (path: string, origin: string, options?: { confirmed?: boolean }) => Promise<void>;
+    };
+    let answer = false;
+    controller.confirmLoad = async (origin) => {
+      calls.push(`confirm ${origin} stored=${(await ctx.vfs.stat('/browser/Imported/p.S68')) !== null}`);
+      return answer;
+    };
+    controller.open = async (path, origin, options) =>
+      void calls.push(`open ${path} ${origin} ${JSON.stringify(options)}`);
+    const drop = [{ name: 'p.S68', isFolder: false, read: async () => ascii('S0'), handle: null }];
+    await handleDrop(drop, dropDeps(ctx));
+    expect(await ctx.vfs.stat('/browser/Imported/p.S68')).toBeNull(); // Cancel: nothing copied
+    answer = true;
+    await handleDrop(drop, dropDeps(ctx));
+    expect(calls).toEqual([
+      'confirm drop stored=false',
+      'confirm drop stored=false',
+      'open /browser/Imported/p.S68 drop {"confirmed":true}',
+    ]);
+    await tick();
+    application.dispose();
+  });
+
   it("the desktop app: its native dialogs replace the port's, and choose folders (DV2 errata 1; H1)", async () => {
     const calls: string[] = [];
     const platform = createFakePlatform({
@@ -156,7 +196,10 @@ describe('feature "files"', { timeout: 60_000 }, () => {
       nativeFileDialogs: {
         open: async (request) => (calls.push(`open ${request.title}`), ['/disk/C/a.X68']),
         save: async (request) => (calls.push(`save ${request.title}`), '/disk/C/b.X68'),
-        chooseFolder: async (title) => (calls.push(`folder ${title}`), '/disk/C/Examples'),
+        chooseFolder: async (title, startDir) => (
+          calls.push(`folder ${title}${startDir === undefined ? '' : ` in ${startDir}`}`),
+          '/disk/C/Examples'
+        ),
       },
     } as Partial<Platform>);
     const application = createTestApplication({ features: [feature], services: { createFileDialogs }, platform });
@@ -164,7 +207,14 @@ describe('feature "files"', { timeout: 60_000 }, () => {
     expect(await dialogs.open({ title: 'Open File', filters: [], multiple: false })).toEqual(['/disk/C/a.X68']);
     expect(await dialogs.save({ title: 'Save As', filters: [], defaultExt: '.X68' })).toBe('/disk/C/b.X68');
     expect(await dialogs.chooseFolder({ title: 'Copy the Examples to' })).toBe('/disk/C/Examples');
-    expect(calls).toEqual(['open Open File', 'save Save As', 'folder Copy the Examples to']);
+    // FolderRequest.startDir is handed to the native dialog (NativeFileDialogs.chooseFolder's 2nd argument).
+    await dialogs.chooseFolder({ title: 'Copy the Examples to', startDir: '/disk/C/Users' });
+    expect(calls).toEqual([
+      'open Open File',
+      'save Save As',
+      'folder Copy the Examples to',
+      'folder Copy the Examples to in /disk/C/Users',
+    ]);
     // No port dialog was opened, and "From this computer..." is not offered there.
     expect(application.ctx.store.getState().dialogs.stack).toEqual([]);
     expect(dialogs.registry.get('upload')).toBeUndefined();

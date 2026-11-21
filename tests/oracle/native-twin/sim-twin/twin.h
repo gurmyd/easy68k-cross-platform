@@ -1,5 +1,5 @@
 // twin.h - functions shared by the simulator twin's driver (driver.cpp) and its file layer
-// (hostfile-native.cpp). Part of easy68k-mac, an unofficial port of EASy68K. GPL-2.0-or-later.
+// (hostfile-native.cpp). Part of easy68k-cross-platform, an unofficial port of EASy68K. GPL-2.0-or-later.
 #ifndef EASY68K_TWIN_H
 #define EASY68K_TWIN_H
 

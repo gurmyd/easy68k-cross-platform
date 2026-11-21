@@ -121,6 +121,12 @@ fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`.
     copy in place; recorded in `docs/differences/FS1.md`. Asking `Caution` before the copy would
     need a way to tell `RunController.open` that the question has been answered, which the contract
     does not have.
+    **Gate I2 round 1:** the contract has it now (`RunController.confirmLoad`, `LoadOptions.confirmed`;
+    docs/requests/W1-load-confirm.md). A dropped `.S68` that is copied (a browser) first calls
+    `confirmLoad('drop')`; on Cancel nothing is copied and nothing is loaded; on OK the file is copied
+    (with its own replace question) and loaded with `open(copy, 'drop', { confirmed: true })`. A file
+    loaded where it lies (the desktop app), or a controller without `confirmLoad`, keeps the old order
+    (open asks). Tested in drop.test.ts, index.test.ts and check-files.mjs.
 
 15. **The desktop app (DV2 errata 1 and 4a; contract additions of gate I1).** When
     `Platform.nativeFileDialogs` exists, FS1 registers it as the provider `native` (which replaces the
@@ -141,7 +147,9 @@ fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`.
     button is `OK`. OK with an empty name takes the selected folder, or the folder shown when none is
     selected; a typed existing folder is taken; a typed new name is created; a typed file is refused.
     The native provider's `chooseFolder(title)` (contracts/platform.ts) takes only the request's
-    title, so a native folder dialog does not start in `startDir`.
+    title, so a native folder dialog does not start in `startDir`. **Gate I2 round 1:**
+    `NativeFileDialogs.chooseFolder(title, startDir?)` has the second argument now, and the native
+    provider passes `FolderRequest.startDir` when the request has one.
 17. **`app.files.toggle` with `FilesRevealArg` (contracts/commands.ts, gate I1 round 2; round 3).**
     With `{ reveal: VPath }` the handler shows the Files panel (never hides it) and reveals the path;
     any other argument toggles as before. A hidden panel is not mounted, so it cannot take the
@@ -150,6 +158,11 @@ fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`.
     the switch back to Editor mode). `revealInFilesPanel(ctx, path)` of FilesPanel.tsx keeps its
     meaning (false when the panel is not mounted; nothing is kept). Help > Examples... can now call
     `ctx.commands.run('app.files.toggle', { reveal: '/browser/Examples' })` (H1).
+    **Gate I2 round 1 (review of I1 round 3: a remembered request stayed pending forever):** a
+    remembered request now waits at most `PENDING_REVEAL_MS` (5 s) for the panel to mount, and a
+    toggle without a path drops it. A request made in Simulator or EASyBIN mode (Help > Examples...
+    is in all three menus; the Files panel exists only in Editor mode) waits for the next switch to
+    Editor mode and gets its 5 s from then.
 18. **The download name of Export... in WebKit on Linux (gate I1 round 2 defect, round 3).** The
     port names the whole-store export `My Programs.zip` (the store's label, 3.8.1) and keeps it.
     CI run 44919519853 (commit c4d3dfa) records, through a wrapper of `HTMLAnchorElement.click`, the
@@ -172,6 +185,11 @@ fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`.
     product did what it guarantees. check-files.mjs now records when the page first called
     `indexedDB.open` and requires each reading to show the message that belongs to its time; its
     detail lists every reading with its time and says when none came before the limit.
+    **Gate I2 round 1 (review of I1 round 3: the banner could pass without ever being seen):** the
+    page itself now records, with a MutationObserver installed before the application starts, when
+    the Files panel first shows `still opening`, measured from the first `indexedDB.open`. A new check
+    requires that time to be under the 20 s limit in at least one of the (up to three) attempts, so
+    the message is always verified, independently of how late the check's own reading comes.
 20. **The Files check with FS2 present (round 3).** In Chromium FS2 (features/files-fsaccess)
     replaces the provider `upload` ("From this computer...") with the system file picker and adds
     "Open folder..." to the dialogs, as its design allows (providers.ts: one provider per id, a later
@@ -179,6 +197,12 @@ fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`.
     button. check-files.mjs now runs its dialog pass with the File System Access API removed (what
     WebKit and Firefox have, so FS1's own provider is tested in both browsers) and names buttons
     exactly. FS2's check covers the Chromium pickers.
+21. **The Open dialog's note with FS2's "From this computer..." (gate I2 round 1, FS2 review).** In
+    Chromium FS2's provider of the same id links the chosen files instead of copying them, so the
+    sentence `From this computer... copies files from this computer into My Programs/Imported.` was
+    wrong there. FS1 marks its own provider (`providers.ts: markImportingUpload`), and the note
+    carries the sentence only while that provider is the one registered. check-files.mjs checks the
+    note against the provider actually registered in the page.
 
 ## Contract
 

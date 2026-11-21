@@ -292,6 +292,28 @@ describe.skipIf(!enginesBuilt)(
       // docs/requests/U1-listbox-clear-itemindex.md; the port kept row 6 before the shim change).
       expect(app.ctx.sim.engine.listingHighlight).toBe(-1);
       expect(selected()).toBe(-1);
+      // Go to PC selects the PC row (highlight() over the loaded rows), and so does the next stop.
+      await app.ctx.commands.run('sim.search.gotoPC');
+      expect(selected()).toBe(rowOf('MOVE.L #5'));
+      model.selectRow(1);
+      await app.ctx.commands.run('sim.run.traceInto');
+      expect(selected()).toBe(rowOf('ADD.L'));
+    });
+
+    it('a program opened over one whose PC moved: the PC field changes, so its start row is selected', async () => {
+      await start();
+      await open('demo');
+      for (let step = 0; step < 3; step++) await app.ctx.commands.run('sim.run.traceInto');
+      expect(model.view.getState().boxes[Box.PC]).toBe('0000100A');
+      await open('nops');
+      // regPCChange runs for the new text 00001000 and its highlight() finds the first NOP.
+      expect(app.ctx.sim.engine.listingHighlight).toBe(rowOf('NOP'));
+      expect(selected()).toBe(rowOf('NOP'));
+      expect(model.view.getState().scroll?.row).toBe(rowOf('NOP'));
+      // Opened again with the PC still at 00001000: no row (the case above, with another program).
+      await open('demo');
+      expect(app.ctx.sim.engine.listingHighlight).toBe(-1);
+      expect(selected()).toBe(-1);
     });
 
     it('the message area: load messages and trace lines arrive through the store', async () => {

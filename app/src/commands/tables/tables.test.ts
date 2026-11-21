@@ -165,6 +165,8 @@ const SIM_MENUS = trim(`
   &Hardware
   &Break Points
   &EASyBIN
+  ---
+  &Log
 &Options
   Source Window Font...
   Output Window Font...

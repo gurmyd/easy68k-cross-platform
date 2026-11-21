@@ -729,6 +729,43 @@ describe.skipIf(!asmBuilt)('with the real assembler (editor-ui §20.4; needs eng
     expect(sRecord).toMatch(/^S1091000112233445566[0-9A-F]{2}\r$/m);
   });
 
+  it('include names as Win32 opens them: `..` after a folder that does not exist, trailing dots and spaces', async () => {
+    // Win32 normalises a name lexically before it opens it (GetFullPathName): `q\..` cancels out
+    // whether or not q exists, and trailing dots and spaces of every component are dropped. The
+    // engine's own file layer does the same (engine/asm/shim/ez_file.cpp, ezCanonicalPath); the
+    // files must also reach it, including those outside the program directory, which the snapshot
+    // retry does not add (gate I2, review of E5).
+    const w = await realWindow();
+    await w.write('/browser/root.x68', ' DC.B $11\r\n');
+    await w.write('/browser/course/Shared/three.X68', ' DC.B $22\r\n');
+    await w.write('/browser/course/Shared/blob.bin', '\x33');
+    await w.write('/browser/course/Lib/four.x68', ' DC.B $44\r\n');
+    const source = [
+      '    ORG $1000',
+      "    INCLUDE '..\\..\\nothere\\..\\root.x68'",
+      "    INCLUDE '..\\Shared\\three.X68.'",
+      "    INCBIN '..\\Shared.\\blob.bin . '",
+      "    INCLUDE '..\\missing\\..\\Lib. \\four.x68'",
+      '    END $1000',
+      '',
+    ].join('\r\n');
+    const doc = await openDoc(w, '/browser/course/lab1/prog.X68', source);
+    const outcome = await assembleDocument(w.deps, doc.id);
+    expect(messagesOf(w, doc.id)).toEqual([]);
+    expect(outcome).toMatchObject({ kind: 'done', status: { errors: 0, warnings: 0 } });
+    if (outcome.kind === 'done') {
+      expect(outcome.collected.snapshot).toBe(false);
+      expect(outcome.collected.includes).toEqual([
+        '/browser/root.x68',
+        '/browser/course/Shared/three.X68',
+        '/browser/course/Lib/four.x68',
+      ]);
+    }
+    const sRecord = (await w.read('/browser/course/lab1/prog.S68')) ?? '';
+    // S1 record at $1000: 11 22 33 44.
+    expect(sRecord).toMatch(/^S107100011223344[0-9A-F]{2}\r$/m);
+  });
+
   it('a message of an include file opens that file and keeps the assembled document active', async () => {
     const w = await realWindow();
     await w.write('/browser/inc/Lib.x68', '* library\r\n    BADOP\r\n');

@@ -317,6 +317,50 @@ describe.skipIf(!enginesBuilt)('createSimEngine with the real engine (needs engi
       test.release();
     });
 
+    // Gate I2 (errata W4 entry 12): check-wave1's tour, measured in the official SIM68K.exe under
+    // Wine (build/W4/probe, probe_tour.py: each program opened with File > Open, run for 2 s, F6,
+    // Ctrl+F2). A row is selected exactly when the new start PC differs from the rewound PC, in
+    // both orders. true = the official list box showed a selected row after the load.
+    const TOUR = [
+      'tutorial1',
+      'tutorial2',
+      'tutorial3',
+      'tutorial4',
+      'MACRO',
+      'fileio',
+      'clockDigital',
+      'clockWithSound',
+      'graphicSound',
+      'mouseWindowSize',
+    ];
+    const OFFICIAL_SELECTED: Record<'forward' | 'reverse', boolean[]> = {
+      forward: [true, false, true, true, false, true, true, false, false, false],
+      reverse: [true, false, false, false, true, true, false, true, true, false],
+    };
+    for (const order of ['forward', 'reverse'] as const) {
+      it(`the ten official examples, opened one after another (${order}), select what the original selects`, async () => {
+        const names = order === 'forward' ? TOUR : [...TOUR].reverse();
+        const test = await createTestEngine();
+        const engine = test.engine;
+        const seen: string[] = [];
+        for (const name of names) {
+          const source = readFileSync(repo(`app/public/examples/${name}.X68`));
+          const program = await assembleProgram(textOf(source));
+          engine.load(program.s68, program.l68, { name: `${name}.S68`, kind: 'open' });
+          const row = engine.listingHighlight;
+          const pc = engine.boxText(Box.PC);
+          if (row >= 0)
+            expect(textOf(engine.listingLine(row)).slice(0, 8), `${name}: the selected row is the PC's`).toBe(pc);
+          seen.push(`${name}:${row >= 0}`);
+          runProgram(engine, { maxInstructions: 20_000 });
+          engine.cmdPause();
+          engine.rewind();
+        }
+        expect(seen).toEqual(names.map((name, i) => `${name}:${OFFICIAL_SELECTED[order][i]}`));
+        test.release();
+      }, 120_000);
+    }
+
     it('a fresh instance selects the PC row of the same program', async () => {
       const test = await createTestEngine();
       test.engine.load(fixture('io.S68'), fixture('io.L68'), { name: 'io.S68' });

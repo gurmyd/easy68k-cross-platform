@@ -29,7 +29,7 @@ import { unzip } from '../tests/oracle/wine/common/unzip.ts';
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const SITE_INDEX_PATH = join(REPO, 'tests', 'corpus', 'site-examples.json');
 /** Sent with every request: a generic name, nothing about the machine or its user. */
-const USER_AGENT = 'easy68k-mac-tests (fetch-site-examples)';
+const USER_AGENT = 'easy68k-cross-platform-tests (fetch-site-examples)';
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 

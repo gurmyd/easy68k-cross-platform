@@ -1,4 +1,4 @@
-Status: item 1 done by FS1 in gate I1 round 3 (features/files/index.ts and reveal.ts; errata FS1.md entry 17; a `reveal` that is not an absolute path toggles like any other argument); item 2 open for H1. Filed by the contracts engineer, W1, at gate I1 round 3. Addressed to FS1 (item 1) and H1 (item 2).
+Status: item 1 done by FS1 in gate I1 round 3 (features/files/index.ts and reveal.ts; errata FS1.md entry 17; a `reveal` that is not an absolute path toggles like any other argument); since gate I2 round 1 a remembered reveal waits at most 5 s for the panel. Item 2 done by H1 (features/help/commands.ts `showExamples` calls `app.files.toggle` with `{ reveal: WEB_EXAMPLES_DIR }`; examples.test.ts and check-help.mjs check it). Both items closed at gate I2 round 1. Filed by the contracts engineer, W1, at gate I1 round 3. Addressed to FS1 (item 1) and H1 (item 2).
 
 # W1: implement and use `FilesRevealArg` of `app.files.toggle`
 

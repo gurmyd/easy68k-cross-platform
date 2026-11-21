@@ -27,13 +27,16 @@
 //     nothing outside the folder is reachable ('..', backslashes, Vfs.resolve);
 //   - a file changed or added by "another program" (written through a separate handle) is found by
 //     revalidation as 3.8.4 describes it (list the tree, compare size and modification time), also
-//     a change that keeps the size; the stub CachedSyncFiles of SH6 is not used (see the result);
+//     a change that keeps the size, both by the rule itself and through SH6's real CachedSyncFiles;
 //   - the time appendFile takes on a 1 kB and on a 20 MB file, printed (errata FS2.md);
 //   - in the application: "Open folder..." mounts the folder and the Open dialog shows it; a
 //     document opened from it is saved into it; a change made by another program meanwhile brings
 //     the documents' "changed outside this window" question, and No leaves the file alone;
 //   - after a reload: the folder is not mounted and no permission is asked without a click; the
 //     toast offers it; its button asks (once, readwrite, inside the click) and mounts it;
+//   - with the engines (engine/dist): a source in the folder is assembled, its .L68 and .S68 land
+//     in the real folder, Execute loads the S-record from there, and the program's own file
+//     (TRAP #15 tasks 52, 54, 56) reaches the real folder through the simulator's view of the files;
 //   - "From this computer..." links a file: the banner with "Open the containing folder..."; Save
 //     writes the real file; after a reload the copy serves; Save from a click asks for access and
 //     then refuses because another program changed the file meanwhile (message shown, file
@@ -45,7 +48,7 @@
 // Screenshots go to build/FS2/fsaccess-check (git-ignored). Exit code 0 = everything passed.
 // The page object `window.__easy68k` exists in development builds only (main.tsx).
 
-/* global console, process, window, document, navigator, indexedDB, DOMException, FileSystemHandle, sessionStorage, performance, setTimeout, TextEncoder, TextDecoder */
+/* global console, process, window, document, navigator, indexedDB, DOMException, FileSystemHandle, sessionStorage, performance, setTimeout, clearTimeout, TextEncoder, TextDecoder */
 
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -70,6 +73,8 @@ const BROWSERS = { chromium, webkit };
 const browsers = browserChoice === 'all' ? ['chromium', 'webkit'] : [browserChoice];
 const requireEngines = process.env.EASY68K_REQUIRE_ENGINES === '1';
 const enginesPresent = existsSync(join(repoRoot, 'engine', 'dist'));
+// Assembling and running a program needs both engines.
+const bothEngines = ['asm68k.wasm', 'sim68k.wasm'].every((f) => existsSync(join(repoRoot, 'engine', 'dist', f)));
 
 let baseUrl = '';
 let failures = 0;
@@ -178,10 +183,13 @@ async function waitForApp(page) {
 const mounts = (page) => page.evaluate(() => window.__easy68k.ctx.vfs.backends().map((b) => b.mount));
 
 async function until(page, fn, arg, timeout = 15_000) {
+  const start = Date.now();
   try {
     await page.waitForFunction(fn, arg, { timeout, polling: 100 });
     return true;
-  } catch {
+  } catch (error) {
+    // Printed so that a failure can be diagnosed from a CI log: a timeout, or the predicate threw.
+    note(`waited ${Date.now() - start} ms in vain: ${String(error?.message ?? error).split('\n')[0]}`);
     return false;
   }
 }
@@ -379,6 +387,63 @@ async function backendPass(browser, name) {
   );
   check(`${p} the re-read gives the other program's bytes`, revalidation.reread === '2222', revalidation.reread);
 
+  // The same with the simulator's real view of the files (SH6's CachedSyncFiles) on /folder.
+  const view = await page.evaluate(async () => {
+    const { FolderBackend } = await import('/src/fs/fsaccess-backend.ts');
+    const { CachedSyncFiles } = await import('/src/fs/sync/cached.ts');
+    const { createVfs } = await import('/src/fs/vfs.ts');
+    const root = await navigator.storage.getDirectory();
+    const dir = await root.getDirectoryHandle('view', { create: true });
+    const vfs = createVfs();
+    vfs.mount(new FolderBackend(dir));
+    const enc = (text) => new TextEncoder().encode(text);
+    await vfs.writeFile('/folder/a.txt', enc('aaaa'));
+    await vfs.writeFile('/folder/gone.txt', enc('g'));
+    await vfs.writeFile('/folder/sub/b.txt', enc('b'));
+    const sync = new CachedSyncFiles({
+      vfs,
+      scheduler: {
+        onFrame: () => () => {},
+        setTimer: (ms, fn) => {
+          const id = setTimeout(fn, ms);
+          return () => clearTimeout(id);
+        },
+      },
+      message: () => {},
+    });
+    await sync.prepare('/folder');
+    const read = (path) => {
+      const stat = sync.stat(path);
+      return stat ? new TextDecoder().decode(sync.read(path, 0, stat.size)) : null;
+    };
+    await new Promise((r) => setTimeout(r, 20));
+    const other = await (await navigator.storage.getDirectory()).getDirectoryHandle('view');
+    const write = async (d, fileName, text) => {
+      const w = await (await d.getFileHandle(fileName, { create: true })).createWritable();
+      await w.write(enc(text));
+      await w.close();
+    };
+    await write(other, 'a.txt', 'AAAA');
+    await write(await other.getDirectoryHandle('sub'), 'c.txt', 'new');
+    await other.removeEntry('gone.txt');
+    const before = read('/folder/a.txt');
+    await sync.revalidate();
+    const out = {
+      before,
+      changed: read('/folder/a.txt'),
+      added: read('/folder/sub/c.txt'),
+      removed: sync.stat('/folder/gone.txt'),
+    };
+    sync.dispose();
+    await root.removeEntry('view', { recursive: true });
+    return out;
+  });
+  check(
+    `${p} SH6's CachedSyncFiles on /folder: revalidate() reads a same-size change, an added file, drops a removed one`,
+    view.before === 'aaaa' && view.changed === 'AAAA' && view.added === 'new' && view.removed === null,
+    JSON.stringify(view),
+  );
+
   // appendFile: Chromium copies the file for every writable stream that keeps its data (errata FS2.md).
   let best = null;
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -439,6 +504,13 @@ async function folderPass(browser, name) {
     JSON.stringify(buttons.map((b) => b.trim())) === JSON.stringify(['From this computer...', 'Open folder...']),
     JSON.stringify(buttons),
   );
+  // "From this computer..." links here (FS2's provider), so the note must not say it copies files.
+  const chromiumNote = await dialog.locator('.e68-filedialog__note').innerText();
+  check(
+    `${p} the dialog's note does not say "From this computer..." copies into My Programs`,
+    !chromiumNote.includes('/Imported') && chromiumNote.includes('Open folder...'),
+    chromiumNote,
+  );
   await page.evaluate(() => window.__fs2.dirs.push('course'));
   await dialog.getByRole('button', { name: 'Open folder...' }).click();
   const shown = await until(page, () =>
@@ -470,7 +542,12 @@ async function folderPass(browser, name) {
   await typeInEditor(page, 'ZZ');
   // Save from the toolbar (a real click).
   await saveFromToolbar(page);
-  const saved = await until(page, () => window.__fs2.readOpfs('course/prog.X68').then((t) => t.includes('ZZ')));
+  const saved = await until(page, () =>
+    window.__fs2.readOpfs('course/prog.X68').then(
+      (t) => t.includes('ZZ'),
+      () => false,
+    ),
+  );
   check(`${p} Save writes the document into the real folder`, saved);
   const fileText = await page.evaluate(() => window.__fs2.readOpfs('course/prog.X68'));
   check(
@@ -495,8 +572,14 @@ async function folderPass(browser, name) {
     asked && (await question.innerText()).includes("'prog.X68' has been changed outside this window. Save anyway?"),
   );
   await page.screenshot({ path: join(outDir, `${name}-folder-changed-outside.png`) });
-  if (asked) await question.getByRole('button', { name: 'No' }).click();
-  await page.waitForTimeout(300);
+  if (asked) {
+    await question.getByRole('button', { name: 'No' }).click();
+    await question.waitFor({ state: 'detached', timeout: 15_000 }).catch(() => {});
+  }
+  check(
+    `${p} ... No keeps the document modified`,
+    await page.evaluate(() => window.__easy68k.ctx.documents.active()?.modified === true),
+  );
   check(
     `${p} ... and No leaves the other program's file as it is`,
     (await page.evaluate(() => window.__fs2.readOpfs('course/prog.X68'))) === '* changed by another program\r\n',
@@ -549,8 +632,103 @@ async function folderPass(browser, name) {
       ),
   );
 
+  await studentInFolder(page, p, name);
+
   check(`${p} folder pass: no console errors or warnings`, messages.length === 0, messages.slice(0, 3).join(' | '));
   await context.close();
+}
+
+/** A program whose source lies in the opened folder writes a file of its own there (TRAP #15 52, 54, 56). */
+const HELLO_SOURCE = [
+  '    ORG    $1000',
+  'START:',
+  '    LEA    NAME,A1',
+  '    MOVE.B #52,D0',
+  '    TRAP   #15',
+  '    LEA    TEXT,A1',
+  '    MOVE.L #5,D2',
+  '    MOVE.B #54,D0',
+  '    TRAP   #15',
+  '    MOVE.B #56,D0',
+  '    TRAP   #15',
+  '    SIMHALT',
+  "NAME DC.B 'out.txt',0",
+  "TEXT DC.B 'HELLO'",
+  '    END    START',
+  '',
+].join('\r\n');
+
+/**
+ * As a student works with the real neighbours: the assembler writes the listing and the S-record
+ * beside the source in the opened folder (E5), Execute loads the S-record from there, and the
+ * program's own file goes through the simulator's view of the files (SH6) into the real folder.
+ */
+async function studentInFolder(page, p, name) {
+  if (!bothEngines && !requireEngines) {
+    note(`${p} engine/dist lacks an engine: assembling and running a program from the folder is skipped`);
+    return;
+  }
+  await page.evaluate((source) => window.__fs2.writeOpfs('course/hello.X68', source), HELLO_SOURCE);
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('app.mode.set', 'editor'));
+  await page.evaluate(() => window.__easy68k.ctx.documents.open('/folder/hello.X68'));
+  await until(page, () => window.__easy68k.ctx.documents.active()?.path === '/folder/hello.X68');
+  await page.evaluate(() => void window.__easy68k.ctx.commands.run('ed.project.assemble'));
+  const status = page.locator('[role=dialog].e68-asm-status');
+  const assembled = await status.waitFor({ timeout: 60_000 }).then(
+    () => true,
+    () => false,
+  );
+  const errors = assembled ? await status.locator('[data-e68-count=errors]').innerText() : '?';
+  const outputs = await page.evaluate(async () => {
+    const out = {};
+    for (const file of ['hello.L68', 'hello.S68']) {
+      out[file] = await window.__fs2.readOpfs(`course/${file}`).then(
+        (t) => t.length,
+        () => null,
+      );
+    }
+    return out;
+  });
+  check(
+    `${p} assembling a source of the folder writes hello.L68 and hello.S68 into the real folder`,
+    assembled && errors === '0' && outputs['hello.L68'] > 0 && outputs['hello.S68'] > 0,
+    `errors ${errors}, ${JSON.stringify(outputs)}`,
+  );
+  await page.screenshot({ path: join(outDir, `${name}-folder-assembled.png`) });
+  if (!assembled) return;
+  await status.locator('.e68-dialog__footer').getByRole('button', { name: 'Execute', exact: true }).click();
+  const loaded = await until(
+    page,
+    () => window.__easy68k.ctx.store.getState().sim.program?.path === '/folder/hello.S68',
+    undefined,
+    60_000,
+  );
+  check(`${p} Execute loads /folder/hello.S68`, loaded);
+  if (!loaded) return;
+  await page.evaluate(() => void window.__easy68k.ctx.commands.run('sim.run.run'));
+  // The simulator's view writes behind (3.8.4, at most every 500 ms per file); wait for the bytes.
+  const started = Date.now();
+  const written = await until(
+    page,
+    () =>
+      window.__fs2.readOpfs('course/out.txt').then(
+        (t) => t === 'HELLO',
+        () => false,
+      ),
+    undefined,
+    30_000,
+  );
+  note(`${p} out.txt reached the real folder ${Date.now() - started} ms after Run`);
+  check(`${p} the program's file out.txt is written into the real folder`, written);
+  const listed = await page.evaluate(async () =>
+    (await window.__easy68k.ctx.vfs.list('/folder')).map((e) => e.name).sort(),
+  );
+  check(
+    `${p} ... and the folder holds the source, its outputs and the program's file`,
+    ['hello.L68', 'hello.S68', 'hello.X68', 'out.txt'].every((f) => listed.includes(f)),
+    JSON.stringify(listed),
+  );
+  await page.screenshot({ path: join(outDir, `${name}-folder-program-ran.png`) });
 }
 
 // ---- Chromium: a linked file in the application ----------------------------------------------------------
@@ -592,11 +770,37 @@ async function linkedPass(browser, name) {
 
   await page.evaluate((target) => window.__easy68k.ctx.documents.open(target), path);
   await until(page, () => (document.querySelector('.cm-content')?.textContent ?? '').includes('linked'));
+  // The long caption of 3.8.2 must fit its button and leave the banner's text readable.
+  const layout = await page.evaluate(() => {
+    const action = [...document.querySelectorAll('.e68-toast__action')].find((b) =>
+      b.textContent.includes('Open the containing folder...'),
+    );
+    const toast = action?.closest('.e68-toast');
+    const textBox = toast?.querySelector('.e68-toast__text')?.getBoundingClientRect();
+    const box = action?.getBoundingClientRect();
+    if (!action || !textBox || !box) return null;
+    const overlaps =
+      box.left < textBox.right && textBox.left < box.right && box.top < textBox.bottom && textBox.top < box.bottom;
+    return { fits: action.scrollWidth <= action.clientWidth + 1, overlaps };
+  });
+  check(
+    `${p} the banner's button holds its whole caption and does not cover the text`,
+    layout !== null && layout.fits && !layout.overlaps,
+    JSON.stringify(layout),
+  );
   await page.screenshot({ path: join(outDir, `${name}-linked-banner.png`) });
   await typeInEditor(page, 'QQ');
   await saveFromToolbar(page);
-  const saved = await until(page, () => window.__fs2.readOpfs('home/lab1/prog.X68').then((t) => t.includes('QQ')));
+  const saved = await until(page, () =>
+    window.__fs2.readOpfs('home/lab1/prog.X68').then(
+      (t) => t.includes('QQ'),
+      () => false,
+    ),
+  );
   check(`${p} Save writes the real file`, saved);
+  // The backend writes the real file first and the copy after it; the Save is over when the
+  // document is no longer modified. Reading the copy before that would race with its write.
+  await until(page, () => window.__easy68k.ctx.documents.active()?.modified === false);
   const copy = await page.evaluate(
     async (target) =>
       new TextDecoder('latin1').decode(
@@ -617,12 +821,26 @@ async function linkedPass(browser, name) {
   await page.evaluate(() => new Promise((r) => setTimeout(r, 30)));
   await page.evaluate(() => window.__fs2.writeOpfs('home/lab1/prog.X68', '* edited elsewhere\r\n'));
   // Playwright's page.evaluate() runs with a user gesture, so the document is opened from a timer
-  // that fires after the page's transient activation has expired (5 s in Chromium), and nothing
-  // else touches the page meanwhile.
-  await page.evaluate((target) => {
-    setTimeout(() => void window.__easy68k.ctx.documents.open(target), 6_500);
-  }, path);
-  await page.waitForTimeout(9_000);
+  // once the page's transient activation has expired (about 5 s in Chromium; polled, not assumed),
+  // and this one evaluate is the only thing that touches the page until the document is open.
+  const activationWait = await page.evaluate(
+    (target) =>
+      new Promise((done, fail) => {
+        const start = performance.now();
+        const tick = () => {
+          const waited = performance.now() - start;
+          if (navigator.userActivation?.isActive !== false) {
+            if (waited > 60_000) fail(new Error('the user activation did not expire within 60 s'));
+            else setTimeout(tick, 100);
+            return;
+          }
+          window.__easy68k.ctx.documents.open(target).then(() => done(Math.round(waited)), fail);
+        };
+        setTimeout(tick, 100);
+      }),
+    path,
+  );
+  note(`${p} the page's user activation expired after ${activationWait} ms; the document was opened then`);
   const fromCopy = await until(page, () => (document.querySelector('.cm-content')?.textContent ?? '').includes('QQ'));
   check(
     `${p} after a reload, without access, the document opens from the copy`,
@@ -648,6 +866,13 @@ async function linkedPass(browser, name) {
     JSON.stringify(requests),
   );
   check(`${p} ... and refuses to overwrite the other program's change, with a message`, refused);
+  // The message names the file itself; the store's internal path (/linked/<id>/...) is not shown.
+  const refusalText = refused ? await refusal.innerText() : '';
+  check(
+    `${p} ... whose text does not show the internal path /linked/<id>/`,
+    refused && !refusalText.includes('/linked/') && refusalText.includes('"prog.X68"'),
+    refusalText.replace(/\s+/g, ' ').trim(),
+  );
   await page.screenshot({ path: join(outDir, `${name}-linked-refused.png`) });
   if (refused) await refusal.getByRole('button', { name: 'OK' }).click();
   check(

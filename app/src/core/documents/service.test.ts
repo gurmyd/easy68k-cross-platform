@@ -4,7 +4,8 @@
 import { describe, expect, it } from 'vitest';
 import { TabType, type DocumentService, type MessageBoxRequest, type SaveRequest } from '../../contracts';
 import { MemoryBackend } from '../../fs/memory-backend';
-import { createVfs } from '../../fs/vfs';
+import { createVfs, fsError } from '../../fs/vfs';
+import { writeError } from './messages';
 import { createAppStore } from '../../state/store';
 import { defaultSettings, DEFAULT_TEMPLATE } from '../settings/defaults';
 import { encodeFile } from './format';
@@ -314,6 +315,26 @@ describe('Save and Save As (editor-ui §6.4, 3.9.3)', () => {
     t.answers.push('Yes');
     expect(await t.manager.save(doc.id)).toBe(true);
     expect(t.asked[0]?.text).toBe("'p.X68' has been changed outside this window. Save anyway?");
+  });
+
+  it("an 'io' failure that carries a whole message is shown without the internal path (FS2 review)", async () => {
+    const t = setup();
+    const doc = t.manager.newSource();
+    t.type(doc.id, 'x');
+    const sentence =
+      '"prog.X68" has been changed by another program since this window last read it, so it was not saved.';
+    t.vfs.writeFile = async () => {
+      throw fsError('io', sentence);
+    };
+    t.saveTargets.push('/browser/prog.X68');
+    t.answers.push('OK');
+    expect(await t.manager.save(doc.id)).toBe(false);
+    expect(t.asked[0]?.text).toBe(sentence);
+    // Other codes, and an 'io' reason that is no sentence, keep the original's prefix.
+    expect(writeError('/browser/a.X68', 'quota', 'io').text).toBe('Cannot create file "/browser/a.X68". quota');
+    expect(writeError('/browser/a.X68', 'No such file.', 'not-found').text).toBe(
+      'Cannot create file "/browser/a.X68". No such file.',
+    );
   });
 
   it('a failed write reports it and leaves the document modified', async () => {

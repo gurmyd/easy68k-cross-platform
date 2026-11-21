@@ -25,7 +25,7 @@
 //   - The cache of an older version is deleted once no open page uses it.
 //
 // The scope is the folder of `sw.js`, so the same build works at a site's root and under a
-// sub-path such as https://<account>.github.io/easy68k-mac/.
+// sub-path such as https://<account>.github.io/easy68k-cross-platform/.
 //
 // The logic is exported so that unit tests can run it under Node with fake caches and clients
 // (sw.test.ts). It imports nothing: the bundle must be a classic script without imports.

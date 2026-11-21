@@ -77,7 +77,7 @@ class FakeContainer implements ServiceWorkerContainerLike {
   }
 }
 
-const SW_URL = 'https://example.test/easy68k-mac/sw.js';
+const SW_URL = 'https://example.test/easy68k-cross-platform/sw.js';
 
 function setup(options: { kind?: 'web' | 'desktop'; controlled?: boolean; scriptUrl?: string | null } = {}) {
   const container = new FakeContainer();
@@ -257,7 +257,7 @@ describe('the feature module', () => {
   /** A page with the meta tag and a worker container, as the production build has. */
   function stubPage(container: FakeContainer) {
     vi.stubGlobal('document', {
-      baseURI: 'https://example.test/easy68k-mac/?open=/browser/a.X68',
+      baseURI: 'https://example.test/easy68k-cross-platform/?open=/browser/a.X68',
       querySelector: (selector: string) => (selector === `meta[name="${SW_META_NAME}"]` ? { content: 'sw.js' } : null),
     });
     vi.stubGlobal('navigator', { serviceWorker: container });

@@ -39,7 +39,7 @@ export default defineConfig({
   root: appDir,
   // Relative asset URLs: the same build works at the site root, under the
   // Pages sub-path and under the desktop app's app:// protocol. EASY68K_BASE
-  // overrides it (for example "/easy68k-mac/").
+  // overrides it (for example "/easy68k-cross-platform/", the Pages sub-path).
   base: process.env.EASY68K_BASE ?? './',
   publicDir: 'public',
   // pwaPlugin is typed loosely (features/ may not import vite), hence the cast, as for cspPlugin.

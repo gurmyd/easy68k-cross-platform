@@ -17,7 +17,9 @@
 //                    run one program of your own with one recipe (report, outlog, log:1..3,
 //                    log:N+out) and print what happened; nothing is recorded. F is an .X68 (the
 //                    official editor assembles it; it may INCLUDE files beside it) or an .S68 (run
-//                    as it is, with the .L68 beside it if there is one). run-report.sh and
+//                    as it is, with the .L68 beside it if there is one). With --out the outputs
+//                    are copied to DIR and the run's work folder is DIR/.work-<run> too, so
+//                    that nothing is written below build/oracle-wine/sim. run-report.sh and
 //                    run-log.sh call this.
 //
 // What a run does:
@@ -338,6 +340,14 @@ function preflight(options) {
   assertImageCurrent(options.image, WINE_DIRECTORY);
 }
 
+/**
+ * The work folder of a --file run: below --out when the caller gave one (so that a caller who must
+ * keep scratch output in a folder of its own can), otherwise below build/oracle-wine/sim.
+ */
+export function fileWorkDirectory(out, run) {
+  return out ? join(out, `.work-${run}`) : join(WORK_ROOT, `file-${run}`);
+}
+
 /** --file: one program of the caller's; prints what happened, records nothing. */
 async function runOneFile(options) {
   preflight(options);
@@ -354,7 +364,7 @@ async function runOneFile(options) {
     name.replace(/\.(x68|s68)$/i, ''),
     source,
   );
-  const workDirectory = join(WORK_ROOT, `file-${process.pid}-${Date.now().toString(36)}`);
+  const workDirectory = fileWorkDirectory(options.out, `${process.pid}-${Date.now().toString(36)}`);
   const records = await runJobs(planJobs([program]), {
     ...options,
     corpus: folder,
@@ -366,8 +376,8 @@ async function runOneFile(options) {
   const out = options.out ?? join(workDirectory, 'out');
   if (record && options.out) {
     mkdirSync(out, { recursive: true });
-    for (const entry of readdirSync(record.outDirectory)) {
-      writeFileSync(join(out, entry), readFileSync(join(record.outDirectory, entry)));
+    for (const entry of readdirSync(record.outDirectory, { withFileTypes: true })) {
+      if (entry.isFile()) writeFileSync(join(out, entry.name), readFileSync(join(record.outDirectory, entry.name)));
     }
   }
   console.log(`outputs: ${record ? (options.out ?? record.outDirectory) : workDirectory}`);

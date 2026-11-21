@@ -386,8 +386,68 @@ entry 28 and the lines marked "Gate I1, round 2" in its second round.
   (W4, round 3), `repaintCounts` has a fifth counter `stackRedraw`, mirrored into
   `AppState.sim.repaint.stackRedraw`. The cold start's repaint of every panel (`ALL_PANELS`) does
   not include it: a cold start re-centres the Stack panel. The start-up of a new engine sends it
-  once (measured: `{ listing: 1, breakpoints: 0, memory: 1, stack: 1, stackRedraw: 1 }`), and loads
-  and traces do not.
+  once, and loads and traces do not. Since gate I2 the counters count calls, not engine calls
+  (entry 33): the start-up of a new engine now measures `{ listing: 1, breakpoints: 0, memory: 2,
+  stack: 3, stackRedraw: 1 }` (at gate I1 it read `memory: 1, stack: 1`).
+
+### 33. The repaint counters count `host.repaint()` calls, not engine calls (4.6; gate I2)
+
+- Says: 4.6, the controller counts per panel how often the engine named it; entry 32 and the
+  contract (`AppState.sim.repaint.stackRedraw`): the Stack panel re-centres when `stack` moved by
+  more than `stackRedraw`.
+- Problem (major defect carried from gate I1 round 3): the UI bridge ORed the bits of every
+  `host.repaint()` of one engine call, and the controller added one per bit. One trace over TRAP
+  #15 task 32 with D1 = 0 makes the calls `[4, 24, 8, 1, 8, 4]`: `Hardware->FormShow`'s
+  `StackFrm->Repaint()` (Stack | StackRedraw) and then `regPCChange`'s `updateDisplay()` (Stack).
+  ORed, `stack` and `stackRedraw` each moved by one and a Stack panel the user had scrolled was
+  redrawn in place instead of re-centred, unlike the original.
+- Does: `SimUiBridge.takeRepaintCalls()` counts each call by panel (`RepaintCalls`), and the
+  controller adds those counts (`takeRepaint()` stays, for callers of the bits). `viewRevision`
+  still moves once per engine call. The rule of the Stack panel needs no change: any
+  `updateDisplay()` in a call (or between two store updates) re-centres, which is also where the
+  original ends whatever the order. Tests: `ui-bridge.test.ts` ("counts the repaint calls by
+  panel"), `controller.commands.test.ts` ("counts every host.repaint() of one engine call"), on
+  the real session `features/stack/real-session.test.ts`, and the browser pass `stack` of
+  `check-run.mjs` (the scrolled panel is centred on SP again after the trace).
+
+### 34. A run command and a load wait until the cached program files have read a save (3.8.4; gate I2)
+
+- Says: 3.8.4, a change saved outside the simulator (editor, Files panel, another window) is seen
+  by the program; Run revalidates "if needed" (4.8).
+- Problem (SH6's review, second defect): `CachedSyncFiles` reads such a change asynchronously
+  after the Vfs reports it, 75-95 ms in WebKit, so Rewind and Run straight after a save read the
+  old bytes.
+- Does: the session (`compose.ts`) listens to the Vfs; after any change it asks every view it
+  handed out for `whenCurrent()` (SH6's member beyond `SyncFiles`; a view without it counts as
+  current). `RunControllerDeps.filesCatchingUp()` returns that promise while it is pending. A run
+  command from the idle state then goes through `loading` as the stale-folder case does, and a
+  load waits before reading the program. With nothing outstanding the command still acts inside
+  itself. Because the action may now run after the click handler has returned, a waiting run
+  command unlocks audio (`resumeAudio`, 3.7) before it waits, inside the user's gesture.
+  Tests: `files-catch-up.test.ts` (real `CachedSyncFiles`, a backend whose reads take several
+  turns, the real engine); without the wait the first test reads 3 bytes instead of 11.
+
+### 35. The session ends the cached views it made (3.8.4; SH6's note)
+
+- Does: `RunSession.dispose()` calls `settled()` on each view (which starts its pending writes)
+  and then SH6's `dispose()` (beyond the contract: stops listening to the Vfs and the timers; the
+  writes already started go on). Test: `session.test.ts` ("the end of a session").
+
+### 36. The toolbar's `LOGGING` label with both log types Disabled (1.3.1; errata U4.md entry 5)
+
+- Problem: `AppState.sim.logging` mirrored the engine's flag, which Log Start sets whatever the
+  types; the original's `startLog` shows the label only when it opened a file.
+- Does: the session reads the two types from `log.state` when the engine's flag goes on and
+  reports `logging` only if one of them was not Disabled. Test: `session.test.ts` ("shows LOGGING
+  only when a log type was enabled at Log Start").
+
+### 37. The verdicts of the run check have a module of their own (gate I1 round 3 review, minor defects)
+
+- `features/run/run-verdicts.mjs` holds `judgeDelays` and `judgeRate`, so that
+  `run-verdicts.test.ts` holds them to their rules without a browser. The default-speed verdict
+  accepts half the grant only when every window had gaps over 50 ms; when any window had steady
+  frames one window must be exact, as in round 2. The detail prints the grant per second beside
+  the rate per second, and the window's length.
 
 ### 28. A session or controller disposed before it starts stays inert (3.12.3, 4.7.1)
 

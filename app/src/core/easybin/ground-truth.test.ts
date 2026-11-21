@@ -22,6 +22,13 @@ const local = join(repo, 'build/golden-local/asm');
 const manifestPath = new URL('./fixtures/ground-truth.manifest', import.meta.url);
 const sha = (data: Uint8Array | string) => createHash('sha256').update(data).digest('hex').slice(0, 16);
 
+/**
+ * How many distinct manifest entries the tracked golden folder holds (130 of the 262; the other 132
+ * are only in build/golden-local/asm). Pinned, so that a file removed from the corpus or the golden
+ * folder is noticed (gate I1 round 3 review). Adding a tracked golden that the manifest knows raises it.
+ */
+const TRACKED_MANIFEST_FILES = 130;
+
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
     const path = join(dir, name);
@@ -89,15 +96,21 @@ describe('the official assembler outputs of the corpus', () => {
 
   it('every distinct .S68 of the tracked golden folder loads and saves back as the original does', () => {
     const { checked, mismatches } = compare(walk(tracked), manifest, seen);
-    expect(checked).toBeGreaterThanOrEqual(130);
+    expect(checked).toBe(TRACKED_MANIFEST_FILES);
     expect(mismatches).toEqual([]);
   }, 600_000);
 
   it.skipIf(!existsSync(local))(
     'the same for the local golden folder (build/golden-local/asm)',
     () => {
+      // The tracked folder first (a no-op when the test above ran: compare skips what it has seen).
+      const first = compare(walk(tracked), manifest, seen);
       const { mismatches } = compare(walk(local), manifest, seen);
-      expect(mismatches).toEqual([]);
+      expect([...first.mismatches, ...mismatches]).toEqual([]);
+      // With both folders every manifest entry must have been met and compared: a missing one means
+      // a file was removed from the corpus or the golden folders (gate I1 round 3 review).
+      const neverMet = [...manifest.keys()].filter((key) => !seen.has(key));
+      expect(neverMet, `manifest entries never met: ${neverMet.join(', ')}`).toEqual([]);
     },
     600_000,
   );

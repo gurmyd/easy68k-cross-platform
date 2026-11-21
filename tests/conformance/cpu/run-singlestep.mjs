@@ -12,7 +12,7 @@
 // which case a missing engine fails. On Windows, `npm run oracle:twins` checks the same baseline
 // on every push, and also through the two native simulator twins.
 //
-// Part of easy68k-mac, an unofficial port of EASy68K. GPL-2.0-or-later.
+// Part of easy68k-cross-platform, an unofficial port of EASy68K. GPL-2.0-or-later.
 
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';

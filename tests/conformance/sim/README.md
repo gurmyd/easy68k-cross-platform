@@ -12,7 +12,8 @@ npx vitest run --config tests/conformance/sim/vitest.config.ts            # all 
 EASY68K_SIM_ONLY=trap15-a npx vitest run --config tests/conformance/sim/vitest.config.ts
 EASY68K_SIM_REPORT=1 npx vitest run --config tests/conformance/sim/vitest.config.ts   # also MISMATCHES.md
 npx prettier --write tests/conformance/sim/MISMATCHES.md                   # then format it (format:check)
-EASY68K_CONFORMANCE_PARTS=final npx ...      # ProgramFiles and LogService at their final paths (gate I2)
+EASY68K_SIM_REPORT_JSON=build/x.json npx ... # also the mismatches as data (owner, program, every differing line)
+EASY68K_CONFORMANCE_PARTS=doubles npx ...    # ProgramFiles and LogService doubles instead of the real parts
 node tests/conformance/sim/generate-instructions.mjs                      # rewrite instructions/g-*.X68
 ```
 
@@ -40,7 +41,7 @@ A program's first comment block names what it checks (`* @item`), how it runs (`
 | ------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `programs.ts`                         | the program list and headers, golden names, manifest types, masking (also used by the oracle)   |
 | `harness.ts`                          | the headless harness of 6.4: `assembleConformance`, `runScenario`                               |
-| `doubles.ts`                          | ProgramFiles and LogService doubles while SH6 and U4 are being written                          |
+| `doubles.ts`                          | ProgramFiles and LogService doubles (kept to cross-check the real parts; not the default)       |
 | `compare.ts`                          | first difference, owners, `MISMATCHES.md`                                                       |
 | `conformance.test.ts`                 | the comparison with the goldens                                                                 |
 | `programs.test.ts`, `harness.test.ts` | the programs and the harness themselves                                                         |
@@ -60,7 +61,8 @@ A program's first comment block names what it checks (`* @item`), how it runs (`
 - An owner is the engine or a host package (`OWNERS` in `compare.ts`): the party that acts. A
   defect of the harness is repaired, not listed. A result seen only under Wine is listed with the
   package that acts if Windows agrees, and marked `unconfirmed` with what would confirm it.
-- With `EASY68K_CONFORMANCE_PARTS=final` (or `parts: 'final'`) the program's folder is one in-memory
+- By default (`parts: 'final'`; `EASY68K_CONFORMANCE_PARTS=doubles` or `parts: 'doubles'` selects the
+  doubles) the program's folder is one in-memory
   view shared by the real ProgramFiles, and the logs are the files the real LogService writes beside
   the program; the outcome reads both back.
 - Text-grid programs run with Wine's cells (see `harness.ts`); with `metrics: 'windows'` the

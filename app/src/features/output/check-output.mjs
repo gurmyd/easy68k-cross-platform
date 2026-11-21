@@ -543,6 +543,36 @@ async function presentationPass(browser, name, ratio) {
     return viewport.scrollWidth > viewport.clientWidth || viewport.scrollHeight > viewport.clientHeight;
   });
   check(`${p} 200% does not fit the panel: the panel scrolls`, scrolls);
+  // A region that scrolls must be reachable from the keyboard (axe scrollable-region-focusable,
+  // WCAG 2.1.1; found by X1's scan of Simulator mode, where the panel is smaller than here).
+  {
+    const scan = await new AxeBuilder({ page })
+      .include('.e68-output')
+      .withRules(['scrollable-region-focusable'])
+      .analyze();
+    check(
+      `${p} 200%: the scrolling picture is keyboard-reachable (axe scrollable-region-focusable)`,
+      scan.violations.length === 0,
+      scan.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`).join('; '),
+    );
+    const scrolled = await page.evaluate(async () => {
+      const viewport = document.querySelector('.e68-output__viewport');
+      viewport.scrollTo(0, 0);
+      viewport.focus();
+      const focused = document.activeElement === viewport;
+      const label = viewport.getAttribute('aria-label') ?? '';
+      return { focused, label, role: viewport.getAttribute('role') ?? '' };
+    });
+    await page.keyboard.press('ArrowDown', { delay: 60 });
+    await page.keyboard.press('PageDown', { delay: 60 });
+    const top = await page.evaluate(() => document.querySelector('.e68-output__viewport').scrollTop);
+    check(
+      `${p} 200%: the picture's scroll region takes the focus, has a name and scrolls with the keys`,
+      scrolled.focused && scrolled.label !== '' && scrolled.role === 'region' && top > 0,
+      `${JSON.stringify(scrolled)} scrollTop after ArrowDown, PageDown: ${top}`,
+    );
+    await page.evaluate(() => document.querySelector('.e68-output__viewport').scrollTo(0, 0));
+  }
   check(
     `${p} the zoom choice is stored (AppSettings.layout.outputZoom)`,
     (await page.evaluate(() => window.__output.ctx.settings.get().app.layout.outputZoom)) === 2,

@@ -55,9 +55,9 @@ export interface AppContext {
    *  applies every registered source to every document view. Extension is @codemirror/state's type. */
   editorExtensions: { register(source: (doc: DocumentState) => Extension): () => void };
   /** The port's version and repository, for the About boxes and the update check (1.4 note 11).
-   *  Added at gate I1 as an optional member: the bootstrap fills it; a context built by hand in a
-   *  test may leave it out. */
-  readonly build?: BuildFacts;
+   *  Added at gate I1 as an optional member; required since gate I2 (errata W1.md entry 14.5):
+   *  the bootstrap and createTestApplication fill it. */
+  readonly build: BuildFacts;
 }
 export interface PanelSpec {
   id: string;

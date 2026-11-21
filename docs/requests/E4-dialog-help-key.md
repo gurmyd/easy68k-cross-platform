@@ -1,5 +1,7 @@
 # Request from E4: F1 inside a modeless dialog (W3, shell)
 
+Status: done at gate I2 (W3), form 1: an element marked `data-e68-own-keys="F1"` keeps F1 while the focus is inside it (`OWN_KEYS_ATTRIBUTE` and `ownKeysSelector` in `commands/keymap.ts`; outcome `owned`; errata W3.md entry 37). E4 now puts the attribute on its dialog box.
+
 editor-ui §15.2 and 1.4 note 8: F1 in the **Assembler Options** dialog opens `options.htm`. That
 dialog is modeless (2.7). The key dispatcher (`commands/keymap.ts`) listens on `window` in the
 capture phase, so while the focus is inside a modeless dialog it resolves F1 first: in Editor mode

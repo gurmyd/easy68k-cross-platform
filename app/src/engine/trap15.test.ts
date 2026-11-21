@@ -13,6 +13,7 @@ import {
   assembleProgram,
   createMemoryFiles,
   createTestEngine,
+  runProgram,
   runTrap15Tour,
   textOf,
   trap15TourSource,
@@ -173,4 +174,150 @@ describe.skipIf(!enginesBuilt)('the tour on the real engine (needs engine/dist)'
     expect(reached.size).toBe(93);
     test.release();
   });
+});
+
+// Gate I2: where the official SIM68K.exe was measured (T3, tests/conformance/sim trap15-a a05, a31,
+// a32; errata T3.md F1, F3, F4; T4.md D1) and the engine had to follow (engine/sim/PATCHES.md P24 and
+// section 3, easy68k_fread / easy68k_fwrite).
+describe.skipIf(!enginesBuilt)('TRAP #15 edge cases measured in the official binary (needs engine/dist)', () => {
+  const source = [
+    '        ORG     $1000',
+    'START   LEA     NAME,A1',
+    '        MOVE.B  #52,D0          open a new file',
+    '        TRAP    #15',
+    '        MOVE.L  D1,D6           file ID',
+    '        LEA     DATA,A1',
+    '        MOVE.L  #10,D2',
+    '        MOVE.B  #54,D0          write 10 bytes',
+    '        TRAP    #15',
+    '        MOVE.L  #$12340036,D0   task 54 with D2 = 0',
+    '        MOVE.L  D6,D1',
+    '        MOVEQ   #0,D2',
+    '        TRAP    #15',
+    '        MOVE.L  D0,RES',
+    '        MOVE.L  D6,D1',
+    '        MOVEQ   #0,D2',
+    '        MOVE.B  #55,D0          back to the start',
+    '        TRAP    #15',
+    '        MOVE.L  #$12340035,D0   task 53: A1 + D2 wraps past 2^32',
+    '        MOVE.L  D6,D1',
+    '        LEA     $2000,A1',
+    '        MOVE.L  #$FFFFFFFF,D2',
+    '        TRAP    #15',
+    '        MOVE.L  D0,RES+4',
+    '        MOVE.L  D2,RES+8',
+    '        MOVE.B  #53,D0          control: 4 bytes from the same position',
+    '        MOVE.L  D6,D1',
+    '        LEA     $2100,A1',
+    '        MOVEQ   #4,D2',
+    '        TRAP    #15',
+    '        MOVE.L  D0,RES+12',
+    '        MOVE.L  D2,RES+16',
+    '        LEA     LONG,A1',
+    '        MOVE.W  #-1,D1',
+    '        MOVE.B  #0,D0           task 0, D1.W negative, 300 bytes',
+    '        TRAP    #15',
+    '        MOVE.W  #$8000,D1',
+    '        MOVE.B  #1,D0           task 1, D1.W = $8000',
+    '        TRAP    #15',
+    '        SIMHALT',
+    "NAME    DC.B    'EDGE.BIN',0",
+    "DATA    DC.B    '0123456789'",
+    '        ORG     $3000',
+    'RES     DS.L    5',
+    "LONG    DCB.B   300,'A'",
+    "        DC.B    'Z',0",
+    '        END     START',
+  ];
+  let memory: Uint8Array;
+  let printed: string[];
+
+  beforeAll(async () => {
+    const program = await assembleProgram(source);
+    const test = await createTestEngine({ files: createMemoryFiles() });
+    test.engine.load(program.s68, program.l68, { name: 'edge.S68' });
+    test.forget();
+    expect(runProgram(test.engine, { maxInstructions: 10_000 })).toMatchObject({ reason: 'stopped', halted: true });
+    memory = test.engine.memory.slice(0, 0x4000);
+    printed = [
+      ...test.callsTo('textOutCR').map(([text]) => textOf(text as Uint8Array)),
+      ...test.callsTo('textOut').map(([text]) => textOf(text as Uint8Array)),
+    ];
+    test.release();
+  }, 120_000);
+
+  const long = (address: number) => new DataView(memory.buffer, memory.byteOffset).getUint32(address);
+
+  it('task 54 with D2 = 0 succeeds: D0.W = 0 (the Borland fwrite returns the item count)', () => {
+    expect(long(0x3000)).toBe(0x12340000);
+  });
+
+  it('task 53 whose bounds test wraps: D0.W = 0, D2 unchanged, nothing read', () => {
+    expect(long(0x3004)).toBe(0x12340000);
+    expect(long(0x3008)).toBe(0xffffffff);
+    expect([...memory.subarray(0x2000, 0x2010)]).toEqual(new Array(16).fill(0xff));
+    // the position did not move: the next read gets the first 4 bytes
+    expect(long(0x300c) & 0xffff).toBe(0);
+    expect(long(0x3010)).toBe(4);
+    expect(textOf(memory.subarray(0x2100, 0x2104))).toBe('0123');
+  });
+
+  it('tasks 0 and 1 with a negative D1.W print exactly 255 characters of a longer string', () => {
+    expect(printed).toEqual(['A'.repeat(255), 'A'.repeat(255)]);
+  });
+});
+
+// Gate I2: the two defects of the original's Save branch of task 58 are not reproduced
+// (ARCHITECTURE.md 3.8.4; engine/sim/PATCHES.md section 5; errata SH6.md entry 12).
+describe.skipIf(!enginesBuilt)('TRAP #15 task 58, Save mode (needs engine/dist)', () => {
+  const source = [
+    '        ORG     $1000',
+    'START   MOVEQ   #1,D1           Save dialog with a file name',
+    '        SUBA.L  A1,A1',
+    '        SUBA.L  A2,A2',
+    '        LEA     PATH,A3',
+    '        MOVE.B  #58,D0',
+    '        TRAP    #15',
+    '        MOVE.B  #0,PATH         Save dialog with an empty name',
+    '        MOVEQ   #1,D1',
+    '        MOVE.B  #58,D0',
+    '        TRAP    #15',
+    '        MOVE.B  #0,$FFFFF8      Save near the end of memory',
+    '        MOVEQ   #1,D1',
+    '        MOVEA.L #$FFFFF8,A3',
+    '        MOVE.L  #$12340000+58,D0',
+    '        TRAP    #15',
+    '        MOVE.L  D0,RES',
+    '        MOVE.L  D1,RES+4',
+    '        SIMHALT',
+    "PATH    DC.B    'FIRST.TXT',0",
+    '        DS.B    256',
+    '        ORG     $3000',
+    'RES     DS.L    2',
+    '        END     START',
+  ];
+
+  it("an empty name clears the Save dialog's own name; the overflow test measures the chosen name", async () => {
+    const program = await assembleProgram(source);
+    const test = await createTestEngine({ files: createMemoryFiles() });
+    test.engine.load(program.s68, program.l68, { name: 'save.S68' });
+    test.forget();
+    const report = runProgram(test.engine, {
+      maxInstructions: 10_000,
+      dialogs: [
+        { accepted: true, fileName: 'C:\\SAVED.TXT' },
+        { accepted: false },
+        { accepted: true, fileName: 'C:\\LONGNAME.TXT' },
+      ],
+    });
+    expect(report).toMatchObject({ reason: 'stopped', halted: true });
+    const initialNames = test.callsTo('fileDialog').map((args) => textOf(args[3] as Uint8Array));
+    // The original showed 'C:\SAVED.TXT' again the second time (it cleared the Open dialog's name).
+    expect(initialNames).toEqual(['FIRST.TXT', '', '']);
+    const view = new DataView(test.engine.memory.buffer, test.engine.memory.byteOffset);
+    // $FFFFF8 + 15 bytes passes the end of memory: error. The original measured the Open dialog's
+    // name (empty) and wrote the path past the end.
+    expect(view.getUint32(0x3000) & 0xffff).toBe(2);
+    test.release();
+  }, 60_000);
 });

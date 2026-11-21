@@ -244,16 +244,36 @@ export class SimMainModel {
 
   /**
    * The original's highlight() as far as the port needs it outside a refresh: Go to PC, a
-   * double-click on the PC field, a typed PC. The engine has run highlight() itself (it keeps the
-   * row in `listingHighlight`); when that row matches the PC field it becomes the selection. If
-   * no row matches, the selection stays where it is. Either way the selection is scrolled into
+   * double-click on the PC field, a typed PC. The engine keeps the row of its last highlight() in
+   * `listingHighlight`; when that row matches the PC field it becomes the selection, otherwise the
+   * last matching row does (the search of highlight()). If no row matches, the selection stays
+   * where it is. Either way the selection is scrolled into
    * view (sim-ui §6.4: "the same scroll rule runs even when the selection did not change").
    */
   followPC(): void {
     const { engine, controller } = this.ctx.sim;
-    const row = engine.listingHighlight;
-    if (this.highlightMatches(row, engine.boxText(Box.PC), controller.snapshot.halted)) this.setSelected(row);
+    const pcText = engine.boxText(Box.PC);
+    const halted = controller.snapshot.halted;
+    let row = engine.listingHighlight;
+    // The engine's row is that of its last highlight(). Right after a load that ran none over the
+    // new rows (errata U1.md entry 8) it is -1 although a row matches; the original's Go to PC and
+    // PC double-click run highlight() there and select it, so the rows are searched as it does.
+    if (!this.highlightMatches(row, pcText, halted)) row = this.lastMatchingRow(pcText, halted);
+    if (row >= 0) this.setSelected(row);
     this.requestScroll(this.selectedRow);
+  }
+
+  /**
+   * The row highlight() selects (SIM68Ku.cpp:792-797): the LAST row from index 3 on whose first 8
+   * characters, upper-cased, equal the PC field and that is an instruction row or the program has
+   * halted. -1 when none does.
+   */
+  private lastMatchingRow(pcText: string, halted: boolean): number {
+    const rows = this.ctx.sim.listing.rows;
+    for (let row = rows.length - 1; row >= FIRST_BODY_ROW; row--) {
+      if (this.highlightMatches(row, pcText, halted)) return row;
+    }
+    return -1;
   }
 
   /** Search > Go to PC (Ctrl+G). */

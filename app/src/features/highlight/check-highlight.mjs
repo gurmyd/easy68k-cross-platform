@@ -15,7 +15,7 @@
 //
 // Screenshots go to build/E3/highlight-check (git-ignored). Exit code 0 = everything passed.
 
-/* global console, process, window, document, requestAnimationFrame, setTimeout, TextEncoder -- browser globals inside page.evaluate() */
+/* global console, process, window, document, requestAnimationFrame, setTimeout, TextEncoder, getComputedStyle -- browser globals inside page.evaluate() */
 
 import { mkdirSync } from 'node:fs';
 import { createServer as createNetServer } from 'node:net';
@@ -139,6 +139,59 @@ async function setKind(page, id, kind) {
 }
 
 /**
+ * A selection in the real editor is drawn (gate I2, E6's review: an opaque .cm-content hid
+ * CodeMirror's selection layer, so no selection was ever visible). The pixels of a selected word
+ * must differ from the same word unselected, with the focus in the editor and without it
+ * (HideSelection = False, editor-ui §7.1); the content itself must be transparent.
+ */
+async function selectionVisible(page, p, name, id, label) {
+  const rect = await page.evaluate(
+    ([d, line]) => {
+      const view = window.__hl.editorView(d);
+      window.__hl.selectRange(view, view.state.doc.length, view.state.doc.length, true);
+      // Blanks only: a browser may recolour selected glyphs even when no selection background is
+      // drawn (Chromium does), so only blanks show whether the background is visible.
+      return window.__hl.textRect(view, line, 0, 8);
+    },
+    [id, LINE.unknown],
+  );
+  if (!rect) {
+    check(`${p} real editor, ${label}: a selection is drawn`, false, 'no coordinates for the text');
+    return;
+  }
+  // Inside the selected text by 3 px on each side, so that the caret at either end is not in it.
+  const clip = {
+    x: Math.round(rect.x) + 3,
+    y: Math.round(rect.y),
+    width: Math.max(4, Math.round(rect.width) - 6),
+    height: Math.max(4, Math.round(rect.height)),
+  };
+  await nextFrames(page);
+  const before = await page.screenshot({ clip });
+  const shots = {};
+  for (const focus of [true, false]) {
+    await page.evaluate(
+      ([d, from, to, f]) => window.__hl.selectRange(window.__hl.editorView(d), from, to, f),
+      [id, rect.pos, rect.end, focus],
+    );
+    await nextFrames(page);
+    shots[focus ? 'focused' : 'unfocused'] = await page.screenshot({ clip });
+  }
+  const own = await page.evaluate((d) => getComputedStyle(window.__hl.editorView(d).contentDOM).backgroundColor, id);
+  await page.screenshot({ path: join(outDir, `${name}-editor-selection.png`) });
+  check(
+    `${p} real editor, ${label}: a selection is drawn, with the focus and without it`,
+    !before.equals(shots.focused) && !before.equals(shots.unfocused) && own === 'rgba(0, 0, 0, 0)',
+    `region ${JSON.stringify(clip)}; differs from unselected: focused ${!before.equals(shots.focused)}, ` +
+      `unfocused ${!before.equals(shots.unfocused)}; .cm-content background ${own}`,
+  );
+  await page.evaluate((d) => {
+    const view = window.__hl.editorView(d);
+    window.__hl.selectRange(view, 0, 0, true);
+  }, id);
+}
+
+/**
  * The highlighter inside the real editor component (E2's DocumentEditor): applied once per view
  * through the editor-extension registry, the colours in both themes and under a stored preset
  * (background, text, caret), a document that changes kind, and a real .L68 file opened through
@@ -182,6 +235,7 @@ async function realEditor(page, p, name) {
     JSON.stringify(light),
   );
   await page.screenshot({ path: join(outDir, `${name}-editor-auto-light.png`) });
+  await selectionVisible(page, p, name, id, 'Auto light');
 
   await setTheme(page, 'dark');
   const dark = await facts();
@@ -208,6 +262,7 @@ async function realEditor(page, p, name) {
     JSON.stringify(stored),
   );
   await page.screenshot({ path: join(outDir, `${name}-editor-color1-dark-theme.png`) });
+  await selectionVisible(page, p, `${name}-color1`, id, 'Color1 in the dark theme');
 
   // The document becomes a list document (store-side kind change): no marks; the stored background.
   await setKind(page, id, 'list');

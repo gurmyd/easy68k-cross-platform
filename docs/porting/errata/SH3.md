@@ -444,3 +444,26 @@ model; the port keeps the rule of the ordinary case. `docs/differences/SH3.md` l
   Console 10, plain and bold, one row). In `docs/differences/SH3.md`.
 - Proportional substitute (Arial): not changed. T2 did not measure these rules there and lists the
   zero-width bytes of Arial as not modelled.
+
+## Gate I2, round 1
+
+### 29. Italic outline cells are compared (docs/requests/T2-outline-italic.md)
+
+- T2 measured that GDI widens the opaque cell of an italic outline-face text further than a plain
+  one: on the right up to a third of the cell height, on the left one pixel more (errata T2
+  section 1 item 18). `gdi-replay.ts` now has `outlineWidening(italic, cellHeight)` with T2's two
+  lines (italic `[max(3, ceil(h / 10)) + 1, max(3, ceil(0.35 * h))]`, otherwise `max(3, ceil(h /
+  10))` on both sides) and records `italic` in each `TextBox` (an optional member, so nothing that
+  builds boxes changes); `outsideTheBoxes` uses it.
+- `gdi-references.test.ts` compares the suite `text-outline-italic` with `cells`: every case that
+  does not draw only `$7F` (those are left out for the reason of entry 28) has Windows' cell
+  rectangles and pen position. A second test shows that the plain margin fails on the suite.
+- Not a change of the product: the pixels the port draws are the same; only what the comparison
+  leaves out around an italic cell (ink the port's substitute glyphs cannot reproduce, 6.5.3).
+
+### 30. `delInHighText` is read through the contract
+
+- Since gate I1 round 3 `GlyphProvider.delInHighText?` is an optional member of the contract
+  (errata W1.md entry 13). `TextScreen` now calls it through `deps.glyphs` directly; only
+  `monospacedOutline`, which the contract does not have, is still read through the module's own
+  `FallbackGlyphs`. `FallbackGlyphs` itself is unchanged (both providers still implement it).

@@ -1,6 +1,6 @@
 # DV3: Node globals for desktop/**/*.{js,mjs}
 
-Status: open (optional; DV3 works without it)
+Status: applied at gate I2 round 1 (config), as asked: `eslint.config.js` (easy68k/node-files) lists `desktop/**/*.{ts,mts,js,mjs}`, and `tests/lint/node-globals.test.ts` is back (the text below; its header now says the gate wrote it). The test was the configuration engineer's from gate I1 round 3, not DV3's, but it was never committed; DV3's repair took both for its own out-of-bounds edits and removed them. DV3 may now drop the `node:console` / `node:process` imports (errata DV3 entry 18). `npm run lint` runs 66 lint tests.
 
 From: DV3 (macOS packaging and release). For: the gate (owner of `eslint.config.js`, W0 > gates).
 

@@ -175,3 +175,57 @@
 .e68-field-label > .e68-textfield {
   flex: 1 1 auto;
 }
+
+/* TextArea: the field frame grows to the box; the textarea scrolls inside it (errata W2 entry 24). */
+.e68-textarea__wrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.e68-textarea__wrap > .e68-field-label {
+  align-items: stretch;
+}
+
+.e68-field.e68-textarea {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  height: auto;
+}
+
+.e68-field-label > .e68-textarea {
+  flex: 1 1 auto;
+}
+
+.e68-textarea__input {
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: var(--sp-1) var(--sp-2);
+  overflow: auto;
+  resize: none;
+  background: transparent;
+  color: inherit;
+  border: 0;
+  border-radius: inherit;
+  outline: none;
+  font-size: var(--fs-md);
+  line-height: var(--lh-body);
+}
+
+.e68-textarea__input[wrap='off'] {
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.e68-textarea__input:focus-visible {
+  outline: none;
+}
+
+.e68-textarea__input:disabled {
+  color: var(--c-text-disabled);
+  -webkit-text-fill-color: var(--c-text-disabled);
+}

@@ -1,6 +1,6 @@
 # U3: browser check of the Break Points panel
 
-Status: open (for the integration gate: root package.json and ci.yml)
+Status: applied at gate I2 round 1 (config), as asked: root script `check:breakpoints` and the step "Break Points check (U3)" of `browser-checks`, group `simulator`, on Ubuntu, macOS and Windows; `build/U3/breakpoints-check/` is uploaded on failure. Run here: 72 of 72 in 283 s.
 
 Please add the root script
 

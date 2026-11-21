@@ -8,7 +8,7 @@ import { Gallery } from './Gallery';
 import type { GalleryRequest } from './route';
 
 export function mountGallery(container: Element, request: GalleryRequest): Root {
-  document.title = 'Component kit - easy68k-mac';
+  document.title = 'Component kit - easy68k-cross-platform';
   const root = createRoot(container);
   root.render(
     <StrictMode>

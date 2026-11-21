@@ -23,11 +23,17 @@ in `docs/porting/gdi-deviations.md`. Entries under **Contract** concern what oth
 - Measured: a filled ellipse with a pen 2 or more wide in `R2_COPYPEN` is drawn from the flattened
   polygon; in every other operation (also `R2_WHITE`, `R2_BLACK`, `R2_NOTCOPYPEN`) and unfilled,
   from the curve. The difference is a few pixels near the four ends. The two sinks cannot tell.
-- Does: `rasterEllipse(..., interior, copyMode = false)`, a ninth optional argument. The Surface
-  (SH1) does not pass it yet, so filled wide-pen ellipses in Copy take the curve: T2's
-  `surface.test.ts` fails 3 of the 343 `clip` cases (`clip-00202`, `clip-00217`, `clip-00230`, 1-4
-  pixels each) until SH1 applies the one-line change of the request. All three are equal with the
-  argument passed (checked by replaying them on `rasterEllipse`).
+- Does: `rasterEllipse(..., interior, copyMode = false)`, a ninth optional argument. Until gate I2
+  the Surface (SH1) did not pass it, so filled wide-pen ellipses in Copy took the curve and T2's
+  `surface.test.ts` failed 3 of the 343 `clip` cases (`clip-00202`, `clip-00217`, `clip-00230`, 1-4
+  pixels each) on every system, CI's Ubuntu and macOS among them. SH1 applied the request at gate
+  I2; the three cases are equal, and `BASELINE.wideEqualSurface` in `ellipse.gdi.test.ts` is 496.
+  The failure was not a platform difference. CI has no conformance job on Windows; replaying the
+  `clip` suite on this Windows PC with the committed `surface.ts` of commit fdabb2b gives the same
+  three cases with the same pixel counts as CI's Ubuntu and macOS, and 0 of 343 with today's.
+  `ellipse.ts` and `widepen.ts` use no library function
+  whose last bit may differ between builds (only `Math.SQRT2`, `Math.round`, `Math.ceil`,
+  `Math.floor`, exact powers of two and BigInt), so they draw the same pixels everywhere.
 
 ### C3. New exports inside the surface folder
 
@@ -111,8 +117,9 @@ Surface calls (`rasterEllipse`, `strokeWideLine`) are unchanged apart from C2's 
 
 - The steps of gdi-deviations.md section 3 and the nib table were measured with a small C++ probe
   in `build/SH2/probe/probe.cpp` (git-ignored): GDI calls under a 1/16 world transform, GetPath,
-  FlattenPath, WidenPath. It is not part of the repository; `docs/requests/SH2-gdi-nibs.md` asks T2
-  to add the nib capture to the committed capture program.
+  FlattenPath, WidenPath. It is not part of the repository. Since gate I2 the nib capture is part
+  of T2's committed capture program (`gdi-capture nibs`, `docs/requests/SH2-gdi-nibs.md`, done);
+  T2's `tests/conformance/gdi/nibs.test.ts` finds all 254 nibs of `tables/pens.ts` equal to it.
 
 ### 8. Repair round 1: the joins at the four ends of a wide-pen ellipse
 
@@ -123,6 +130,25 @@ Surface calls (`rasterEllipse`, `strokeWideLine`) are unchanged apart from C2's 
   `widenClosed`'s last argument may now be a per-vertex array; `rasterEllipse` passes line joins at
   the four ends. Tiny boxes: 248 -> 272 of 285 equal; boxes of one to three points: 88 -> 92 of
   100; every committed suite unchanged. What remains is in gdi-deviations.md section 2, item 4.
+
+### 9. Gate I2: the tie rule of a wide line next to the x axis
+
+- The second verification found wide lines differing from GDI in some directions with
+  dx * dy < 0 (width 2 towards (-1,2): 1 pixel; widths 9 and 12 towards (-7,17): 14-15 pixels;
+  widths 7, 11, 16, 21, 24, 29, 37 likewise), while gdi-deviations.md claimed the line polygon
+  right for every direction measured.
+- Cause: of two guide vertices equally far to one side, the code took the later one in angle
+  order when dx > 0. GDI's WidenPath shows that when one of the two nib vertices lies on the x axis
+  the choice goes by dy > 0 instead (`laterOnTie` in `widepen.ts`).
+- Checked against GDI's LineTo pixels (scratch probe): every primitive direction in -40..40 for
+  widths 2-14 (50,960 lines), -20..20 for widths 15-40 (26,624), -10..10 for widths 41-255, every
+  tie direction in -40..40 for widths 2-255 (1,420): all equal. `widepen.test.ts` holds the eleven
+  widened paths that T2's `gdi-capture nibs` records for these directions (the test fails with the
+  old rule). Wide-pen ellipses gained too (`v2-midpen` 294 -> 296 of 300, `v2-small-copy-f`
+  888 -> 889 of 1,008, `wide-big` 196 -> 197 of 200; no family of either verification lost a
+  case). gdi-deviations.md
+  section 2 now lists every family that still differs with its measured scope, in place of the
+  sentence "These are all the differences known".
 
 ## Notes
 

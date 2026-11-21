@@ -377,6 +377,48 @@ describe('step 1: a modal dialog is open', () => {
   });
 });
 
+describe('an element that owns a chord (data-e68-own-keys; docs/requests/E4-dialog-help-key.md)', () => {
+  const OWNS_F1 = element('INPUT', { type: 'checkbox', inside: ['[data-e68-own-keys~="F1"]'] });
+  const OWNS_F5 = element('BUTTON', { inside: ['[data-e68-own-keys~="F5"]'] });
+  const key = (name: string) => ({
+    key: name,
+    code: name,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    metaKey: false,
+  });
+
+  it('F1 inside a modeless dialog that owns it is left to the dialog, on both key maps', () => {
+    for (const os of ['windows', 'mac'] as const) {
+      const app = harness({ os, mode: 'editor' });
+      expect(app.send(key('F1'), OWNS_F1), os).toEqual({
+        outcome: { kind: 'owned' },
+        prevented: false,
+        stopped: false,
+      });
+      expect(app.state.ran).toEqual([]);
+    }
+  });
+
+  it('other chords inside it, and F1 elsewhere, still run their commands', () => {
+    const app = harness({ mode: 'editor' });
+    expect(app.send(win('F9'), OWNS_F1).outcome).toEqual({ kind: 'run', command: 'ed.project.assemble' });
+    expect(app.send(key('F1'), BUTTON).outcome.kind).toBe('run');
+  });
+
+  it("an owned guarded chord reaches the element, but the browser's default is still cancelled", () => {
+    const app = harness({ mode: 'simulator' });
+    expect(app.send(key('F5'), OWNS_F5)).toEqual({ outcome: { kind: 'owned' }, prevented: true, stopped: false });
+  });
+
+  it('the selector quotes the chord', async () => {
+    const { ownKeysSelector } = await import('./keymap');
+    expect(ownKeysSelector('F1')).toBe('[data-e68-own-keys~="F1"]');
+    expect(ownKeysSelector('Ctrl+Shift+"')).toBe('[data-e68-own-keys~="Ctrl+Shift+\\""]');
+  });
+});
+
 describe('step 2: the Output panel has the keyboard', () => {
   it('the dispatcher does nothing at all, not even for F9 or F5', () => {
     const app = harness({ mode: 'simulator' });

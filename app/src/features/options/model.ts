@@ -357,6 +357,13 @@ export function cssFontFamily(name: string): string {
   return clean === '' ? 'var(--font-mono)' : `"${clean}", var(--font-mono)`;
 }
 
+/**
+ * The dialogs' help key in the chord form of commands/chords.ts: F1 on every system (the chord of
+ * `ed.help.help` on Windows and macOS). The modeless Assembler Options dialog lists it in
+ * `data-e68-own-keys` so that the shell leaves it to the dialog.
+ */
+export const HELP_CHORD = 'F1';
+
 /** True for F1 without modifiers: the dialog's help key. */
 export function isHelpKey(event: {
   key: string;

@@ -109,6 +109,12 @@ function reasonOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** The FsError code of a failed write (contracts/fs.ts), if it has one. */
+function codeOf(error: unknown): string | undefined {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === 'string' ? code : undefined;
+}
+
 export class DocumentManager implements DocumentService {
   readonly registry: DocumentRegistry;
   private readonly deps: DocumentServiceDeps;
@@ -285,7 +291,7 @@ export class DocumentManager implements DocumentService {
     try {
       await vfs.writeFile(path, encodeFile(target, text));
     } catch (error) {
-      await dialogs.messageBox(writeError(path, reasonOf(error)));
+      await dialogs.messageBox(writeError(path, reasonOf(error), codeOf(error)));
       return false;
     }
     const stat = await vfs.stat(path).catch(() => null);

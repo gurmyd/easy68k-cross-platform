@@ -4,7 +4,7 @@
  * small script language. It is a test tool (ARCHITECTURE.md 6.2.1): sim-script.mjs runs the same
  * scripts through the WebAssembly engine, and the two transcripts must be identical.
  *
- * Part of easy68k-mac, an unofficial port of EASy68K. GPL-2.0-or-later.
+ * Part of easy68k-cross-platform, an unofficial port of EASy68K. GPL-2.0-or-later.
  *
  * Usage:
  *   sim-twin --script <file> --sandbox <dir> --work <dir> [--out <file>]

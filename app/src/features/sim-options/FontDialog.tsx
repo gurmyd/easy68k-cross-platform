@@ -16,6 +16,7 @@ import {
   FONT_STYLES,
   fontChoices,
   fontFrom,
+  initialFontName,
   styleNameOf,
   type FontDialogProps,
   type FontDialogResult,
@@ -27,7 +28,7 @@ export function FontDialog({ props, close }: DialogProps<FontDialogProps, FontDi
   const { target } = props;
   const withEffects = target === 'output';
   const choices = fontChoices(target, props.font.name);
-  const [name, setName] = useState(props.font.name);
+  const [name, setName] = useState(() => initialFontName(target, props.font.name));
   const [size, setSize] = useState(props.font.size);
   const [style, setStyle] = useState<FontStyleName>(styleNameOf(props.font));
   const [underline, setUnderline] = useState(props.font.underline);

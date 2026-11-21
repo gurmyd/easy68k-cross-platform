@@ -55,8 +55,6 @@ export function registryTarget(ctx: AppContext): EditorTarget {
       return null;
     }
   };
-  // Ends the watch of the last match (focusEditor).
-  let stopGuard: () => void = () => {};
   return {
     activeId: () => ctx.store.getState().documents.activeId,
     snapshot(id) {
@@ -81,53 +79,16 @@ export function registryTarget(ctx: AppContext): EditorTarget {
         userEvent: 'input.replace',
       });
     },
-    focusEditor(id, selection) {
+    focusEditor() {
+      // The editor keeps the match selected as it takes the focus: focusPanel lets its view focus
+      // itself (state/panels.ts PANEL_FOCUS_EVENT, ui/editor/DocumentEditor.tsx), which writes the
+      // state's selection into the page instead of letting the browser put back its own earlier
+      // caret. Until gate I2 this feature had to undo that caret for 400 ms after a match
+      // (errata/E6.md, entry 2); the guard also undid an arrow key pressed in that time.
       focusPanel(ctx, 'editor');
-      // The shell focuses the editor's text element directly. A browser then puts the DOM caret
-      // where the element last had it (or at its start), and the editor reads that back as a new
-      // selection (a transaction with the user event "select"), which would undo the match just
-      // selected (seen in Chromium after a click on the dialog's button). So for a short while the
-      // first such selection change is undone once. Anything else ends the watch: an edit, a click
-      // in the text ("select.pointer"), a selection made by code, the next search
-      // (errata/E6.md, entry 2).
-      stopGuard();
-      const reg = registry();
-      if (!reg || !reg.has(id)) return;
-      let active = true;
-      let stopTimer: () => void = () => {};
-      const unsubscribe = reg.subscribe((event) => {
-        if (!active || event.id !== id) return;
-        if (event.kind !== 'updated') return stop();
-        const tr = event.transaction;
-        if (tr.docChanged) return stop();
-        if (!tr.selection) return; // a reconfiguration
-        const main = tr.state.selection.main;
-        if (main.from === selection.from && main.to === selection.to) return;
-        const fromFocus = tr.isUserEvent('select') && !tr.isUserEvent('select.pointer');
-        const doc = tr.state.doc;
-        stop();
-        if (!fromFocus) return;
-        // Not from inside the registry's notification: the editor may still be storing a batch.
-        ctx.scheduler.setTimer(0, () => {
-          if (!reg.has(id) || reg.state(id).doc !== doc) return;
-          reg.dispatch(id, { selection: { anchor: selection.from, head: selection.to }, scrollIntoView: true });
-        });
-      });
-      const stop = () => {
-        if (!active) return;
-        active = false;
-        unsubscribe();
-        stopTimer();
-        stopGuard = () => {};
-      };
-      stopTimer = ctx.scheduler.setTimer(FOCUS_GUARD_MS, stop);
-      stopGuard = stop;
     },
   };
 }
-
-/** How long after a match the selection change that the editor's focus causes is undone. */
-const FOCUS_GUARD_MS = 400;
 
 /** Props of the two dialogs: `below` when the other one was open as it opened (then it opens under it). */
 export interface FindDialogProps {

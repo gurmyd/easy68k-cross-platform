@@ -194,6 +194,42 @@ describe('widenSegment: the polygon GDI fills (WidenPath)', () => {
     );
   });
 
+  it('breaks a tie next to a nib vertex on the x axis by the sign of dy (the directions of gate I2)', () => {
+    // GDI's WidenPath of a line from (0,0) one step of (dx, dy) pixels long, read back with GetPath
+    // by T2's `gdi-capture nibs` (tests/conformance/gdi/golden/nibs.json, "ties"). In these directions
+    // one of the two tied guide vertices lies on the x axis; the rule of the other ties (by the sign
+    // of dx) took the wrong one, which drew strokes up to 15 pixels off (lines from (50,50)).
+    const measured: [number, number, number, string][] = [
+      [2, -1, 2, '8,16 15,0 7,-15 -8,-16 -24,16 -31,32 -23,47 -8,48'],
+      [2, 1, -2, '-16,0 -7,15 7,15 16,0 32,-32 23,-47 9,-47 0,-32'],
+      [2, -2, 4, '8,16 15,0 7,-15 -8,-16 -40,48 -47,64 -39,79 -24,80'],
+      [7, -16, 39, '40,40 55,0 39,-38 0,-55 -40,-40 -296,584 -311,624 -295,662 -256,679 -216,664'],
+      [7, 16, -39, '-56,0 -39,38 0,55 39,38 56,0 312,-624 295,-662 256,-679 217,-662 200,-624'],
+      [9, -7, 17, '48,48 71,0 50,-50 0,-71 -48,-48 -160,224 -183,272 -162,322 -112,343 -64,320'],
+      [9, 7, -17, '-72,0 -50,50 0,71 50,50 72,0 184,-272 162,-322 112,-343 62,-322 40,-272'],
+      [11, -13, 31, '64,64 87,0 61,-61 0,-87 -64,-64 -272,432 -295,496 -269,557 -208,583 -144,560'],
+      [11, 13, -31, '-88,0 -61,61 0,87 61,61 88,0 296,-496 269,-557 208,-583 147,-557 120,-496'],
+      [
+        12,
+        -7,
+        17,
+        '72,72 95,0 67,-67 37,-87 0,-95 -37,-87 -72,-72 -184,200 -207,272 -179,339 -149,359 -112,367 -75,359 -40,344',
+      ],
+      [
+        12,
+        7,
+        -17,
+        '-96,0 -67,67 -37,87 0,95 37,87 67,67 96,0 208,-272 179,-339 149,-359 112,-367 75,-359 45,-339 16,-272',
+      ],
+    ];
+    for (const [width, dx, dy, path] of measured) {
+      const gdi = path.split(' ').map((p) => p.split(',').map(Number) as [number, number]);
+      expect(widenSegment(width, { x: 0, y: 0 }, { x: 16 * dx, y: 16 * dy }), `width ${width} (${dx},${dy})`).toEqual(
+        pairs(gdi),
+      );
+    }
+  });
+
   it('a line of length zero is widened as a line pointing in +x', () => {
     expect(distinct(widenSegment(6, { x: 0, y: 0 }, { x: 0, y: 0 }))).toEqual(
       pairs([
@@ -230,7 +266,7 @@ describe('widenSegment: the polygon GDI fills (WidenPath)', () => {
       emitDot(penDot(width), 0, 0, (y, a, b) => dot.push(`${y}:${a}..${b}`));
       expect(filled, `width ${width}`).toEqual(dot);
     }
-  });
+  }, 60_000);
 });
 
 describe('fillPolygons', () => {

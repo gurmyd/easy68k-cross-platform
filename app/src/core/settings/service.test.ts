@@ -393,6 +393,11 @@ describe('two windows on one storage (3.8.6 rule 2)', () => {
  */
 class LateStorage {
   text: string | null = null;
+  /**
+   * True: every window reads the shared store itself, ahead of the events still on their way to it,
+   * as two Chromium pages of one renderer process do (they share one storage cache).
+   */
+  constructor(private readonly sharedRead = false) {}
   private readonly windows: {
     copy: string | null;
     queue: (string | null)[];
@@ -408,7 +413,7 @@ class LateStorage {
     };
     this.windows.push(self);
     return {
-      read: () => self.copy,
+      read: () => (this.sharedRead ? this.text : self.copy),
       write: (text) => {
         self.copy = text;
         this.text = text;
@@ -1410,5 +1415,86 @@ describe('stamps in the stored document (errata W3 entry 26)', () => {
     expect(mergeStamped(theirs, merged).mineWon).toBe(false);
     expect(compareStamps([3, 'a'], [3, 'b'])).toBeLessThan(0);
     expect(compareStamps([4, 'a'], [3, 'b'])).toBeGreaterThan(0);
+  });
+});
+
+// ---- An outside write that a window hears of through another window first (errata W3 entry 39)
+
+describe('an outside write that a window has already heard of through another window', () => {
+  const setFont = (size: number) => (s: Settings) => ({ ...s, editor: { ...s.editor, fontSize: size } });
+  const fonts = (storage: LateStorage, ...windows: SettingsStore[]) => [
+    ...windows.map((w) => w.get().editor.fontSize),
+    parseSettings(storage.text).settings.editor.fontSize,
+  ];
+  const X = JSON.stringify({ version: 1, editor: { fontSize: 21 } });
+  const Y = JSON.stringify({ version: 1, editor: { fontSize: 22 } });
+
+  it('reads ahead of the events (shared cache): a change made after the write survives its late event', () => {
+    const storage = new LateStorage(true);
+    const clock = testClock();
+    const a = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'a' });
+    const b = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'b' });
+    const outside = storage.window();
+    clock.advance(1000);
+    outside.write(X);
+    storage.deliverOne(0); // A takes X in ...
+    clock.advance(10);
+    a.update(setBitField(true)); // ... and writes, with X's mark; B has not had X's event yet.
+    clock.advance(10);
+    b.update(setFont(30)); // B reads A's write from the shared cache, then sets 30, after X.
+    storage.deliverAll(); // now X's event reaches B: it is the write B knows, not a new one.
+    expect(fonts(storage, a, b)).toEqual([30, 30, 30]);
+  });
+
+  it('a second write of the same text is still new to a window that opened after the first', () => {
+    const storage = new LateStorage();
+    const clock = testClock();
+    const a = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'a' });
+    const outside = storage.window();
+    clock.advance(1000);
+    outside.write(X);
+    storage.deliverAll();
+    clock.advance(1000);
+    outside.write(Y);
+    const b = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'b' });
+    storage.deliverAll();
+    clock.advance(1000);
+    b.update(setFont(30));
+    storage.deliverAll();
+    clock.advance(1000);
+    outside.write(X);
+    storage.deliverAll();
+    expect(fonts(storage, a, b)).toEqual([21, 21, 21]);
+    clock.advance(10);
+    a.update(setBitField(true));
+    storage.deliverAll();
+    expect(fonts(storage, a, b)).toEqual([21, 21, 21]);
+  });
+
+  it('three windows, one opened on the outside write, which is then written again after two changes', () => {
+    const storage = new LateStorage();
+    const clock = testClock();
+    const a = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'a' });
+    const b = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'b' });
+    const outside = storage.window();
+    clock.advance(1000);
+    outside.write(X);
+    const c = createSettingsService(storage.window(), undefined, { now: clock.now, writerId: 'c' });
+    storage.deliverOne(0);
+    clock.advance(100);
+    a.update(setFont(30));
+    storage.deliverAll();
+    clock.advance(100);
+    c.update(setFont(40));
+    storage.deliverAll();
+    expect(fonts(storage, a, b, c)).toEqual([40, 40, 40, 40]);
+    clock.advance(1000);
+    outside.write(X);
+    storage.deliverAll();
+    expect(fonts(storage, a, b, c)).toEqual([21, 21, 21, 21]);
+    clock.advance(100);
+    b.update(setBitField(true));
+    storage.deliverAll();
+    expect(fonts(storage, a, b, c)).toEqual([21, 21, 21, 21]);
   });
 });

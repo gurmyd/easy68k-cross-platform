@@ -46,13 +46,18 @@ W1. "Manual checks" lists what only a person with a real folder can prove.
    a 1 kB file and 90-125 ms on a 20 MB file. Consequence for SH6 (the cached view writes back with
    the write-behind helper) and U4 (log files): on `/folder`, batch appends rather than appending
    line by line; a log file of a few hundred kilobytes is unaffected in practice.
+   Since each stream starts from a copy of the file and replaces it on close, two overlapping
+   appends would lose the first one's data. The Vfs serialises the writes it is given; since gate
+   I2 `FolderBackend` also runs the writes of one file (letter case folded) one after the other
+   itself, for callers that use the backend directly (found by the package's review).
 
 4. **What the API cannot say.** Folders have no modification time: `stat` gives `mtime: 0` for a
    folder. There is no read-only flag: `readOnly` is always `false`, and a write to a read-only file
    fails with code `io` (`NoModificationAllowedError` or `NotAllowedError`). Chromium's swap files
    (`<name>.crswap`, beside a file while it is written) are left out of `list`. Modification times
    are milliseconds; a change by another program that keeps the size and falls within the
-   resolution of the disk's own clock (FAT: 2 s) is not seen by revalidation.
+   resolution of the disk's own clock (FAT: 2 s) is not seen by revalidation. What a program can
+   observe of the missing read-only flag (TRAP #15 tasks 51 and 59) is in docs/differences/FS2.md.
 
 5. **Permission after a reload (3.8.1, "permission is asked again").** At start nothing is asked:
    `createStartupBackends()` mounts the folder only when `queryPermission({mode: 'readwrite'})` is

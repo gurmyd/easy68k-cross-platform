@@ -62,6 +62,8 @@ export interface TextBox {
   height: number;
   /** The font was underlined or struck out. */
   lined: boolean;
+  /** The font was italic (GDI widens such a box further, `outlineWidening`). */
+  italic?: boolean;
 }
 
 export interface Replay {
@@ -130,6 +132,7 @@ export function replayCase(c: ReplayCase, glyphs: GlyphProvider): Replay {
       width: drawn.reduce((sum, glyph) => sum + glyph.advance, 0),
       height: text.state.rowHeight,
       lined: text.state.font.underline || text.state.font.strikeOut,
+      italic: text.state.font.italic,
     });
     paint(x, y, drawn, extent, color, target);
   };
@@ -265,10 +268,22 @@ export function outsideTheBoxes(boxes: readonly TextBox[]): (x: number, y: numbe
   const lined = boxes.some((box) => box.lined);
   const inside = (x: number, y: number, widened: boolean) =>
     boxes.some((box) => {
-      const margin = widened ? Math.max(3, Math.ceil(box.height / 10)) : 0;
-      return x >= box.x - margin && x < box.x + box.width + margin && y >= box.y && y < box.y + box.height;
+      const [left, right] = widened ? outlineWidening(box.italic === true, box.height) : [0, 0];
+      return x >= box.x - left && x < box.x + box.width + right && y >= box.y && y < box.y + box.height;
     });
   return (x, y) => !inside(x, y, false) && (lined || inside(x, y, true));
+}
+
+/**
+ * How far GDI widens the opaque box of an outline-face text beyond its advances, left and right,
+ * as T2 measured it (errata T2 section 1 item 18; the same two lines as `outlineWidening` in
+ * tests/conformance/gdi/text-model.ts, which the application may not import): plain and bold
+ * `max(3, ceil(h / 10))` on each side; italic one pixel more on the left and up to a third of the
+ * cell height on the right (docs/requests/T2-outline-italic.md).
+ */
+export function outlineWidening(italic: boolean, cellHeight: number): [left: number, right: number] {
+  const plain = Math.max(3, Math.ceil(cellHeight / 10));
+  return italic ? [plain + 1, Math.max(3, Math.ceil(0.35 * cellHeight))] : [plain, plain];
 }
 
 /** A case with what Windows drew for it: the picture and GDI's pen position at the end. */

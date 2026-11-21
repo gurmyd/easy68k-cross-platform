@@ -12,11 +12,14 @@
 // which renders an input into that cell and ends the edit itself (Enter,
 // Escape, blur) by clearing `editing`; the grid takes the focus back.
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import '../../styles/components.css';
 import './DataGrid.css';
 import { moveIndex } from './roving';
-import { rowsPerPage } from './virtual';
+import { rowsPerPage, scrollTopBelowHeader } from './virtual';
+
+/** A CSS length from a number of px or a CSS length. */
+const cssLength = (value: number | string) => (typeof value === 'number' ? `${value}px` : value);
 
 export interface DataGridColumn<R> {
   id: string;
@@ -45,7 +48,10 @@ export interface DataGridProps<R> {
   rowTitle?: (row: R, index: number) => string | undefined;
   editing?: { row: number; column: number } | null;
   renderEditor?: (row: R, rowIndex: number, columnIndex: number) => ReactNode;
-  /** Height of the scrolling area (CSS length); default: as tall as the rows. */
+  /**
+   * Height of the rows' area below the header (CSS length); default: as tall as the rows. The
+   * grid element itself scrolls, with the header row kept at its top.
+   */
   height?: number | string;
   /** Shown when there are no rows. */
   emptyText?: string;
@@ -73,22 +79,29 @@ export function DataGrid<R>({
   const baseId = useId();
   const gridRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const headRef = useRef<HTMLDivElement>(null);
   const [column, setColumn] = useState(0);
   const activeColumn = Math.min(column, Math.max(0, columns.length - 1));
   const cellId = (row: number, col: number) => `${baseId}-r${row}c${col}`;
   const tracks = [rowNumbers ? '44px' : null, ...columns.map((c) => c.width ?? '1fr')].filter(Boolean).join(' ');
 
-  // Keep the selected row in view; take the focus back after an edit.
+  // Keep the selected row in view below the sticky header; take the focus back after an edit.
+  // The grid element itself scrolls (it holds the focus, so axe's scrollable-region-focusable is
+  // met; docs/requests/U3-datagrid-scroll-region.md, errata W2 entry 20).
   const wasEditing = useRef(false);
   useEffect(() => {
+    const grid = gridRef.current;
     const body = bodyRef.current;
     const row = body?.querySelector<HTMLElement>(`[data-row="${selectedRow}"]`);
-    if (body && row) {
-      const top = row.offsetTop - body.offsetTop;
-      if (top < body.scrollTop) body.scrollTop = top;
-      else if (top + row.offsetHeight > body.scrollTop + body.clientHeight) {
-        body.scrollTop = top + row.offsetHeight - body.clientHeight;
-      }
+    if (grid && body && row) {
+      const next = scrollTopBelowHeader(
+        body.offsetTop + row.offsetTop,
+        row.offsetHeight,
+        grid.scrollTop,
+        grid.clientHeight,
+        headRef.current?.offsetHeight ?? 0,
+      );
+      if (next !== grid.scrollTop) grid.scrollTop = next;
     }
     if (wasEditing.current && !editing) gridRef.current?.focus({ preventScroll: true });
     wasEditing.current = Boolean(editing);
@@ -109,9 +122,14 @@ export function DataGrid<R>({
       tabIndex={0}
       data-e68-enter=""
       className={className ? `e68-grid ${className}` : 'e68-grid'}
+      data-height={height !== undefined ? '' : undefined}
+      style={height !== undefined ? ({ '--e68-grid-body-h': cssLength(height) } as CSSProperties) : undefined}
       onKeyDown={(event) => {
         if (event.target !== gridRef.current || rows.length === 0) return;
-        const page = rowsPerPage(bodyRef.current?.clientHeight ?? ROW_HEIGHT * 5, ROW_HEIGHT);
+        const view = gridRef.current
+          ? gridRef.current.clientHeight - (headRef.current?.offsetHeight ?? 0)
+          : ROW_HEIGHT * 5;
+        const page = rowsPerPage(view, ROW_HEIGHT);
         const current = Math.max(0, selectedRow);
         let nextRow: number | null = null;
         let nextColumn: number | null = null;
@@ -150,7 +168,7 @@ export function DataGrid<R>({
         if (nextColumn !== null) setColumn(nextColumn);
       }}
     >
-      <div role="rowgroup" className="e68-grid__head">
+      <div ref={headRef} role="rowgroup" className="e68-grid__head">
         <div role="row" aria-rowindex={1} className="e68-grid__row" style={{ gridTemplateColumns: tracks }}>
           {rowNumbers && (
             <div role="columnheader" className="e68-grid__header e68-grid__rownumber">
@@ -172,7 +190,7 @@ export function DataGrid<R>({
         ref={bodyRef}
         role="rowgroup"
         className="e68-grid__body"
-        style={height !== undefined ? { height } : undefined}
+        style={height !== undefined ? { minHeight: cssLength(height) } : undefined}
       >
         {rows.length === 0 && emptyText && (
           <div role="row" className="e68-grid__row">

@@ -62,6 +62,7 @@
   background: var(--c-surface);
   color: var(--c-text);
   outline: none;
+  container: e68-logpanel / inline-size;
 }
 
 .e68-logpanel:focus-visible {
@@ -94,8 +95,12 @@
   color: var(--c-danger);
 }
 
+/* The two files one above the other, each the panel's full width, so that an execution-log line
+   (`PC=... Code=... Line=... source`, about 100 columns) is seen whole in a tool pane. Side by side
+   only where the panel is wide enough for that, the execution log taking the larger share. */
 .e68-logpanel__files {
   display: flex;
+  flex-direction: column;
   flex: 1 1 0;
   min-height: 0;
 }
@@ -103,13 +108,14 @@
 .e68-logpanel__file {
   display: flex;
   flex-direction: column;
-  flex: 1 1 0;
+  flex: 2 1 0;
   min-width: 0;
   min-height: 0;
 }
 
 .e68-logpanel__file + .e68-logpanel__file {
-  border-left: 1px solid var(--c-border);
+  flex-grow: 1;
+  border-top: 1px solid var(--c-border);
 }
 
 .e68-logpanel__head {
@@ -145,13 +151,13 @@
   white-space: pre;
 }
 
-@media (max-width: 640px) {
+@container e68-logpanel (min-width: 1500px) {
   .e68-logpanel__files {
-    flex-direction: column;
+    flex-direction: row;
   }
 
   .e68-logpanel__file + .e68-logpanel__file {
-    border-left: 0;
-    border-top: 1px solid var(--c-border);
+    border-top: 0;
+    border-left: 1px solid var(--c-border);
   }
 }

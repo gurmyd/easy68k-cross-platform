@@ -24,7 +24,7 @@
 // app/src/ui/editor/check-editor.mjs does. Screenshots go to build/E6/find-check unless --out says
 // otherwise (always below build/). Exit code 0 = every check passed.
 
-/* global console, process, document, window, Navigator -- browser globals are used inside page.evaluate() callbacks */
+/* global console, process, document, window, Navigator, setTimeout -- browser globals are used inside page.evaluate() callbacks */
 
 import { mkdirSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -64,6 +64,9 @@ if (!['chromium', 'webkit', 'all'].includes(browserChoice)) {
 const BROWSERS = { chromium, webkit };
 const browsers = browserChoice === 'all' ? ['chromium', 'webkit'] : [browserChoice];
 const PAGE_READY_MS = 120_000;
+// The longest wait for one step to show its effect. Generous for GitHub's Mac runner, which is far
+// slower than a desktop PC; a step that succeeds returns as soon as its effect is seen.
+const STEP_MS = 15_000;
 
 let baseUrl = '';
 let failures = 0;
@@ -131,8 +134,9 @@ async function setText(page, text, anchor = 0, head = anchor) {
     },
     { text, anchor, head },
   );
-  // Longer than the history's grouping delay, so that what follows is an undo step of its own.
-  await page.waitForTimeout(600);
+  // No pause for the history's grouping delay is needed: the one undo this check makes follows a
+  // Replace All, whose user event "input.replace" never joins the step before it (CodeMirror joins
+  // only "input.type" and "delete" changes).
 }
 
 async function select(page, anchor, head = anchor) {
@@ -163,7 +167,7 @@ const endBox = (page) => page.getByRole('alertdialog').filter({ hasText: 'End of
 /** Waits for the `End of document reached.` box; true when it came. Leaves it open. */
 async function waitEndBox(page) {
   return endBox(page)
-    .waitFor({ timeout: 8000 })
+    .waitFor({ timeout: STEP_MS })
     .then(
       () => true,
       () => false,
@@ -173,7 +177,7 @@ async function waitEndBox(page) {
 /** Closes the box with Enter (its OK button has the focus) and waits until it is gone. */
 async function closeEndBox(page) {
   await page.keyboard.press('Enter');
-  await endBox(page).waitFor({ state: 'detached', timeout: 8000 });
+  await endBox(page).waitFor({ state: 'detached', timeout: STEP_MS });
 }
 
 const waitSelection = (page, expected) =>
@@ -184,7 +188,7 @@ const waitSelection = (page, expected) =>
         return main.from === expected[0] && main.to === expected[1];
       },
       expected,
-      { timeout: 8000 },
+      { timeout: STEP_MS },
     )
     .then(
       () => true,
@@ -230,7 +234,7 @@ async function findPass(browser, name) {
     await setText(page, LOOP_TEXT, 21, 25);
     await page.keyboard.press(playwrightKey(chord));
     const shown = await findDialog(page)
-      .waitFor({ timeout: 8000 })
+      .waitFor({ timeout: STEP_MS })
       .then(
         () => true,
         () => false,
@@ -265,7 +269,7 @@ async function findPass(browser, name) {
     check(`${p} the following ${next} starts from the top`, await waitSelection(page, [0, 4]));
     if (index < findChords.length - 1) {
       await findDialog(page).getByRole('button', { name: 'Cancel' }).click();
-      await findDialog(page).waitFor({ state: 'detached', timeout: 8000 });
+      await findDialog(page).waitFor({ state: 'detached', timeout: STEP_MS });
     }
   }
 
@@ -275,6 +279,32 @@ async function findPass(browser, name) {
   await input.fill('D0');
   await findDialog(page).getByRole('button', { name: 'Find  (F3)' }).click();
   check(`${p} without a selection the search starts at the caret (note 7)`, await waitSelection(page, [3, 5]));
+
+  // The match survives the editor's taking the focus from the dialog's button (the browser must
+  // not put back its own earlier caret: PANEL_FOCUS_EVENT, errata entry 2), and a key pressed in
+  // the editor right after it acts on the match.
+  await page.waitForFunction(() => document.activeElement?.classList.contains('cm-content') ?? false, null, {
+    timeout: STEP_MS,
+  });
+  // One task for the browser's selectionchange after the focus, which the editor reads back.
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  check(
+    `${p} the match is still selected once the editor has the focus`,
+    await waitSelection(page, [3, 5]),
+    JSON.stringify(await selection(page)),
+  );
+  await page.keyboard.press('ArrowRight');
+  check(
+    `${p} ArrowRight right after a match collapses it to its end`,
+    await waitSelection(page, [5, 5]),
+    JSON.stringify(await selection(page)),
+  );
+  await page.keyboard.press('Shift+ArrowLeft');
+  check(
+    `${p} Shift+ArrowLeft after that extends the selection`,
+    await waitSelection(page, [4, 5]),
+    JSON.stringify(await selection(page)),
+  );
 
   // Match case and whole word.
   await setText(page, 'd0 xD0 D00 D0');
@@ -309,19 +339,19 @@ async function findPass(browser, name) {
   // Simulator mode hides the dialog; Editor mode shows it again with its text.
   await page.evaluate(() => window.__easy68k.ctx.commands.run('app.mode.set', 'simulator'));
   const hidden = await findDialog(page)
-    .waitFor({ state: 'detached', timeout: 8000 })
+    .waitFor({ state: 'detached', timeout: STEP_MS })
     .then(
       () => true,
       () => false,
     );
   check(`${p} the dialog is not shown in Simulator mode`, hidden);
   await page.evaluate(() => window.__easy68k.ctx.commands.run('app.mode.set', 'editor'));
-  await findDialog(page).waitFor({ timeout: 8000 });
+  await findDialog(page).waitFor({ timeout: STEP_MS });
   check(`${p} back in Editor mode the dialog is there with its text`, (await input.inputValue()) === 'xD0');
 
   await findDialog(page).getByRole('button', { name: 'Cancel' }).click();
   const closed = await findDialog(page)
-    .waitFor({ state: 'detached', timeout: 8000 })
+    .waitFor({ state: 'detached', timeout: STEP_MS })
     .then(
       () => true,
       () => false,
@@ -343,7 +373,7 @@ async function replacePass(browser, name) {
     await setText(page, original, 8, 10);
     await page.keyboard.press(playwrightKey(chord));
     const shown = await replaceDialog(page)
-      .waitFor({ timeout: 8000 })
+      .waitFor({ timeout: STEP_MS })
       .then(
         () => true,
         () => false,
@@ -373,16 +403,25 @@ async function replacePass(browser, name) {
     // One Undo restores the text.
     await page.locator('.e68-editor .cm-content').click();
     await page.keyboard.press(playwrightKey(undoChords[index % undoChords.length]));
-    await page.waitForTimeout(200);
-    check(`${p} one Undo restores the text`, (await docText(page)) === original, JSON.stringify(await docText(page)));
+    const undone = await page
+      .waitForFunction(
+        (original) => document.querySelector('[data-e68-document]').e68View.state.doc.toString() === original,
+        original,
+        { timeout: STEP_MS },
+      )
+      .then(
+        () => true,
+        () => false,
+      );
+    check(`${p} one Undo restores the text`, undone, JSON.stringify(await docText(page)));
     await replaceDialog(page).getByRole('button', { name: 'Cancel' }).click();
-    await replaceDialog(page).waitFor({ state: 'detached', timeout: 8000 });
+    await replaceDialog(page).waitFor({ state: 'detached', timeout: STEP_MS });
   }
 
   // Replace: a selected match is replaced and the next one selected; a non-matching selection is not.
   await setText(page, 'D0 xx D0 D0', 0, 5);
   await page.keyboard.press(playwrightKey(replaceChords[0]));
-  await replaceDialog(page).waitFor({ timeout: 8000 });
+  await replaceDialog(page).waitFor({ timeout: STEP_MS });
   await replaceDialog(page).getByLabel('Find what:').fill('D0');
   await replaceDialog(page).getByLabel('Replace with').fill('D7');
   await select(page, 0, 5);
@@ -399,7 +438,7 @@ async function replacePass(browser, name) {
 
   // Both dialogs at once, in both themes, with an accessibility scan.
   await page.keyboard.press(playwrightKey((await chordsOf(page, 'ed.edit.find'))[0]));
-  await findDialog(page).waitFor({ timeout: 8000 });
+  await findDialog(page).waitFor({ timeout: STEP_MS });
   for (const theme of ['light', 'dark']) {
     await page.evaluate((value) => window.__easy68k.ctx.commands.run('app.theme.set', value), theme);
     await page.waitForFunction((value) => document.documentElement.getAttribute('data-theme') === value, theme);

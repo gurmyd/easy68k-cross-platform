@@ -23,6 +23,11 @@ export interface TextFieldProps extends Omit<
   message?: string;
   /** Width in characters; default: fill the container. */
   widthCh?: number;
+  /**
+   * Least width of a left label, in characters, so that the boxes of several fields line up
+   * (Find what: / Replace with). Added at gate I2 (errata W2 entry 23).
+   */
+  labelWidthCh?: number;
   inputRef?: Ref<HTMLInputElement>;
 }
 
@@ -35,6 +40,7 @@ export function TextField({
   invalid = false,
   message,
   widthCh,
+  labelWidthCh,
   inputRef,
   id,
   className,
@@ -89,7 +95,11 @@ export function TextField({
         htmlFor={inputId}
         className={labelPosition === 'top' ? 'e68-field-label e68-field-label--top' : 'e68-field-label'}
       >
-        <span className="e68-field-label__text" data-disabled={disabled ? 'true' : undefined}>
+        <span
+          className="e68-field-label__text"
+          data-disabled={disabled ? 'true' : undefined}
+          style={labelWidthCh && labelPosition === 'left' ? { minWidth: `${labelWidthCh}ch` } : undefined}
+        >
           <Caption text={label} />
         </span>
         {field}

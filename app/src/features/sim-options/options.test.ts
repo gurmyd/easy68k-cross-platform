@@ -15,6 +15,7 @@ import {
   clampInterval,
   fontChoices,
   fontFrom,
+  initialFontName,
   measuredName,
   parseFontSize,
   screenNumberOf,
@@ -34,6 +35,16 @@ describe('the rules of the option dialogs', () => {
     expect(fontChoices('printer', 'Comic Sans MS')).toContain('Comic Sans MS');
     expect(measuredName('courier new')).toBe('Courier New');
     expect(measuredName('Arial')).toBeNull();
+  });
+
+  it('starts with a saved or imported name, a measured font in its listed spelling', () => {
+    expect(initialFontName('output', 'lucida console')).toBe('Lucida Console');
+    expect(initialFontName('source', 'FIXEDSYS')).toBe('Fixedsys');
+    // An imported sim68K.dat may carry any name: it is kept, and selects nothing in the list.
+    expect(initialFontName('output', 'Terminal')).toBe('Terminal');
+    expect(fontChoices('output', 'Terminal')).not.toContain('Terminal');
+    // The printer takes any name as it is.
+    expect(initialFontName('printer', 'courier new')).toBe('courier new');
   });
 
   it('limits the sizes to 8..18 for the Output and Source fonts', () => {

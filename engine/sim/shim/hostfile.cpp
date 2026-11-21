@@ -123,6 +123,31 @@ extern "C" FILE *easy68k_fopen(const char *name, const char *mode) {
 extern "C" int easy68k_remove(const char *name) { return host_file_remove(name) == 0 ? 0 : -1; }
 
 // ---------------------------------------------------------------------------
+// fread() and fwrite() of SIMOPS2.CPP (readFile, writeFile; TRAP #15 tasks 53
+// and 54).  The C library of this build and the Borland one linked into
+// SIM68K.exe answer two requests differently; T3 measured the official binary
+// under Wine (tests/conformance/sim, trap15-a/a31 and a32; errata T3.md F3,
+// F4).  Everything else goes to the C library unchanged.
+// ---------------------------------------------------------------------------
+// Task 53 reads fread(buf, 1, D2.L, fp).  A count above INT_MAX reaches it
+// only when A1 + D2 wraps past 2^32 (the bounds test of CODE9.CPP passes, e.g.
+// A1 = $2000, D2 = $FFFFFFFF).  The Borland fread returns the requested count
+// and reads nothing: D0.W = 0 and D2 is left as it was.  Here the count would
+// reach the host as -1 and the read would fail.
+extern "C" size_t easy68k_fread(void *buffer, size_t size, size_t count, FILE *stream) {
+  if (size == 1 && count > (size_t)INT_MAX) return count;
+  return (fread)(buffer, size, count, stream);
+}
+
+// Task 54 writes fwrite(buf, D2.L, 1, fp).  With D2 = 0 the Borland fwrite
+// returns the item count (1), so the task reports success (D0.W = 0); C99's
+// fwrite returns 0 for a zero item size, which the task reports as an error.
+extern "C" size_t easy68k_fwrite(const void *buffer, size_t size, size_t count, FILE *stream) {
+  if (size == 0) return count;
+  return (fwrite)(buffer, size, count, stream);
+}
+
+// ---------------------------------------------------------------------------
 // 3. The execution log.  The original opens it in text mode ("wt" / "at"), so
 // every "\n" the simulator prints is written to disk as CR LF.  The same
 // translation is done here, and the resulting bytes are handed to the host.

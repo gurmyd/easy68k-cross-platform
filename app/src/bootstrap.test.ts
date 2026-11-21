@@ -244,6 +244,23 @@ describe('features', () => {
       expect(handled).toEqual(expect.arrayContaining(['app.mode.set', 'app.mode.next', 'app.theme.set']));
     }
   });
+
+  // Gate I2 (9.5): no command id is left without a handler once wave two is in. The commands
+  // below are owed by the package named; remove one from the list when its handler arrives (the
+  // test fails until then, so the list can only shrink).
+  // Empty since U4 gave sim.view.log its handler (gate I2); an entry reads
+  // 'some.command.id': 'PACKAGE (what is missing)'.
+  const OWED_HANDLERS: Readonly<Record<string, string>> = {};
+  for (const kind of ['web', 'desktop'] as const) {
+    it(`with the features of wave two, every command has a handler (${kind}; gate I2, 9.5)`, () => {
+      const app = createTestApplication({ features: FEATURES, platform: createFakePlatform({ kind }) });
+      const missing = COMMAND_IDS.filter((id) => !app.commands.hasHandler(id));
+      expect(
+        missing.map((id) => `${id}: ${OWED_HANDLERS[id] ?? 'no owner recorded'}`),
+        'commands without a handler',
+      ).toEqual(Object.keys(OWED_HANDLERS).map((id) => `${id}: ${OWED_HANDLERS[id]}`));
+    }, 60_000);
+  }
 });
 
 describe('every command without a handler is shown disabled (3.12.2)', () => {

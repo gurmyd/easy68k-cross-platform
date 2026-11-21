@@ -68,7 +68,45 @@
 
 .e68-toast__text {
   flex: 1 1 auto;
+  min-width: 0;
   font-size: var(--fs-md);
+  overflow-wrap: anywhere;
+}
+
+/* The action and the close button keep their size; only the text wraps. */
+.e68-toast__action,
+.e68-toast__close {
+  flex: none;
+}
+
+/* A long action caption goes on a line of its own under the text, at the right (toastLayout). */
+.e68-toast[data-layout='stacked'] {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'icon text close'
+    '. action action';
+  align-items: center;
+  row-gap: var(--sp-2);
+}
+
+.e68-toast[data-layout='stacked'] .e68-toast__icon {
+  grid-area: icon;
+}
+
+.e68-toast[data-layout='stacked'] .e68-toast__text {
+  grid-area: text;
+}
+
+.e68-toast[data-layout='stacked'] .e68-toast__action {
+  grid-area: action;
+  justify-self: end;
+  max-width: 100%;
+}
+
+.e68-toast[data-layout='stacked'] .e68-toast__close {
+  grid-area: close;
+  align-self: start;
 }
 
 @keyframes e68-toast-in {

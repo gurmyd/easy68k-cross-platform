@@ -21,6 +21,7 @@
 
 import {
   FontTarget,
+  RepaintBit,
   type Bytes,
   type Clock,
   type ControllerRequest,
@@ -29,6 +30,26 @@ import {
   type SoftTimerApi,
 } from '../../contracts';
 import { decode } from '../codec/cp1252';
+
+/** How many `host.repaint()` calls named each panel (by RepaintBit). */
+export interface RepaintCalls {
+  readonly listing: number;
+  readonly breakpoints: number;
+  readonly memory: number;
+  readonly stack: number;
+  readonly stackRedraw: number;
+}
+
+export const NO_REPAINT_CALLS: RepaintCalls = Object.freeze({
+  listing: 0,
+  breakpoints: 0,
+  memory: 0,
+  stack: 0,
+  stackRedraw: 0,
+});
+
+const REPAINT_PANELS =
+  RepaintBit.Listing | RepaintBit.Breakpoints | RepaintBit.Memory | RepaintBit.Stack | RepaintBit.StackRedraw;
 
 /** `host.optionChanged(option, value)`: which option the engine changed. */
 export type ChangedOption = 'exceptions' | 'bitField';
@@ -78,6 +99,7 @@ export class SimUiBridge implements SimUiBridgeApi {
 
   private registersShownFlag = false;
   private repaintBits = 0;
+  private repaintCalls: RepaintCalls = NO_REPAINT_CALLS;
   private liveFlag = false;
   private alerts: PendingAlert[] = [];
   private effects: (() => void)[] = [];
@@ -109,11 +131,29 @@ export class SimUiBridge implements SimUiBridgeApi {
     return shown;
   }
 
-  /** The RepaintBit combination reported since the last call (0 = none). */
+  /**
+   * The RepaintBit combination reported since the last call (0 = none). It forgets how often each
+   * bit came; the run controller takes `takeRepaintCalls()` instead. Either call empties both.
+   */
   takeRepaint(): number {
     const bits = this.repaintBits;
     this.repaintBits = 0;
+    this.repaintCalls = NO_REPAINT_CALLS;
     return bits;
+  }
+
+  /**
+   * How many `host.repaint()` calls named each panel since the last call (all zero = none). One
+   * engine call can make several: a trace over TRAP #15 task 32 with D1 = 0 sends the original's
+   * `StackFrm->Repaint()` (Stack | StackRedraw) and then `updateDisplay()` (Stack alone), and the
+   * Stack panel must see that the second one came (gate I2; the panel re-centres when `stack`
+   * moved by more than `stackRedraw`). Either take call empties both.
+   */
+  takeRepaintCalls(): RepaintCalls {
+    const calls = this.repaintCalls;
+    this.repaintBits = 0;
+    this.repaintCalls = NO_REPAINT_CALLS;
+    return calls;
   }
 
   /** True once if `memoryLivePaint()` ran since the last call. */
@@ -180,6 +220,7 @@ export class SimUiBridge implements SimUiBridgeApi {
     this.captionText = null;
     this.registersShownFlag = false;
     this.repaintBits = 0;
+    this.repaintCalls = NO_REPAINT_CALLS;
     this.liveFlag = false;
     this.alerts = [];
     this.effects = [];
@@ -246,6 +287,16 @@ export class SimUiBridge implements SimUiBridgeApi {
 
   repaint(what: number): void {
     this.repaintBits |= what;
+    if ((what & REPAINT_PANELS) === 0) return;
+    const calls = this.repaintCalls;
+    const add = (count: number, bit: number) => ((what & bit) !== 0 ? count + 1 : count);
+    this.repaintCalls = {
+      listing: add(calls.listing, RepaintBit.Listing),
+      breakpoints: add(calls.breakpoints, RepaintBit.Breakpoints),
+      memory: add(calls.memory, RepaintBit.Memory),
+      stack: add(calls.stack, RepaintBit.Stack),
+      stackRedraw: add(calls.stackRedraw, RepaintBit.StackRedraw),
+    };
   }
 
   memoryLivePaint(_address: number): void {

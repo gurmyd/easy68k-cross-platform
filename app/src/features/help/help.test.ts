@@ -280,7 +280,7 @@ describe('the update check', () => {
       '1.0.0',
       async (url) => ((asked = url), { ok: true, json: async () => ({ tag_name: 'v1.0.0' }) }),
     );
-    expect(asked).toBe('https://api.github.com/repos/gurmyd/easy68k-mac/releases/latest');
+    expect(asked).toBe('https://api.github.com/repos/gurmyd/easy68k-cross-platform/releases/latest');
   });
 });
 

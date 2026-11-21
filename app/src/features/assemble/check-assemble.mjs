@@ -1,4 +1,4 @@
-// Browser check of the Assemble feature (ARCHITECTURE.md 9.4 E5; editor-ui Â§20.4). Owner: E5.
+// Browser check of the Assemble feature (ARCHITECTURE.md 9.4 E5; editor-ui §20.4). Owner: E5.
 //
 //   node app/src/features/assemble/check-assemble.mjs [--browser chromium|webkit|all] [--out <dir>] [--keys mac|windows]
 //
@@ -32,7 +32,7 @@
 // Screenshots go to build/E5/assemble-check (git-ignored) unless --out says otherwise. Exit code
 // 0 = everything passed.
 
-/* global console, process, document, window, Navigator -- browser globals are used inside page.evaluate() callbacks */
+/* global console, process, document, window, Navigator, setTimeout, clearTimeout -- browser globals are used inside page.evaluate() callbacks */
 
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -88,6 +88,8 @@ if (missing.length > 0) {
 const PAGE_READY_MS = 180_000;
 /** How long one step of the interface may take before it counts as hanging. */
 const STEP_MS = 30_000;
+/** How long one pass may take in all (two page loads, many steps) before it counts as hanging. */
+const PASS_MS = 900_000;
 
 let baseUrl = '';
 let failures = 0;
@@ -218,6 +220,13 @@ const closeStatus = async (page, button = 'Close') => {
 const messagesRegion = (page) => page.locator('[data-e68-workspace="editor"] [data-e68-panel="messages"]');
 const messageRows = (page) => messagesRegion(page).locator('.e68-asm-messages [role=row][data-row]');
 const regionHeight = (page) => messagesRegion(page).evaluate((element) => element.getBoundingClientRect().height);
+/** The list's height once `ok(height)` holds, or the last height read when it does not within STEP_MS. */
+async function settledHeight(page, ok) {
+  const began = Date.now();
+  let height = await regionHeight(page);
+  while (!ok(height) && Date.now() - began < STEP_MS) height = await regionHeight(page);
+  return height;
+}
 
 const activeDoc = (page) =>
   page.evaluate(() => {
@@ -289,7 +298,7 @@ async function assemblePass(browser, name) {
     `${p} untitled1.L68 and untitled1.S68 are in the browser store`,
     (await exists(page, '/browser/Untitled/untitled1.L68')) && (await exists(page, '/browser/Untitled/untitled1.S68')),
   );
-  const cleanHeight = await regionHeight(page);
+  const cleanHeight = await settledHeight(page, (h) => Math.round(h) === 7);
   check(
     `${p} after a clean assembly the message list is 7 px high`,
     Math.round(cleanHeight) === 7,
@@ -322,7 +331,7 @@ async function assemblePass(browser, name) {
     JSON.stringify(headers) === '["Line ","Error Message"]',
     JSON.stringify(headers),
   );
-  const openHeight = await regionHeight(page);
+  const openHeight = await settledHeight(page, (h) => h >= 86.5);
   check(`${p} the message list opens to at least 87 px`, openHeight >= 86.5, String(openHeight));
   check(
     `${p} the tool-tip is "double click error to highlight in source"`,
@@ -337,18 +346,37 @@ async function assemblePass(browser, name) {
   await shot(page, `${name}-messages`);
 
   await messageRows(page).first().locator('[role=gridcell]').nth(1).dblclick();
-  await page.waitForTimeout(200);
-  const selected = await page.evaluate(() => {
-    const ctx = window.__easy68k.ctx;
-    const id = ctx.store.getState().documents.activeId;
-    const view = document.querySelector(`[data-e68-document="${id}"]`).e68View;
-    const { from, to } = view.state.selection.main;
-    return { text: view.state.sliceDoc(from, to), focused: view.hasFocus };
-  });
+  // The selection must hold once the editor has the focus: the browser restores its own caret when
+  // an element is focused, and CodeMirror would read that back as a new selection (E6's note to
+  // E2 and W3). Wait until the line is selected and focused, then require it to stay so across
+  // several polls and two event-loop turns, so that a late `selectionchange` would be seen.
+  const selection = () =>
+    page.evaluate(() => {
+      const ctx = window.__easy68k.ctx;
+      const id = ctx.store.getState().documents.activeId;
+      const view = document.querySelector(`[data-e68-document="${id}"]`).e68View;
+      const { from, to } = view.state.selection.main;
+      return { text: view.state.sliceDoc(from, to), focused: view.hasFocus };
+    });
+  const isSelected = (s) => s.text === '    FOO D0' && s.focused;
+  const began = Date.now();
+  let selected = await selection();
+  while (!isSelected(selected) && Date.now() - began < STEP_MS) selected = await selection();
+  const settledAfterMs = Date.now() - began;
+  const later = [];
+  for (let i = 0; i < 5 && isSelected(selected); i++) {
+    await page.evaluate(() => new Promise((resolve) => setTimeout(() => setTimeout(resolve, 0), 0)));
+    later.push(await selection());
+  }
   check(
     `${p} double-click selects the line and focuses the editor`,
-    selected.text === '    FOO D0' && selected.focused,
-    JSON.stringify(selected),
+    isSelected(selected),
+    `${JSON.stringify(selected)} after ${settledAfterMs} ms`,
+  );
+  check(
+    `${p} ... and the selection survives the focus`,
+    later.length === 5 && later.every(isSelected),
+    JSON.stringify(later.find((s) => !isSelected(s)) ?? later.at(-1)),
   );
   await shot(page, `${name}-double-click`);
 
@@ -357,8 +385,16 @@ async function assemblePass(browser, name) {
   await clear.waitFor({ timeout: STEP_MS });
   await shot(page, `${name}-context-menu`);
   await clear.click();
-  await page.waitForTimeout(200);
-  check(`${p} Clear Error Messages empties the list`, (await messageRows(page).count()) === 0);
+  const emptied = await messageRows(page)
+    .first()
+    .waitFor({ state: 'detached', timeout: STEP_MS })
+    .then(() => true)
+    .catch(() => false);
+  check(
+    `${p} Clear Error Messages empties the list`,
+    emptied && (await messageRows(page).count()) === 0,
+    String(await messageRows(page).count()),
+  );
   // The marker gutter keeps one hidden spacer marker without a title (ui/editor/markers.ts).
   const MARKERS = '.e68-marker[title^="ERROR"], .e68-squiggle[title^="ERROR"]';
   const markersLeft = await page
@@ -376,7 +412,7 @@ async function assemblePass(browser, name) {
       ),
     );
   check(`${p} ... and removes the marker`, markersLeft.length === 0, JSON.stringify(markersLeft));
-  const clearedHeight = await regionHeight(page);
+  const clearedHeight = await settledHeight(page, (h) => Math.round(h) === 7);
   check(`${p} ... and collapses the list to 7 px`, Math.round(clearedHeight) === 7, String(clearedHeight));
 
   // No END, Show Warnings off.
@@ -528,7 +564,10 @@ async function assemblePass(browser, name) {
   check(`${p} Execute while a program waits: the Caution question`, cautionTitle === 'Caution', cautionTitle);
   await shot(page, `${name}-caution`);
   await caution.getByRole('button', { name: 'Cancel' }).click();
-  await page.waitForTimeout(300);
+  await caution.waitFor({ state: 'detached', timeout: STEP_MS });
+  // Cancel must change nothing; give a wrongly started load the time of two event-loop turns to
+  // show itself, then read the state.
+  await page.evaluate(() => new Promise((resolve) => setTimeout(() => setTimeout(resolve, 0), 0)));
   const kept = await page.evaluate(() => {
     const state = window.__easy68k.ctx.store.getState();
     return { path: state.sim.program?.path, phase: state.sim.phase };
@@ -555,6 +594,200 @@ async function assemblePass(browser, name) {
   const fresh = await page.evaluate(() => window.__easy68k.ctx.sim.engine.getRegister(17));
   check(`${p} ... OK loads the new program afresh (PC $1000)`, fresh === 0x1000, String(fresh));
 
+  check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await context.close();
+}
+
+/** The text of the active document, with "\n" line ends. */
+const documentText = (page) =>
+  page.evaluate(() => {
+    const ctx = window.__easy68k.ctx;
+    const id = ctx.store.getState().documents.activeId;
+    return document.querySelector(`[data-e68-document="${id}"]`).e68View.state.doc.toString();
+  });
+
+/** Presses the first chord of a command on the page's key map. */
+async function pressCommand(page, id) {
+  const [chord] = await chordsOf(page, id);
+  if (!chord) throw new Error(`${id} has no chord on this key map`);
+  await page.keyboard.press(playwrightKey(chord));
+}
+
+// A student's first program, typed with the keyboard, with one typing mistake on line 5.
+const STUDENT_LINES = [
+  '    ORG $1000',
+  'START:',
+  '    LEA MSG,A1',
+  '    MOVE.B #14,D0',
+  '    TRAPP #15',
+  '    SIMHALT',
+  "MSG DC.B 'HELLO',0",
+  '    END START',
+];
+
+/**
+ * The path a visitor of the preview takes: New, type a program with a typing mistake, F9, the
+ * error row and its marker, double-click the row, type the correction over the selected line, F9,
+ * Execute, run it in the simulator; then a program in the browser store that INCLUDEs a file
+ * next to it.
+ */
+async function studentPass(browser, name) {
+  const p = `${name}: student:`;
+  const { context, page, errors } = await openApp(browser);
+
+  await page.locator('.e68-shell__toolbar [data-command="ed.file.new"]').click();
+  await page.waitForFunction(() => {
+    const state = window.__easy68k.ctx.store.getState();
+    return state.documents.items.find((doc) => doc.id === state.documents.activeId)?.name === 'untitled2.x68';
+  });
+  await editorFocus(page);
+  await pressCommand(page, 'ed.edit.selectAll');
+  await page.keyboard.press('Delete');
+  // Auto Indent is on by default (editor-ui §8.4): Enter carries the line's leading blanks to the
+  // next line. A student types each line's text after that indent, and Backspaces over it before a
+  // label in column 1, as here.
+  const beforeCaret = () =>
+    page.evaluate(() => {
+      const ctx = window.__easy68k.ctx;
+      const id = ctx.store.getState().documents.activeId;
+      const { state } = document.querySelector(`[data-e68-document="${id}"]`).e68View;
+      const head = state.selection.main.head;
+      return state.sliceDoc(state.doc.lineAt(head).from, head);
+    });
+  for (const line of STUDENT_LINES) {
+    const indent = /^[ \t]*/.exec(line)[0];
+    let carried = await beforeCaret();
+    for (let i = 0; i < 40 && carried !== '' && carried !== indent; i++) {
+      await page.keyboard.press('Backspace');
+      carried = await beforeCaret();
+    }
+    await page.keyboard.type(line.slice(carried.length));
+    await page.keyboard.press('Enter');
+  }
+  const typed = await documentText(page);
+  const typedLines = typed.split('\n');
+  check(
+    `${p} the program typed with the keyboard is in the editor, the indent carried by Enter (Auto Indent)`,
+    STUDENT_LINES.every((line, i) => typedLines[i] === line) && typedLines.at(-1) === '    ',
+    JSON.stringify(typed),
+  );
+
+  await pressAssemble(page);
+  const first = await readStatus(page);
+  check(
+    `${p} F9 with the typing mistake: Assembler Status - untitled2.x68, Errors: 1, Execute disabled`,
+    first.title === 'Assembler Status - untitled2.x68' && first.errors === '1' && !first.executeEnabled,
+    JSON.stringify(first),
+  );
+  await closeStatus(page);
+  await messageRows(page).first().waitFor({ timeout: STEP_MS });
+  const rows = await messageRows(page).evaluateAll((elements) =>
+    elements.map((row) => [...row.querySelectorAll('[role=gridcell]')].map((cell) => cell.textContent)),
+  );
+  check(
+    `${p} the Messages panel shows 5 / ERROR: Invalid opcode`,
+    JSON.stringify(rows) === '[["5","ERROR: Invalid opcode"]]',
+    JSON.stringify(rows),
+  );
+  check(
+    `${p} the line has its marker`,
+    (await page.locator('.e68-marker--error[title="ERROR: Invalid opcode"]').count()) === 1,
+  );
+  await shot(page, `${name}-student-error`);
+
+  await messageRows(page).first().locator('[role=gridcell]').nth(1).dblclick();
+  const began = Date.now();
+  let selection = '';
+  while (Date.now() - began < STEP_MS) {
+    selection = await page.evaluate(() => {
+      const ctx = window.__easy68k.ctx;
+      const id = ctx.store.getState().documents.activeId;
+      const view = document.querySelector(`[data-e68-document="${id}"]`).e68View;
+      const { from, to } = view.state.selection.main;
+      return view.hasFocus ? view.state.sliceDoc(from, to) : '';
+    });
+    if (selection.trim() === 'TRAPP #15') break;
+  }
+  check(`${p} double-click selects the wrong line`, selection.trim() === 'TRAPP #15', JSON.stringify(selection));
+  // Typing replaces the selected line (it ends before its line break).
+  await page.keyboard.type('    TRAP #15');
+  const corrected = (await documentText(page)).split('\n');
+  check(`${p} the correction replaced the line`, corrected[4] === '    TRAP #15', JSON.stringify(corrected[4]));
+
+  await pressAssemble(page);
+  const second = await readStatus(page);
+  check(
+    `${p} F9 after the correction: Errors: 0, Warnings: 0, Execute enabled`,
+    second.errors === '0' && second.warnings === '0' && second.executeEnabled,
+    JSON.stringify(second),
+  );
+  await closeStatus(page, 'Execute');
+  const cleared = await messageRows(page)
+    .first()
+    .waitFor({ state: 'detached', timeout: STEP_MS })
+    .then(() => true)
+    .catch(() => false);
+  check(
+    `${p} the row and its marker are gone`,
+    cleared && (await page.locator('.e68-marker--error[title^="ERROR"]').count()) === 0,
+  );
+  await page.waitForFunction(
+    () => {
+      const state = window.__easy68k.ctx.store.getState();
+      return (
+        state.mode === 'simulator' &&
+        state.sim.program?.path === '/browser/Untitled/untitled2.S68' &&
+        state.sim.phase === 'idle'
+      );
+    },
+    null,
+    { timeout: STEP_MS },
+  );
+  await pressCommand(page, 'sim.run.run');
+  await page.waitForFunction(() => window.__easy68k.ctx.store.getState().sim.halted, null, { timeout: STEP_MS });
+  const ran = await page.evaluate(() => ({
+    pc: window.__easy68k.ctx.sim.engine.getRegister(17),
+    d0: window.__easy68k.ctx.sim.engine.getRegister(0),
+  }));
+  check(
+    `${p} Execute, then Run: the program runs to SIMHALT`,
+    ran.d0 === 14 && ran.pc > 0x1000 && ran.pc < 0x1020,
+    JSON.stringify(ran),
+  );
+  await shot(page, `${name}-student-run`);
+
+  // A program in the browser store with an INCLUDE of a file next to it.
+  await writeFile(
+    page,
+    '/browser/student/io.x68',
+    'PRINT MACRO\r\n    LEA \\1,A1\r\n    MOVE.B #14,D0\r\n    TRAP #15\r\n    ENDM\r\n',
+  );
+  await writeFile(
+    page,
+    '/browser/student/hello.X68',
+    "    ORG $1000\r\n    INCLUDE 'io.x68'\r\nSTART:\r\n    PRINT TEXT\r\n    SIMHALT\r\nTEXT DC.B 'FROM AN INCLUDE',0\r\n    END START\r\n",
+  );
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('app.mode.set', 'editor'));
+  await openDocument(page, '/browser/student/hello.X68');
+  await pressAssemble(page);
+  const inc = await readStatus(page);
+  check(
+    `${p} a program with INCLUDE 'io.x68' from the store: Errors: 0, Execute enabled`,
+    inc.title === 'Assembler Status - hello.X68' && inc.errors === '0' && inc.warnings === '0' && inc.executeEnabled,
+    JSON.stringify(inc),
+  );
+  await closeStatus(page, 'Execute');
+  await page.waitForFunction(
+    () => {
+      const state = window.__easy68k.ctx.store.getState();
+      return state.sim.program?.path === '/browser/student/hello.S68' && state.sim.phase === 'idle';
+    },
+    null,
+    { timeout: STEP_MS },
+  );
+  await pressCommand(page, 'sim.run.run');
+  await page.waitForFunction(() => window.__easy68k.ctx.store.getState().sim.halted, null, { timeout: STEP_MS });
+  await shot(page, `${name}-student-include-run`);
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   await context.close();
 }
@@ -599,13 +832,26 @@ async function main() {
       const browser = await BROWSERS[name].launch();
       const passes = [
         ['assemble', assemblePass],
+        ['student path', studentPass],
         ['themes and accessibility', themePass],
       ];
       try {
         for (const [label, pass] of passes) {
           console.log(`\n[${name}, ${label}]`);
+          // A pass that hangs (a step without its own time limit) fails with the last check it
+          // reached, instead of holding the CI job until the job's own limit.
+          let watchdog;
+          const hung = new Promise((_, reject) => {
+            watchdog = setTimeout(
+              () =>
+                reject(
+                  new Error(`did not end within ${PASS_MS / 1000} s; last check: ${results.at(-1)?.name ?? 'none'}`),
+                ),
+              PASS_MS,
+            );
+          });
           try {
-            await pass(browser, name);
+            await Promise.race([pass(browser, name), hung]);
           } catch (error) {
             check(
               `${name}: the ${label} pass ran to its end`,
@@ -615,6 +861,8 @@ async function main() {
                 .slice(0, 4)
                 .join(' | '),
             );
+          } finally {
+            clearTimeout(watchdog);
           }
         }
       } finally {

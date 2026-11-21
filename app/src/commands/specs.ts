@@ -88,6 +88,8 @@ const ROWS: Record<KnownCommandId, Row> = {
   'sim.view.hardware': { caption: '&Hardware' },
   'sim.view.breakpoints': { caption: '&Break Points' },
   'sim.view.easybin': { caption: '&EASyBIN' },
+  // added (1.5; docs/requests/U4-log-panel-command.md)
+  'sim.view.log': { caption: '&Log' },
   // ---- Simulator: Options
   'sim.options.sourceFont': { caption: 'Source Window Font...' },
   'sim.options.outputFont': { caption: 'Output Window Font...' },

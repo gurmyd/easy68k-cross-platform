@@ -1,6 +1,6 @@
 # Request from T2 to SH3: the widening of italic outline cells (gate I1 round 3)
 
-Status: open (optional for SH3; nothing of SH3's fails today).
+Status: done by SH3 at gate I2 round 1, both items. `gdi-replay.ts` has `outlineWidening(italic, h)` (the two lines, as given) and `TextBox.italic`; `outsideTheBoxes` uses them. `gdi-references.test.ts` compares the suite `text-outline-italic` with `cells` (every case but those that draw only $7F, which are left out as in `text-outline-zero`) and shows that the plain margin would fail; errata SH3.md entry 29.
 
 T2 measured how far GDI widens the opaque cell of an outline-face text beyond its advance box
 (errata T2 section 1 item 18). Plain and bold stay within `max(3, ceil(h / 10))` on each side, the

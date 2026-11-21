@@ -23,6 +23,7 @@ import {
   type LinkRecord,
 } from './fsaccess-backend';
 import { MemoryBackend } from './memory-backend';
+import { CachedSyncFiles } from './sync/cached';
 import { createVfs, isFsError } from './vfs';
 
 const ascii = (text: string): Bytes => Uint8Array.from(text, (c) => c.charCodeAt(0));
@@ -128,6 +129,28 @@ describe('FolderBackend', () => {
     expect(disk.read('work/out/data.bin')?.length).toBe(3001);
   });
 
+  it('overlapping appends and writes to one file are done one after the other, so no data is lost', async () => {
+    const disk = new FakeDisk();
+    const backend = new FolderBackend(disk.root('work'));
+    await backend.writeFile('log.txt', ascii(''));
+    // Called directly, without the Vfs (which serialises on its own). A writable stream starts from
+    // a copy of the file, so without the backend's own ordering only the last append would survive.
+    await Promise.all([1, 2, 3, 4, 5].map((n) => backend.appendFile('log.txt', ascii(`[${n}]`))));
+    expect(text(disk.read('work/log.txt'))).toBe('[1][2][3][4][5]');
+    await Promise.all([backend.writeFile('log.txt', ascii('new')), backend.appendFile('log.txt', ascii('+'))]);
+    expect(text(disk.read('work/log.txt'))).toBe('new+');
+    // A failed write does not stop the ones queued after it: both run and fail on their own.
+    disk.removeExternally('work/log.txt');
+    disk.writeExternally('work/log.txt/inner.txt', ascii('a folder now'));
+    const failed = backend.appendFile('log.txt', ascii('no'));
+    const next = backend.appendFile('log.txt', ascii('no'));
+    expect((await rejection(failed)).code).toBe('is-directory');
+    expect((await rejection(next)).code).toBe('is-directory');
+    disk.removeExternally('work/log.txt');
+    await backend.appendFile('log.txt', ascii('!'));
+    expect(text(disk.read('work/log.txt'))).toBe('!');
+  });
+
   it('hides Chromium swap files from listings', async () => {
     const disk = new FakeDisk();
     disk.writeExternally('work/prog.X68', ascii('x'));
@@ -186,6 +209,38 @@ describe('FolderBackend', () => {
     const added = [...after.keys()].filter((path) => !before.has(path));
     expect(changed).toEqual(['a.txt']);
     expect(added).toEqual(['sub/c.txt']);
+  });
+
+  it("SH6's real CachedSyncFiles on /folder: revalidate() sees changed, added and removed files", async () => {
+    const disk = new FakeDisk();
+    const vfs = createVfs();
+    vfs.mount(new FolderBackend(disk.root('work')));
+    await vfs.writeFile('/folder/a.txt', ascii('aaaa'));
+    await vfs.writeFile('/folder/gone.txt', ascii('g'));
+    await vfs.writeFile('/folder/sub/b.txt', ascii('b'));
+    const view = new CachedSyncFiles({
+      vfs,
+      scheduler: { onFrame: () => () => {}, setTimer: () => () => {} },
+      message: () => {},
+    });
+    await view.prepare('/folder');
+    const read = (path: string) => {
+      const stat = view.stat(path);
+      return stat ? text(view.read(path, 0, stat.size)) : null;
+    };
+    expect(read('/folder/a.txt')).toBe('aaaa');
+    // Another program changes a file (same size), adds one and removes one; the backend sends no
+    // events, so the view knows only after revalidate().
+    disk.writeExternally('work/a.txt', ascii('AAAA'));
+    disk.writeExternally('work/sub/c.txt', ascii('c'));
+    disk.removeExternally('work/gone.txt');
+    expect(read('/folder/a.txt')).toBe('aaaa');
+    await view.revalidate();
+    expect(read('/folder/a.txt')).toBe('AAAA');
+    expect(read('/folder/sub/c.txt')).toBe('c');
+    expect(view.stat('/folder/gone.txt')).toBeNull();
+    expect(view.resolve('/folder', 'SUB\\C.TXT')).toBe('/folder/sub/c.txt');
+    view.dispose();
   });
 });
 

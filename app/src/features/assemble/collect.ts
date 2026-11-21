@@ -10,7 +10,8 @@
 //   - The entry of `mainName` is the editor buffer (encodeForAssembler of the document's text), not
 //     the stored file. Every other entry is a file as stored.
 //   - The main text and, transitively, every text file found are scanned for INCLUDE and INCBIN
-//     lines (scanIncludeNames). Each name is resolved with Vfs.resolve against the program
+//     lines (scanIncludeNames). Each name, as Win32 reads it (win32Name: trailing dots and spaces
+//     dropped, as the engine's file layer does), is resolved with Vfs.resolve against the program
 //     directory (the folder of the main source: the original resolves nested includes against the
 //     current directory as well) and the files found are added.
 //   - When the assembler still reports `ERROR: Unable to access specified file`, the whole program
@@ -107,6 +108,27 @@ export function scanIncludeNames(text: string): IncludeName[] {
   return found;
 }
 
+/**
+ * The name as Win32 opens it, and as the engine's file layer resolves it (engine/asm/shim/ez_file.cpp,
+ * ezCanonicalPath): trailing dots and spaces of every component are dropped, and a component left
+ * empty disappears; `.` and `..` are kept for Vfs.resolve, which applies them lexically (so `q\..`
+ * cancels out whether or not q exists). `lib.x68.` and `Lib. \four.x68` name `lib.x68` and
+ * `Lib\four.x68`. Separators become `\`.
+ */
+export function win32Name(name: string): string {
+  const parts: string[] = [];
+  for (const part of name.split(/[\\/]/)) {
+    if (part === '.' || part === '..') {
+      parts.push(part);
+      continue;
+    }
+    const trimmed = part.replace(/[. ]+$/, '');
+    if (trimmed !== '') parts.push(trimmed);
+  }
+  // A leading separator (a rooted name) is kept, so that Vfs.resolve refuses it as before.
+  return (/^[\\/]/.test(name) ? '\\' : '') + parts.join('\\');
+}
+
 /** The tree an assembly sees: the document's mount, its program directory and its main name. */
 export interface AssemblyTree {
   mount: string;
@@ -155,7 +177,7 @@ export async function collectFiles(vfs: CollectVfs, mainPath: VPath, buffer: Byt
   while (queue.length > 0) {
     const text = queue.shift() as string;
     for (const { directive, name } of scanIncludeNames(text)) {
-      const path = await vfs.resolve(tree.programDir, name).catch(() => null);
+      const path = await vfs.resolve(tree.programDir, win32Name(name)).catch(() => null);
       if (path === null) continue;
       const key = keyOf(tree, path);
       if (key === null) continue;

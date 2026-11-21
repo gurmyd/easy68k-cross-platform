@@ -61,6 +61,24 @@ export function scrollTopFor(
   return Math.min(maxTop, Math.max(0, Math.round(next)));
 }
 
+/**
+ * The scroll position of a scroller with a sticky header of `headHeight` px at its top that shows
+ * the box from `top` to `top + height` (in the scroller's content coordinates) below the header,
+ * scrolling as little as possible. DataGrid uses it: the grid element itself scrolls, so that the
+ * element that holds the focus is the one that scrolls (docs/requests/U3-datagrid-scroll-region.md).
+ */
+export function scrollTopBelowHeader(
+  top: number,
+  height: number,
+  scrollTop: number,
+  clientHeight: number,
+  headHeight: number,
+): number {
+  if (top - headHeight < scrollTop) return Math.max(0, top - headHeight);
+  if (top + height > scrollTop + clientHeight) return Math.max(0, top + height - clientHeight);
+  return scrollTop;
+}
+
 /** Number of whole rows a viewport shows (at least 1), for Page Up / Page Down. */
 export function rowsPerPage(viewportHeight: number, rowHeight: number): number {
   return Math.max(1, Math.floor(viewportHeight / rowHeight));

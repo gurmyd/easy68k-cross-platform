@@ -12,7 +12,7 @@ import { placePopup } from './position';
 import { moveIndex, pageIndex } from './roving';
 import { parseSpinText, spinKeyValue } from './spin';
 import { splitterDragValue, splitterKeyValue } from './splitter-model';
-import { rowsPerPage, scrollTopFor, visibleRange } from './virtual';
+import { rowsPerPage, scrollTopBelowHeader, scrollTopFor, visibleRange } from './virtual';
 
 describe('mnemonic', () => {
   it('parses the original captions', () => {
@@ -263,6 +263,17 @@ describe('virtual rows', () => {
     expect(scrollTopFor(10, 'center', 0, 100, 20, 1000)).toBe(160);
     expect(scrollTopFor(999, 'start', 0, 100, 20, 1000)).toBe(19_900);
     expect(rowsPerPage(100, 22)).toBe(4);
+  });
+
+  it('shows a row below a sticky header, scrolling as little as needed (DataGrid, gate I2)', () => {
+    // Header 25 px, view 157 px (six rows of 22 below it); rows start at 25 in content coordinates.
+    expect(scrollTopBelowHeader(25, 22, 0, 157, 25)).toBe(0);
+    expect(scrollTopBelowHeader(25 + 5 * 22, 22, 0, 157, 25)).toBe(0);
+    expect(scrollTopBelowHeader(25 + 6 * 22, 22, 0, 157, 25)).toBe(22);
+    expect(scrollTopBelowHeader(25 + 48 * 22, 22, 0, 157, 25)).toBe(25 + 49 * 22 - 157);
+    // A row hidden under the header at the top is brought just below it.
+    expect(scrollTopBelowHeader(25 + 3 * 22, 22, 100, 157, 25)).toBe(66);
+    expect(scrollTopBelowHeader(25, 22, 100, 157, 25)).toBe(0);
   });
 });
 

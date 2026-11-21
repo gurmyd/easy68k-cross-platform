@@ -20,7 +20,7 @@
 // like this project). They get only the two compile-only fixes of engine/asm/PATCHES.md
 // ("Native twins"), applied by the same text replacements as engine/asm/native/build.mjs.
 //
-// Windows only. Part of easy68k-mac, an unofficial port of EASy68K. GPL-2.0-or-later.
+// Windows only. Part of easy68k-cross-platform, an unofficial port of EASy68K. GPL-2.0-or-later.
 
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -76,7 +76,9 @@ export async function unpatchedSourceDir(log = () => {}) {
   const sha = (b) => createHash('sha256').update(b).digest('hex');
   if (!bytes || sha(bytes) !== ORIGINAL_ARCHIVE.sha256) {
     log(`fetching ${ORIGINAL_ARCHIVE.url}`);
-    const response = await fetch(ORIGINAL_ARCHIVE.url, { headers: { 'user-agent': 'easy68k-mac-test-fetch' } });
+    const response = await fetch(ORIGINAL_ARCHIVE.url, {
+      headers: { 'user-agent': 'easy68k-cross-platform-test-fetch' },
+    });
     if (!response.ok) throw new Error(`${ORIGINAL_ARCHIVE.url}: HTTP ${response.status}`);
     bytes = Buffer.from(await response.arrayBuffer());
     if (bytes.length !== ORIGINAL_ARCHIVE.size || sha(bytes) !== ORIGINAL_ARCHIVE.sha256) {

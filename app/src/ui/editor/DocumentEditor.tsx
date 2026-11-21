@@ -10,6 +10,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore, type
 import type { DocumentState } from '../../contracts';
 import { useAppContext, useAppState } from '../../state/context';
 import { editorExtensionSources, subscribeEditorExtensions } from '../../state/editor-extensions';
+import { PANEL_FOCUS_EVENT } from '../../state/panels';
 import { shallowEqual } from '../../state/store';
 import { editorCompartment, editorConfig, type DocumentViewOptions } from './extensions';
 import { fontFamilyFor, fontSizeFor } from './fonts';
@@ -105,8 +106,17 @@ export function DocumentEditor({ doc, active }: DocumentEditorProps) {
 
     const onFocus = () => session.focusChanged(id, true);
     const onBlur = () => session.focusChanged(id, false);
+    // focusPanel(ctx, 'editor') (state/panels.ts) lets the view take the focus its own way:
+    // view.focus() writes the state's selection into the page. A plain element.focus() lets the
+    // browser restore its own earlier caret, which CodeMirror then reads back as a new selection,
+    // undoing a selection made by code just before (Find's match, a jump to a message's line).
+    const onPanelFocus = (event: Event) => {
+      event.preventDefault();
+      view.focus();
+    };
     view.contentDOM.addEventListener('focus', onFocus);
     view.contentDOM.addEventListener('blur', onBlur);
+    view.contentDOM.addEventListener(PANEL_FOCUS_EVENT, onPanelFocus);
     const unregister = session.registerView(id, view);
     // A change made elsewhere (Reload replaces the state; a reconfiguration by another part): follow it.
     const stopExternal = session.link.onExternalChange(id, (tr) => {
@@ -124,6 +134,7 @@ export function DocumentEditor({ doc, active }: DocumentEditorProps) {
       stopExternal();
       view.contentDOM.removeEventListener('focus', onFocus);
       view.contentDOM.removeEventListener('blur', onBlur);
+      view.contentDOM.removeEventListener(PANEL_FOCUS_EVENT, onPanelFocus);
       if (view.hasFocus) session.focusChanged(id, false);
       unregister();
       view.destroy();

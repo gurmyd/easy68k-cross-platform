@@ -30,6 +30,18 @@
 #       sim-main      app/src/features/sim-main/check-sim-main.mjs       U1
 #       pwa           app/src/features/pwa/check-pwa.mjs                 DV1
 #       wave1         tests/integration/wave1/check-wave1.mjs            I1
+#       options       app/src/features/options/check-options.mjs         E4
+#       find          app/src/features/find/check-find.mjs               E6
+#       print         app/src/features/print/check-print.mjs             E6
+#       fsaccess      app/src/features/files-fsaccess/check-fsaccess.mjs FS2
+#       assemble      app/src/features/assemble/check-assemble.mjs       E5
+#       audio         app/src/features/audio/check-audio.mjs             SH5
+#       sim_files     app/src/features/sim-files/check-sim-files.mjs     SH6
+#       breakpoints   app/src/features/breakpoints/check-breakpoints.mjs U3
+#       log           app/src/features/log/check-log.mjs                 U4
+#       wave2         tests/integration/wave2/check-wave2.mjs            I2
+#   check: packaging unit tests  tests/desktop/packaged/playwright.config.ts (project unit, DV3)
+#   e2e-stability              as e2e, on a manual run or when tests/e2e/** changed (6.9 item 10, X1)
 #   windows-oracles: GDI       tests/oracle/gdi-capture/run.mjs     (npm run oracle:gdi, T2)
 #   windows-oracles: twins     tests/oracle/native-twin/run.mjs     (npm run oracle:twins, T4)
 #   windows-oracles: asm CLI   tests/oracle/asm-cli/run.mjs         (T1)
@@ -112,6 +124,17 @@ jobs:
       sim_main: ${{ steps.guards.outputs.sim_main }}
       pwa: ${{ steps.guards.outputs.pwa }}
       wave1: ${{ steps.guards.outputs.wave1 }}
+      options: ${{ steps.guards.outputs.options }}
+      find: ${{ steps.guards.outputs.find }}
+      print: ${{ steps.guards.outputs.print }}
+      fsaccess: ${{ steps.guards.outputs.fsaccess }}
+      assemble: ${{ steps.guards.outputs.assemble }}
+      audio: ${{ steps.guards.outputs.audio }}
+      sim_files: ${{ steps.guards.outputs.sim_files }}
+      breakpoints: ${{ steps.guards.outputs.breakpoints }}
+      log: ${{ steps.guards.outputs.log }}
+      wave2: ${{ steps.guards.outputs.wave2 }}
+      e2e_stability: ${{ steps.guards.outputs.e2e_stability }}
       browser_checks: ${{ steps.guards.outputs.browser_checks }}
       gdi: ${{ steps.guards.outputs.gdi }}
       twins: ${{ steps.guards.outputs.twins }}
@@ -161,6 +184,16 @@ jobs:
             sim_main        app/src/features/sim-main/check-sim-main.mjs
             pwa             app/src/features/pwa/check-pwa.mjs
             wave1           tests/integration/wave1/check-wave1.mjs
+            options         app/src/features/options/check-options.mjs
+            find            app/src/features/find/check-find.mjs
+            print           app/src/features/print/check-print.mjs
+            fsaccess        app/src/features/files-fsaccess/check-fsaccess.mjs
+            assemble        app/src/features/assemble/check-assemble.mjs
+            audio           app/src/features/audio/check-audio.mjs
+            sim_files       app/src/features/sim-files/check-sim-files.mjs
+            breakpoints     app/src/features/breakpoints/check-breakpoints.mjs
+            log             app/src/features/log/check-log.mjs
+            wave2           tests/integration/wave2/check-wave2.mjs
           '
           check_names=""
           browser_checks=false
@@ -192,9 +225,19 @@ jobs:
           desktop_dev=false
           if [ -f tests/desktop/dev/playwright.config.ts ] && [ "$changed" = true ]; then desktop_dev=true; fi
 
+          # e2e-stability (6.9 item 10: 20 repetitions in a row on ubuntu-latest, X1-ci.md): about
+          # twenty times the e2e job, so only on a manual run and when the end-to-end suites or their
+          # configuration changed (against the same base as desktop-dev; no base known: changed).
+          e2e_changed=true
+          if [ -n "$base" ] && [ "$base" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
+            if git diff --quiet "$base" HEAD -- tests/e2e tests/playwright.config.ts; then e2e_changed=false; fi
+          fi
+          e2e_stability=false
+          if [ "$e2e" = true ] && { [ "$EVENT" = workflow_dispatch ] || [ "$e2e_changed" = true ]; }; then e2e_stability=true; fi
+
           # The weekly schedule runs the engine comparison only (7.3, 7.4).
           if [ "$EVENT" = schedule ]; then
-            conformance=false; e2e=false; integration=false; gdi=false; twins=false; asm_cli=false; desktop_dev=false
+            conformance=false; e2e=false; e2e_stability=false; integration=false; gdi=false; twins=false; asm_cli=false; desktop_dev=false
             for name in $check_names; do eval "$name=false"; done
             browser_checks=false
           fi
@@ -202,6 +245,7 @@ jobs:
           {
             echo "conformance=$conformance"
             echo "e2e=$e2e"
+            echo "e2e_stability=$e2e_stability"
             echo "integration=$integration"
             for name in $check_names; do eval "echo \"$name=\$$name\""; done
             echo "browser_checks=$browser_checks"
@@ -216,12 +260,14 @@ jobs:
             echo "### Job guards"
             echo "| guard | runs |"
             echo "|---|---|"
-            for name in conformance e2e integration $check_names browser_checks gdi twins asm_cli engines_weekly windows_oracles desktop_dev; do
+            for name in conformance e2e e2e_stability integration $check_names browser_checks gdi twins asm_cli engines_weekly windows_oracles desktop_dev; do
               eval "value=\$$name"
               echo "| $name | $value |"
             done
             echo
             echo "desktop/** or app/** changed: $changed"
+            echo
+            echo "tests/e2e/** or tests/playwright.config.ts changed: $e2e_changed"
           } >> "$GITHUB_STEP_SUMMARY"
 
   engines:
@@ -251,6 +297,12 @@ jobs:
         run: npm run lint
       - name: Format check
         run: npm run format:check
+      # The packaged-app suite's project `unit` (docs/requests/DV3-ci-unit.md): desktop/scripts, the
+      # facts release.yml must keep and the harness's parsers. No app, no browser, no Electron;
+      # about 5 s. The rest of tests/desktop/packaged runs in release.yml against a built bundle.
+      - name: Packaging unit tests (DV3)
+        if: ${{ !cancelled() && hashFiles('tests/desktop/packaged/playwright.config.ts') != '' }}
+        run: npx playwright test --config tests/desktop/packaged/playwright.config.ts --project unit
 
   unit:
     name: unit (${{ matrix.os }})
@@ -412,6 +464,71 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # 6.9 item 10 and X1's acceptance: the end-to-end suites pass 20 times in a row on ubuntu-latest
+  # in each browser (docs/requests/X1-ci.md item 2). The plan runs it on a manual run and when
+  # tests/e2e/** or tests/playwright.config.ts changed, never on the weekly schedule.
+  e2e-stability:
+    name: e2e stability (ubuntu-latest, ${{ matrix.browser }}, 20 repetitions)
+    needs: [plan, engines]
+    if: needs.plan.outputs.e2e_stability == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      EASY68K_REQUIRE_ENGINES: ${{ needs.engines.outputs.available == 'asm sim' && '1' || '' }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Download engine-dist
+        if: needs.engines.outputs.available != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: engine-dist
+          path: engine/dist
+      - name: Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      # The same cache entries as e2e (ubuntu-latest, one browser each).
+      - name: Restore Playwright browsers
+        id: browsers
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ steps.playwright.outputs.version }}-${{ runner.os }}-${{ runner.arch }}-${{ matrix.browser }}
+      - name: Install ${{ matrix.browser }}
+        if: steps.browsers.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Install the system libraries for ${{ matrix.browser }}
+        if: steps.browsers.outputs.cache-hit == 'true'
+        run: npx playwright install-deps ${{ matrix.browser }}
+      - name: Production build
+        run: npm run build
+      # The dot reporter keeps the log of 20 repetitions short; the HTML report is uploaded on failure.
+      - name: End-to-end tests, 20 repetitions
+        run: npm run test:e2e -- --project ${{ matrix.browser }} --repeat-each=20 --reporter=dot,html
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report-stability-${{ matrix.browser }}
+          path: |
+            tests/playwright-report/
+            tests/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
   # The browser checks that exist before the end-to-end suites do: one script
   # per package (check-<name>.mjs, the convention of check-shell.mjs), each
   # against the Vite dev server on a free port or, for check:pwa, against its
@@ -419,10 +536,11 @@ jobs:
   # EASY68K_REQUIRE_BROWSERS=1: a browser that is not installed is a failure,
   # not a skip. EASY68K_REQUIRE_ENGINES=1 when engine-dist holds both engines.
   #
-  # The checks take too long for one runner, so the matrix splits them in two
-  # groups: `interface` (the editor side, the shell, Help, EASyBIN; no engine
-  # needed) and `simulator` (the checks that load the engines). A step that
-  # needs both engines is skipped when engine-dist does not hold them.
+  # The checks take too long for one runner, so the matrix splits them in three
+  # groups: `interface` (the editor side, the shell, Help, EASyBIN; only
+  # check:assemble needs the engines), `simulator` (the checks that load the
+  # engines) and `integration` (the scenarios of the integration gates). A step
+  # that needs both engines is skipped when engine-dist does not hold them.
   # Measured at gate I1 (Windows 11 PC under heavy load, both browsers, one
   # check at a time per queue): interface about 16 minutes (gallery 73 s,
   # shell 189, editor 159, highlight 23, files 136 or more, documents 25, help
@@ -435,6 +553,24 @@ jobs:
   # room for four times that. Run 44919519853 (gate I1 round 2, with check:wave1 in `simulator`):
   # interface 7.3 / 8.9 / 9.3 min (Ubuntu / macOS / Windows), simulator 9.7 / 13.2 / 10.9;
   # check:wave1 took 2.1 / 2.7 / 2.5 min of that, sim-main 1.8 / 3.4 / 2.0.
+  # Run 44937920498 (commit fdabb2b, before wave two): interface 6.5 / 10.4 min on Ubuntu / macOS,
+  # simulator 10.5 / 13.7 / 10.7 (check:wave1 2.9 / 3.3 / 3.0 of it). On Windows the interface
+  # job was cancelled at its 45-minute limit: check:files stopped printing at "[webkit, a page
+  # killed in the middle of a write]" and hung for 39 minutes, so the four checks after it never
+  # ran. Since gate I2 every check step therefore has a limit of its own, 15 minutes (the longest
+  # step so far took 3.4 on macOS): a check that hangs fails alone and the rest of the group runs.
+  #
+  # Gate I2 adds ten checks. Measured on this PC (one at a time per queue, two queues, heavy load):
+  # options 192-215 s, find 93-275, print 10-79, fsaccess 59-142, assemble 329, audio 16,
+  # sim-files 55, breakpoints 263, log 346; check:wave2 is new. GitHub's runners took about 0.7
+  # times this PC's figures for the checks of wave one. Two groups would have put the simulator
+  # group near 30 minutes on macOS, so the two integration scenarios (check:wave1, check:wave2)
+  # have a group of their own, `integration`, and check:assemble (E5, an editor feature that needs
+  # the engines) is in `interface`, which downloads engine-dist too. Expected on macOS: interface
+  # about 20 min, simulator about 20, integration about 10; the limit of 45 leaves room for twice.
+  # Re-measured in round 2 of gate I2 (this PC, two queues, after the restart): options 108 s,
+  # find 170, print 47, fsaccess 109, assemble 146 (interface: 580 s added); audio 48, sim-files
+  # 115, breakpoints 153, log 187 (simulator: 503 s added).
   browser-checks:
     name: browser-checks (${{ matrix.os }}, ${{ matrix.group }})
     needs: [plan, engines]
@@ -443,7 +579,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        group: [interface, simulator]
+        group: [interface, simulator, integration]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     env:
@@ -486,7 +622,7 @@ jobs:
         id: browsers-install
         if: steps.browsers.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium webkit
-      # Both groups of one system use the same key; the second save only warns that it exists.
+      # All groups of one system use the same key; a later save only warns that it exists.
       - name: Save Playwright browsers
         if: steps.browsers.outputs.cache-hit != 'true' && steps.browsers-install.outcome == 'success'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -503,36 +639,69 @@ jobs:
       # Group `interface`:
       - name: Gallery check (W2)
         if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.gallery == 'true' }}
+        timeout-minutes: 15
         run: npm run check:gallery
       - name: Shell check (W3)
         if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.shell == 'true' }}
+        timeout-minutes: 15
         run: npm run check:shell
       - name: Editor check (E2)
         if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.editor == 'true' }}
+        timeout-minutes: 15
         run: npm run check:editor
       - name: Syntax highlighting check (E3)
         if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.highlight == 'true' }}
+        timeout-minutes: 15
         run: npm run check:highlight
       # check:files proves an exported archive with the system's own tool: Python's zipfile,
       # unzip or bsdtar, whichever the runner has (all three runners have Python).
       - name: Files check (FS1)
         if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.files == 'true' }}
+        timeout-minutes: 15
         run: npm run check:files
       - name: Documents check (E1)
         if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.documents == 'true' }}
+        timeout-minutes: 15
         run: npm run check:documents
       - name: Help check (H1)
         if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.help == 'true' }}
+        timeout-minutes: 15
         run: npm run check:help
       - name: Drawing surface check (SH1)
         if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.surface == 'true' }}
+        timeout-minutes: 15
         run: npm run check:surface
       - name: EASyBIN check (B1)
         if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.easybin == 'true' }}
+        timeout-minutes: 15
         run: npm run check:easybin
+      # Wave two (gate I2), group `interface`: of these only check:assemble needs engine/dist.
+      - name: Options dialogs check (E4)
+        if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.options == 'true' }}
+        timeout-minutes: 15
+        run: npm run check:options
+      - name: Find and Replace check (E6)
+        if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.find == 'true' }}
+        timeout-minutes: 15
+        run: npm run check:find
+      - name: Print check (E6)
+        if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.print == 'true' }}
+        timeout-minutes: 15
+        run: npm run check:print
+      - name: File System Access check (FS2)
+        if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.fsaccess == 'true' }}
+        timeout-minutes: 15
+        run: npm run check:fsaccess
+      # check:assemble needs engine/dist (F9 assembles, Execute runs): without it the script says it
+      # was skipped and exits 0, and fails then when EASY68K_REQUIRE_ENGINES=1, like check:output.
+      - name: Assemble check (E5)
+        if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.assemble == 'true' }}
+        timeout-minutes: 15
+        run: npm run check:assemble
       # Group `simulator`:
       - name: Engine binding in the browser (W4)
         if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.engine_browsers == 'true' && needs.engines.outputs.available == 'asm sim' }}
+        timeout-minutes: 15
         run: npm run check:engine-browsers
       - name: Upload the engine binding's memory figures
         if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.engine_browsers == 'true' && needs.engines.outputs.available == 'asm sim' }}
@@ -544,31 +713,63 @@ jobs:
           retention-days: 90
       - name: Offline, install and Pages check (DV1)
         if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.pwa == 'true' && needs.engines.outputs.available == 'asm sim' }}
+        timeout-minutes: 15
         run: npm run check:pwa
       - name: Text screen check (SH3)
         if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.text == 'true' && needs.engines.outputs.available == 'asm sim' }}
+        timeout-minutes: 15
         run: npm run check:text
       # check:output and check:hardware skip their engine parts by themselves when
       # engine/dist is missing (and fail then when EASY68K_REQUIRE_ENGINES=1); so does
       # check:shell above for its simulator session. check:hardware --without-engines proves it.
       - name: Output panel check (SH4)
         if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.output == 'true' }}
+        timeout-minutes: 15
         run: npm run check:output
       - name: Hardware panel check (SH7)
         if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.hardware == 'true' }}
+        timeout-minutes: 15
         run: npm run check:hardware
       - name: Run check (SH8)
         if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.run == 'true' && needs.engines.outputs.available == 'asm sim' }}
+        timeout-minutes: 15
         run: npm run check:run
       - name: Registers, Listing and Messages check (U1)
         if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.sim_main == 'true' && needs.engines.outputs.available == 'asm sim' }}
+        timeout-minutes: 15
         run: npm run check:sim-main
       - name: Memory and Stack check (U2)
         if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.memory_stack == 'true' && needs.engines.outputs.available == 'asm sim' }}
+        timeout-minutes: 15
         run: npm run check:memory-stack
+      # Wave two (gate I2), group `simulator`. check:sim-files, check:breakpoints and check:log need
+      # engine/dist for (part of) their work and skip it by themselves when it is missing, or fail
+      # then when EASY68K_REQUIRE_ENGINES=1, like check:output; check:audio needs no engine.
+      - name: Sound check (SH5)
+        if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.audio == 'true' }}
+        timeout-minutes: 15
+        run: npm run check:audio
+      - name: Program files check (SH6)
+        if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.sim_files == 'true' }}
+        timeout-minutes: 15
+        run: npm run check:sim-files
+      - name: Break Points check (U3)
+        if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.breakpoints == 'true' }}
+        timeout-minutes: 15
+        run: npm run check:breakpoints
+      - name: Logging and simulator options check (U4)
+        if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.log == 'true' }}
+        timeout-minutes: 15
+        run: npm run check:log
+      # Group `integration`: the scenarios of the integration gates (ARCHITECTURE.md 9.3, 9.5).
       - name: Integration scenario in the browser (I1)
-        if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.wave1 == 'true' && needs.engines.outputs.available == 'asm sim' }}
+        if: ${{ !cancelled() && matrix.group == 'integration' && needs.plan.outputs.wave1 == 'true' && needs.engines.outputs.available == 'asm sim' }}
+        timeout-minutes: 15
         run: npm run check:wave1
+      - name: Integration scenario in the browser (I2)
+        if: ${{ !cancelled() && matrix.group == 'integration' && needs.plan.outputs.wave2 == 'true' && needs.engines.outputs.available == 'asm sim' }}
+        timeout-minutes: 15
+        run: npm run check:wave2
       - name: Upload the screenshots of the browser checks
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -593,6 +794,21 @@ jobs:
             build/U1/sim-main-check/
             build/U2/check/
             build/I1/wave1-check/
+            build/E4/options-check/
+            build/E6/find-check/
+            build/E6/print-check/
+            build/FS2/fsaccess-check/
+            !build/FS2/fsaccess-check/vite-cache/
+            build/E5/assemble-check/
+            build/SH5/audio-check/
+            build/SH6/sim-files-check/
+            !build/SH6/sim-files-check/vite-cache/
+            build/U3/breakpoints-check/
+            build/U4/log-check/
+            !build/U4/log-check/vite-cache/
+            build/I2/wave2-check/
+            !build/I2/wave2-check/vite-cache/
+            !build/I2/wave2-check/dist/
           if-no-files-found: ignore
           retention-days: 14
 

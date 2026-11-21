@@ -57,6 +57,16 @@ export function ListingPanel() {
   // measure each row's text and the gutter can stay at the left while the text scrolls sideways.
   const columns = useMemo(() => rows.reduce((widest, text) => Math.max(widest, expandTabs(text).length), 0), [rows]);
 
+  // New rows (a load, a close, a cold start) start at the top, as the original's list box does:
+  // `Items->Clear()` sends LB_RESETCONTENT, which sets the top index to 0, and `LoadFromFile` adds
+  // the rows below it. A load that selects no row (errata U1.md entry 8) therefore shows the first
+  // rows, not the place the previous program was scrolled to. Runs before the scroll request below,
+  // which then brings a selected row on screen.
+  useLayoutEffect(() => {
+    const element = list.current?.element();
+    if (element) element.scrollTop = 0;
+  }, [rows]);
+
   // Scroll requests of the model (highlight, Go to PC, Find): the third-visible-row rule.
   useLayoutEffect(() => {
     const request = view.scroll;

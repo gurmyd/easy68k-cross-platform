@@ -8,6 +8,7 @@ import {
   focusPanel,
   focusPanelElement,
   hidePanel,
+  PANEL_FOCUS_EVENT,
   nextPanelInCycle,
   panelOf,
   panelVisible,
@@ -224,6 +225,33 @@ describe('focusPanelElement', () => {
     expect(focusPanelElement(root(editor, simulator), 'messages')).toBe(true);
     expect(editor.focused).toEqual([]);
     expect(simulator.focused).toEqual(['control']);
+  });
+
+  it('lets the element take the focus its own way when it cancels PANEL_FOCUS_EVENT (the editor)', () => {
+    const focused: string[] = [];
+    const events: Event[] = [];
+    const selfFocusing = (cancels: boolean) => ({
+      focus: () => focused.push(cancels ? 'plain focus (wrong)' : 'plain focus'),
+      dispatchEvent: (event: Event) => {
+        events.push(event);
+        if (cancels) {
+          event.preventDefault();
+          focused.push('its own focus');
+        }
+        return !event.defaultPrevented;
+      },
+    });
+    for (const cancels of [true, false]) {
+      const target = selfFocusing(cancels);
+      const element = { closest: () => null, querySelector: () => target };
+      expect(focusPanelElement(root({ element }), 'editor')).toBe(true);
+    }
+    expect(focused).toEqual(['its own focus', 'plain focus']);
+    expect(events.map((event) => [event.type, event.bubbles, event.cancelable])).toEqual([
+      [PANEL_FOCUS_EVENT, false, true],
+      [PANEL_FOCUS_EVENT, false, true],
+    ]);
+    expect(PANEL_FOCUS_EVENT).toBe('e68-panel-focus');
   });
 
   it('reports false when the region is not rendered', () => {

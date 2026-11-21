@@ -1,6 +1,6 @@
 # DV3: run the packaging unit tests on every push
 
-Status: open (for the next gate).
+Status: applied at gate I2 round 1 (config), as asked: the step "Packaging unit tests (DV3)" in ci.yml's job `check` (ubuntu), after the format check, guarded by the file and by `!cancelled()`. Run here: 31 passed in about 7 s. The optional `--project prebuilt` is not added this round: it needs engine-dist and a job that has it; `check` has none (next gate, if DV3 still wants it).
 
 ## What
 

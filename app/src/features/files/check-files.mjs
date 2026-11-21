@@ -32,7 +32,7 @@
 // Screenshots go to build/FS1/files-check (git-ignored). Exit code 0 = everything passed.
 // The page object `window.__easy68k` exists in development builds only (main.tsx).
 
-/* global console, process, window, document, indexedDB, IDBFactory, IDBObjectStore, setTimeout, DataTransfer, DragEvent, File, performance, Navigator, DOMException, URL, TextEncoder, TextDecoder, Buffer */
+/* global console, process, window, document, indexedDB, IDBFactory, IDBObjectStore, setTimeout, DataTransfer, DragEvent, File, performance, Navigator, DOMException, URL, TextEncoder, TextDecoder, Buffer, MutationObserver */
 
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -108,6 +108,25 @@ function hangIndexedDB() {
     if (window.__idbOpenAt === undefined) window.__idbOpenAt = performance.now();
     return {};
   };
+  // The page itself notes when the Files panel first says "still opening", measured from the start
+  // of opening: on a loaded runner the check's own reading can come after the 20 s limit, and the
+  // product's message must still be seen (gate I1 round 3 review). A reading in the page does not
+  // depend on how fast Playwright answers.
+  const watch = () => {
+    const seen = () => {
+      if (window.__stillOpeningAt !== undefined || window.__idbOpenAt === undefined) return;
+      const text = document.querySelector('[data-e68-panel="files"] [role=alert]')?.textContent ?? '';
+      if (text.includes('still opening')) window.__stillOpeningAt = Math.round(performance.now() - window.__idbOpenAt);
+    };
+    new MutationObserver(seen).observe(document.documentElement, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    });
+    seen();
+  };
+  if (document.documentElement) watch();
+  else document.addEventListener('DOMContentLoaded', watch, { once: true });
 }
 
 /** A browser without the File System Access API (WebKit and Firefox have none). */
@@ -593,18 +612,23 @@ async function hangingPass(browser, name) {
     // Read at once: 20 s after opening began, the pending store gives way to the memory stand-in.
     await page.waitForSelector('[data-e68-panel="files"] [role=tree]');
     // The banner and how long ago opening began, read together in the page.
-    const { banner, sinceOpen, kind } = await page.evaluate(() => ({
+    const { banner, sinceOpen, kind, stillOpeningAt } = await page.evaluate(() => ({
       banner: document.querySelector('[data-e68-panel="files"] [role=alert]')?.innerText ?? '',
       sinceOpen: window.__idbOpenAt === undefined ? null : Math.round(performance.now() - window.__idbOpenAt),
       kind: window.__easy68k.ctx.vfs.backends().find((b) => b.mount === 'browser')?.constructor.name,
+      stillOpeningAt: window.__stillOpeningAt ?? null,
     }));
-    readings.push({ sinceOpen, banner });
+    readings.push({ sinceOpen, banner, stillOpeningAt });
     if (best === null || shownAfter < best.shownAfter) {
       await page.screenshot({ path: join(outDir, `${name}-store-opening.png`) });
       best = { errors, shownAfter, kind };
     }
     await context.close();
-    if (best.shownAfter < 15_000 && readings.some((r) => r.sinceOpen !== null && r.sinceOpen < OPEN_TIMEOUT_MS)) break;
+    if (
+      best.shownAfter < 15_000 &&
+      readings.some((r) => r.stillOpeningAt !== null && r.stillOpeningAt < OPEN_TIMEOUT_MS)
+    )
+      break;
   }
   const { errors, shownAfter, kind } = best;
   // What the product guarantees (fs/browser-backend.ts): until OPEN_TIMEOUT_MS (20 s) after opening
@@ -619,7 +643,9 @@ async function hangingPass(browser, name) {
       ? r.banner.includes('still opening')
       : r.banner.includes('Files are NOT being saved'));
   const early = readings.filter((r) => r.sinceOpen !== null && r.sinceOpen < OPEN_TIMEOUT_MS).length;
-  const described = readings.map((r) => `${r.sinceOpen} ms: ${r.banner.slice(0, 40)}`).join(' | ');
+  const described = readings
+    .map((r) => `${r.sinceOpen} ms: ${r.banner.slice(0, 40)} (page saw "still opening" at ${r.stillOpeningAt} ms)`)
+    .join(' | ');
   check(
     `${p} IndexedDB that never answers: the application is shown well before the 20 s time limit`,
     shownAfter < 15_000,
@@ -628,7 +654,14 @@ async function hangingPass(browser, name) {
   check(
     `${p} IndexedDB that never answers: the Files panel says the store is still opening (or, after 20 s, that it gave up)`,
     readings.length > 0 && readings.every(fits),
-    `${early ? '' : 'no reading before the 20 s limit on this run (machine loaded); '}read after opening began: ${described}`,
+    `${early ? '' : 'no reading of the check itself before the 20 s limit (machine loaded); '}read after opening began: ${described}`,
+  );
+  // Always required: the "still opening" message itself was on screen before the limit, as the
+  // page recorded it (not only the given-up message after it).
+  check(
+    `${p} IndexedDB that never answers: "still opening" was shown before the 20 s limit`,
+    readings.some((r) => r.stillOpeningAt !== null && r.stillOpeningAt < OPEN_TIMEOUT_MS),
+    `first seen by the page at ${readings.map((r) => r.stillOpeningAt).join(', ')} ms after opening began (attempts)`,
   );
   check(
     `${p} IndexedDB that never answers: a pending store stands at /browser`,
@@ -707,10 +740,18 @@ async function uiPass(browser, name) {
   const asmListed = await listedOptions(dialog, ['inc', 'lib.ASM']);
   check(`${p} Open dialog: the ASM filter`, same(asmListed, ['inc', 'lib.ASM']), JSON.stringify(asmListed));
   const note = await dialog.locator('.e68-filedialog__note').innerText();
+  // In Chromium FS2 replaces the 'upload' provider with one that links the chosen files instead of
+  // copying them (FS2 review): the note describes the copy only for FS1's own provider.
+  const uploadCopies = await page.evaluate(async () => {
+    const { isImportingUpload } = await import('/src/features/files/providers.ts');
+    const provider = window.__easy68k.ctx.fileDialogs.registry?.get('upload');
+    return provider ? isImportingUpload(provider) : null;
+  });
+  const copySentence = 'From this computer... copies files from this computer into';
   check(
-    `${p} Open dialog: states where files are kept`,
-    note.includes('keeps your files in its own storage') && note.includes('From this computer...'),
-    note,
+    `${p} Open dialog: states where files are kept, and describes "From this computer..." only where it copies`,
+    note.includes('keeps your files in its own storage') && note.includes(copySentence) === (uploadCopies === true),
+    `FS1's copying provider registered: ${uploadCopies}; note: ${note}`,
   );
   await page.screenshot({ path: join(outDir, `${name}-open-dialog.png`) });
   await scan(page, `${name} open dialog`);
@@ -874,6 +915,58 @@ async function uiPass(browser, name) {
     `${p} drop: the files open in the order of the drop`,
     same(opened, ['/browser/Imported/zeta.X68', '/browser/Imported/alpha.X68']),
     JSON.stringify(opened),
+  );
+
+  // A dropped .S68 in Simulator mode (W1-load-confirm item 2): the controller's confirmLoad('drop')
+  // comes before the copy; on Cancel nothing is copied; on OK the copy is opened with
+  // { confirmed: true }. The controller's open is recorded instead of loading (no engine needed).
+  const simDrop = await page.evaluate(async () => {
+    const ctx = window.__easy68k.ctx;
+    const controller = ctx.sim.controller;
+    const log = [];
+    const realConfirm = controller.confirmLoad;
+    const realOpen = controller.open;
+    const hasConfirm = typeof realConfirm === 'function';
+    let answer = false;
+    controller.confirmLoad = async (origin) => {
+      log.push(`confirm ${origin} copied=${(await ctx.vfs.stat('/browser/Imported/dropped.S68')) !== null}`);
+      return answer;
+    };
+    controller.open = async (path, origin, options) =>
+      void log.push(`open ${path} ${origin} ${JSON.stringify(options)}`);
+    const previousMode = ctx.store.getState().mode;
+    ctx.store.setState((s) => ({ ...s, mode: 'simulator' }));
+    const drop = () => {
+      const dt = new DataTransfer();
+      dt.items.add(new File(['S00600004844521B'], 'dropped.S68', { type: 'application/octet-stream' }));
+      document.body.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      document.body.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    };
+    const until = async (test) => {
+      for (let i = 0; i < 100 && !test(); i++) await new Promise((r) => setTimeout(r, 50));
+    };
+    drop();
+    await until(() => log.length >= 1);
+    await new Promise((r) => setTimeout(r, 300));
+    const afterCancel = (await ctx.vfs.stat('/browser/Imported/dropped.S68')) !== null;
+    answer = true;
+    drop();
+    await until(() => log.some((l) => l.startsWith('open')));
+    controller.confirmLoad = realConfirm;
+    controller.open = realOpen;
+    ctx.store.setState((s) => ({ ...s, mode: previousMode }));
+    return { hasConfirm, log, afterCancel };
+  });
+  check(
+    `${p} drop in Simulator mode: Caution (confirmLoad) before the copy; Cancel copies nothing; OK opens the copy confirmed`,
+    simDrop.hasConfirm &&
+      !simDrop.afterCancel &&
+      same(simDrop.log, [
+        'confirm drop copied=false',
+        'confirm drop copied=false',
+        'open /browser/Imported/dropped.S68 drop {"confirmed":true}',
+      ]),
+    JSON.stringify(simDrop),
   );
 
   // The Files panel: select demo, Export... downloads demo.zip.

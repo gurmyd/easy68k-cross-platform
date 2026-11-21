@@ -17,7 +17,7 @@
 //   - left side: the guide vertex furthest in the direction (d.y, -d.x) (the left of d on the
 //     screen); right side: furthest in (-d.y, d.x). When two guide vertices are equally far, the
 //     one later in angle order is taken if d.x > 0 (or d.x = 0 and d.y > 0), the earlier one
-//     otherwise.
+//     otherwise; but when one of the two lies on the x axis (nib y = 0), the later one if d.y > 0.
 //   - the polygon is: P0 + o(left); the nib vertices strictly between left and right going round
 //     the back of P0; P0 + o(right); P1 + o(right); the nib vertices strictly between right and
 //     left going round the front of P1; P1 + o(left).
@@ -88,10 +88,10 @@ function toHalfPixel(v: number): number {
 }
 
 /**
- * The index of the guide vertex furthest in direction (ux, uy). Of two equally far (they are then
- * neighbours), the later one in angle order if `dx` > 0, the earlier one otherwise.
+ * The index of the guide vertex furthest in direction (ux, uy), for a segment of direction (dx, dy).
+ * Of two equally far (they are then neighbours), the one `laterOnTie` chooses.
  */
-function furthest(pen: Pen, ux: number, uy: number, preferLater: boolean): number {
+function furthest(pen: Pen, ux: number, uy: number, dx: number, dy: number): number {
   const n = pen.guideX.length;
   let best = -Infinity;
   let first = -1;
@@ -114,7 +114,8 @@ function furthest(pen: Pen, ux: number, uy: number, preferLater: boolean): numbe
     earlier = tied;
     later = first;
   }
-  return preferLater ? later : earlier;
+  const onXAxis = pen.nib.y[earlier] === 0 || pen.nib.y[later] === 0;
+  return laterOnTie(dx, dy, onXAxis) ? later : earlier;
 }
 
 /** The widened polygon of one segment, in 28.4 fixed point. */
@@ -125,8 +126,8 @@ export function widenSegment(width: number, p0: FixPoint, p1: FixPoint): FixPoin
   let dx = p1.x - p0.x;
   const dy = p1.y - p0.y;
   if (dx === 0 && dy === 0) dx = 1; // GDI widens a point as a line pointing in +x
-  const left = furthest(pen, dy, -dx, laterOnTie(dx, dy));
-  const right = furthest(pen, -dy, dx, laterOnTie(dx, dy));
+  const left = furthest(pen, dy, -dx, dx, dy);
+  const right = furthest(pen, -dy, dx, dx, dy);
   const out: FixPoint[] = [{ x: p0.x + (offsetX[left] as number), y: p0.y + (offsetY[left] as number) }];
   for (let i = (left - 1 + n) % n; i !== right; i = (i - 1 + n) % n) {
     out.push({ x: p0.x + (nib.x[i] as number), y: p0.y + (nib.y[i] as number) });
@@ -185,7 +186,6 @@ export function widenClosed(
     if (dx === 0 && dy === 0) continue;
     // The direction that picks the offsets: the segment's own, unless the caller gives another.
     const d = directions?.[i] ?? { x: dx, y: dy };
-    const later = laterOnTie(d.x, d.y);
     segments.push({
       a,
       b,
@@ -193,8 +193,8 @@ export function widenClosed(
       ib: (i + 1) % points.length,
       dx,
       dy,
-      left: furthest(pen, d.y, -d.x, later),
-      right: furthest(pen, -d.y, d.x, later),
+      left: furthest(pen, d.y, -d.x, d.x, d.y),
+      right: furthest(pen, -d.y, d.x, d.x, d.y),
     });
   }
   const k = segments.length;
@@ -307,7 +307,14 @@ export function strokeWideLine(
   fillPolygons([polygon], clip, emit);
 }
 
-/** Which of two equally far guide vertices a segment of direction (dx, dy) takes (measured). */
-function laterOnTie(dx: number, dy: number): boolean {
+/**
+ * Which of two equally far guide vertices a segment of direction (dx, dy) takes: true for the later
+ * one in angle order: when one of the two nib vertices lies on the x axis, the later one if dy > 0;
+ * otherwise the later one if dx > 0, or dx = 0 and dy > 0. Measured with WidenPath on the ties of
+ * widths 2-40, and against LineTo's pixels on every tie of widths 2-255 in directions -40..40
+ * (docs/porting/gdi-deviations.md section 2 and section 3 step 5; SH2 errata entry 9).
+ */
+function laterOnTie(dx: number, dy: number, onXAxis: boolean): boolean {
+  if (onXAxis) return dy > 0;
   return dx > 0 || (dx === 0 && dy > 0);
 }

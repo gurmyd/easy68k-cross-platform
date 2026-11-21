@@ -1,4 +1,4 @@
-Status: done (filed by W4 at gate I1 round 3, for the contracts engineer; `RepaintBit.StackRedraw = 16` was in `app/src/contracts/engine.ts` when W4 ran the mirror tests after the rebuild, and both pass). SH8's item 3 remains.
+Status: done (filed by W4 at gate I1 round 3, for the contracts engineer; `RepaintBit.StackRedraw = 16` was in `app/src/contracts/engine.ts` when W4 ran the mirror tests after the rebuild, and both pass). SH8's item 3 of `U2-stack-redraw-bit.md` is done too (gate I1 round 3, the SH8 status line there); nothing of this request remains (contracts, gate I2).
 
 # W4: add `RepaintBit.StackRedraw = 16` to the contracts (item 2 of U2-stack-redraw-bit.md)
 

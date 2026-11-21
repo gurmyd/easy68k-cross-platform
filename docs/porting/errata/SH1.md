@@ -383,3 +383,30 @@ equal because they use the measured table (entry 14); everything else the stubs 
   `y - reach + i` covers `x + left[i] .. x + right[i]`), and `emitDot(dot, x, y, emit)` and
   `mixDot(buffer, x, y, dot, mix)` in `raster.ts`. The stubs `widepen.ts` and `ellipse.ts` use
   `penDot` for their one-point cases. Nothing outside `surface/` used `dotRows`.
+
+## 16. Gate I2 round 1: the ellipse's drawing mode, the stubs are gone, b06 (modes 18-23)
+
+- **Copy mode for ellipses** (docs/requests/SH2-ellipse-mode.md, applied as asked). GDI draws a
+  filled ellipse with a pen 2 or more wide in `R2_COPYPEN` from the widened flattened polygon and
+  widens the curve itself in every other operation; `rasterEllipse` cannot tell from its two sinks.
+  `Surface.drawEllipse` now passes `MODE_TABLE[penMode & 0xff] === 4` (mode 4 and every value that
+  draws as mode 4, such as 158). Reproduced first: T2's `clip` comparison failed 3 of 343 cases
+  (`clip-00202`, `-00217`, `-00230`) and SH2's `ellipses-wide` gave 361 of 500 through the
+  Surface; with the argument T2's test passes all 16 comparisons and `ellipses-wide` gives 496 of
+  500 through the Surface. New test in `surface.test.ts` ("a filled wide-pen ellipse tells
+  rasterEllipse whether the mode draws as Copy"): it fails with `false` in place of the argument.
+- **Entry 10 row g and entry 13**: SH2 has replaced both stubs (`ellipse.ts`, `widepen.ts`); the
+  header of `surface.ts` no longer calls them stubs. The tables of entry 13 that count "SH2, stub"
+  columns are the record of their time; T2's `surface.test.ts` now compares every SH2 case.
+- **b06, drawing modes 18-23** (T3's known difference, owner SH1, "Unconfirmed (Wine only)"). The
+  official program under Wine draws the pen unchanged for these modes; the port draws them as
+  trap15-b 5.4 says (mode 20 white, mode 22 the inverse of the pen). SH1 does not change the modes,
+  because the part Wine changes is measured on real Windows: T2's capture (`spots.json`, `rop2Raw`,
+  captured on Windows 11 10.0.26300) gives `SetROP2` every raw value 0-255 after `R2_COPYPEN` and
+  reads `GetROP2` back. Windows accepts every value (`GetROP2` returns it) and draws value `v` as
+  operation `((v - 1) AND 15) + 1`; Wine's `SetROP2` refuses values above 16 and keeps Copy, which
+  is what the Wine golden shows. The other half, which word `TCanvas.CreatePen` reads for each mode,
+  comes from the binary (entry 11, regenerated from SIM68K.exe). So the Wine result is a property
+  of Wine, and the entry should be settled by the run on Windows that
+  tests/conformance/windows-confirm/README.md describes; SIM68K.exe cannot be run here, because it
+  opens a window. For T3 (owner of known-differences.json): the evidence above.

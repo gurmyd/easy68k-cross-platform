@@ -16,7 +16,9 @@
 //   origin 'local'; changes a backend reports through onExternalChange are reported with origin
 //   'external'. Prefixes are compared with exact letter case. mkdirp is reported as one 'write' of
 //   the folder it was asked for (not of the parents it created on the way), also when the folder
-//   existed already.
+//   existed already. mount() and unmount() are reported, synchronously, as a 'write' and a
+//   'remove' of "/<mount>" (gate I2, errata FS2.md C1, errata W1.md entry 14); an unmount of a
+//   name that is not mounted reports nothing.
 // - Failures reject with an FsError (fsError(), isFsError()).
 //
 // Owner: W1.
@@ -90,6 +92,7 @@ class VirtualFileSystem implements Vfs {
         this.emit({ path, kind: change.kind, origin: 'external' });
       }) ?? (() => {});
     this.mounts.set(name, { backend, unsubscribe });
+    this.emit({ path: `/${name}`, kind: 'write', origin: 'local' });
   }
 
   unmount(mount: string): void {
@@ -97,6 +100,7 @@ class VirtualFileSystem implements Vfs {
     if (!mounted) return;
     mounted.unsubscribe();
     this.mounts.delete(mount);
+    this.emit({ path: `/${mount}`, kind: 'remove', origin: 'local' });
   }
 
   backends(): FileSystemBackend[] {

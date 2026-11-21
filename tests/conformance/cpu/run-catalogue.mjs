@@ -9,7 +9,7 @@
 // build/cpu-catalogue/report.md). Exit code 1 if any file differs from baseline.json, unless
 // --write-baseline is given, which rewrites baseline.json from this run instead.
 //
-// Needs engine/dist (the built simulator). Part of easy68k-mac, an unofficial port of EASy68K.
+// Needs engine/dist (the built simulator). Part of easy68k-cross-platform, an unofficial port of EASy68K.
 // GPL-2.0-or-later.
 
 import { mkdirSync, writeFileSync } from 'node:fs';

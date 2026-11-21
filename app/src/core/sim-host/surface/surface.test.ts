@@ -5,7 +5,9 @@
 
 import { describe, expect, it } from 'vitest';
 import type { Glyph, OverlayCell, PixelBuffer, Rect } from '../../../contracts';
-import { MODE_TABLE, rop } from './rop';
+import { rasterEllipse } from './ellipse';
+import { createBuffer, mixSpan } from './raster';
+import { createMix, MODE_TABLE, rop, setMix } from './rop';
 import { MAX_SURFACE, Surface } from './surface';
 import {
   BLACK,
@@ -1009,6 +1011,52 @@ describe('ellipses: what the surface itself decides (tasks 88 and 91, trap15-b Â
       other.setFillColor(RED);
       other.ellipse(x1, y1, x2, y2);
       expect(hashPixels(other.back)).toBe(hashPixels(straight.back));
+    }
+  });
+
+  it('a filled wide-pen ellipse tells rasterEllipse whether the mode draws as Copy (docs/requests/SH2-ellipse-mode.md)', () => {
+    // What rasterEllipse draws for one box, with the sinks the surface uses, in the given mode.
+    const direct = (mode: number, box: readonly [number, number, number, number], width: number, copy: boolean) => {
+      const buffer = createBuffer(64, 64);
+      const pen = setMix(createMix(), mode, WHITE);
+      const fill = setMix(createMix(), mode, RED);
+      rasterEllipse(
+        ...box,
+        width,
+        { left: 0, top: 0, right: 64, bottom: 64 },
+        (row, from, to) => mixSpan(buffer, row, from, to, pen),
+        (row, from, to) => mixSpan(buffer, row, from, to, fill),
+        copy,
+      );
+      return hashPixels(buffer);
+    };
+    const drawn = (mode: number, box: readonly [number, number, number, number], width: number) => {
+      const surface = new Surface(64, 64);
+      surface.setLineColor(WHITE);
+      surface.setFillColor(RED);
+      surface.setPenWidth(width);
+      surface.setDrawingMode(mode);
+      surface.ellipse(...box);
+      return hashPixels(surface.back);
+    };
+    // Boxes where the two ways of widening give different pixels (found by trying, as in GDI).
+    const cases: { box: readonly [number, number, number, number]; width: number }[] = [];
+    for (let width = 2; width <= 8 && cases.length < 3; width++) {
+      for (let side = 6; side <= 40 && cases.length < 3; side += 3) {
+        const box = [5, 7, 5 + side, 7 + Math.round(side * 0.7)] as const;
+        if (direct(4, box, width, true) !== direct(4, box, width, false)) cases.push({ box, width });
+      }
+    }
+    expect(cases.length, 'boxes on which the copy-mode widening differs').toBeGreaterThan(0);
+    const copyModes = [4, 18, 255].filter((mode) => MODE_TABLE[mode] === 4);
+    const otherModes = [0, 6, 9, 13, 15].filter((mode) => MODE_TABLE[mode] !== 4);
+    expect(copyModes.length).toBeGreaterThan(0);
+    for (const { box, width } of cases) {
+      for (const mode of copyModes)
+        expect(drawn(mode, box, width), `mode ${mode}`).toBe(direct(mode, box, width, true));
+      for (const mode of otherModes) {
+        expect(drawn(mode, box, width), `mode ${mode}`).toBe(direct(mode, box, width, false));
+      }
     }
   });
 

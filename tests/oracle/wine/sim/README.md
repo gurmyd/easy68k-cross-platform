@@ -34,7 +34,9 @@ A run writes, below `tests/conformance/sim/golden/`:
 
 A golden is rewritten only when its masked content changed, so a regeneration on another machine
 changes nothing but `manifest.json`'s date. Work files of a run (job list, one log per container,
-every output, screenshots of failed runs) are in `build/oracle-wine/sim/<run>/`.
+every output, screenshots of failed runs) are in `build/oracle-wine/sim/<run>/`; for a `--file`
+run with `--out DIR` (and so for `run-report.sh` and `run-log.sh` with a third argument) they are
+in `DIR/.work-<run>/`, beside the copied outputs.
 
 ## The recipes
 
@@ -52,15 +54,14 @@ A program that is given as an `.S68` (`run-report.sh`, `run-log.sh`) is run as i
 
 ## Files
 
-| File                          | Where it runs | What                                                                                                                                                               |
-| ----------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `regenerate.mjs`              | host          | `npm run oracle:wine:sim`: plans the jobs, runs the containers (`../common/docker.mjs`), hashes and stores the results; `--file` for one program                   |
-| `regenerate.test.mjs`         | host          | its unit tests (no Docker); run by `npm run test:conformance`                                                                                                      |
-| `run-report.sh`, `run-log.sh` | host          | one program with one recipe (6.2.2); call `regenerate.mjs --file`                                                                                                  |
-| `sim_corpus.sh`               | container     | stages the official folder and the programs, runs one shard of the job list                                                                                        |
-| `sim_batch.py`                | container     | per job: assemble once, fresh run folder, one recipe of `sim_run.py`, collect                                                                                      |
-| `sim_run.py`                  | container     | the two recipes of official-oracle.md 5.1 and 5.2, unchanged since they were proven there                                                                          |
-| `sim_proofs.sh`               | container     | the first proof run of official-oracle.md 5.1/5.2; superseded by the above and kept only because the `Dockerfile` (T1) names it (docs/requests/T3-oracle-image.md) |
+| File                          | Where it runs | What                                                                                                                                             |
+| ----------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `regenerate.mjs`              | host          | `npm run oracle:wine:sim`: plans the jobs, runs the containers (`../common/docker.mjs`), hashes and stores the results; `--file` for one program |
+| `regenerate.test.mjs`         | host          | its unit tests (no Docker); run by `npm run test:conformance`                                                                                    |
+| `run-report.sh`, `run-log.sh` | host          | one program with one recipe (6.2.2); call `regenerate.mjs --file`                                                                                |
+| `sim_corpus.sh`               | container     | stages the official folder and the programs, runs one shard of the job list                                                                      |
+| `sim_batch.py`                | container     | per job: assemble once, fresh run folder, one recipe of `sim_run.py`, collect                                                                    |
+| `sim_run.py`                  | container     | the two recipes of official-oracle.md 5.1 and 5.2, unchanged since they were proven there                                                        |
 
 The image is not rebuilt for a change of these scripts: `regenerate.mjs` mounts this folder
 read-only at `/mnt/sim-driver` and runs `sim_corpus.sh` and `sim_batch.py` from there.

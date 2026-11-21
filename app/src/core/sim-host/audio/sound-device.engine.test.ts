@@ -9,6 +9,7 @@ import { Reg, type AudioBackend } from '../../../contracts';
 import { createSimEngine, releaseSimEngine } from '../../../engine';
 import { assembleProgram, createTestEngine, runProgram, type AssembledProgram } from '../../../engine/testing';
 import { MemoryBackend } from '../../../fs/memory-backend';
+import { CachedSyncFiles } from '../../../fs/sync/cached';
 import { MemorySyncFiles } from '../../../fs/sync/memory';
 import { createVfs } from '../../../fs/vfs';
 import { VirtualTime } from '../../run/clock';
@@ -244,6 +245,86 @@ describe.skipIf(!enginesBuilt)(
       await runGraphicSound(dead, time);
       expect(attempts).toEqual(recorded.eventsOf('play').map((play) => play.at));
       expect(session!.engine!.getRegister(Reg.D0) & 0xffff).toBe(1);
+    });
+
+    it('graphicSound.X68 composed as in the application: the real ProgramFiles over the cached view, and what task 70 costs in its wait loop', async () => {
+      // No part is replaced: the session composes the real SoundDevice over the real ProgramFiles,
+      // which reads through the CachedSyncFiles view the browser's store uses (SH6).
+      const time = new VirtualTime();
+      const backend = new FakeAudioBackend(time);
+      const vfs = createVfs();
+      vfs.mount(new MemoryBackend());
+      await vfs.writeFile('/memory/examples/graphicSound.S68', graphicSound.s68);
+      for (const name of ['0.wav', '1.wav', 'roger.wav'])
+        await vfs.writeFile(`/memory/examples/${name}`, official(name));
+      const view = new CachedSyncFiles({ vfs, scheduler: time, message: () => {} });
+      // Every whole-file read of the sound device passes through view.read; count and time them.
+      const reads = { count: 0, ms: 0 };
+      const read = view.read.bind(view);
+      view.read = (path, position, count) => {
+        const started = performance.now();
+        const bytes = read(path, position, count);
+        reads.ms += performance.now() - started;
+        reads.count += 1;
+        return bytes;
+      };
+      try {
+        await view.whenCurrent();
+        session = await createHeadlessSession({
+          engines: { create: createSimEngine, release: releaseSimEngine },
+          vfs,
+          viewFor: () => view,
+          settleFiles: () => void view.settled(),
+          time,
+          audio: backend,
+        });
+        const messages: string[] = [];
+        const original = session.bridge.addMessage.bind(session.bridge);
+        session.bridge.addMessage = (line: string) => {
+          messages.push(line);
+          original(line);
+        };
+        await session.controller.open('/memory/examples/graphicSound.S68', 'open');
+        messages.length = 0; // the loader's own lines; what follows is the program's
+        const wallStart = performance.now();
+        session.controller.run();
+        let idle = false;
+        for (let i = 0; i < 2000 && !idle; i++) {
+          idle = session.runUntilIdle(64);
+          if (!idle) await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+        const wallMs = performance.now() - wallStart;
+        expect(idle).toBe(true);
+        expect(session.engine?.state().halt).toBe(true);
+        expect(messages).toEqual([]);
+
+        const plays = backend.eventsOf('play');
+        const names = plays.map((play) => {
+          const bytes = backend.bytesOf(play.playback)!;
+          return ['0.wav', '1.wav', 'roger.wav'].find((name) => official(name).length === bytes.length);
+        });
+        expect(names).toEqual(['1.wav', '0.wav', 'roger.wav']);
+        const [one, zero, roger] = plays.map((play) => play.at) as [number, number, number];
+        expect(zero - one).toBeGreaterThanOrEqual(302.13);
+        expect(zero - one).toBeLessThan(302.13 + 17);
+        expect(roger - zero).toBeGreaterThanOrEqual(355.96);
+        expect(roger - zero).toBeLessThan(355.96 + 17);
+
+        // The wait loop reads the file at every try (the original tests FileExists each time).
+        const perRead = reads.ms / reads.count;
+        const virtualMs = roger - one;
+        console.info(
+          `task 70 in the wait loop: ${reads.count} whole-file reads over ${virtualMs.toFixed(0)} ms of program time ` +
+            `(${((reads.count * 1000) / virtualMs).toFixed(0)} per second), ${reads.ms.toFixed(1)} ms in all, ` +
+            `${(perRead * 1000).toFixed(1)} us each; the whole run took ${wallMs.toFixed(0)} ms of wall time`,
+        );
+        expect(reads.count).toBeGreaterThan(10);
+        // A read is a copy of a file of a few kilobytes: microseconds. The bound is a hundred times
+        // that, so a loaded machine does not fail it, while a read that walked the store would.
+        expect(perRead).toBeLessThan(0.5);
+      } finally {
+        view.dispose();
+      }
     });
   },
 );

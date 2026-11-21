@@ -19,10 +19,11 @@
 // twin): -fwrapv, -fwrapv-pointer, -ftrivial-auto-var-init=zero. MSVC's defaults already match
 // -fsigned-char, -fno-strict-aliasing and Ctrl-Z as end of file (-fms-extensions).
 //
-// Windows only. Part of easy68k-mac, an unofficial port of EASy68K. GPL-2.0-or-later.
+// Windows only. Part of easy68k-cross-platform, an unofficial port of EASy68K. GPL-2.0-or-later.
 
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { diagnostics, runWithVcvars } from './msvc.mjs';
 
@@ -51,10 +52,70 @@ export function engineSourceLists() {
 
 const quote = (p) => `"${p}"`;
 
+/** Every file below dir, as paths relative to the repository with forward slashes, sorted. */
+function filesBelow(dir) {
+  const out = [];
+  const walk = (d) => {
+    for (const entry of readdirSync(d, { withFileTypes: true })) {
+      const path = join(d, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (entry.isFile()) out.push(relative(repo, path).split('\\').join('/'));
+    }
+  };
+  if (existsSync(dir)) walk(dir);
+  return out.sort();
+}
+
+/**
+ * SHA-256 over everything a simulator twin is built from: engine/sim/build.mjs (the source lists),
+ * every file of engine/sim/src and engine/sim/shim, the twin's own folder sim-twin/ and this
+ * script (the flags). A build writes it next to the program (sources.sha256); a twin whose stamp
+ * differs was built from other sources and says nothing about today's engine.
+ */
+export function simTwinInputsDigest() {
+  const hash = createHash('sha256');
+  const files = [
+    relative(repo, join(simDir, 'build.mjs')).split('\\').join('/'),
+    relative(repo, fileURLToPath(import.meta.url))
+      .split('\\')
+      .join('/'),
+    ...filesBelow(join(simDir, 'src')),
+    ...filesBelow(join(simDir, 'shim')),
+    ...filesBelow(twinDir),
+  ];
+  for (const file of files) {
+    hash.update(`${file}\0`);
+    hash.update(readFileSync(join(repo, file)));
+    hash.update('\0');
+  }
+  return hash.digest('hex');
+}
+
+/** Path of the stamp a build writes next to the twin. @param {'O2'|'Od'} variant */
+export function simTwinStampPath(variant) {
+  return join(dirname(simTwinPath(variant)), 'sources.sha256');
+}
+
+/**
+ * 'missing' (not built), 'stale' (built from other sources than today's, or before stamps were
+ * written) or 'current'.
+ * @param {'O2'|'Od'} variant
+ * @param {string} [digest] simTwinInputsDigest()
+ * @param {string} [exe] the program (default simTwinPath(variant)); its stamp lies beside it
+ */
+export function simTwinState(variant, digest = simTwinInputsDigest(), exe = simTwinPath(variant)) {
+  if (!existsSync(exe)) return 'missing';
+  const stamp = join(dirname(exe), 'sources.sha256');
+  if (!existsSync(stamp)) return 'stale';
+  return readFileSync(stamp, 'utf8').trim() === digest ? 'current' : 'stale';
+}
+
 /** @param {'O2'|'Od'} variant @param {{ verbose?: boolean }} [options] */
 export async function buildSimTwin(variant, options = {}) {
   if (process.platform !== 'win32') throw new Error('The native twins are built with MSVC on Windows.');
   const { original, shim } = engineSourceLists();
+  // taken before compiling, so that a source edited during the build leaves the twin stale
+  const digest = simTwinInputsDigest();
   const outDir = dirname(simTwinPath(variant));
   rmSync(outDir, { recursive: true, force: true });
   for (const sub of ['src', 'shim', 'twin']) mkdirSync(join(outDir, 'obj', sub), { recursive: true });
@@ -89,6 +150,7 @@ export async function buildSimTwin(variant, options = {}) {
   if (options.verbose) console.log(output);
   else if (found.length) console.log(`sim-${variant}: ${found.length} compiler diagnostics (--verbose shows them)`);
   if (!existsSync(exe)) throw new Error(`build of ${exe} reported success but the file is missing\n${output}`);
+  writeFileSync(simTwinStampPath(variant), `${digest}\n`);
   return exe;
 }
 

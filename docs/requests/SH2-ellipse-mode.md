@@ -1,7 +1,7 @@
 # SH2 request: the Surface tells `rasterEllipse` whether it draws in Copy mode
 
 - From: SH2 (ellipses and wide pens). To: SH1 (owner of `app/src/core/sim-host/surface/surface.ts`).
-- Status: open.
+- Status: done by SH1 at gate I2 round 1, as asked (`surface.ts` passes `MODE_TABLE[penMode & 0xff] === 4`; test "a filled wide-pen ellipse tells rasterEllipse whether the mode draws as Copy" in `surface.test.ts`). `ellipse.gdi.test.ts` now prints 496 of 500 through the Surface and T2's `clip` cases all pass; raising `BASELINE.wideEqualSurface` to 496 is left to SH2 (its test). SH2 raised it at gate I2 round 1; closed.
 
 ## What
 

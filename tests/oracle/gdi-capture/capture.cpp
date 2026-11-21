@@ -6,6 +6,7 @@
 //   gdi-capture.exe cases <case-list.txt> <out-dir>   one .pix per case + pen.txt
 //   gdi-capture.exe fonts <out-dir>                   metrics.tsv, outline.tsv, raster atlases
 //   gdi-capture.exe spots <out-dir>                   spots.json (colours, ROP2, dots, ...)
+//   gdi-capture.exe nibs <out-dir>                    nibs.json (the polygons of the wide pens)
 //   gdi-capture.exe info                              the machine settings line, on stdout
 //
 // The program draws ONLY into memory device contexts holding a 32-bit top-down DIB section. It
@@ -25,6 +26,8 @@
 #define NOMINMAX
 #include <windows.h>
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -999,6 +1002,104 @@ static int runSpots(const std::string& outDir) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// nibs: the polygon GDI makes of a wide pen (docs/requests/SH2-gdi-nibs.md)
+//
+// GDI widens a line drawn with a wide pen into a polygon whose round ends are made of the vertices
+// of one convex polygon per width, the pen's nib (app/src/core/sim-host/surface/tables/pens.ts).
+// Measured as SH2 measured it: GM_ADVANCED with a world transform of 1/16 in x and y, so that the
+// path keeps GDI's 28.4 fixed-point coordinates; a pen CreatePenIndirect(PS_SOLID, 16 * w); for
+// each of 360 directions BeginPath, MoveToEx(0, 0), LineTo(16000 cos a, 16000 sin a), EndPath,
+// WidenPath, GetPath. The widened path is P0 + offset, cap vertices..., P0 - offset, P1 - offset,
+// cap vertices..., P1 + offset; the nib is the union, over the directions, of the cap vertices at
+// P0 = (0, 0). Written in order of increasing angle atan2(y, x) from -180 degrees.
+//
+// "ties" also records the whole widened path of a few integer directions at which the port's
+// widened lines differed from GDI by a pixel or more (SH2's review): a segment from (0, 0) to
+// 16 * (dx, dy), the points as "x,y,type" with the type GetPath returns.
+
+static std::vector<std::pair<POINT, BYTE>> widenedPath(HDC dc, int width, long x1, long y1) {
+  LOGPEN lp = {PS_SOLID, {16 * width, 0}, RGB(255, 255, 255)};
+  HPEN pen = CreatePenIndirect(&lp);
+  HGDIOBJ old = SelectObject(dc, pen);
+  BeginPath(dc);
+  MoveToEx(dc, 0, 0, nullptr);
+  LineTo(dc, x1, y1);
+  EndPath(dc);
+  if (!WidenPath(dc)) fail("WidenPath failed");
+  int k = GetPath(dc, nullptr, nullptr, 0);
+  if (k <= 0) fail("GetPath returned no points");
+  std::vector<POINT> points(k);
+  std::vector<BYTE> types(k);
+  GetPath(dc, points.data(), types.data(), k);
+  AbortPath(dc);
+  SelectObject(dc, old);
+  DeleteObject(pen);
+  std::vector<std::pair<POINT, BYTE>> out;
+  for (int i = 0; i < k; i++) out.push_back({points[i], types[i]});
+  return out;
+}
+
+static int runNibs(const std::string& outDir) {
+  ensureDir(outDir);
+  Canvas c(4, 4);
+  if (!SetGraphicsMode(c.dc, GM_ADVANCED)) fail("SetGraphicsMode(GM_ADVANCED) failed");
+  XFORM sixteenth = {1.0f / 16, 0, 0, 1.0f / 16, 0, 0};
+  if (!SetWorldTransform(c.dc, &sixteenth)) fail("SetWorldTransform failed");
+  const double pi = 3.14159265358979323846;
+  std::string json = "{\n  \"capturedOn\": " + machineSettingsJson() + ",\n  \"nibs\": {";
+  for (int w = 2; w <= 255; w++) {
+    std::set<std::pair<long, long>> vertices;
+    for (int k = 0; k < 360; k++) {
+      const long x1 = std::lround(16000 * std::cos(k * pi / 180));
+      const long y1 = std::lround(16000 * std::sin(k * pi / 180));
+      // The path is P0 + offset, cap vertices..., P0 - offset, P1 - offset, cap vertices...,
+      // P1 + offset: the points near P0 come first. The four offset points are not nib vertices.
+      std::vector<std::pair<long, long>> near0, near1;
+      for (const auto& [p, type] : widenedPath(c.dc, w, x1, y1)) {
+        const double d0 = double(p.x) * p.x + double(p.y) * p.y;
+        const double d1 = double(p.x - x1) * (p.x - x1) + double(p.y - y1) * (p.y - y1);
+        if (d0 <= d1 && near1.empty()) near0.push_back({long(p.x), long(p.y)});
+        else if (d0 > d1) near1.push_back({long(p.x - x1), long(p.y - y1)});
+        else fail("a widened path does not have the form P0 cap, P1 cap");
+      }
+      if (near0.size() < 2 || near1.size() < 2) fail("a widened path has fewer than two points at an end");
+      // Only the cap at P0 = (0, 0) is taken. Relative to P1, the cap vertices of many directions
+      // lie one sixteenth further out than the nib (width 2, direction 1 degree: 8,16 and 16,0 for
+      // the nib's 7,15 and 15,0), so the far end is not the nib translated; "ties" shows such paths.
+      for (size_t i = 1; i + 1 < near0.size(); i++) vertices.insert(near0[i]);
+    }
+    std::vector<std::pair<long, long>> sorted(vertices.begin(), vertices.end());
+    auto angle = [](const std::pair<long, long>& v) {
+      double a = std::atan2(double(v.second), double(v.first));
+      return a <= -3.14159265358979 ? 3.14159265358979323846 : a;  // (-180, 180]
+    };
+    std::sort(sorted.begin(), sorted.end(), [&](const auto& a, const auto& b) {
+      double x = angle(a), y = angle(b);
+      return x != y ? x < y : a < b;
+    });
+    std::string list;
+    for (const auto& v : sorted) list += fmt("%s%ld,%ld", list.empty() ? "" : " ", v.first, v.second);
+    json += fmt("%s\n    \"%d\": \"%s\"", w == 2 ? "" : ",", w, list.c_str());
+  }
+  json += "\n  },\n  \"ties\": [";
+  const int ties[][3] = {{2, -1, 2}, {2, 1, -2}, {2, -2, 4}, {7, -16, 39}, {7, 16, -39}, {9, -7, 17},
+                         {9, 7, -17}, {11, -13, 31}, {11, 13, -31}, {12, -7, 17}, {12, 7, -17}};
+  bool first = true;
+  for (const auto& t : ties) {
+    std::string list;
+    for (const auto& [p, type] : widenedPath(c.dc, t[0], 16L * t[1], 16L * t[2]))
+      list += fmt("%s%ld,%ld,%d", list.empty() ? "" : " ", long(p.x), long(p.y), int(type));
+    json += fmt("%s\n    {\"width\": %d, \"dx\": %d, \"dy\": %d, \"path\": \"%s\"}", first ? "" : ",", t[0], t[1], t[2],
+                list.c_str());
+    first = false;
+  }
+  json += "\n  ]\n}\n";
+  writeText(outDir + "\\nibs.json", json);
+  std::printf("pen nibs written\n");
+  return 0;
+}
+
+// ---------------------------------------------------------------------------------------------
 
 int main(int argc, char** argv) {
   if (argc >= 2 && std::strcmp(argv[1], "info") == 0) {
@@ -1008,7 +1109,9 @@ int main(int argc, char** argv) {
   if (argc == 4 && std::strcmp(argv[1], "cases") == 0) return runCases(argv[2], argv[3]);
   if (argc == 3 && std::strcmp(argv[1], "fonts") == 0) return runFonts(argv[2]);
   if (argc == 3 && std::strcmp(argv[1], "spots") == 0) return runSpots(argv[2]);
+  if (argc == 3 && std::strcmp(argv[1], "nibs") == 0) return runNibs(argv[2]);
   std::fprintf(stderr,
-               "usage: gdi-capture cases <case-list> <out-dir> | fonts <out-dir> | spots <out-dir> | info\n");
+               "usage: gdi-capture cases <case-list> <out-dir> | fonts <out-dir> | spots <out-dir> | nibs <out-dir> | "
+               "info\n");
   return 1;
 }

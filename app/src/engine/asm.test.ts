@@ -205,6 +205,25 @@ describe.skipIf(!asmBuilt)('createAsmEngine with the real engine (needs engine/d
       ]);
     });
 
+    // Gate I2 (E5's review): the engine's own lookup already resolves these as Win32 does; when E5's
+    // scan supplies the file, it is found.
+    it("'..' after a folder that does not exist, and a trailing dot, resolve as on Windows", async () => {
+      const result = await assemble('p/prog.X68', {
+        'p/prog.X68': source(
+          'START   NOP',
+          "        INCLUDE 'q\\..\\lib1.x68'", // p/q does not exist
+          "        INCLUDE 'lib2.x68.'",
+          '        END     START',
+        ),
+        'p/lib1.x68': source('        MOVEQ   #1,D1'),
+        'p/lib2.x68': source('        MOVEQ   #2,D2'),
+      });
+      expect(result.messages).toEqual([]);
+      const listing = listingLines(result).join('\n');
+      expect(listing).toContain('MOVEQ   #1,D1');
+      expect(listing).toContain('MOVEQ   #2,D2');
+    });
+
     it('a name that no supplied file has is the original\'s "Unable to access specified file"', async () => {
       const result = await assemble('prog.X68', {
         'prog.X68': source('START   NOP', '        INCLUDE missing.x68', '        END     START'),

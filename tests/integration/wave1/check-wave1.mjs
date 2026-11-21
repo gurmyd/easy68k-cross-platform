@@ -393,22 +393,33 @@ async function studentPart(browser, name, os, fx) {
     (await page.evaluate(() => window.__easy68k.ctx.store.getState().mode)) === 'editor',
   );
 
-  // --- Help > Examples..., then the example from the Files panel
+  // --- Help > Examples..., then the example from the Files panel. In a browser the command copies
+  // the examples into the store and shows them in the Files panel (ARCHITECTURE.md 5.8): the panel
+  // is shown and the Examples folder is revealed, that is selected (app.files.toggle with
+  // FilesRevealArg, docs/requests/W1-files-reveal-arg.md). It used to say so in a toast instead.
   await menu(page, 'Help', /^Examples/);
-  const toast = page.locator('.e68-toast', { hasText: 'examples' });
-  const toastShown = await toast
-    .first()
-    .waitFor({ timeout: STEP_TIMEOUT })
-    .then(
-      () => true,
-      () => false,
-    );
-  check(
-    `${p} Help > Examples... says where the examples are`,
-    toastShown,
-    toastShown ? await toast.first().innerText() : 'no toast',
+  const revealed = await waitFor(
+    page,
+    () => {
+      const row = [...document.querySelectorAll('[data-e68-panel="files"] [role=treeitem]')].find(
+        (item) => item.getAttribute('aria-selected') === 'true',
+      );
+      return row !== undefined && (row.textContent ?? '').trim().startsWith('Examples');
+    },
+    null,
   );
-  await filesRow(page, 'Examples').first().dblclick();
+  const selectedRows = await page
+    .locator('[data-e68-panel="files"] [role=treeitem][aria-selected=true]')
+    .allInnerTexts()
+    .catch(() => []);
+  const filesShown = await page.evaluate(() => window.__easy68k.ctx.commands.isChecked?.('app.files.toggle') ?? null);
+  check(
+    `${p} Help > Examples... shows the Files panel with the Examples folder selected`,
+    revealed && filesShown !== false && (await page.locator('[data-e68-panel="files"]').first().isVisible()),
+    `selected: ${JSON.stringify(selectedRows)}; View > Files checked: ${filesShown}`,
+  );
+  // The folder may already be expanded by the reveal; a double-click would then fold it again.
+  if ((await filesRow(page, 'tutorial1.X68').count()) === 0) await filesRow(page, 'Examples').first().dblclick();
   await filesRow(page, 'tutorial1.X68').first().waitFor({ timeout: STEP_TIMEOUT });
   const listed = (await page.locator('[data-e68-panel="files"] [role=treeitem]').allInnerTexts()).slice(2).sort();
   check(
@@ -1002,6 +1013,8 @@ async function tourPart(browser, name, os, fx) {
     const program = fx.examples[source];
     const expected = fx.outcomes[source];
     const before = errors.length;
+    // The PC field before the load decides what the listing marks afterwards (below).
+    const pcShownBefore = (await registerFields(page)).PC;
     await openProgram(page, program.s68Name, 'toolbar', os);
     const loaded = await sim(page);
     await page.waitForTimeout(300);
@@ -1016,10 +1029,19 @@ async function tourPart(browser, name, os, fx) {
       };
     });
     const rowOnScreen = await highlightedRow(page);
+    // The original's rule (sim-ui 6.4; errata U1.md entry 8 and W4.md entry 9, traced in its
+    // source): the load empties the list box, which drops its selection, and only a CHANGE of the
+    // PC field's text selects the PC row (regPCChange). A program that starts at the PC already
+    // shown therefore has no row marked until the first step; one that starts elsewhere has its
+    // PC row marked. Never another row.
+    const samePc = pcShownBefore === pcRow.pc;
+    const marked =
+      pcRow.text.startsWith(pcRow.pc) && pcRow.selected === pcRow.row && rowOnScreen.trimEnd() === pcRow.text.trimEnd();
+    const none = pcRow.row === -1 && pcRow.selected === -1 && rowOnScreen === '';
     check(
-      `${p} ${source}: after the load the listing highlights the row of the PC`,
-      pcRow.text.startsWith(pcRow.pc) && pcRow.selected === pcRow.row && rowOnScreen.trimEnd() === pcRow.text.trimEnd(),
-      `PC ${pcRow.pc}; engine row ${pcRow.row} "${pcRow.text.slice(0, 40)}"; selected row ${pcRow.selected}; on screen "${rowOnScreen.slice(0, 40)}"`,
+      `${p} ${source}: after the load the listing marks ${samePc ? 'no row (the PC field kept its text)' : 'the row of the PC'}`,
+      samePc ? none : marked,
+      `PC before ${pcShownBefore}, after ${pcRow.pc}; engine row ${pcRow.row} "${pcRow.text.slice(0, 40)}"; selected row ${pcRow.selected}; on screen "${rowOnScreen.slice(0, 40)}"`,
     );
     const stepsBefore = await page.evaluate(() => window.__easy68k.ctx.sim.engine.stepCount);
     await toolbarButton(page, 'sim.run.run').click();

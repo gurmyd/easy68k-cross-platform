@@ -15,13 +15,15 @@
 //   - Log Start while a program runs and the file exists, with the question open for seconds:
 //     every byte the program writes after the click is in the log;
 //   - the cost of a flush in the real browser store (IndexedDB) with a 30 MB log and a small one;
-//   - the Log panel; Auto Trace Options; Enable Exceptions and Enable Bit Field (saved at once,
+//   - the Log panel from View > Log; Auto Trace Options; Enable Exceptions and Enable Bit Field (saved at once,
 //     still set after a reload of the page); the three font dialogs; Fullscreen Options;
 //   - the dialogs pass an accessibility scan; screenshots in the light and the dark theme.
 //
 // The page object `window.__easy68k` (development builds only, main.tsx) is used to put the test
-// programs into the browser store, to read state for the comparisons, and to show the Log panel,
-// for which the menus have no command yet (docs/requests/U4-log-panel-command.md).
+// programs into the browser store and to read state for the comparisons. The check waits for the
+// state it needs (the register fields re-read, a box shown, lines in the log) rather than for fixed
+// times, so that a slow runner passes as this PC does; the one fixed pause is the three seconds the
+// user takes to answer the question while a program runs.
 //
 // Screenshots go to build/U4/log-check (git-ignored). Prints "N of M checks passed"; the exit code
 // is 0 only if every check passed and no page logged an error. Needs engine/dist (the programs are
@@ -292,12 +294,46 @@ async function answerLogStopped(page, p) {
   await box.waitFor({ state: 'detached', timeout: UI_TIMEOUT }).catch(() => {});
 }
 
+const regsRevision = (page) => page.evaluate(() => window.__easy68k.ctx.store.getState().sim.regsRevision);
+
+/**
+ * One Trace Into with the toolbar, waiting until the step is shown (the register fields are re-read,
+ * or a box is up) rather than for a fixed time: a slow runner may take longer than this PC.
+ */
+async function traceOnce(page) {
+  const before = await regsRevision(page);
+  await toolbarButton(page, 'sim.run.traceInto').click(); // waits until the button is enabled
+  const shown = await waitFor(
+    page,
+    (revision) =>
+      window.__easy68k.ctx.store.getState().sim.regsRevision !== revision ||
+      document.querySelector('[role=alertdialog]') !== null,
+    before,
+  );
+  if (!shown) throw new Error(`Trace Into showed no step within ${UI_TIMEOUT} ms`);
+}
+
 /** Trace Into with the toolbar until the program halts. */
 async function traceToHalt(page, steps) {
-  for (let i = 0; i < steps; i++) {
-    await toolbarButton(page, 'sim.run.traceInto').click();
-    await page.waitForTimeout(80);
-  }
+  for (let i = 0; i < steps; i++) await traceOnce(page);
+}
+
+/**
+ * Clicks a toolbar command that resets the simulator (Rewind, Reload) and waits until the reset is
+ * shown (the register fields are re-read, the simulator idle), not for a fixed time.
+ */
+async function resetWith(page, id) {
+  const before = await regsRevision(page);
+  await toolbarButton(page, id).click();
+  const done = await waitFor(
+    page,
+    (revision) => {
+      const { sim } = window.__easy68k.ctx.store.getState();
+      return sim.regsRevision !== revision && sim.phase === 'idle';
+    },
+    before,
+  );
+  if (!done) note(`${id}: no reset seen within ${UI_TIMEOUT} ms`);
 }
 
 // --- the parts -----------------------------------------------------------------------------------
@@ -404,29 +440,53 @@ async function loggingPart(browser, name, programs) {
     JSON.stringify(output),
   );
 
-  // --- the Log panel (shown through the page object: no command opens it yet)
-  await page.evaluate(async () => {
-    const { showPanel } = await import('/src/state/panels.ts');
-    showPanel(window.__easy68k.ctx, 'log');
-  });
+  // --- the Log panel, from View > Log
+  await menu(page, 'View', /^Log$/);
   const panel = page.locator(`${SIM} [data-e68-panel="log"]`);
-  await panel.waitFor({ state: 'visible', timeout: UI_TIMEOUT });
-  await page.waitForTimeout(300);
-  const panelText = await panel.innerText();
+  const panelShown = await panel
+    .waitFor({ state: 'visible', timeout: UI_TIMEOUT })
+    .then(() => true)
+    .catch(() => false);
+  const panelFocused = await page.evaluate(() => Boolean(document.activeElement?.closest('[data-e68-panel="log"]')));
+  check(`${p} View > Log shows the Log panel and gives it the focus`, panelShown && panelFocused);
+  const panelWanted = ['Stopped', 'hello_RunLog.txt', 'hello_OutLog.txt', 'Line=   12      SIMHALT', 'Hello'];
+  await waitFor(
+    page,
+    (wanted) => {
+      const element = document.querySelector('[data-e68-panel="log"]');
+      return element !== null && wanted.every((text) => element.innerText.includes(text));
+    },
+    panelWanted,
+  );
+  const panelText = panelShown ? await panel.innerText() : '';
   check(
     `${p} the Log panel shows the state, both names and the last lines`,
-    panelText.includes('Stopped') &&
-      panelText.includes('hello_RunLog.txt') &&
-      panelText.includes('hello_OutLog.txt') &&
-      panelText.includes('Line=   12      SIMHALT') &&
-      panelText.includes('Hello'),
+    panelWanted.every((text) => panelText.includes(text)),
     panelText.replace(/\s+/g, ' ').slice(0, 200),
   );
+  // An execution-log line is seen whole, up to its source text (the pane is the panel's width).
+  const lineWhole = await page.evaluate(() => {
+    const pre = document.querySelector('[data-e68-panel="log"] .e68-logpanel__text');
+    if (!pre) return { ok: false, detail: 'no text' };
+    const range = document.createRange();
+    const node = [...pre.childNodes].find((n) => n.nodeType === 3);
+    if (!node) return { ok: false, detail: 'empty' };
+    const at = node.textContent.indexOf('SIMHALT');
+    if (at < 0) return { ok: false, detail: 'no SIMHALT' };
+    range.setStart(node, at);
+    range.setEnd(node, at + 'SIMHALT'.length);
+    const word = range.getBoundingClientRect();
+    const box = pre.getBoundingClientRect();
+    return {
+      ok: word.right <= box.right && word.left >= box.left,
+      detail: `SIMHALT at ${Math.round(word.left)}..${Math.round(word.right)}, pane ${Math.round(box.left)}..${Math.round(box.right)}`,
+    };
+  });
+  check(`${p} the Log panel shows an execution-log line whole`, lineWhole.ok, lineWhole.detail);
   await shot('log-panel');
 
   // --- the question: Cancel
-  await toolbarButton(page, 'sim.run.rewind').click();
-  await page.waitForTimeout(200);
+  await resetWith(page, 'sim.run.rewind');
   const before = await readText(page, '/browser/logcheck/hello_RunLog.txt');
   await toolbarButton(page, 'sim.run.logStart').click();
   const question = dialogNamed(page, 'Log File Options');
@@ -443,7 +503,8 @@ async function loggingPart(browser, name, programs) {
   await axe(page, 'the Log File Options question', p);
   await question.getByRole('button', { name: 'Cancel' }).click();
   await question.waitFor({ state: 'detached', timeout: UI_TIMEOUT });
-  await page.waitForTimeout(200);
+  // Cancel gives Log Start back once start() has finished.
+  await waitFor(page, () => window.__easy68k.ctx.sim.log.state.startEnabled, undefined);
   const afterCancel = await logState(page);
   check(
     `${p} Cancel: logging stays off, the engine is not logging, the file is unchanged`,
@@ -467,13 +528,9 @@ async function loggingPart(browser, name, programs) {
   check(`${p} then the output log's question`, (await second.innerText()).includes('Output Log File exists!'));
   await second.getByRole('button', { name: 'Replace' }).click();
   await loggingLabel(page).waitFor({ timeout: UI_TIMEOUT });
-  await toolbarButton(page, 'sim.run.traceInto').click();
-  await page.waitForTimeout(150);
-  await toolbarButton(page, 'sim.run.rewind').click();
-  await page.waitForTimeout(150);
-  await toolbarButton(page, 'sim.run.reload').click();
-  await waitFor(page, () => window.__easy68k.ctx.store.getState().sim.phase === 'idle', undefined);
-  await page.waitForTimeout(150);
+  await traceOnce(page);
+  await resetWith(page, 'sim.run.rewind');
+  await resetWith(page, 'sim.run.reload');
   // Log Stop with the keyboard, from the Listing panel.
   await page.locator(`${SIM} [data-e68-panel="listing"] [data-e68-panel-focus]`).focus();
   const chord = await pressCommandKey(page, 'sim.run.logStop', 'Shift');
@@ -516,7 +573,9 @@ async function loggingPart(browser, name, programs) {
   const d2Later = await page.evaluate(() => window.__easy68k.ctx.sim.engine.getRegister(2));
   check(`${p} the program stands still while the question is open`, d2Asked === d2Later, `D2 ${d2Asked} -> ${d2Later}`);
   await question.getByRole('button', { name: 'Append' }).click();
-  await page.waitForTimeout(800);
+  // Until the program has written some lines into the log (by the log's own count, not a pause).
+  const wrote = await waitFor(page, () => window.__easy68k.ctx.sim.log.tail('output', 40).length >= 30, undefined);
+  if (!wrote) note(`${p} the program wrote fewer than 30 lines into the log within ${UI_TIMEOUT} ms`);
   await toolbarButton(page, 'sim.run.logStop').click();
   await toolbarButton(page, 'sim.run.pause').click();
   await settled(page);

@@ -28,6 +28,7 @@ import {
   compareReplay,
   fontOfCase,
   isProportionalName,
+  outlineWidening,
   outsideTheBoxes,
   replayCase,
   scoreReplays,
@@ -208,6 +209,48 @@ describe('task 95 against the GDI capture: the outline faces (suite text-outline
         }
       }
       expect(tooFar).toEqual([]);
+    },
+    LIMIT,
+  );
+});
+
+describe('task 95 against the GDI capture: italic in the outline faces (suite text-outline-italic)', () => {
+  // GDI widens the opaque box of an italic outline text further than a plain one (errata T2
+  // section 1 item 18; docs/requests/T2-outline-italic.md): `outlineWidening` leaves those pixels
+  // out, as T2's `outlineCells` does. Texts that draw only $7F are left out as in text-outline-zero
+  // (the fallback font's cell height is not measured).
+  const ZERO_WIDTH = [0x09, 0x0a, 0x0d, 0x1c, 0x1d, 0x1e, 0x1f];
+  const drawsOnlyDel = (reference: ReferenceCase) =>
+    reference.case.ops.some(
+      (o) => o.op === 'text' && o.bytes.includes(0x7f) && o.bytes.every((b) => b === 0x7f || ZERO_WIDTH.includes(b)),
+    );
+  const modelled = () => suite('text-outline-italic').filter((reference) => !drawsOnlyDel(reference));
+
+  it(
+    'Courier New, Lucida Console, Consolas in italic: the cell rectangles and the pen positions are those of Windows',
+    () => {
+      const cases = modelled();
+      // 177 cases in the suite when this was written: 3 faces, 9 sizes, the strings of OUTLINE_ITALIC_STRINGS
+      expect(cases.length).toBeGreaterThanOrEqual(100);
+      const score = scoreReplays(cases, fonts, 'cells');
+      expect(differing(score)).toEqual([]);
+      expect(score.equal).toBe(cases.length);
+    },
+    LIMIT,
+  );
+
+  it(
+    'the plain margin (a tenth of the cell on both sides) would fail here',
+    () => {
+      let failing = 0;
+      for (const reference of modelled()) {
+        const replay = replayCase(reference.case, fonts);
+        const plainBoxes = replay.boxes.map((box) => ({ ...box, italic: false }));
+        if (compareReplay(replay, reference.image, outsideTheBoxes(plainBoxes))) failing++;
+      }
+      expect(failing).toBeGreaterThan(0);
+      expect(outlineWidening(true, 39)).toEqual([5, 14]);
+      expect(outlineWidening(false, 39)).toEqual([4, 4]);
     },
     LIMIT,
   );

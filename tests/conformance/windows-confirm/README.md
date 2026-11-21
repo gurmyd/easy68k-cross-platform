@@ -28,6 +28,17 @@ the program, so copy the program and `../sim/dumplib.X68` into a scratch folder 
 change the INCLUDE line to `INCLUDE 'dumplib.X68'`, and run
 `bash tests/oracle/wine/sim/run-report.sh build/<folder>/<program>.X68`.
 
-One program of the conformance suite also needs Windows: `../sim/trap15-b/b06-modes-above-15.X68`
-(drawing modes 18-23, trap15-b V8). Under Wine it draws the copy mode for all of them
-(`docs/porting/errata/T3.md` F6); its `result.bin` from Windows settles what the port should do.
+Programs of the conformance suite that also need Windows, because the port differs from the
+official program under Wine and the difference is marked `unconfirmed` in
+`../sim/known-differences.json`. Compare each Windows `result.bin` with the golden in
+`../sim/golden/<suite>/`:
+
+- `../sim/trap15-b/b06-modes-above-15.X68` (drawing modes 18-23, trap15-b V8). Under Wine it draws
+  the copy mode for all of them (`docs/porting/errata/T3.md` F6).
+- `../sim/trap15-a/a51-files-read-after-write.X68`, `a52-files-write-after-read.X68`,
+  `a53-files-past-end-then-read.X68` (reads and writes on one stream without a seek between them,
+  F7).
+- `../sim/trap15-a/a58-files-devices.X68` (the device name `NUL`, F8).
+
+If the Windows result equals the golden, the owner named in `known-differences.json` repairs the
+port; if not, the golden is replaced by the Windows result.

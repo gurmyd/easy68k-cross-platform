@@ -14,12 +14,21 @@
 //
 // Owner: E4.
 
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { OWN_KEYS_ATTRIBUTE } from '../../commands/keymap';
 import type { DialogProps as FeatureDialogProps } from '../../contracts';
 import { useAppContext, useAppState } from '../../state/context';
 import { Button, Checkbox, Dialog, TabPanel, Tabs } from '../../ui/components';
 import { confirmAssemblerOptions, openOptionsHelp, optionsStateOf, saveTemplate } from './actions';
-import { ASSEMBLER_OPTIONS, asmValue, cssFontFamily, isHelpKey, type AsmDraft, type AsmOption } from './model';
+import {
+  ASSEMBLER_OPTIONS,
+  HELP_CHORD,
+  asmValue,
+  cssFontFamily,
+  isHelpKey,
+  type AsmDraft,
+  type AsmOption,
+} from './model';
 import {
   ASSEMBLER_CANCEL_CAPTION,
   ASSEMBLER_GROUP_CAPTION,
@@ -44,6 +53,8 @@ export function AssemblerOptionsDialog({ close }: FeatureDialogProps<Record<stri
   const [template, setTemplate] = useState(() => ctx.settings.get().editor.template);
   const [busy, setBusy] = useState(false);
   const body = useRef<HTMLDivElement>(null);
+  const templateArea = useRef<HTMLTextAreaElement>(null);
+  const pendingCaret = useRef<number | null>(null);
   const idBase = useId();
 
   // Options > Assembler Options... while the dialog is open brings it to the front.
@@ -54,6 +65,18 @@ export function AssemblerOptionsDialog({ close }: FeatureDialogProps<Record<stri
       state.focusAssembler = null;
     };
   }, [ctx]);
+
+  // F1 belongs to this dialog while the focus is anywhere in its box (tabs, boxes, template, the
+  // button row, the close button): the shell's key dispatcher leaves a chord listed in
+  // `data-e68-own-keys` to the element that lists it (commands/keymap.ts, errata W3.md entry 37;
+  // docs/requests/E4-dialog-help-key.md), so the dialog's onKeyDown opens options.htm, not main.htm.
+  // The kit's Dialog passes no attributes through, so the mark goes on its box from here.
+  useEffect(() => {
+    const box = body.current?.closest<HTMLElement>('[role=dialog]');
+    if (!box) return;
+    box.setAttribute(OWN_KEYS_ATTRIBUTE, HELP_CHORD);
+    return () => box.removeAttribute(OWN_KEYS_ATTRIBUTE);
+  }, []);
 
   const ok = async () => {
     if (busy) return;
@@ -82,9 +105,17 @@ export function AssemblerOptionsDialog({ close }: FeatureDialogProps<Record<stri
     const area = event.currentTarget;
     if (document.execCommand?.('insertText', false, '\t')) return;
     const { selectionStart, selectionEnd, value } = area;
+    // The caret is put back right after React writes the new value (a layout effect, not a
+    // display frame: a headless runner may deliver none).
+    pendingCaret.current = selectionStart + 1;
     setTemplate(`${value.slice(0, selectionStart)}\t${value.slice(selectionEnd)}`);
-    requestAnimationFrame(() => area.setSelectionRange(selectionStart + 1, selectionStart + 1));
   };
+  useLayoutEffect(() => {
+    const caret = pendingCaret.current;
+    if (caret === null || !templateArea.current) return;
+    pendingCaret.current = null;
+    templateArea.current.setSelectionRange(caret, caret);
+  }, [template]);
 
   return (
     <Dialog
@@ -139,6 +170,7 @@ export function AssemblerOptionsDialog({ close }: FeatureDialogProps<Record<stri
           <TabPanel idBase={idBase} tabId="template" className="e68-options__tabpanel">
             <div className="e68-options__stack">
               <textarea
+                ref={templateArea}
                 className="e68-options__template"
                 aria-label={TEMPLATE_TAB_CAPTION}
                 value={template}

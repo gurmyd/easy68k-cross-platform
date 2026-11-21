@@ -19,7 +19,9 @@
 //     reaches a second window; sim68K.dat exported through the real Save dialog has its raw bytes;
 //   - an accessibility scan (axe-core) of each dialog; no console errors.
 //
-// Nothing here assumes Windows: no chord but Escape, Enter, Tab and F1 is pressed. Needs neither
+// Nothing here assumes Windows: no chord but Escape, Tab and the Help key is pressed, and the Help
+// key is read from the application's chord table for the system the page runs on (chordsOn());
+// every wait is for a condition, with limits sized for GitHub's slower Mac runner. Needs neither
 // engine/dist nor a production build. Screenshots go to build/E4/options-check (git-ignored).
 // Exit code 0 = everything passed. `window.__easy68k` exists in development builds only.
 
@@ -107,8 +109,29 @@ const dialogByTitle = (page, title) => page.locator('[role=dialog]', { has: page
 const openDialogIds = (page) =>
   page.evaluate(() => window.__easy68k.ctx.store.getState().dialogs.stack.map((d) => d.id));
 
-/** The page that the Help drawer shows, if it is open and on top of the point it covers. */
-const helpShowsOptions = (page) =>
+const PLAYWRIGHT_MODIFIERS = { Ctrl: 'Control', Alt: 'Alt', Shift: 'Shift', Cmd: 'Meta' };
+/**
+ * The Help key of the system the page runs on, read from the application's chord table
+ * (`chordsOn()` of app/src/commands/specs.ts), as Playwright's key name. Today F1 on every system.
+ */
+async function helpKey(page) {
+  const { os, chords } = await page.evaluate(async () => {
+    const { chordsOn } = await import('/src/commands/specs.ts');
+    const os = window.__easy68k.ctx.platform.os;
+    return { os, chords: chordsOn('ed.help.help', os, false) };
+  });
+  const chord = chords[0];
+  if (!chord) throw new Error(`ed.help.help has no chord on ${os}`);
+  const parts = chord.split('+');
+  const key = parts.pop();
+  return { os, chord, key: [...parts.map((m) => PLAYWRIGHT_MODIFIERS[m] ?? m), key].join('+') };
+}
+
+/**
+ * The page that the Help drawer shows, if it is open and on top of the point it covers. A slow
+ * runner may take long to load the help page, so an expected page is waited for up to a minute.
+ */
+const helpShowsOptions = (page, timeout = 60_000) =>
   page
     .waitForFunction(
       () => {
@@ -125,7 +148,7 @@ const helpShowsOptions = (page) =>
         );
       },
       null,
-      { timeout: 15_000 },
+      { timeout },
     )
     .then(() => true)
     .catch(() => false);
@@ -328,9 +351,10 @@ async function editorOptionsPass(browser, name) {
   check(`${p} Help opens options.htm above the dialog`, await helpShowsOptions(page));
   await page.screenshot({ path: join(outDir, `${name}-editor-options-help.png`) });
   await closeHelp(page);
+  const help = await helpKey(page);
   await dialog.getByLabel('Real Tabs').focus();
-  await page.keyboard.press('F1');
-  check(`${p} F1 opens options.htm above the dialog`, await helpShowsOptions(page));
+  await page.keyboard.press(help.key);
+  check(`${p} ${help.chord} (Help key on ${help.os}) opens options.htm above the dialog`, await helpShowsOptions(page));
   await closeHelp(page);
   check(`${p} the dialog is still open after Help`, (await openDialogIds(page)).includes('options.editor'));
 
@@ -490,13 +514,29 @@ async function assemblerOptionsPass(browser, name) {
       !(await dialog.getByLabel('Show Warnings').isChecked()) &&
       same(await editorSettings(page), before),
   );
-  // F1 opens options.htm. In this modeless dialog the shell's key dispatcher sees F1 first
-  // (docs/requests/E4-dialog-help-key.md): the check reports what happens without failing on it.
-  await dialog.getByLabel('Show Warnings').focus();
-  await page.keyboard.press('F1');
-  const f1 = await helpShowsOptions(page);
-  console.log(`  note  ${p} F1 in the modeless dialog opens options.htm: ${f1}`);
-  await closeHelp(page);
+  // The Help key opens options.htm, not main.htm: the dialog's box lists it in data-e68-own-keys,
+  // so the shell's key dispatcher leaves it to the dialog (docs/requests/E4-dialog-help-key.md).
+  const help = await helpKey(page);
+  const owns = await dialog.getAttribute('data-e68-own-keys');
+  check(
+    `${p} the dialog box owns ${help.chord} (data-e68-own-keys)`,
+    (owns ?? '').split(' ').includes(help.chord),
+    owns,
+  );
+  for (const [where, target] of [
+    ['a check box', dialog.getByLabel('Show Warnings')],
+    ['the Cancel button', dialog.getByRole('button', { name: 'Cancel' })],
+  ]) {
+    await target.focus();
+    await page.keyboard.press(help.key);
+    check(
+      `${p} ${help.chord} (Help key on ${help.os}) on ${where} of the modeless dialog opens options.htm`,
+      await helpShowsOptions(page),
+    );
+    await page.screenshot({ path: join(outDir, `${name}-assembler-help.png`) });
+    await closeHelp(page);
+  }
+  check(`${p} the dialog is still open after Help`, (await openDialogIds(page)).includes('options.assembler'));
   // Cancel restores.
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await commandDone(page);
@@ -588,7 +628,7 @@ async function transferPass(browser, name) {
     JSON.stringify([imported.fontSize, imported.realTabs, imported.colorPreset]),
   );
   const reached = await second.page
-    .waitForFunction(() => window.__easy68k.ctx.settings.get().editor.colorPreset === -1, null, { timeout: 15_000 })
+    .waitForFunction(() => window.__easy68k.ctx.settings.get().editor.colorPreset === -1, null, { timeout: 60_000 })
     .then(() => true)
     .catch(() => false);
   check(`${p} the import reaches the other window`, reached);

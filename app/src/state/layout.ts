@@ -6,7 +6,7 @@
 // `splits[id]` (a fraction 0..1). Everything here is a pure function of the settings; the shell
 // (ui/shell) draws the regions and state/panels.ts changes the settings.
 
-import type { Platform, Settings } from '../contracts';
+import type { AppState, Platform, Settings } from '../contracts';
 
 /** The panel ids of section 2.4. */
 export const PANEL_IDS = [
@@ -159,6 +159,27 @@ export function messagesPaneHeight(input: {
   if (messageCount > 0) return Math.max(MESSAGES_OPEN_MIN, dragged ?? MESSAGES_OPEN_MIN);
   const collapsed = assembled ? MESSAGES_CLEAN : MESSAGES_INITIAL;
   return dragged === null ? collapsed : Math.max(MESSAGES_INITIAL, dragged);
+}
+
+/**
+ * What `messagesPaneHeight` needs to know of the active document `id`: how many rows its list
+ * holds, and whether the list has been used at all. A list is used once an assembly has given the
+ * document a summary, or has written or cleared its rows: an include file's document gets rows (and
+ * an empty list after `Clear Error Messages`, or when the next assembly clears it) without a summary
+ * of its own, and its empty list is then 7 px, as the assembled document's is (editor-ui §4.2;
+ * errata E5.md entry 8). `list` changes whenever the list is replaced or cleared.
+ */
+export function messageListOf(
+  state: Pick<AppState, 'messages' | 'assemble'>,
+  id: string | null,
+): { count: number; assembled: boolean; list: string } {
+  const summary = id === null ? undefined : state.assemble[id];
+  const messages = id === null ? undefined : state.messages[id];
+  return {
+    count: messages?.length ?? 0,
+    assembled: summary !== undefined || messages !== undefined,
+    list: `${id ?? ''}/${summary?.at ?? ''}/${messages?.length ?? 0}`,
+  };
 }
 export const MESSAGES_INITIAL = 5;
 export const MESSAGES_CLEAN = 7;

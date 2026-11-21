@@ -39,6 +39,20 @@ export function canTakeDroppedFolder(provider: FileSourceProvider): provider is 
   return typeof (provider as Partial<DroppedFolderProvider>).openDroppedFolder === 'function';
 }
 
+/** FS1's own "From this computer..." providers, which copy into /browser/Imported. Another package
+ *  may register a provider under the same id that does something else (FS2 links the files in
+ *  Chromium), so the Open dialog's note describes the copy only for these. */
+const importingUploads = new WeakSet<FileSourceProvider>();
+
+export function markImportingUpload<P extends FileSourceProvider>(provider: P): P {
+  importingUploads.add(provider);
+  return provider;
+}
+
+export function isImportingUpload(provider: FileSourceProvider): boolean {
+  return importingUploads.has(provider);
+}
+
 /** The registered providers, in registration order. One provider per id; a later one replaces it. */
 export interface ProviderRegistry {
   register(provider: FileSourceProvider): () => void;

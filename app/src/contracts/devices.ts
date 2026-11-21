@@ -215,6 +215,15 @@ export interface GlyphProvider {
    * 13): a provider without it draws the byte's own glyph.
    */
   delInHighText?(font: FontSpec): Glyph | null;
+  /**
+   * True for a font whose face is one of the fixed-pitch outline faces (Courier New, Lucida Console,
+   * Consolas). Windows builds the opaque cell of a text in those faces from the widths it draws
+   * (errata T2.md section 2): a zero-width byte takes no room even alone, and $7F always takes the
+   * width of `delInHighText`. Added at gate I2 as an optional member (SH3's needs entry, errata
+   * W1.md entry 14), the signature of SH3's `FallbackGlyphs.monospacedOutline`: a provider without
+   * it gets the rules of the raster faces.
+   */
+  monospacedOutline?(font: FontSpec): boolean;
 }
 /**
  * Reads one file below app/public/fonts/ for the glyph provider of the application
@@ -351,6 +360,8 @@ export interface AudioBackend {
   /** Starts playback now, or as soon as decoding finishes. Returns a playback handle. */
   play(sound: SoundId, loop: boolean): number;
   stop(playback: number): void;
+  /** The backend may drop the bytes; playbacks already asked for play on (task 74: "released, not
+   *  stopped"). Comment added at gate I2 (errata SH5.md entry 5). */
   release(sound: SoundId): void;
   /** Called from user gestures (any run command, any key in the Output panel) to unlock audio. */
   resume(): void;
@@ -430,8 +441,21 @@ export interface LogDeps {
   /** Replace / Append / Cancel question for an existing file. */
   askFileExists: (kind: 'exec' | 'output') => Promise<'Replace' | 'Append' | 'Cancel'>;
 }
+/** Which file the last LogServiceApi.start() could not open (gate I2, errata U4.md C1). */
+export interface LogStartFailure {
+  kind: 'exec' | 'output';
+  /** The name as the Log Output dialog shows it. */
+  fileName: string;
+}
 /** LogService (constructor(deps: LogDeps)): the `log` part. */
 export interface LogServiceApi extends HostLog {
+  /** Why the last start() resolved false: the file it could not open, or null (it started, or the
+   *  user cancelled), so that Log Start shows the original's error box only for a failure. Added at
+   *  gate I2 as an optional member (errata U4.md C1). */
+  readonly startFailure?: LogStartFailure | null;
+  /** The last failure of a flush, or null after a flush that succeeded (for the Log panel). Added at
+   *  gate I2 as an optional member (errata U4.md C1). */
+  readonly writeError?: string | null;
   readonly state: LogState;
   subscribe(listener: () => void): () => void;
   setLogFileNames(programPath: VPath): void; // recompute the two default names
@@ -518,7 +542,10 @@ export interface ListingViewApi {
 
 /* ------------------------------------------------------------------ serial and network (3.3.4) */
 
-/** NullSerial (constructor()), DesktopSerial (constructor(deps: DesktopSerialDeps)): the `serial` part. */
+/** NullSerial (constructor()), DesktopSerial (constructor(deps: DesktopSerialDeps)): the `serial` part.
+ *  Every one checks the CID first: outside 0..15 (MAX_COMM = 16) tasks 40, 41 and 43 return 1 and
+ *  commRead returns -1, before any port is touched, as the original's TsimIO does (simIOu.cpp:2072;
+ *  trap15-a §6; errata W1.md entry 14). */
 export interface SerialDeviceApi extends HostSerial {
   resetToStartup(): void; // every port closed
 }

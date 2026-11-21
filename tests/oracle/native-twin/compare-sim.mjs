@@ -12,7 +12,7 @@
 //   - optionally the 124 files of the single-step suite (tests/conformance/cpu), about one
 //     million instructions.
 //
-// Part of easy68k-mac, an unofficial port of EASy68K. GPL-2.0-or-later.
+// Part of easy68k-cross-platform, an unofficial port of EASy68K. GPL-2.0-or-later.
 
 import { spawn } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -167,10 +167,7 @@ async function standardJobs(workDir, local, log) {
   let skipped = 0;
   for (const path of corpusFiles({ local })) {
     const p = await loadProgram(path);
-    const files = new Map(
-      p.folder.map((f) => [basename(f), f === path ? p.stripped : new Uint8Array(readFileSync(f))]),
-    );
-    files.set(p.mainName, p.stripped);
+    const files = new Map(p.inputs);
     const result = await assemble(
       p.mainName,
       files,

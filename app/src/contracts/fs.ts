@@ -31,7 +31,10 @@ export interface FileSystemBackend {
   stat(rel: string): Promise<FileStat | null>; // rel: path inside the mount, no leading '/'
   readFile(rel: string): Promise<Bytes>;
   writeFile(rel: string, data: Bytes): Promise<void>; // creates parent directories; replaces the file
-  /** Adds bytes at the end (creating the file). Cost must depend on data.length, not on the file size. */
+  /** Adds bytes at the end (creating the file). Cost must depend on data.length, not on the file size,
+   *  except for the `fsaccess` backends, where the browser copies the whole file for every write
+   *  (errata FS2.md entry 3, C2): callers that append often (logs, program files) batch their bytes.
+   *  Concurrent calls on one path are serialised by the Vfs, not by the backend. */
   appendFile(rel: string, data: Bytes): Promise<void>;
   remove(rel: string): Promise<void>;
   list(rel: string): Promise<DirEntry[]>;
@@ -98,7 +101,9 @@ export interface Vfs {
    *  exact match exists, ".." is allowed while it stays inside the mount. null = not found or refused. */
   resolve(dir: VPath, name: string): Promise<VPath | null>;
   snapshot(dir: VPath, limits: SnapshotLimits): Promise<DirSnapshot>;
-  /** Every change below `prefix`: made through this Vfs ('local') or reported by a backend ('external'). */
+  /** Every change below `prefix`: made through this Vfs ('local') or reported by a backend ('external').
+   *  mount() and unmount() are reported too, as a 'write' and a 'remove' of "/<mount>" with origin
+   *  'local' (gate I2, errata FS2.md C1). */
   subscribe(prefix: VPath, listener: (change: VfsChange) => void): () => void;
 }
 
@@ -128,6 +133,16 @@ export interface SyncFiles {
    *  run controller calls it when a program stops, 4.2). */
   settled(): Promise<void>;
   readonly unsettled: boolean; // for the unload guard
+  /**
+   * Resolves when every change the Vfs has reported to this view so far (a save in the editor, the
+   * Files panel, another window) has been read in, so that the program sees it. A direct view is
+   * always current and may leave it out. Added at gate I2 as an optional member (errata W1.md
+   * entry 14; SH6's review): the session awaits it before Rewind, Reload and Run.
+   */
+  whenCurrent?(): Promise<void>;
+  /** Stops listening to the Vfs and cancels the view's timers; pending writes are not made (call
+   *  settled() first). Added at gate I2 as an optional member, for the end of a session. */
+  dispose?(): void;
 }
 
 /**
@@ -159,6 +174,9 @@ export interface OpenRequest {
   filters: FileFilter[];
   multiple: boolean;
   startDir?: VPath;
+  /** The text the File name field starts with (TRAP #15 task 58: the program's name). Absent: empty.
+   *  Added at gate I2 as an optional member (errata SH6.md C1). */
+  initialName?: string;
 }
 /** A caller's own question for a file that exists already (SaveRequest.overwritePrompt). */
 export interface OverwritePrompt {
@@ -172,6 +190,10 @@ export interface SaveRequest {
    *  original's "*.X68" alike. */
   defaultExt: string;
   suggested?: VPath;
+  /** The folder the dialog starts in when `suggested` is absent (TRAP #15 task 58 without a name: the
+   *  program's current directory). `suggested` wins when both are given. Added at gate I2 as an
+   *  optional member (errata SH6.md C1). */
+  startDir?: VPath;
   /**
    * The question asked when the chosen file exists. Absent: the dialog's own, the editor's
    * `File exists! OK to overwrite?` (title `Caution!`). An object: this question instead (the
@@ -196,6 +218,21 @@ export interface FileSourceProvider {
   /** Added at gate I1: the provider's own folder chooser (the `native` provider of the desktop app,
    *  from Platform.nativeFileDialogs). */
   chooseFolder?(request: FolderRequest): Promise<VPath | null>;
+  /**
+   * Opens a folder dropped on the window, given the `FileSystemDirectoryHandle` of the drop
+   * (`DataTransferItem.getAsFileSystemHandle()`); resolves true when the provider took it. Added at
+   * gate I2 as an optional member (errata W1.md entry 14), the signature `features/files`
+   * (`providers.ts`, `DroppedFolderProvider`) and `features/files-fsaccess` (the `folder`
+   * provider) already share.
+   */
+  openDroppedFolder?(handle: unknown): Promise<boolean>;
+  /**
+   * Makes a file the application was handed as a `FileSystemFileHandle` (an installed web app's
+   * `launchQueue`, 5.7) a path of the Vfs that a later Save writes back to, or null when the
+   * provider cannot. Added at gate I2 as an optional member (`docs/requests/DV1-launch-files.md`;
+   * errata W1.md entry 14): the `fsaccess` provider of FS2 implements it with `LinkedBackend.link`.
+   */
+  linkFileHandle?(handle: FileSystemFileHandle): Promise<VPath | null>;
 }
 export interface FileDialogs {
   open(request: OpenRequest): Promise<VPath[] | null>; // null = cancelled
@@ -208,4 +245,12 @@ export interface FileDialogs {
    * for it, and FS1's service has it.
    */
   chooseFolder?(request: FolderRequest): Promise<VPath | null>;
+  /**
+   * Hands `handle` to the first registered provider that has `linkFileHandle` and resolves to the
+   * path it made, or null when none has it (WebKit, Firefox, the desktop app) or it declined. For
+   * a file the application was given outside a dialog (the launch queue of an installed web app,
+   * 5.7). Added at gate I2 as an optional member (`docs/requests/DV1-launch-files.md`; errata W1.md
+   * entry 14): FS1's service implements it, and a caller tests for it.
+   */
+  linkFileHandle?(handle: FileSystemFileHandle): Promise<VPath | null>;
 }

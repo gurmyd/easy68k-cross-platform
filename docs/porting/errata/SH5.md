@@ -83,8 +83,24 @@ No contract change was needed. Two remarks for W1:
   try, because the original tests `FileExists` each time and a missing file must give its message even
   while the player is busy. Under the real controller that is thousands of whole-file reads per second
   of waiting (roger.wav is 11 kB). With an existence test the device would read only when the player
-  is free. Whether this matters depends on what `ProgramFiles.read` costs (SH6: a copy or a view); I2
-  should measure it with graphicSound.X68 in the application.
+  is free.
+
+  **Measured at gate I2 (round 1), not requested.** With the real `ProgramFiles` over SH6's
+  `CachedSyncFiles` (a copy per read):
+  - Headless, virtual time (`sound-device.engine.test.ts`, the test "composed as in the
+    application"): about 73,600 reads over the 672 ms of program time of the two waits (about 110,000
+    per second at EASy68K-like speed), 16 to 22 us each on this PC (a `slice` of 11 kB is about 7 us,
+    resolving the name about 6 us).
+  - In the application (`check-audio.mjs`, Chromium, three runs): about 15,000 reads per run, 240 to
+    260 ms of reading in the 660 ms of waiting (16 to 17 us each); the sounds start 0.3 to 0.5 ms after
+    the durations in the best run, the display delivers about 40 frames in that time, and the longest
+    frame gap is 50 to 83 ms (also seen without sound in the load step). WebKit (Windows build): 22 to
+    61 us per read, the sounds start within 4 ms in the best run.
+
+  The cost only lowers how often the wait loop spins (the governor's time budget is shared), which the
+  program cannot observe: the busy flag clears by the clock, not by the number of tries. The optional
+  member is therefore not requested; it stays a possible improvement if a slower machine shows long
+  frames while a program waits for a sound.
 
 ## 6. For other packages
 
@@ -92,6 +108,12 @@ No contract change was needed. Two remarks for W1:
   name bytes exactly as the program gave them (already cut to 255 bytes by the engine); null = the
   file does not exist. Task 70 in a wait loop calls it at every try (see 5): a cheap `read` (no copy
   of unchanged bytes) helps.
+- **Integration (gate I2)**: graphicSound.X68 runs in the application with the real `ProgramFiles`:
+  `check-audio.mjs` assembles it with the application's assembler, writes it and its three sounds into
+  the browser store, opens it in the simulator and presses Run, three times, in Chromium and WebKit.
+  That step needs `engine/dist` (skipped with a note without it, failing when
+  `EASY68K_REQUIRE_ENGINES=1`). clockWithSound.X68 runs in check-wave1's tour (I1), which does not
+  check its sounds.
 - **SH8 / I2**: nothing to change in `compose.ts`; `resetToStartup()` of the device is already called
   there. The clock given to the device must be the session clock (RealClock in the application,
   VirtualTime headless), as it is.

@@ -73,7 +73,7 @@ export const PORT_STATEMENT =
  * The repository when the build does not say (ARCHITECTURE.md 10.2, O-14 wants it read from the
  * Git remote at build time; the About box has no access to that yet, docs/requests/H1-build-info.md).
  */
-export const DEFAULT_REPOSITORY = 'gurmyd/easy68k-mac';
+export const DEFAULT_REPOSITORY = 'gurmyd/easy68k-cross-platform';
 
 export function repositoryUrl(repository: string = DEFAULT_REPOSITORY): string {
   return `https://github.com/${repository}`;

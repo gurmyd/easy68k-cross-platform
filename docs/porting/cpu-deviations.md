@@ -1,6 +1,6 @@
 # Where the EASy68K CPU core differs from a real 68000
 
-Catalogue of work package T4 (ARCHITECTURE.md 6.1 layer L7, 6.2.4). Part of easy68k-mac, an
+Catalogue of work package T4 (ARCHITECTURE.md 6.1 layer L7, 6.2.4). Part of easy68k-cross-platform, an
 unofficial port of EASy68K. GPL-2.0-or-later.
 
 **What this is.** The simulator of this project is the original EASy68K v5.16.1 core, compiled to

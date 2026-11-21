@@ -59,7 +59,7 @@ import { basename, changeFileExt, dirname } from '../paths/winpath';
 import { Governor, instructionsPerSecond, stepsBetween, subslice, type SpeedSetting } from './governor';
 import { createStartupEngine, startupBoxes } from './startup-engine';
 import type { TimerSet } from './timers';
-import type { SimUiBridge } from './ui-bridge';
+import { NO_REPAINT_CALLS, type RepaintCalls, type SimUiBridge } from './ui-bridge';
 
 /** The switches of a command line (sim-ui §8.1), applied by a load with origin 'commandLine'. */
 export interface CommandLineSwitches {
@@ -137,6 +137,14 @@ export interface RunControllerDeps {
    * skipped only when the controller has done nothing since the last one AND this is true (4.7.1).
    */
   partsUntouched?: () => boolean;
+  /**
+   * A change of a program file made outside the simulator (a save in the editor, an import, another
+   * window) that a cached view of the program files has not read in yet: the promise resolves when
+   * it has (3.8.4). null = nothing outstanding. A run command and a load wait for it, so that the
+   * program sees what was saved before the command (gate I2; SH6's review measured 75-95 ms in
+   * WebKit between a save and the view having the new bytes).
+   */
+  filesCatchingUp?: () => Promise<void> | null;
 }
 
 /** The message area after the recovery from an engine failure (4.8). */
@@ -188,7 +196,9 @@ const DELAY_UNIT_MS = 10;
 
 /**
  * How often the engine has named each panel in `host.repaint(what)` (4.6, `RepaintBit`). A panel
- * re-reads its data, and the Stack panel re-centres, when its own counter moves.
+ * re-reads its data, and the Stack panel re-centres, when its own counter moves. Every call counts,
+ * also several in one engine call (gate I2): a trace over TRAP #15 task 32 with D1 = 0 sends
+ * StackFrm->Repaint() and then updateDisplay(), and only the counts show that the second came.
  */
 export interface RepaintCounts {
   readonly listing: number;
@@ -509,6 +519,8 @@ export class SimRunController implements RunController {
         await this.attempt('prepare the program folder', () => this.deps.files.setCurrentDir(dirname(path)));
       }
       this.filesStale = false;
+      // A folder the view had prepared before is not read again: changes saved meanwhile must be in.
+      await this.awaitFilesCatchingUp();
       if (this.disposed) return;
 
       const kind: LoadKind = origin === 'open' ? 'open' : origin === 'reload' ? 'reload' : 'drop';
@@ -804,7 +816,8 @@ export class SimRunController implements RunController {
 
   /**
    * A run command. From the idle state the program's files are brought up to date first if the
-   * window has had the focus elsewhere (3.8.4); the phase is 'loading' meanwhile.
+   * window has had the focus elsewhere, or if a change saved outside the simulator has not reached
+   * the cached view yet (3.8.4); the phase is 'loading' meanwhile. Otherwise the command acts at once.
    */
   private runCommand(action: () => void): void {
     if (!this.runCommandsAvailable()) return;
@@ -812,19 +825,46 @@ export class SimRunController implements RunController {
       this.guard(action);
       this.publish();
     };
-    if (!this.filesStale || this.phaseNow !== 'idle') {
+    const catchingUp = this.phaseNow === 'idle' ? this.filesCatchingUp() : null;
+    if ((!this.filesStale && !catchingUp) || this.phaseNow !== 'idle') {
       go();
       return;
     }
+    const stale = this.filesStale;
+    // The command is a user gesture (3.7); the action runs after the files are read, which may be
+    // too late for a browser that unlocks audio only inside the gesture (WebKit), so unlock it now.
+    this.deps.ui.resumeAudio();
     this.setPhase('loading');
     this.publish();
-    void this.attempt('revalidate the program folder', () => this.deps.files.revalidateIfStale()).then(() => {
+    void (async () => {
+      if (stale) await this.attempt('revalidate the program folder', () => this.deps.files.revalidateIfStale());
       this.filesStale = false;
+      await this.awaitFilesCatchingUp();
       if (this.disposed || this.phaseNow !== 'loading') return;
       this.setPhase('idle');
       go();
       this.finishLoading();
-    });
+    })();
+  }
+
+  /** `deps.filesCatchingUp()`, or null when the session does not tell. */
+  private filesCatchingUp(): Promise<void> | null {
+    try {
+      return this.deps.filesCatchingUp?.() ?? null;
+    } catch (error) {
+      this.deps.ui.report('the state of the program files could not be read', error);
+      return null;
+    }
+  }
+
+  /** Waits until the cached views have read every change saved outside the simulator so far. */
+  private async awaitFilesCatchingUp(): Promise<void> {
+    // A change saved while waiting gives a new promise; a few rounds at most, then go on.
+    for (let round = 0; round < 3; round++) {
+      const pending = this.filesCatchingUp();
+      if (!pending) return;
+      await this.attempt('read the changed program files', () => pending);
+    }
   }
 
   /* ================================================================== queue, invoke, hold (4.3, 4.4.5) */
@@ -1276,8 +1316,10 @@ export class SimRunController implements RunController {
   private afterEngineCall(): void {
     const { bridge } = this.deps;
     if (bridge.takeRegistersShown()) this.refreshSnapshot();
-    const repaint = bridge.takeRepaint();
-    if (repaint !== 0) this.repainted(repaint);
+    // By call, not by the OR of the bits: one engine call can send StackFrm->Repaint() (Stack |
+    // StackRedraw) and updateDisplay() (Stack), and the Stack panel must re-centre then (gate I2).
+    const calls = bridge.takeRepaintCalls();
+    if (calls !== NO_REPAINT_CALLS) this.repaintedBy(calls);
     if (bridge.takeLive()) this.livePending = true;
     const boxes = bridge.takeAlerts();
     if (boxes.length > 0) {
@@ -1295,14 +1337,25 @@ export class SimRunController implements RunController {
 
   /** The panels named by `bits` (RepaintBit) must re-read their data (4.6). */
   private repainted(bits: number): void {
+    const once = (bit: number): number => ((bits & bit) !== 0 ? 1 : 0);
+    this.repaintedBy({
+      listing: once(RepaintBit.Listing),
+      breakpoints: once(RepaintBit.Breakpoints),
+      memory: once(RepaintBit.Memory),
+      stack: once(RepaintBit.Stack),
+      stackRedraw: once(RepaintBit.StackRedraw),
+    });
+  }
+
+  /** The `host.repaint()` calls of one engine call, counted by panel (4.6). */
+  private repaintedBy(calls: RepaintCalls): void {
     const { listing, breakpoints, memory, stack, stackRedraw } = this.repaints;
-    const count = (counter: number, bit: number): number => ((bits & bit) !== 0 ? counter + 1 : counter);
     this.repaints = {
-      listing: count(listing, RepaintBit.Listing),
-      breakpoints: count(breakpoints, RepaintBit.Breakpoints),
-      memory: count(memory, RepaintBit.Memory),
-      stack: count(stack, RepaintBit.Stack),
-      stackRedraw: count(stackRedraw, RepaintBit.StackRedraw),
+      listing: listing + calls.listing,
+      breakpoints: breakpoints + calls.breakpoints,
+      memory: memory + calls.memory,
+      stack: stack + calls.stack,
+      stackRedraw: stackRedraw + calls.stackRedraw,
     };
     this.viewRev++;
     this.dirty = true;

@@ -467,6 +467,22 @@ async function keyboardPass(browser, name) {
     listingBefore !== listingAfter,
     `${listingBefore} -> ${listingAfter}`,
   );
+  // A group box's access key (GroupBox 'Ass&embler') moves the focus to the group's first control
+  // and changes nothing (errata W2 entry 22).
+  await page.locator('[role=dialog][aria-modal=true] [data-e68-default]').focus();
+  await page.keyboard.down('Alt');
+  await k('KeyE');
+  await page.keyboard.up('Alt');
+  const onFirstOfGroup = await page.evaluate(
+    () => document.activeElement === document.querySelector('[data-testid=modal-groupbox] input'),
+  );
+  a = await active(page);
+  const listingAfterGroup = await page.locator('[role=dialog] input[type=checkbox]').first().isChecked();
+  check(
+    `${p} Alt+E (group box 'Ass&embler') focuses the group's first control and changes nothing`,
+    onFirstOfGroup && listingAfterGroup === listingAfter,
+    `focus on ${a?.tag} ${a?.role ?? ''} '${a?.text}', checked ${listingAfter} -> ${listingAfterGroup}`,
+  );
   await page.locator('[data-testid=open-nested]').click();
   a = await active(page);
   check(`${p} a message box over the dialog takes the focus`, a?.text === 'OK', a?.text);
@@ -841,6 +857,40 @@ async function keyboardPass(browser, name) {
   }
   check(`${p} splitter drag moves it`, (await valueNow()) === 300, String(await valueNow()));
 
+  // TextArea (errata W2 entry 24): the frame draws the focus ring, Enter adds a line, long lines
+  // do not wrap (the box scrolls sideways), the label names the box.
+  const area = page.locator('[data-testid=textarea-sample] textarea').first();
+  await area.scrollIntoViewIfNeeded();
+  await area.focus();
+  // The caret goes to the end by script: the key for that differs between the systems' text boxes.
+  await area.evaluate((el) => el.setSelectionRange(el.value.length, el.value.length));
+  await k('Enter');
+  await page.keyboard.type('X');
+  const areaState = await area.evaluate((el) => {
+    const frame = el.closest('.e68-textarea');
+    const style = window.getComputedStyle(frame);
+    return {
+      lastLine: el.value.split('\n').at(-1),
+      lines: el.value.split('\n').length,
+      ring: style.outlineStyle === 'solid' && parseFloat(style.outlineWidth) >= 2,
+      noWrap: el.scrollWidth > el.clientWidth + 1,
+      scrollsDown: el.scrollHeight > el.clientHeight + 1,
+      name: el.labels?.[0]?.querySelector('.e68-field-label__text')?.textContent ?? '',
+      height: Math.round(frame.getBoundingClientRect().height),
+    };
+  });
+  check(
+    `${p} text area: focus ring on its frame, Enter adds a line, no wrapping, scrolls, labelled`,
+    areaState.lastLine === 'X' &&
+      areaState.lines === 15 &&
+      areaState.ring &&
+      areaState.noWrap &&
+      areaState.scrollsDown &&
+      areaState.name === 'Template:' &&
+      areaState.height === 132,
+    JSON.stringify(areaState),
+  );
+
   // List box and grid.
   const listbox = page.locator('#lists [role=listbox]').first();
   await listbox.focus();
@@ -857,6 +907,49 @@ async function keyboardPass(browser, name) {
   await k('ArrowDown');
   await k('Enter');
   check(`${p} grid Down + Enter goes to line 14`, (await output(page)).includes('Go to line 14'));
+
+  // A grid with a set height scrolls itself (it holds the focus; U3's request), keeps its header
+  // row at the top and shows the selected row below the header, never under it.
+  const tall = page.locator('#lists .e68-gallery__scroll-grid');
+  await tall.scrollIntoViewIfNeeded();
+  await tall.focus();
+  const gridView = () =>
+    tall.evaluate((el) => {
+      const head = el.querySelector('.e68-grid__head').getBoundingClientRect();
+      const row = el.querySelector('[role=row][aria-selected=true]')?.getBoundingClientRect();
+      const box = el.getBoundingClientRect();
+      const body = el.querySelector('.e68-grid__body');
+      return {
+        scrollTop: Math.round(el.scrollTop),
+        scrolls: el.scrollHeight > el.clientHeight,
+        bodyScrolls: body.scrollHeight > body.clientHeight + 1,
+        headAtTop: Math.abs(head.top - box.top) <= 2,
+        rowBelowHead: row ? row.top >= head.bottom - 1 && row.bottom <= box.bottom + 1 : false,
+        selected: el.querySelector('[role=row][aria-selected=true]')?.getAttribute('data-row'),
+      };
+    });
+  await k('Control+End');
+  const atEnd = await gridView();
+  check(
+    `${p} tall grid: Ctrl+End scrolls the grid itself to row 49; header stays at the top`,
+    atEnd.selected === '48' &&
+      atEnd.scrolls &&
+      !atEnd.bodyScrolls &&
+      atEnd.scrollTop > 0 &&
+      atEnd.headAtTop &&
+      atEnd.rowBelowHead,
+    JSON.stringify(atEnd),
+  );
+  await k('Control+Home');
+  await k('PageDown');
+  await k('PageDown');
+  await k('PageUp');
+  const paged = await gridView();
+  check(
+    `${p} tall grid: Page Down, Page Down, Page Up leaves the selected row below the header`,
+    paged.selected === '6' && paged.headAtTop && paged.rowBelowHead,
+    JSON.stringify(paged),
+  );
 
   // Tree view keys (treeViewKeyAction, drawn by the gallery as a caller would).
   const tree = page.locator('[data-testid=tree-sample]');
@@ -943,6 +1036,46 @@ async function keyboardPass(browser, name) {
   await page.locator('[data-testid=show-toast]').click();
   const toast = await page.locator('.e68-toasts:not(.e68-toasts--inline) .e68-toast').count();
   check(`${p} a toast appears in the live region`, toast === 1, `${toast}`);
+
+  // A long action caption ('Open the containing folder...', FS2's note) goes on a line of its own
+  // and overlaps neither the text nor the close button; a short one stays on the text's line.
+  const toastBoxes = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('.e68-toasts--inline .e68-toast')).map((toast) => {
+      const rect = (sel) => {
+        const r = toast.querySelector(sel)?.getBoundingClientRect();
+        return r ? { l: r.left, r: r.right, t: r.top, b: r.bottom } : null;
+      };
+      return {
+        layout: toast.getAttribute('data-layout'),
+        toast: toast.getBoundingClientRect().toJSON(),
+        text: rect('.e68-toast__text'),
+        action: rect('.e68-toast__action'),
+        caption: rect('.e68-toast__action .e68-button__caption'),
+        close: rect('.e68-toast__close'),
+      };
+    }),
+  );
+  const overlaps = (a, b) => a && b && a.l < b.r - 0.5 && b.l < a.r - 0.5 && a.t < b.b - 0.5 && b.t < a.b - 0.5;
+  const withAction = toastBoxes.filter((t) => t.action);
+  const bad = withAction.filter(
+    (t) =>
+      overlaps(t.action, t.text) ||
+      overlaps(t.action, t.close) ||
+      t.caption.l < t.action.l - 0.5 ||
+      t.caption.r > t.action.r + 0.5 ||
+      t.action.r > t.toast.right + 0.5,
+  );
+  const long = withAction.find((t) => t.layout === 'stacked');
+  check(
+    `${p} toasts: an action never overlaps the text or the close button, and its caption fits its button`,
+    withAction.length >= 2 && bad.length === 0,
+    JSON.stringify(bad.length ? bad : withAction.map((t) => t.layout)),
+  );
+  check(
+    `${p} toasts: the long action 'Open the containing folder...' sits under the text, at the right`,
+    Boolean(long) && long.action.t >= long.text.b - 0.5 && withAction.some((t) => t.layout === 'inline'),
+    JSON.stringify(long ?? withAction),
+  );
 
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   await context.close();

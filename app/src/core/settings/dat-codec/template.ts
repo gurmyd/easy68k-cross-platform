@@ -12,6 +12,8 @@ export function templateFromBytes(bytes: Bytes): string {
 
 /**
  * The text as the original saves it (`Template->Lines->SaveToFile`): Windows-1252 with CR LF.
+ * The box is a plain-text TRichEdit (optionsS.dfm:209-214), so, as for the source window
+ * (editor-ui 6.7), a line break follows the last line only if the text ends with one.
  * `unmappable` counts characters that Windows-1252 cannot hold, written as `?`.
  */
 export function templateToBytes(text: string): { bytes: Bytes; unmappable: number } {

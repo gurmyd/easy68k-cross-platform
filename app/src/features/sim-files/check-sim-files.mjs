@@ -23,9 +23,11 @@
 //      closed; a new page starts and the bytes are in the file (exitNow at pagehide, the journal,
 //      recoverJournal at the start).
 //
-// Every step waits for the state it expects (up to WAIT ms); the two liveness steps repeat Rewind and
-// Run up to 20 times, 100 ms apart, until the program reads the new bytes. Nothing depends on the
-// operating system: no chords are pressed (Escape and clicks only).
+// Every step waits for the state it expects (up to WAIT ms), with no fixed pauses. The two liveness
+// steps Rewind and Run once, straight after the change was reported: the first try must read the
+// new bytes (the session catches the cached view up before it rewinds; gate I2, SH6's review).
+// Nothing depends on the operating system or on the speed of the machine: no chords are pressed
+// (Escape, typing into fields and clicks only).
 //
 // Needs engine/dist (both engines): without it the check prints "skipped", or fails when
 // EASY68K_REQUIRE_ENGINES=1. Needs no production build. Screenshots go to build/SH6/sim-files-check
@@ -406,6 +408,12 @@ async function pass(browser, name, programs) {
   check(`${p} the reader program loads`, await openProgram(page, 'reader'));
   await runToHalt(page);
   check(`${p} without input.txt task 51 gives 2`, ((await results68(page, 1))[0] & 0xffff) === 2);
+  // The first page's Vfs reports the other page's change when the browser store's broadcast arrives
+  // (3.8.6); listen for that report, which is the moment a student could switch windows.
+  await page.evaluate((dir) => {
+    window.__reported = [];
+    window.__easy68k.ctx.vfs.subscribe(dir, (change) => window.__reported.push(change));
+  }, DIR);
   const second = await openPage(context);
   await second.page.evaluate(
     (path) =>
@@ -415,26 +423,24 @@ async function pass(browser, name, programs) {
       ),
     `${DIR}/input.txt`,
   );
-  // The first page hears of it through the browser store's broadcast (3.8.6).
   const heard = await until(
     page,
-    async (path) => (await window.__easy68k.ctx.vfs.stat(path)) !== null,
+    (path) => window.__reported.some((change) => change.path === path && change.origin === 'external'),
     `${DIR}/input.txt`,
   );
-  check(`${p} the first page's store hears of the file written by page two`, heard);
-  let found = false;
-  let shown = null;
-  for (let attempt = 0; attempt < 20 && !found; attempt++) {
-    // The cached view reads the broadcast file at once; Rewind and Run as the student would.
-    await rewindAndRun(page);
-    const [d0, d2] = await results68(page, 2);
-    shown = { d0: d0 & 0xffff, d2, text: (await labelText(page, 'BUF', 40))?.slice(0, d2) ?? null };
-    found = shown.d0 === 0 && shown.text === 'written by page two';
-    if (!found) await page.waitForTimeout(100);
-  }
-  check(`${p} Rewind and Run read the file page two wrote, without a reload`, found, JSON.stringify(shown));
+  check(`${p} the first page hears of the file written by page two`, heard);
+  // At once, and once: the session reads the change in before it rewinds (the first try counts).
+  await rewindAndRun(page);
+  const [d0, d2] = await results68(page, 2);
+  const shown = { d0: d0 & 0xffff, d2, text: (await labelText(page, 'BUF', 40))?.slice(0, d2) ?? null };
+  check(
+    `${p} the first Rewind and Run read the file page two wrote, without a reload`,
+    shown.d0 === 0 && shown.text === 'written by page two',
+    JSON.stringify(shown),
+  );
   reportErrors(`${p} page two:`, second.errors);
   await second.page.close();
+  // Saved as the editor saves, then Rewind and Run straight away: the first try must read it.
   await page.evaluate(
     (path) =>
       window.__easy68k.ctx.vfs.writeFile(
@@ -443,15 +449,14 @@ async function pass(browser, name, programs) {
       ),
     `${DIR}/input.txt`,
   );
-  found = false;
-  for (let attempt = 0; attempt < 20 && !found; attempt++) {
-    await rewindAndRun(page);
-    const [, d2] = await results68(page, 2);
-    shown = (await labelText(page, 'BUF', 40))?.slice(0, d2) ?? null;
-    found = shown === 'saved as the editor saves';
-    if (!found) await page.waitForTimeout(100);
-  }
-  check(`${p} a save through the Vfs is read by the next Rewind and Run`, found, JSON.stringify(shown));
+  await rewindAndRun(page);
+  const [, savedD2] = await results68(page, 2);
+  const saved = (await labelText(page, 'BUF', 40))?.slice(0, savedD2) ?? null;
+  check(
+    `${p} a save through the Vfs is read by the very next Rewind and Run`,
+    saved === 'saved as the editor saves',
+    JSON.stringify(saved),
+  );
 
   // 3. Task 58.
   check(`${p} the dialog program loads`, await openProgram(page, 'dialog'));
@@ -541,6 +546,7 @@ async function pass(browser, name, programs) {
   const preview = await page.evaluate(() => document.querySelector('.e68-printer-output__page')?.textContent ?? null);
   check(`${p} the dialog shows the page`, preview === 'HELLO PRINTER\nSECOND LINE', JSON.stringify(preview));
   await screenshot(printer, `${name}-printer-light.png`);
+  await screenshot(page.locator('body'), `${name}-simulator-with-printer-output.png`); // with its neighbours
   await scan(page, '[role=dialog]', `${name} Printer Output, light`);
   await page.evaluate(() => window.__easy68k.ctx.commands.run('app.theme.set', 'dark'));
   await page.waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'dark');

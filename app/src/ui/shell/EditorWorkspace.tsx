@@ -9,12 +9,19 @@
 // Regions: `files` (left, collapsible; shown by default in a browser, hidden in the desktop app),
 // `editor` (the editor area, owner E2) and `messages` (owner E5). The height of the message list
 // follows the original (editor-ui §7.3): 5 px before the first assembly, at least 87 px while it
-// holds messages, 7 px after a clean assembly or `Clear Error Messages`; the separator above it
+// holds messages, 7 px after a clean assembly or `Clear Error Messages` (also in an include file's
+// document, messageListOf); the separator above it
 // can be dragged at any time.
 
 import { useRef, useState } from 'react';
 import { useAppContext, useAppState } from '../../state/context';
-import { MESSAGES_INITIAL, MESSAGES_OPEN_MIN, isPanelVisible, messagesPaneHeight } from '../../state/layout';
+import {
+  MESSAGES_INITIAL,
+  MESSAGES_OPEN_MIN,
+  isPanelVisible,
+  messageListOf,
+  messagesPaneHeight,
+} from '../../state/layout';
 import { shallowEqual } from '../../state/store';
 import { Splitter } from '../components';
 import { PanelRegion } from './PanelRegion';
@@ -27,16 +34,10 @@ function EditorCenter() {
   const container = useRef<HTMLDivElement>(null);
   const { height: available } = useElementSize(container);
   // `list` changes whenever the message list of the active document is replaced or cleared.
-  const { count, assembled, list } = useAppState((state) => {
-    const id = state.documents.activeId;
-    const summary = id === null ? undefined : state.assemble[id];
-    const messages = id === null ? undefined : state.messages[id];
-    return {
-      count: messages?.length ?? 0,
-      assembled: summary !== undefined,
-      list: `${id ?? ''}/${summary?.at ?? ''}/${messages?.length ?? 0}`,
-    };
-  }, shallowEqual);
+  const { count, assembled, list } = useAppState(
+    (state) => messageListOf(state, state.documents.activeId),
+    shallowEqual,
+  );
   // What the user dragged applies until the list changes; then the original's rule decides again.
   const [drag, setDrag] = useState<{ list: string; height: number } | null>(null);
   const dragged = drag !== null && drag.list === list ? drag.height : null;

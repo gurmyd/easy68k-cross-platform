@@ -70,7 +70,18 @@ describe('task 58: the request', () => {
       },
     });
     const open = programDialogRequest(props({ initialName: 'maps\\one.lvl' }), '/browser/game');
-    expect(open).toMatchObject({ kind: 'open', request: { title: 'Open', startDir: '/browser/game/maps' } });
+    expect(open).toMatchObject({
+      kind: 'open',
+      request: { title: 'Open', startDir: '/browser/game/maps', initialName: 'one.lvl' },
+    });
+  });
+
+  it('Save without a name starts in the current directory (contract C1)', () => {
+    expect(programDialogRequest(props({ mode: 1 }), '/browser/demo')).toMatchObject({
+      kind: 'save',
+      request: { startDir: '/browser/demo' },
+    });
+    expect(programDialogRequest(props({ mode: 1 }), '/browser/demo').request).not.toHaveProperty('suggested');
   });
 
   it('Save: the program title or "Save As", no default extension, no overwrite question', () => {

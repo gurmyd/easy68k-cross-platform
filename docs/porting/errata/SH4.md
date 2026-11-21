@@ -419,3 +419,25 @@ desktop app, checks `HO`, checks that the paste event came less than 150 ms
 All passed on macos-15 in CI run 44919519853 (job desktop-dev). Item 3 of entry 21 can leave the
 manual list; items 1 and 2 (real dead keys and input methods, the system's key repeat and the
 macOS accent menu) still need a person.
+
+## Gate I2, round 1
+
+### 25. The picture's scroll region is a Tab stop (axe scrollable-region-focusable, found by X1)
+
+- Found by X1's axe scan of Simulator mode (`tests/e2e/app/a11y.spec.ts`, "Simulator mode with the
+  tool panels"): `scrollable-region-focusable` (serious) on `.e68-output__viewport`, in both
+  browsers and themes. The viewport scrolls whenever the zoomed surface is larger than the panel
+  (2.9.2), and nothing in it could take the focus: the program's key field lies beside it, not in
+  it. A keyboard user could not scroll a picture that does not fit (WCAG 2.1.1).
+- SH4's own scan did not see it because the check's panel showed the surface at 100 % in a window
+  large enough for it; axe reports the rule only while the region actually overflows.
+- Reproduced in `check-output.mjs`: at 200 % (the panel scrolls) an axe run of that rule on the
+  panel, and a check that the region takes the focus, has a name and scrolls with ArrowDown and
+  PageDown. Both failed before the change ("scrollable-region-focusable: .e68-output__viewport";
+  no role, no name).
+- Does: the viewport is `role="region"`, `aria-label="Output picture"`, `tabIndex={0}`, with the
+  focus ring on `:focus-visible`. A click on it (or on the canvas) still gives the program the
+  keyboard, as before; only Tab reaches the region itself, and keys pressed there scroll the
+  picture and reach no program (the program's keys are those of the field, 2.9.4). An addition
+  of the port's panel layout, recorded in docs/differences/SH4.md (nothing a program observes
+  changes).

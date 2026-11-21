@@ -9,6 +9,7 @@ import {
   Checkbox,
   DataGrid,
   Dialog,
+  GroupBox,
   IconButton,
   ListBox,
   MaskedField,
@@ -23,8 +24,10 @@ import {
   SR_FIELD,
   TabPanel,
   Tabs,
+  TextArea,
   TextField,
   ToastStack,
+  toastLayout,
   Toolbar,
   ToolbarSeparator,
   Tooltip,
@@ -300,6 +303,29 @@ describe('lists', () => {
     expect(out).toContain('aria-selected="true"');
   });
 
+  it('DataGrid with a height: the grid itself scrolls, header captions are verbatim (gate I2)', () => {
+    const grid = (height?: number | string) =>
+      html(
+        <DataGrid
+          label="Memory breakpoints"
+          columns={[{ id: 'line', header: 'Line ' }]}
+          rows={[{ line: 1 }]}
+          rowKey={(_row, i) => String(i)}
+          selectedRow={0}
+          onSelectRow={noop}
+          {...(height !== undefined ? { height } : {})}
+        />,
+      );
+    const tall = grid(132);
+    // The height goes to the grid element (the one that holds the focus) as a custom property,
+    // and to the rows' area as its least height; the body has no height of its own to scroll in.
+    expect(tall).toMatch(/role="grid"[^>]*data-height=""[^>]*style="--e68-grid-body-h:132px"/);
+    expect(tall).toContain('class="e68-grid__body" style="min-height:132px"');
+    expect(grid('6em')).toContain('--e68-grid-body-h:6em');
+    expect(grid()).not.toContain('data-height');
+    expect(tall).toContain('>Line </div>');
+  });
+
   it('VirtualList renders only the first rows before it is measured', () => {
     const out = html(<VirtualList count={100000} rowHeight={18} renderRow={(i) => `row ${i}`} overscan={2} />);
     expect(out).toContain('height:1800000px');
@@ -322,6 +348,26 @@ describe('Toast and Tooltip', () => {
     expect(out).toContain('aria-label="Dismiss"');
   });
 
+  it('a long action caption puts the action under the text (toastLayout; FS2 at gate I2)', () => {
+    expect(toastLayout({})).toBe('inline');
+    expect(toastLayout({ action: { label: 'Simulator', run: noop } })).toBe('inline');
+    expect(toastLayout({ action: { label: '&Reload', run: noop } })).toBe('inline');
+    expect(toastLayout({ action: { label: 'Open the containing folder...', run: noop } })).toBe('stacked');
+    const out = html(
+      <ToastStack
+        toasts={[
+          { id: 1, text: 'Linked', action: { label: 'Open the containing folder...', run: noop } },
+          { id: 2, text: 'A new version is available.', action: { label: 'Reload', run: noop } },
+        ]}
+        onDismiss={noop}
+      />,
+    );
+    expect(out).toMatch(/class="e68-toast e68-toast--information" data-layout="stacked"/);
+    expect(out).toMatch(/class="e68-toast e68-toast--information" data-layout="inline"/);
+    expect(out.match(/e68-toast__action/g)).toHaveLength(2);
+    expect(out.match(/e68-toast__close/g)).toHaveLength(2);
+  });
+
   it('Tooltip adds nothing to the accessible name and renders no bubble on the server', () => {
     const out = html(
       <Tooltip text="Open File (Ctrl+O)">
@@ -329,5 +375,67 @@ describe('Toast and Tooltip', () => {
       </Tooltip>,
     );
     expect(out).toBe('<span class="e68-tooltip__anchor"><button type="button">Open</button></span>');
+  });
+});
+
+describe('GroupBox, Dialog footer and field labels (gate I2)', () => {
+  it('GroupBox is a fieldset named by its verbatim caption, with its access key', () => {
+    const out = html(
+      <GroupBox caption="&Color  Group" layout="row" className="x">
+        <span>inside</span>
+      </GroupBox>,
+    );
+    expect(out).toContain('<fieldset class="e68-groupbox e68-groupbox--row x" data-e68-mnemonic="c">');
+    expect(out).toContain(
+      '<legend class="e68-groupbox__caption"><span class="e68-mnemonic">C</span>olor  Group</legend>',
+    );
+    expect(out).toContain('<span>inside</span>');
+    const plain = html(
+      <GroupBox caption="Effects" disabled>
+        x
+      </GroupBox>,
+    );
+    expect(plain).toContain('<fieldset class="e68-groupbox e68-groupbox--column" disabled="">');
+    expect(plain).not.toContain('data-e68-mnemonic');
+  });
+
+  it('Dialog footerAlign center marks the button row; the default adds nothing', () => {
+    const dialog = (align?: 'end' | 'center') =>
+      html(
+        <Dialog
+          title="Assembler Status - a.X68"
+          inline
+          {...(align ? { footerAlign: align } : {})}
+          footer={<Button caption="Close" />}
+        >
+          x
+        </Dialog>,
+      );
+    expect(dialog('center')).toContain('<div class="e68-dialog__footer" data-align="center">');
+    expect(dialog()).toContain('<div class="e68-dialog__footer">');
+    expect(dialog('end')).toContain('<div class="e68-dialog__footer">');
+  });
+
+  it('TextArea: a framed textarea, no wrapping by default, its label and access key', () => {
+    const out = html(<TextArea label="&Template:" value={'*-----\n*  Title'} onChange={noop} height={260} monospace />);
+    expect(out).toContain('class="e68-field e68-textarea" style="height:260px"');
+    expect(out).toMatch(/<textarea[^>]*class="e68-textarea__input e68-field__input--mono"/);
+    expect(out).toMatch(/<textarea[^>]*wrap="off"/);
+    expect(out).toMatch(/<textarea[^>]*spellcheck="false"/i);
+    expect(out).toMatch(/<textarea[^>]*data-e68-mnemonic="t"/);
+    expect(out).toContain('class="e68-field-label e68-field-label--top"');
+    expect(out).toContain('*  Title</textarea>');
+    const bare = html(<TextArea aria-label="Template" value="" onChange={noop} disabled wrap="soft" />);
+    expect(bare).not.toContain('<label');
+    expect(bare).toContain('data-disabled="true"');
+    expect(bare).toMatch(/<textarea[^>]*wrap="soft"/);
+    expect(bare).toMatch(/<textarea[^>]*aria-label="Template"/);
+  });
+
+  it('TextField labelWidthCh gives a left label a least width', () => {
+    const out = html(<TextField label="Fi&nd what:" labelWidthCh={11} value="" onChange={noop} />);
+    expect(out).toContain('class="e68-field-label__text" style="min-width:11ch"');
+    const top = html(<TextField label="Find:" labelPosition="top" labelWidthCh={11} value="" onChange={noop} />);
+    expect(top).not.toContain('min-width:11ch');
   });
 });

@@ -8,7 +8,7 @@
 // The language and the transcript format are described in README.md ("Scripts"). Everything
 // here mirrors driver.cpp line by line; a change to one must be made to the other.
 //
-// Part of easy68k-mac, an unofficial port of EASy68K. GPL-2.0-or-later.
+// Part of easy68k-cross-platform, an unofficial port of EASy68K. GPL-2.0-or-later.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -194,9 +194,16 @@ export function escapeBytes(bytes) {
 const latin1 = (text) => Uint8Array.from(text, (ch) => ch.charCodeAt(0) & 0xff);
 const text1 = (bytes) => String.fromCharCode(...bytes);
 
-/** A plain file name a program may open: 1-64 characters A-Z a-z 0-9 . _ -, not starting with '.'. */
+/**
+ * A plain file name a program may open: 1-64 characters A-Z a-z 0-9 . _ -, not starting or ending
+ * with '.', and not a Windows device name (CON, PRN, AUX, NUL, COM0-9, LPT0-9, with or without an
+ * extension). The twin opens real Windows files, where a trailing dot is dropped ('DATA.TXT.'
+ * opens data.txt) and a device name opens the device; neither has a counterpart here, so both
+ * sides refuse such names (twin_plain_name in sim-twin/hostfile-native.cpp is the same rule).
+ */
 export function isPlainName(name) {
-  return /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}$/.test(name);
+  if (!/^[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}$/.test(name) || name.endsWith('.')) return false;
+  return !/^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])$/i.test(name.split('.')[0] ?? '');
 }
 
 const hexDigit = (c) => {
@@ -286,7 +293,10 @@ export function parseNumber(
 
 /**
  * In-memory files of the 68000 program with the semantics of the twin's real files
- * (fopen "r+b" / "rb" / "w+b" on a case-insensitive file system, unbuffered).
+ * (fopen "r+b" / "rb" / "w+b" on a case-insensitive file system, unbuffered). A file is open in at
+ * most one stream: a second open of it fails, and so does its removal, until the stream is closed
+ * (the twin keeps the same rule in sim-twin/hostfile-native.cpp). What Windows does with two
+ * streams on one file has no counterpart here, so neither side allows it.
  */
 export class Sandbox {
   constructor() {
@@ -305,6 +315,7 @@ export class Sandbox {
     const name = text1(nameBytes);
     if (!isPlainName(name)) return 0;
     const key = name.toLowerCase();
+    if (this.isOpen(key)) return 0;
     if (mode === 2) this.put(name, new Uint8Array(0));
     else if (!this.files.has(key)) return 0;
     const handle = this.nextHandle++;
@@ -349,7 +360,12 @@ export class Sandbox {
   }
   remove(nameBytes) {
     const name = text1(nameBytes);
-    return isPlainName(name) && this.files.delete(name.toLowerCase());
+    return isPlainName(name) && !this.isOpen(name.toLowerCase()) && this.files.delete(name.toLowerCase());
+  }
+  /** Whether a stream on the file with this lower-case name is open. */
+  isOpen(key) {
+    for (const h of this.handles.values()) if (h.key === key) return true;
+    return false;
   }
   /** The `dump files` lines. */
   dump() {

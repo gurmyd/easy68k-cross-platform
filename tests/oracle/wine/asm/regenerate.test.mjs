@@ -13,6 +13,7 @@ import {
   LARGE_SOURCE_BYTES,
   REPORT_PATH,
   failureOf,
+  fileWorkDirectory,
   ingestRun,
   looksInteractive,
   planPrograms,
@@ -25,6 +26,18 @@ import {
 const bytes = (text) => Uint8Array.from(Buffer.from(text, 'latin1'));
 const scratch = mkdtempSync(join(tmpdir(), 'easy68k-regenerate-test-'));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
+
+describe('fileWorkDirectory (--file with --out)', () => {
+  // Before gate I2 a --file run with --out still made its work folder below build/oracle-wine/asm.
+  it('puts the work files below the --out folder and starts them empty', () => {
+    const out = join(scratch, 'file-out');
+    const first = fileWorkDirectory(out);
+    expect(first).toBe(join(out, 'work'));
+    writeFileSync(join(first, 'old.txt'), 'x');
+    expect(fileWorkDirectory(out)).toBe(first);
+    expect(readdirSync(first)).toEqual([]);
+  });
+});
 
 describe('planPrograms', () => {
   const programs = planPrograms(['official', 'github-mit', 'conformance']);

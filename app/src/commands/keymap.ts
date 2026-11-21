@@ -38,6 +38,9 @@
 // - MENUS. While the focus is in the menu bar or an open menu, no command runs: letters and
 //   arrows belong to the menu, as on Windows. Alt+letter opens the menu with that access key on
 //   Windows and Linux (section 1.4 note 14); macOS has no menu access keys.
+// - OWNED KEYS. An element marked `data-e68-own-keys="F1"` handles the chords it lists itself
+//   while the focus is inside it: the dispatcher leaves them to it before step 3 (a modeless
+//   dialog's F1, which opens the dialog's own help page; errata W3.md entry 37).
 // - CTRL EDITING KEYS ON macOS (rule K2). A Mac's browser treats only the Cmd forms of Undo, Cut,
 //   Copy, Paste and Select All as editing keys. On the macOS key map the dispatcher performs the
 //   Ctrl forms itself in a plain text field (an input or a textarea; text-field-edits.ts), before
@@ -66,6 +69,20 @@ import { textFieldEditChords, type TextFieldEdit } from './text-field-edits';
  * focus, "the Output panel has the keyboard" (2.10).
  */
 export const PROGRAM_KEYS_SELECTOR = '[data-e68-keys="program"]';
+
+/**
+ * An element that handles some chords itself lists them, in the normal form of chords.ts and
+ * separated by spaces, in this attribute: `data-e68-own-keys="F1"`. While the focus is inside it
+ * and no modal dialog is open, the dispatcher leaves those chords to it (it still cancels a guarded
+ * chord's default action, 2.9.3). The modeless Assembler Options dialog owns F1 this way, which opens
+ * its own help page (editor-ui §15.2, 1.4 note 8; docs/requests/E4-dialog-help-key.md).
+ */
+export const OWN_KEYS_ATTRIBUTE = 'data-e68-own-keys';
+
+/** The selector of an element that owns `chord`. */
+export function ownKeysSelector(chord: string): string {
+  return `[${OWN_KEYS_ATTRIBUTE}~="${chord.replace(/["\\]/g, '\\$&')}"]`;
+}
 
 /** The parts of a keydown event the dispatcher uses; a plain object will do in tests. */
 export interface DispatchEvent extends KeyEventLike {
@@ -105,6 +122,8 @@ export type KeyOutcome =
   | { kind: 'modal'; cancelled: boolean }
   /** The Output panel has the keyboard (step 2). */
   | { kind: 'output' }
+  /** The focused element, or one around it, handles the chord itself (`data-e68-own-keys`). */
+  | { kind: 'owned' }
   /** The focus is in the menu bar or a menu. */
   | { kind: 'menu'; cancelled: boolean }
   /** A text-editing chord, left to the focused text field. */
@@ -219,6 +238,12 @@ export function createKeyDispatcher(env: KeymapEnv): KeyDispatcher {
       if (closest(event.target, '[role="menu"], [role="menubar"]')) {
         if (isGuarded) event.preventDefault();
         return { kind: 'menu', cancelled: isGuarded };
+      }
+
+      // An element that handles the chord itself (`data-e68-own-keys`): a modeless dialog's F1.
+      if (closest(event.target, ownKeysSelector(chord))) {
+        if (isGuarded) event.preventDefault();
+        return { kind: 'owned' };
       }
 
       // 3 and 4. Commands of the current mode, and those of every mode.

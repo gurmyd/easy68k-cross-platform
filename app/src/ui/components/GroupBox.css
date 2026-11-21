@@ -1,0 +1,31 @@
+/* GroupBox (GroupBox.tsx). Owner: W2. */
+
+.e68-groupbox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-sm);
+  color: var(--c-text);
+}
+
+.e68-groupbox--row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Captions are verbatim (section 0 rule 7). */
+.e68-groupbox__caption {
+  padding: 0 var(--sp-1);
+  color: var(--c-text);
+  font-size: var(--fs-md);
+  white-space: pre;
+}
+
+.e68-groupbox:disabled > .e68-groupbox__caption {
+  color: var(--c-text-disabled);
+}

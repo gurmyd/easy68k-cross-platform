@@ -144,6 +144,47 @@ describe('Simulator mode', () => {
     expect(log).toEqual(['import prog.S68 8', 'load /browser/Imported/prog.S68']);
   });
 
+  it('with RunController.confirmLoad, Caution comes before the copy; Cancel copies nothing (W1-load-confirm item 2)', async () => {
+    const asked: string[] = [];
+    const answers = [false, true];
+    const { d, log } = deps({
+      mode: 'simulator',
+      programLoaded: true,
+      confirmLoad: async () => {
+        asked.push(`confirm (copies so far: ${log.length})`);
+        return answers.shift() ?? true;
+      },
+      openProgram: async (path, confirmed) => {
+        log.push(`load ${path}${confirmed ? ' confirmed' : ''}`);
+      },
+    });
+    const cancelled = await handleDrop([file('prog.S68'), file('prog.L68')], d);
+    expect(log).toEqual([]); // nothing copied, nothing loaded
+    expect(cancelled.skipped).toEqual(['prog.S68']);
+    await handleDrop([file('prog.S68'), file('prog.L68')], d);
+    expect(asked).toEqual(['confirm (copies so far: 0)', 'confirm (copies so far: 0)']);
+    expect(log).toEqual(['import prog.S68 8', 'import prog.L68 8', 'load /browser/Imported/prog.S68 confirmed']);
+  });
+
+  it('a file opened where it lies is not pre-confirmed: open asks Caution itself', async () => {
+    let asked = 0;
+    const { d, log } = deps({
+      mode: 'simulator',
+      programLoaded: true,
+      locate: async () => ({ path: '/disk/C/work/prog.S68', kind: 'file' }),
+      confirmLoad: async () => {
+        asked++;
+        return true;
+      },
+      openProgram: async (path, confirmed) => {
+        log.push(`load ${path}${confirmed ? ' confirmed' : ''}`);
+      },
+    });
+    await handleDrop([file('prog.S68')], d);
+    expect(asked).toBe(0);
+    expect(log).toEqual(['load /disk/C/work/prog.S68']);
+  });
+
   it('copies a dropped listing with the same base name along; ignores a folder and an unreadable file', async () => {
     const { d, log } = deps({ mode: 'simulator' });
     await handleDrop([file('Prog.S68'), file('x.txt'), file('PROG.l68')], d);

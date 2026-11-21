@@ -191,8 +191,17 @@ export function OutputPanel() {
       </div>
 
       <div className="e68-output__body">
-        {/* A click beside the surface gives the program the keyboard, like a click on it. */}
-        <div ref={viewport} className="e68-output__viewport" onClick={focusKeys}>
+        {/* A click beside the surface gives the program the keyboard, like a click on it. The
+            region is a Tab stop of its own, so that a zoomed picture that does not fit can be
+            scrolled from the keyboard (WCAG 2.1.1; the program's keys stay in the field below). */}
+        <div
+          ref={viewport}
+          className="e68-output__viewport"
+          role="region"
+          aria-label="Output picture"
+          tabIndex={0}
+          onClick={focusKeys}
+        >
           <canvas
             ref={canvas}
             className="e68-output__canvas"

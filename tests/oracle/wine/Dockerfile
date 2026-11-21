@@ -45,10 +45,13 @@ RUN Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp & \
 
 # /oracle is one flat folder: the scripts import and call each other there
 # (common/ = shared helpers, asm/ = assembler driver, sim/ = simulator driver).
-# Only the scripts that run inside the container are copied.
+# Only the scripts that run inside the container are copied. The simulator driver
+# (sim/sim_batch.py, sim_corpus.sh) is not: tests/oracle/wine/sim/regenerate.mjs mounts
+# its folder at run time. sim_run.py stays because the measurements of
+# official-oracle.md section 5 were made with it (docs/requests/T3-oracle-image.md).
 COPY common/entry.sh common/stage.sh common/xwin.py /oracle/
 COPY asm/asm_batch.py asm/asm_corpus.sh asm/richedit_check.py asm/merge_manifests.py asm/gen_richedit_stress.py /oracle/
-COPY sim/sim_run.py sim/sim_proofs.sh /oracle/
+COPY sim/sim_run.py /oracle/
 RUN chmod +x /oracle/*
 
 WORKDIR /work

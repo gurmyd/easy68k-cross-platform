@@ -19,8 +19,8 @@
 //   rect.ts      rectangles, every pen width                    (§6.3)
 //   flood.ts     flood fill                                     (§6.6)
 //   text.ts      the opaque cell and the glyphs of TextOut      (§5.2, §6.7)
-//   widepen.ts   lines of wider pens      - stub, SH2 replaces  (§6.2)
-//   ellipse.ts   ellipses                 - stub, SH2 replaces  (§6.4)
+//   widepen.ts   lines of wider pens      - owner SH2           (§6.2)
+//   ellipse.ts   ellipses                 - owner SH2           (§6.4)
 //   tables/      the round dots of wide pens                    (§6.2)
 //
 // What this file adds is the bookkeeping of trap15-b §5.5 and §5.6, which is easy to get wrong:
@@ -44,7 +44,7 @@ import { floodFill } from './flood';
 import { drawLine } from './line';
 import { BLACK_PIXEL, clipRect, createBuffer, mixPixel, mixSpan, Region, type SpanSink } from './raster';
 import { drawRectangle } from './rect';
-import { createMix, setMix, type Mix } from './rop';
+import { createMix, MODE_TABLE, setMix, type Mix } from './rop';
 import { paintText, textBounds } from './text';
 import { strokeWideLine } from './widepen';
 
@@ -529,6 +529,10 @@ export class Surface implements SurfaceApi {
       { left: 0, top: 0, right: back.width, bottom: back.height },
       outline,
       interior,
+      // GDI strokes and fills a filled wide-pen ellipse in one pass in Copy (R2_COPYPEN, also the
+      // modes that draw as mode 4), and widens the curve itself otherwise; the sinks cannot tell
+      // rasterEllipse which (docs/requests/SH2-ellipse-mode.md, docs/porting/gdi-deviations.md).
+      MODE_TABLE[this.state.penMode & 0xff] === 4,
     );
     this.changed(x1 - width, y1 - width, x2 + width + 1, y2 + width + 1);
   }

@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState } from 'react';
 import './Toast.css';
 import { Button } from './Button';
+import { stripMnemonic } from './mnemonic';
 import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 
@@ -28,6 +29,19 @@ export interface ToastStackProps {
   onDismiss: (id: ToastItem['id']) => void;
   /** Render in place instead of fixed at the bottom right (the gallery). */
   inline?: boolean;
+}
+
+/**
+ * Action captions up to this many characters (without the '&' marker) sit on the toast's line;
+ * a longer one ('Open the containing folder...', 3.8.2) goes on a line of its own under the text,
+ * so that it never squeezes or covers the text (gate I2, FS2's note; errata W2 entry 19).
+ */
+export const TOAST_INLINE_ACTION_MAX = 14;
+
+/** 'inline' when the toast's action fits beside its text, 'stacked' when it goes below it. */
+export function toastLayout(toast: Pick<ToastItem, 'action'>): 'inline' | 'stacked' {
+  if (!toast.action) return 'inline';
+  return stripMnemonic(toast.action.label).length > TOAST_INLINE_ACTION_MAX ? 'stacked' : 'inline';
 }
 
 export function ToastStack({ toasts, onDismiss, inline = false }: ToastStackProps) {
@@ -57,6 +71,7 @@ export function Toast({ toast, onDismiss }: { toast: ToastItem; onDismiss: () =>
   return (
     <div
       className={`e68-toast e68-toast--${kind}`}
+      data-layout={toastLayout(toast)}
       onPointerEnter={() => setPaused(true)}
       onPointerLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)}
@@ -69,6 +84,7 @@ export function Toast({ toast, onDismiss }: { toast: ToastItem; onDismiss: () =>
       {action && (
         <Button
           size="small"
+          className="e68-toast__action"
           caption={action.label}
           onClick={() => {
             action.run();
@@ -76,7 +92,14 @@ export function Toast({ toast, onDismiss }: { toast: ToastItem; onDismiss: () =>
           }}
         />
       )}
-      <IconButton icon="close" label="Dismiss" size="small" tooltip={false} onClick={onDismiss} />
+      <IconButton
+        icon="close"
+        label="Dismiss"
+        size="small"
+        tooltip={false}
+        className="e68-toast__close"
+        onClick={onDismiss}
+      />
     </div>
   );
 }

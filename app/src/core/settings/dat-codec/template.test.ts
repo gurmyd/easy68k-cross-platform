@@ -25,6 +25,15 @@ describe('template.NEW', () => {
     ]);
   });
 
+  it('adds no line break after the last line: the box is a plain-text TRichEdit (editor-ui 6.7)', () => {
+    // optionsS.dfm:209-214 `Template: TRichEdit`, `PlainText = True`: its Lines->SaveToFile streams
+    // the text as it is, like the source window's, so a final CR LF is written only if the text
+    // ends with a line break (errata E4 entry 11).
+    expect(Array.from(templateToBytes('x').bytes)).toEqual([0x78]);
+    expect(Array.from(templateToBytes('x\n').bytes)).toEqual([0x78, 0x0d, 0x0a]);
+    expect(Array.from(templateToBytes('').bytes)).toEqual([]);
+  });
+
   it('counts characters that Windows-1252 cannot hold', () => {
     expect(templateToBytes('中\n').unmappable).toBe(1);
   });

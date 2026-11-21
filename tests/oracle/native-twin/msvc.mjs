@@ -4,7 +4,7 @@
 // newest Visual Studio installation with the x86/x64 C++ tools that vswhere reports (any
 // version and edition, so that a CI runner with a newer Visual Studio works too).
 //
-// Part of easy68k-mac, an unofficial port of EASy68K. GPL-2.0-or-later.
+// Part of easy68k-cross-platform, an unofficial port of EASy68K. GPL-2.0-or-later.
 
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, writeFileSync } from 'node:fs';

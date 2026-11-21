@@ -9,26 +9,9 @@ import { createTestApplication, type TestApplication } from '../../state/testing
 import { feature } from './index';
 import { END_OF_DOCUMENT, FIND_DIALOG_ID, FindModel, REPLACE_DIALOG_ID, findModelOf, firstLine } from './model';
 
-/** Timers of the scheduler, run by the test. */
-interface Timers {
-  pending: { delay: number; fn: () => void }[];
-  runAll(): void;
-}
-
-function setup(text: string, timers?: Timers) {
+function setup(text: string) {
   const app = createTestApplication({
     features: [feature],
-    ...(timers
-      ? {
-          scheduler: {
-            onFrame: () => () => {},
-            setTimer: (delay: number, fn: () => void) => {
-              timers.pending.push({ delay, fn });
-              return () => {};
-            },
-          },
-        }
-      : {}),
     services: {
       createDocumentService: (ctx: AppContext) =>
         new DocumentManager({
@@ -243,70 +226,22 @@ describe('feature "find"', () => {
     expect(await findModelOf(stub.ctx).search('x', { wholeWord: false, matchCase: false })).toBe(false);
   });
 
-  it('after a match the editor takes the focus, and the caret the focus puts back is undone once', async () => {
-    const timers: Timers = {
-      pending: [],
-      runAll() {
-        const list = this.pending.splice(0);
-        for (const timer of list) timer.fn();
-      },
-    };
-    const { app, select, sel, model, registry, id } = setup('ab ab ab ab', timers);
+  it("after a match the editor takes the focus, and the next selection change is the student's", async () => {
+    // The editor's view keeps the match as it takes the focus (PANEL_FOCUS_EVENT, gate I2), so the
+    // feature no longer undoes a selection change after a match: an arrow key, a click or a caret
+    // the browser reports is left alone (the 400 ms guard of errata entry 2 is gone).
+    const { app, select, sel, model, registry, id } = setup('ab ab ab ab');
     model.setFind({ text: 'ab' });
     select(1);
     await model.findNextFromFindDialog();
     expect(sel()).toEqual([3, 5]);
     expect(app.shell.getState().focusRequest?.panel).toBe('editor');
-    // The editor reads the browser's caret back after the focus: user event "select".
-    registry.dispatch(id, { selection: { anchor: 0 }, userEvent: 'select' });
-    expect(sel()).toEqual([0, 0]);
-    timers.runAll();
-    expect(sel()).toEqual([3, 5]);
-    // Only once: the next such change stays.
-    registry.dispatch(id, { selection: { anchor: 1 }, userEvent: 'select' });
-    timers.runAll();
-    expect(sel()).toEqual([1, 1]);
-  });
-
-  it('a click in the text, a selection by code or an edit after a match is left alone', async () => {
-    const timers: Timers = { pending: [], runAll() {} };
-    const { select, sel, model, registry, id } = setup('ab ab ab', timers);
-    const run = () => {
-      for (const timer of timers.pending.splice(0)) timer.fn();
-    };
-    model.setFind({ text: 'ab' });
+    registry.dispatch(id, { selection: { anchor: 5 }, userEvent: 'select', scrollIntoView: true });
+    expect(sel()).toEqual([5, 5]);
     select(1);
     await model.findNextFromFindDialog();
-    registry.dispatch(id, { selection: { anchor: 7 }, userEvent: 'select.pointer' });
     registry.dispatch(id, { selection: { anchor: 0 }, userEvent: 'select' });
-    run();
-    expect(sel()).toEqual([0, 0]);
-    select(1);
-    await model.findNextFromFindDialog();
-    select(2); // by code (no user event)
-    registry.dispatch(id, { selection: { anchor: 0 }, userEvent: 'select' });
-    run();
-    expect(sel()).toEqual([0, 0]);
-    select(1);
-    await model.findNextFromFindDialog();
-    registry.dispatch(id, { changes: { from: 0, insert: 'x' } });
-    registry.dispatch(id, { selection: { anchor: 0 }, userEvent: 'select' });
-    run();
-    expect(sel()).toEqual([0, 0]);
-  });
-
-  it('the watch ends after a short time and with the next search', async () => {
-    const timers: Timers = { pending: [], runAll() {} };
-    const { select, sel, model, registry, id } = setup('ab ab ab', timers);
-    model.setFind({ text: 'ab' });
-    select(1);
-    await model.findNextFromFindDialog();
-    // The guard's own timer (400 ms) has run out.
-    const guard = timers.pending.find((t) => t.delay === 400);
-    expect(guard).toBeDefined();
-    guard?.fn();
-    registry.dispatch(id, { selection: { anchor: 0 }, userEvent: 'select' });
-    for (const timer of timers.pending.splice(0)) timer.fn();
+    await Promise.resolve();
     expect(sel()).toEqual([0, 0]);
   });
 

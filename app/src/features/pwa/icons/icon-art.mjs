@@ -1,6 +1,6 @@
 // The application icon (ARCHITECTURE.md 10.2, O-7: a new icon, not the original's). Owner: DV1.
 //
-// Original work of this project, made for easy68k-mac and licensed with it (GPL-2.0-or-later): a
+// Original work of this project, made for easy68k-cross-platform (formerly easy68k-mac) and licensed with it (GPL-2.0-or-later): a
 // 68000-style chip in a dual in-line package on the accent colour of the interface, with "68K" in
 // seven-segment figures. No font is involved; every shape is a rectangle or a polygon, so the
 // SVG and the PNGs rendered from it look the same everywhere.

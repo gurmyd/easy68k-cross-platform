@@ -23,7 +23,9 @@
 //                    $EASY68K_OFFICIAL_DIR; see ../common/fetch-official.mjs)
 //   --file F.X68 [--settings settings.dat] [--out DIR]
 //                    assemble one file of your own and print what happened; nothing is recorded
-//                    (this is what run.sh calls)
+//                    (this is what run.sh calls). With --out the outputs go to DIR and the run's
+//                    work files to DIR/work; without it both go to a new folder below
+//                    build/oracle-wine/asm
 //
 // What a run does:
 //   1. lists the programs (tests/corpus/official, tests/corpus/github, the conformance programs of
@@ -678,11 +680,21 @@ function newWorkDirectory(name) {
   return directory;
 }
 
+/** The work folder of a `--file` run given `--out`: `<out>/work`, emptied first. */
+export function fileWorkDirectory(out) {
+  const directory = join(out, 'work');
+  rmSync(directory, { recursive: true, force: true });
+  mkdirSync(directory, { recursive: true });
+  return directory;
+}
+
 /** `--file`: one program of the caller's, nothing recorded. */
 async function runOneFile(options) {
   const shipped = new Uint8Array(readFileSync(join(options.official, 'settings.dat')));
   const settings = options.settings ? new Uint8Array(readFileSync(options.settings)) : shipped;
-  const workDirectory = newWorkDirectory('file');
+  // With --out every file of the run stays below that folder (its work files in <out>/work), so
+  // that a caller who keeps scratch output in a folder of its own writes nothing elsewhere.
+  const workDirectory = options.out ? fileWorkDirectory(options.out) : newWorkDirectory('file');
   const id = basename(options.file);
   const records = await runJobs([{ id, mountKey: 'source', source: id, label: 'given', settings }], {
     image: options.image,

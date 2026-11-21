@@ -127,10 +127,11 @@ export function createSimSession(ctx: AppContext, env: SimSessionEnv, options: S
     }
     return view;
   };
+  const settleView = (view: SyncFiles): void => {
+    void view.settled().catch((error: unknown) => report('a program file could not be written to storage', error));
+  };
   const settleFiles = (): void => {
-    for (const view of cachedViews.values()) {
-      void view.settled().catch((error: unknown) => report('a program file could not be written to storage', error));
-    }
+    for (const view of cachedViews.values()) settleView(view);
   };
 
   /* ---- what the parts report that only the session knows */
@@ -330,11 +331,28 @@ export function createSimSession(ctx: AppContext, env: SimSessionEnv, options: S
       return sim === appState.sim ? appState : { ...appState, sim };
     });
   };
+  // `sim.logging` drives the toolbar's `LOGGING` label, shown "while a log file is open" (1.3.1).
+  // The original's startLog sets its logging flag whatever the two log types, but shows the label
+  // only when it opened a file, that is when a type was not Disabled (U4 errata entry 5). The
+  // types are read when logging starts, as the original decides then.
+  let engineLogging = false;
+  let fileOpened = true;
+  const logTypesEnabled = (): boolean => {
+    try {
+      const { execType, outputType } = session.log.state;
+      return execType !== 0 || outputType !== 0;
+    } catch {
+      return true; // a log part without a state: the engine's flag alone
+    }
+  };
   /** What only the engine knows; not read during a load, when nothing touches the engine (4.7). */
   const readEngine = (): void => {
     if (controller.phase === 'loading') return;
     try {
-      logging = controller.engine.state().logging;
+      const nowLogging = controller.engine.state().logging;
+      if (nowLogging && !engineLogging) fileOpened = logTypesEnabled();
+      engineLogging = nowLogging;
+      logging = nowLogging && fileOpened;
       breakpoints = controller.engine.breakpoints();
     } catch (error) {
       report('the engine state could not be read', error);
@@ -402,6 +420,13 @@ export function createSimSession(ctx: AppContext, env: SimSessionEnv, options: S
       if (guarding) ctx.platform.confirmBeforeUnload(false, UNLOAD_PARTY);
       guarding = false;
       dispose();
+      // The cached views stop listening to the Vfs (SH6's CachedSyncFiles.dispose(), beyond the
+      // contract); what they hold that storage has not got yet is handed to storage first.
+      for (const view of cachedViews.values()) {
+        settleView(view);
+        (view as { dispose?: () => void }).dispose?.();
+      }
+      cachedViews.clear();
     },
   });
   sessions.add(runSession);

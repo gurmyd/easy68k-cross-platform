@@ -69,7 +69,7 @@ Borland C++ Builder 6 would.
 | P21 | `CODE7.CPP` | 159 | `(uint)EV1 >>= 1;` -> `EV1 = (long)((uint)EV1 >> 1);` | A cast used as an lvalue is a Borland extension. | None. |
 | P22 | `CODE7.CPP` | 237 | `&(static_cast<long>(bit_no))` -> `(long *)&bit_no` | The address of a cast is a Borland extension. The meaning (the fetched word is stored in `bit_no`) is the only one under which immediate bit numbers work at all. | None. |
 | P23 | `CODE9.CPP` | 28 | `#include "easy68k.h"` added. | Declaration for P25. | None. |
-| P24 | `CODE9.CPP` | 738 | TRAP #15 tasks 0 / 1: `buf[(short)D[1]] = '\0'` only `if ((short)D[1] >= 0)`. | With D1.W = $8000-$FFFF the original writes a zero byte up to 32768 bytes below a stack buffer. | In that case the original prints the string and then whatever follows in an unterminated stack buffer, and corrupts its own stack: not reproducible. Here the string is printed up to its NUL, at most 255 characters. |
+| P24 | `CODE9.CPP` | 738, 740 | TRAP #15 tasks 0 / 1: `buf[(short)D[1]] = '\0'` only `if ((short)D[1] >= 0)`; otherwise (gate I2) `buf[255] = '\0'`. | With D1.W = $8000-$FFFF the original writes a zero byte up to 32768 bytes below a stack buffer. `strncpy(buf, inStr, 255)` writes no NUL for a string of 255 bytes or more, so without the explicit end the text printed depended on the compiler (it was 255 characters only because the build zero-fills locals, `-ftrivial-auto-var-init=zero`; errata T4.md D1). | In that case the original prints the string and then whatever follows in an unterminated stack buffer, and corrupts its own stack: not reproducible. Measured under Wine (errata T4.md D1, T3.md F1): 255 characters, or 255 and one byte `$C0`, depending on the 68000 instruction before the `TRAP`. Here the string is printed up to its NUL, at most 255 characters, whatever the compiler. |
 | P25 | `CODE9.CPP` | 881-885 | TRAP #15 task 23: the loop `while (n-- > 0 && runMode) { ProcessMessages(); Sleep(10); }` -> `easy68k_delay(n)`, which records the count; P07 then returns `SIM_WAIT_DELAY` until the host has reported `n` periods or `runMode` is false. | A blocking wait inside the instruction. | None in what executes. One period is 10 ms nominal; the host decides how long it really is (the original's `Sleep(10)` is about 15.6 ms on Windows). |
 | P26 | `CODE9.CPP` | 1016 | `(maptype)` cast on `Invalid \| Read \| Rom`. | As P12. | None. |
 | P27 | `SIMOPS2.CPP` | 63 | `fileOp()` (task 59): `fclose(fp)` only `if (fp != NULL)`. | The original calls `fclose(NULL)` when the file does not exist; that crashes in musl. | None. |
@@ -91,6 +91,19 @@ These keep further lines of the originals unchanged.
   and renames `fopen` and `remove` to `easy68k_fopen` / `easy68k_remove`
   (`shim/hostfile.cpp`), which serve the files of TRAP #15 tasks 50-59 from the
   host and the S-record text from the bytes the host handed over.
+  Since gate I2 it also renames `fread` and `fwrite` (function-like macros) to
+  `easy68k_fread` / `easy68k_fwrite` in `shim/hostfile.cpp`, which answer two
+  requests as the Borland run-time library linked into SIM68K.exe does and pass
+  everything else to the C library: `fwrite` with an item size of 0 returns
+  the item count (task 54 with D2 = 0 gives D0.W = 0, not 2), and `fread` of
+  more than `INT_MAX` single bytes returns the requested count and reads
+  nothing (task 53 whose bounds test wraps, e.g. A1 = $2000 and
+  D2 = $FFFFFFFF, gives D0.W = 0 and leaves D2 unchanged, not 2). Both were
+  measured in the official binary under Wine (T3: `tests/conformance/sim`,
+  trap15-a `a31` and `a32`; errata T3.md F3, F4). Tests: io.test.mjs, "file
+  tasks 50-59 against the host file system" (D2 = 0), and
+  `app/src/engine/trap15.test.ts`, "TRAP #15 edge cases measured in the
+  official binary" (both cases, and P24).
 - **Stand-in headers with the original names**, found through the include
   path: `shim/vcl/vcl.h`, `dos.h`, `Printers.hpp`, `iostream.h`, `conio.h`,
   `net.h`, and the form headers `shim/SIM68Ku.h`, `simIOu.h`, `hardwareu.h`,
@@ -183,3 +196,4 @@ All in `shim/`; none of these is an edit of an original file.
 | `log.cpp`, `startLog` | Writes the execution-log header and sets `logging`; does not open files or ask Replace / Append / Cancel (host). If the user cancels, the host simply does not call it; the original sets `logging = true` even then and writes to a closed file. | 11.5. |
 | `misc.cpp`, `cbpoint` | See 11.4. | |
 | `api.cpp`, `sim_bp_expr_set` | See 11.5. | |
+| `simio.cpp`, `displayFileDialog` / `fileDialogReply` (TRAP #15 task 58) | In Save mode with an empty `(A3)` the Save dialog's own file name is cleared, and the overflow test after OK measures the name of the dialog that was shown. The original clears and measures `OpenDialogIO->FileName` in the Save branch (`simIOu.cpp:541`, `:544`), so its Save dialog showed the name of its previous use and its overflow test used the Open dialog's name (trap15-a task 58). | ARCHITECTURE.md 3.8.4: "they are not reproduced". Changed at gate I2 (errata SH6.md entry 12); until then the shim copied both. |

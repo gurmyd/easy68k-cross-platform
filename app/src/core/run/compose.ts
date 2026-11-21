@@ -181,9 +181,61 @@ export function applySimSettings(engine: SimEngine, settings: SimSettings, hardw
   if (hardwareVisible) engine.setHardwareVisible(true);
 }
 
+/** What a cached view offers beyond `SyncFiles` (SH6's CachedSyncFiles, fs/sync/cached.ts). */
+interface CatchingUpView {
+  /** Resolves when every change reported by others so far has been read into memory. */
+  whenCurrent?: () => Promise<void>;
+  /** Stops listening to the Vfs and cancels its timers. */
+  dispose?: () => void;
+}
+
+/**
+ * Knows whether a change saved outside the simulator (the editor, the Files panel, another window)
+ * may not have reached a view of the program files yet (3.8.4; gate I2, SH6's review): a cached
+ * view reads such a change asynchronously after the Vfs reports it, so a Run right after a save
+ * would otherwise read the old bytes. Every change the Vfs reports counts; a view that has nothing
+ * to read resolves at once, so the program's own writes cost a microtask.
+ */
+function trackFileChanges(
+  vfs: Vfs,
+  views: () => Iterable<SyncFiles>,
+): {
+  pending: () => Promise<void> | null;
+  dispose: () => void;
+} {
+  let pending: Promise<void> | null = null;
+  let epoch = 0;
+  const onChange = (): void => {
+    const mine = ++epoch;
+    // The views' own listeners run in the same notification, some after this one (they subscribe
+    // when they prepare a folder): ask them once all have heard of the change.
+    const waiting = Promise.resolve()
+      .then(() => Promise.all([...views()].map((view) => (view as CatchingUpView).whenCurrent?.())))
+      .then(
+        () => {},
+        () => {},
+      );
+    pending = waiting;
+    void waiting.then(() => {
+      if (epoch === mine) pending = null;
+    });
+  };
+  const unsubscribe = typeof vfs.subscribe === 'function' ? vfs.subscribe('/', onChange) : () => {};
+  return { pending: () => pending, dispose: unsubscribe };
+}
+
 export function composeSession(env: SessionEnv): ComposedSession {
   const { clock, scheduler, ui, parts = {} } = env;
   const timers = new TimerSet(clock);
+
+  // The views of the program files the session handed out, and the changes they may still read.
+  const views = new Set<SyncFiles>();
+  const viewFor = (dir: VPath): SyncFiles => {
+    const view = env.viewFor(dir);
+    views.add(view);
+    return view;
+  };
+  const fileChanges = trackFileChanges(env.vfs, () => views);
 
   // The parts post to the controller's queue and the controller is built from the parts, so the
   // queue is reached through this binding, which is set a few lines below.
@@ -242,7 +294,7 @@ export function composeSession(env: SessionEnv): ComposedSession {
   const files: ProgramFilesApi =
     parts.files ??
     new ProgramFiles({
-      viewFor: env.viewFor,
+      viewFor,
       message,
       showFileDialog: (mode, title, filter, initialName) => ui.showFileDialog(mode, title, filter, initialName),
       post,
@@ -342,6 +394,7 @@ export function composeSession(env: SessionEnv): ComposedSession {
     // The two things a user can change without the controller hearing of it (4.7.1, last paragraph).
     partsUntouched: () =>
       surface.back.width === STARTUP_WIDTH && surface.back.height === STARTUP_HEIGHT && !text.state.textWrap,
+    filesCatchingUp: fileChanges.pending,
   });
   const built = controller;
 
@@ -365,6 +418,9 @@ export function composeSession(env: SessionEnv): ComposedSession {
     bridge,
     timers,
     start: () => built.start(),
-    dispose: () => built.dispose(),
+    dispose: () => {
+      fileChanges.dispose();
+      built.dispose();
+    },
   };
 }

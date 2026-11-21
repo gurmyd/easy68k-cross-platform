@@ -10,10 +10,12 @@
 // Simulator mode (sim-ui §8.4): if a program has been loaded, `The current debug environment will
 // be lost, click OK to continue.` (title `Caution`, OK / Cancel) comes first, whatever was dropped.
 // On OK only the first dropped file counts, and only if its name ends in .S68 (any case); it is
-// loaded with RunController.open(path, 'drop'). For an .S68 the controller asks that question
-// itself (ARCHITECTURE.md 4.7 step 2), so this file asks it only when something else was dropped,
-// which is then ignored. A dropped .L68 with the same base name is copied along, so that the
-// listing appears (docs/differences/FS1.md).
+// loaded with RunController.open(path, 'drop'). For an .S68 the controller asks that question: in
+// a browser through RunController.confirmLoad('drop') before the file is copied (nothing is copied
+// on Cancel), then open(copy, 'drop', { confirmed: true }); a file opened where it lies (the desktop
+// app), or a controller without confirmLoad, gets it inside open (ARCHITECTURE.md 4.7 step 2). This
+// file asks it itself only when something else was dropped, which is then ignored. A dropped .L68
+// with the same base name is copied along, so that the listing appears (docs/differences/FS1.md).
 //
 // The desktop app (docs/porting/errata/DV2.md 4a): deps.locate names a dropped file's real place on
 // /disk (DesktopPlatform.grantDroppedFile). A file found there is opened where it is, not copied; a
@@ -60,7 +62,14 @@ export interface DropDeps {
   /** Copies a dropped file into the store and returns the path to open. */
   importFile(name: string, data: Bytes): Promise<VPath>;
   openDocument(path: VPath): Promise<unknown>;
-  openProgram(path: VPath): Promise<void>;
+  /** Loads a program; `confirmed` when confirmLoad has just been asked and answered OK. */
+  openProgram(path: VPath, confirmed?: boolean): Promise<void>;
+  /**
+   * Step 2 of the load on its own (RunController.confirmLoad('drop')): asks `Caution` when a
+   * program is loaded and resolves false on Cancel. Where it exists the question comes before a
+   * dropped .S68 is copied, as the original asks before anything happens.
+   */
+  confirmLoad?(): Promise<boolean>;
   folderProviders(): DroppedFolderProvider[];
   /** The desktop app: the item's place on /disk, or null (then it is copied as in a browser). */
   locate?(item: DroppedItem): Promise<LocatedItem | null>;
@@ -117,10 +126,19 @@ export async function handleDrop(items: readonly DroppedItem[], deps: DropDeps):
       return outcome;
     }
     let path: VPath;
+    let confirmed = false;
     const located = await locate(first, deps);
     if (located?.kind === 'file') {
       path = located.path; // the listing beside it is found there by the controller
     } else {
+      // The copy must not happen when the user cancels the Caution question (sim-ui §8.4).
+      if (deps.confirmLoad) {
+        if (!(await deps.confirmLoad())) {
+          outcome.skipped.push(first.name);
+          return outcome;
+        }
+        confirmed = true;
+      }
       try {
         path = await deps.importFile(first.name, await first.read());
       } catch {
@@ -138,8 +156,9 @@ export async function handleDrop(items: readonly DroppedItem[], deps: DropDeps):
         }
       }
     }
-    // RunController.open asks the Caution question itself when a program is loaded (4.7 step 2).
-    await deps.openProgram(path);
+    // Without confirmLoad (or for a file opened where it lies), RunController.open asks the Caution
+    // question itself when a program is loaded (4.7 step 2).
+    await deps.openProgram(path, confirmed || undefined);
     outcome.opened.push(path);
     return outcome;
   }

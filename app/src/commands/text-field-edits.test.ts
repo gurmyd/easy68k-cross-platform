@@ -3,6 +3,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   PASTE_REFUSED_MAC,
+  TEXT_FIELD_HISTORY_DEPTH,
+  TextFieldHistory,
+  installTextFieldHistory,
   performTextFieldEdit,
   textFieldEditChords,
   type PlainTextField,
@@ -15,6 +18,10 @@ function field(value: string, start: number, end: number, type = 'text') {
     select() {
       state.selectionStart = 0;
       state.selectionEnd = state.value.length;
+    },
+    setSelectionRange(from: number, to: number) {
+      state.selectionStart = from;
+      state.selectionEnd = to;
     },
   });
 }
@@ -121,5 +128,194 @@ describe('performTextFieldEdit', () => {
     const away = host({ readClipboard: async () => 'x', hasFocus: (_f: PlainTextField) => false });
     await performTextFieldEdit('paste', field('', 0, 0), away);
     expect([...empty.calls, ...away.calls]).toEqual([]);
+  });
+});
+
+// ---- The history of Ctrl+Z and Ctrl+Option+Z (errata W3.md entry 36)
+
+type Field = ReturnType<typeof field>;
+
+/** Changes `f` as the browser would, telling `history` what its events would tell it. */
+function edit(history: TextFieldHistory, f: Field, inputType: string, change: () => void) {
+  history.beforeChange(f);
+  change();
+  history.changed(f, inputType);
+}
+
+/** Types `text` at the caret, one character per event, as a person does. */
+function type(history: TextFieldHistory, f: Field, text: string) {
+  for (const character of text) {
+    edit(history, f, 'insertText', () => {
+      const end = f.selectionEnd ?? f.value.length;
+      const start = f.selectionStart ?? end;
+      f.value = f.value.slice(0, start) + character + f.value.slice(end);
+      f.setSelectionRange(start + 1, start + 1);
+    });
+  }
+}
+
+/** A host whose replaceRange edits the fake field (and fires no events, as if they were ignored). */
+function historyHost(f: Field) {
+  const ranges: string[] = [];
+  const result = host({
+    replaceRange: (_field, start, end, text) => {
+      ranges.push(`${start}..${end}=${JSON.stringify(text)}`);
+      f.value = f.value.slice(0, start) + text + f.value.slice(end);
+      f.setSelectionRange(start + text.length, start + text.length);
+    },
+  });
+  return Object.assign(result, { ranges });
+}
+
+describe('TextFieldHistory', () => {
+  it('typing, then a cut: Undo takes back the cut only, Redo puts it back (the macOS runner case)', async () => {
+    const history = new TextFieldHistory();
+    const f = field('', 0, 0);
+    const h = historyHost(f);
+    type(history, f, 'abc def');
+    f.setSelectionRange(4, 7);
+    edit(history, f, 'deleteByCut', () => {
+      f.value = 'abc ';
+      f.setSelectionRange(4, 4);
+    });
+    await performTextFieldEdit('undo', f, h, history);
+    expect([f.value, f.selectionStart, f.selectionEnd]).toEqual(['abc def', 4, 7]);
+    await performTextFieldEdit('redo', f, h, history);
+    expect([f.value, f.selectionStart, f.selectionEnd]).toEqual(['abc ', 4, 4]);
+    // Only the part that differs is replaced; the browser's own undo is never asked.
+    expect(h.ranges).toEqual(['4..4="def"', '4..7=""']);
+    expect(h.calls).toEqual([]);
+    // Two undos: the cut, then the whole run of typing.
+    await performTextFieldEdit('undo', f, h, history);
+    await performTextFieldEdit('undo', f, h, history);
+    expect(f.value).toBe('');
+    expect(history.canUndo(f)).toBe(false);
+    await performTextFieldEdit('undo', f, h, history);
+    expect(f.value).toBe('');
+  });
+
+  it('typing at another caret, and a paste, are steps of their own', async () => {
+    const history = new TextFieldHistory();
+    const f = field('', 0, 0);
+    const h = historyHost(f);
+    type(history, f, 'move');
+    f.setSelectionRange(0, 0);
+    type(history, f, 'x');
+    // The shell's paste goes through execCommand('insertText'), which the browser calls typing.
+    f.setSelectionRange(5, 5);
+    history.beforeChange(f, true);
+    edit(history, f, 'insertText', () => {
+      f.value = 'xmove.l';
+      f.setSelectionRange(7, 7);
+    });
+    type(history, f, ' D0');
+    const values: string[] = [];
+    while (history.canUndo(f)) {
+      await performTextFieldEdit('undo', f, h, history);
+      values.push(f.value);
+    }
+    expect(values).toEqual(['xmove.l', 'xmove', 'move', '']);
+  });
+
+  it('a value a script changed starts the history again', async () => {
+    const history = new TextFieldHistory();
+    const f = field('', 0, 0);
+    const h = historyHost(f);
+    type(history, f, 'abc');
+    f.value = 'D0';
+    expect(history.canUndo(f)).toBe(false);
+    await performTextFieldEdit('undo', f, h, history);
+    expect(f.value).toBe('D0');
+    f.setSelectionRange(2, 2);
+    type(history, f, '1');
+    await performTextFieldEdit('undo', f, h, history);
+    expect(f.value).toBe('D0');
+    expect(history.canUndo(f)).toBe(false);
+  });
+
+  it("the browser's own undo (Cmd+Z) starts the history again; a new change clears Redo", async () => {
+    const history = new TextFieldHistory();
+    const f = field('', 0, 0);
+    const h = historyHost(f);
+    type(history, f, 'ab');
+    edit(history, f, 'historyUndo', () => {
+      f.value = '';
+      f.setSelectionRange(0, 0);
+    });
+    expect(history.canUndo(f)).toBe(false);
+    type(history, f, 'cd');
+    await performTextFieldEdit('undo', f, h, history);
+    expect(history.canRedo(f)).toBe(true);
+    type(history, f, 'e');
+    expect(history.canRedo(f)).toBe(false);
+  });
+
+  it(`keeps at most ${TEXT_FIELD_HISTORY_DEPTH} steps`, () => {
+    const history = new TextFieldHistory();
+    const f = field('', 0, 0);
+    for (let i = 0; i < TEXT_FIELD_HISTORY_DEPTH + 20; i++) {
+      edit(history, f, 'insertFromPaste', () => {
+        f.value += 'x';
+        f.setSelectionRange(f.value.length, f.value.length);
+      });
+    }
+    const h = historyHost(f);
+    let steps = 0;
+    while (history.undo(f, h)) steps++;
+    expect(steps).toBe(TEXT_FIELD_HISTORY_DEPTH);
+    expect(f.value).toBe('x'.repeat(20));
+  });
+
+  it('Cut and Paste of the shell tell the history the state before them', async () => {
+    const history = new TextFieldHistory();
+    const f = field('', 0, 0);
+    type(history, f, 'abc');
+    f.setSelectionRange(0, 3);
+    const h = historyHost(f);
+    h.execCommand = (command) => {
+      h.calls.push(command);
+      if (command === 'cut') {
+        // As in Chromium: execCommand fires no beforeinput, only input.
+        f.value = '';
+        f.setSelectionRange(0, 0);
+        history.changed(f, 'deleteByCut');
+      }
+      return true;
+    };
+    await performTextFieldEdit('cut', f, h, history);
+    await performTextFieldEdit('undo', f, h, history);
+    expect([f.value, f.selectionStart, f.selectionEnd]).toEqual(['abc', 0, 3]);
+  });
+
+  it('without replaceRange on the host, Undo and Redo are the browser’s', async () => {
+    const history = new TextFieldHistory();
+    const f = field('ab', 2, 2);
+    const h = host();
+    await performTextFieldEdit('undo', f, h, history);
+    expect(h.calls).toEqual(['undo']);
+  });
+
+  it('installTextFieldHistory listens to beforeinput and input of the fields it accepts, in the capture phase', () => {
+    const listeners = new Map<string, (event: Event) => void>();
+    const target = {
+      addEventListener: (name: string, listener: (event: Event) => void, options: unknown) => {
+        expect(options).toEqual({ capture: true });
+        listeners.set(name, listener);
+      },
+      removeEventListener: (name: string) => void listeners.delete(name),
+    } as unknown as Pick<Window, 'addEventListener' | 'removeEventListener'>;
+    const history = new TextFieldHistory();
+    const f = field('', 0, 0);
+    const other = field('', 0, 0);
+    const uninstall = installTextFieldHistory(target, history, (element) => element === f);
+    for (const element of [f, other]) {
+      listeners.get('beforeinput')?.({ target: element } as unknown as Event);
+      element.value = 'a';
+      element.setSelectionRange(1, 1);
+      listeners.get('input')?.({ target: element, inputType: 'insertText' } as unknown as Event);
+    }
+    expect([history.canUndo(f), history.canUndo(other)]).toEqual([true, false]);
+    uninstall();
+    expect(listeners.size).toBe(0);
   });
 });

@@ -6,7 +6,7 @@ import { FontSource, FontTarget, RepaintBit, type ControllerRequest } from '../.
 import { HOST_PART_DEFAULTS } from '../../engine/sim';
 import { VirtualTime } from './clock';
 import { TimerSet } from './timers';
-import { SimUiBridge, type UiBridgeDeps } from './ui-bridge';
+import { NO_REPAINT_CALLS, SimUiBridge, type UiBridgeDeps } from './ui-bridge';
 
 const bytes = (text: string) => Uint8Array.from(text, (ch) => ch.charCodeAt(0));
 
@@ -105,6 +105,26 @@ describe('SimUiBridge', () => {
       false,
       [],
     ]);
+  });
+
+  // Gate I2 (major defect of the gate I1 round 3 review): the OR of the bits loses a second call,
+  // and with it the updateDisplay() that follows a StackFrm->Repaint() in one engine call.
+  it('counts the repaint calls by panel, so that Repaint() then updateDisplay() is not lost', () => {
+    const { bridge } = make();
+    expect(bridge.takeRepaintCalls()).toBe(NO_REPAINT_CALLS);
+    // The sequence of one trace over TRAP #15 task 32 with D1 = 0 (real engine).
+    for (const what of [4, 24, 8, 1, 8, 4]) bridge.repaint(what);
+    expect(bridge.takeRepaintCalls()).toEqual({ listing: 1, breakpoints: 0, memory: 2, stack: 3, stackRedraw: 1 });
+    expect(bridge.takeRepaintCalls()).toBe(NO_REPAINT_CALLS);
+    expect(bridge.takeRepaint()).toBe(0); // taking the counts took the bits too
+    bridge.repaint(RepaintBit.Stack | RepaintBit.StackRedraw);
+    expect(bridge.takeRepaint()).toBe(RepaintBit.Stack | RepaintBit.StackRedraw);
+    expect(bridge.takeRepaintCalls()).toBe(NO_REPAINT_CALLS); // ... and the other way round
+    bridge.repaint(0); // names no panel
+    expect(bridge.takeRepaintCalls()).toBe(NO_REPAINT_CALLS);
+    bridge.repaint(RepaintBit.Breakpoints);
+    bridge.resetToStartup();
+    expect(bridge.takeRepaintCalls()).toBe(NO_REPAINT_CALLS);
   });
 
   it('mirrors the command state, key commands and the caption, and says when something changed', () => {

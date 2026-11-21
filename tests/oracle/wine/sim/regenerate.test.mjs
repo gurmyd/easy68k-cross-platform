@@ -1,12 +1,14 @@
 // Unit tests of the host side of the simulator oracle (regenerate.mjs). They start no container and
 // need neither Docker nor the official programs. Owner: T3.
 
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseHeader } from '../../../conformance/sim/programs.ts';
+import { REPO_ROOT, parseHeader } from '../../../conformance/sim/programs.ts';
 import {
   MAX_CONTAINERS,
   dealOrder,
   defaultTimeout,
+  fileWorkDirectory,
   isGzipped,
   jobLine,
   parseArguments,
@@ -168,6 +170,13 @@ describe('parseArguments and goldens', () => {
     expect(() => parseArguments(['--recipe', 'log:9'])).toThrow(/unknown recipe/);
     expect(() => parseArguments(['--bogus'])).toThrow(/unknown argument/);
     expect(() => parseArguments(['--containers', '0'])).toThrow(/containers/);
+  });
+
+  // Review of T3, round 2: a --file run with --out wrote its work folder below build/oracle-wine/sim.
+  it('keeps the work folder of a --file run below --out when there is one', () => {
+    const out = resolve('build', 'mine', 'probe');
+    expect(fileWorkDirectory(out, '42-x')).toBe(join(out, '.work-42-x'));
+    expect(fileWorkDirectory(null, '42-x')).toBe(join(REPO_ROOT, 'build', 'oracle-wine', 'sim', 'file-42-x'));
   });
 
   it('gzips execution logs only', () => {

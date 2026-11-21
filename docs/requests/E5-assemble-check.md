@@ -1,5 +1,7 @@
 # Request from E5: run the Assemble feature's browser check in CI (gate I2)
 
+Status: applied at gate I2 round 1 (config), with one difference: the step "Assemble check (E5)" is in `browser-checks`, group `interface`, not `simulator`, to balance the groups (ci.yml's comment above the job has the figures); that group downloads engine-dist and sets `EASY68K_REQUIRE_ENGINES=1` like every group. Root script `check:assemble`; `build/E5/assemble-check/` is uploaded on failure. Run here: 92 of 92. A first run lost WebKit to "Target page, context or browser has been closed" while the PC was out of memory, and then waited without end at "[webkit, student path]" until it was stopped after 14 minutes (for E5: a closed browser should fail the pass at once).
+
 E5's acceptance (ARCHITECTURE.md 9.4; editor-ui §20.4) includes what only a browser shows: the
 status dialog, the message list with its height rule, markers, double-click, the context menu,
 Load L68 and Execute into the real simulator session. Following the convention of

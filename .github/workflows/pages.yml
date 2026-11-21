@@ -14,10 +14,10 @@
 # The site is not deployed without both engines: a web app that cannot assemble or run is worse
 # than the previous deployment, which stays online when this workflow fails.
 #
-# To try the build locally (the server must serve app/dist under /easy68k-mac/):
-#   EASY68K_BASE=/easy68k-mac/ npm run build
+# To try the build locally (the server must serve app/dist under /easy68k-cross-platform/):
+#   EASY68K_BASE=/easy68k-cross-platform/ npm run build
 # In Git Bash on Windows, put MSYS_NO_PATHCONV=1 in front: otherwise MSYS rewrites the value
-# /easy68k-mac/ into a Windows path (C:/Program Files/Git/easy68k-mac/) before Vite sees it.
+# /easy68k-cross-platform/ into a Windows path (C:/Program Files/Git/easy68k-cross-platform/) before Vite sees it.
 # Or run npm run check:pwa, which builds and serves the site and drives two browsers through it.
 #
 # Pages must be set to "GitHub Actions" as its source in the repository settings.
@@ -88,7 +88,7 @@ jobs:
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - name: Production build
         env:
-          # "/easy68k-mac" for a project site, "" for a user or organisation site.
+          # "/easy68k-cross-platform" for a project site, "" for a user or organisation site.
           EASY68K_BASE: ${{ steps.pages.outputs.base_path }}/
         run: npm run build
       # Safety net: pwaPlugin() in app/vite.config.ts has done this already; idempotent.

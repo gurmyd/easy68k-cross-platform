@@ -79,10 +79,26 @@ export function unmappableQuestion(count: number): MessageBoxRequest {
  * A file could not be written. The original leaves this to the VCL, which shows the exception's
  * message (EFCreateError, `Cannot create file "<name>"`) and keeps the document modified
  * (editor-ui §6.4). The port names the file the same way and adds the reason it was given.
+ *
+ * An `io` failure whose reason is already a whole message written for the user (the browser store
+ * is full, FS1; a linked file was changed by another program or no longer exists, FS2) is shown on
+ * its own: those messages name the file themselves, and the prefix would show the store's internal
+ * path, such as `/linked/<id>/prog.X68` (gate I2, FS2 review).
  */
-export function writeError(path: string, reason: string): MessageBoxRequest {
-  const text = reason ? `Cannot create file "${path}". ${reason}` : `Cannot create file "${path}".`;
+export function writeError(path: string, reason: string, code?: string): MessageBoxRequest {
+  const text =
+    code === 'io' && isUserSentence(reason)
+      ? reason
+      : reason
+        ? `Cannot create file "${path}". ${reason}`
+        : `Cannot create file "${path}".`;
   return { title: 'Error', text, icon: 'error', buttons: ['OK'] };
+}
+
+/** A reason that reads as a message of its own: it starts with a capital or a quote and ends a sentence. */
+function isUserSentence(reason: string): boolean {
+  const trimmed = reason.trim();
+  return /^["'A-Z]/.test(trimmed) && /[.!?]["']?$/.test(trimmed) && trimmed.includes(' ');
 }
 
 /** ARCHITECTURE.md 3.9.4, the drafts of a window that is gone. Buttons `Restore` and `Discard`. */

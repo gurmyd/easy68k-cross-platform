@@ -58,15 +58,15 @@ export interface DocumentService {
   closeAll(): Promise<boolean>;
   activate(id: string): void;
 
-  /* ---- added at gate I1 (docs/porting/errata/W1.md, entry 11). Optional in this round: the real
-     service (core/documents, E1) has both; a stand-in may leave them out, so a caller tests first
-     (`ctx.documents.update?.(id, patch)`). ---- */
+  /* ---- added at gate I1 (docs/porting/errata/W1.md, entry 11) as optional members; required
+     since gate I2 (entry 14.5), when the real service (core/documents, E1), the shell's stand-in
+     and every fake in the tree had both. A caller's `?.` from the optional days still compiles. ---- */
 
   /** Changes settings of an open document: Insert/Replace (the editor), font and tabs (Editor
    *  Options). The store's DocumentState follows; the text, `modified` and `revision` do not change.
    *  The next Save writes the font and tab values into the trailer. */
-  update?(id: string, patch: DocumentPatch): void;
+  update(id: string, patch: DocumentPatch): void;
   /** The selection and caret of a document, for F1 in the editor (editor-ui §15.3). null for an
    *  unknown id. */
-  selection?(id: string): DocumentSelection | null;
+  selection(id: string): DocumentSelection | null;
 }

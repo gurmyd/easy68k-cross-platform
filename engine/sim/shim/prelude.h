@@ -70,11 +70,20 @@ char *ultoa(unsigned long value, char *str, int radix);
 FILE *easy68k_fopen(const char *name, const char *mode);
 int easy68k_remove(const char *name);
 
+// fread() / fwrite() as the Borland run-time library linked into SIM68K.exe
+// answers the two requests where it differs from a C99 library (gate I2,
+// measured by T3 under Wine): see shim/hostfile.cpp.  Function-like macros, so
+// that the shim can still reach the C library's own functions as (fread).
+size_t easy68k_fread(void *buffer, size_t size, size_t count, FILE *stream);
+size_t easy68k_fwrite(const void *buffer, size_t size, size_t count, FILE *stream);
+
 #ifdef __cplusplus
 }
 #endif
 
 #define fopen easy68k_fopen
 #define remove easy68k_remove
+#define fread(buffer, size, count, stream) easy68k_fread(buffer, size, count, stream)
+#define fwrite(buffer, size, count, stream) easy68k_fwrite(buffer, size, count, stream)
 
 #endif

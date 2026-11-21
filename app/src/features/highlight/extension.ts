@@ -130,8 +130,11 @@ const codeColor = `var(${syntaxVariable('code')})`;
 export const highlightTheme = EditorView.theme({
   '&.e68-syntax': { ...cssVariables(AUTO_LIGHT), backgroundColor: background },
   ':root[data-theme="dark"] &.e68-syntax': cssVariables(AUTO_DARK),
-  '&.e68-syntax .cm-scroller, &.e68-syntax .cm-content': { backgroundColor: background },
-  '&.e68-syntax .cm-content': { color: codeColor, caretColor: codeColor },
+  // The scroller carries the background, never .cm-content: CodeMirror draws the selection in a
+  // layer behind the content (.cm-selectionLayer, z-index -2), which an opaque .cm-content would
+  // hide, so no selection was ever visible (gate I2, E6's review). Pinned by check-highlight.mjs.
+  '&.e68-syntax .cm-scroller': { backgroundColor: background },
+  '&.e68-syntax .cm-content': { backgroundColor: 'transparent', color: codeColor, caretColor: codeColor },
   // One step more specific than the editor component's own cursor rule, which would otherwise win
   // by stylesheet order and draw a light-theme caret on a stored dark background (or the reverse).
   '&.e68-syntax .cm-cursorLayer .cm-cursor, &.e68-syntax .cm-dropCursor': { borderLeftColor: codeColor },

@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { simTwinPath } from './build-sim-twin.mjs';
+import { simTwinInputsDigest, simTwinPath, simTwinState } from './build-sim-twin.mjs';
 import {
   crc32,
   escapeBytes,
@@ -65,6 +65,31 @@ describe('the sandbox of program files', () => {
       expect(isPlainName(bad), bad).toBe(false);
   });
 
+  // Gate I2: T3's programs a57 and a58 open 'DATA.TXT.' and 'NUL', which the twin's real Windows
+  // files resolve to data.txt and the null device; the in-memory side cannot, so both refuse them.
+  it('refuses a trailing dot and the Windows device names', () => {
+    for (const bad of ['DATA.TXT.', 'a.', 'NUL', 'nul.txt', 'Con', 'PRN', 'aux.bin', 'COM1', 'lpt9.x', 'COM0'])
+      expect(isPlainName(bad), bad).toBe(false);
+    for (const ok of ['NULL', 'nul_x', 'COM10', 'console.txt', 'LPT', 'a.b.c']) expect(isPlainName(ok), ok).toBe(true);
+  });
+
+  // Gate I2: T3's programs a35 and a56 remove an open file and open one file twice. The twin
+  // keeps a file open in at most one stream (sim-twin/hostfile-native.cpp); the sandbox must agree.
+  it('lets a file be open in one stream at a time and not be removed while open', () => {
+    const s = new Sandbox();
+    const w = s.open(bytes('two.bin'), 2);
+    expect(s.write(w, bytes('ABCD'))).toBe(4);
+    expect(s.open(bytes('TWO.bin'), 0)).toBe(0);
+    expect(s.open(bytes('two.bin'), 2)).toBe(0);
+    expect(s.remove(bytes('two.bin'))).toBe(false);
+    expect(s.close(w)).toBe(true);
+    const r = s.open(bytes('two.bin'), 1);
+    expect(r).toBeGreaterThan(0);
+    expect(s.open(bytes('two.bin'), 1)).toBe(0);
+    expect(s.close(r)).toBe(true);
+    expect(s.remove(bytes('two.bin'))).toBe(true);
+  });
+
   it('has the semantics of fopen r+b / rb / w+b on a case-insensitive file system', () => {
     const s = new Sandbox();
     expect(s.open(bytes('missing.txt'), 0)).toBe(0);
@@ -80,8 +105,33 @@ describe('the sandbox of program files', () => {
     expect(s.read(r, 10)).toHaveLength(0);
     expect(s.seek(r, -1, 0)).toBe(-1);
     expect(s.dump()).toEqual(['files 1', 'file "Data.BIN" 9 68656C6C6F00000021']);
+    expect(s.close(r)).toBe(true);
     expect(s.remove(bytes('DATA.bin'))).toBe(true);
     expect(s.dump()).toEqual(['files 0']);
+  });
+});
+
+describe('the source stamp of a built twin', () => {
+  it("tells a twin built from today's sources from a stale or missing one", () => {
+    const digest = simTwinInputsDigest();
+    expect(digest).toMatch(/^[0-9a-f]{64}$/);
+    expect(simTwinInputsDigest()).toBe(digest);
+    const dir = join(repo, 'build', 'native-twin', `unit-stamp-${process.pid}`);
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir, { recursive: true });
+    const exe = join(dir, 'sim-twin.exe');
+    try {
+      expect(simTwinState('Od', digest, exe)).toBe('missing');
+      writeFileSync(exe, '');
+      // built before stamps existed (the case that compared a twin from older engine sources)
+      expect(simTwinState('Od', digest, exe)).toBe('stale');
+      writeFileSync(join(dir, 'sources.sha256'), `${'0'.repeat(64)}\n`);
+      expect(simTwinState('Od', digest, exe)).toBe('stale');
+      writeFileSync(join(dir, 'sources.sha256'), `${digest}\n`);
+      expect(simTwinState('Od', digest, exe)).toBe('current');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
@@ -126,8 +176,16 @@ describe('running a script through the WebAssembly simulator', () => {
     await expect(runScript('reg Q9 1\n')).rejects.toThrow(/script line 1: unknown register: Q9/);
   });
 
+  // Only a twin built from today's sources is compared: one built before an edit of engine/sim
+  // differs wherever the edit changed behaviour, which says nothing about the compiler.
   const twin = simTwinPath('Od');
-  it.skipIf(!enginesBuilt || !existsSync(twin))(
+  const twinState = simTwinState('Od');
+  if (twinState === 'stale')
+    console.log(
+      `sim-script.test.mjs: ${twin} was built from other sources than today's engine/sim; not compared. ` +
+        'Rebuild it with: node tests/oracle/native-twin/build-sim-twin.mjs',
+    );
+  it.skipIf(!enginesBuilt || twinState !== 'current')(
     'the built twin gives the same transcript (with host calls)',
     async () => {
       const dir = join(repo, 'build', 'native-twin', 'unit-test');

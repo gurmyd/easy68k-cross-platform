@@ -8,7 +8,7 @@
 //
 // The folder reference/examples/github/easy68k-qt is never read (ARCHITECTURE.md 6.3).
 //
-// Part of easy68k-mac, an unofficial port of EASy68K. GPL-2.0-or-later.
+// Part of easy68k-cross-platform, an unofficial port of EASy68K. GPL-2.0-or-later.
 
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
@@ -65,22 +65,44 @@ export async function assemblerModule() {
   return asmModule;
 }
 
+/** An INCLUDE or INCBIN of a file in the parent folder, as `INCLUDE '..\dumplib.X68'`. */
+const PARENT_REFERENCE = /\b(?:INCLUDE|INCBIN)\s+['"]?\.\.[\\/]/i;
+
 /**
  * A program as the editor would assemble it: the main file loaded as the editor loads it (trailer
  * removed, its tab settings applied), every other file of its folder available by name.
+ *
+ * A program that INCLUDEs or INCBINs a file of its parent folder (`..\dumplib.X68`, as the
+ * simulator conformance programs of tests/conformance/sim do) is named relative to that parent
+ * instead: the main file is `<folder>/<name>`, the files of its folder `<folder>/<file>` and the
+ * files of the parent folder plain `<file>`, so that the reference resolves as in the original's
+ * folder. Without that such a program does not assemble and the simulator comparison skips it.
+ *
+ * `inputs` lists every [name, bytes] pair to hand to the assembler, the main file included.
  * @param {string} path
  */
 export async function loadProgram(path) {
   const { loadEditorText } = await assemblerModule();
   const loaded = loadEditorText(new Uint8Array(readFileSync(path)));
   const dir = dirname(path);
+  const stripped = new Uint8Array(loaded.text);
+  const folder = folderFiles(dir);
+  const usesParent = PARENT_REFERENCE.test(Buffer.from(stripped).toString('latin1'));
+  const prefix = usesParent ? `${basename(dir)}/` : '';
+  const mainName = prefix + basename(path);
+  const bytesOf = (f) => (f === path ? stripped : new Uint8Array(readFileSync(f)));
+  /** @type {Array<[string, Uint8Array]>} */
+  const inputs = folder.map((f) => [prefix + basename(f), bytesOf(f)]);
+  if (usesParent) for (const f of folderFiles(dirname(dir))) inputs.push([basename(f), bytesOf(f)]);
+  if (!inputs.some(([name]) => name === mainName)) inputs.push([mainName, stripped]);
   return {
     path,
     rel: relative(repo, path).replaceAll('\\', '/'),
     dir,
-    mainName: basename(path),
-    stripped: new Uint8Array(loaded.text),
-    folder: folderFiles(dir),
+    mainName,
+    stripped,
+    folder,
+    inputs,
     tabType: loaded.tabType === 'assembly' ? 0 : 1,
     tabSize: loaded.tabSize ?? 4,
   };

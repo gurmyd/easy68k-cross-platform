@@ -10,7 +10,7 @@ import { useAppContext } from '../../state/context';
 import { Button, Dialog, Icon, IconButton, ListBox, Select, TextField, type ListBoxItem } from '../../ui/components';
 import { newFolder } from './actions';
 import { decideOpen, decideSave, visibleEntries, type DialogStep, type FileDialogProps } from './dialogs';
-import { BROWSER_PROVIDER_ID, FOLDER_PROVIDER_ID, NATIVE_PROVIDER_ID } from './providers';
+import { BROWSER_PROVIDER_ID, FOLDER_PROVIDER_ID, NATIVE_PROVIDER_ID, isImportingUpload } from './providers';
 import { locations, sortEntries } from './store';
 import './files.css';
 
@@ -332,7 +332,7 @@ export function FileDialog({ props, close }: DialogProps<FileDialogProps, Result
       {!isSave && (
         <p className="e68-filedialog__note">
           {`This browser keeps your files in its own storage, "${storeLabel}". `}
-          {providerButtons.some((p) => p.id === 'upload')
+          {providerButtons.some(isImportingUpload)
             ? `From this computer... copies files from this computer into ${storeLabel}/Imported. `
             : ''}
           {hasFolderProvider ? 'Open folder... works on a folder of this computer directly. ' : ''}

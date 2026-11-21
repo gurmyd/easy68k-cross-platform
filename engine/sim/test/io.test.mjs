@@ -217,7 +217,9 @@ test('file tasks 50-59 against the host file system', async () => {
   assert.equal(l(16), 10, 'and D2 is left unchanged');
   assert.equal(w(20), 0, 'task 55 position');
   assert.equal(w(22), 0, 'task 53 after positioning');
-  assert.equal(w(24), 2, 'task 54 with a length of 0: F_ERROR (fwrite returns 0)');
+  // The Borland fwrite returns the item count for a zero item size (measured in the official
+  // binary, T3 trap15-a a31; PATCHES.md section 3, easy68k_fwrite); C99's returns 0.
+  assert.equal(w(24), 0, 'task 54 with a length of 0: success, as the Borland fwrite reports it');
   assert.equal(w(26), 0, 'task 50 close all');
   assert.equal(w(28), 0, 'task 59: file exists');
   assert.equal(w(30), 0, 'task 57 delete');

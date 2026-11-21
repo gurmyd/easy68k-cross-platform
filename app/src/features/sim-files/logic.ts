@@ -18,7 +18,7 @@ import type {
   VPath,
 } from '../../contracts';
 import { codePointForByte } from '../../core/codec/cp1252';
-import { dirname, isRooted, isVPath, mountOf, resolveLexically } from '../../core/paths/winpath';
+import { basename, dirname, isRooted, isVPath, mountOf, resolveLexically } from '../../core/paths/winpath';
 import { PAGE_HEIGHT, PAGE_WIDTH, PRINTER_DPI, printerCell } from '../../core/sim-host/printer';
 
 /* ================================================================== task 58 */
@@ -80,7 +80,8 @@ export function programDialogRequest(props: SimFileDialogProps, currentDir: VPat
       // (trap15-a task 58): the program decides what to do with the name.
       defaultExt: '',
       overwritePrompt: null,
-      ...(initial ? { suggested: initial } : {}),
+      // Without a name the dialog starts in the program's current directory (contract C1, gate I2).
+      ...(initial ? { suggested: initial } : currentDir ? { startDir: currentDir } : {}),
     };
     return { kind: 'save', request };
   }
@@ -90,6 +91,8 @@ export function programDialogRequest(props: SimFileDialogProps, currentDir: VPat
     filters,
     multiple: false,
     ...(startDir ? { startDir } : {}),
+    // The original's Open dialog shows the program's name in its File name field (contract C1).
+    ...(initial ? { initialName: basename(initial) } : {}),
   };
   return { kind: 'open', request };
 }

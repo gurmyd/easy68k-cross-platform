@@ -280,7 +280,6 @@ export function runProgram(engine: SimEngine, script: RunScript = {}): RunReport
     if (statuses[statuses.length - 1] !== status) statuses.push(status);
     switch (status) {
       case RunStatus.Running:
-        if (instructions >= limit) return report('limit');
         break;
       case RunStatus.Stopped:
         return report('stopped');
@@ -304,6 +303,9 @@ export function runProgram(engine: SimEngine, script: RunScript = {}): RunReport
       default:
         return report('error');
     }
+    // After every status that does not end the run: a program that waits on each pass of its loop
+    // (a clock calling task 23, say) never returns Running, and must stop at the limit too.
+    if (instructions >= limit) return report('limit');
   }
 }
 

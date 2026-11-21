@@ -50,6 +50,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
+import { STEADY_GAP_MS, judgeDelays, judgeRate } from './run-verdicts.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -110,6 +111,18 @@ const SOURCES = {
     '        TRAP    #15',
     '        SIMHALT',
     "TEXT:   DC.B    'HELLO FROM THE RUN CHECK',0",
+    '        END     START',
+  ],
+  // Sets the stack pointer, then TRAP #15 task 32 with D1 = 0 (show the Hardware window): one
+  // engine call that sends StackFrm->Repaint() and then updateDisplay() (the Stack pass).
+  trap32: [
+    '        ORG     $1000',
+    'START:  MOVEA.L #$8000,SP',
+    '        MOVEQ   #0,D1',
+    '        MOVEQ   #32,D0',
+    '        TRAP    #15',
+    '        MOVEQ   #1,D2',
+    '        SIMHALT',
     '        END     START',
   ],
 };
@@ -284,57 +297,8 @@ async function measureDelay(page, run, polling = undefined, attempts = 5) {
   return runs;
 }
 
-/** The verdict on `measureDelay`: no run too short, and one run exact. */
-function judgeDelays(runs) {
-  return {
-    ok: runs.every((run) => run.took >= 50) && runs.some((run) => run.took <= run.allowed),
-    detail: runs
-      .map((run) => `${run.took}${run.lateMs >= 5 ? ` (timers ${Math.round(run.lateMs)} ms late)` : ''}`)
-      .join(', ')
-      .concat(' hundredths of a second'),
-  };
-}
-
-/** Frames (or watchdog ticks) further apart than this count as unsteady; the governor's MAX_CATCHUP_MS. */
-const STEADY_GAP_MS = 50;
 /** The pace of the scheduler's watchdog once it has taken over: WATCHDOG_FRAME_MS of state/browser.ts. */
 const WATCHDOG_FRAME_MS = 1000 / 60;
-
-/**
- * The verdict on the default speed over measurement windows of `{ executed, ms, granted, longest,
- * exact }` (`granted`: what the governor's allowance rule grants for the frames, or watchdog ticks,
- * the window really had: the time since the one before, at most STEADY_GAP_MS each, times 1000).
- *
- * What the product guarantees (ARCHITECTURE.md 4.2): the allowance never exceeds that grant, plus
- * one cap of allowance carried into the window; and it executes the whole grant whenever the time
- * budget of a frame (8 ms, or half the frame interval) suffices for it. At a million instructions
- * per second a frame's grant is at most 50,000 instructions, which the engine executes in 8 ms on
- * any machine that runs it at 6.25 million instructions per second or more; every CI runner and this
- * PC do (the Maximum check). So one window in up to five must be exact (3 %), and a window can only
- * fall short of it on a machine too slow or too loaded for that budget. When none is exact, the
- * best window must still have executed half its grant, which rules out a governor that loses time,
- * and the figures are printed so that the CI log alone tells the runner from the product.
- */
-function judgeRate(windows) {
-  const rateOf = (run) => run.executed / (run.ms / 1000);
-  const share = (run) => (run.granted > 0 ? run.executed / run.granted : 0);
-  const describe = (run) =>
-    `${Math.round(rateOf(run)).toLocaleString('en-US')}/s, ${Math.round(100 * share(run))} % of the grant ` +
-    `of ${Math.round(run.granted).toLocaleString('en-US')} (longest gap ${Math.round(run.longest)} ms` +
-    `${run.slow !== undefined ? `, ${run.slow} of ${run.frames} gaps over ${STEADY_GAP_MS} ms` : ''})`;
-  const neverAbove = windows.every((run) => run.executed <= 1.03 * run.granted + 50_000);
-  const exact = windows.some((run) => run.exact);
-  const best = Math.max(...windows.map(share));
-  const notes = [];
-  if (!neverAbove) notes.push('a window executed more than the governor grants: the product is wrong');
-  if (!exact) {
-    notes.push(
-      `no window executed its whole grant (best ${Math.round(100 * best)} %): the engine's time budget per frame ` +
-        `was the limit. ${best >= 0.5 ? 'Accepted: at least half the grant.' : 'Below half the grant: a failure.'}`,
-    );
-  }
-  return { ok: neverAbove && (exact || best >= 0.5), detail: windows.map(describe).join('; '), notes };
-}
 
 /** The button of a command in the toolbar of the mode in front. */
 const toolbarButton = (page, id) => page.locator(`.e68-shell [role=toolbar] [data-command="${id}"]:visible`).first();
@@ -1022,6 +986,71 @@ async function noFramesPass(browser, name, programs) {
   await context.close();
 }
 
+/**
+ * The Stack panel and the repaints of one engine call (gate I2, the major defect carried from gate
+ * I1 round 3). A trace over TRAP #15 task 32 with D1 = 0 shows the Hardware window, whose FormShow
+ * redraws the Stack window where it is (StackFrm->Repaint()); the same trace then ends with
+ * updateDisplay(), which re-centres it on the stack pointer. The original ends re-centred; the port
+ * used to stay where the user had scrolled the panel.
+ */
+async function stackPass(browser, name, programs) {
+  const p = `${name}:`;
+  const { context, page, errors } = await openApp(browser);
+  await prepare(page, programs);
+  await load(page, 'trap32');
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('sim.view.stack'));
+  const rowSelector = '[data-e68-panel="stack"] .e68-stack__row:not(.e68-stack__measure)';
+  await page.waitForSelector(rowSelector, { timeout: UI_TIMEOUT });
+  const middle = () =>
+    page.evaluate((selector) => {
+      const rows = [...document.querySelectorAll(selector)];
+      return rows[Math.trunc(rows.length / 2)]?.textContent?.slice(0, 8) ?? '';
+    }, rowSelector);
+  const trace = async () => {
+    const before = (await sim(page)).regsRevision;
+    await page.evaluate(() => window.__easy68k.ctx.commands.run('sim.run.traceInto'));
+    await page.waitForFunction((rev) => window.__easy68k.ctx.store.getState().sim.regsRevision > rev, before, {
+      timeout: UI_TIMEOUT,
+    });
+  };
+  await trace(); // MOVEA.L #$8000,SP
+  await page.waitForFunction(
+    ({ selector }) => {
+      const rows = [...document.querySelectorAll(selector)];
+      return rows[Math.trunc(rows.length / 2)]?.textContent?.startsWith('00008000');
+    },
+    { selector: rowSelector },
+    { timeout: UI_TIMEOUT },
+  );
+  await trace(); // MOVEQ #0,D1
+  await trace(); // MOVEQ #32,D0
+  const centred = await middle();
+  const stackPanel = page.locator('[data-e68-panel="stack"]');
+  await stackPanel.getByRole('button', { name: 'Higher addresses' }).click();
+  await stackPanel.getByRole('button', { name: 'Higher addresses' }).click();
+  const scrolled = await middle();
+  check(
+    `${p} the Stack panel is centred on SP = 00008000 and scrolls two rows`,
+    centred === '00008000' && scrolled === '00008008',
+    `${centred} -> ${scrolled}`,
+  );
+  const before = (await sim(page)).repaint;
+  await trace(); // TRAP #15, task 32, D1 = 0
+  const after = (await sim(page)).repaint;
+  // The Hardware window may now be in front of the Stack panel; the panel keeps its rows.
+  const now = await middle();
+  check(
+    `${p} a trace over TRAP #15 task 32/0 re-centres the scrolled Stack panel on SP`,
+    now === '00008000',
+    `middle row ${now}; repaint.stack ${before?.stack} -> ${after?.stack}, ` +
+      `stackRedraw ${before?.stackRedraw} -> ${after?.stackRedraw}`,
+  );
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('sim.view.stack'));
+  await page.screenshot({ path: join(outDir, `${name}-stack-after-trap32.png`) });
+  check(`${p} stack: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await context.close();
+}
+
 // --- run ----------------------------------------------------------------------------------------
 
 async function main() {
@@ -1059,6 +1088,7 @@ async function main() {
           ['run', runPass],
           ['start-up arguments', startupPass],
           ['no display frames', noFramesPass],
+          ['stack', stackPass],
         ]) {
           console.log(`\n[${name}, ${title}]`);
           try {

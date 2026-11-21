@@ -1,9 +1,14 @@
 /* DataGrid (DataGrid.tsx). Owner: W2. */
 
+/* The grid element scrolls (it holds the focus; axe's scrollable-region-focusable), and the
+   header row stays at its top (errata W2 entry 20). */
 .e68-grid {
+  --e68-grid-head-h: 25px;
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: auto;
   border: 1px solid var(--c-border);
   border-radius: var(--r-sm);
   background: var(--c-surface);
@@ -17,18 +22,23 @@
   outline-offset: -1px;
 }
 
+/* `height`: the rows' area plus the header and the frame. */
+.e68-grid[data-height] {
+  height: calc(var(--e68-grid-body-h) + var(--e68-grid-head-h) + 2px);
+}
+
 .e68-grid__head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   flex: none;
   background: var(--c-panel);
   border-bottom: 1px solid var(--c-border);
-  border-radius: var(--r-sm) var(--r-sm) 0 0;
 }
 
 .e68-grid__body {
   position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
+  flex: 1 0 auto;
 }
 
 .e68-grid__row {
@@ -40,13 +50,14 @@
 .e68-grid__header {
   display: flex;
   align-items: center;
-  height: 24px;
+  height: calc(var(--e68-grid-head-h) - 1px);
   padding: 0 var(--sp-2);
   overflow: hidden;
   color: var(--c-text-muted);
   font-size: var(--fs-sm);
   font-weight: 600;
-  white-space: nowrap;
+  /* Captions are verbatim ('Line ' keeps its trailing space; section 0 rule 7). */
+  white-space: pre;
   user-select: none;
 }
 

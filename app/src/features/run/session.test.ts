@@ -453,6 +453,25 @@ describe.skipIf(!enginesBuilt)(
       expect(boxes()).toEqual([]);
     });
 
+    // U4 errata entry 5 (gate I2): the original's startLog with both log types Disabled logs but
+    // opens no file, and its LOGGING label stays hidden; sim.logging drives that label.
+    it('shows LOGGING only when a log type was enabled at Log Start', async () => {
+      // The double's state object is shared, so that the test can change the types later.
+      const types = { execType: 0, outputType: 0 };
+      await start({ log: { state: types as unknown as LogServiceApi['state'] } });
+      await open('logged');
+      app.ctx.sim.controller.invoke((engine) => engine.startLog('11/20/2026 1:07:46 PM'));
+      session.sync();
+      expect(app.ctx.sim.engine.state().logging).toBe(true);
+      expect(sim().logging).toBe(false);
+      app.ctx.sim.controller.invoke((engine) => engine.stopLog());
+      session.sync();
+      types.execType = 1;
+      app.ctx.sim.controller.invoke((engine) => engine.startLog('11/20/2026 1:07:46 PM'));
+      session.sync();
+      expect(sim().logging).toBe(true);
+    });
+
     it('refuses a native command that arrives while the task 58 dialog is open', async () => {
       const platform = createFakePlatform({ kind: 'desktop' });
       await start({ platform });
@@ -1127,5 +1146,49 @@ describe('a session disposed before it starts', () => {
     await (runSessionOf(app.ctx.sim) as RunSession).start();
     expect(created).toBe(0);
     expect(frameSubscriptions).toBe(0);
+  });
+});
+
+// SH6's note for gate I2: CachedSyncFiles.dispose() (beyond the contract) stops a view listening
+// to the Vfs. The session ends its views with it, after handing their changes to storage.
+describe('the end of a session', () => {
+  it('settles and disposes of the cached views it made', async () => {
+    const calls: string[] = [];
+    class TrackedView extends MemorySyncFiles {
+      override settled(): Promise<void> {
+        calls.push('settled');
+        return super.settled();
+      }
+      dispose(): void {
+        calls.push('dispose');
+      }
+    }
+    const doubles = createDeviceDoubles();
+    const app = createTestApplication({
+      session: {
+        engines: { create: () => Promise.reject(new Error('no engine in this test')), release: () => {} },
+        createCachedSyncFiles: () => new TrackedView(),
+      },
+      features: [feature],
+      services: {
+        createSimSession: (ctx, env) =>
+          createSimSession(ctx, env, {
+            parts: { listing: doubles.parts.listing },
+            glyphs: BLANK_GLYPHS,
+            page: createFakePage().page,
+            autoStart: false,
+          }),
+      },
+    });
+    const session = runSessionOf(app.ctx.sim) as RunSession;
+    // The real ProgramFiles asks the session for the view of a folder of the browser store (this
+    // in-memory view reaches nothing, so preparing the folder fails; the view was made).
+    await session.files.setCurrentDir('/browser/demo').catch(() => {});
+    expect(calls).toEqual([]);
+    session.dispose();
+    expect(calls).toEqual(['settled', 'dispose']);
+    session.dispose(); // a second time does nothing
+    expect(calls).toEqual(['settled', 'dispose']);
+    app.dispose();
   });
 });

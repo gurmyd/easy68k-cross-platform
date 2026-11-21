@@ -348,11 +348,68 @@ describe('CachedSyncFiles: changes made by others', () => {
   });
 
   it('revalidate() keeps what the program changed and has not written yet', async () => {
-    const { view, backend } = await setup({ 'demo/a.txt': 'a' });
+    const { view, backend, vfs } = await setup({ 'demo/a.txt': 'a' });
     await view.prepare('/memory/demo');
     view.write('/memory/demo/a.txt', 0, text('P'));
     await backend.writeFile('demo/a.txt', text('outside'));
     await view.revalidate();
     expect(str(view.read('/memory/demo/a.txt', 0, 10))).toBe('P');
+    await view.settled();
+    expect(await stored(vfs, '/memory/demo/a.txt')).toBe('P');
+  });
+
+  // Gate I2, SH6's review: the append was computed from the size storage had before the other
+  // window's change, so storage ended up with 'WXYZabc'.
+  it("an append after another window replaced the file writes the program's version whole", async () => {
+    const { view, vfs, backend } = await setup({ 'demo/f.txt': '0123456789' });
+    await view.prepare('/memory/demo');
+    view.write('/memory/demo/f.txt', 10, text('abc')); // not settled yet
+    await backend.externalWrite('demo/f.txt', text('WXYZ'));
+    await view.whenCurrent();
+    expect(str(view.read('/memory/demo/f.txt', 0, 100))).toBe('0123456789abc');
+    await view.settled();
+    expect(await stored(vfs, '/memory/demo/f.txt')).toBe('0123456789abc');
+  });
+
+  it('the same when revalidate() finds the outside change (the opened folder)', async () => {
+    const { view, vfs, backend } = await setup({ 'demo/f.txt': '0123456789' });
+    await view.prepare('/memory/demo');
+    view.write('/memory/demo/f.txt', 10, text('abc'));
+    await backend.writeFile('demo/f.txt', text('WXYZ')); // behind the Vfs's back
+    await view.revalidate();
+    await view.settled();
+    expect(await stored(vfs, '/memory/demo/f.txt')).toBe('0123456789abc');
+  });
+
+  it('a file whose write failed can still be removed from storage', async () => {
+    const { view, vfs } = await setup({ 'demo/f.txt': 'old' });
+    await view.prepare('/memory/demo');
+    vi.spyOn(vfs, 'writeFile').mockImplementationOnce(() => Promise.reject(fsError('io', 'full')));
+    view.write('/memory/demo/f.txt', 0, text('N'));
+    await view.settled();
+    expect(view.remove('/memory/demo/f.txt')).toBe(true);
+    await view.settled();
+    expect(await vfs.stat('/memory/demo/f.txt')).toBeNull();
+  });
+});
+
+describe('CachedSyncFiles: reading a whole file', () => {
+  // The sound device reads the whole file at every try of a wait loop (SH5's note for gate I2).
+  it('returns the same copy until the bytes change', async () => {
+    const { view, vfs } = await setup({ 'demo/tick.wav': 'RIFF' });
+    await view.prepare('/memory/demo');
+    const first = view.read('/memory/demo/tick.wav', 0, 4);
+    expect(view.read('/memory/demo/tick.wav', 0, 1 << 20)).toBe(first);
+    expect(view.read('/memory/demo/tick.wav', 1, 3)).not.toBe(first);
+    view.write('/memory/demo/tick.wav', 0, text('r'));
+    const second = view.read('/memory/demo/tick.wav', 0, 4);
+    expect(str(second)).toBe('rIFF');
+    expect(str(first)).toBe('RIFF');
+    view.create('/memory/demo/tick.wav');
+    expect(view.read('/memory/demo/tick.wav', 0, 4)?.length).toBe(0);
+    await view.settled(); // else the program's change would win over the outside one
+    await vfs.writeFile('/memory/demo/tick.wav', text('NEW'));
+    await view.whenCurrent();
+    expect(str(view.read('/memory/demo/tick.wav', 0, 4))).toBe('NEW');
   });
 });

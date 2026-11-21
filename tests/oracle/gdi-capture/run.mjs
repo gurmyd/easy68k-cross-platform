@@ -4,7 +4,7 @@
 //
 //     node tests/oracle/gdi-capture/run.mjs            regenerate and compare (what CI runs)
 //     node tests/oracle/gdi-capture/run.mjs --write    regenerate and update the committed files
-//     options: --only cases,spots,fonts   --all (also compare the machine-dependent outputs)
+//     options: --only cases,spots,nibs,fonts   --all (also compare the machine-dependent outputs)
 //              --replace-references-from-other-windows (let --write replace references captured on
 //              another Windows; see "Another Windows" in README.md)
 //              --as-windows "10.0.26100 cp1252 96dpi" (judge as that Windows; to try the policy)
@@ -17,6 +17,7 @@
 //   tests/conformance/gdi/golden/<suite>.pixpack.gz   one .pix per case of cases.ts (and of SH2's
 //                                                     cases-ellipse.ts once it exists), packed
 //   tests/conformance/gdi/golden/spots.json           the spot values of trap15-b, measured
+//   tests/conformance/gdi/golden/nibs.json            the polygon of every wide pen 2-255 (WidenPath)
 //   app/public/fonts/metrics.json                     the metric table of 3.5.1 + the raster rules
 //   app/public/fonts/bitmap/*.bin                     the raster-font atlases (Fixedsys, Courier)
 //   tools/fonts-src/windows-outline-metrics.tsv       what make-font-atlases.mjs needs from Windows
@@ -61,7 +62,7 @@ const asWindows = asWindowsIndex >= 0 ? args[asWindowsIndex + 1] : undefined;
 const fromIndex = args.indexOf('--from');
 const from = fromIndex >= 0 ? resolve(args[fromIndex + 1] ?? '.') : undefined;
 const onlyIndex = args.indexOf('--only');
-const only = new Set(onlyIndex >= 0 ? (args[onlyIndex + 1] ?? '').split(',') : ['cases', 'spots', 'fonts']);
+const only = new Set(onlyIndex >= 0 ? (args[onlyIndex + 1] ?? '').split(',') : ['cases', 'spots', 'nibs', 'fonts']);
 
 const { generateCases, serializeCases, SUITES } = await import(pathToFileURL(join(GDI, 'cases.ts')).href);
 const { encodePack, decodePack, decodeAtlas } = await import(pathToFileURL(join(GDI, 'pix.ts')).href);
@@ -191,6 +192,23 @@ async function captureSpots(exe, out) {
     undefined,
     (b) => canonicalSpots(b.toString(), all, false),
   );
+}
+
+/** The pen nibs (docs/requests/SH2-gdi-nibs.md); compared without the capturedOn record. */
+async function captureNibs(exe, out) {
+  if (from && !existsSync(join(out, 'nibs.json'))) {
+    console.log(`  (nibs: the capture in ${from} has no nibs.json; not compared)`);
+    return;
+  }
+  process.stdout.write(await capture(exe, ['nibs', out]));
+  const json = readFileSync(join(out, 'nibs.json'), 'utf8').replaceAll('\r\n', '\n');
+  const canon = (b) => {
+    const value = JSON.parse(b.toString());
+    delete value.capturedOn;
+    return JSON.stringify(value);
+  };
+  canon(Buffer.from(json)); // must be valid
+  add(relative(repo, join(GOLDEN, 'nibs.json')), Buffer.from(json), canon);
 }
 
 async function captureFonts(exe, out) {
@@ -406,6 +424,7 @@ async function main() {
   }
   if (only.has('cases')) await captureCases(exe, out);
   if (only.has('spots')) await captureSpots(exe, out);
+  if (only.has('nibs')) await captureNibs(exe, out);
   if (only.has('fonts')) await captureFonts(exe, out);
 
   const differences = [];

@@ -21,7 +21,7 @@
 // Screenshots go to build/E6/print-check unless --out says otherwise (always below build/). Exit
 // code 0 = every check passed.
 
-/* global console, process, document, window, getComputedStyle, Navigator -- browser globals are used inside page.evaluate() callbacks */
+/* global console, process, document, window, getComputedStyle, Navigator, setTimeout, Event -- browser globals are used inside page.evaluate() callbacks */
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -60,6 +60,9 @@ if (!['chromium', 'webkit', 'all'].includes(browserChoice)) {
 const BROWSERS = { chromium, webkit };
 const browsers = browserChoice === 'all' ? ['chromium', 'webkit'] : [browserChoice];
 const PAGE_READY_MS = 120_000;
+// The longest wait for one step to show its effect. Generous for GitHub's Mac runner, which is far
+// slower than a desktop PC; a step that succeeds returns as soon as its effect is seen.
+const STEP_MS = 15_000;
 const MARKER = '<------------------------------ PAGE ------------------------------>';
 
 let baseUrl = '';
@@ -79,6 +82,26 @@ function pretendSystem(keys) {
   Object.defineProperty(Navigator.prototype, 'userAgentData', { get: () => undefined });
 }
 
+/**
+ * Runs in every frame (Playwright's init scripts do). Inside a child frame, which is where the
+ * web platform's real print path (platform/web.ts) loads the print document, `print()` records
+ * what would be printed in the top window and reports `afterprint`, instead of opening the
+ * system's print dialog. The top window's own `print()` is left alone.
+ */
+function recordFramePrint() {
+  if (window === window.top) return;
+  window.print = () => {
+    const top = window.top;
+    top.__framePrints = top.__framePrints ?? [];
+    top.__framePrints.push({
+      title: document.title,
+      pages: [...document.querySelectorAll('pre.page')].map((pre) => pre.textContent),
+      frameHidden: window.frameElement ? getComputedStyle(window.frameElement).visibility === 'hidden' : null,
+    });
+    setTimeout(() => window.dispatchEvent(new Event('afterprint')), 0);
+  };
+}
+
 const PLAYWRIGHT_MODIFIERS = { Ctrl: 'Control', Alt: 'Alt', Shift: 'Shift', Cmd: 'Meta' };
 function playwrightKey(chord) {
   const parts = chord.split('+');
@@ -96,6 +119,7 @@ const chordsOf = (page, id) =>
 async function openApp(browser) {
   const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, reducedMotion: 'reduce' });
   await context.addInitScript(pretendSystem, keysChoice);
+  await context.addInitScript(recordFramePrint);
   const page = await context.newPage();
   const errors = [];
   page.on('console', (message) => {
@@ -118,6 +142,7 @@ async function openApp(browser) {
   // The recorder in place of the system print dialog (nothing is printed, no dialog opens).
   await page.evaluate(() => {
     window.__printed = [];
+    window.__realPrint = window.__easy68k.ctx.platform.print;
     window.__easy68k.ctx.platform.print = (html, title) => {
       window.__printed.push({ html, title });
       return Promise.resolve();
@@ -140,7 +165,7 @@ async function setText(page, text, anchor = 0, head = anchor) {
 const printedJobs = (page) => page.evaluate(() => window.__printed);
 async function waitJobs(page, count) {
   return page
-    .waitForFunction((count) => window.__printed.length >= count, count, { timeout: 10_000 })
+    .waitForFunction((count) => window.__printed.length >= count, count, { timeout: STEP_MS })
     .then(
       () => true,
       () => false,
@@ -305,7 +330,7 @@ async function printPass(browser, name) {
   await setText(page, text, 5, 15); // "\tORG\t$1000"
   await page.keyboard.press(playwrightKey(printChords[0]));
   const dialog = page.getByRole('dialog', { name: 'Print', exact: true });
-  const asked = await dialog.waitFor({ timeout: 8000 }).then(
+  const asked = await dialog.waitFor({ timeout: STEP_MS }).then(
     () => true,
     () => false,
   );
@@ -327,19 +352,61 @@ async function printPass(browser, name) {
     // Cancel prints nothing.
     await setText(page, text, 5, 15);
     await page.keyboard.press(playwrightKey(printChords[0]));
-    await dialog.waitFor({ timeout: 8000 });
+    await dialog.waitFor({ timeout: STEP_MS });
     await dialog.getByRole('button', { name: 'Cancel' }).click();
-    await dialog.waitFor({ state: 'detached', timeout: 8000 });
-    await page.waitForTimeout(300);
-    check(`${p} Cancel in the range question prints nothing`, (await printedJobs(page)).length === before + 1);
+    await dialog.waitFor({ state: 'detached', timeout: STEP_MS });
   }
 
-  // Printer Setup: the same system dialog, for the whole document.
+  // Printer Setup: the same system dialog, for the whole document. It is also what proves that
+  // Cancel printed nothing, without a pause: the next job to arrive must be Printer Setup's.
   const count = (await printedJobs(page)).length;
   await page.evaluate(() => window.__easy68k.ctx.commands.run('ed.file.printerSetup'));
   await waitJobs(page, count + 1);
-  const setup = (await printedJobs(page)).at(-1);
+  const all = await printedJobs(page);
+  const setup = all.at(-1);
   check(`${p} Printer Setup... opens the system print dialog with the document`, setup?.html === job?.html);
+  if (asked) {
+    check(
+      `${p} Cancel in the range question prints nothing`,
+      all.length === before + 2,
+      `${all.length - before} jobs after the range question (expected 2: Selection, Printer Setup)`,
+    );
+  }
+
+  // The real print path of the web platform: the hidden frame with the print document, whose
+  // print() (recorded, see recordFramePrint) is where the system dialog would open; the job
+  // finishes on afterprint and the frame is removed.
+  await page.evaluate(() => {
+    window.__framePrints = [];
+    window.__easy68k.ctx.platform.print = window.__realPrint;
+  });
+  await setText(page, text, 0);
+  await page.keyboard.press(playwrightKey(printChords[0]));
+  const framed = await page
+    .waitForFunction(() => window.__framePrints.length >= 1, null, { timeout: STEP_MS })
+    .then(
+      () => true,
+      () => false,
+    );
+  const framePrint = await page.evaluate(() => window.__framePrints[0] ?? null);
+  check(
+    `${p} the web platform prints from a hidden frame holding the print document`,
+    framed &&
+      framePrint?.frameHidden === true &&
+      framePrint.title === job?.title &&
+      framePrint.pages.length === 2 &&
+      framePrint.pages[1].startsWith('PAGE2'),
+    JSON.stringify(framePrint)?.slice(0, 200),
+  );
+  const frameGone = await page
+    .waitForFunction((title) => ![...document.querySelectorAll('iframe')].some((f) => f.title === title), job?.title, {
+      timeout: STEP_MS,
+    })
+    .then(
+      () => true,
+      () => false,
+    );
+  check(`${p} after the print dialog closes the frame is removed`, frameGone);
 
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   await context.close();

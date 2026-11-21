@@ -81,15 +81,47 @@ export function lineStyles(view: EditorView, lineNumber: number): [string, strin
   });
 }
 
-/** Colour and background of a view's content. */
-export function contentColors(view: EditorView): { color: string; background: string; marks: number } {
+/** The background a view's text is drawn on: the first non-transparent one from the content up. */
+function effectiveBackground(element: Element | null): string {
+  for (let at = element; at; at = at.parentElement) {
+    const background = getComputedStyle(at).backgroundColor;
+    if (background !== 'rgba(0, 0, 0, 0)' && background !== 'transparent') return background;
+  }
+  return 'rgba(0, 0, 0, 0)';
+}
+
+/** Colour and background of a view's content (the background it is drawn on; the content itself is
+ *  transparent so that the selection layer behind it shows). */
+export function contentColors(view: EditorView): {
+  color: string;
+  background: string;
+  ownBackground: string;
+  marks: number;
+} {
   const content = view.contentDOM;
   const style = getComputedStyle(content);
   return {
     color: style.color,
-    background: style.backgroundColor,
+    background: effectiveBackground(content),
+    ownBackground: style.backgroundColor,
     marks: content.querySelectorAll('[class*="e68-syntax__"]').length,
   };
+}
+
+/** Selects [from, to) in a view, with or without the focus, for the selection check. */
+export function selectRange(view: EditorView, from: number, to: number, focus: boolean): void {
+  view.dispatch({ selection: { anchor: from, head: to } });
+  if (focus) view.focus();
+  else view.contentDOM.blur();
+}
+
+/** The page rectangle of the text [from, to) of line `line` (1-based) in a view. */
+export function textRect(view: EditorView, line: number, from: number, to: number) {
+  const start = view.state.doc.line(line).from;
+  const a = view.coordsAtPos(start + from);
+  const b = view.coordsAtPos(start + to, -1);
+  if (!a || !b) return null;
+  return { x: a.left, y: a.top, width: b.right - a.left, height: a.bottom - a.top, pos: start + from, end: start + to };
 }
 
 /**

@@ -9,7 +9,7 @@ compiler would show it. The _twins_ are the same sources built natively with Mic
 compiler) and wasm32. Every twin, at `/O2` and at `/Od`, must give exactly the output of the
 WebAssembly build on every program we have.
 
-Part of easy68k-mac, an unofficial port of EASy68K. GPL-2.0-or-later.
+Part of easy68k-cross-platform, an unofficial port of EASy68K. GPL-2.0-or-later.
 
 ## Running it
 
@@ -26,7 +26,7 @@ node tests/oracle/native-twin/run.mjs --local --singlestep --jobs 4
 | `--singlestep`    | also the 124 files of the 68000 single-step suite (fetched into `build/singlestep/` if needed); included anyway when already fetched, and always in CI |
 | `--no-singlestep` | leave the suite out                                                                                                                                    |
 | `--engine-twins`  | also build the assembler engine's own twins (`engine/asm/native/build.mjs`) and run its test `engine/asm/test/native.test.mjs` (always in CI)          |
-| `--skip-build`    | use twins that are already built                                                                                                                       |
+| `--skip-build`    | use twins that are already built; a simulator twin built from other sources than today's (its stamp `sources.sha256` differs) is rebuilt               |
 | `--jobs N`        | parallel processes, default 4, at most 6                                                                                                               |
 
 The result is `build/native-twin/report.md`; in CI it is also added to the job summary. The exit
@@ -62,6 +62,17 @@ which needs `fopencookie()`; `sim-twin/native-prelude.h` and `sim-twin/include/e
 engine's shim compile with MSVC unchanged. There is no _unpatched_ simulator twin: the engine's
 shim depends on the patches that make `runprog()` resumable (engine/sim/PATCHES.md P04, P05, P07),
 so the unpatched simulator sources cannot be built with it (docs/porting/errata/T4.md).
+
+Each simulator twin carries a stamp, `sources.sha256` beside the program: the SHA-256 of
+`engine/sim/build.mjs`, every file of `engine/sim/src` and `engine/sim/shim`, `sim-twin/` and
+`build-sim-twin.mjs`, taken when it was built (`simTwinState()`). `sim-script.test.mjs` compares only
+a twin whose stamp matches today's sources; for a stale one it prints how to rebuild it and skips
+the comparison, because a twin built before an edit of `engine/sim` differs wherever the edit
+changed behaviour, which says nothing about the compiler.
+
+Programs that `INCLUDE` or `INCBIN` a file of their parent folder (`'..\dumplib.X68'`, as the
+simulator conformance programs do) are handed to both assemblers relative to that parent folder
+(`corpus.mjs`, `loadProgram`), so that they assemble as they do in their folder.
 
 ## What is compared
 

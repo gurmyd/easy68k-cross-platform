@@ -32,6 +32,22 @@ export function firstDifference(expected: string, actual: string): FirstDifferen
   };
 }
 
+/** Every line (up to `max`) at which two masked texts differ, compared line by line. */
+export function differingLines(
+  expected: string,
+  actual: string,
+  max = 40,
+): { line: number; official: string; port: string }[] {
+  const e = expected.split('\n');
+  const a = actual.split('\n');
+  const out: { line: number; official: string; port: string }[] = [];
+  for (let i = 0; i < Math.max(e.length, a.length) && out.length < max; i++) {
+    if (e[i] === a[i]) continue;
+    out.push({ line: i + 1, official: e[i] ?? '<end of file>', port: a[i] ?? '<end of file>' });
+  }
+  return out;
+}
+
 /**
  * Owners a mismatch can be assigned to (ARCHITECTURE.md section 8): the engine or a host package,
  * the party that acts on it. A defect of the harness or its doubles is repaired, not listed; a
@@ -70,19 +86,84 @@ export interface Mismatch {
   kind: string;
   difference: FirstDifference;
   known: KnownDifference | null;
+  /** Every differing line (differingLines), for the data report. */
+  lines?: { line: number; official: string; port: string }[];
 }
 
-const escapeCell = (text: string): string =>
+/** One entry of the data report (EASY68K_SIM_REPORT_JSON): what the owner repairs from. */
+export interface MismatchRecord {
+  owner: Owner | null;
+  ownerName: string | null;
+  program: string;
+  recipe: string;
+  artifact: string;
+  /** 'measured': the suite compared the port with a golden; 'pending': listed, no golden yet. */
+  state: 'measured' | 'pending';
+  unconfirmed: string | null;
+  cause: string;
+  evidence: string | null;
+  /** The differing lines, official (what SIM68K.exe did) against the port. */
+  lines: { line: number; official: string; port: string }[];
+}
+
+/** The mismatches as data: one record per difference, measured ones first. */
+export function mismatchRecords(
+  mismatches: readonly Mismatch[],
+  pending: readonly { key: string; known: KnownDifference }[] = [],
+): MismatchRecord[] {
+  const record = (
+    key: string,
+    known: KnownDifference | null,
+    state: MismatchRecord['state'],
+    lines: MismatchRecord['lines'],
+  ): MismatchRecord => {
+    const [program = '', recipe = '', artifact = ''] = key.split('|');
+    return {
+      owner: known?.owner ?? null,
+      ownerName: known ? OWNERS[known.owner] : null,
+      program,
+      recipe,
+      artifact,
+      state,
+      unconfirmed: known?.unconfirmed ?? null,
+      cause: known?.summary ?? 'not yet assigned',
+      evidence: known?.evidence ?? null,
+      lines,
+    };
+  };
+  return [
+    ...mismatches.map((m) =>
+      record(
+        m.key,
+        m.known,
+        'measured',
+        m.lines ?? [{ line: m.difference.line, official: m.difference.expected, port: m.difference.actual }],
+      ),
+    ),
+    ...pending.map(({ key, known }) => record(key, known, 'pending', [])),
+  ];
+}
+
+const escapeCell = (text: string, max = 160): string =>
   text
     .replace(/\r/g, '\\r')
     .replace(/[^\t\n\x20-\x7e]/gu, (ch) => `\\x${ch.charCodeAt(0).toString(16).padStart(2, '0')}`)
     .replace(/\|/g, '\\|')
-    .slice(0, 160);
+    .slice(0, max);
 
 /** MISMATCHES.md: every mismatch with its owner, grouped by owner. */
 export function renderMismatchReport(
   mismatches: readonly Mismatch[],
-  counts: { programs: number; runs: number; equal: number; skipped: string[]; parts: string; metrics: string },
+  counts: {
+    programs: number;
+    runs: number;
+    equal: number;
+    skipped: string[];
+    parts: string;
+    metrics: string;
+    /** Listed differences whose run has no official result yet (measured with a probe so far). */
+    pending?: { key: string; known: KnownDifference }[];
+  },
 ): string {
   const lines = [
     '# Mismatches between the port and the official SIM68K.exe',
@@ -125,5 +206,21 @@ export function renderMismatchReport(
     lines.push('');
   }
   if (mismatches.length === 0) lines.push('No mismatch.', '');
+  if (counts.pending?.length) {
+    lines.push(
+      '## Listed, waiting for the official result',
+      '',
+      'Differences measured in the official program with probes; the suite program has no golden yet.',
+      '',
+      '| Program | Recipe | Owner | Cause |',
+      '|---|---|---|---|',
+    );
+    for (const { key, known } of counts.pending) {
+      const [id, recipe, kind] = key.split('|');
+      const cause = `${known.summary}${known.unconfirmed ? ` Unconfirmed: ${known.unconfirmed}` : ''}`;
+      lines.push(`| \`${id}\` | ${recipe} ${kind} | ${known.owner} | ${escapeCell(cause, 1000)} |`);
+    }
+    lines.push('');
+  }
   return lines.join('\n');
 }

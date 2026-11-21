@@ -28,7 +28,9 @@ import type {
   GlyphProvider,
   LoadOptions,
   LoadOrigin,
+  LogServiceApi,
   NativeFileDialogs,
+  OpenRequest,
   OutputDeviceDeps,
   Platform,
   RunController,
@@ -36,7 +38,9 @@ import type {
   SimEngine,
   SimHost,
   SimSession,
+  SyncFiles,
   Vfs,
+  VfsChange,
 } from '.';
 import * as contracts from '.';
 import { MemoryBackend } from '../fs/memory-backend';
@@ -274,6 +278,8 @@ const EXPORTS: Record<string, string[]> = {
     'DesktopNetDeps',
     // gate I1 (errata W1.md, entry 11)
     'FontFileLoader',
+    // gate I2 (errata W1.md, entry 14)
+    'LogStartFailure',
   ],
 };
 
@@ -658,12 +664,12 @@ const OPTIONAL_ADDITIONS = {
   saveRequest: true satisfies StillValidWithout<SaveRequest, 'overwritePrompt'>,
   fileSourceProvider: true satisfies StillValidWithout<FileSourceProvider, 'chooseFolder'>,
   fileDialogs: true satisfies StillValidWithout<FileDialogs, 'chooseFolder'>,
-  documentService: true satisfies StillValidWithout<DocumentService, 'update' | 'selection'>,
+  // DocumentService.update and .selection and AppContext.build: required since gate I2 (entry
+  // 14.5); see REQUIRED_SINCE_GATE_I2 below.
   platform: true satisfies StillValidWithout<
     Platform,
     'nativeFileDialogs' | 'grantDroppedFile' | 'userDataDir' | 'bindDeviceSources' | 'onFullScreenChange'
   >,
-  appContext: true satisfies StillValidWithout<AppContext, 'build'>,
   simState: true satisfies StillValidWithout<AppState['sim'], 'repaint'>,
   simRepaint: true satisfies StillValidWithout<NonNullable<AppState['sim']['repaint']>, 'stackRedraw'>,
   simSession: true satisfies StillValidWithout<SimSession, 'printJobs' | 'onPrintJob'>,
@@ -672,6 +678,29 @@ const OPTIONAL_ADDITIONS = {
   // round 3 (entry 13)
   runController: true satisfies StillValidWithout<RunController, 'confirmLoad'>,
   loadOptions: true satisfies StillValidWithout<LoadOptions, 'confirmed'>,
+  // gate I2 (entry 14)
+  openRequest: true satisfies StillValidWithout<OpenRequest, 'initialName'>,
+  saveRequestStartDir: true satisfies StillValidWithout<SaveRequest, 'startDir'>,
+  syncFiles: true satisfies StillValidWithout<SyncFiles, 'whenCurrent' | 'dispose'>,
+  glyphProviderOutline: true satisfies StillValidWithout<GlyphProvider, 'monospacedOutline'>,
+  logService: true satisfies StillValidWithout<LogServiceApi, 'startFailure' | 'writeError'>,
+  fileSourceProviderHandles: true satisfies StillValidWithout<
+    FileSourceProvider,
+    'openDroppedFolder' | 'linkFileHandle'
+  >,
+  fileDialogsLink: true satisfies StillValidWithout<FileDialogs, 'linkFileHandle'>,
+};
+
+/** true when every member K of T is required (T without K is no longer a T). */
+type IsRequired<T, K extends keyof T> = Assignable<Omit<T, K>, T> extends true ? false : true;
+/**
+ * Members added as optional at gate I1 and made required at gate I2 (errata W1.md entry 14.5),
+ * when every implementation and fake in the tree had them. Each entry must have the type `true`.
+ */
+const REQUIRED_SINCE_GATE_I2 = {
+  documentServiceUpdate: true satisfies IsRequired<DocumentService, 'update'>,
+  documentServiceSelection: true satisfies IsRequired<DocumentService, 'selection'>,
+  appContextBuild: true satisfies IsRequired<AppContext, 'build'>,
 };
 
 // Five methods gained an optional last parameter. A function with the parameters of wave one (or of
@@ -712,6 +741,12 @@ const ADDED_DECLARATIONS: Record<string, string[]> = {
     'mkdirp(path: VPath): Promise<void>;',
     'overwritePrompt?: OverwritePrompt | null;',
     'chooseFolder?(request: FolderRequest): Promise<VPath | null>;',
+    // gate I2 (entry 14)
+    'initialName?: string;',
+    'whenCurrent?(): Promise<void>;',
+    'dispose?(): void;',
+    'openDroppedFolder?(handle: unknown): Promise<boolean>;',
+    'linkFileHandle?(handle: FileSystemFileHandle): Promise<VPath | null>;',
   ],
   'platform.ts': [
     'readonly nativeFileDialogs?: NativeFileDialogs | null;',
@@ -723,15 +758,16 @@ const ADDED_DECLARATIONS: Record<string, string[]> = {
     'chooseFolder(title: string, startDir?: VPath | null): Promise<VPath | null>;',
   ],
   'documents.ts': [
-    'update?(id: string, patch: DocumentPatch): void;',
-    'selection?(id: string): DocumentSelection | null;',
+    // required since gate I2 (entry 14.5)
+    'update(id: string, patch: DocumentPatch): void;',
+    'selection(id: string): DocumentSelection | null;',
   ],
   'commands.ts': [
     'run(id: CommandId, arg?: unknown, options?: CommandRunOptions): Promise<void>;',
     'export interface FilesRevealArg { reveal: VPath; }',
   ],
   'features.ts': [
-    'readonly build?: BuildFacts;',
+    'readonly build: BuildFacts;', // required since gate I2 (entry 14.5)
     'toast(text: string, action?: { label: string; run(): void }, options?: ToastOptions): void;',
   ],
   'store.ts': [
@@ -749,13 +785,17 @@ const ADDED_DECLARATIONS: Record<string, string[]> = {
     'textOverhang?(font: FontSpec): number;',
     'message?: (text: string) => void;',
     'delInHighText?(font: FontSpec): Glyph | null;',
+    // gate I2 (entry 14)
+    'monospacedOutline?(font: FontSpec): boolean;',
+    'readonly startFailure?: LogStartFailure | null;',
+    'readonly writeError?: string | null;',
   ],
 };
 
 describe('additions of gate I1 (errata W1.md, entry 11)', () => {
   it('every added member is optional, so code written against the wave-one contracts stays valid', () => {
     // The types above are the check (npm run typecheck); this keeps the tables in the test run.
-    for (const table of [OPTIONAL_ADDITIONS, WAVE_ONE_SIGNATURES]) {
+    for (const table of [OPTIONAL_ADDITIONS, WAVE_ONE_SIGNATURES, REQUIRED_SINCE_GATE_I2]) {
       for (const [name, ok] of Object.entries(table)) expect(ok, name).toBe(true);
     }
     expect(Object.keys(NEW_ARGUMENTS)).toHaveLength(10);
@@ -804,6 +844,19 @@ describe('additions of gate I1 (errata W1.md, entry 11)', () => {
     vfs.mount(new MemoryBackend());
     await vfs.mkdirp('/memory/Examples/Sub');
     expect((await vfs.stat('/memory/Examples/Sub'))?.kind).toBe('dir');
+  });
+
+  // Entry 14 (errata FS2.md C1): Vfs.subscribe reports mount() and unmount().
+  it('the Vfs reports a mount and an unmount to its subscribers (gate I2)', () => {
+    const vfs: Vfs = createVfs();
+    const seen: VfsChange[] = [];
+    vfs.subscribe('/', (change) => seen.push(change));
+    vfs.mount(new MemoryBackend({ mount: 'folder', kind: 'fsaccess', label: 'coursework' }));
+    vfs.unmount('folder');
+    expect(seen).toEqual([
+      { path: '/folder', kind: 'write', origin: 'local' },
+      { path: '/folder', kind: 'remove', origin: 'local' },
+    ]);
   });
 
   // Entry 12 (review of round 1): mkdirp may be required only while createVfs() is the one Vfs.
@@ -857,6 +910,17 @@ describe('additions of gate I1 (errata W1.md, entry 11)', () => {
       'const make = (): Vfs => ({',
       'const make = (): Vfs => new Fake();',
       '  makeVfs(): Vfs {\n    return new Fake();\n  }',
+      // gate I2 (review of gate I1 round 3): a returned local name, an aliased import, Object.freeze
+      'function fakeVfs(): Vfs {\n  const fake = { mount() {} };\n  return fake as never;\n}',
+      "import type { Vfs as V } from '../contracts';\nclass F implements V {",
+      'const v: Vfs = Object.freeze({ mount() {} }) as never;',
+      'function fakeVfs(): Vfs {\n  let fake: Partial<Vfs>;\n  fake = new Fake();\n  return fake;\n}',
+      'const make = (): Vfs => {\n  return { mount() {} } as never;\n};',
+      'const fake = { mount() {} };\nconst v: Vfs = fake as never;',
+      "import { type Vfs as V, createVfs } from '../contracts';\nconst v: V = {",
+      "import type { Vfs as V } from '../contracts';\nfunction f(): V { return {} as never; }",
+      'type V = Vfs;\nconst v = {} as V;',
+      'const v: Vfs = Object.assign({}, other);',
     ];
     const notImplementations = [
       'vfs: Pick<Vfs, "stat">',
@@ -877,6 +941,15 @@ describe('additions of gate I1 (errata W1.md, entry 11)', () => {
       'type T = { vfs: Vfs };',
       'x as VfsChange',
       'function f(): VfsChange {',
+      // gate I2
+      'const make = (): Vfs => {\n  const vfs = createVfs();\n  return vfs;\n};',
+      'function f(): Vfs {\n  const vfs = createVfs();\n  return vfs;\n}',
+      'const v: Vfs = Object.assign(createVfs(), { extra: 1 });',
+      'const v: Vfs = Object.freeze(createVfs());',
+      "import type { Vfs as V } from '../contracts';\nfunction use(vfs: V): void {",
+      "import type { Vfs as V } from '../contracts';\nconst vfs: V = createVfs();",
+      'const other = { a: 1 };\nconst vfs: Vfs = ctx.vfs;',
+      "const s = 'Vfs as V'; class F implements V {",
     ];
     for (const form of implementations) expect(vfsImplementationsIn(form), form).not.toEqual([]);
     for (const form of notImplementations) expect(vfsImplementationsIn(form), form).toEqual([]);
@@ -893,6 +966,11 @@ describe('additions of gate I1 (errata W1.md, entry 11)', () => {
  *   file, is written here: an object literal, a class expression or `new X(...)`;
  * - a function, method or arrow function whose return type is `Vfs` or `Promise<Vfs>` and that
  *   returns a value written here.
+ * Gate I2 (review of gate I1 round 3): a local name of the type (`import type { Vfs as V }`,
+ * `type V = Vfs`) counts as `Vfs`; `Object.freeze`, `seal`, `assign` or `create` of a value written
+ * here is one; a local name (a returned variable, or the value of a variable typed `Vfs`) given a
+ * value written here, in the function's body or in the file, is one; an arrow function with a block
+ * body is judged by its `return`s.
  * A value made elsewhere (`createVfs()`, `ctx.vfs`, a parameter, another function's result) is
  * judged where it is made. `new Proxy(vfs, ...)` forwards to a real Vfs and is not written here.
  */
@@ -900,8 +978,32 @@ function vfsImplementationsIn(source: string): string[] {
   if (!/\bVfs\b/.test(source)) return [];
   const hits: string[] = [];
   const excerpt = (at: number) => source.slice(at, at + 60).replace(/\s+/g, ' ');
-  /** The start of a value written here (see above), after `=`, `=>` or `return`. */
-  const writtenHere = String.raw`(?:\(\s*)*(?:\{|new\s+(?!Proxy\b)|class\b)`;
+  // Gate I2 (review of round 3): local names of the type count as `Vfs` itself:
+  // `import type { Vfs as V }`, `import { type Vfs as V }`, `type V = Vfs;`.
+  const names = new Set(['Vfs']);
+  const inImportBraces = (at: number) => /\bimport\b[^;]*\{[^}]*$/.test(source.slice(0, at));
+  for (const m of source.matchAll(/\bVfs\s+as\s+([\w$]+)/g)) {
+    if (inImportBraces(m.index)) names.add(m[1] as string);
+  }
+  for (const m of source.matchAll(/\btype\s+([\w$]+)\s*=\s*Vfs\s*;/g)) names.add(m[1] as string);
+  const escape = (name: string) => name.replace(/\$/g, '\\$');
+  /** The type, as a regular expression: `Vfs` or one of its local names. */
+  const T = `(?:${[...names].map(escape).join('|')})`;
+  /** The start of a value written here (see above), after `=`, `=>` or `return`. Also an object
+   *  literal (or class, or new X) passed to Object.freeze, seal, assign or create. */
+  const literal = String.raw`(?:\(\s*)*(?:\{|new\s+(?!Proxy\b)|class\b)`;
+  const writtenHere = String.raw`(?:${literal}|(?:\(\s*)*Object\s*\.\s*(?:freeze|seal|assign|create)\s*\(\s*${literal})`;
+  /** True when `name` is given a value written here in `text` (`const name = {`, `name = new X(`). */
+  const boundHere = (name: string, text: string) =>
+    new RegExp(String.raw`(?<![\w$.])${escape(name)}\s*(?::[^=;]*)?=(?![=>])\s*${writtenHere}`).test(text);
+  /** True when a function body returns a value written here, directly or through a local name. */
+  const returnsWrittenHere = (body: string) => {
+    if (new RegExp(String.raw`\breturn\s+${writtenHere}`).test(body)) return true;
+    for (const r of body.matchAll(/\breturn\s+([\w$]+)\s*(?=as\b|satisfies\b|;|\n|\}|$)/g)) {
+      if (boundHere(r[1] as string, body)) return true;
+    }
+    return false;
+  };
   /** Splits a type list at its top-level commas (outside <...>, (...), {...}). */
   const topLevel = (list: string) => {
     const parts: string[] = [];
@@ -929,36 +1031,41 @@ function vfsImplementationsIn(source: string): string[] {
     return source.slice(open);
   };
 
+  const entryIsT = new RegExp(String.raw`^(?:[\w$]+\.)*${T}$`);
   for (const m of source.matchAll(/\bimplements\s+([^{]+)\{/g)) {
-    if (topLevel(m[1] as string).some((entry) => /^(?:[\w$]+\.)*Vfs$/.test(entry))) hits.push(excerpt(m.index));
+    if (topLevel(m[1] as string).some((entry) => entryIsT.test(entry))) hits.push(excerpt(m.index));
   }
-  for (const m of source.matchAll(/\b(?:as|satisfies)\s+Vfs\b(?![\w$.<])|(?<![\w$]\s*)<Vfs>\s*\{/g))
-    hits.push(excerpt(m.index));
+  for (const m of source.matchAll(
+    new RegExp(String.raw`\b(?:as|satisfies)\s+${T}\b(?![\w$.<])|(?<![\w$]\s*)<${T}>\s*\{`, 'g'),
+  ))
+    if (!inImportBraces(m.index)) hits.push(excerpt(m.index));
+  /** A value written here, or a local name given such a value elsewhere in the file. */
+  const valueWrittenHere = (value: string) => {
+    if (new RegExp(String.raw`^\s*${writtenHere}`).test(value)) return true;
+    const id = /^\s*([\w$]+)\s*(?=as\b|satisfies\b|;|,|\n|\)|$)/.exec(value)?.[1];
+    return id !== undefined && boundHere(id, source);
+  };
   // name: Vfs = value   (variables, parameters with a default, class properties)
-  for (const m of source.matchAll(/([\w$]+)\s*[?!]?\s*:\s*Vfs\s*(=(?!>)|;|,|\n|$)/g)) {
+  for (const m of source.matchAll(new RegExp(String.raw`([\w$]+)\s*[?!]?\s*:\s*${T}\s*(=(?!>)|;|,|\n|$)`, 'g'))) {
     const name = m[1] as string;
     const values: string[] = [];
     const rest = source.slice(m.index + m[0].length);
     if (m[2] === '=') values.push(rest);
     else if (/\b(?:let|var)\s+$/.test(source.slice(0, m.index))) {
       // declared without a value: look for `name = ...` later in the file
-      for (const later of rest.matchAll(new RegExp(`(?<![\\w$.])${name.replace(/\$/g, '\\$')}\\s*=(?![=>])`, 'g')))
+      for (const later of rest.matchAll(new RegExp(String.raw`(?<![\w$.])${escape(name)}\s*=(?![=>])`, 'g')))
         values.push(rest.slice(later.index + later[0].length));
     }
     // An object literal, a class expression or `new X(...)` is a Vfs written here; another value
     // (`ctx.vfs`, `createVfs()`, a parameter) is a Vfs made elsewhere, where this scan judges it.
-    for (const value of values) {
-      if (new RegExp(String.raw`^\s*${writtenHere}`).test(value)) hits.push(excerpt(m.index));
-    }
+    if (values.some(valueWrittenHere)) hits.push(excerpt(m.index));
   }
-  // (...): Vfs {  /  (...): Promise<Vfs> {  /  (...): Vfs => body
-  for (const m of source.matchAll(/\)\s*:\s*(?:Promise\s*<\s*Vfs\s*>|Vfs)\s*(\{|=>)/g)) {
+  // (...): Vfs {  /  (...): Promise<Vfs> {  /  (...): Vfs => body  /  (...): Vfs => { body }
+  for (const m of source.matchAll(new RegExp(String.raw`\)\s*:\s*(?:Promise\s*<\s*${T}\s*>|${T})\s*(\{|=>)`, 'g'))) {
     const after = m.index + m[0].length;
-    const returnsWrittenHere =
-      m[1] === '{'
-        ? new RegExp(String.raw`\breturn\s+${writtenHere}`).test(block(after - 1))
-        : new RegExp(String.raw`^\s*${writtenHere}`).test(source.slice(after));
-    if (returnsWrittenHere) hits.push(excerpt(m.index));
+    const blockBody = m[1] === '{' ? after - 1 : /^\s*\{/.test(source.slice(after)) ? source.indexOf('{', after) : -1;
+    const found = blockBody >= 0 ? returnsWrittenHere(block(blockBody)) : valueWrittenHere(source.slice(after));
+    if (found) hits.push(excerpt(m.index));
   }
   return hits;
 }

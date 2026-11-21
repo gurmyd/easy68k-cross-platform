@@ -255,7 +255,9 @@ export default defineConfig(
       'tools/**/*.{js,mjs}',
       '**/*.config.{ts,mts,js,mjs}',
       'tests/**/*.{ts,mts,js,mjs}',
-      'desktop/**/*.{ts,mts}',
+      // desktop/src and DV3's packaging scripts (desktop/scripts/*.mjs) run under Node only
+      // (docs/requests/DV3-eslint-node-globals.md; tests/lint/node-globals.test.ts).
+      'desktop/**/*.{ts,mts,js,mjs}',
     ],
     languageOptions: { globals: { ...globals.node } },
   },

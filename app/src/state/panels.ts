@@ -141,9 +141,36 @@ const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
+ * The event the shell sends to the element it is about to focus (bubbles: no; cancelable: yes).
+ * An element that must take the focus its own way cancels it and focuses itself: the editor's
+ * content element, whose plain `focus()` lets the browser put back its own DOM caret, which
+ * CodeMirror then reads as a new selection and so loses a selection made just before (a Find
+ * match, a jump to a message's line). CodeMirror's `EditorView.focus()` brings the DOM selection
+ * in line with the editor's state instead. Errata W3.md entry 38.
+ *
+ *   content.addEventListener(PANEL_FOCUS_EVENT, (event) => { event.preventDefault(); view.focus(); });
+ */
+export const PANEL_FOCUS_EVENT = 'e68-panel-focus';
+
+/** The parts of an element that focusPanelElement uses; a page element has them all. */
+interface FocusTarget {
+  focus(options?: FocusOptions): void;
+  dispatchEvent?(event: Event): boolean;
+}
+
+/** Focuses `target`, or lets it focus itself (PANEL_FOCUS_EVENT). */
+function focusTarget(target: FocusTarget): void {
+  if (typeof target.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+    const event = new CustomEvent(PANEL_FOCUS_EVENT, { bubbles: false, cancelable: true });
+    if (!target.dispatchEvent(event)) return;
+  }
+  target.focus({ preventScroll: true });
+}
+
+/**
  * Puts the focus into the region `id` under `root`: on the element marked data-e68-panel-focus,
  * else on the first focusable control, else on the region itself. False when the region is not
- * rendered (yet).
+ * rendered (yet). The element may take the focus its own way (PANEL_FOCUS_EVENT).
  */
 export function focusPanelElement(root: ParentNode, id: string): boolean {
   const regions = Array.from(root.querySelectorAll<HTMLElement>(panelSelector(id)));
@@ -154,6 +181,6 @@ export function focusPanelElement(root: ParentNode, id: string): boolean {
     region.querySelector<HTMLElement>('[data-e68-panel-focus]') ??
     region.querySelector<HTMLElement>(FOCUSABLE) ??
     region;
-  target.focus({ preventScroll: true });
+  focusTarget(target);
   return true;
 }

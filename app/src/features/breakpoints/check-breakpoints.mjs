@@ -9,7 +9,8 @@
 //   1. In the application as it starts: View > Break Points shows the panel with its three groups,
 //      49 numbered rows per grid and every button disabled, and puts the focus into the Registers
 //      grid. With real clicks and keys: a double-click shows the editors in the first free row;
-//      Enter in an editor and the Set button store the row; the Expression Builder's buttons follow
+//      Enter in an editor and the Set button store the row (Enter in an empty Expression editor
+//      does nothing, as the original's disabled Set); the Expression Builder's buttons follow
 //      the grammar of sim-ui §12.2 and build `R1 AND A1`; the original's message boxes (`Select a
 //      Valid Row.`, `Invalid PC/Reg Breakpoint. ...`); Clear of a condition that an expression uses
 //      asks for confirmation, removes that expression and renumbers the others; Escape hides the
@@ -158,19 +159,10 @@ async function scanPanel(page, label) {
     .include('.e68-bp')
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
     .analyze();
-  // The kit's DataGrid scrolls its body while the focus stays on the grid itself, which moves the
-  // selected row with the arrow keys and keeps it in view; axe cannot see that and reports the
-  // body as a scroll region without keyboard access. That finding belongs to the kit (W2) and is
-  // printed but not counted: docs/requests/U3-datagrid-scroll-region.md.
-  const isGridBody = (node) => /\.e68-grid__body/.test(node.target.join(' '));
-  const kitFindings = [];
-  const violations = result.violations.flatMap((v) => {
-    if (v.id !== 'scrollable-region-focusable') return [v];
-    const nodes = v.nodes.filter((node) => !isGridBody(node));
-    if (nodes.length < v.nodes.length) kitFindings.push(`${v.id} on ${v.nodes.length - nodes.length} grid bodies`);
-    return nodes.length ? [{ ...v, nodes }] : [];
-  });
-  if (kitFindings.length) console.log(`        not counted (kit): ${kitFindings.join('; ')}`);
+  // Every finding counts. (Until gate I2 the DataGrid's scrolling body was reported as
+  // scrollable-region-focusable and not counted; W2 made the focused grid the scroll container:
+  // docs/requests/U3-datagrid-scroll-region.md, errata W2 entry 20.)
+  const violations = result.violations;
   const serious = violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
   const describe = (list) =>
     list.map(
@@ -420,7 +412,17 @@ async function shellPass(browser, name) {
     await untilPanel(page, (s) => JSON.stringify(s.exprEnabled) === JSON.stringify(['lparen', 'mem', 'reg'])),
     (await readPanel(page)).exprEnabled.join(),
   );
+  // Enter stands for Set, which is disabled for an empty expression: no message box, the editors
+  // stay (review of U3; errata U3.md entry 2). A message box would be modal and block the click on
+  // PC/Reg that follows, so the next check also shows that none opened.
+  await page.locator('[aria-label="Count of row 1"]').press('Enter');
   await button(page, 'reg').click();
+  check(
+    `${p} Enter in an empty expression editor does nothing (no "Fields missing")`,
+    (await untilPanel(page, (s) => s.draft === ' R1  ' && s.expressions.editingRow === 0)) &&
+      (await messageBox(page)) === null,
+    JSON.stringify({ box: await messageBox(page), draft: (await readPanel(page)).draft }),
+  );
   check(
     `${p} after R1: AND, OR, Backspace and Set`,
     await untilPanel(
@@ -606,6 +608,8 @@ async function enginePass(browser, name, program) {
     JSON.stringify(state),
   );
   await shoot(page, `${name}-light-stopped`);
+  // The whole window: the panel beside its neighbours (listing, registers, messages) at the stop.
+  await page.screenshot({ path: join(outDir, `${name}-window-stopped.png`) });
 
   await page.evaluate(() => window.__easy68k.ctx.sim.controller.coldStart());
   check(

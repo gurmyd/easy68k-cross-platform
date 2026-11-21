@@ -10,14 +10,26 @@
 //   npx vitest run --config tests/conformance/sim/vitest.config.ts
 //   EASY68K_SIM_ONLY=trap15-a      only programs whose id contains the text
 //   EASY68K_SIM_REPORT=1           also write MISMATCHES.md
-//   EASY68K_CONFORMANCE_PARTS=final  the ProgramFiles and LogService at their final paths (I2)
+//   EASY68K_SIM_REPORT_JSON=<path> also write the mismatches as data (owner, program, official and
+//                                  port lines; compare.ts mismatchRecords)
+//   EASY68K_CONFORMANCE_PARTS=doubles  ProgramFiles and LogService doubles (doubles.ts) instead of
+//                                      the classes at their final paths (the default)
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { firstDifference, OWNERS, renderMismatchReport, type KnownDifferences, type Mismatch } from './compare';
+import {
+  differingLines,
+  firstDifference,
+  mismatchRecords,
+  OWNERS,
+  renderMismatchReport,
+  type KnownDifferences,
+  type Mismatch,
+} from './compare';
+import { NOT_MODELLED_BY_DOUBLES } from './doubles';
 import { assembleConformance, partsMode, runScenario, type AssembledConformance } from './harness';
 import {
   GOLDEN_DIR,
@@ -112,7 +124,7 @@ describe.skipIf(!enginesBuilt || manifest === null)(
           for (const recipe of program.recipes) {
             const artifacts = artifactsOf(program).filter((a) => a.recipe === recipeId(recipe));
             const entry = record?.recipes[recipeId(recipe)];
-            if (entry?.status !== 'ok') {
+            if (entry?.status !== 'ok' || (partsMode({}) === 'doubles' && NOT_MODELLED_BY_DOUBLES[program.id])) {
               skipped.push(`${program.id}:${recipeId(recipe)}`);
               continue;
             }
@@ -152,6 +164,10 @@ describe.skipIf(!enginesBuilt || manifest === null)(
                 kind: artifact.kind,
                 difference,
                 known: known[key] ?? null,
+                lines: differingLines(
+                  maskArtifact(artifact.kind, official as Uint8Array),
+                  port ? maskArtifact(artifact.kind, port) : `<no ${artifact.kind}: the run ended ${outcome.end}>`,
+                ),
               });
               if (!known[key]) {
                 unknown.push(
@@ -167,6 +183,30 @@ describe.skipIf(!enginesBuilt || manifest === null)(
     }
 
     afterAll(() => {
+      const pending = Object.entries(known)
+        .filter(([key]) => {
+          const [id = '', recipe = ''] = key.split('|');
+          // Listed but without an official result yet (not: skipped because of the doubles).
+          return skipped.includes(`${id}:${recipe}`) && manifest?.programs[id]?.recipes[recipe]?.status !== 'ok';
+        })
+        .map(([key, entry]) => ({ key, known: entry }));
+      const parts =
+        partsMode({}) === 'final'
+          ? 'the classes at their final paths'
+          : 'ProgramFiles and LogService doubles (doubles.ts), every other part at its final path';
+      const jsonPath = process.env.EASY68K_SIM_REPORT_JSON;
+      if (jsonPath) {
+        const data = {
+          written: new Date().toISOString(),
+          parts,
+          programs: programs.length,
+          artifactsCompared: compared,
+          equal,
+          notCompared: skipped,
+          mismatches: mismatchRecords(mismatches, pending),
+        };
+        writeFileSync(jsonPath, `${JSON.stringify(data, null, 2)}\n`);
+      }
       if (process.env.EASY68K_SIM_REPORT !== '1') return;
       writeFileSync(
         REPORT_PATH,
@@ -175,11 +215,9 @@ describe.skipIf(!enginesBuilt || manifest === null)(
           runs: compared,
           equal,
           skipped,
-          parts:
-            partsMode({}) === 'final'
-              ? 'the classes at their final paths'
-              : 'ProgramFiles and LogService doubles (doubles.ts), every other part at its final path',
+          parts,
           metrics: "Wine's cells (harness.ts WINE_CELLS)",
+          pending,
         }),
       );
     });

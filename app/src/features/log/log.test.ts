@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { SimOption, type AppContext, type SimEngine } from '../../contracts';
 import { asciiBytes } from '../../core/sim-host/log/format';
 import { LogService } from '../../core/sim-host/log/log-service';
+import { withPanelVisible } from '../../state/layout';
+import { panelVisible } from '../../state/panels';
 import { createInertSimSession } from '../../state/stub-services';
 import { createTestApplication, type TestApplication } from '../../state/testing';
 import { feature, showLogOutput, startLogging } from './index';
@@ -157,14 +159,23 @@ describe('the log feature in an application', () => {
     if (!condition()) throw new Error(`timed out: ${what}`);
   }
 
-  it('registers the three commands, the two dialogs and the Log panel', () => {
+  it('registers the four commands, the two dialogs and the Log panel', () => {
     const { app } = build();
-    for (const id of ['sim.run.logStart', 'sim.run.logStop', 'sim.options.logOutput']) {
+    for (const id of ['sim.run.logStart', 'sim.run.logStop', 'sim.options.logOutput', 'sim.view.log']) {
       expect(feature.commands?.[id]).toBeDefined();
     }
     expect(app.dialogComponents.has(LOG_OUTPUT_DIALOG_ID)).toBe(true);
     expect(app.dialogComponents.has(LOG_FILE_EXISTS_DIALOG_ID)).toBe(true);
     expect(app.panels.find('simulator', 'log')?.title).toBe('Log');
+  });
+
+  it('View > Log (sim.view.log) shows the Log panel', async () => {
+    const { app } = build();
+    app.ctx.settings.update((settings) => withPanelVisible(settings, 'log', false));
+    expect(panelVisible(app.ctx, 'log')).toBe(false);
+    expect(app.ctx.commands.isEnabled('sim.view.log')).toBe(true);
+    await app.ctx.commands.run('sim.view.log');
+    expect(panelVisible(app.ctx, 'log')).toBe(true);
   });
 
   it('Log Start and Log Stop follow sim-ui §13.6, and the menus hear of every change', async () => {

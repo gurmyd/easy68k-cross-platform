@@ -280,6 +280,30 @@ describe.skipIf(!enginesBuilt)('with the real engines (needs engine/dist)', ENGI
       test.release();
     });
 
+    // Gate I2: the limit was checked only while run() returned Running, so a program that waits on
+    // every pass of its loop (the official clock examples) ran for ever and the worker ran out of memory.
+    it("ends with 'limit' for a program that waits on every pass of its loop", async () => {
+      const clock = [
+        '        ORG     $1000',
+        'START   MOVEQ   #1,D1',
+        'LOOP    MOVEQ   #23,D0          delay 1/100 s',
+        '        TRAP    #15',
+        '        BRA     LOOP',
+        '        END     START',
+      ];
+      const program = await assembleProgram(clock);
+      const test = await createTestEngine();
+      test.engine.load(program.s68, program.l68);
+      const report = runProgram(test.engine, { maxInstructions: 300 });
+      expect(report).toMatchObject({ reason: 'limit', halted: false });
+      expect(report.statuses).toContain(RunStatus.WaitDelay);
+      expect(report.statuses).not.toContain(RunStatus.Stopped);
+      // one pass is three instructions; the limit is checked after each wait
+      expect(report.instructions).toBeGreaterThanOrEqual(300);
+      expect(report.instructions).toBeLessThan(310);
+      test.release();
+    }, 60_000);
+
     it("ends with 'error' when run() returns a status it cannot serve", async () => {
       const test = await createTestEngine();
       const faulty = withFaults(test.engine, { at: 'run', returns: RunStatus.Busy });

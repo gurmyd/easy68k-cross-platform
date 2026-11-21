@@ -1,6 +1,8 @@
 # Request from U4: run the logging and options browser check in CI (gate I2)
 
-Status: open.
+Status: done at gate I2 by the configuration engineer: the root script `check:log` exists and
+`.github/workflows/ci.yml` runs `npm run check:log` in `browser-checks`, group `simulator`. At the
+same gate U4 replaced the check's remaining fixed pauses by waits for state (see below).
 
 U4's acceptance (ARCHITECTURE.md 9.4) covers dialogs, enabled states and files in the browser
 store. Unit tests run under Node without a DOM, so, following the convention of

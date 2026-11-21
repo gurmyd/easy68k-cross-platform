@@ -12,11 +12,11 @@
 // is P7 (the operand bytes of a line with an undefined symbol are uninitialised in the unpatched
 // sources), recognised by classifyUnpatched(). Any other difference is a failure.
 //
-// Part of easy68k-mac, an unofficial port of EASy68K. GPL-2.0-or-later.
+// Part of easy68k-cross-platform, an unofficial port of EASy68K. GPL-2.0-or-later.
 
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { asmTwinPath } from './build-asm-twins.mjs';
 import { assemblerModule, corpusFiles, loadProgram, repo } from './corpus.mjs';
@@ -235,8 +235,7 @@ export async function compareAsm(options) {
   let done = 0;
   await pool(tasks, jobs, async ({ path, setName, set, index }) => {
     const p = await loadProgram(path);
-    const inputs = p.folder.map((f) => [basename(f), f === path ? p.stripped : new Uint8Array(readFileSync(f))]);
-    if (!inputs.some(([name]) => name === p.mainName)) inputs.push([p.mainName, p.stripped]);
+    const inputs = p.inputs;
     const opts = { ...set, tabType: p.tabType ? 'fixed' : 'assembly', tabSize: p.tabSize };
     const result = await assemble(p.mainName, new Map(inputs), opts, TIME);
     if (result.fatal) {

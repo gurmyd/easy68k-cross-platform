@@ -248,8 +248,8 @@ describe('the bundled worker', () => {
     await finishPwaBuild(dir, { code });
     const text = readFileSync(join(dir, SW_FILE), 'utf8');
 
-    // A service worker scope: the build output served at /easy68k-mac/.
-    const scopeUrl = 'https://example.test/easy68k-mac/';
+    // A service worker scope: the build output served at /easy68k-cross-platform/.
+    const scopeUrl = 'https://example.test/easy68k-cross-platform/';
     let online = true;
     const files = new Map(
       precacheEntries(dir).map((entry) => [

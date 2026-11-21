@@ -21,6 +21,7 @@ cell followed by `MoveTo(x + TextWidth, y)`. Fonts are created as `TFont.GetHand
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tests/conformance/gdi/golden/<suite>.pixpack.gz` | one `.pix` (6.5.3) per case of `tests/conformance/gdi/cases.ts`, packed per suite (format in `pix.ts`), with GDI's pen position after each case                                                                     |
 | `tests/conformance/gdi/golden/spots.json`         | spot values: system colours, stock palette, colour forms, the 16 operations, raw ROP2 values 0-255, dots of widths 0-14, task 95 control bytes                                                                      |
+| `tests/conformance/gdi/golden/nibs.json`          | the nib of every pen width 2-255 and the widened paths of a few tie directions (below, "Pen nibs")                                                                                                                  |
 | `app/public/fonts/metrics.json`                   | the metric table of 3.5.1 (6.5.3 format) and the raster rules (below)                                                                                                                                               |
 | `app/public/fonts/bitmap/*.bin`                   | raster atlases (origin: `app/public/fonts/bitmap/README.md`)                                                                                                                                                        |
 | `tools/fonts-src/windows-outline-metrics.tsv`     | for `tools/make-font-atlases.mjs`: cells, ascents, advances, underline and strike-out of the outline faces at the atlas sizes, and the width of `$7F` in a string with a byte of `$80` or above (`delInHighString`) |
@@ -209,7 +210,30 @@ against it. Measured against fresh captures (gate I1, review round 2, defect 14)
 
 When SH2 adds `tests/conformance/gdi/cases-ellipse.ts` (exporting `generateEllipseCases():
 GdiCase[]`, erasable TypeScript only, no relative imports), `run.mjs` captures those cases too, into
-packs named after their suites.
+packs named after their suites. SH2's suites are `ellipses`, `ellipses-large` and `ellipses-wide`; their
+packs (`tests/conformance/gdi/golden/ellipses*.pixpack.gz`) are outputs of `run.mjs` like every other
+pack and live with them in T2's `golden/` (ARCHITECTURE.md section 8: `conformance/gdi/**` is T2's
+except `cases-ellipse.ts`). SH2 owns the case list; a change to it is followed by
+`npm run oracle:gdi -- --write`, not by an edit of a pack.
+
+## Pen nibs
+
+`gdi-capture nibs <dir>` writes `nibs.json` (docs/requests/SH2-gdi-nibs.md): for every pen width
+2-255 the polygon GDI makes of the pen, its _nib_, which `app/src/core/sim-host/surface/tables/pens.ts`
+holds. Measured as SH2 measured it: `GM_ADVANCED` with a world transform of 1/16, so that the path
+keeps GDI's 28.4 coordinates; `CreatePenIndirect(PS_SOLID, 16 * w)`; for 360 directions `MoveToEx(0,
+0)`, `LineTo(16000 cos a, 16000 sin a)` inside a path, `WidenPath`, `GetPath`. The widened path is `P0 +
+offset, cap..., P0 - offset, P1 - offset, cap..., P1 + offset`; the nib is the union of the cap
+vertices at P0 over the directions, as `"x,y"` pairs by increasing angle from -180 degrees (the
+format of `penNib()`). The cap at P1 is not used: relative to P1 many directions give vertices one
+sixteenth further out (width 2 at 1 degree: `8,16` and `16,0` where the nib has `7,15` and `15,0`).
+`ties` records the whole widened path of the integer directions at which SH2's review found the
+port's wide lines one pixel or more off (width 2 `(-1,2)`, 7 `(-16,39)`, 9 and 12 `(-7,17)`, 11
+`(-13,31)` and their opposites): a segment from `(0, 0)` to `16 * (dx, dy)`, each point as
+`x,y,type` with GetPath's type (6 = move to, 2 = line to, 3 = line to and close).
+
+`tests/conformance/gdi/nibs.test.ts` holds `pens.ts` to `nibs.json` on every system. On this
+reference Windows all 254 nibs equal `pens.ts`.
 
 `tests/conformance/gdi/surface.test.ts` holds the port's surface to every compared case. Ellipses
 and lines drawn with a pen 2 or more pixels wide are SH2's (ARCHITECTURE.md 3.4 rules 4 and 6);

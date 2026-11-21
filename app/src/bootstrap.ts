@@ -31,9 +31,11 @@ import type {
   Scheduler,
 } from './contracts';
 import type { Os } from './commands/chords';
-import { installKeymap, type KeyOutcome } from './commands/keymap';
+import { hasProgramKeys, installKeymap, isPlainTextField, type KeyOutcome } from './commands/keymap';
 import {
+  TextFieldHistory,
   browserTextEditHost,
+  installTextFieldHistory,
   performTextFieldEdit,
   type PlainTextField,
   type TextEditHost,
@@ -227,6 +229,17 @@ export function bootstrap(env: BootstrapEnv): Application {
   const menuAccess: Application['menuAccess'] = { open: null };
   /** Made on the first Ctrl editing key of macOS in a text field: it needs the page's document. */
   let textEditHost: TextEditHost | null = null;
+  /** The history of the plain text fields for the Ctrl+Z of macOS (errata W3.md entry 36). */
+  const textFieldHistory = platform.os === 'mac' ? new TextFieldHistory() : undefined;
+  if (env.keyTarget && textFieldHistory) {
+    disposers.push(
+      installTextFieldHistory(
+        env.keyTarget,
+        textFieldHistory,
+        (element) => isPlainTextField(element) && !hasProgramKeys(element),
+      ),
+    );
+  }
   if (env.keyTarget) {
     disposers.push(
       installKeymap(
@@ -242,7 +255,7 @@ export function bootstrap(env: BootstrapEnv): Application {
           // The Ctrl editing keys of macOS in plain text fields (K2; errata W3.md entry 34).
           editTextField: (edit, target) => {
             textEditHost ??= browserTextEditHost(platform.pasteIntoFocus, (text) => dialogs.toast(text));
-            void performTextFieldEdit(edit, target as PlainTextField, textEditHost);
+            void performTextFieldEdit(edit, target as PlainTextField, textEditHost, textFieldHistory);
           },
         },
         env.onKey,

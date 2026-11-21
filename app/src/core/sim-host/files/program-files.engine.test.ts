@@ -5,7 +5,7 @@
 //
 // The log and the sound device belong to other packages of this wave; they are doubles here.
 
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { Bytes, FileSystemBackend, SnapshotLimits, SoundDeviceApi, Vfs, VPath } from '../../../contracts';
@@ -17,6 +17,7 @@ import { createVfs } from '../../../fs/vfs';
 import { VirtualTime } from '../../run/clock';
 import { createHeadlessSession, type HeadlessAnswers, type HeadlessSession } from '../../run/headless';
 import { createDeviceDoubles, partOf } from '../../run/test-kit';
+import { FakeAudioBackend, silentWav } from '../audio/testing';
 import { ProgramFiles, STDIO_BUFFER } from './program-files';
 
 const dist = (file: string) => fileURLToPath(new URL(`../../../../../engine/dist/${file}`, import.meta.url));
@@ -56,6 +57,8 @@ interface World {
   view: CachedSyncFiles;
   session: HeadlessSession;
   heard: (string | null)[];
+  /** With `realSound`: what SH5's real sound device handed to the audio backend. */
+  audio: FakeAudioBackend | null;
 }
 
 let world: World | null = null;
@@ -67,7 +70,7 @@ afterEach(() => {
 
 async function createWorld(
   files: Record<string, string | Bytes>,
-  options: { limits?: SnapshotLimits; answers?: HeadlessAnswers; readOnly?: string[] } = {},
+  options: { limits?: SnapshotLimits; answers?: HeadlessAnswers; readOnly?: string[]; realSound?: boolean } = {},
 ): Promise<World> {
   const backend = new MemoryBackend();
   const vfs = createVfs();
@@ -96,19 +99,22 @@ async function createWorld(
     },
   });
   const doubles = createDeviceDoubles();
+  // With realSound the session composes SH5's SoundDevice over the real ProgramFiles, as the app does.
+  const audio = options.realSound ? new FakeAudioBackend(time) : null;
   session = await createHeadlessSession({
     engines: { create: createSimEngine, release: releaseSimEngine },
     vfs,
     viewFor: () => view,
     settleFiles: () => void view.settled(),
     time,
-    parts: { log: doubles.parts.log, sound },
+    parts: audio ? { log: doubles.parts.log } : { log: doubles.parts.log, sound },
+    ...(audio ? { audio } : {}),
     ...(options.answers ? { answers: options.answers } : {}),
   });
   // The view's messages go where the session's go (the session passes its own writer in the app).
   view['deps'].message = (m: string) => session?.bridge.addMessage(m);
   for (const m of messages) session.bridge.addMessage(m);
-  world = { vfs, backend, view, session, heard };
+  world = { vfs, backend, view, session, heard, audio };
   return world;
 }
 
@@ -243,7 +249,7 @@ describe.skipIf(!enginesBuilt)(
             ...trap(53),
             ...rec('D0'),
             ...rec('D2'),
-            // a fresh open: 53 with D2 = 0 gives 2; 54 with D2 = 0 (UNVERIFIED on Windows)
+            // a fresh open: 53 with D2 = 0 gives 2; 54 with D2 = 0 gives 0 (T3 F3)
             '        LEA     TEN,A1',
             ...trap(51),
             '        MOVE.L  D1,D7',
@@ -256,7 +262,7 @@ describe.skipIf(!enginesBuilt)(
             '        MOVEQ   #0,D2',
             ...trap(54),
             ...rec('D0'),
-            // 53 at $2000 with D2 = $FFFFFFFF on the 10-byte file: 0 and 10 (32-bit wrap)
+            // 53 at $2000 with D2 = $FFFFFFFF on the 10-byte file: 0, D2 kept (T3 F4)
             '        MOVE.L  D7,D1',
             '        LEA     $2000,A1',
             '        MOVE.L  #$FFFFFFFF,D2',
@@ -341,13 +347,12 @@ describe.skipIf(!enginesBuilt)(
       expect(word(next()), 'read again: D0').toBe(1);
       expect(next(), 'read again: D2 unchanged').toBe(20);
       expect(word(next()), '53 with D2 = 0').toBe(2);
-      expect(word(next()), '54 with D2 = 0 (musl: 2; Windows UNVERIFIED)').toBe(2);
-      // 53 at $2000 with D2 = $FFFFFFFF: trap15-a expects D0 = 0 and D2 = 10 (the port rule for the
-      // wrapped bounds test). The engine hands the host a count of -1 (fread's size_t cut to int in
-      // shim/hostfile.cpp) and its own import shim turns any answer into an error, so D0 = 2. That is
-      // the engine's to change (reported in docs/porting/errata/SH6.md); it is read here, not asserted.
-      next();
-      next();
+      // The original's answers, measured under Wine (docs/porting/errata/T3.md F3 and F4; the engine
+      // reproduces them since gate I2, engine/sim/shim/hostfile.cpp): a zero-length write succeeds,
+      // and a count that wraps the bounds test "succeeds", reads nothing and leaves D2 as it was.
+      expect(word(next()), '54 with D2 = 0').toBe(0);
+      expect(word(next()), '53 at $2000 with D2 = $FFFFFFFF: D0').toBe(0);
+      expect(next(), '53 at $2000 with D2 = $FFFFFFFF: D2').toBe(0xffffffff);
       for (const fid of ['8', '-1', 'closed']) {
         for (const task of [53, 54, 55, 56]) expect(word(next()), `task ${task} FID ${fid}`).toBe(2);
       }
@@ -360,6 +365,28 @@ describe.skipIf(!enginesBuilt)(
       await w.view.settled();
       expect(await stored(w, 'demo/ten.bin')).toBe('0123456789');
       expect(await w.vfs.stat('/memory/demo/t.bin')).toBeNull();
+    });
+
+    // T3 ran this program on the official SIM68K.exe under Wine (docs/porting/errata/T3.md F2): what
+    // the Borland run-time's buffers let a second stream see, byte by byte, after large writes, and
+    // what a reading stream keeps. The port must write the same result.bin.
+    it('stdio-buffer.X68 writes the result.bin of the official simulator', async () => {
+      const confirm = (file: string) =>
+        fileURLToPath(new URL(`../../../../../tests/conformance/${file}`, import.meta.url));
+      const source = readFileSync(confirm('windows-confirm/stdio-buffer.X68'), 'latin1')
+        .replace("INCLUDE '..\\sim\\dumplib.X68'", "INCLUDE 'dumplib.X68'")
+        .split(/\r?\n/);
+      const golden = readFileSync(confirm('windows-confirm/stdio-buffer.wine.result.bin'));
+      const assembled = await assembleProgram(source, { 'dumplib.X68': readFileSync(confirm('sim/dumplib.X68')) });
+      const w = await createWorld({});
+      await w.vfs.writeFile('/memory/demo/prog.S68', assembled.s68);
+      await w.vfs.writeFile('/memory/demo/prog.L68', assembled.l68);
+      await w.view.whenCurrent();
+      await w.session.controller.open('/memory/demo/prog.S68', 'open');
+      await runToStop(w);
+      await w.view.settled();
+      const result = await w.vfs.readFile('/memory/demo/result.bin');
+      expect(String.fromCharCode(...result)).toBe(String.fromCharCode(...golden));
     });
 
     it('names in another letter case and with backslashes open; a read-only file gives result 3', async () => {
@@ -399,7 +426,7 @@ describe.skipIf(!enginesBuilt)(
       expect(word(d3 as number)).toBe(3);
     });
 
-    it('write buffering: 10 bytes are not there for a second open; after task 56, or 512 bytes, they are', async () => {
+    it('write buffering: 10 bytes are not there for a second open; after task 56, or a large write, they are', async () => {
       const w = await createWorld({});
       await load(
         w,
@@ -433,7 +460,7 @@ describe.skipIf(!enginesBuilt)(
             ...trap(53),
             ...rec('D0'),
             ...rec('D2'),
-            // 600 bytes to big.bin through one stream: a second stream reads the first 512
+            // 600 bytes to big.bin in one task 54: a large write goes out whole (T3 errata F2)
             '        LEA     BIG,A1',
             ...trap(52),
             '        MOVE.L  D1,D6',
@@ -460,7 +487,7 @@ describe.skipIf(!enginesBuilt)(
       expect(word(afterClose as number)).toBe(0);
       expect(count).toBe(10);
       expect(word(bigD0 as number)).toBe(0);
-      expect(bigCount, `bytes visible after 600 written (${STDIO_BUFFER} committed)`).toBe(STDIO_BUFFER);
+      expect(bigCount, `bytes visible after one write of 600 (>= ${STDIO_BUFFER}: not buffered)`).toBe(600);
       await w.view.settled();
       expect(await stored(w, 'demo/out.txt')).toBe('0123456789');
       expect((await w.vfs.readFile('/memory/demo/big.bin')).length).toBe(600); // task 50 closed it
@@ -513,7 +540,11 @@ describe.skipIf(!enginesBuilt)(
     });
 
     it('liveness: files saved through the Vfs, added by another window, and a sound file, are seen at the next Rewind and Run', async () => {
-      const w = await createWorld({});
+      // No whenCurrent() of the test's own between a change and Rewind: the session catches the
+      // views up itself (core/run/compose.ts), which is what a student relies on.
+      const w = await createWorld({}, { realSound: true });
+      const audio = w.audio as FakeAudioBackend;
+      const wav = silentWav(800);
       await load(
         w,
         program(
@@ -534,21 +565,22 @@ describe.skipIf(!enginesBuilt)(
       );
       await runToStop(w);
       expect(word(results(w, 1)[0] as number), 'no input.txt yet').toBe(2);
-      expect(w.heard).toEqual([null]);
+      expect(audio.eventsOf('play')).toEqual([]);
+      expect(w.session.messages()).toContain("'tick.wav' not found");
 
       // Saved as the editor saves: through the Vfs. A sound file is added the same way.
       await w.vfs.writeFile('/memory/demo/input.txt', text('first version'));
-      await w.vfs.writeFile('/memory/demo/tick.wav', text('RIFF....WAVE'));
-      await w.view.whenCurrent();
+      await w.vfs.writeFile('/memory/demo/tick.wav', wav);
       w.session.controller.rewind();
       await runToStop(w);
       expect(word(results(w, 1)[0] as number)).toBe(0);
       expect(str(w.session.engine.memory.slice(...bufRange(w, 13)))).toBe('first version');
-      expect(w.heard[1]).toBe('RIFF....WAVE');
+      const plays = audio.eventsOf('play');
+      expect(plays, 'the added sound file plays').toHaveLength(1);
+      expect([...(audio.bytesOf(plays[0]!.playback) ?? [])]).toEqual([...wav]);
 
       // Changed in another window: the backend reports it.
       await w.backend.externalWrite('demo/input.txt', text('from window two'));
-      await w.view.whenCurrent();
       w.session.controller.rewind();
       await runToStop(w);
       expect(str(w.session.engine.memory.slice(...bufRange(w, 15)))).toBe('from window two');
@@ -667,7 +699,7 @@ describe.skipIf(!enginesBuilt)(
       const journal = { text: null as string | null };
       const source = program(
         [
-          // log.bin: 700 bytes (512 committed, then written to storage), then 20 more, never closed
+          // log.bin: 700 bytes (one large write: committed, then written to storage), then 20 more, never closed
           '        LEA     LOG,A1',
           ...trap(52),
           '        MOVE.L  D1,D6',
@@ -740,17 +772,17 @@ describe.skipIf(!enginesBuilt)(
       const a = await page(mortal);
       await a.session.controller.open('/memory/demo/prog.S68', 'open');
       a.session.controller.run();
-      // Run until the delay: the first 512 bytes reach the view, and storage through the timer.
+      // Run until the delay: the 700 bytes reach the view, and storage through the timer.
       for (let i = 0; i < 50 && a.session.controller.phase !== 'waitDelay'; i++) a.session.time.advance(16);
       a.session.time.advance(600);
       await a.view.settled();
-      expect((await storage.readFile('demo/log.bin')).length).toBe(512);
+      expect((await storage.readFile('demo/log.bin')).length).toBe(700);
       dead = true; // the storage stops answering: the tab is being closed
       await runToStop(a);
       const expectedLog = a.session.engine.memory.slice(0x3000, 0x3000 + 700);
       a.files.exitNow(); // pagehide
       expect(journal.text).not.toBeNull();
-      expect((await storage.readFile('demo/log.bin')).length).toBe(512);
+      expect((await storage.readFile('demo/log.bin')).length).toBe(700);
       expect(await storage.stat('demo/note.txt')).toBeNull();
       a.session.dispose();
 

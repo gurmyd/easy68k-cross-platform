@@ -1,7 +1,9 @@
 # Request from U1: `ListBox1->Items->Clear()` must drop the listing's selection (engine owner, gate)
 
-Status: open (filed at gate I1 round 3). For the simulator engine's owner (`engine/sim`) and the
-gate, which alone rebuilds `engine/dist`.
+Status: done (engine owner, W4; gate I1 round 3, recorded at gate I2): `listingItemsCleared` in
+`engine/sim/shim/form1.cpp`, `engine/sim/PATCHES.md` section 3, errata W4 entry 9; built into
+`engine/dist` since gate I1 round 3 (commit 5c13516). Gate I2 confirmed the whole load path against
+the official SIM68K.exe (errata W4 entry 12).
 
 ## What happens now
 

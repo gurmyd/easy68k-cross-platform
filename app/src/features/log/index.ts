@@ -8,6 +8,7 @@
 //   sim.run.logStop        Log Stop.
 //   sim.options.logOutput  the modeless Log Output dialog (`sim.logOutput`); OK selects what is
 //                          logged and stores the two types in the settings.
+//   sim.view.log           View > Log: shows and focuses the Log panel.
 //   dialogs                `sim.logOutput`, `sim.logFileExists` (the latter opened by the session)
 //   panel `log`            the Log panel
 //
@@ -17,6 +18,7 @@
 
 import type { AppContext, AppState, FeatureModule, LogServiceApi } from '../../contracts';
 import { logStartFailure } from '../../core/sim-host/log/log-service';
+import { showPanel } from '../../state/panels';
 import { LogFileExistsDialog } from './LogFileExistsDialog';
 import { LogOutputDialog, type LogOutputProps, type LogOutputResult } from './LogOutputDialog';
 import { LogPanel } from './LogPanel';
@@ -110,6 +112,10 @@ export const feature: FeatureModule = {
     },
     'sim.options.logOutput': {
       run: (ctx) => void showLogOutput(ctx),
+    },
+    // View > Log (1.5, 2.6; request U4-log-panel-command.md): shows and focuses the Log panel.
+    'sim.view.log': {
+      run: (ctx) => showPanel(ctx, 'log'),
     },
   },
   panels: [{ id: 'log', title: 'Log', mode: 'simulator', component: LogPanel }],

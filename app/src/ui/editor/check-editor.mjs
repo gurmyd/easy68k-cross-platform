@@ -29,7 +29,7 @@
 // 0 = everything passed. The page object `window.__easy68k` and the view hook `e68View` on the
 // view's element exist in development builds only.
 
-/* global console, process, document, window, navigator, DataTransfer, ClipboardEvent, Navigator -- browser globals are used inside page.evaluate() callbacks */
+/* global console, process, document, window, navigator, DataTransfer, ClipboardEvent, Navigator, requestAnimationFrame, setTimeout -- browser globals are used inside page.evaluate() callbacks */
 
 import { mkdirSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -506,6 +506,27 @@ async function editingPass(browser, name) {
     });
     check(`${p} ${chord} selects the whole text`, JSON.stringify(range) === '[0,11]', JSON.stringify(range));
   }
+
+  // A selection made by code while the focus is elsewhere survives focusPanel(ctx, 'editor') (gate
+  // I2, E6's report: the browser restored its own DOM caret on focus, which CodeMirror read back as
+  // a new selection, so Find's match and a jump to a message's line were undone).
+  await setText(page, 'line1\nline2\nline3', 0);
+  const kept = await page.evaluate(async () => {
+    const view = document.querySelector('[data-e68-document]').e68View;
+    view.contentDOM.blur();
+    document.querySelector('[data-e68-panel="toolbar"] button, .e68-toolbar button')?.focus();
+    view.dispatch({ selection: { anchor: 6, head: 11 } });
+    const { focusPanel } = await import('/src/state/panels.ts');
+    focusPanel(window.__easy68k.ctx, 'editor');
+    await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 100))));
+    const { from, to } = view.state.selection.main;
+    return { range: [from, to], focused: view.hasFocus };
+  });
+  check(
+    `${p} focusPanel('editor') keeps a selection made while the focus was elsewhere`,
+    JSON.stringify(kept.range) === '[6,11]' && kept.focused,
+    JSON.stringify(kept),
+  );
 
   // Insert / Replace.
   await setText(page, 'abc', 1);

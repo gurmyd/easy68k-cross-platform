@@ -18,9 +18,10 @@
 //     what GDI under Wine measures for "Fixedsys" 9 (11 x 14: Wine has no Fixedsys raster font),
 //     so that the grid logic (wrap, scroll, stride aliasing) is compared with the original's on the
 //     same grid. 'windows' uses the real glyph provider (app/public/fonts, Windows' metrics).
-//   - parts 'doubles' (default): ProgramFiles and LogService, which belong to packages of the same
-//     wave (SH6, U4), are the doubles of doubles.ts; every other part is the class at its final
-//     path. 'final' (or EASY68K_CONFORMANCE_PARTS=final) uses the classes at the final paths too.
+//   - parts 'final' (the default since gate I2): every host part is the class at its final path,
+//     ProgramFiles (SH6) and LogService (U4) included, as 6.4 says. 'doubles' (or
+//     EASY68K_CONFORMANCE_PARTS=doubles) replaces those two by the doubles of doubles.ts, which T3
+//     used while SH6 and U4 were being written; harness.test.ts keeps the two modes in agreement.
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -237,7 +238,7 @@ function endsWithMark(bytes: Uint8Array | null): boolean {
 }
 
 export function partsMode(scenario: Pick<Scenario, 'parts'>): 'doubles' | 'final' {
-  return scenario.parts ?? (process.env.EASY68K_CONFORMANCE_PARTS === 'final' ? 'final' : 'doubles');
+  return scenario.parts ?? (process.env.EASY68K_CONFORMANCE_PARTS === 'doubles' ? 'doubles' : 'final');
 }
 
 /** Runs one scenario in a fresh headless session and returns what happened. */

@@ -62,7 +62,7 @@ export function presentFiles(suite = readSuite()) {
 }
 
 async function download(url) {
-  const response = await fetch(url, { headers: { 'user-agent': 'easy68k-mac-test-fetch' } });
+  const response = await fetch(url, { headers: { 'user-agent': 'easy68k-cross-platform-test-fetch' } });
   if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
   return new Uint8Array(await response.arrayBuffer());
 }

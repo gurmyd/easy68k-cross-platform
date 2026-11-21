@@ -752,6 +752,52 @@ async function realAppPass(browser, name) {
   const dots = await page.locator('.e68-listing__dot--on').count();
   check(`${p} the visible rows show their breakpoints`, dots > 0, String(dots));
 
+  // Open the same program again while the PC field already reads its start address and the list is
+  // scrolled down: the original selects no row (ListBox1->Items->Clear() is LB_RESETCONTENT, and
+  // the unchanged PC text runs no regPCChange/highlight(); errata U1.md entry 8) and its list box
+  // starts at the top again (LB_RESETCONTENT sets the top index to 0). The next trace step, and
+  // Go to PC, select the PC row.
+  const scrolledBefore = await page.evaluate(
+    () => document.querySelector('[data-e68-panel="listing"] .e68-listing__list').scrollTop,
+  );
+  await open('nops');
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+  const reopened = await page.evaluate(() => {
+    const { ctx } = window.__easy68k;
+    return {
+      pc: ctx.sim.controller.snapshot.boxes[18],
+      engineRow: ctx.sim.engine.listingHighlight,
+      selected: ctx.store.getState().sim.selectedRow,
+      ariaSelected: document.querySelectorAll('.e68-listing__row[aria-selected="true"]').length,
+      scrollTop: document.querySelector('[data-e68-panel="listing"] .e68-listing__list').scrollTop,
+    };
+  });
+  check(
+    `${p} the same program opened again at an unchanged PC selects no row, as the original does`,
+    reopened.pc === '00001000' && reopened.engineRow === -1 && reopened.selected === -1 && reopened.ariaSelected === 0,
+    JSON.stringify(reopened),
+  );
+  check(
+    `${p} ... and its listing starts at the top again (LB_RESETCONTENT)`,
+    scrolledBefore > 0 && reopened.scrollTop === 0,
+    `scrollTop before ${scrolledBefore}, after ${reopened.scrollTop}`,
+  );
+  await run('sim.search.gotoPC');
+  const firstNop = await page.evaluate(() => {
+    const { ctx } = window.__easy68k;
+    return ctx.sim.listing.rows.findIndex((text, row) => row > 2 && ctx.sim.listing.isInstruction(row));
+  });
+  s = await real();
+  check(`${p} ... Go to PC then selects the PC row`, s.selected === firstNop && firstNop > 2, JSON.stringify(s));
+  await rowLocator(page, 'START:').locator('.e68-listing__text').click();
+  await run('sim.run.traceInto');
+  s = await real();
+  check(
+    `${p} ... and so does the next trace step`,
+    s.pc === '00001002' && s.selected === firstNop + 1,
+    `${JSON.stringify(s)}, first NOP row ${firstNop}`,
+  );
+
   // File > Close: the Caution question, then an empty listing and no selection.
   const closing = run('sim.file.close');
   const caution = page.getByRole('alertdialog').filter({ has: page.getByRole('button', { name: 'Cancel' }) });

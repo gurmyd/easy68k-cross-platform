@@ -1,15 +1,18 @@
-// Small stand-ins for the two host parts of the conformance harness whose real classes belong to
-// packages of the same wave as T3 (ARCHITECTURE.md 9.4): ProgramFiles (SH6) and LogService (U4).
-// While those are stubs, the harness runs with these doubles; with EASY68K_CONFORMANCE_PARTS=final
-// it runs with whatever is at the final paths (harness.ts). Owner: T3.
+// Small stand-ins for two host parts of the conformance harness, ProgramFiles (SH6) and LogService
+// (U4), written while those packages were being written in the same wave (ARCHITECTURE.md 9.4).
+// The harness runs with the real classes by default; EASY68K_CONFORMANCE_PARTS=doubles (or
+// parts: 'doubles') selects these, and harness.test.ts keeps the two in agreement. Owner: T3.
 //
 // What the doubles model, and nothing more:
 //
 //   ConformanceFiles  the program's folder as a map of names to bytes; names are matched without
-//                     regard to letter case and with `\` or `/` (trap15-a §11 item 14). C library
+//                     regard to letter case and with `\` or `/` (trap15-a §11 item 14); a name
+//                     with a folder in it names a folder that does not exist. C library
 //                     streams: "r+b" fails on a missing or read-only file, "rb" on a missing one,
 //                     "w+b" creates or truncates (fails on a read-only file). No buffering: written
-//                     bytes are visible at once (the 512-byte buffer of 3.8.4 is SH6's). Short reads,
+//                     bytes are visible at once (the 512-byte buffer of 3.8.4 is SH6's), so a
+//                     program whose result shows the buffers is listed in NOT_MODELLED_BY_DOUBLES
+//                     and skipped in that mode. Short reads,
 //                     an empty read at the end, seeks past the end, a write on a read-only stream
 //                     fails. The task 58 dialog answers with the scenario's answers.
 //   ConformanceLog    keeps the execution-log bytes the engine writes and the output-log bytes the
@@ -33,11 +36,33 @@ import {
 
 const latin1Of = (bytes: Bytes): string => String.fromCharCode(...bytes);
 
-/** The key a name is found under: the last path element, upper case (the folder is flat). */
+/**
+ * The key a name is found under: the name upper case, without `.\` (the folder is flat). A name
+ * with a folder in it (`sub\x.bin`, `..\x.bin`, `\x.bin`) gives '' and so no file: that folder does
+ * not exist, and the original's fopen fails there, as the real ProgramFiles does. As on Windows,
+ * trailing periods and spaces are dropped (`DATA.TXT.` is `data.txt`), and a name with `?` or `*`
+ * names no file (trap15-a/a57).
+ */
 export function fileKey(name: string): string {
-  const parts = name.split(/[\\/]/).filter((part) => part !== '' && part !== '.');
-  return (parts[parts.length - 1] ?? '').toUpperCase();
+  const parts = name.split(/[\\/]/).filter((part) => part !== '.');
+  if (parts.length !== 1) return '';
+  const key = (parts[0] as string).replace(/[. ]+$/u, '').toUpperCase();
+  return /[?*]/u.test(key) ? '' : key;
 }
+
+/**
+ * Programs whose result depends on what the doubles deliberately do not model (the C library's
+ * buffers), so that the comparison with EASY68K_CONFORMANCE_PARTS=doubles skips them; with the real
+ * parts (the default) they are compared like every other program.
+ */
+export const NOT_MODELLED_BY_DOUBLES: Readonly<Record<string, string>> = {
+  'trap15-a/a51-files-read-after-write': 'a read right after a write on one stream (the write buffer)',
+  'trap15-a/a52-files-write-after-read': 'a write right after a read on one stream (the read buffer)',
+  'trap15-a/a53-files-past-end-then-read': 'a read after a write past the end (the write buffer)',
+  'trap15-a/a56-files-same-file-twice':
+    "the first stream's read after a task 52 truncated the file returns the bytes it had buffered",
+  'trap15-a/a59-files-buffer-edges': 'what a second stream sees of the 512-byte write buffer',
+};
 
 interface OpenStream {
   key: string;

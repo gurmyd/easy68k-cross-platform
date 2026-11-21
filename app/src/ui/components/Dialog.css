@@ -79,6 +79,10 @@
   border-top: 1px solid var(--c-border);
 }
 
+.e68-dialog__footer[data-align='center'] {
+  justify-content: center;
+}
+
 @keyframes e68-backdrop-in {
   from {
     opacity: 0;

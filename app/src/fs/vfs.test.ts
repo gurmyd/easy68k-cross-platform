@@ -308,6 +308,42 @@ describe('subscribe', () => {
     await expect(vfs.writeFile('/memory/ro.txt', text('y'))).rejects.toMatchObject({ code: 'read-only' });
     vfs.unmount('memory');
     backend.emitExternal({ rel: 'ro.txt', kind: 'write' });
+    // The unmount itself is reported (gate I2); what the backend reports afterwards is not.
+    expect(seen).toEqual([{ path: '/memory', kind: 'remove', origin: 'local' }]);
+  });
+
+  // Gate I2 (errata FS2.md C1): a store mounted while the application runs (File > Open > Open
+  // folder...) must reach the Files panel and the dialogs without a write of its own.
+  it('reports mount and unmount as a write and a remove of the mount root', () => {
+    const vfs = createVfs();
+    const all: VfsChange[] = [];
+    const folder: VfsChange[] = [];
+    const other: VfsChange[] = [];
+    vfs.subscribe('/', (c) => all.push(c));
+    vfs.subscribe('/folder', (c) => folder.push(c));
+    vfs.subscribe('/memory', (c) => other.push(c));
+    const backend = new MemoryBackend({ mount: 'folder', kind: 'fsaccess', label: 'coursework' });
+    vfs.mount(backend);
+    expect(all).toEqual([{ path: '/folder', kind: 'write', origin: 'local' }]); // synchronously
+    vfs.unmount('folder');
+    vfs.unmount('folder'); // not mounted: nothing
+    vfs.mount(backend);
+    expect(all).toEqual([
+      { path: '/folder', kind: 'write', origin: 'local' },
+      { path: '/folder', kind: 'remove', origin: 'local' },
+      { path: '/folder', kind: 'write', origin: 'local' },
+    ]);
+    expect(folder).toEqual(all);
+    expect(other).toEqual([]);
+  });
+
+  it('a mount that is refused reports nothing', () => {
+    const vfs = createVfs();
+    const seen: VfsChange[] = [];
+    vfs.mount(new MemoryBackend());
+    vfs.subscribe('/', (c) => seen.push(c));
+    expect(() => vfs.mount(new MemoryBackend())).toThrow(/already mounted/);
+    expect(() => vfs.mount(new MemoryBackend({ mount: 'a/b', kind: 'memory', label: 'x' }))).toThrow(TypeError);
     expect(seen).toEqual([]);
   });
 });

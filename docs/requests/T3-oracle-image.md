@@ -1,6 +1,6 @@
 # Request T3: the simulator scripts in the Wine oracle image
 
-Status: open (for the owner of `tests/oracle/wine/Dockerfile`, T1, at the next gate)
+Status: done by T1 in gate I2 round 1. The Dockerfile copies `sim/sim_run.py` alone, and `oracle.yml`'s image cache key hashes `tests/oracle/wine/sim/sim_run.py` in place of `sim/*.sh` and `sim/*.py`. An image built before the change still passes `assertImageCurrent` (it checks only the files the Dockerfile names), so nobody must rebuild; a build of the changed Dockerfile passed `regenerate.mjs --check --only tutorial` (18 runs equal the manifest). T3 may now delete `sim_proofs.sh`.
 
 ## What
 

@@ -14,6 +14,7 @@ import { Checkbox } from '../Checkbox';
 import { ContextMenu, useContextMenu } from '../ContextMenu';
 import { DataGrid } from '../DataGrid';
 import { Dialog } from '../Dialog';
+import { GroupBox } from '../GroupBox';
 import { Icon } from '../Icon';
 import { IconButton } from '../IconButton';
 import { ICON_NAMES } from '../icons';
@@ -29,6 +30,7 @@ import { Select } from '../Select';
 import { SpinField } from '../SpinField';
 import { Splitter } from '../Splitter';
 import { TabPanel, Tabs, type TabItem } from '../Tabs';
+import { TextArea } from '../TextArea';
 import { TextField } from '../TextField';
 import { ToastStack, type ToastItem } from '../Toast';
 import { Toolbar, ToolbarSeparator, ToolbarSpacer } from '../Toolbar';
@@ -92,7 +94,7 @@ export function Gallery({ initialTheme = 'system' }: GalleryProps) {
           <Icon name="assemble" size={20} />
           <div>
             <h1 className="e68-gallery__title">Component kit</h1>
-            <p className="e68-gallery__subtitle">easy68k-mac - design tokens and components (W2)</p>
+            <p className="e68-gallery__subtitle">easy68k-cross-platform - design tokens and components (W2)</p>
           </div>
         </div>
         <Toolbar label="Theme" className="e68-gallery__theme">
@@ -654,6 +656,25 @@ function SplittersSection() {
 
 // --- Text fields, spin fields, selects ---------------------------------------------
 
+// A made-up template in the shape of the original's (comment header, ORG, END), wider than the
+// box, so that the box scrolls sideways.
+const GALLERY_TEMPLATE = [
+  '*-----------------------------------------------------------',
+  '* Title      :',
+  '* Written by :',
+  '* Date       :',
+  '* Description:',
+  '*-----------------------------------------------------------',
+  '    ORG    $1000',
+  'START:                  ; first instruction of program',
+  '',
+  '* Put program code here',
+  '',
+  '    SIMHALT             ; halt simulator',
+  '',
+  '    END    START        ; last line of source',
+].join('\n');
+
 function FieldsSection() {
   const [find, setFind] = useState('MOVE.B');
   const [path, setPath] = useState('My Programs/demo/demo.X68');
@@ -662,6 +683,7 @@ function FieldsSection() {
   const [view, setView] = useState('SS');
   const [irq, setIrq] = useState('1');
   const [zoom, setZoom] = useState('fit');
+  const [template, setTemplate] = useState(GALLERY_TEMPLATE);
   return (
     <Section
       id="fields"
@@ -709,6 +731,21 @@ function FieldsSection() {
               invalid
               message="A file name cannot contain ?"
             />
+          </div>
+        </Specimen>
+      </Row>
+      <Row>
+        <Specimen label="TextArea: the template editor (no wrapping, scrolls both ways), disabled">
+          <div className="e68-gallery__stack" data-testid="textarea-sample">
+            <TextArea
+              label="&Template:"
+              value={template}
+              onChange={setTemplate}
+              monospace
+              height={132}
+              style={{ width: '46ch' }}
+            />
+            <TextArea aria-label="Disabled" value={'*  Disabled'} onChange={() => undefined} disabled rows={2} />
           </div>
         </Specimen>
       </Row>
@@ -949,6 +986,11 @@ function ChoicesSection() {
         </>
       }
     >
+      <Row>
+        <Specimen label="GroupBox: a framed group (TGroupBox); in a dialog its access key goes to the first control">
+          <GroupBoxSample />
+        </Specimen>
+      </Row>
       <Row>
         <Specimen label="Checkbox: off, on, hover, focus, disabled">
           <div className="e68-gallery__stack">
@@ -1258,6 +1300,9 @@ function ListsSection({ report }: { report: Report }) {
             height={66}
           />
         </Specimen>
+        <Specimen label="DataGrid with a set height: 49 rows, six visible (Break Points); the grid itself scrolls">
+          <ScrollingGridSample />
+        </Specimen>
       </Row>
       <Specimen
         label={`VirtualList: 1 MB of memory, 65,536 rows - row $${(memoryRow * 16).toString(16).toUpperCase().padStart(8, '0')}`}
@@ -1417,7 +1462,7 @@ function DialogsSection({ report }: { report: Report }) {
             {tab === 'template' ? (
               <TextField label="&File:" value="template.NEW" onChange={() => undefined} widthCh={20} />
             ) : (
-              <div className="e68-gallery__stack">
+              <GroupBox caption="Ass&embler" data-testid="modal-groupbox">
                 <Checkbox
                   label="Generate &Listing file"
                   checked={options.listing}
@@ -1433,7 +1478,7 @@ function DialogsSection({ report }: { report: Report }) {
                   checked={options.crossRef}
                   onChange={(crossRef) => setOptions((o) => ({ ...o, crossRef }))}
                 />
-              </div>
+              </GroupBox>
             )}
           </TabPanel>
         </Dialog>
@@ -1600,11 +1645,71 @@ function FeedbackSection({ report, addToast }: { report: Report; addToast: (toas
                 { id: 's', kind: 'success', text: 'Assembly complete: no errors', duration: 0 },
                 { id: 'w', kind: 'warning', text: 'Output window size limited to 4096 x 4096', duration: 0 },
                 { id: 'e', kind: 'error', text: 'demo.X68 could not be saved', duration: 0 },
+                {
+                  id: 'long',
+                  kind: 'information',
+                  text: '"prog.X68" is opened from this computer: Save writes to that file. The listing and the files a program writes stay in the browser. To keep them beside the file, open its folder.',
+                  duration: 0,
+                  action: { label: 'Open the containing folder...', run: () => undefined },
+                },
               ]}
             />
           </div>
         </Specimen>
       </Row>
     </Section>
+  );
+}
+
+// --- A grid with a set height (Break Points: 49 rows, six visible) -------------------------
+
+const SCROLL_GRID_ROWS = Array.from({ length: 49 }, (_, index) => ({
+  address: index === 0 ? '00007FFC' : index === 1 ? '00001000' : '',
+  op: index === 0 ? '==' : index === 1 ? '<>' : '',
+  value: index === 0 ? '00000000' : index === 1 ? '0000FFFF' : '',
+  size: index < 2 ? 'L' : '',
+}));
+
+function ScrollingGridSample() {
+  const [row, setRow] = useState(0);
+  return (
+    <DataGrid
+      label="Memory breakpoints"
+      rowNumbers
+      columns={[
+        { id: 'address', header: 'Address', width: '84px', mono: true },
+        { id: 'op', header: 'Op', width: '48px', mono: true },
+        { id: 'value', header: 'Value', width: '84px', mono: true },
+        { id: 'size', header: 'Size', width: '48px' },
+      ]}
+      rows={SCROLL_GRID_ROWS}
+      rowKey={(_row, index) => String(index)}
+      selectedRow={row}
+      onSelectRow={setRow}
+      height={6 * 22}
+      className="e68-gallery__scroll-grid"
+    />
+  );
+}
+
+// --- Group boxes ------------------------------------------------------------------------
+
+function GroupBoxSample() {
+  const [bold, setBold] = useState(false);
+  const [italic, setItalic] = useState(true);
+  return (
+    <div className="e68-gallery__inline" data-testid="groupbox-sample">
+      <GroupBox caption="Text Attributes">
+        <Checkbox label="&Bold" checked={bold} onChange={setBold} />
+        <Checkbox label="&Italic" checked={italic} onChange={setItalic} />
+      </GroupBox>
+      <GroupBox caption="&Color" layout="row">
+        <Button caption="Black" size="small" onClick={() => undefined} />
+        <Button caption="Maroon" size="small" onClick={() => undefined} />
+      </GroupBox>
+      <GroupBox caption="Effects" disabled>
+        <Checkbox label="Stri&keout" checked={false} onChange={() => undefined} />
+      </GroupBox>
+    </div>
   );
 }

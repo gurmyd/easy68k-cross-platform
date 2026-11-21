@@ -18,7 +18,7 @@
 // Cycle counts, prefetch contents after the instruction and bus transactions are not compared:
 // EASy68K does not model them (docs/porting/ground-truth.md section 5).
 //
-// Part of easy68k-mac, an unofficial port of EASy68K. GPL-2.0-or-later.
+// Part of easy68k-cross-platform, an unofficial port of EASy68K. GPL-2.0-or-later.
 
 import { gunzipSync } from 'node:zlib';
 import { readFileSync } from 'node:fs';

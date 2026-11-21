@@ -36,7 +36,7 @@
 // Owner: FS2.
 
 import type { BackendChange, Bytes, DirEntry, FileStat, FileSystemBackend, FsError, Platform } from '../contracts';
-import { sameName } from '../core/paths/winpath';
+import { foldCase, sameName } from '../core/paths/winpath';
 import { openStartupStore, type ChannelLike } from './browser-backend';
 import { MemoryBackend } from './memory-backend';
 import { fsError, isFsError } from './vfs';
@@ -291,33 +291,37 @@ export class FolderBackend implements FileSystemBackend {
   async writeFile(rel: string, data: Bytes): Promise<void> {
     checkRel(rel, false);
     const copy = data.slice(); // the caller may change its array while the write waits
-    const file = await this.fileHandle(rel, true);
-    try {
-      await writeWhole(file, copy);
-    } catch (error) {
-      throw toFsError(error, rel, 'file', this.handle.name);
-    }
+    return this.inTurn(rel, async () => {
+      const file = await this.fileHandle(rel, true);
+      try {
+        await writeWhole(file, copy);
+      } catch (error) {
+        throw toFsError(error, rel, 'file', this.handle.name);
+      }
+    });
   }
 
   async appendFile(rel: string, data: Bytes): Promise<void> {
     checkRel(rel, false);
     const copy = data.slice();
-    const file = await this.fileHandle(rel, true);
-    if (copy.length === 0) return; // the file exists now; nothing to add
-    try {
-      const size = (await file.getFile()).size;
-      const writable = await file.createWritable({ keepExistingData: true });
+    return this.inTurn(rel, async () => {
+      const file = await this.fileHandle(rel, true);
+      if (copy.length === 0) return; // the file exists now; nothing to add
       try {
-        await writable.seek(size);
-        await writable.write(copy);
+        const size = (await file.getFile()).size;
+        const writable = await file.createWritable({ keepExistingData: true });
+        try {
+          await writable.seek(size);
+          await writable.write(copy);
+        } catch (error) {
+          await writable.abort?.(error).catch(() => {});
+          throw error;
+        }
+        await writable.close();
       } catch (error) {
-        await writable.abort?.(error).catch(() => {});
-        throw error;
+        throw toFsError(error, rel, 'file', this.handle.name);
       }
-      await writable.close();
-    } catch (error) {
-      throw toFsError(error, rel, 'file', this.handle.name);
-    }
+    });
   }
 
   async remove(rel: string): Promise<void> {
@@ -352,6 +356,27 @@ export class FolderBackend implements FileSystemBackend {
   }
 
   // ---- internals ----------------------------------------------------------------------
+
+  /** The write running or waiting last on each file (key: the path with its letter case folded). */
+  private readonly writes = new Map<string, Promise<void>>();
+
+  /**
+   * Runs the writes of one file one after the other. A writable stream starts from a copy of the
+   * file taken when it is created and replaces the file on close, so two overlapping appends would
+   * each start from the old content and the second close would drop the first one's data. The Vfs
+   * already serialises the writes it is given; this protects callers that use the backend directly.
+   */
+  private inTurn(rel: string, write: () => Promise<void>): Promise<void> {
+    const key = foldCase(rel);
+    const before = this.writes.get(key) ?? Promise.resolve();
+    const mine = before.then(write, write);
+    const settled = mine.catch(() => {});
+    this.writes.set(key, settled);
+    void settled.then(() => {
+      if (this.writes.get(key) === settled) this.writes.delete(key);
+    });
+    return mine;
+  }
 
   /** The folder at rel, walking down from the root one checked segment at a time. */
   private async dir(rel: string, create: boolean): Promise<FsaDirectoryHandle> {

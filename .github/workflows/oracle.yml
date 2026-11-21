@@ -80,12 +80,14 @@ jobs:
           path: engine/dist
 
       # The image (2.4 GB) takes three minutes to build and changes only with these files.
+      # Of the simulator's folder only sim_run.py is copied into it; the rest of the driver is
+      # mounted at run time (docs/requests/T3-oracle-image.md).
       - name: Restore the Wine image
         id: image
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: build/oracle-wine/image.tar
-          key: oracle-wine-image-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/oracle/wine/Dockerfile', 'tests/oracle/wine/common/*.sh', 'tests/oracle/wine/common/*.py', 'tests/oracle/wine/asm/*.sh', 'tests/oracle/wine/asm/*.py', 'tests/oracle/wine/sim/*.sh', 'tests/oracle/wine/sim/*.py') }}
+          key: oracle-wine-image-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/oracle/wine/Dockerfile', 'tests/oracle/wine/common/*.sh', 'tests/oracle/wine/common/*.py', 'tests/oracle/wine/asm/*.sh', 'tests/oracle/wine/asm/*.py', 'tests/oracle/wine/sim/sim_run.py') }}
       - name: Load the Wine image
         if: steps.image.outputs.cache-hit == 'true'
         run: docker load --input build/oracle-wine/image.tar

@@ -56,7 +56,9 @@ async function main() {
   if (options.from) {
     archive = new Uint8Array(readFileSync(options.from));
   } else {
-    const response = await fetch(URL_OF_ARCHIVE, { headers: { 'user-agent': 'easy68k-mac-tests (fetch-official)' } });
+    const response = await fetch(URL_OF_ARCHIVE, {
+      headers: { 'user-agent': 'easy68k-cross-platform-tests (fetch-official)' },
+    });
     if (!response.ok) throw new Error(`${URL_OF_ARCHIVE}: HTTP ${response.status} ${response.statusText}`);
     archive = new Uint8Array(await response.arrayBuffer());
   }

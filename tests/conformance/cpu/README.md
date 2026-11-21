@@ -1,7 +1,7 @@
 # CPU catalogue: the 68000 single-step suite on the EASy68K core
 
 Work package T4 (ARCHITECTURE.md 6.1 layer L7, 6.2.4). The catalogue itself, with every class of
-deviation and its count, is `docs/porting/cpu-deviations.md`. Part of easy68k-mac, an unofficial
+deviation and its count, is `docs/porting/cpu-deviations.md`. Part of easy68k-cross-platform, an unofficial
 port of EASy68K. GPL-2.0-or-later.
 
 | File                             | What                                                                                                                                                                     |

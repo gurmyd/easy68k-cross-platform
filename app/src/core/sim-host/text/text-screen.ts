@@ -519,9 +519,10 @@ export class TextScreen implements TextScreenApi {
     // A provider without `textOverhang` (it is optional in the contract) has no overhang.
     this.overhang = Math.max(0, this.deps.glyphs.textOverhang?.(s.font) ?? 0);
     this.overhangGlyph = this.overhang > 0 ? emptyGlyph(this.overhang, s.rowHeight) : null;
-    // The contract's GlyphProvider does not have this; the port's own provider does.
+    // `delInHighText` is an optional member of the contract's GlyphProvider (since gate I1 round 3);
+    // `monospacedOutline` is not, and only the port's own provider has it.
+    this.delInHighText = this.deps.glyphs.delInHighText?.(s.font) ?? null;
     const fallback = this.deps.glyphs as Partial<FallbackGlyphs>;
-    this.delInHighText = fallback.delInHighText?.(s.font) ?? null;
     this.monospacedOutline = fallback.monospacedOutline?.(s.font) ?? false;
   }
 

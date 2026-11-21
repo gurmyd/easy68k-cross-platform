@@ -1,7 +1,7 @@
 # SH2 request: capture the pen nibs with the GDI capture program
 
 - From: SH2 (ellipses and wide pens). To: T2 (owner of `tests/oracle/gdi-capture/`).
-- Status: open. Not urgent: nothing fails without it.
+- Status: done by T2 in gate I2 round 1. `gdi-capture nibs` writes `tests/conformance/gdi/golden/nibs.json` (the cap vertices at P0 over 360 directions, widths 2-255, plus the widened paths of the tie directions of SH2's review); `npm run oracle:gdi` regenerates and compares it on Windows (`--only nibs` alone), and `tests/conformance/gdi/nibs.test.ts` holds `pens.ts` to it on every system: all 254 nibs equal on this Windows (10.0.26300). Note for SH2: relative to P1 the cap vertices of many directions lie one sixteenth further out than the nib (README.md "Pen nibs"; the `ties` paths show it).
 
 ## What
 

@@ -88,6 +88,11 @@
   /* --- Focus (2.8): 2px solid accent, 1px offset, never removed ----------- */
   --focus-ring: 2px solid var(--c-accent);
   --focus-offset: 1px;
+  /* The same ring drawn inside a whole panel or list that holds the focus, where an outside ring
+     would be clipped by the region's edge (errata W2 entry 25): as a box-shadow, or as an
+     outline with this offset. */
+  --focus-ring-inset: inset 0 0 0 2px var(--c-accent);
+  --focus-offset-inset: -2px;
 
   /* --- Stacking (2.8) ---------------------------------------------------- */
   --z-panel: 1;

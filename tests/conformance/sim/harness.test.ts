@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { FileMode } from '../../../app/src/contracts';
 import { ConformanceFiles, ConformanceLog, fileKey } from './doubles';
-import { assembleConformance, createWineGlyphs, runScenario } from './harness';
+import { assembleConformance, createWineGlyphs, partsMode, runScenario } from './harness';
 import { maskArtifact, parseHeader, type ConformanceProgram } from './programs';
 
 const dist = (file: string) => fileURLToPath(new URL(`../../../engine/dist/${file}`, import.meta.url));
@@ -27,13 +27,23 @@ describe('ConformanceFiles', () => {
       'Data.TXT': { data: bytes('hello') },
       'ro.bin': { data: bytes('x'), readOnly: true },
     });
-    expect(fileKey('sub\\data.txt')).toBe('DATA.TXT');
+    expect(fileKey('.\\data.txt')).toBe('DATA.TXT');
+    // A name with a folder names a folder that does not exist (the original's fopen fails).
+    expect(fileKey('sub\\data.txt')).toBe('');
+    // Windows drops trailing periods and spaces; '?' and '*' name no file (trap15-a/a57).
+    expect(fileKey('DATA.TXT.')).toBe('DATA.TXT');
+    expect(fileKey('data.txt ')).toBe('DATA.TXT');
+    expect(fileKey('d?ta.txt')).toBe('');
+    expect(fileKey('d*.txt')).toBe('');
+    expect(files.fileOpen(bytes('nofolder\\x.bin'), FileMode.Create)).toBe(0);
+    expect(files.fileOpen(bytes('sub/Data.TXT'), FileMode.Read)).toBe(0);
+    expect(files.fileRemove(bytes('sub\\data.txt'))).toBe(false);
     expect(files.fileOpen(bytes('missing'), FileMode.Read)).toBe(0);
     expect(files.fileOpen(bytes('ro.bin'), FileMode.Update)).toBe(0); // r+b fails on a read-only file
     const ro = files.fileOpen(bytes('RO.BIN'), FileMode.Read);
     expect(ro).toBeGreaterThan(0);
     expect(files.fileWrite(ro, bytes('y'))).toBe(-1);
-    const h = files.fileOpen(bytes('c:\\x\\data.txt'), FileMode.Update);
+    const h = files.fileOpen(bytes('./DATA.txt'), FileMode.Update);
     expect(text(files.fileRead(h, 3))).toBe('hel');
     expect(text(files.fileRead(h, 10))).toBe('lo'); // short read
     expect(text(files.fileRead(h, 10))).toBe(''); // empty at the end
@@ -148,4 +158,31 @@ describe.skipIf(!enginesBuilt)('runScenario (needs engine/dist)', () => {
     );
     expect(text(realLog.outputLog)?.startsWith('EASy68K output log file: ')).toBe(true);
   }, 240_000);
+
+  // Review of T3, round 2: the doubles flattened 'nofolder\x.bin' to 'x.bin' and created it, where
+  // the original (D0.W = 2, D1 = $FFFFFFFF) and the real ProgramFiles fail.
+  it('a name in a missing folder fails in both modes', async () => {
+    const program = await assembleConformance(inline('trap15-a/a54-files-missing-folder'));
+    const real = await runScenario({ program, parts: 'final' });
+    const twin = await runScenario({ program, parts: 'doubles' });
+    const result = text(real.files['result.bin'] ?? null) ?? '';
+    expect(result.startsWith('D0=00000002 D1=FFFFFFFF ')).toBe(true);
+    expect(text(twin.files['result.bin'] ?? null)).toBe(result);
+    expect(Object.keys(real.files)).toEqual(['result.bin']);
+    expect(Object.keys(twin.files)).toEqual(['result.bin']);
+  }, 120_000);
+
+  it("uses the real ProgramFiles and LogService unless EASY68K_CONFORMANCE_PARTS is 'doubles'", () => {
+    const saved = process.env.EASY68K_CONFORMANCE_PARTS;
+    try {
+      delete process.env.EASY68K_CONFORMANCE_PARTS;
+      expect(partsMode({})).toBe('final');
+      process.env.EASY68K_CONFORMANCE_PARTS = 'doubles';
+      expect(partsMode({})).toBe('doubles');
+      expect(partsMode({ parts: 'final' })).toBe('final');
+    } finally {
+      if (saved === undefined) delete process.env.EASY68K_CONFORMANCE_PARTS;
+      else process.env.EASY68K_CONFORMANCE_PARTS = saved;
+    }
+  });
 });

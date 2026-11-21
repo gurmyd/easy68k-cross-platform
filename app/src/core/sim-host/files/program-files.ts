@@ -16,10 +16,17 @@
 //   or truncates it at once. The engine falls back from Update to Read itself (task 51 result 3).
 // - Streams: handles are positive integers, never reused; each stream has its own position; one
 //   file may be open in several streams.
-// - Write buffering: bytes written through a stream are pending until committed to the view - on
-//   close, on a seek, before a read through the same stream, and in whole multiples of
-//   STDIO_BUFFER as soon as that many are pending. No other stream and no other host part sees
-//   pending bytes.
+// - Write buffering, as the Borland run-time does it (measured under Wine, docs/porting/errata/T3.md
+//   F2, tests/conformance/windows-confirm/stdio-buffer.X68): a stream holds up to STDIO_BUFFER
+//   pending bytes. A write that does not fit into what is left of the buffer first commits the
+//   buffer (so byte by byte, 512 bytes become visible when the 513th arrives); a write of
+//   STDIO_BUFFER bytes or more commits the buffer and then goes to the file whole. Pending bytes
+//   are also committed on close, on a seek and before a read through the same stream. No other
+//   stream and no other host part sees pending bytes.
+// - Read buffering, likewise measured: a read takes its bytes from the stream's buffer and refills
+//   it STDIO_BUFFER bytes at a time from the file, so a stream that has read part of a file keeps
+//   returning the bytes it buffered even after another stream changed them; a seek or a write
+//   through the stream empties its buffer.
 // - A simulator reset is never seen here (the engine forgets its slots without closing them), so
 //   the streams of the old run stay open, with their pending bytes, until exit(): a later remove
 //   of such a file fails, and a new open does not see the pending bytes, as on Windows.
@@ -43,7 +50,7 @@ import { applyEntryBytes, parseJournal, serializeJournal, toBase64, type Journal
 
 export type { ProgramFilesDeps } from '../../../contracts';
 
-export const STDIO_BUFFER = 512; // bytes; Borland BUFSIZ, to be confirmed (O-15)
+export const STDIO_BUFFER = 512; // bytes; Borland BUFSIZ (O-15), confirmed under Wine (T3 errata F2)
 
 /** The mount of the desktop app's real file system (3.8.1). */
 const DISK_MOUNT = 'disk';
@@ -62,7 +69,12 @@ interface Stream {
   pending: Uint8Array;
   pendingLength: number;
   pendingStart: number;
+  /** The read buffer: bytes of the file as they were when the buffer was filled, from readStart. */
+  readBuffer: Uint8Array;
+  readStart: number;
 }
+
+const NO_BYTES = new Uint8Array(0);
 
 /** What changed in one file through one view since the view was last settled (for the journal). */
 interface Touch {
@@ -214,9 +226,11 @@ export class ProgramFiles implements ProgramFilesApi {
       view,
       writable: mode !== FileMode.Read,
       position: 0,
-      pending: new Uint8Array(0),
+      pending: new Uint8Array(STDIO_BUFFER),
       pendingLength: 0,
       pendingStart: 0,
+      readBuffer: NO_BYTES,
+      readStart: 0,
     });
     return handle;
   }
@@ -225,35 +239,59 @@ export class ProgramFiles implements ProgramFilesApi {
     const stream = this.streams.get(handle);
     if (!stream || !Number.isSafeInteger(count) || count < 0) return null;
     if (!this.commit(stream)) return null;
-    const data = stream.view.read(stream.path, stream.position, count);
-    if (data === null) return null;
-    stream.position += data.length;
+    // First what the buffer holds at the position.
+    const offset = stream.position - stream.readStart;
+    const buffered =
+      offset >= 0 && offset < stream.readBuffer.length
+        ? stream.readBuffer.subarray(offset, Math.min(offset + count, stream.readBuffer.length))
+        : NO_BYTES;
+    stream.position += buffered.length;
+    const rest = count - buffered.length;
+    if (rest === 0) return buffered.slice();
+    // Then refills of STDIO_BUFFER bytes until the count is met or the file ends. They are done as
+    // one read of the file; the buffer keeps the last block, as the last refill would have left it.
+    const start = stream.position;
+    const fresh = stream.view.read(stream.path, start, rest);
+    if (fresh === null) return null;
+    if (fresh.length > 0) {
+      const lastBlock = start + Math.floor((fresh.length - 1) / STDIO_BUFFER) * STDIO_BUFFER;
+      stream.readBuffer = stream.view.read(stream.path, lastBlock, STDIO_BUFFER) ?? NO_BYTES;
+      stream.readStart = lastBlock;
+    }
+    stream.position += fresh.length;
+    if (buffered.length === 0) return fresh;
+    const data = new Uint8Array(buffered.length + fresh.length);
+    data.set(buffered);
+    data.set(fresh, buffered.length);
     return data;
   }
 
   fileWrite(handle: number, data: Bytes): number {
     const stream = this.streams.get(handle);
     if (!stream || !stream.writable) return -1;
+    stream.readBuffer = NO_BYTES;
+    if (data.length === 0) return 0;
+    // What does not fit into the rest of the buffer pushes the buffer out first.
+    if (stream.pendingLength > 0 && stream.pendingLength + data.length > STDIO_BUFFER) {
+      if (!this.commit(stream)) return -1;
+    }
+    if (data.length >= STDIO_BUFFER) {
+      // A large write goes to the file whole, not through the buffer.
+      if (!this.viewWrite(stream.view, stream.path, stream.position, data)) return -1;
+      stream.position += data.length;
+      return data.length;
+    }
     if (stream.pendingLength === 0) stream.pendingStart = stream.position;
-    const needed = stream.pendingLength + data.length;
-    if (needed > stream.pending.length) {
-      const grown = new Uint8Array(Math.max(needed, stream.pending.length * 2, STDIO_BUFFER));
-      grown.set(stream.pending.subarray(0, stream.pendingLength));
-      stream.pending = grown;
-    }
     stream.pending.set(data, stream.pendingLength);
-    stream.pendingLength = needed;
+    stream.pendingLength += data.length;
     stream.position += data.length;
-    if (stream.pendingLength >= STDIO_BUFFER) {
-      const whole = stream.pendingLength - (stream.pendingLength % STDIO_BUFFER);
-      if (!this.commit(stream, whole)) return -1;
-    }
     return data.length;
   }
 
   fileSeek(handle: number, offset: number, whence: number): number {
     const stream = this.streams.get(handle);
     if (!stream || !Number.isSafeInteger(offset)) return -1;
+    stream.readBuffer = NO_BYTES;
     if (!this.commit(stream)) return -1;
     let base: number;
     if (whence === 0) base = 0;

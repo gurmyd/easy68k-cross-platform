@@ -1,14 +1,16 @@
-// Unit tests of the comparison helpers of the native-twin oracle (no build, no engine needed).
+// Unit tests of the comparison helpers of the native-twin oracle (no build needed; the test of how
+// programs are handed to the assembler needs engine/dist and skips without it).
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { engineNativeFlags, ORIGINAL_ARCHIVE, systemTarPath, unpackZip } from './build-asm-twins.mjs';
 import { engineSourceLists } from './build-sim-twin.mjs';
 import { classifyUnpatched, patchTriggeredBy, unpatchedDiffers } from './compare-asm.mjs';
 import { firstDifferentLine, knownDifference, standardScript } from './compare-sim.mjs';
-import { corpusFiles } from './corpus.mjs';
+import { assemblerModule, corpusFiles, loadProgram } from './corpus.mjs';
 
 describe('assembler comparison', () => {
   const W = [
@@ -85,6 +87,47 @@ describe('assembler comparison', () => {
   it('never takes a corpus file from reference/examples/github/easy68k-qt', () => {
     for (const path of corpusFiles({ local: true })) expect(path.toLowerCase()).not.toContain('easy68k-qt');
   });
+});
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+const enginesBuilt = existsSync(join(repoRoot, 'engine', 'dist', 'asm68k.wasm'));
+
+describe('the programs of the comparison', () => {
+  it.runIf(process.env.EASY68K_REQUIRE_ENGINES === '1' && !enginesBuilt)(
+    'engine/dist holds the assembler (EASY68K_REQUIRE_ENGINES=1)',
+    () => {
+      expect.fail('EASY68K_REQUIRE_ENGINES is 1 but engine/dist/asm68k.wasm is missing: run `npm run build:engines`.');
+    },
+  );
+
+  // The simulator conformance programs INCLUDE '..\dumplib.X68'. Before the parent folder was
+  // handed to the assembler, every one of them failed to assemble and the simulator comparison
+  // skipped it without a word.
+  it.skipIf(!enginesBuilt)(
+    'assembles a program that includes a file of its parent folder',
+    async () => {
+      const withParent = corpusFiles().filter((p) => /\bINCLUDE\s+'\.\.\\/i.test(readFileSync(p, 'latin1')));
+      expect(withParent.length).toBeGreaterThan(0);
+      const { assemble } = await assemblerModule();
+      const failed = [];
+      for (const path of withParent.slice(0, 5)) {
+        const p = await loadProgram(path);
+        expect(p.mainName).toBe(`${basename(dirname(path))}/${basename(path)}`);
+        expect(p.inputs.map(([name]) => name)).toContain(p.mainName);
+        const result = await assemble(p.mainName, new Map(p.inputs), {}, { year: 2026, month: 1, day: 1 });
+        if (result.fatal || !result.sRecord || result.errorCount)
+          failed.push(`${p.rel}: ${result.errorCount} error(s)`);
+      }
+      expect(failed).toEqual([]);
+      // a program without such a reference keeps its plain name
+      const plain = corpusFiles().find(
+        (p) => p.replaceAll('\\', '/').includes('/tests/corpus/') && !/\.\.[\\/]/.test(readFileSync(p, 'latin1')),
+      );
+      expect(plain).toBeDefined();
+      expect((await loadProgram(plain)).mainName).toBe(basename(plain));
+    },
+    60_000,
+  );
 });
 
 describe('simulator comparison', () => {
