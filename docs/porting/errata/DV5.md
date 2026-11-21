@@ -127,3 +127,25 @@ is no **Contract** section.
 - No further run was made: nothing in DV5's paths can change the outcome. Once D1 is repaired,
   the same run (`gh workflow run release.yml --ref <branch> -f draft_release=false`) should pass
   check 7 unchanged.
+
+### 9. Repair round 1 (after the independent verification)
+
+- D1 is still present: `origin/main` has no change to `vfs.ts`, `controller.ts` or `fs-ipc.ts`
+  since run 44960702355. Reproduced again at the branch head without a Mac: a `MemoryBackend`
+  mounted as `disk` whose `list` refuses every folder above the program's folder (as `fs-ipc.ts`
+  does outside the granted roots); `vfs.stat` of `.../tutorial1.L68` returns the file and
+  `vfs.resolve(folder, 'tutorial1.L68')` returns null (scratch test, not committed: it tests W1's
+  code). D1 is routed to its owners in `docs/requests/DV5-l68-resolve.md`, together with the
+  tightening of DV3's check 3. Check 7 is left as it is: it fails for the right reason, and making
+  it pass in DV5's paths would hide a defect a student meets.
+- The x64 artifact of run 44960702355 (`desktop-packaged-results-x64`) was downloaded and its
+  screenshots looked at: `programs-tutorial1-assembled.png` (status dialog, 0 warnings, 0 errors,
+  the path under `/disk/private/var/folders/...`), `programs-tutorial1-tutorial1-halted.png` (the
+  three message lines including `Unable to open .L68 file.`, the "not found" text in the listing,
+  the output `D1 contains: 8` to `Program End`, Halted, PC=$1074) and `programs-fileio-end.png`
+  (Halted, PC=$84C, the trace lines of the TRAPs in the message area). They agree with the arm64
+  ones and with the log. In the halted screenshot the toolbar's tooltip ("Program halted. Rewind
+  or Reload to run it again.") covers the D0 row, because the pointer is still on Run; cosmetic,
+  the check reads the fields from the page, not the picture.
+- The unit tests and the build step (`--project=packaged programs/`) pass on this PC: 6 passed, the
+  three Mac checks skipped.
