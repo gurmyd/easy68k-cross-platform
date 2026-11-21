@@ -162,3 +162,49 @@ describe.skipIf(!enginesBuilt)('DesktopNet through the real engine, against a sc
     }
   }, 60_000);
 });
+
+describe.skipIf(!enginesBuilt)('DesktopSerial through the real engine, against a scripted main process', () => {
+  it('tasks 40-43: D0.W keeps the CID in the high word, D1.B counts, task 42 appends what arrived', async () => {
+    const listeners = new Map<string, (...args: unknown[]) => void>();
+    const main: DesktopDeviceBridge = {
+      request(channel, ...args) {
+        if (channel === 'serial.write') {
+          // The device echoes, in two pieces, as a real line may deliver it.
+          const bytes = args[1] as Uint8Array;
+          listeners.get('serial.data')?.(args[0], 1, bytes.subarray(0, 1));
+          listeners.get('serial.data')?.(args[0], 1, bytes.subarray(1));
+          return { sent: bytes.length };
+        }
+        return true;
+      },
+      on(channel, listener) {
+        listeners.set(channel, listener);
+        return () => listeners.delete(channel);
+      },
+    };
+    const program = buildProgram({
+      strings: { PORT: 'COM4', DATA: 'PING' },
+      steps: [
+        { kind: 'call', task: 40, d0High: 5, a1: 'PORT', save: 'open' },
+        { kind: 'call', task: 43, d0High: 5, d1: 0xffffff04, a1: 'DATA', save: 'send' },
+        { kind: 'readSerial', cid: 5, want: 4, tries: 10, save: 'read' },
+        { kind: 'call', task: 42, d0High: 5, d1: 0x12345608, a1: 'BUFFER', save: 'short' },
+      ],
+    });
+    const { slots, test } = await run(program, () => ({
+      serial: new DesktopSerial({ bridge: main, portMap: () => ({ COM4: '/dev/ttys004' }) }),
+    }));
+    try {
+      expect(slots['open']?.d0).toBe(hex(5 << 16));
+      // D1.B = bytes sent; bits 31..8 kept.
+      expect(slots['send']).toEqual({ d0: hex(5 << 16), d1: hex(0xffffff04) });
+      // Read in pieces until 4 bytes: the last read's D0 and the bytes in all.
+      expect(slots['read']).toEqual({ d0: hex(5 << 16), d1: hex(4) });
+      expect(new TextDecoder().decode(test.engine.memory.subarray(BUFFER, BUFFER + 4))).toBe('PING');
+      // Nothing more has arrived: result 4 (timeout), D1.B = 0, bits 31..8 kept.
+      expect(slots['short']).toEqual({ d0: hex((5 << 16) | 4), d1: hex(0x12345600) });
+    } finally {
+      test.release();
+    }
+  }, 60_000);
+});

@@ -19,7 +19,9 @@ the original's own "not available" result (note 37 of 1.4), unchanged.
   reads.
 - **Task 43 returns when the system has taken the bytes**, not when they have left the wire.
 - **Line settings the device cannot do.** A setting of task 41 that the Mac's serial driver refuses
-  (mark parity is one on some drivers) gives result 2, where Windows may accept it.
+  gives result 2, where Windows may accept it. Mark parity is one: macOS has no mark parity, and
+  task 41 with parity 3 gives 2 there (seen on GitHub's macOS 15 runner against a pseudo-terminal;
+  the port stays open with its previous settings).
 - **Changing parity, data bits or stop bits** closes the device and opens it again with the new
   settings (only the baud rate can be changed on an open port on a Mac); bytes the driver held
   and had not passed on yet are lost.
