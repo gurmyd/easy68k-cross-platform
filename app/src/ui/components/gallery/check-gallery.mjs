@@ -480,6 +480,106 @@ async function keyboardPass(browser, name) {
   await k('Enter');
   check(`${p} Enter in a check box presses the default button`, (await output(page)).includes('Assembler Options: OK'));
 
+  // A modal dialog with controls that cannot take the focus (visibility: hidden, inside a disabled
+  // fieldset) and controls that lose it (disabled or removed when pressed). Tab must pass over them
+  // and go on from where a lost control was, never stay in place (errata W2 entry 13).
+  await page.locator('[data-testid=open-awkward]').click();
+  await page.waitForSelector('[data-testid=awkward-body]', { timeout: 5000 });
+  const awkwardNames = () =>
+    page.evaluate(() => {
+      const box = document.querySelector('[role=dialog][aria-modal=true]');
+      const button = (text) => Array.from(box.querySelectorAll('button')).find((b) => b.textContent.trim() === text);
+      const field = box.querySelector('[data-testid=awkward-body] input:not([aria-label])');
+      return {
+        name: window.__e68name(field),
+        disable: window.__e68name(button('Disable me')),
+        remove: window.__e68name(button('Remove me')),
+        three: window.__e68name(button('Three')),
+        ok: window.__e68name(button('OK')),
+        cancel: window.__e68name(button('Cancel')),
+      };
+    });
+  const aw = await awkwardNames();
+  a = await active(page);
+  check(`${p} hidden controls: the dialog opens on its default button`, a?.inDialog && a.text === 'OK', a?.text);
+  await tabLog();
+  const awForward = [];
+  await press('Tab', 6, awForward);
+  const awWantForward = [aw.cancel, aw.name, aw.disable, aw.remove, aw.three, aw.ok];
+  check(
+    `${p} hidden controls: Tab passes over the hidden button and the disabled fieldset`,
+    JSON.stringify(awForward) === JSON.stringify(awWantForward),
+    `expected ${awWantForward.join(' > ')}; got ${awForward.join(' > ')}`,
+  );
+  const awBackward = [];
+  await press('Shift+Tab', 6, awBackward);
+  const awWantBackward = [aw.three, aw.remove, aw.disable, aw.name, aw.cancel, aw.ok];
+  check(
+    `${p} hidden controls: Shift+Tab passes over them in the reverse order`,
+    JSON.stringify(awBackward) === JSON.stringify(awWantBackward),
+    `expected ${awWantBackward.join(' > ')}; got ${awBackward.join(' > ')}`,
+  );
+  const awCancelled = await tabLog();
+  check(
+    `${p} hidden controls: each key cancelled`,
+    awCancelled.length === 12 && awCancelled.every(Boolean),
+    `cancelled per key: ${awCancelled.map((c) => (c ? 'y' : 'n')).join('')}`,
+  );
+  await page.locator('[role=dialog] button', { hasText: 'Disable me' }).focus();
+  await k('Space');
+  const afterDisable = await focusName();
+  await k('Shift+Tab');
+  let landed = await focusName();
+  check(
+    `${p} Shift+Tab after the focused button was disabled goes to its previous neighbour`,
+    landed === aw.name,
+    `after Space the focus was on ${afterDisable}; Shift+Tab went to ${landed}, expected ${aw.name}`,
+  );
+  await page.locator('[role=dialog] button', { hasText: 'Remove me' }).focus();
+  await k('Space');
+  const afterRemove = await focusName();
+  await k('Tab');
+  landed = await focusName();
+  check(
+    `${p} Tab after the focused button was removed goes to its next neighbour`,
+    landed === aw.three,
+    `after Space the focus was on ${afterRemove}; Tab went to ${landed}, expected ${aw.three}`,
+  );
+  // A Tab that an input method is composing with belongs to it (synthetic keydown: a real IME
+  // cannot be driven headless). The same synthetic Tab without isComposing must be taken.
+  await page.locator('[data-testid=awkward-body] input:not([aria-label])').focus();
+  const synthetic = async (isComposing) =>
+    page.evaluate((composing) => {
+      const target = document.activeElement;
+      const event = new window.KeyboardEvent('keydown', {
+        key: 'Tab',
+        code: 'Tab',
+        isComposing: composing,
+        bubbles: true,
+        cancelable: true,
+      });
+      target.dispatchEvent(event);
+      return { cancelled: event.defaultPrevented, focus: window.__e68name(document.activeElement) };
+    }, isComposing);
+  const ime = await synthetic(true);
+  check(
+    `${p} a Tab while an input method composes is left to it`,
+    !ime.cancelled && ime.focus === aw.name,
+    `cancelled=${ime.cancelled}, focus on ${ime.focus}`,
+  );
+  const plain = await synthetic(false);
+  check(
+    `${p} the same synthetic Tab without composition is taken by the dialog`,
+    plain.cancelled && plain.focus === aw.three,
+    `cancelled=${plain.cancelled}, focus on ${plain.focus}, expected ${aw.three}`,
+  );
+  await k('Escape');
+  check(
+    `${p} hidden controls: Escape closes the dialog`,
+    (await page.locator('[aria-modal=true]').count()) === 0,
+    `${await page.locator('[aria-modal=true]').count()} modal layers open`,
+  );
+
   // Message boxes.
   await page.locator('[data-testid=open-message-confirmation]').click();
   await k('n');

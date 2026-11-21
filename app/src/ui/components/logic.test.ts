@@ -3,7 +3,7 @@
 // focus trap, message-box answers.
 
 import { describe, expect, it } from 'vitest';
-import { trapStep } from './focus';
+import { isImeKey, trapOrder, trapStep } from './focus';
 import { menuKeyAction, type MenuEntry, type MenuKeyEvent } from './menu-model';
 import { messageBoxEscapeResult } from './MessageBox';
 import { findMnemonic, findTypeahead, mnemonicKeyOf, parseMnemonic, stripMnemonic } from './mnemonic';
@@ -299,6 +299,36 @@ describe('focus trap', () => {
     // Outside the dialog or on the dialog itself (nothing before): first / last.
     expect(trapStep(5, -1, false, 0)).toBe(0);
     expect(trapStep(5, -1, true, 0)).toBe(4);
+  });
+});
+
+describe('focus trap: elements that refuse the focus, and input methods', () => {
+  it('tries every element once, starting where trapStep goes, in the direction of the key', () => {
+    expect(trapOrder(5, 1, false)).toEqual([2, 3, 4, 0, 1]);
+    expect(trapOrder(5, 1, true)).toEqual([0, 4, 3, 2, 1]);
+    // From a point between elements: the neighbours of that point first.
+    expect(trapOrder(5, -1, false, 2)).toEqual([2, 3, 4, 0, 1]);
+    expect(trapOrder(5, -1, true, 2)).toEqual([1, 0, 4, 3, 2]);
+    // From outside: first (Tab) or last (Shift+Tab) first.
+    expect(trapOrder(3, -1, false)).toEqual([0, 1, 2]);
+    expect(trapOrder(3, -1, true)).toEqual([2, 1, 0]);
+    expect(trapOrder(1, 0, false)).toEqual([0]);
+    expect(trapOrder(0, -1, false)).toEqual([]);
+  });
+
+  it('passes over an element that refuses the focus instead of staying put', () => {
+    // A simulated dialog list where element 2 refuses focus(): Tab from 1 lands on 3, Shift+Tab from 3 on 1.
+    const refuses = new Set([2]);
+    const land = (order: number[]) => order.find((index) => !refuses.has(index));
+    expect(land(trapOrder(5, 1, false))).toBe(3);
+    expect(land(trapOrder(5, 3, true))).toBe(1);
+  });
+
+  it('leaves a key to the input method while it composes', () => {
+    expect(isImeKey({ isComposing: true, keyCode: 9 })).toBe(true);
+    expect(isImeKey({ isComposing: false, keyCode: 229 })).toBe(true);
+    expect(isImeKey({ isComposing: false, keyCode: 9 })).toBe(false);
+    expect(isImeKey({})).toBe(false);
   });
 });
 

@@ -1212,7 +1212,7 @@ function ListsSection({ report }: { report: Report }) {
 
 // --- Dialogs and message boxes -------------------------------------------------------
 
-type OpenDialog = { kind: 'message'; index: number } | { kind: 'modal' } | null;
+type OpenDialog = { kind: 'message'; index: number } | { kind: 'modal' } | { kind: 'awkward' } | null;
 
 function DialogsSection({ report }: { report: Report }) {
   const [open, setOpen] = useState<OpenDialog>(null);
@@ -1221,6 +1221,7 @@ function DialogsSection({ report }: { report: Report }) {
   const [findText, setFindText] = useState('');
   const [options, setOptions] = useState({ listing: true, symbols: false, crossRef: false });
   const [tab, setTab] = useState<string | null>('options');
+  const [awkward, setAwkward] = useState({ disabled: false, removed: false, name: '' });
   const message = open?.kind === 'message' ? MESSAGE_SAMPLES[open.index] : undefined;
   return (
     <Section
@@ -1238,6 +1239,14 @@ function DialogsSection({ report }: { report: Report }) {
         <Specimen label="Open the real thing">
           <div className="e68-gallery__stack">
             <Button caption="&Modal dialog..." onClick={() => setOpen({ kind: 'modal' })} data-testid="open-modal" />
+            <Button
+              caption="Modal dialog with &hidden controls..."
+              onClick={() => {
+                setAwkward({ disabled: false, removed: false, name: '' });
+                setOpen({ kind: 'awkward' });
+              }}
+              data-testid="open-awkward"
+            />
             <Button caption="Modeless &Find dialog" onClick={() => setFindOpen(true)} data-testid="open-find" />
             {MESSAGE_SAMPLES.map((sample, index) => (
               <Button
@@ -1343,6 +1352,45 @@ function DialogsSection({ report }: { report: Report }) {
               </div>
             )}
           </TabPanel>
+        </Dialog>
+      )}
+      {open?.kind === 'awkward' && (
+        // Controls that cannot take the focus (hidden, in a disabled fieldset) and controls that
+        // lose it (disabled or removed when pressed): Tab must pass over them (errata W2 entry 13).
+        <Dialog
+          title="Hidden controls"
+          width={420}
+          onCancel={() => setOpen(null)}
+          footer={
+            <>
+              <Button caption="&OK" isDefault onClick={() => setOpen(null)} />
+              <Button caption="Cancel" onClick={() => setOpen(null)} />
+            </>
+          }
+        >
+          <div className="e68-gallery__stack" data-testid="awkward-body">
+            <TextField
+              label="&Name:"
+              value={awkward.name}
+              onChange={(name) => setAwkward((a) => ({ ...a, name }))}
+              widthCh={16}
+            />
+            <button type="button" style={{ visibility: 'hidden' }}>
+              Invisible
+            </button>
+            <fieldset disabled style={{ border: 0, margin: 0, padding: 0 }}>
+              <input aria-label="Switched off" defaultValue="off" />
+            </fieldset>
+            <Button
+              caption="&Disable me"
+              disabled={awkward.disabled}
+              onClick={() => setAwkward((a) => ({ ...a, disabled: true }))}
+            />
+            {!awkward.removed && (
+              <Button caption="&Remove me" onClick={() => setAwkward((a) => ({ ...a, removed: true }))} />
+            )}
+            <Button caption="&Three" onClick={() => undefined} />
+          </div>
         </Dialog>
       )}
       {open?.kind === 'modal' && nested && (

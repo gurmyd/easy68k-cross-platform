@@ -18,8 +18,13 @@ export function tabbables(root: Element): HTMLElement[] {
   return all.filter((element) => {
     if (element.tabIndex < 0) return false;
     if (element.closest('[inert]')) return false;
+    // Disabled, also by a <fieldset disabled> around it (the selectors above miss that case).
+    if (element.matches(':disabled')) return false;
     // Not rendered (display: none, or inside a closed <details>).
     if (element.getClientRects().length === 0) return false;
+    // Rendered but invisible (visibility: hidden or collapse): it refuses the focus.
+    const view = element.ownerDocument.defaultView;
+    if (view && view.getComputedStyle(element).visibility !== 'visible') return false;
     // Of a radio group only the checked button (or the first) is a tab stop.
     if (element instanceof HTMLInputElement && element.type === 'radio' && element.name) {
       const group = all.filter(
@@ -49,6 +54,30 @@ export function trapStep(count: number, current: number, shift: boolean, precedi
   const before = Math.min(Math.max(0, preceding), count);
   if (shift) return before > 0 ? before - 1 : count - 1;
   return before < count ? before : 0;
+}
+
+/**
+ * The indices of a modal dialog's list to try, in turn, for one Tab (or
+ * Shift+Tab): first the one `trapStep` gives, then on in the same direction,
+ * each element once. The dialog focuses them one after the other until one
+ * takes the focus, so an element that refuses it (removed or hidden in the
+ * meantime) does not hold the focus in place.
+ */
+export function trapOrder(count: number, current: number, shift: boolean, preceding = 0): number[] {
+  const first = trapStep(count, current, shift, preceding);
+  if (first === null) return [];
+  const order: number[] = [];
+  for (let i = 0; i < count; i++) order.push(shift ? (((first - i) % count) + count) % count : (first + i) % count);
+  return order;
+}
+
+/**
+ * True for a key pressed while an input method (IME) is composing text: the
+ * key belongs to the IME (Tab may pick a candidate), so a dialog leaves it alone.
+ * Browsers report such a keydown with `isComposing` or with the key code 229.
+ */
+export function isImeKey(event: { isComposing?: boolean; keyCode?: number }): boolean {
+  return event.isComposing === true || event.keyCode === 229;
 }
 
 /** The number of `list` elements (in document order) that come before `node` in the document. */
