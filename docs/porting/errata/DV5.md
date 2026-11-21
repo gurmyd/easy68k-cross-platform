@@ -105,4 +105,25 @@ is no **Contract** section.
 
 ### 8. Runs of release.yml on the branch gate3/dv5
 
-- (filled in below as the runs finish)
+- Run 44960702355 (commit b3ed49f, manual, `draft_release` unticked): `version`, `engines`, `web`
+  passed; `mac-arm64` (job 137018680443) and `mac-x64` (job 137018680427) built, signed and
+  checked the bundle as before, then the packaged suite: 58 passed, 1 failed on each. DV3's
+  checks 1-5 passed. DV5's unit tests and build step passed (the engine reproduced both official
+  examples byte for byte on the runners). `checksums` and `publish` were skipped because the mac
+  jobs failed.
+  - Check 6 passed on both: status dialog 0 errors, 0 warnings; `tutorial1.L68` (7714 bytes; the
+    golden has 7713, its date line is one character shorter) and `tutorial1.S68` (576 bytes) in
+    the temporary folder, equal to the official files but the date line.
+  - Check 7 failed on both, only on D1: the message area had a third line,
+    `Unable to open .L68 file.`. The rest held: Halted 236 ms (arm64) and 638 ms (x64) after Run;
+    the Output canvas 640 x 480, hash `377357e7...088170` equal to the headless harness's; the
+    text rows `D1 contains: 8`, `D2 contains: 520`, `D3 contains: 68020`, `Program End` equal.
+    The screenshot (artifact `desktop-packaged-results-<arch>`,
+    `screenshots/programs-tutorial1-tutorial1-halted.png`) shows the "A matching .L68 file was
+    not found" text where the listing should be.
+  - Check 8 passed on both: `test1.txt` held the 24 bytes after the TRAP of task 50 (0 ms and
+    1 ms after the PC moved); the bytes were on disk from the task 55 TRAP on (entry 2); Run
+    halted and task 57 deleted the file.
+- No further run was made: nothing in DV5's paths can change the outcome. Once D1 is repaired,
+  the same run (`gh workflow run release.yml --ref <branch> -f draft_release=false`) should pass
+  check 7 unchanged.
