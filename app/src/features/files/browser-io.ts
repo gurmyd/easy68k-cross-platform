@@ -53,8 +53,14 @@ export function pickFiles(options: PickOptions = {}): Promise<File[] | null> {
     input.addEventListener('cancel', () => finish(null));
     // Browsers without the 'cancel' event: the window gets the focus back when the chooser closes;
     // if no 'change' follows soon, the user cancelled.
-    const onFocus = () =>
+    // Not for a folder. There the browser asks "Upload N files to this site?" after the chooser has
+    // closed, and hands the files over only when the person has answered and it has listed them:
+    // that can be many seconds after the focus came back, and giving up after one second dropped
+    // the whole import without a word. A folder choice ends only with 'change' or 'cancel'.
+    const onFocus = () => {
+      if (options.folder) return;
       setTimeout(() => finish(input.files && input.files.length > 0 ? Array.from(input.files) : null), 1000);
+    };
     window.addEventListener('focus', onFocus);
     document.body.append(input);
     input.click();
