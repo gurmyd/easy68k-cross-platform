@@ -189,3 +189,18 @@ is no **Contract** section.
   (ubuntu, integration), check:wave2's graphicSound.X68 timing; e2e (macos-latest, chromium),
   `tests/e2e/editor/editing.spec.ts:212` "Undo reverses typing, a paste and a comment" (an editor
   test that does not reach `vfs.resolve`). Routed to I2, the wave-2 audio owner and the e2e owner.
+
+### 12. Second Mac proof of D1 (after the review)
+
+- Commit b255dcb (b06b365, the review's changes, merged with `origin/main` at 7845093). The commit
+  that records this entry changes only this file.
+- Release run 44972000916 (manual, `draft_release` unticked): every job passed (`publish`
+  skipped). `mac-arm64` (job 137053657347) and `mac-x64` (job 137053657425): `59 passed` each,
+  `check 7: passed` on both; check 3 printed the first listing rows
+  `00000000                            10  * This program is public domain.` (arm64) and
+  `00001000 Starting Address` (x64), a listing row on both, not the "not found" text.
+- CI run 44972001171 (push of b255dcb), job desktop-dev (macos-15, job 137053748182): `78 passed`,
+  `1 skipped`, with the three tests of `tests/desktop/dev/programs.spec.ts` passing ("assembles with
+  both INCLUDEs found; Execute shows its listing with the PC row marked", "Run: the data file named
+  in another letter case is read, and the included texts are shown", "the other callers of
+  Vfs.resolve find names on /disk in any letter case").
