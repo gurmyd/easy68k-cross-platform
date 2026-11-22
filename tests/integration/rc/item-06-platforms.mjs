@@ -31,7 +31,10 @@ import { fileURLToPath } from 'node:url';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const yaml = createRequire(join(repo, 'package.json'))('js-yaml');
-const workflow = (name) => yaml.load(readFileSync(join(repo, '.github', 'workflows', name), 'utf8'));
+// EASY68K_RC_WORKFLOWS=<folder> reads the workflows from another folder (to show that the judge
+// fails when a workflow is broken).
+const workflowsDir = process.env.EASY68K_RC_WORKFLOWS ?? join(repo, '.github', 'workflows');
+const workflow = (name) => yaml.load(readFileSync(join(workflowsDir, name), 'utf8'));
 
 const args = { runs: [], mac: [] };
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -161,9 +164,14 @@ check(
 const oracleText = JSON.stringify(oracle.jobs);
 check(/oracle:wine:asm/.test(oracleText), 'regenerates the assembler goldens (oracle:wine:asm)');
 check(/oracle:wine:sim/.test(oracleText), 'regenerates the simulator goldens (oracle:wine:sim)');
+// 7.4: "opens a pull request when a golden changed". The repository does not let GitHub Actions
+// create pull requests (run 45034017858), so since erratum T1 27 the job pushes the candidate to
+// the branch oracle/regenerated-<run id> and names in its summary the address at which a person
+// opens the pull request (.../pull/new/<branch>). Either form proposes the change for review.
 check(
-  Boolean(oracle.jobs.propose) && /gh pr create/.test(oracleText),
-  'opens a pull request when a golden changed (job propose)',
+  Boolean(oracle.jobs.propose) &&
+    (/gh pr create/.test(oracleText) || (/oracle\/regenerated-/.test(oracleText) && /pull\/new\//.test(oracleText))),
+  'proposes a pull request when a golden changed (job propose: opens it, or pushes the branch and names the address, erratum T1 27)',
 );
 check(/site/.test(oracleText) && /manifest/.test(oracleText), 'fetches the site set and compares with the manifest');
 check(Boolean(oracle.jobs.singlestep), 'single-step suites re-checked against the frozen baseline (job singlestep)');
@@ -256,14 +264,20 @@ const prescribed = {
   ],
   release: ['engines / build (linux)', 'web', 'mac-arm64', 'mac-x64', 'checksums', 'publish (draft)'],
   pages: ['engines / build (linux)', 'build', 'deploy'],
-  oracle: ['engines / build (linux)', 'wine (official EDIT68K.exe and SIM68K.exe)', 'propose', 'singlestep'],
+  // The jobs propose and singlestep by the names GitHub shows for them (their `name:` in oracle.yml).
+  oracle: [
+    'engines / build (linux)',
+    'wine (official EDIT68K.exe and SIM68K.exe)',
+    'propose the regenerated goldens',
+    'single-step CPU suites (frozen baseline)',
+  ],
 };
 /** Jobs that 7.4 runs only on some events; on the others GitHub reports them as skipped. */
 const skippedAllowed = {
   ci: (name, event) => name.startsWith('e2e stability') && event === 'push',
   release: (name) => name === 'publish (draft)', // a manual run without draft_release
   pages: () => false,
-  oracle: (name) => name === 'propose', // runs only when a golden changed
+  oracle: (name) => name === 'propose the regenerated goldens', // runs only when a golden changed
 };
 for (const { name, file } of args.runs) {
   const data = JSON.parse(readFileSync(file, 'utf8'));

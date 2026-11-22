@@ -16,7 +16,12 @@
 //   5. Given CI logs, that every web-e2e entry PASSED in each named browser log, and every
 //      desktop-e2e entry in the desktop logs: a test that failed, was skipped, was an expected
 //      failure (test.fail) or does not appear at all is reported by name.
-//   6. Given Vitest JSON reports (--reporter=json), that every unit entry with a title passed.
+//   6. Given Vitest JSON reports (--reporter=json), that every unit entry passed: an entry with a
+//      title by that title in its file; a file by every test in it; a folder of programs without
+//      test files (tests/conformance/sim/logs) by a passed test, in the suite of the folder above
+//      it, named after each of its programs ("logs/l01-arith"). npm run check:rc makes the reports
+//      (the files the entries name, and the sim project of test:conformance) and passes them.
+//      The counts are printed for the entries of 1.3 (item 5) and with those of 1.5.
 //
 // Run from the repository root:
 //   node tests/integration/rc/item-05-parity.mjs
@@ -30,7 +35,7 @@
 // Exit code 0 when every check that was given its input holds, 1 otherwise. Every problem is
 // printed with its row, so that a failure can be read from the output alone.
 
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -262,9 +267,10 @@ for (const [item, found] of manualItems) {
 
 /**
  * Results of a Playwright list-reporter log: one record per result line, with the file (forward
- * slashes, relative to tests/), the full title path after the file, and the outcome. Colours are
- * read before they are stripped: a green cross is an expected failure (test.fail), a red one a
- * failure.
+ * slashes, relative to tests/; the duration at the end may be in ms, s, m or h, so that a test of
+ * more than a minute, "(1.2m)", is read too), the full title path after the file, and the outcome.
+ * Colours are read before they are stripped: a green cross is an expected failure (test.fail), a
+ * red one a failure.
  */
 const ESC = String.fromCharCode(27);
 const COLOUR = new RegExp(`${ESC}\\[[0-9;]*m`, 'g');
@@ -278,7 +284,7 @@ function playwrightResults(path) {
     const line = raw.replace(TIMESTAMP, '');
     const plain = line.replace(COLOUR, '');
     const match =
-      /^\s+(✓|✘|ok|x|-)\s+\d+\s+(?:\[([\w-]+)\]\s+›\s+)?(\S+?):\d+:\d+\s+›\s+(.*?)(?:\s+\(\d[\d.]*m?s\))?\s*$/.exec(
+      /^\s+(✓|✘|ok|x|-)\s+\d+\s+(?:\[([\w-]+)\]\s+›\s+)?(\S+?):\d+:\d+\s+›\s+(.*?)(?:\s+\(\d[\d.]*(?:ms|s|m|h)\))?\s*$/.exec(
         plain,
       );
     if (!match) continue;
@@ -358,12 +364,30 @@ if (args.unit.length > 0) {
     if (entry.kind !== 'unit') continue;
     if (entry.test === undefined) {
       // A folder or a whole file: every test in it must have passed, and there must be some. A
-      // folder of programs (tests/conformance/sim/logs) holds no test files: the suite that runs
-      // it is the folder above it, so then every test of that suite must have passed.
+      // folder of programs (tests/conformance/sim/logs) holds no test files: then its tests are
+      // those of the suite in the folder above it whose title names one of its programs
+      // ("logs/l01-arith", as conformance.test.ts names a program by its id), and every program of
+      // the folder must have one (review of the release-candidate check: before, every test of the
+      // folder above counted, or nothing when the report did not hold that suite).
       let inside = assertions.filter((a) => a.file.endsWith(entry.file) || a.file.includes(`${entry.file}/`));
-      if (inside.length === 0) {
+      const missingPrograms = [];
+      if (inside.length === 0 && existsSync(join(repo, entry.file)) && statSync(join(repo, entry.file)).isDirectory()) {
         const suite = entry.file.replace(/\/[^/]+$/, '/');
-        inside = assertions.filter((a) => a.file.includes(suite));
+        const folder = entry.file.split('/').at(-1);
+        const stems = [
+          ...new Set(
+            readdirSync(join(repo, entry.file))
+              .filter((name) => /\.x68$/i.test(name))
+              .map((name) => name.replace(/\.[^.]+$/, '')),
+          ),
+        ];
+        inside = assertions.filter(
+          (a) => a.file.includes(suite) && stems.some((stem) => a.title === `${folder}/${stem}`),
+        );
+        for (const stem of stems)
+          if (!inside.some((a) => a.title === `${folder}/${stem}` && a.status === 'passed'))
+            missingPrograms.push(`${folder}/${stem}`);
+        if (stems.length === 0) missingPrograms.push(`${entry.file} holds no program`);
       }
       // Skipped tests are counted but not held against it: each suite has a guard test that is
       // skipped whenever engine/dist is present (it fails only when the engines are missing).
@@ -374,17 +398,17 @@ if (args.unit.length > 0) {
         tests: inside.length,
         notPassed: failed.length,
         skipped: skipped.length,
+        programsWithoutPassedTest: missingPrograms,
       });
-      if (inside.length === 0 || failed.length > 0) {
-        summary.notPassed.push({
-          row: label(row),
-          file: entry.file,
-          outcome: inside.length === 0 ? 'absent' : `${failed.length} not passed`,
-        });
-        problem(
-          label(row),
-          `unit ${entry.file}: ${inside.length === 0 ? 'no test of it in the reports' : `${failed.length} of ${inside.length} not passed`}`,
-        );
+      if (inside.length === 0 || failed.length > 0 || missingPrograms.length > 0) {
+        const outcome =
+          inside.length === 0
+            ? 'no test of it in the reports'
+            : failed.length > 0
+              ? `${failed.length} of ${inside.length} not passed`
+              : `no passed test for ${missingPrograms.join(', ')}`;
+        summary.notPassed.push({ row: label(row), file: entry.file, outcome });
+        problem(label(row), `unit ${entry.file}: ${outcome}`);
       } else summary.passed += 1;
       continue;
     }
@@ -433,6 +457,14 @@ for (const [item, found] of manualItems) {
   );
 }
 console.log('  (sign-off of these items: OPEN; only a person on a Mac can give it)');
+/** "N of M entries of 1.3": item 5 counts 1.3 only; the totals below include 1.5. */
+const of13 = (kind, summary, extra = () => true) => {
+  const wanted = allEntries.filter(
+    ({ row, entry }) => entry.kind === kind && extra(entry) && /^1\.3\./.test(row.section),
+  );
+  const missed = summary.notPassed.filter((miss) => /^1\.3\./.test(miss.row)).length;
+  return `${wanted.length - missed} of ${wanted.length} entries of 1.3`;
+};
 for (const [browser, summary] of Object.entries(resultsReport.web)) {
   const wanted = allEntries.filter(({ entry }) => entry.kind === 'web-e2e' && entry.test !== undefined).length;
   const distinct = new Set(
@@ -442,24 +474,26 @@ for (const [browser, summary] of Object.entries(resultsReport.web)) {
   ).size;
   const distinctMissed = new Set(summary.notPassed.map((miss) => `${miss.file}\u0000${miss.test}`)).size;
   console.log(
-    `web-e2e entries passed in ${browser}: ${summary.passed} of ${wanted}; distinct tests named: ${distinct}, not passed: ${distinctMissed} (${summary.resultLines} result lines read)`,
+    `web-e2e entries passed in ${browser}: ${of13('web-e2e', summary, (e) => e.test !== undefined)}; with 1.5 ${summary.passed} of ${wanted}; distinct tests named: ${distinct}, not passed: ${distinctMissed} (${summary.resultLines} result lines read)`,
   );
   for (const miss of summary.notPassed) console.log(`  - ${miss.outcome}: ${miss.file} "${miss.test}" [${miss.row}]`);
 }
 if (resultsReport.desktop) {
   const wanted = allEntries.filter(({ entry }) => entry.kind === 'desktop-e2e').length;
   console.log(
-    `desktop-e2e entries passed: ${resultsReport.desktop.passed} of ${wanted} (${resultsReport.desktop.resultLines} result lines read)`,
+    `desktop-e2e entries passed: ${of13('desktop-e2e', resultsReport.desktop)}; with 1.5 ${resultsReport.desktop.passed} of ${wanted} (${resultsReport.desktop.resultLines} result lines read)`,
   );
   for (const miss of resultsReport.desktop.notPassed)
     console.log(`  - ${miss.outcome}: ${miss.file} "${miss.test}" [${miss.row}]`);
 }
 if (resultsReport.unit) {
   const wanted = allEntries.filter(({ entry }) => entry.kind === 'unit').length;
-  console.log(`unit entries passed: ${resultsReport.unit.passed} of ${wanted}`);
+  console.log(
+    `unit entries passed: ${of13('unit', resultsReport.unit)}; with 1.5 ${resultsReport.unit.passed} of ${wanted}`,
+  );
   for (const folder of resultsReport.unit.folders)
     console.log(
-      `  folder ${folder.file}: ${folder.tests} tests, ${folder.notPassed} failed, ${folder.skipped} skipped`,
+      `  folder ${folder.file}: ${folder.tests} tests, ${folder.notPassed} failed, ${folder.skipped} skipped${folder.programsWithoutPassedTest.length ? `; NO PASSED TEST for ${folder.programsWithoutPassedTest.join(', ')}` : ''}`,
     );
   for (const miss of resultsReport.unit.notPassed)
     console.log(`  - ${miss.outcome}: ${miss.file} "${miss.test ?? ''}" [${miss.row}]`);

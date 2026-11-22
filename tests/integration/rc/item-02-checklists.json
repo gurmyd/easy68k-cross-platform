@@ -1,5 +1,5 @@
 {
-  "about": "Release candidate, item 2 (ARCHITECTURE.md 6.9): every automatable item of trap15-a section 13, hardware section 13 and the sim-ui section 19 quirks marked as affecting program results, with the tests that prove it. Built by hand by I3 from the three specs and the test sources on 2026-11-22; checked by item-02-checklists.mjs (every named program and test must exist). verdict: proved = the named tests cover the whole item; partial = they cover a part (note says which); none = no test found; manual = needs a person or a device. A program proof counts against the official SIM68K.exe golden; a test proof is a unit, engine or conformance test against what the spec dictates (no golden).",
+  "about": "Release candidate, item 2 (ARCHITECTURE.md 6.9): every automatable item of trap15-a section 13, hardware section 13 and the sim-ui section 19 quirks marked as affecting program results, with the tests that prove it. Built by hand by I3 from the three specs and the test sources on 2026-11-22; checked by item-02-checklists.mjs (every named program must have an official result, and every named test must exist with exactly the title given; brought up to date on 2026-11-22 with T3's reviewed mapping, errata T3 12 and 13). verdict: proved = the named tests cover the whole item; partial = they cover a part (note says which); none = no test found; manual = needs a person or a device. A program proof counts against the official SIM68K.exe golden; a test proof is a unit, engine or conformance test against what the spec dictates (no golden).",
   "lists": [
     {
       "name": "trap15-a 13",
@@ -94,7 +94,7 @@
             },
             {
               "test": "app/src/core/sim-host/text/engine.test.ts",
-              "title": "81 printable characters from column 0, wrap off"
+              "title": "81 printable characters from column 0, wrap off: 80 visible, cursor column 81, nothing on the next row; task 22 at (1,0) returns the 81st"
             }
           ]
         },
@@ -106,7 +106,7 @@
           "proofs": [
             {
               "test": "app/src/core/sim-host/text/engine.test.ts",
-              "title": "the same with wrap on: the 80th character leaves the cursor at (next row, 0)"
+              "title": "the same with wrap on: the 80th character leaves the cursor at (next row, 0); the 81st is printed there"
             }
           ]
         },
@@ -209,7 +209,7 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "task 2: abc Enter stores 61 62 63 00 and D1.L = 3"
+              "title": "task 2: abc Enter stores 61 62 63 00 and D1.L = 3; ab, Backspace, c gives ac; 79 characters then any key end the input"
             },
             {
               "test": "engine/sim/test/io.test.mjs",
@@ -224,7 +224,7 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "79 characters then any key end the input"
+              "title": "task 2: abc Enter stores 61 62 63 00 and D1.L = 3; ab, Backspace, c gives ac; 79 characters then any key end the input"
             },
             {
               "test": "engine/sim/test/io.test.mjs",
@@ -240,11 +240,11 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "ab, Backspace, c gives ac"
+              "title": "task 2: abc Enter stores 61 62 63 00 and D1.L = 3; ab, Backspace, c gives ac; 79 characters then any key end the input"
             },
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "input-3: Backspace on an empty line does nothing"
+              "title": "input-3: Backspace on an empty line does nothing: no pixel, no cursor move, and the line is what follows"
             }
           ]
         },
@@ -256,7 +256,7 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "input-4: task 2 after task 16 with D1.B = 2"
+              "title": "input-4: task 2 after task 16 with D1.B = 2: Enter still moves to column 0 of the next row"
             }
           ]
         },
@@ -267,7 +267,7 @@
           "proofs": [
             {
               "test": "app/src/core/sim-host/text/engine.test.ts",
-              "title": "task 2 after task 12 with D1.B = 0"
+              "title": "task 2 after task 12 with D1.B = 0: nothing is drawn, the cursor still advances, Enter still does CR, LF"
             },
             {
               "test": "engine/sim/test/io.test.mjs",
@@ -302,7 +302,7 @@
             },
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "input-7: a key during a task 23 delay"
+              "title": "input-7: a key during a task 23 delay: task 7 gives 1, task 5 returns it at once, task 7 then 0; of three keys only the last"
             }
           ]
         },
@@ -313,7 +313,7 @@
           "proofs": [
             {
               "test": "app/src/core/sim-host/text/engine.test.ts",
-              "title": "quirk: a type-ahead Enter completes the input at once"
+              "title": "quirk: a type-ahead Enter completes the input at once, and the prompt is started after it and keeps blinking"
             }
           ]
         },
@@ -324,7 +324,7 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "task 5: Enter gives D1.B = $0D"
+              "title": "task 5: Enter gives D1.B = $0D, keeps bits 31..8 and moves to column 0 of the next row (same row after task 16 D1.B = 2)"
             }
           ]
         },
@@ -335,7 +335,7 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "keeps bits 31..8 and moves to column 0 of the next row"
+              "title": "task 5: Enter gives D1.B = $0D, keeps bits 31..8 and moves to column 0 of the next row (same row after task 16 D1.B = 2)"
             },
             {
               "program": "trap15-a/a44-task7-no-key"
@@ -373,7 +373,7 @@
             },
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "input-12: task 19 with D1 = 'ASDF' while S is held gives $00FF0000"
+              "title": "input-12: task 19 with D1 = 'ASDF' while S is held gives $00FF0000; with D1 = 0 after Q pressed and released, $00510051"
             }
           ]
         },
@@ -387,7 +387,7 @@
             },
             {
               "test": "app/src/core/sim-host/text/engine.test.ts",
-              "title": "task 22 on a typed character gives $20"
+              "title": "task 2: the typed characters are echoed but not stored in the shadow array; task 22 on a typed character gives $20"
             }
           ]
         },
@@ -395,15 +395,19 @@
           "id": "input-14",
           "item": "Click Run while the main window has the focus: the I/O window comes to the front and takes the keys",
           "verdict": "proved",
-          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "note": "Headless: Run asks the interface to bring the Output panel forward and typed keys reach the program. Browser: input.spec.ts's run() helper asserts after every Run that the Output panel holds the keyboard focus; the named test uses it. 'Comes to the front' is the panel being shown and focused (one page, no window order). (T3's reviewed mapping, docs/porting/errata/T3.md entries 12 and 13)",
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "input-14, the part a session shows"
+              "title": "input-14, the part a session shows: Run of a program that reads a line brings the Output panel forward, and typed keys reach task 2 without a click"
             },
             {
               "test": "tests/e2e/sim/input.spec.ts",
-              "title": "Run gives the Output panel the keyboard"
+              "title": "task 2: a typed line is echoed, ends with Enter, and is stored with its length"
+            },
+            {
+              "test": "app/src/features/output/check-output.mjs",
+              "title": "Run gives the Output panel the keyboard (2.10)"
             }
           ]
         },
@@ -415,15 +419,15 @@
           "proofs": [
             {
               "test": "app/src/features/output/engine.test.ts",
-              "title": "rule 3: plain Tab and Shift+Tab give the program no key-down and no character"
+              "title": "rule 3: plain Tab and Shift+Tab give the program no key-down and no character; the key-up arrives"
             },
             {
               "test": "app/src/core/sim-host/input/chars.test.ts",
-              "title": "Ctrl+I is $09"
+              "title": "Ctrl+letter is $01-$1A: Ctrl+H is a backspace, Ctrl+I is $09, Ctrl+M is Enter"
             },
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "input-15: Ctrl+I in task 2 is echoed as one glyph"
+              "title": "input-15: Ctrl+I in task 2 is echoed as one glyph, the cursor advances one column, $09 is stored; task 5 Ctrl+I gives $09 and the cursor moves five columns"
             }
           ]
         },
@@ -431,23 +435,23 @@
           "id": "input-16",
           "item": "Task 19 loop on F6: pauses before task 24, $FF after task 24 D1 = 1; F9 the same",
           "verdict": "proved",
-          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "note": "(T3's reviewed mapping, docs/porting/errata/T3.md entries 12 and 13)",
           "proofs": [
             {
               "test": "app/src/features/output/engine.test.ts",
-              "title": "after task 24 the eleven shortcuts reach the program and only the release chord acts"
+              "title": "key commands enabled: F6 runs Pause and the program never sees $FF, not even when it runs again while F6 is held"
+            },
+            {
+              "test": "app/src/features/output/engine.test.ts",
+              "title": "key commands enabled: F9 while the program runs (Run disabled, as the dispatcher has it) runs nothing and task 19 reads $00 while it is held"
+            },
+            {
+              "test": "app/src/features/output/engine.test.ts",
+              "title": "after task 24 with D1 = 1: F6 does not pause and task 19 gives $000000FF while it is held; F9 the same"
             },
             {
               "test": "app/src/features/output/engine.test.ts",
               "title": "rule 2: F9 runs Run and is not seen by task 19; its key-up is"
-            },
-            {
-              "test": "app/src/features/output/engine.test.ts",
-              "title": "key commands enabled: F6 runs Pause and the program never sees $FF"
-            },
-            {
-              "test": "app/src/features/output/engine.test.ts",
-              "title": "after task 24 with D1 = 1: F6 does not pause and task 19 gives $000000FF"
             }
           ]
         },
@@ -458,7 +462,7 @@
           "proofs": [
             {
               "test": "app/src/core/sim-host/text/engine.test.ts",
-              "title": "HELLO, cursor back onto the H, task 2 and Enter at once"
+              "title": "HELLO, cursor back onto the H, task 2 and Enter at once: the H is blanked on screen, task 22 still returns H, and it reappears at the next repaint"
             }
           ]
         },
@@ -470,7 +474,7 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "input-18: task 2 with A1 = $FFFFFE"
+              "title": "input-18: task 2 with A1 = $FFFFFE: abc Enter lands at $FFFFFE, $FFFFFF, $000000, $000001 (24-bit wrap)"
             }
           ]
         },
@@ -564,17 +568,17 @@
         },
         {
           "id": "files-4",
-          "item": "Task 51 on a read-only file: 3, valid FID; 53 works; 54 gives 2",
+          "item": "Task 51 on a read-only file: 3, valid FID; 53 works; 54 gives 2 for more than 512 bytes, and 0 for up to 512, after which 56 gives 2 (corrected, erratum STDIO 2)",
           "verdict": "proved",
-          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12); the write of up to 512 bytes as measured in the official program (docs/porting/errata/STDIO.md entry 2)",
           "proofs": [
             {
               "test": "app/src/core/sim-host/files/program-files.engine.test.ts",
-              "title": "a read-only file gives result 3"
+              "title": "names in another letter case and with backslashes open; a read-only file gives result 3"
             },
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "files-4: task 51 on a read-only file gives 3"
+              "title": "files-4: task 51 on a read-only file gives 3 and a valid FID; task 53 reads through it; task 54 gives 0, the close 2"
             }
           ]
         },
@@ -649,7 +653,7 @@
             },
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "files-11: task 59 on a writable file 0"
+              "title": "files-11: task 59 on a writable file 0, on a read-only file 3, on a missing file 2; D1 unchanged"
             }
           ]
         },
@@ -687,7 +691,7 @@
           "id": "files-15",
           "item": "Task 58 Cancel: D1 = 0, buffer unchanged; OK: D1 = 1, path at (A3), zeros to offset 255",
           "verdict": "proved",
-          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "note": "OK path with the real ProgramFiles (SH6) and the real run controller; the asynchronous dialog answer is awaited. (T3's reviewed mapping, docs/porting/errata/T3.md entries 12 and 13)",
           "proofs": [
             {
               "test": "engine/sim/test/io.test.mjs",
@@ -695,11 +699,11 @@
             },
             {
               "test": "app/src/core/sim-host/files/program-files.engine.test.ts",
-              "title": "task 58: Cancel; OK in Open mode moves the current directory"
+              "title": "task 58: Cancel; OK in Open mode moves the current directory; a Save-mode path that task 52 creates"
             },
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "files-15: task 58 OK: D1 = 1"
+              "title": "files-15: task 58 OK: D1 = 1, the path at (A3) and zeros after it up to offset 255; byte 256 untouched"
             }
           ]
         },
@@ -724,7 +728,7 @@
             },
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "map-1: MEMORY INVALID $8000, exceptions off"
+              "title": "map-1: MEMORY INVALID $8000, exceptions off: task 14 at $8000 and task 13 at $7FFE halt with the bus-error message naming the first byte; an empty string raises nothing"
             }
           ]
         },
@@ -739,7 +743,7 @@
             },
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "map-2: MEMORY ROM $8000, task 2 with A1 = $8000"
+              "title": "map-2: MEMORY ROM $8000, task 2 with A1 = $8000: the input works, D1.L is the length, memory is unchanged"
             }
           ]
         },
@@ -750,7 +754,7 @@
           "proofs": [
             {
               "test": "app/src/core/sim-host/text/engine.test.ts",
-              "title": "the output log gets what trap15-a §13 lists: 41 42 0A for task 13"
+              "title": "the output log gets what trap15-a §13 lists: 41 42 0A for task 13, 0D 0A for the two characters, nothing for BEL"
             },
             {
               "test": "app/src/core/sim-host/text/text-screen.test.ts",
@@ -773,7 +777,7 @@
           "proofs": [
             {
               "test": "app/src/core/sim-host/hardware/engine.test.ts",
-              "title": "1. after a load with the panel visible"
+              "title": "1. after a load with the panel visible: all segments and LEDs lit, $E00012 = $00, $E00014 = $FF"
             },
             {
               "program": "hardware/h01-device-bytes-at-start"
@@ -815,7 +819,7 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "item 4: a click on switch 3 sets bit 3 of $E00012"
+              "title": "item 4: a click on switch 3 sets bit 3 of $E00012, a second click clears it, other bits stay"
             }
           ]
         },
@@ -826,7 +830,7 @@
           "proofs": [
             {
               "test": "app/src/core/sim-host/hardware/engine.test.ts",
-              "title": "5. a program writes $FF to $E00012"
+              "title": "5. a program writes $FF to $E00012: pictures stay; a click on an off switch draws it on, again clears the bit"
             }
           ]
         },
@@ -837,7 +841,7 @@
           "proofs": [
             {
               "test": "app/src/core/sim-host/hardware/engine.test.ts",
-              "title": "6. hiding and showing the panel with a switch on"
+              "title": "6. hiding and showing the panel with a switch on: byte $00, picture stays on, next click leaves 0 and draws off"
             }
           ]
         },
@@ -848,7 +852,7 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "item 7: holding push button 2 reads $FB"
+              "title": "item 7: holding push button 2 reads $FB, releasing $FF; after the program wrote $00 a press and release gives $04"
             }
           ]
         },
@@ -873,7 +877,7 @@
           "proofs": [
             {
               "test": "app/src/core/sim-host/hardware/engine.test.ts",
-              "title": "9. moving the display to $100000"
+              "title": "9. moving the display to $100000: the digits follow $100000, $100002, ...; task 32/1 returns $00100000"
             }
           ]
         },
@@ -897,7 +901,7 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "item 11: exceptions off, an IRQ click on a loaded idle program starts it"
+              "title": "item 11: exceptions off, an IRQ click on a loaded idle program starts it, adds 44 cycles, enters no handler"
             }
           ]
         },
@@ -908,7 +912,7 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "item 12: exceptions on, mask 0, an IRQ click enters the handler"
+              "title": "item 12: exceptions on, mask 0, an IRQ click enters the handler after one more instruction with mask = n, S = 1, T = 0"
             },
             {
               "program": "hardware/h09-irq-cycles-and-frame"
@@ -945,7 +949,7 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "item 15: in trace mode an IRQ click runs nothing"
+              "title": "item 15: in trace mode an IRQ click runs nothing; the next step lands in the handler"
             }
           ]
         },
@@ -956,7 +960,7 @@
           "proofs": [
             {
               "test": "app/src/core/sim-host/hardware/session.test.ts",
-              "title": "a checked box with interval 500: 19 ticks in 10 s at 16 ms frames while running"
+              "title": "a checked box with interval 500: 19 ticks in 10 s at 16 ms frames while running, every one handled, none after Pause"
             },
             {
               "test": "app/src/core/sim-host/hardware/engine.test.ts",
@@ -964,7 +968,7 @@
             },
             {
               "test": "app/src/core/sim-host/hardware/model.test.ts",
-              "title": "labels and buttons follow hardwareState"
+              "title": "labels and buttons follow hardwareState; \"Automatic\" before the first report"
             }
           ]
         },
@@ -980,7 +984,7 @@
             },
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "item 17: opening a file unchecks all seven automatic boxes"
+              "title": "item 17: opening a file unchecks all seven automatic boxes and the label reads Automatic Disabled"
             }
           ]
         },
@@ -1016,7 +1020,7 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "item 20: STOP with exceptions on halts with its message"
+              "title": "item 20: STOP with exceptions on halts with its message; an IRQ click resumes; the stacked PC is the second instruction after STOP"
             },
             {
               "program": "hardware/h04-stop-auto-irq"
@@ -1027,7 +1031,7 @@
           "id": "21",
           "item": "STOP with Exc off: message with location, IRQ and Reset disabled (dark-maroon look), clicks do nothing",
           "verdict": "proved",
-          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "note": "The colour is computed in Chromium and WebKit, light and dark theme: rgb(64, 0, 0) background and borders after STOP with exceptions off. (T3's reviewed mapping, docs/porting/errata/T3.md entries 12 and 13)",
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
@@ -1035,15 +1039,15 @@
             },
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "item 21: STOP with exceptions off prints its message"
+              "title": "item 21: after STOP with exceptions off the model reports the IRQ and Reset buttons disabled (the panel draws them dark maroon from that)"
             },
             {
-              "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "item 21: after STOP with exceptions off the model reports the IRQ and Reset buttons disabled"
+              "test": "tests/conformance/sim/check-stop-buttons.mjs",
+              "title": "after the STOP all eight buttons are disabled"
             },
             {
-              "test": "app/src/features/hardware/check-hardware.mjs",
-              "title": "after SIMHALT the IRQ and Reset buttons are disabled"
+              "test": "tests/conformance/sim/check-stop-buttons.mjs",
+              "title": "a disabled IRQ or Reset button is a flat dark-maroon square: background and borders rgb(64, 0, 0)"
             }
           ]
         },
@@ -1069,7 +1073,7 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "item 23: Reset loads SSP and PC from vectors 0 and 4"
+              "title": "item 23: Reset loads SSP and PC from vectors 0 and 4, SR = $2700, adds 84 cycles, keeps D and A registers, and the program runs"
             }
           ]
         },
@@ -1077,11 +1081,11 @@
           "id": "24",
           "item": "Fresh start, no file, window shown: one IRQ click halts at once (SIMHALT at 0), buttons disabled until a file or Reset Program",
           "verdict": "proved",
-          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "note": "(T3's reviewed mapping, docs/porting/errata/T3.md entries 12 and 13)",
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "item 24: fresh start, no file, window shown"
+              "title": "item 24: fresh start, no file, window shown: a click on any IRQ button (1-7) halts at once (SIMHALT at 0) and leaves IRQ and Reset disabled until a file is opened or Reset Program"
             }
           ]
         },
@@ -1092,7 +1096,7 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "item 25: exceptions off, after \"Illegal instruction found\" an IRQ click resumes"
+              "title": "item 25: exceptions off, after \"Illegal instruction found\" an IRQ click resumes after the offending word"
             }
           ]
         },
@@ -1103,7 +1107,7 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "item 26: exceptions off, an IRQ latched during the run is taken at the end of TRAP #15 task 32/5"
+              "title": "item 26: exceptions off, an IRQ latched during the run is taken at the end of TRAP #15 task 32/5, stacking the PC after the TRAP"
             },
             {
               "program": "hardware/h07-pending-irq-exceptions-later"
@@ -1117,11 +1121,11 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "item 27: exceptions on, an SSP inside ROM"
+              "title": "item 27: exceptions on, an SSP inside ROM: the handler is entered, the six stack bytes stay"
             },
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "item 27: exceptions on, a 16-byte Read range right below the SSP"
+              "title": "item 27: exceptions on, a 16-byte Read range right below the SSP: the IRQ handler is entered, 200 cycles on top of 78, SSP 62 bytes lower"
             }
           ]
         },
@@ -1167,7 +1171,7 @@
             },
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "item 30: ROM $2000: a long write at $1FFE is ignored completely"
+              "title": "item 30: ROM $2000: a long write at $1FFE is ignored completely, also its two bytes below the range; execution continues"
             }
           ]
         },
@@ -1178,7 +1182,7 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "item 31: Read range"
+              "title": "item 31: Read range: a write raises a bus error (vector $8 with exceptions on; message and halt with them off); reads work"
             }
           ]
         },
@@ -1189,7 +1193,7 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "item 32: Invalid range"
+              "title": "item 32: Invalid range: reads and writes in it raise a bus error; a long read 2 bytes below does not, a long write 2 bytes below does"
             }
           ]
         },
@@ -1200,7 +1204,7 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "item 33: Protected range"
+              "title": "item 33: Protected range: a Run started in supervisor mode can still access it from user mode; single-stepping the same code faults"
             },
             {
               "test": "engine/sim/test/debug.test.mjs",
@@ -1216,7 +1220,7 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "item 34: a second program without MEMORY directives"
+              "title": "item 34: a second program without MEMORY directives leaves the first program's map enabled"
             }
           ]
         },
@@ -1258,7 +1262,7 @@
             },
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "item 37: Protected 0-$400, exceptions on, user code single-stepped into TRAP #1"
+              "title": "item 37: Protected 0-$400, exceptions on, user code single-stepped into TRAP #1: the port stops with an error report, does not hang, and stays usable"
             }
           ]
         }
@@ -1301,11 +1305,11 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "Q3: a running program that reaches address 0 is paused there with no message"
+              "title": "Q3: a running program that reaches address 0 is paused there with no message; Run continues from address 0"
             },
             {
               "test": "engine/sim/test/quirks.test.mjs",
-              "title": "Run stops silently when the PC becomes 0"
+              "title": "Run stops silently when the PC becomes 0 (run-to-address test with no target)"
             }
           ]
         },
@@ -1317,7 +1321,7 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "Q4: a Run To Cursor interrupted by Pause leaves its target"
+              "title": "Q4: a Run To Cursor interrupted by Pause leaves its target: a later Run stops there once, the next Run goes on"
             }
           ]
         },
@@ -1354,7 +1358,7 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "Q10: Rewind keeps memory"
+              "title": "Q10: Rewind keeps memory; a file left open is forgotten without being closed (its buffered bytes are not written)"
             },
             {
               "test": "engine/sim/test/loader.test.mjs",
@@ -1362,7 +1366,7 @@
             },
             {
               "test": "app/src/core/sim-host/files/program-files.engine.test.ts",
-              "title": "abandoned streams: after Rewind task 57 fails"
+              "title": "abandoned streams: after Rewind task 57 fails and a new open misses the pending bytes; a cold start writes them"
             }
           ]
         },
@@ -1373,7 +1377,7 @@
           "proofs": [
             {
               "test": "app/src/core/run/controller.load.test.ts",
-              "title": "becomes what Reload loads (sim-ui Q11)"
+              "title": "Open Data loads on top, resets nothing, moves the folder and becomes what Reload loads (sim-ui Q11)"
             }
           ]
         },
@@ -1395,7 +1399,7 @@
           "id": "Q14",
           "item": "bitfield, /e and /b persist into later sessions through the settings file",
           "verdict": "proved",
-          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "note": "(T3's reviewed mapping, docs/porting/errata/T3.md entries 12 and 13)",
           "proofs": [
             {
               "test": "app/src/features/sim-options/options.test.ts",
@@ -1403,14 +1407,14 @@
             },
             {
               "test": "app/src/core/run/controller.load.test.ts",
-              "title": "commandLine: cold start, load, /e and /b"
+              "title": "commandLine: cold start, load, /e and /b, then idle, then /f and /r"
             },
             {
               "program": "quirks/q08-exceptions-option-persists"
             },
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "Q14: /e and /b change the saved options"
+              "title": "Q14: /e and /b change the saved options; a later session started with the saved settings and no switches has both on (round trip through the stored settings document)"
             }
           ]
         },
@@ -1418,19 +1422,23 @@
           "id": "Q19",
           "item": "Memory window edits, Copy and Fill bypass the memory map; Fill uses a 4-byte pattern; no live update at address 0",
           "verdict": "proved",
-          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "note": "Edits, Copy and Fill bypass the map and Fill's 4-byte pattern are tested. 'No live update at address 0' is a deliberate difference by the architect's decision (correction note under ARCHITECTURE.md 6.9, erratum U2 S6; docs/differences/U2.md and T3.md): the port updates there, model.test.ts asserts that, and nothing a program does can observe it. An accepted difference with a recorded cause does not count against item 2 (erratum T3 14).",
           "proofs": [
             {
               "test": "app/src/features/memory/model.test.ts",
-              "title": "Fill: writes the 4-byte pattern From through To"
+              "title": "Fill: writes the 4-byte pattern From through To; From > To does nothing"
             },
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "Q19: Memory window writes"
+              "title": "Q19: Memory window writes (one byte, and the Copy and Fill path) bypass the memory map: they land in ROM and Invalid ranges, and the program reads them"
             },
             {
               "test": "app/src/features/memory/model.test.ts",
               "title": "Live: sets SimOption.MemLive and repaints changed rows once per frame, also at address 0"
+            },
+            {
+              "difference": "docs/DIFFERENCES.md",
+              "names": "Live update of the Memory window at address 0"
             }
           ]
         },
@@ -1438,27 +1446,43 @@
           "id": "Q21",
           "item": "Advanced breakpoints: hex count, count 0, A7 = user SP, read side effect, parenthesis conversion, ... odd memory condition",
           "verdict": "proved",
-          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "note": "The hex count is a documented difference (docs/DIFFERENCES.md, Break Points table row 1: read as decimal). (T3's reviewed mapping, docs/porting/errata/T3.md entries 12 and 13)",
           "proofs": [
+            {
+              "test": "app/src/core/breakpoints/slots.test.ts",
+              "title": "the count is decimal (10.2 O-10): 10 is ten, 00 is zero"
+            },
             {
               "test": "engine/sim/test/debug.test.mjs",
               "title": "Run resets the hit counters; a count of 0 breaks on every step until the expression is first true (QUIRK)"
             },
             {
-              "test": "engine/sim/test/debug.test.mjs",
-              "title": "Run resets the hit counters; a count of 0 breaks on every step"
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "Q21: a break condition on A7 tests the user stack pointer, not the supervisor one"
             },
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "Q21: a break condition on A7 tests the user stack pointer"
+              "title": "Q21: evaluating a memory condition reads the address, and that read satisfies a Read test of a condition evaluated after it in the same step"
+            },
+            {
+              "test": "app/src/core/breakpoints/expression.test.ts",
+              "title": "the example of sim-ui §12.2: R1 AND ( R2 OR R3 ) OR R4 is R1 AND ((R2 OR R3) OR R4)"
+            },
+            {
+              "test": "app/src/core/breakpoints/slots.test.ts",
+              "title": "a memory condition: type 1, typeId = the address (not masked), readWrite"
             },
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "Q21: evaluating a word memory condition on an odd address"
+              "title": "Q21: a memory condition's address is not masked to 24 bits (BPoint.cpp:130): $01003000 reads the byte at $003000, but its R/W test never matches an access there"
             },
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "Q21: evaluating a memory condition reads the address"
+              "title": "Q21: a word memory condition on $01003001 (odd, not masked) raises the address error like $003001 (exceptions off: the program halts)"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "Q21: evaluating a word memory condition on an odd address raises an address error (exceptions off: the program halts)"
             }
           ]
         },
@@ -1493,11 +1517,11 @@
           "proofs": [
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "Q24: Rewind writes its note to the output log only after the Log Output dialog was shown"
+              "title": "Q24: Rewind writes its note to the output log only after the Log Output dialog was shown with a non-zero type"
             },
             {
               "test": "app/src/core/sim-host/log/log-engine.test.ts",
-              "title": "(sim-ui Q24)"
+              "title": "Rewind writes its note only if the dialog had been shown with a type selected (sim-ui Q24)"
             }
           ]
         },

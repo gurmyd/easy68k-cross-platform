@@ -14,46 +14,193 @@
 //   6.5.2  the ellipse suites: 8,192 small boxes every pixel equal; 3,000 large boxes at least 95 %
 //          every pixel equal and none with more differing pixels than 0.5 % of its outline; 500
 //          wide-pen boxes reported, not worse than docs/porting/gdi-deviations.md;
-//   6.5.3  the raster-face text suite (every pixel and pen) and the outline-face suites (cells and
-//          pen) through T2's replay; the machine-dependent suites are counted and named, not judged;
+//   6.5.3  text as the architect decided on 22 November 2026 (the correction note under 6.5.3;
+//          errata T2 25, T2 26, T2 28, T2 29), replayed on the port's own text screen with the fonts
+//          of app/public/fonts as app/src/core/sim-host/text/gdi-references.test.ts does: (1) the
+//          raster faces off the text path (suite text) every pixel and pen, the outline faces their
+//          cells and pens; (2) the text path where Windows is deterministic (text-path, and the
+//          texts of text-control without a fallback byte or $80) every pixel and pen; (3) the
+//          recorded differences: the pens of the fallback bytes where both captured Windows agree and
+//          every pixel where they draw the same; for $80 and "@" the pens Windows gives in every
+//          history (golden/text-path-euro-pens.json, text-path-at-pens.json) and every pixel outside
+//          the euro sign; everything else of (3) and the one-build suites text-path-formfeed and
+//          text-path-fallback reported with their numbers, not required;
 //   6.5.4  X3's whole-program baseline holds every official example, the twenty conformance
 //          programs and X3's own scenes (the browser half is `npm run check:examples`).
 //
-// It reuses T2's and SH2's readers and replays (tests/conformance/gdi) and the real Surface; it
-// judges nothing those suites do not judge, it only counts. No browser.
+// It reuses T2's and SH2's readers and replays (tests/conformance/gdi), SH3's replay of the text
+// screen and the real Surface; it judges nothing those suites do not judge, it counts each class and
+// fails when a required one differs. No browser. The Windows halves are in CI: the windows-oracles
+// job's step "GDI capture, regenerate and compare (T2)" prints the pens of the one-build suites.
 //
 // Part of easy68k-cross-platform, an unofficial port of EASy68K. GPL-2.0-or-later.
 
 import { readdirSync, readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import type { FontSpec } from '../../../app/src/contracts';
+import { AtlasGlyphProvider, OUTLINE_INDEX_FILE } from '../../../app/src/core/sim-host/fonts/atlas-provider';
+import { parseOutlineIndex, type OutlineAtlasInfo } from '../../../app/src/core/sim-host/fonts/metrics';
 import { rasterEllipse } from '../../../app/src/core/sim-host/surface/ellipse';
 import { Surface } from '../../../app/src/core/sim-host/surface/surface';
-import type { GdiCase, GdiOp } from '../../conformance/gdi/cases';
+import {
+  euroInk,
+  fontOfCase,
+  isProportionalName,
+  replayCase,
+  scoreReplays,
+  type ReferenceCase,
+  type ReplayCase,
+} from '../../../app/src/core/sim-host/text/gdi-replay';
+import { FALLBACK_BYTES, type GdiCase, type GdiOp } from '../../conformance/gdi/cases';
 import { generateEllipseCases, type EllipseCase } from '../../conformance/gdi/cases-ellipse';
-import { loadMetrics } from '../../conformance/gdi/fonts';
 import { cases, firstDifference, isMachineSuite, references, suiteNames } from '../../conformance/gdi/golden';
 import { decodePack, decodePix } from '../../conformance/gdi/pix';
 import { replayOnSurface } from '../../conformance/gdi/replay';
-import { outlineCells } from '../../conformance/gdi/text-model';
 
 const T = 600_000;
 const GOLDEN = new URL('../../conformance/gdi/golden/', import.meta.url);
-const OUTLINE_CELL_SUITES = ['text-outline', 'text-outline-zero'];
-const TEXT_SUITES = [
-  'text',
-  'text-control',
-  'text-outline',
-  'text-outline-zero',
-  'text-outline-glyphs',
-  'text-outline-italic',
-];
+const isText = (suite: string) => suite.startsWith('text');
+const ZERO_WIDTH = [0x09, 0x0a, 0x0d, 0x1c, 0x1d, 0x1e, 0x1f];
 
 const lines: string[] = [];
 const say = (line: string) => {
   lines.push(line);
   console.log(line);
 };
+
+// ---------------------------------------------------------------- 6.5.3 helpers
+// The port's own text screen with the fonts of app/public/fonts, as
+// app/src/core/sim-host/text/gdi-references.test.ts (SH3) replays it.
+const FONTS = fileURLToPath(new URL('../../../app/public/fonts/', import.meta.url));
+const readFont = async (path: string): Promise<Uint8Array | null> => {
+  try {
+    return new Uint8Array(await readFile(FONTS + path));
+  } catch {
+    return null;
+  }
+};
+let provider: AtlasGlyphProvider | undefined;
+async function glyphs(): Promise<AtlasGlyphProvider> {
+  if (!provider) {
+    provider = new AtlasGlyphProvider(readFont);
+    await provider.ready;
+    if (!provider.loaded || provider.problems.length > 0)
+      throw new Error(`the fonts of app/public/fonts do not load: ${provider.problems.join('; ')}`);
+  }
+  return provider;
+}
+const outlineIndex = async (): Promise<OutlineAtlasInfo[]> =>
+  parseOutlineIndex((await readFont(OUTLINE_INDEX_FILE)) as Uint8Array);
+const spec = (font: { name: string; size: number; style: number }): FontSpec => ({
+  name: font.name,
+  size: font.size,
+  bold: font.style === 1,
+  italic: font.style === 2,
+  underline: font.style === 3,
+  strikeOut: font.style === 4,
+});
+/**
+ * EASY68K_RC_SPOIL=<suite> moves the pen of the first reference of that suite by one pixel in
+ * memory, to show that the judge fails when a reference and the port disagree: a text suite of
+ * 6.5.3 (suite(), below) or a primitive suite of 6.5.1 (countSuite()).
+ */
+const spoilt = (name: string, pen: readonly [number, number], index: number): [number, number] =>
+  process.env.EASY68K_RC_SPOIL === name && index === 0 ? [pen[0] + 1, pen[1]] : [pen[0], pen[1]];
+const suite = (name: string): ReferenceCase[] =>
+  references(name).map((r, i) => ({ case: r.case as ReplayCase, image: r.image, pen: spoilt(name, r.pen, i) }));
+const hasFallbackByte = (r: ReferenceCase) =>
+  r.case.ops.some((o) => o.op === 'text' && o.bytes.some((b) => FALLBACK_BYTES.includes(b)));
+const onlyText = (r: ReferenceCase) => {
+  const texts = r.case.ops.filter((o) => o.op === 'text');
+  const text = texts[0];
+  if (texts.length !== 1 || !text || text.op !== 'text') throw new Error(`${r.case.id}: not one text`);
+  return text;
+};
+const euroPens = (): Map<string, number> => {
+  const doc = JSON.parse(readFileSync(new URL('text-path-euro-pens.json', GOLDEN), 'utf8')) as {
+    cases: [string, number, number, string, number][];
+  };
+  return new Map(doc.cases.map(([face, size, style, hex, pen]) => [`${face}|${size}|${style}|${hex}`, pen]));
+};
+const euroKey = (r: ReferenceCase): string => {
+  const f = fontOfCase(r.case);
+  const hex = onlyText(r)
+    .bytes.map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  return `${f.name}|${f.size}|${f.style}|${hex}`;
+};
+
+/** The classes of 6.5.3 as decided: required ones must be equal, reported ones are printed. */
+class Rule {
+  readonly lines: string[] = [];
+  readonly failures: string[] = [];
+  cases = 0;
+  equal = 0;
+  required = 0;
+  require(
+    name: string,
+    refs: ReferenceCase[],
+    fonts: AtlasGlyphProvider,
+    how: 'pixels' | 'but-euro' | 'cells' | 'pens',
+  ) {
+    const s = scoreReplays(refs, fonts, how);
+    this.cases += s.cases;
+    this.equal += s.equal;
+    this.required += 1;
+    if (s.cases === 0) this.failures.push(`${name}: no cases`);
+    this.failures.push(...s.differences.slice(0, 10).map((d) => `${name}: ${d}`));
+    this.lines.push(
+      `${name}: ${s.equal} of ${s.cases} equal${s.differences.length ? ` - ${s.differences.length} DIFFER` : ''}`,
+    );
+  }
+  report(
+    name: string,
+    refs: ReferenceCase[],
+    fonts: AtlasGlyphProvider,
+    how: 'pixels' | 'but-euro' | 'cells' | 'pens',
+  ) {
+    const s = scoreReplays(refs, fonts, how);
+    this.lines.push(
+      `${name}: reported, not required - ${s.equal} of ${s.cases} equal (pictures ${s.picturesEqual}, pens ${s.pensEqual})`,
+    );
+  }
+  /** The capture's pen of each case equals the pinned pen (the pins describe these references). */
+  pinned(name: string, refs: ReferenceCase[], pins: Map<string, number>) {
+    const wrong = refs.filter((r) => r.pen[0] - onlyText(r).x !== pins.get(euroKey(r))).map((r) => r.case.id);
+    this.failures.push(...wrong.map((id) => `${name}: the capture's pen of ${id} is not the pinned one`));
+    this.lines.push(
+      `${name}: ${refs.length} texts of the suite are pinned${wrong.length ? `, ${wrong.length} DISAGREE` : ''}`,
+    );
+  }
+  /** The port's pen for one text of the pinned lists equals the pin. */
+  pens(name: string, pins: { key: string; pen: number }[], fonts: AtlasGlyphProvider) {
+    let equal = 0;
+    for (const { key, pen } of pins) {
+      const [face, size, style, hex] = key.split('|') as [string, string, string, string];
+      const bytes = (hex.match(/../g) ?? []).map((h) => parseInt(h, 16));
+      const port = replayCase(
+        {
+          id: key,
+          width: 640,
+          height: 260,
+          ops: [
+            { op: 'font', name: face, size: Number(size), style: Number(style) },
+            { op: 'text', x: 6, y: 2, bytes },
+          ],
+        },
+        fonts,
+      );
+      if (port.pen[0] - 6 === pen) equal += 1;
+      else this.failures.push(`${name}: ${key}: port ${port.pen[0] - 6}, Windows ${pen}`);
+    }
+    this.cases += pins.length;
+    this.equal += equal;
+    this.required += 1;
+    this.lines.push(`${name}: ${equal} of ${pins.length} pens equal`);
+  }
+}
 
 interface SuiteCount {
   readonly suite: string;
@@ -63,23 +210,21 @@ interface SuiteCount {
   readonly failures: readonly string[];
 }
 
-/** T2's comparison of surface.test.ts, counted instead of asserted. */
+/** T2's comparison of surface.test.ts for a primitive suite, counted instead of asserted. */
 function countSuite(suite: string): SuiteCount {
-  const metrics = loadMetrics();
-  const outline = OUTLINE_CELL_SUITES.includes(suite);
   let compared = 0;
   let equal = 0;
   let total = 0;
   const failures: string[] = [];
-  for (const r of references(suite)) {
+  for (const [i, r] of references(suite).entries()) {
     total++;
-    const cells = outline ? outlineCells(metrics, r.case) : undefined;
-    if (cells === null) continue;
-    const got = replayOnSurface(r.case, outline ? 'outline' : 'raster');
+    const got = replayOnSurface(r.case, 'raster');
     compared++;
-    const diff = firstDifference(got, r.image, cells ? (x, y) => !cells.uncertain(x, y) : undefined);
+    const diff = firstDifference(got, r.image);
+    // EASY68K_RC_SPOIL reaches the primitive suites too (review of the release-candidate check).
+    const pen = spoilt(suite, r.pen, i);
     if (diff) failures.push(`${r.case.id}: ${diff.count} pixels`);
-    else if (got.pen[0] !== r.pen[0] || got.pen[1] !== r.pen[1]) failures.push(`${r.case.id}: pen`);
+    else if (got.pen[0] !== pen[0] || got.pen[1] !== pen[1]) failures.push(`${r.case.id}: pen`);
     else equal++;
   }
   return { suite, total, compared, equal, failures };
@@ -100,34 +245,184 @@ function opsWithWidth(c: GdiCase): { op: GdiOp; width: number; mode: number }[] 
 
 describe('item 3: the thresholds of 6.5', () => {
   it(
-    '6.5.1 and 6.5.3: every case of every primitive and text suite that does not depend on the machine is equal to GDI',
+    '6.5.1: every case of every primitive suite that does not depend on the machine is equal to GDI',
     () => {
-      const all = suiteNames();
       const results: SuiteCount[] = [];
-      for (const suite of all) {
+      for (const suite of suiteNames()) {
+        if (isText(suite)) continue;
         if (isMachineSuite(suite)) {
           say(
-            `6.5 ${suite}: ${references(suite).length} references, machine-dependent, not judged (6.2.3, erratum T2 17)`,
+            `6.5.1 ${suite}: ${references(suite).length} references, machine-dependent (system colours), not judged (6.2.3, erratum T2 17)`,
           );
           continue;
         }
         const r = countSuite(suite);
         results.push(r);
-        const skipped = r.total - r.compared;
         say(
-          `6.5 ${suite}: ${r.equal} of ${r.compared} cases every pixel and pen equal` +
-            (skipped ? ` (${skipped} of ${r.total} outside the cell model, not compared)` : '') +
+          `6.5.1 ${suite}: ${r.equal} of ${r.compared} cases every pixel and pen equal` +
             (r.failures.length ? `; differing: ${r.failures.slice(0, 10).join(', ')}` : ''),
         );
       }
-      const prim = results.filter((r) => !TEXT_SUITES.includes(r.suite));
-      const text = results.filter((r) => TEXT_SUITES.includes(r.suite));
-      const sum = (rs: SuiteCount[], k: 'equal' | 'compared') => rs.reduce((n, r) => n + r[k], 0);
-      say(
-        `6.5.1 primitives total: ${sum(prim, 'equal')} of ${sum(prim, 'compared')} cases equal in ${prim.length} suites`,
-      );
-      say(`6.5.3 text total: ${sum(text, 'equal')} of ${sum(text, 'compared')} cases equal in ${text.length} suites`);
+      const sum = (k: 'equal' | 'compared') => results.reduce((n, r) => n + r[k], 0);
+      say(`6.5.1 primitives total: ${sum('equal')} of ${sum('compared')} cases equal in ${results.length} suites`);
       expect(results.flatMap((r) => r.failures.map((f) => `${r.suite} ${f}`))).toEqual([]);
+    },
+    T,
+  );
+
+  it(
+    '6.5.3: text as the architect decided on 22 November 2026 (errata T2 25, T2 26, T2 28, T2 29)',
+    async () => {
+      const fonts = await glyphs();
+      const rule = new Rule();
+      // (1) Raster-face texts off the text path: every pixel and the pen.
+      rule.require('(1) text, raster faces off the text path: every pixel and pen', suite('text'), fonts, 'pixels');
+      // Outline faces: the cell rectangles and the pen (6.5.3, second half of the first bullet).
+      const onlyDel = (r: ReferenceCase) =>
+        r.case.ops.some(
+          (o) =>
+            o.op === 'text' && o.bytes.includes(0x7f) && o.bytes.every((b) => b === 0x7f || ZERO_WIDTH.includes(b)),
+        );
+      const outline = suite('text-outline');
+      rule.require(
+        'outline faces, text-outline, fixed-pitch faces: cells and pen',
+        outline.filter((r) => !isProportionalName(fontOfCase(r.case).name)),
+        fonts,
+        'cells',
+      );
+      // The proportional substitute (font numbers 5 and 7): Windows' widths where the size has an
+      // atlas; elsewhere they are estimated from the nearest atlas, a recorded difference
+      // (docs/differences/SH3.md), reported here.
+      const arialSizes = (await outlineIndex()).filter((a) => a.face === 'Arial').map((a) => a.size as number);
+      const proportional = outline.filter((r) => isProportionalName(fontOfCase(r.case).name));
+      const sameCell = (a: FontSpec, b: FontSpec) => {
+        const [ca, cb] = [fonts.metrics(a), fonts.metrics(b)];
+        return ca.colWidth === cb.colWidth && ca.rowHeight === cb.rowHeight;
+      };
+      const measured = proportional.filter((r) => {
+        const f = fontOfCase(r.case);
+        return arialSizes.some((size) => size === f.size || sameCell(spec(f), spec({ ...f, size })));
+      });
+      rule.require(
+        'outline faces, text-outline, proportional substitute at sizes with an atlas: cells and pen',
+        measured,
+        fonts,
+        'cells',
+      );
+      rule.report(
+        'outline faces, text-outline, proportional substitute at other sizes (widths estimated, SH3)',
+        proportional.filter((r) => !measured.includes(r)),
+        fonts,
+        'cells',
+      );
+      rule.require(
+        'outline faces, text-outline-zero: cells and pen (pen only where the text draws only $7F)',
+        suite('text-outline-zero').filter((r) => !onlyDel(r)),
+        fonts,
+        'cells',
+      );
+      rule.require(
+        'outline faces, text-outline-zero, texts of only $7F: pen',
+        suite('text-outline-zero').filter(onlyDel),
+        fonts,
+        'pens',
+      );
+      rule.require(
+        'outline faces, text-outline-italic: cells and pen',
+        suite('text-outline-italic').filter((r) => !onlyDel(r)),
+        fonts,
+        'cells',
+      );
+      rule.require('outline faces, text-outline-glyphs: pen', suite('text-outline-glyphs'), fonts, 'pens');
+      // (2) On the text path where Windows is deterministic and draws from the face itself.
+      rule.require('(2) text-path: every pixel and pen', suite('text-path'), fonts, 'pixels');
+      const control = suite('text-control');
+      const fallback = control.filter(hasFallbackByte);
+      const pathControl = control.filter((r) => !hasFallbackByte(r));
+      const exact = pathControl.filter((r) => euroInk(r.case, fonts) === null);
+      const withEuro = pathControl.filter((r) => euroInk(r.case, fonts) !== null);
+      rule.require('(2) text-control without a fallback byte or $80: every pixel and pen', exact, fonts, 'pixels');
+      // (3a, 3b) The euro sign: the pen and every pixel outside its glyph where Windows gives the same
+      // pen in every history (golden/text-path-euro-pens.json); the rest reported.
+      const pinned = euroPens();
+      const held = (rs: ReferenceCase[]) => rs.filter((r) => pinned.has(euroKey(r)));
+      const notHeld = (rs: ReferenceCase[]) => rs.filter((r) => !pinned.has(euroKey(r)));
+      rule.pinned('(3) text-control with $80, pinned pens', held(withEuro), pinned);
+      rule.require(
+        '(3) text-control with $80, pinned: every pixel but the euro sign, and the pen',
+        held(withEuro),
+        fonts,
+        'but-euro',
+      );
+      rule.report('(3b) text-control with $80, pen depends on history', notHeld(withEuro), fonts, 'but-euro');
+      const euro = suite('text-path-euro');
+      rule.pinned('(3) text-path-euro, pinned pens', held(euro), pinned);
+      rule.require(
+        '(3) text-path-euro, pinned: every pixel but the euro sign, and the pen',
+        held(euro),
+        fonts,
+        'but-euro',
+      );
+      rule.report('(3b) text-path-euro, pen depends on history', notHeld(euro), fonts, 'but-euro');
+      rule.pens(
+        '(3) golden/text-path-euro-pens.json: every pinned pen',
+        [...pinned].map(([key, pen]) => ({ key, pen })),
+        fonts,
+      );
+      // (3a) The fallback-font bytes: the pen where the two captured Windows agree, every pixel where
+      // they draw the same picture and pen.
+      const runner = decodePack(
+        new Uint8Array(readFileSync(new URL('windows-10.0.26100/text-control.pixpack.gz', GOLDEN))),
+      );
+      const agree = fallback.map((r) => {
+        const other = runner.cases.find((c) => c.id === r.case.id);
+        if (!other) throw new Error(`windows-10.0.26100/text-control.pixpack.gz has no ${r.case.id}`);
+        const image = decodePix(other.pix);
+        const samePicture = image.pixels.every((p, j) => (p & 0xffffff) === ((r.image.pixels[j] as number) & 0xffffff));
+        const samePen = other.pen[0] === r.pen[0] && other.pen[1] === r.pen[1];
+        return { r, samePicture, samePen };
+      });
+      rule.require(
+        `(3a) text-control fallback bytes (${fallback.length} texts), pen where both Windows agree`,
+        agree.filter((a) => a.samePen).map((a) => a.r),
+        fonts,
+        'pens',
+      );
+      rule.require(
+        '(3a) text-control fallback bytes, every pixel and pen where both Windows draw the same',
+        agree.filter((a) => a.samePen && a.samePicture).map((a) => a.r),
+        fonts,
+        'pixels',
+      );
+      rule.report(
+        '(3a) text-control fallback bytes where the two Windows differ (recorded difference, SH3)',
+        agree.filter((a) => !a.samePen || !a.samePicture).map((a) => a.r),
+        fonts,
+        'pixels',
+      );
+      // (3b) "@" in Courier on the text path: the pens without a byte of $80 or above.
+      const at = JSON.parse(readFileSync(new URL('text-path-at-pens.json', GOLDEN), 'utf8')) as {
+        cases: [number, number, string, number][];
+      };
+      rule.pens(
+        '(3b) golden/text-path-at-pens.json: every pinned pen of "@" in Courier',
+        at.cases.map(([size, style, hex, pen]) => ({ key: `Courier|${size}|${style}|${hex}`, pen })),
+        fonts,
+      );
+      // One-build suites: reported, not required (6.5.3: no pen of $0C is required; text-path-fallback
+      // and the history-dependent euro pens wait for a second build's capture, erratum T2 29).
+      rule.report('(3a) text-path-formfeed ($0C on the path, one build)', suite('text-path-formfeed'), fonts, 'pixels');
+      rule.report(
+        '(3a) text-path-fallback (fallback bytes with $80 or above on the path, one build)',
+        suite('text-path-fallback'),
+        fonts,
+        'pixels',
+      );
+      for (const l of rule.lines) say(`6.5.3 ${l}`);
+      say(
+        `6.5.3 required: ${rule.equal} of ${rule.cases} cases equal in ${rule.required} classes; ${rule.failures.length} differ`,
+      );
+      expect(rule.failures).toEqual([]);
     },
     T,
   );

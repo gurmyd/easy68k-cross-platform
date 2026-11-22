@@ -39,6 +39,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../../tests/browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../../..');
@@ -388,7 +389,7 @@ async function run(browser, name, baseUrl, shapeHashes) {
   await page.locator('#screen').screenshot({ path: join(outDir, `${name}-specimen.png`) });
 
   check(`${name}: no console errors`, errors.length === 0, errors.join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 // --- run -------------------------------------------------------------------------------
@@ -422,16 +423,16 @@ async function main() {
       try {
         await run(browser, name, baseUrl, shapeHashes);
       } finally {
-        await browser.close();
+        await doneWith(browser, { last: name === browsers.at(-1) });
       }
     }
   } finally {
-    await server.close();
+    closeAtEnd(server);
   }
 
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
-  process.exit(failures ? 1 : 0);
+  await endChecks(failures ? 1 : 0);
 }
 
 await main();

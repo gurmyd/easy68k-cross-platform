@@ -71,6 +71,39 @@ describe('ProgramFiles: names', () => {
     }
   });
 
+  it('a name that ends in a separator opens, creates, reads and removes nothing (Windows 11 and Wine: error 267)', async () => {
+    const { files, view } = await harness({ '/memory/demo/data': 'd', '/memory/demo/data.txt': 'e' });
+    const ENDING = [
+      'data\\',
+      'data/',
+      'data\\\\',
+      'sub\\',
+      '.\\',
+      'data.txt\\',
+      'data.txt/',
+      'NUL\\',
+      'NUL/',
+      'NUL\\\\',
+    ];
+    for (const n of [...ENDING, 'data \\', 'data.\\', 'NUL.\\', '.\\data\\', 'CON\\', 'COM1\\', 'nul.txt\\']) {
+      for (const mode of [FileMode.Create, FileMode.Update, FileMode.Read])
+        expect(files.fileOpen(name(n), mode), `${n} mode ${mode}`).toBe(0);
+      expect(files.fileRemove(name(n)), n).toBe(false);
+      expect(files.read(name(n)), n).toBeNull();
+    }
+    expect(view.paths().sort()).toEqual(['/memory/demo/data', '/memory/demo/data.txt']);
+    // The same names without the separator are unchanged.
+    expect(files.fileOpen(name('data'), FileMode.Read)).toBeGreaterThan(0);
+    expect(files.fileOpen(name('.\\data'), FileMode.Read)).toBeGreaterThan(0);
+    expect(files.fileOpen(name('data\\.'), FileMode.Read)).toBeGreaterThan(0);
+    // A device path stays the device behind trailing separators (measured the same under Wine).
+    for (const n of ['\\\\.\\NUL\\', '\\\\?\\NUL\\', '\\\\.\\NUL/', '\\\\.\\NUL\\\\']) {
+      expect(files.fileOpen(name(n), FileMode.Create), n).toBeGreaterThan(0);
+      expect(files.fileRemove(name(n)), n).toBe(false);
+    }
+    expect(files.fileOpen(name('\\\\.\\NUL \\'), FileMode.Create)).toBe(0);
+  });
+
   it('read() of the same name follows the current directory and the mounts given (names are parsed once)', async () => {
     const { files } = await harness({
       '/memory/demo/a.txt': 'demo',

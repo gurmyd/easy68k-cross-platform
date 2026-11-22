@@ -221,3 +221,39 @@ is no **Contract** section.
 - The whole-tree checks (typecheck, lint, format check, `npm test`, `npm run test:conformance`)
   were run at the end of this round by the engineer who holds DV5's paths; the results are in that
   engineer's report.
+
+### 14. Check 7 read the Output panel's text once, before its 2 Hz mirror had the lines (release run 45034019734)
+
+- Seen: release.yml for b247e17, job `mac-arm64`: 58 passed, 1 failed, check 7: "the Output
+  panel's text differs from the headless run: line 1 of 4 expected / 0 actual: expected "D1
+  contains: 8", got "(none)"". The same log shows `run: "Halted 213 ms after Run"`, the message
+  area equal to the headless run's, and the Output canvas's hash **equal** to the headless run's
+  (`377357e7...`): the program had run to its end and its four lines were on the canvas. Only the
+  text rows (`outputRows`) were empty. `mac-x64`: passed, `Halted 394 ms after Run`.
+- Cause, in the check: the Output panel's text rows are its text mirror for screen readers, which
+  follows the text screen at most twice per second, in a display frame (2.11;
+  `features/output/mirror.ts` `MIRROR_INTERVAL_MS` = 500, `OutputPanel.tsx`), so it lags the
+  canvas by up to half a second and a frame. Check 7 waited for the halt, polled the messages and
+  the canvas, and then read the rows **once**. On the faster Apple Silicon runner that read came
+  inside the lag; on the Intel runner, and in earlier runs, it came after it by chance.
+- Not the kept-command change of SH8.md entry 47: check 7 gives Run after the load has ended
+  (`executeFromStatus` waits until the PC field shows `00001000`, which is published only at the
+  end of the load), so no command was kept. The product question that change raised is answered
+  in SH8.md entry 48 (a store state was published too early; no frame showed it; repaired).
+- Measured on this PC (`build/check7/mirror-lag.mjs`, headless browsers with display frames, 12
+  runs each): the rows were complete 26 to 456 ms after the first frame that said Halted in
+  WebKit (median 419) and up to 456 ms in Chromium (median 290); read once right after Halted
+  they were incomplete in 12 of 12 runs in both. The same lag is visible in `check-run.mjs`'s
+  watch (SH8.md entry 48): frames that say Halted with the Output text still empty.
+- Does: `checks.ts` check 7 polls the rows for up to 20 s (first written by the lead engineer of
+  the release-candidate check while this entry was being written; kept, every 100 ms) and prints
+  `outputRowsShown`, how long after the halt they were complete. `scenario.ts` `runToHalt` now
+  waits for what "run to its end" means: the run state Halted **and** the Registers panel's Cycles
+  count above the one before the click (`cyclesShown`), never a state alone; check 7 prints the
+  cycles. This also serves check 8 and DV2's `tests/desktop/dev/programs.spec.ts`.
+- Rehearsed on Windows with the development build of the desktop app (hidden windows, the
+  production web build under `app://`): check 6 and the repaired check 7 passed 3 of 3 (`Halted
+  ... 498 cycles`, rows complete 469 to 490 ms after the halt was seen). Hidden windows get no
+  display frames, so there the canvas and the mirror wait for the same timer and the old read
+  passed too (3 of 3): the race needs frames, as a visible window on a Mac has. Only a new run of
+  release.yml shows check 7 on Apple Silicon; the orchestrator starts it.

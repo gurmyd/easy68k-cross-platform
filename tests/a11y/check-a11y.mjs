@@ -42,6 +42,7 @@ import { createReport } from './lib/report.mjs';
 import { ROUTED_DIALOGS, scanPart } from './lib/scan.mjs';
 import { structurePart } from './lib/structure.mjs';
 import { walkEdit, walkRun } from './lib/walk.mjs';
+import { closeAtEnd, doneWith, endChecks } from '../browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../..');
@@ -137,11 +138,11 @@ async function main() {
           }
         }
       } finally {
-        await browser.close();
+        await doneWith(browser, { last: name === browsers.at(-1) });
       }
     }
   } finally {
-    await stop();
+    closeAtEnd({ close: stop }, 'the server');
   }
   if (only.includes('scan') && findings.length > 0) {
     for (const entry of unusedKnown(findings, KNOWN)) {
@@ -153,7 +154,7 @@ async function main() {
   if (report.notes.length > 0)
     console.log(`\nNotes (not failures):\n${report.notes.map((text) => `  - ${text}`).join('\n')}`);
   console.log(`\n${report.summary()}`);
-  process.exit(report.failures ? 1 : 0);
+  await endChecks(report.failures ? 1 : 0);
 }
 
 await main();

@@ -1,4 +1,4 @@
-﻿// The two keyboard-only walk-throughs of the accessibility audit (ARCHITECTURE.md 9.6 Q1
+// The two keyboard-only walk-throughs of the accessibility audit (ARCHITECTURE.md 9.6 Q1
 // acceptance; 2.9, 2.10, 2.11). Owner: Q1.
 //
 //   walk-edit  "edit, assemble, fix an error": from a freshly opened application, reach the editor
@@ -20,6 +20,7 @@
 
 /* global document, window */
 
+import { closeWithin } from '../../browser-checks/ending.mjs';
 import {
   describeFocus,
   dialogStack,
@@ -234,7 +235,7 @@ export async function walkEdit({ browser, name, os, baseUrl, report, outDir }) {
     report.check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   } finally {
     await shoot(page, outDir, `${name}-${os}-walk-edit-end`);
-    await context.close();
+    await closeWithin(context);
   }
 }
 
@@ -335,16 +336,42 @@ export async function walkRun({ browser, name, os, baseUrl, report, outDir }) {
     );
     await page.keyboard.type('42', { delay: 60 });
     await page.keyboard.press('Enter', { delay: 60 });
+    // The engine has D1 at once when the key is delivered (a timer tick), but the store's phase is
+    // published at the next display frame (4.6, erratum SH8 18), 60 to 130 ms later on GitHub's Mac
+    // runner. So wait for both, and print how long after the engine had D1 the phase came (erratum
+    // SH8 49). (The Registers panel shows no new values while the program runs, as in the original.)
+    await page.evaluate(() => {
+      const record = { engineAt: null, shownAt: null };
+      window.__walkAnswer = record;
+      const until = performance.now() + 60_000;
+      const look = () => {
+        const now = performance.now();
+        if (now > until) return;
+        if (record.engineAt === null && window.__easy68k.ctx.sim.engine.registers().d[1] === 42) record.engineAt = now;
+        if (record.engineAt !== null && window.__easy68k.ctx.store.getState().sim.phase === 'running') {
+          record.shownAt = now;
+          return;
+        }
+        setTimeout(look, 1);
+      };
+      look();
+    });
     const answered = await waitFor(
       page,
-      () => window.__easy68k.ctx.sim.engine.registers().d[1] === 42,
+      () =>
+        window.__easy68k.ctx.sim.engine.registers().d[1] === 42 &&
+        window.__easy68k.ctx.store.getState().sim.phase === 'running',
       null,
       STEP_TIMEOUT,
     );
+    const lag = await page.evaluate(() => {
+      const { engineAt, shownAt } = window.__walkAnswer;
+      return engineAt === null || shownAt === null ? 'not measured' : `${Math.round(shownAt - engineAt)} ms`;
+    });
     report.check(
       `${p} the typed answer reaches the program (D1 = 42) and it goes on running`,
-      answered && (await phase(page)) === 'running',
-      `D1 = ${(await registers(page)).d[1]}, phase ${await phase(page)}`,
+      answered,
+      `D1 = ${(await registers(page)).d[1]}, phase ${await phase(page)}; the phase was published ${lag} after the engine had D1`,
     );
     await shoot(page, outDir, `${name}-${os}-walk-run-answered`);
 
@@ -458,6 +485,6 @@ export async function walkRun({ browser, name, os, baseUrl, report, outDir }) {
     report.check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   } finally {
     await shoot(page, outDir, `${name}-${os}-walk-run-end`);
-    await context.close();
+    await closeWithin(context);
   }
 }

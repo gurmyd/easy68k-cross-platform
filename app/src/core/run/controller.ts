@@ -684,10 +684,11 @@ export class SimRunController implements RunController {
         });
       }
       // The switches act as part of the load; what was kept comes after them.
-      this.finishLoading('idle', false, false);
-      if (switches?.fullScreen) this.deps.ui.enterFullScreen();
-      if (switches?.run) this.run();
-      this.deliverKept();
+      this.finishLoading('idle', false, () => {
+        if (switches?.fullScreen) this.deps.ui.enterFullScreen();
+        if (switches?.run) this.run();
+        this.deliverKept();
+      });
     } catch (error) {
       if (error === ENGINE_FAILED) return; // the recovery of fail() ends the 'loading' phase
       // A host part failed. The load must not leave the simulator locked in 'loading'.
@@ -813,11 +814,21 @@ export class SimRunController implements RunController {
 
   /**
    * The end of a load: the phase leaves 'loading', what waited in the queue is delivered, and the
-   * commands kept meanwhile are carried out (`deliver`; `load` does it itself after the switches of
-   * a command line). While the recovery from an engine failure is under way, only the recovery
-   * itself ends the phase, and what was kept for the program before it is dropped.
+   * commands kept meanwhile are carried out (`afterwards`; `load` passes the switches of a command
+   * line first). While the recovery from an engine failure is under way, only the recovery itself
+   * ends the phase, and what was kept for the program before it is dropped.
+   *
+   * The kept commands are carried out BEFORE the end of the load is published (errata SH8.md entry
+   * 48): in the original the queued key is delivered when the load returns, before anything paints,
+   * so no subscriber (the store, the status bar, the native menu, a caller awaiting `open`) may see
+   * the new program loaded, idle and unrun when a Run was given during the load. A command that
+   * publishes (every run command does) publishes the loaded state together with its own.
    */
-  private finishLoading(to: SimPhase = 'idle', endOfRecovery = false, deliver = true): void {
+  private finishLoading(
+    to: SimPhase = 'idle',
+    endOfRecovery = false,
+    afterwards: () => void = () => this.deliverKept(),
+  ): void {
     if (this.disposed || (this.recovering && !endOfRecovery)) return;
     if (endOfRecovery) this.loadFailed();
     if (this.phaseNow === 'loading') {
@@ -825,8 +836,8 @@ export class SimRunController implements RunController {
       this.updateFreeze();
     }
     if (this.queue.length > 0 || this.phaseNow !== 'idle') this.requestTick();
+    afterwards();
     this.publish();
-    if (deliver) this.deliverKept();
   }
 
   /**

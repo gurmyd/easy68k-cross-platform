@@ -1,11 +1,16 @@
 // The 68000 program's files (ARCHITECTURE.md 3.8.4): the C library streams of the original over a
 // SyncFiles view, and the task 58 dialog.
 //
-// The engine passes the program's file operations to the host unbuffered and in order (TRAP #15
-// tasks 50-59, trap15-a §7). The original opened these files with fopen() and the Borland run-time
-// library buffered them, which a program can observe: data written and not closed is not in the
-// file yet when the program, or anything else, looks at the file again. This class therefore
-// models the stream:
+// The original opened these files with fopen() and the Borland run-time library buffered them,
+// which a program can observe. Since gate I3 the engine itself has that run-time's streams
+// (engine/sim/shim/STDIO-MODEL.md) and uses this class as the operating system below them: a read
+// of the stream's buffer arrives here as a read of 512 bytes, its flush as a write. The engine
+// relies on two properties of this class: a write of STDIO_BUFFER bytes or fewer into an empty
+// pending buffer stays pending until the next call on the handle (the engine keeps there the bytes
+// its stream's flush would write), and pending bytes are written by exit() / exitNow() (the
+// run-time's flush of every stream at the end of the process). The buffering below was written
+// while the engine passed every request through unbuffered; it still describes what this class
+// does, but the engine's requests never depend on it otherwise (STDIO-MODEL.md section 10):
 //
 // - Names (trap15-a §7.1, §11 item 14): Windows-1252; '\' and '/' separate; relative names resolve
 //   against `currentDir`; letter case is ignored when no exact match exists; a name with a drive
@@ -70,8 +75,8 @@ const INVALID_NAME_CHARS = /[<>:"|?*\u0000-\u001f]/;
 
 /** NUL as the last part of a name: Windows ignores trailing spaces, periods and colons there. */
 const NUL_NAME = /^nul[ .:]*$/i;
-/** The device paths `\\.\NUL` and `\\?\NUL`. */
-const NUL_DEVICE_PATH = /^\\\\[.?]\\nul$/i;
+/** The device paths `\\.\NUL` and `\\?\NUL`, also with separators after them (the same on Windows 11 and under Wine). */
+const NUL_DEVICE_PATH = /^\\\\[.?]\\nul[\\/]*$/i;
 /** The other DOS devices, which Windows 11 recognises only as the whole name (¹²³ count as digits). */
 const OTHER_DEVICE_NAME = /^(?:con|prn|aux|(?:com|lpt)[1-9\u00b9\u00b2\u00b3])[ .:]*$|^con(?:in|out)\$$/i;
 /** A drive letter at the start of a name. */
@@ -466,6 +471,9 @@ export class ProgramFiles implements ProgramFilesApi {
   private parseName(text: string): { dir: VPath; rel: string } | null {
     // A drive letter names no folder of the port; the other characters Windows refuses fail fopen().
     if (text === '' || hasDriveLetter(text) || INVALID_NAME_CHARS.test(text)) return null;
+    // A name that ends in a separator names a folder, never a file: fopen fails (error 267 on Windows 11 and under
+    // Wine) for `data\`, `data/` and `NUL\`, whether or not a file of that name exists, and nothing is created.
+    if (/[\\/]$/.test(text)) return null;
     // Windows drops trailing periods and spaces of every name segment.
     const segments = splitWindowsName(text)
       .map((segment) => (segment === '.' || segment === '..' ? segment : segment.replace(/[. ]+$/, '')))

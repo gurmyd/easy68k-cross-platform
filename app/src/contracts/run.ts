@@ -63,6 +63,16 @@ export interface RunController {
   readonly program: ProgramInfo | null;
   readonly snapshot: RunSnapshot;
   readonly alerts: readonly PendingAlert[]; // message boxes the engine opened, oldest first
+  /**
+   * True while a run command (Run, Run To Cursor, Step Over, Trace Into, Auto Trace), Pause, Rewind,
+   * Reload or a second Execute given now is kept and carried out when the load has ended, instead
+   * of being refused: during a load, and from the answer to the Caution question until the load
+   * begins (errata SH8.md entries 47 and 48). The run feature enables those commands while it is
+   * true. Added after the release-candidate check as an optional member (errata SH8.md entry 50),
+   * so that the run feature depends on this contract and not on the SimRunController class: a
+   * controller without it keeps nothing, and the commands follow the phase alone.
+   */
+  readonly keepsCommands?: boolean;
   subscribe(listener: () => void): () => void;
 
   /* loads: each puts the controller into 'loading'; a request made during 'loading' is ignored */

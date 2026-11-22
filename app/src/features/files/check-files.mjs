@@ -15,7 +15,11 @@
 //     QuotaExceededError) rejects the save with the clear message, shows it, and keeps the saved
 //     file intact;
 //   - a page killed in the middle of a write (Chromium: renderer crash; WebKit: page closed at
-//     once) leaves every file as it was or as written, never half written;
+//     once) leaves every file as it was or as written, never half written, and the next page has
+//     the real store with every request answered (or the line says what it waited for);
+//   - a store held by a read-write transaction that never ends (what a dead page can leave): the
+//     next page answers within the 20 s limit with the memory stand-in and says why, and once the
+//     transaction has ended a reload has the real store, the whole file and no torn write;
 //   - blocked storage (IndexedDB.open throws, as in some private windows): the page still starts,
 //     the Files panel says plainly that nothing is being kept;
 //   - storage that never answers (IndexedDB.open hangs): the page is shown after the short start-up
@@ -41,7 +45,7 @@
 // Screenshots go to build/FS1/files-check (git-ignored). Exit code 0 = everything passed.
 // The page object `window.__easy68k` exists in development builds only (main.tsx).
 
-/* global console, process, window, document, indexedDB, IDBFactory, IDBObjectStore, setTimeout, DataTransfer, DragEvent, File, performance, Navigator, DOMException, URL, TextEncoder, TextDecoder, Buffer, MutationObserver, clearTimeout, navigator, requestAnimationFrame, FileSystemDirectoryHandle, FileSystemFileHandle */
+/* global console, process, window, document, indexedDB, IDBFactory, IDBObjectStore, setTimeout, DataTransfer, DragEvent, File, performance, Navigator, DOMException, URL, TextEncoder, TextDecoder, Buffer, MutationObserver, clearTimeout, navigator, requestAnimationFrame, FileSystemDirectoryHandle, FileSystemFileHandle, IDBDatabase */
 
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -51,6 +55,7 @@ import { fileURLToPath } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../tests/browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -333,7 +338,7 @@ async function backendPass(browser, name) {
     timing.size === (20 << 20) + 12 * 1024 && timing.length === timing.size,
   );
   check(`${p} backend pass: no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /** Reload, two pages, full storage. */
@@ -413,7 +418,7 @@ async function storePass(browser, name) {
 
   const errors = [...a.errors, ...b.errors].filter((text) => !/Failed to load resource|QuotaExceeded/.test(text));
   check(`${p} store pass: no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /** Full storage (Chromium: the origin's quota lowered through the DevTools protocol), on a page of its own. */
@@ -458,7 +463,7 @@ async function quotaPass(browser, name) {
   await cdp.send('Storage.overrideQuotaForOrigin', { origin });
   const errors = a.errors.filter((text) => !/Failed to load resource|QuotaExceeded/.test(text));
   check(`${p} full storage: no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /**
@@ -516,18 +521,105 @@ async function injectedQuotaPass(browser, name) {
   await a.page.screenshot({ path: join(outDir, `${name}-storage-full.png`) });
   const errors = a.errors.filter((text) => !/Failed to load resource|QuotaExceeded/.test(text));
   check(`${p} full storage: no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
+
+/**
+ * In the page: every indexedDB.open and every transaction, with when it was made and when (and
+ * how) it ended, in window.__idbTrace; times in ms from the page's start. The kill pass reads it
+ * to say exactly what a page that waits is waiting for (FS1 errata entry 29).
+ */
+function traceIndexedDB() {
+  const log = [];
+  window.__idbTrace = log;
+  const at = () => Math.round(performance.now());
+  const open = IDBFactory.prototype.open;
+  IDBFactory.prototype.open = function (...args) {
+    const request = open.apply(this, args);
+    const entry = { what: `indexedDB.open("${args[0]}")`, made: at(), ended: null, outcome: 'no answer' };
+    log.push(entry);
+    for (const type of ['success', 'error', 'blocked']) {
+      request.addEventListener(type, () => {
+        if (type === 'blocked') entry.blocked = at();
+        else [entry.ended, entry.outcome] = [at(), type];
+      });
+    }
+    return request;
+  };
+  const transaction = IDBDatabase.prototype.transaction;
+  IDBDatabase.prototype.transaction = function (...args) {
+    const tx = transaction.apply(this, args);
+    const entry = { what: `${args[1] ?? 'readonly'} transaction`, made: at(), ended: null, outcome: 'no answer' };
+    log.push(entry);
+    tx.addEventListener('complete', () => ([entry.ended, entry.outcome] = [at(), 'complete']));
+    tx.addEventListener('abort', () => ([entry.ended, entry.outcome] = [at(), `abort ${tx.error?.name ?? ''}`.trim()]));
+    return tx;
+  };
+}
+
+/**
+ * What a page of the kill pass is waiting for: the store mounted at /browser and its message,
+ * the IndexedDB requests that have not answered or took over a second, and the Web Locks held and
+ * waited for. Evaluated without awaiting the store, so it answers while the store hangs.
+ */
+async function waitingFor(page) {
+  return page
+    .evaluate(async () => {
+      const store = window.__easy68k?.ctx?.vfs?.backends().find((b) => b.mount === 'browser');
+      const banner = document.querySelector('[data-e68-panel="files"] [role=alert]')?.textContent ?? '';
+      const now = Math.round(performance.now());
+      const slow = (window.__idbTrace ?? [])
+        .filter((e) => e.ended === null || e.ended - e.made > 1000)
+        .map((e) =>
+          e.ended === null
+            ? `${e.what} made at ${e.made} ms: no answer after ${now - e.made} ms${e.blocked ? ' (blocked)' : ''}`
+            : `${e.what} made at ${e.made} ms: ${e.outcome} after ${e.ended - e.made} ms`,
+        );
+      let locks;
+      try {
+        const snapshot = await Promise.race([
+          navigator.locks.query(),
+          new Promise((resolve) => setTimeout(() => resolve(null), 2000)),
+        ]);
+        locks = snapshot
+          ? `locks held: ${snapshot.held.map((l) => l.name).join(', ') || 'none'}; waited for: ${snapshot.pending.map((l) => l.name).join(', ') || 'none'}`
+          : 'navigator.locks.query() did not answer within 2 s';
+      } catch (error) {
+        locks = `navigator.locks.query() failed: ${error}`;
+      }
+      const kind = store?.constructor?.name ?? 'none';
+      // A request made a moment ago (a merge after the reading) is not a wait; one older than 1 s is.
+      const unanswered = (window.__idbTrace ?? []).some((e) => e.ended === null && now - e.made > 1000);
+      const text = `store ${kind}${banner ? ` ("${banner.slice(0, 120)}")` : ''}; IndexedDB: ${slow.join('; ') || 'every request answered within 1 s'}; ${locks}`;
+      return { kind, unanswered, slow: slow.length > 0, text };
+    })
+    .catch((error) => ({
+      kind: 'unknown',
+      unanswered: true,
+      slow: true,
+      text: `the page did not answer either: ${String(error).slice(0, 120)}`,
+    }));
+}
+
+/**
+ * The limit for the reading in the new page: the store gives up OPEN_TIMEOUT_MS (20 s) after it
+ * began to open, so a page that still waits after this long waits for something else.
+ */
+const SURVIVOR_LIMIT_MS = 60_000;
 
 /**
  * A page that dies in the middle of a write (Chromium: the renderer crashed through the DevTools
  * protocol; WebKit: the page closed at once). Afterwards a new page of the same store finds every
  * file either as it was or as written, never half written, and the index agrees with the bytes.
+ * Each delay's new page must come up and answer within SURVIVOR_LIMIT_MS; a page that does not is
+ * reported with what it waits for (waitingFor), and so is a page whose store did not open in time.
  */
 async function killPass(browser, name) {
   const p = `${name}:`;
   const context = await newContext(browser);
+  await context.addInitScript(traceIndexedDB);
   const results = [];
+  const waits = [];
   for (const delay of [0, 2, 10, 30, 80]) {
     progress(`delay ${delay} ms: opening the page to kill`);
     const victim = await openApp(context);
@@ -559,7 +651,8 @@ async function killPass(browser, name) {
     progress(`delay ${delay} ms: opening a new page of the same store`);
     const survivor = await openApp(context);
     progress(`delay ${delay} ms: reading the files in the new page`);
-    const found = await survivor.page.evaluate(async (target) => {
+    let timer;
+    const reading = survivor.page.evaluate(async (target) => {
       const { vfs } = window.__easy68k.ctx;
       const out = {};
       for (const file of [target, `${target}.log`]) {
@@ -578,8 +671,25 @@ async function killPass(browser, name) {
       }
       return out;
     }, path);
-    results.push(found);
-    await survivor.page.close();
+    reading.catch(() => {}); // a reading that ran out of time is abandoned with its page
+    const found = await Promise.race([
+      reading,
+      new Promise((resolveLimit) => {
+        timer = setTimeout(() => resolveLimit(null), SURVIVOR_LIMIT_MS);
+      }),
+    ]).finally(() => clearTimeout(timer));
+    // Where the new page waited: its store, and any IndexedDB request slower than a second.
+    const waited = await waitingFor(survivor.page);
+    if (found === null) {
+      waits.push(`delay ${delay} ms: the new page did not answer within ${SURVIVOR_LIMIT_MS / 1000} s: ${waited.text}`);
+      results.push({ [path]: 'NO ANSWER' });
+    } else {
+      // Waiting that ended (a slow disk) is printed; a store that gave up or a request still unanswered fails.
+      if (waited.kind !== 'BrowserBackend' || waited.unanswered) waits.push(`delay ${delay} ms: ${waited.text}`);
+      else if (waited.slow) console.log(`       delay ${delay} ms, slow but answered: ${waited.text}`);
+      results.push(found);
+    }
+    await closeWithin(survivor.page);
     if (!victim.page.isClosed()) await victim.page.close().catch(() => {});
   }
   const flat = results.flatMap((r) => Object.values(r));
@@ -589,7 +699,129 @@ async function killPass(browser, name) {
       results.every((r) => !Object.entries(r).some(([k, v]) => !k.endsWith('.log') && v === 'missing')),
     flat.join('; '),
   );
-  await context.close();
+  // The new page came up with the real store each time and no request of it was left unanswered:
+  // when one was, the line says what it waited for (the store, the IndexedDB requests, the locks).
+  check(
+    `${p} a page killed in the middle of a write: the new page has the real store each time, with every request answered`,
+    waits.length === 0,
+    waits.join(' | ').slice(0, 300) || `store BrowserBackend, ${results.length} of ${results.length}`,
+  );
+  for (const wait of waits) console.log(`       ${wait}`);
+  await closeWithin(context);
+}
+
+/**
+ * What a page that died in the middle of a write can leave behind (FS1 errata entry 29): a
+ * read-write transaction on the store that the browser does not end. Here another page holds one
+ * open for as long as the pass wants, with a torn write in it, by asking for a record each time the
+ * last one answered. The next page must come up and answer within OPEN_TIMEOUT_MS (20 s) of opening
+ * with the memory stand-in, saying why; once the transaction has ended (aborted, as the browser
+ * ends a dead page's), a reload has the real store with the completely written file and without
+ * the torn write. Before the repair that next page waited for ever.
+ */
+async function heldStorePass(browser, name) {
+  const p = `${name}:`;
+  const OPEN_TIMEOUT_MS = 20_000; // fs/browser-backend.ts
+  const context = await newContext(browser);
+  await context.addInitScript(traceIndexedDB);
+  progress('opening the page that holds the store');
+  const holder = await openApp(context);
+  await holder.page.evaluate(async () => {
+    await window.__easy68k.ctx.vfs.writeFile('/browser/held/kept.X68', new TextEncoder().encode('old'));
+    await new Promise((resolve, reject) => {
+      const request = indexedDB.open('easy68k-files', 1);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const tx = request.result.transaction('files', 'readwrite');
+        const store = tx.objectStore('files');
+        store.put({ size: 8 << 20, mtime: 1, segs: 0 }, ['h', 'held/torn.bin']);
+        store.put({ data: new Uint8Array(4).fill(72) }, ['s', 'held/kept.X68', 1]);
+        const hold = { alive: true, tx, ended: new Promise((end) => (tx.onabort = tx.oncomplete = end)) };
+        window.__hold = hold;
+        const spin = () => {
+          store.get('held/kept.X68').onsuccess = () => {
+            if (hold.alive) spin();
+          };
+        };
+        spin();
+        resolve();
+      };
+    });
+  });
+  progress('opening a new page while the store is held');
+  const next = await openApp(context);
+  let timer;
+  const reading = next.page.evaluate(async () => {
+    const calledAt = performance.now();
+    const stat = await window.__easy68k.ctx.vfs.stat('/browser/held/kept.X68');
+    const answeredAt = performance.now();
+    const openedAt = (window.__idbTrace ?? []).find((e) => e.what.startsWith('indexedDB.open'))?.made ?? null;
+    const mounted = window.__easy68k.ctx.vfs.backends().find((b) => b.mount === 'browser');
+    // A PendingBrowserStore stands at /browser for good; what it gave is its current store.
+    const store = mounted?.current ?? mounted;
+    return {
+      stat,
+      kind: store?.constructor?.name,
+      sinceOpen: openedAt === null ? null : Math.round(answeredAt - openedAt),
+      afterCall: Math.round(answeredAt - calledAt),
+    };
+  });
+  reading.catch(() => {});
+  progress('reading in the new page while the store is held');
+  const outcome = await Promise.race([
+    reading,
+    new Promise((resolveLimit) => {
+      timer = setTimeout(() => resolveLimit(null), 90_000);
+    }),
+  ]).finally(() => clearTimeout(timer));
+  const waited = outcome === null ? await waitingFor(next.page) : null;
+  const banner = await next.page
+    .locator('[data-e68-panel="files"] [role=alert]')
+    .first()
+    .innerText({ timeout: 5000 })
+    .catch(() => '');
+  check(
+    `${p} a store held by a transaction that never ends: the next page answers within the 20 s limit`,
+    outcome !== null &&
+      outcome.sinceOpen !== null &&
+      (outcome.sinceOpen <= OPEN_TIMEOUT_MS + 10_000 || outcome.afterCall <= 2000),
+    outcome === null
+      ? `no answer after 90 s: ${waited.text}`
+      : `answered ${outcome.sinceOpen} ms after opening began, ${outcome.afterCall} ms after the call`,
+  );
+  check(
+    `${p} a store held for ever: the next page keeps files in memory and says why`,
+    outcome?.kind === 'UnsavedBrowserStore' &&
+      outcome.stat === null &&
+      banner.includes('Files are NOT being saved') &&
+      banner.includes('reading the list of files took longer than 20 s'),
+    `${outcome?.kind}: ${banner.slice(0, 200)}`,
+  );
+  await next.page.screenshot({ path: join(outDir, `${name}-store-held.png`) });
+  const nextErrors = next.errors.filter((text) => !/Failed to load resource/.test(text));
+  check(`${p} a store held for ever: no console errors`, nextErrors.length === 0, nextErrors.slice(0, 3).join(' | '));
+  progress('ending the held transaction and reloading');
+  await holder.page.evaluate(async () => {
+    window.__hold.alive = false;
+    window.__hold.tx.abort();
+    await window.__hold.ended;
+  });
+  await next.page.reload();
+  await next.page.waitForSelector('[data-e68-panel="files"] [role=tree]');
+  const after = await next.page.evaluate(async () => {
+    const { vfs } = window.__easy68k.ctx;
+    const kind = vfs.backends().find((b) => b.mount === 'browser')?.constructor?.name;
+    const stat = await vfs.stat('/browser/held/kept.X68');
+    const text = stat ? new TextDecoder().decode(await vfs.readFile('/browser/held/kept.X68')) : null;
+    const torn = await vfs.stat('/browser/held/torn.bin');
+    return { kind, text, size: stat?.size ?? null, torn: torn !== null };
+  });
+  check(
+    `${p} a store held for ever: once the transaction has ended, a reload has the real store, the whole file and no torn write`,
+    after.kind === 'BrowserBackend' && after.text === 'old' && after.size === 3 && !after.torn,
+    JSON.stringify(after),
+  );
+  await closeWithin(context);
 }
 
 /** IndexedDB refuses to open (a private window): the page works and says nothing is kept. */
@@ -623,7 +855,7 @@ async function blockedPass(browser, name) {
   check(`${p} blocked storage: saving still works for the session`, same(works, [7]));
   await page.screenshot({ path: join(outDir, `${name}-blocked-storage.png`) });
   check(`${p} blocked storage: no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /**
@@ -671,7 +903,7 @@ async function hangingPass(browser, name) {
       await page.screenshot({ path: join(outDir, `${name}-store-opening.png`) });
       best = { errors, shownAfter, kind };
     }
-    await context.close();
+    await closeWithin(context);
     if (
       best.shownAfter < 15_000 &&
       readings.some((r) => r.stillOpeningAt !== null && r.stillOpeningAt < OPEN_TIMEOUT_MS)
@@ -740,7 +972,7 @@ async function uiPass(browser, name) {
       '/browser/demo/all.bin',
       Uint8Array.from({ length: 2048 }, (_, i) => i & 0xff),
     );
-    await vfs.writeFile('/browser/Übung 1/Prüfung.X68', enc('x'));
+    await vfs.writeFile('/browser/Ãœbung 1/PrÃ¼fung.X68', enc('x'));
     window.__filters = await import('/src/features/files/filters.ts');
   });
 
@@ -1216,7 +1448,7 @@ async function uiPass(browser, name) {
   await page.screenshot({ path: join(outDir, `${name}-files-panel-dark.png`) });
   await scan(page, `${name} dark editor with Files panel`);
   check(`${p} ui pass: no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 
   const fresh = await newContext(browser);
   const second = await openApp(fresh);
@@ -1431,7 +1663,7 @@ async function storageNoticePass(browser, name) {
     JSON.stringify(plainGeometry.notice),
   );
   check(`${p} plain page: no console errors`, plain.errors.length === 0, plain.errors.slice(0, 3).join(' | '));
-  await plainContext.close();
+  await closeWithin(plainContext);
 
   progress('first start with the parameter');
   const context = await newContext(browser);
@@ -1451,7 +1683,7 @@ async function storageNoticePass(browser, name) {
       `${JSON.stringify(geometry)} vs ${JSON.stringify(plainGeometry)}`,
     );
     check(`${p} no console errors`, opened.errors.length === 0, opened.errors.slice(0, 3).join(' | '));
-    await context.close();
+    await closeWithin(context);
     return;
   }
 
@@ -1571,7 +1803,7 @@ async function storageNoticePass(browser, name) {
     opened.errors.length === 0 && second.errors.length === 0,
     [...opened.errors, ...second.errors].slice(0, 3).join(' | '),
   );
-  await context.close();
+  await closeWithin(context);
 
   // The installed app with an empty store: the other variant; Import... brings the .zip over.
   progress('installed app');
@@ -1632,7 +1864,7 @@ async function storageNoticePass(browser, name) {
     installed.errors.length === 0,
     installed.errors.slice(0, 3).join(' | '),
   );
-  await installedContext.close();
+  await closeWithin(installedContext);
 
   // The installed app's Got it is remembered too (the store stays empty, so only that hides it).
   progress('installed app, got it');
@@ -1649,7 +1881,7 @@ async function storageNoticePass(browser, name) {
     `${p} installed app: Got it is remembered with the store still empty`,
     (await empty.page.locator(NOTICE).count()) === 0 && Object.keys(await storeContents(empty.page)).length === 0,
   );
-  await emptyContext.close();
+  await closeWithin(emptyContext);
 }
 
 // ---- the stage of additions: the Files panel of ARCHITECTURE-PLUS P3.2 (N5) -------------------------
@@ -2969,7 +3201,7 @@ async function firstWriteNoticePass(browser, name) {
       JSON.stringify(await toastsOf(page)),
     );
     check(`${p} no console errors`, hidden.errors.length === 0, hidden.errors.slice(0, 3).join(' | '));
-    await context.close();
+    await closeWithin(context);
     return;
   }
   await page.locator(TOAST).first().waitFor({ timeout: 15_000 });
@@ -2994,7 +3226,7 @@ async function firstWriteNoticePass(browser, name) {
   await page.waitForTimeout(500);
   check(`${p} and the panel, shown again, has no notice`, (await page.locator(NOTICE).count()) === 0);
   check(`${p} panel hidden: no console errors`, hidden.errors.length === 0, hidden.errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 
   // 2. A first visit that starts in Simulator mode (?open= a program), where there is no Files panel.
   progress('simulator mode');
@@ -3039,7 +3271,7 @@ async function firstWriteNoticePass(browser, name) {
   await sim.page.screenshot({ path: join(outDir, `${name}-storage-notice-first-write-simulator.png`) });
   await scan(sim.page, `${name} Simulator mode with the storage note`);
   check(`${p} Simulator mode: no console errors`, sim.errors.length === 0, sim.errors.slice(0, 3).join(' | '));
-  await simContext.close();
+  await closeWithin(simContext);
 
   // 3. The panel showed the notice: the first write needs no note of its own.
   progress('panel visible');
@@ -3052,7 +3284,7 @@ async function firstWriteNoticePass(browser, name) {
     `${p} with the notice on the screen in the panel, a write shows no note`,
     (await visible.page.locator(TOAST).count()) === 0,
   );
-  await visibleContext.close();
+  await closeWithin(visibleContext);
 }
 
 /** Lists and tests a .zip with whatever archive tool this system has. */
@@ -3115,6 +3347,7 @@ async function main() {
           ['storage that does not answer', hangingPass],
           ['full storage', name === 'chromium' ? quotaPass : injectedQuotaPass],
           ['a page killed in the middle of a write', killPass],
+          ['a store held by a transaction that never ends', heldStorePass],
           ['dialogs, panel, drop, export, import', uiPass],
           ['the Safari storage notice', storageNoticePass],
           ['the storage notice at the first write', firstWriteNoticePass],
@@ -3152,17 +3385,17 @@ async function main() {
       } catch (error) {
         check(`${name}: the pass ran to the end`, false, String(error?.stack ?? error).slice(0, 400));
       } finally {
-        await browser.close();
+        await doneWith(browser, { last: name === browsers.at(-1) });
       }
     }
   } finally {
-    await server.close();
+    closeAtEnd(server);
   }
   for (const file of ['chromium-demo.zip', 'webkit-demo.zip']) rmSync(join(outDir, `${file}.tmp`), { force: true });
   writeFileSync(join(outDir, 'results.json'), JSON.stringify(results, null, 2));
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
-  process.exit(failures ? 1 : 0);
+  await endChecks(failures ? 1 : 0);
 }
 
 await main();

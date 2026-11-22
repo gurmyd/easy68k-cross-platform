@@ -417,6 +417,28 @@ describe.skipIf(!enginesBuilt)(
       expect(enabled('sim.run.run')).toBe(false); // busy, as after any Run
     });
 
+    // Errata SH8.md entry 48: the store (and so the status bar, the menus and the native menu) never
+    // holds the loaded program idle and unrun when a Run was given during its load.
+    it('a Run kept during a load: the store goes from loading to running, never through idle', async () => {
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      await start({ files: { setCurrentDir: () => gate } });
+      const loading = open('counter');
+      await settle();
+      await app.ctx.commands.run('sim.run.run');
+      const phases: string[] = [];
+      const stop = app.ctx.store.subscribe(() => {
+        const { phase } = sim();
+        if (phases.at(-1) !== phase) phases.push(phase);
+      });
+      release();
+      await loading;
+      await settle();
+      stop();
+      expect(phases).toEqual(['running']);
+      expect(app.ctx.sim.engine.stepCount).toBeGreaterThan(0);
+    });
+
     it('a Run To Cursor kept during an Execute reads the row selected when the load has ended', async () => {
       await start();
       await open('counter');

@@ -361,6 +361,152 @@ function slowFactory(real: IDBFactory, delayMs: number): IDBFactory {
   } as unknown as IDBFactory;
 }
 
+/**
+ * What the browser can keep for a page that died in the middle of a write (CI run 45034021673,
+ * WebKit on Windows): a read-write transaction of the dead page's connection that is never ended.
+ * IndexedDB runs a later transaction on the same object store only after it, so every transaction
+ * of the next page waits behind it. Here: a connection of the same database whose read-write
+ * transaction has put a torn write (a head without its bytes, a stray segment) and is kept alive
+ * by a request after each answer. abort() ends it as the browser does when it finally notices.
+ */
+async function deadPageTransaction(factory: IDBFactory): Promise<{ abort(): Promise<void>; connection: IDBDatabase }> {
+  const connection = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = factory.open(BROWSER_DB_NAME, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore('files');
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  const tx = connection.transaction('files', 'readwrite');
+  const store = tx.objectStore('files');
+  store.put({ size: 8 << 20, mtime: 1, segs: 0 }, ['h', 'torn.bin']);
+  store.put({ data: ascii('half') }, ['s', 'kept.X68', 1]);
+  let alive = true;
+  const spin = () => {
+    const request = store.get('kept.X68');
+    request.onsuccess = () => {
+      if (alive) spin();
+    };
+  };
+  spin();
+  const ended = new Promise<void>((resolve) => {
+    tx.onabort = () => resolve();
+    tx.oncomplete = () => resolve();
+  });
+  return {
+    connection,
+    async abort() {
+      alive = false;
+      tx.abort();
+      await ended;
+    },
+  };
+}
+
+/** The promise's value, or a rejection naming `what` after `ms` (a hang fails the test, not the run). */
+function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    promise.finally(() => clearTimeout(timer)),
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`still waiting after ${ms} ms: ${what}`)), ms);
+    }),
+  ]);
+}
+
+describe('a page that died in the middle of a write (CI run 45034021673)', { timeout: 60_000 }, () => {
+  it('the next page comes up within the time limit although the dead page holds the store', async () => {
+    const factory = new IDBFactory();
+    const first = await openStore({ indexedDB: factory });
+    await first.writeFile('kept.X68', ascii('old'));
+    await first.writeFile('big.bin', new Uint8Array(1 << 20).fill(78));
+    await first.close();
+    const dead = await deadPageTransaction(factory);
+    try {
+      const started = Date.now();
+      const backend = await openStartupStore({ indexedDB: factory, keyRange: IDBKeyRange, openTimeoutMs: 300 }, 50);
+      expect(backend).toBeInstanceOf(PendingBrowserStore);
+      expect(storageProblem(backend)).toBe(STORE_MESSAGES.opening);
+      // Before the repair this waited for ever: the time limit covered indexedDB.open only, not the
+      // reading of the index that the dead page's transaction holds up.
+      expect(await within(backend.stat('kept.X68'), 10_000, 'stat in the next page')).toBeNull();
+      expect(Date.now() - started).toBeLessThan(5_000);
+      expect((backend as PendingBrowserStore).current).toBeInstanceOf(UnsavedBrowserStore);
+      const problem = storageProblem(backend) ?? '';
+      expect(problem).toContain('Files are NOT being saved');
+      expect(problem).toContain('reading the list of files took longer than 0.3 s');
+      // The session goes on in memory.
+      await backend.writeFile('session.txt', ascii('s'));
+      expect(text(await backend.readFile('session.txt'))).toBe('s');
+    } finally {
+      await dead.abort();
+    }
+    // The browser has ended the dead page's transaction: its torn write is gone, and every file that
+    // was completely written is there, whole, and the index agrees with the bytes.
+    const next = await openStore({ indexedDB: factory });
+    expect(await next.list('')).toEqual([
+      { name: 'big.bin', kind: 'file' },
+      { name: 'kept.X68', kind: 'file' },
+    ]);
+    expect(text(await next.readFile('kept.X68'))).toBe('old');
+    expect((await next.stat('kept.X68'))?.size).toBe(3);
+    const big = await next.readFile('big.bin');
+    expect(big.length === 1 << 20 && big.every((b) => b === 78)).toBe(true);
+    expect((await next.stat('big.bin'))?.size).toBe(1 << 20);
+    dead.connection.close();
+  });
+
+  it('the connection of a store that gave up is closed, and a database that answers too late too', async () => {
+    const factory = new IDBFactory();
+    await (await openStore({ indexedDB: factory })).close();
+    // The connections the backend gets from open(), to see whether it closed them.
+    const connections: IDBDatabase[] = [];
+    const watching = {
+      open(name: string, version?: number) {
+        const request = factory.open(name, version);
+        request.addEventListener('success', () => connections.push(request.result));
+        return request;
+      },
+    } as unknown as IDBFactory;
+    // fake-indexeddb marks a connection whose close() was called.
+    const closeCalled = (db: IDBDatabase) => (db as unknown as { _closePending: boolean })._closePending;
+
+    const dead = await deadPageTransaction(factory);
+    const backend = await openBrowserStore({
+      indexedDB: watching,
+      keyRange: IDBKeyRange,
+      channel: null,
+      openTimeoutMs: 100,
+    });
+    expect(backend).toBeInstanceOf(UnsavedBrowserStore);
+    expect(storageProblem(backend)).toContain('reading the list of files took longer than 0.1 s');
+    expect(connections.length).toBe(1);
+    expect(closeCalled(connections[0] as IDBDatabase)).toBe(true);
+    await dead.abort();
+    dead.connection.close();
+
+    // indexedDB.open itself answers after the time limit: that connection is closed at once.
+    const late = await openBrowserStore({
+      indexedDB: slowFactory(watching, 200),
+      keyRange: IDBKeyRange,
+      channel: null,
+      openTimeoutMs: 50,
+    });
+    expect(storageProblem(late)).toContain('opening the database took longer than 0.05 s');
+    await until(() => connections.length === 2, 'the late connection arrives');
+    expect(closeCalled(connections[1] as IDBDatabase)).toBe(true);
+  });
+
+  it('a store that opens and reads its index in time is not affected by the time limit', async () => {
+    const factory = new IDBFactory();
+    const first = await openStore({ indexedDB: factory });
+    await first.writeFile('a.X68', ascii('a'));
+    await first.close();
+    const backend = await openStore({ indexedDB: factory, openTimeoutMs: 5_000 });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(text(await backend.readFile('a.X68'))).toBe('a');
+  });
+});
+
 describe('start-up (review FS1: the page must not wait up to 20 s for a store that hangs)', { timeout: 60_000 }, () => {
   it('a store that opens in time is mounted itself', async () => {
     const backend = await openStartupStore({ indexedDB: new IDBFactory(), keyRange: IDBKeyRange, channel: null }, 1000);

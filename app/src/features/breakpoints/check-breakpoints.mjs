@@ -38,6 +38,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../tests/browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -303,7 +304,7 @@ async function shellPass(browser, name) {
   check(`${p} View > Break Points shows the panel`, await showPanel(page));
   let panel = await readPanel(page);
   if (!panel) {
-    await context.close();
+    await closeWithin(context);
     return;
   }
   check(
@@ -531,7 +532,7 @@ async function shellPass(browser, name) {
   await shoot(page, `${name}-dark-editing`);
   await scanPanel(page, `${name} dark, editing`);
   reportErrors(p, errors);
-  await context.close();
+  await closeWithin(context);
 }
 
 const SOURCE = [
@@ -629,7 +630,7 @@ async function enginePass(browser, name, program) {
     }),
   );
   reportErrors(p, errors);
-  await context.close();
+  await closeWithin(context);
 }
 
 async function main() {
@@ -664,15 +665,15 @@ async function main() {
         check(`${name}: the check ran to its end`, false, String(error?.stack ?? error));
         if (pageErrors.length) console.log(`        page errors: ${pageErrors.slice(0, 5).join(' | ')}`);
       } finally {
-        await browser.close();
+        await doneWith(browser, { last: name === browsers.at(-1) });
       }
     }
   } finally {
-    await server.close();
+    closeAtEnd(server);
   }
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
-  process.exit(failures ? 1 : 0);
+  await endChecks(failures ? 1 : 0);
 }
 
 await main();

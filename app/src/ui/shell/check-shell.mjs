@@ -60,6 +60,7 @@ import { fileURLToPath } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../tests/browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -516,7 +517,7 @@ async function structurePass(browser, name, os) {
   await page.keyboard.press('Escape');
 
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /** The commands of the editor's own keys (EDITOR_FOCUS_COMMANDS in app/src/commands/tables/keys.ts). */
@@ -892,7 +893,7 @@ async function keyboardPass(browser, name, os) {
   });
 
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /**
@@ -960,7 +961,7 @@ async function textFieldKeysPass(browser, name, os) {
     }
     check(`${p} Ctrl+A, C and Z in a text field are left to the browser`, left.length === 0, left.join(', '));
     check(`${p} no console or page errors (text fields)`, errors.length === 0, errors.slice(0, 3).join(' | '));
-    await context.close();
+    await closeWithin(context);
     return;
   }
 
@@ -1098,7 +1099,7 @@ async function textFieldKeysPass(browser, name, os) {
   await closeOverlays(page);
 
   check(`${p} no console or page errors (text fields)`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /** Modal dialogs: nothing runs, message boxes answer, the controller is held. */
@@ -1304,7 +1305,7 @@ async function dialogPass(browser, name) {
   );
 
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 // --- settings in two pages (3.8.6 rule 2; errata W3 entry 26) ---------------------------------
@@ -1732,7 +1733,7 @@ async function windowsPass(browser, name) {
     a.errors.length + b.errors.length === 0,
     [...a.errors, ...b.errors].slice(0, 3).join(' | '),
   );
-  await context.close();
+  await closeWithin(context);
 }
 
 /** Accessibility scans and the gallery route. */
@@ -1758,7 +1759,7 @@ async function scanPass(browser, name) {
     await page.waitForSelector('[role=alertdialog]');
     await scan(page, `${name} ${themeName} message box`);
     check(`${p} ${themeName}: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-    await context.close();
+    await closeWithin(context);
   }
 
   const context = await newContext(browser, 'windows');
@@ -1769,7 +1770,7 @@ async function scanPass(browser, name) {
     () => false,
   );
   check(`${p} ?gallery shows the component kit's gallery`, gallery && (await page.locator('.e68-shell').count()) === 0);
-  await context.close();
+  await closeWithin(context);
 }
 
 // --- run -------------------------------------------------------------------------------
@@ -1827,17 +1828,17 @@ async function main() {
         console.log(`\n[${name}, accessibility and gallery]`);
         await pass('accessibility and gallery', () => scanPass(browser, name));
       } finally {
-        await browser.close();
+        await doneWith(browser, { last: name === browsers.at(-1) });
       }
     }
   } finally {
-    await server.close();
+    closeAtEnd(server);
   }
 
   if (notes.length > 0) console.log(`\nNotes (not failures):\n${notes.map((text) => `  - ${text}`).join('\n')}`);
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
-  process.exit(failures ? 1 : 0);
+  await endChecks(failures ? 1 : 0);
 }
 
 await main();

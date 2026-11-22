@@ -14,6 +14,7 @@
 
 /* global document, window, getComputedStyle */
 
+import { closeWithin } from '../../browser-checks/ending.mjs';
 import { AA, contrastRatio, formatRatio, parseColor, toHex } from './contrast.mjs';
 import { newContext, openApp, waitFor } from './app.mjs';
 import { assembleAndExecute, PROGRAM } from './scan.mjs';
@@ -272,6 +273,6 @@ export async function contrastPart({ browser, name, baseUrl, report, enginesPres
     }
     report.check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   } finally {
-    await context.close();
+    await closeWithin(context);
   }
 }

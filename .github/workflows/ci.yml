@@ -54,6 +54,7 @@
 #       frame_policy  tools/check-frame-policy.mjs                       N0
 #   check: packaging unit tests  tests/desktop/packaged/playwright.config.ts (project unit, DV3)
 #   check: documents           tools/check-docs.test.mjs            (npm run check:docs, DOC1)
+#   check: check scripts' ending tests/browser-checks/ending.test.mjs (npm run test:check-ending, W0)
 #   e2e-stability              as e2e, on a manual run (input e2e_stability) or a push of a v* tag (6.9 item 10, X1);
 #                              --repeat-each=20 split by --shard: Chromium in 2 jobs, WebKit in 4;
 #                              each shard ends after --global-timeout (120 min) if a browser hangs
@@ -397,6 +398,12 @@ jobs:
       - name: Documents (DOC1)
         if: ${{ !cancelled() && hashFiles('tools/check-docs.test.mjs') != '' }}
         run: npm run check:docs
+      # docs/requests/W0-check-ending-test.md: the guarded ending every browser check script imports
+      # (tests/browser-checks/ending.mjs, errata W0 entry 12). Node's test runner, no browser, ~1.5 s.
+      # The file is named: on Windows Node 24's `node --test <folder>` does not find it.
+      - name: Check scripts' ending (W0)
+        if: ${{ !cancelled() }}
+        run: npm run test:check-ending
       # The packaged-app suite's project `unit` (docs/requests/DV3-ci-unit.md): desktop/scripts, the
       # facts release.yml must keep and the harness's parsers. No app, no browser, no Electron;
       # about 5 s. The rest of tests/desktop/packaged runs in release.yml against a built bundle.

@@ -119,11 +119,22 @@ test('Execute switches to Simulator mode with the program loaded and not running
   const dialog = await assemble(app, 'exec.X68');
   await app.button(dialog, 'Execute').click();
   await expect.poll(() => app.mode()).toBe('simulator');
+  // "Loaded" is what the simulator shows a person when the load has ended: the listing of the
+  // program (the simulator had none before this Execute, and the listing is refreshed together with
+  // the end of the load) and the PC field at its start address ($1000, the template's ORG and START;
+  // the start-up state has 00000000). The run commands being enabled is no sign of it: they are
+  // enabled during a load as well, since a run command given then is kept and carried out when the
+  // load ends (errata SH8.md entries 47 and 48).
   const listing = page.locator('[data-e68-panel="listing"]');
   await expect(listing).toContainText('SIMHALT');
+  const sim = page.locator('[data-e68-workspace="simulator"]');
+  await expect(sim.locator('[data-e68-panel="registers"] input[data-box="18"]'), 'the PC field').toHaveValue(
+    '00001000',
+  );
+  // "Not running" is what the status bar says; and Run and Trace Into are enabled then. Pause is
+  // enabled in every state (sim-ui.md, the toolbar and Run menu tables), so it says nothing here.
+  await expect(page.locator('[data-e68-status="run"]'), 'the run state').toHaveText('Stopped');
   await expect(app.toolbarButton('sim.run.run')).toBeEnabled();
-  // Pause is enabled in every state (sim-ui.md, the toolbar and Run menu tables), so it says
-  // nothing here; "not running" shows as Run and Trace Into being enabled.
   await expect(app.toolbarButton('sim.run.traceInto')).toBeEnabled();
   await expect(app.toolbarButton('sim.run.pause')).toBeEnabled();
 });

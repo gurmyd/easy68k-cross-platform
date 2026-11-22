@@ -30,6 +30,10 @@ class EStringListError : public Exception {};
 // Thrown by the recursion guard in mem_req (see PATCHES.md, "Unbounded
 // recursion"); stands for the stack overflow the original would run into.
 class EStackOverflow : public Exception {};
+// Thrown by the file streams (shim/hostfile.cpp) where the original's run-time
+// would copy past the end of its memory: an access violation, which the
+// original's "catch (...)" handlers catch as well.
+class EAccessViolation : public Exception {};
 
 // ---------------------------------------------------------------------------
 // AnsiString: a byte string with 1-based indexing.

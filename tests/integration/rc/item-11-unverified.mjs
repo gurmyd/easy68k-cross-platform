@@ -20,6 +20,14 @@
 //     open and in neither place. It also prints the confirmed items that section 4 still names as
 //     not confirmed.
 //
+// Each open item must have a row of its own in part 4 (ROWS / ROW_OF: the subsection and the first
+// cell) whose third cell states the port's chosen behaviour, and a confirmed item must have left
+// part 4. The unconfirmed conformance programs (a53, b19; erratum T3 14) are open items too.
+// EASY68K_RC_DIFFERENCES=<file> reads another copy (to show that the judge fails on a missing row,
+// or on a row whose third cell is empty or a dash), EASY68K_RC_PORTING=<folder> another copy of
+// docs/porting. The word is searched without regard to case; an occurrence only in lower or mixed
+// case is accounted for by LOWER_CASE.
+//
 // Exit code 0 only when the heading exists and no item and no occurrence is in neither place. The
 // tables below are the I3 reading of 2026-11-22; when a spec, an erratum or DIFFERENCES.md changes,
 // the script says which table entry no longer matches. --all prints every occurrence.
@@ -31,7 +39,9 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const porting = join(repo, 'docs', 'porting');
+// EASY68K_RC_PORTING=<folder>: another copy of docs/porting (to show that the judge fails on a new
+// occurrence that no table accounts for).
+const porting = process.env.EASY68K_RC_PORTING ?? join(repo, 'docs', 'porting');
 const all = process.argv.includes('--all');
 
 // ---- the spec lists of open items and how DIFFERENCES.md section 4 names them ---------------------
@@ -65,7 +75,7 @@ const DEFINITIONS = [
 /** Inline occurrences outside a list that a list item carries. [file, piece, list item] */
 const CARRIED = [
   ['assembler.md', 'number of open files / stack (UNVERIFIED on Windows)', 'asm12.10'],
-  ['assembler.md', 'the shim or accept. UNVERIFIED on the real program', null], // INT_MIN / -1: in no list
+  ['assembler.md', 'the shim or accept. UNVERIFIED on the real program', 'asm.9.2'], // INT_MIN / -1: a row of part 4
   ['assembler.md', 'classified as letter/space there is UNVERIFIED', 'asm12.8'],
   ['assembler.md', 'The real program very likely behaves the same; UNVERIFIED', 'asm12.4'],
   ['assembler.md', "What Borland's `fprintf` does with such a line is UNVERIFIED", 'asm12.2'],
@@ -81,13 +91,13 @@ const CARRIED = [
   ['editor-ui.md', 'UNVERIFIED: the exact extension Windows appends', 'ed22.12c'],
   ['editor-ui.md', 'UNVERIFIED: how a file with bare LF', 'ed22.12a'],
   ['editor-ui.md', 'UNVERIFIED: Shift+Tab in this mode', 'ed22.12b'],
-  ['editor-ui.md', 'that are now out of ascending order', null], // 8.3: in no list
-  ['editor-ui.md', "control's default tab stops apply (UNVERIFIED spacing)", null], // 8.3: in no list
+  ['editor-ui.md', 'that are now out of ascending order', 'ed.8.3'], // 8.3: a row of part 4
+  ['editor-ui.md', "control's default tab stops apply (UNVERIFIED spacing)", 'ed.8.3'], // 8.3: a row of part 4
   ['editor-ui.md', '-1 (UNVERIFIED; the design-time combo', 'ed22.12f'],
-  ['editor-ui.md', "UNVERIFIED against the original's RichEdit; erratum E6 4", null], // E6 4: in no list
+  ['editor-ui.md', "UNVERIFIED against the original's RichEdit; erratum E6 4", 'ed.E6.4'], // E6 4: a row of part 4
   ['hardware.md', 'what the eight-digit mask does to a value above 99999999', 'h12.U1'],
   ['hardware.md', 'Recursion hazard - vector 8 in a faulting range', 'h12.U2'],
-  ['hardware.md', 'Push-button release without press', null], // 9.2 item 8: DIFFERENCES part SH7, no list
+  ['hardware.md', 'Push-button release without press', 'hw.9.2.8'], // 9.2 item 8: a row of part 4
   ['official-oracle.md', '`editor-ui.md` 6.7 still says UNVERIFIED', 'ed22.12a'],
   ['sim-core.md', 'hardware faults such as access violations', 'c13.1'],
   ['sim-core.md', 'UNVERIFIED what the user sees in the original (a stack overflow', 'c13.1'],
@@ -105,7 +115,7 @@ const CARRIED = [
   ['sim-core.md', "UNVERIFIED: the original's instructions per second", 'c13.8'],
   ['sim-ui.md', '**Quirk / UNVERIFIED:** `"%u"`', 'ui19.Q18'],
   ['sim-ui.md', '**Quirk (UNVERIFIED on the binary, follows directly from the source):**', 'ui19.Q9'],
-  ['trap15-tasks-0-59.md', '`getXY` reads the *form* canvas pen', null], // 3.1: item 5 covers TextOut only
+  ['trap15-tasks-0-59.md', '`getXY` reads the *form* canvas pen', 'a.3.1'], // 3.1: a row of part 4
   ['trap15-tasks-0-59.md', 'the cell sizes Windows GDI returns for the other fonts', 'a12.1'],
   ['trap15-tasks-0-59.md', 'Keys that do **not** reach these handlers', 'a12.13'],
   ['trap15-tasks-0-59.md', 'undefined behaviour. **UNVERIFIED** what a given Windows build', 'a12.8'],
@@ -125,7 +135,7 @@ const CARRIED = [
   ['trap15-tasks-60-up.md', "Loader cache. The source never disables the DirectMusic loader's object cache", 'b15.V6'],
   ['trap15-tasks-60-up.md', 'a second `connect` on a socket', 'b15.V14'],
   ['trap15-tasks-60-up.md', 'Any send error, including "would block"', 'b15.V14'],
-  ['trap15-tasks-60-up.md', 'For TCP, Winsock does not fill in the address', null], // 12.2: V14 does not name it
+  ['trap15-tasks-60-up.md', 'For TCP, Winsock does not fill in the address', 'b.12.2'], // 12.2: a row of part 4
   ['trap15-tasks-60-up.md', 'Closing when nothing was opened returns an error', 'b15.V14'],
   ['trap15-tasks-60-up.md', 'Needs Winsock started, i.e. after task 100 or 101', 'b15.V14'],
   ['trap15-tasks-60-up.md', 'Because `bound` is never cleared', 'b15.V14'],
@@ -147,10 +157,10 @@ const SETTLED = [
 /** Errata lines with the marker: what they refer to (a list item, or null for a new open item). */
 const ERRATA = [
   ['DV4.md', "original's answers for the cases §12 lists as UNVERIFIED", 'b15.V14'],
-  ['E1.md', '**UNVERIFIED against the official binary.** No file of the corpus', null], // E1 2: DIFFERENCES part E1
+  ['E1.md', '**UNVERIFIED against the official binary.** No file of the corpus', 'e1.2'], // E1 2: confirmed (s21)
   ['E2.md', 'Silent about Real Tabs on (editor-ui §8.2: UNVERIFIED', 'ed22.12b'],
-  ['E6.md', 'UNVERIFIED against the RichEdit', null], // E6 4: word characters, in no list
-  ['E6.md', "UNVERIFIED what the original's `TEdit` shows", null], // E6 5: in no list
+  ['E6.md', 'UNVERIFIED against the RichEdit', 'ed.E6.4'], // E6 4: word characters, a row of part 4
+  ['E6.md', "UNVERIFIED what the original's `TEdit` shows", 'ed.E6.5'], // E6 5: a row of part 4
   ['FS1.md', 'The default extension rule (editor-ui §6.4, UNVERIFIED)', 'ed22.12c'],
   ['SH2.md', 'UNVERIFIED"; "Outline and interior are each combined once"', 'b15.V12'],
   ['SH2.md', 'UNVERIFIED beyond the two samples."', 'b15.V11'],
@@ -159,6 +169,41 @@ const ERRATA = [
   ['T1.md', 'engine README "UNVERIFIED against the real EASy68K.EXE', 'asm12.2'],
   ['T2.md', '## 3. trap15-tasks-0-59.md §12 (UNVERIFIED items 1-3): answers', 'a12.1'],
   ['W2.md', 'hardware §12 V1 marks the keystroke-level behaviour', 'h12.V1'],
+];
+/**
+ * The word in lower or mixed case ("unverified on the binary"), which the search finds too (it is
+ * case-insensitive since the review of the release-candidate check). [file as errata/X.md or X.md,
+ * piece of the line, what it is]: a list item that carries it; { settled }; { notTheMarker }; or
+ * { awaiting: owner, why }, a statement whose owner has not yet said whether it is an item of item 11
+ * (it is printed with its owner, apart from the counts, and does not decide the item; a lower-case
+ * occurrence in none of these rows does: it is unaccounted).
+ */
+const LOWER_CASE = [
+  [
+    'official-oracle.md',
+    'Synthetic stress files found four Wine deviations or unverified cases',
+    {
+      settled: 'the oracle tool under Wine, not the original program: official-oracle.md section 3.4 states each case',
+    },
+  ],
+  ['speed.md', '(0.3 to 3 million, unverified) brackets it', 'c13.8'],
+  ['errata/SH5.md', '(V14 unverified)', 'b15.V14'],
+  ['errata/DOC1.md', 'tests/integration/rc/item-11-unverified.mjs', { notTheMarker: "the name of this judge's file" }],
+  [
+    'errata/E4.md',
+    '`atoi` past 32 bits wraps (unverified on the binary',
+    { awaiting: 'E4', why: "the settings reader's atoi; DIFFERENCES.md part 4 row 6 is task 4's atoi, not this one" },
+  ],
+  [
+    'errata/E4.md',
+    'Ctrl-Z (0x1A) is not treated as an end of file',
+    { awaiting: 'E4', why: 'the settings reader and Ctrl-Z; no row of part 4' },
+  ],
+  [
+    'errata/E4.md',
+    'Unverified on the binary (Wine is not set up on this PC)',
+    { awaiting: 'E4', why: 'the line break after the last line of template.NEW on Save Template; no row of part 4' },
+  ],
 ];
 
 // ---- step 3: the items of the lists ----------------------------------------------------------------
@@ -253,7 +298,15 @@ const ITEMS = [
   // trap15-tasks-60-up.md section 15, the open table (V1-V3, V5, V7-V9 are "established")
   ['b15.V4', 'flood fill versus non-Copy modes', 'open'],
   ['b15.V6', 'DirectX looping, loader cache', 'open'],
-  ['b15.V8', 'modes 18-255 (established, but Wine differs: known-differences.json, b06, unconfirmed)', 'open'],
+  [
+    'b15.V8',
+    'modes 18-255 (b06 differs from its Wine golden only)',
+    {
+      confirmed:
+        "the GDI calls of the original measured on Windows 11 (golden/modes.json, erratum SH1 17); b06's golden is Wine's SetROP2, an accepted difference (known-differences.json)",
+      evidence: ['tests/conformance/gdi/golden/modes.json', 'tests/conformance/sim/known-differences.json'],
+    },
+  ],
   ['b15.V10', 'Tab never reaching OnKeyDown; mouse capture', 'open'],
   [
     'b15.V11',
@@ -263,7 +316,7 @@ const ITEMS = [
         'GDI capture: widelines 2000 of 2000, nibs 254 of 254; wide-pen ellipses 496 of 500 (docs/porting/gdi-deviations.md section 2)',
       evidence: ['docs/porting/gdi-deviations.md', 'tests/conformance/gdi/golden/ellipses-wide.pixpack.gz'],
       portDiffers: true,
-      recorded: 'docs/porting/gdi-deviations.md only (not in DIFFERENCES.md)',
+      recorded: 'DIFFERENCES.md part SH2 (docs/porting/gdi-deviations.md section 2)',
     },
   ],
   [
@@ -353,7 +406,7 @@ const ITEMS = [
         'tests/conformance/asm/golden/checklist/dir-16-fail-with-and-without-text-fail-w-fail-with',
       ],
       portDiffers: true,
-      recorded: 'tests/conformance/asm/known-differences.json only (macro-09); not DIFFERENCES.md',
+      recorded: 'DIFFERENCES.md part T1 (macro-09; tests/conformance/asm/known-differences.json)',
     },
   ],
   [
@@ -363,7 +416,7 @@ const ITEMS = [
       confirmed: 'official EDIT68K.exe under Wine: golden checklist/stc-03',
       evidence: ['tests/conformance/asm/golden/checklist/stc-03-missing-then-do-unknown-condition-mismatched-and'],
       portDiffers: true,
-      recorded: 'tests/conformance/asm/known-differences.json only (stc-03); not DIFFERENCES.md',
+      recorded: 'DIFFERENCES.md part T1 (stc-03; tests/conformance/asm/known-differences.json)',
     },
   ],
   ['asm12.4', 'BFINS followed by a label: phase error', 'open'],
@@ -384,7 +437,7 @@ const ITEMS = [
       confirmed: 'official EDIT68K.exe under Wine crashes (stack overflow; golden/REPORT.md, macro-10)',
       evidence: ['tests/conformance/asm/golden/REPORT.md'],
       portDiffers: true,
-      recorded: 'engine/asm/PATCHES.md P8 ("Differs") only; not DIFFERENCES.md',
+      recorded: 'DIFFERENCES.md part T1 (macro-10, no official result) and engine/asm/PATCHES.md P8',
     },
   ],
   [
@@ -394,7 +447,7 @@ const ITEMS = [
       confirmed: 'official EDIT68K.exe under Wine crashes (stack overflow; golden/REPORT.md, macro-13)',
       evidence: ['tests/conformance/asm/golden/REPORT.md'],
       portDiffers: true,
-      recorded: 'engine/asm/PATCHES.md "Macro nesting" only (it still says UNVERIFIED); not DIFFERENCES.md',
+      recorded: 'DIFFERENCES.md part T1 (macro-13, no official result) and engine/asm/PATCHES.md "Macro nesting"',
     },
   ],
   ['asm12.8', 'Borland ctype for bytes >= $80', 'open'],
@@ -425,7 +478,72 @@ const ITEMS = [
   ['bin22.3b', 'OnClick when New sets ItemIndex', 'open'],
   ['bin22.3c', 'the glyph of $7F', 'open'],
   ['bin22.3d', 'Borland sscanf on a sign or 0x in an S-record line', 'open'],
+  // statements in the text of a spec or an erratum that no spec list carries (rows of part 4)
+  ['asm.9.2', 'INT_MIN / -1 in an expression (assembler 9.2)', 'open'],
+  ['ed.8.3', 'tab stops out of order, spacing beyond the 20th (editor-ui 8.3)', 'open'],
+  ['ed.E6.4', 'word characters of Match whole word only (editor-ui 14.2, erratum E6 4)', 'open'],
+  ['ed.E6.5', 'the Find box and a line break (erratum E6 5)', 'open'],
+  ['hw.9.2.8', 'a push button whose release never arrives (hardware 9.2 item 8)', 'open'],
+  ['a.3.1', 'which pen task 96 reads after text output (trap15-a 3.1)', 'open'],
+  ['b.12.2', 'task 107 over TCP: the address at (A2) (trap15-b 12.2)', 'open'],
+  [
+    'e1.2',
+    'Error in LoadFile() for a trailer that is too short (erratum E1 2)',
+    {
+      confirmed: 'official EDIT68K.exe under Wine: run richedit/s21 shows the Information box (errata T1 16, 17)',
+      evidence: ['tests/conformance/asm/golden/REPORT.md'],
+    },
+  ],
+  // conformance programs whose golden is unconfirmed (6.9 item 2 as corrected, erratum T3 14): open
+  // items of item 11, listed in part 4
+  ['prog.a53', 'trap15-a/a53-files-past-end-then-read (golden seen only under Wine)', 'open'],
+  ['prog.b19', 'trap15-b/b19-net-send-uninitialised (golden seen only under Wine)', 'open'],
 ];
+
+/**
+ * The row of part 4 of docs/DIFFERENCES.md that lists an open item: the start of its subsection's
+ * heading and the item's first cell (a row may hold several items; one item may have several rows).
+ */
+const ROW_OF = {
+  a12: (n) => ['TRAP #15 tasks 0 to 59', n],
+  b15: (n) => ['TRAP #15 tasks 60 and up', n],
+  h12: (n) => ['The hardware window', n],
+  c13: (n) => ['The simulator core', n],
+  asm12: (n) => ['The assembler', n],
+  ui19: (n) => ['The simulator window', n],
+};
+const ROWS = {
+  'ed22.12a': ['The editor', 'Bare LF (§6.7)'],
+  'ed22.12b': ['The editor', 'Shift+Tab with Real Tabs on (§8.2)'],
+  'ed22.12c': ['The editor', 'Default extension (§6.4)'],
+  'ed22.12d': ['The editor', 'Toolbar hints (§3)'],
+  'ed22.12e': ['The editor', 'Replace dialog (§13)'],
+  'ed22.12f': ['The editor', 'Default preset (§17, line 57 of `settings.dat`)'],
+  'bin22.3a': ['EASyBIN', '§4.1'],
+  'bin22.3b': ['EASyBIN', '§9'],
+  'bin22.3c': ['EASyBIN', '§5.3'],
+  'bin22.3d': ['EASyBIN', '§10.3'],
+  'asm.9.2': ['The assembler', '§9.2 (in the text)'],
+  'ed.8.3': ['The editor', 'Tab stops (§8.3, in the text)'],
+  'ed.E6.4': ['The editor', 'Match whole word only (§14.2, erratum E6 4)'],
+  'ed.E6.5': ['The editor', 'The Find box and a line break (erratum E6 5)'],
+  'hw.9.2.8': ['The hardware window', '§9.2 item 8 (in the text)'],
+  'a.3.1': ['TRAP #15 tasks 0 to 59', '§3.1 (in the text)'],
+  'b.12.2': ['TRAP #15 tasks 60 and up', '§12.2 (in the text)'],
+  'prog.a53': [
+    'Conformance programs whose official result was seen only under Wine',
+    '`trap15-a/a53-files-past-end-then-read`',
+  ],
+  'prog.b19': [
+    'Conformance programs whose official result was seen only under Wine',
+    '`trap15-b/b19-net-send-uninitialised`',
+  ],
+};
+const rowOf = (id) => {
+  if (ROWS[id]) return ROWS[id];
+  const [list, n] = id.split('.');
+  return ROW_OF[list] ? ROW_OF[list](n) : null;
+};
 
 // ---- run -------------------------------------------------------------------------------------------
 const problems = [];
@@ -433,7 +551,7 @@ const read = (f) => readFileSync(f, 'utf8');
 const norm = (s) => s.replace(/\s+/g, ' ');
 
 // step 2: DIFFERENCES.md
-const differences = read(join(repo, 'docs', 'DIFFERENCES.md'));
+const differences = read(process.env.EASY68K_RC_DIFFERENCES ?? join(repo, 'docs', 'DIFFERENCES.md'));
 const HEADING = '## 4. Not yet confirmed against the original';
 const hAt = differences.indexOf(`\n${HEADING}\n`);
 let section4 = '';
@@ -443,6 +561,51 @@ else {
   section4 = norm(rest.slice(0, rest.search(/\n## /) >= 0 ? rest.search(/\n## /) : undefined));
 }
 const named = Object.fromEntries(Object.entries(LISTS).map(([id, l]) => [id, l.ref.test(section4)]));
+/**
+ * The cells of a Markdown table row, empty cells kept: split at every `|` that is neither escaped
+ * (`\|`) nor inside a code span, then the parts before the first and after the last `|` dropped.
+ * (Splitting at " | " instead joined an emptied cell to the next one, review of the release
+ * candidate.)
+ */
+function tableCells(line) {
+  const cells = [''];
+  let code = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === '\\' && line[i + 1] === '|') {
+      cells[cells.length - 1] += '\\|';
+      i += 1;
+    } else if (ch === '`') {
+      code = !code;
+      cells[cells.length - 1] += ch;
+    } else if (ch === '|' && !code) cells.push('');
+    else cells[cells.length - 1] += ch;
+  }
+  return cells.slice(1, -1).map((c) => c.trim());
+}
+/** A cell that states something: not empty and not only a dash. */
+const statesSomething = (cell) => !/^[\s\-–—]*$/.test(cell ?? '');
+/** The table rows of part 4, per subsection: cells "Item | Not confirmed | What the port does | How". */
+const part4Rows = [];
+if (hAt >= 0) {
+  const rest = differences.slice(hAt + HEADING.length + 2);
+  const end = rest.search(/\n## /);
+  let sub = '';
+  for (const line of (end >= 0 ? rest.slice(0, end) : rest).split(/\r?\n/)) {
+    if (line.startsWith('### ')) sub = line.slice(4);
+    else if (
+      line.startsWith('| ') &&
+      !/^\|[-| :]+\|\s*$/.test(line) &&
+      !line.startsWith('| Item |') &&
+      !line.startsWith('| Program |')
+    )
+      part4Rows.push({ section: sub, cells: tableCells(line) });
+  }
+}
+const rowsFor = (id) => {
+  const where = rowOf(id);
+  return where ? part4Rows.filter((r) => r.section.startsWith(where[0]) && r.cells[0] === where[1]) : [];
+};
 
 // step 1: occurrences
 const files = [
@@ -462,8 +625,26 @@ for (const f of files) {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (/^#{1,4} /.test(line)) heading = line;
-    if (!line.includes('UNVERIFIED')) continue;
+    if (!/unverified/i.test(line)) continue;
     const at = `${f.erratum ? 'errata/' : ''}${f.name}:${i + 1}`;
+    if (!line.includes('UNVERIFIED')) {
+      // Only in lower or mixed case: LOWER_CASE says what it is.
+      const k = LOWER_CASE.findIndex(
+        ([file, piece]) => file === `${f.erratum ? 'errata/' : ''}${f.name}` && line.includes(piece),
+      );
+      let kind = 'UNACCOUNTED';
+      let to = null;
+      if (k >= 0) {
+        used.add(`L${k}`);
+        const what = LOWER_CASE[k][2];
+        if (typeof what === 'string') [kind, to] = ['carried', what];
+        else if (what.settled) [kind, to] = ['settled', what.settled];
+        else if (what.notTheMarker) [kind, to] = ['not the marker', what.notTheMarker];
+        else [kind, to] = ['awaiting its owner', `${what.awaiting}: ${what.why}`];
+      }
+      occ.push({ at, heading: heading.slice(0, 80), kind, to, text: line.trim().slice(0, 160), lowerCase: true });
+      continue;
+    }
     const find = (table) => table.findIndex(([file, piece]) => file === f.name && line.includes(piece));
     let kind;
     let to = null;
@@ -495,6 +676,7 @@ for (const [tag, table] of [
   ['S', SETTLED],
   ['C', CARRIED],
   ['E', ERRATA],
+  ['L', LOWER_CASE],
 ])
   table.forEach((row, k) => {
     if (!used.has(`${tag}${k}`)) problems.push(`table entry no longer found in the documents: ${row[0]}: "${row[1]}"`);
@@ -532,13 +714,22 @@ for (const [id, what, status] of ITEMS) {
   const list = id.split('.')[0];
   const isNamed = named[list];
   if (status === 'decision') out.decision.push(`${id} ${what}`);
-  else if (status === 'open') (isNamed ? out.openNamed : out.neither).push(`${id} ${what}`);
-  else {
+  else if (status === 'open') {
+    // Listed: a row of its own in part 4 whose third cell gives the port's chosen behaviour.
+    const rows = rowsFor(id);
+    const withBehaviour = rows.filter((r) => statesSomething(r.cells[2]));
+    if (withBehaviour.length > 0) out.openNamed.push(`${id} ${what}`);
+    else
+      out.neither.push(
+        `${id} ${what}${rows.length > 0 ? ' (its row gives no chosen behaviour)' : ' (no row of its own in part 4)'}`,
+      );
+    void isNamed;
+  } else {
     for (const e of status.evidence)
       if (!existsSync(join(repo, e))) problems.push(`${id}: evidence ${e} does not exist`);
     const line = `${id} ${what}: ${status.confirmed}${status.portDiffers ? `; the port differs, recorded in ${status.recorded ?? 'NOTHING'}` : ''}`;
     out.confirmed.push(line);
-    if (isNamed) out.confirmedStillNamed.push(`${id} ${what}`);
+    if (rowsFor(id).length > 0) out.confirmedStillNamed.push(`${id} ${what}`);
     if (status.portDiffers && !status.recorded)
       problems.push(`${id}: confirmed, the port differs, and no document records it`);
   }
@@ -546,24 +737,31 @@ for (const [id, what, status] of ITEMS) {
 const newItems = occ.filter((o) => o.kind === 'NOT CARRIED' || o.kind === 'UNACCOUNTED');
 
 // ---- print -----------------------------------------------------------------------------------------
-const count = (k) => occ.filter((o) => o.kind === k).length;
-console.log(`item 11: UNVERIFIED in docs/porting and docs/porting/errata: ${occ.length} occurrences`);
+const upper = occ.filter((o) => !o.lowerCase);
+const lower = occ.filter((o) => o.lowerCase);
+const count = (k, among = upper) => among.filter((o) => o.kind === k).length;
+console.log(`item 11: UNVERIFIED in docs/porting and docs/porting/errata: ${upper.length} occurrences`);
 console.log(
   `  ${count('definition')} define the marker, ${count('list')} inside a spec's list of open items, ${count('carried')} carried by a list item, ${count('erratum')} errata about a list item, ${count('settled')} settled where they stand, ${count('superseded')} superseded text, ${count('NOT CARRIED')} in no list, ${count('UNACCOUNTED')} unaccounted`,
 );
+console.log(
+  `the word in lower or mixed case ("unverified"), searched without regard to case: ${lower.length} occurrences: ${count('carried', lower)} carried by a list item, ${count('settled', lower)} settled where they stand, ${count('not the marker', lower)} not the marker, ${count('awaiting its owner', lower)} awaiting their owner's decision whether they are items of item 11, ${count('UNACCOUNTED', lower)} unaccounted`,
+);
+for (const o of lower.filter((x) => x.kind === 'awaiting its owner' || x.kind === 'UNACCOUNTED'))
+  console.log(`    ${o.kind.toUpperCase()} ${o.at} ${o.to ?? ''} | ${o.text}`);
 if (all) for (const o of occ) console.log(`    ${o.kind.padEnd(11)} ${o.at} ${o.to ?? ''} | ${o.text}`);
 console.log(`docs/DIFFERENCES.md: heading "${HEADING}" ${hAt >= 0 ? 'present' : 'MISSING'}`);
 for (const [id, l] of Object.entries(LISTS))
   console.log(`  section 4 ${named[id] ? 'names   ' : 'does NOT name'} ${l.file} ${l.heading.replace(/^## /, '§')}`);
 console.log(
-  '  section 4 states one chosen behaviour for all of them ("the port does what the specification recommends"), not one per item',
+  `  section 4 has ${part4Rows.length} table rows; each open item needs a row of its own with the port's chosen behaviour`,
 );
 console.log(`list items: ${ITEMS.length} (${out.decision.length} decisions, not UNVERIFIED)`);
 console.log(`  confirmed: ${out.confirmed.length}`);
 for (const l of out.confirmed) console.log(`    ${l}`);
-console.log(`  confirmed but still named by section 4 as not yet confirmed: ${out.confirmedStillNamed.length}`);
+console.log(`  confirmed but still a row of section 4: ${out.confirmedStillNamed.length}`);
 for (const l of out.confirmedStillNamed) console.log(`    ${l}`);
-console.log(`  open and named by section 4: ${out.openNamed.length}`);
+console.log(`  open and a row of section 4 with the chosen behaviour: ${out.openNamed.length}`);
 for (const l of out.openNamed) console.log(`    ${l}`);
 console.log(`  open and in NEITHER place: ${out.neither.length}`);
 for (const l of out.neither) console.log(`    ${l}`);
@@ -573,6 +771,11 @@ console.log(
 for (const o of newItems) console.log(`    ${o.at} [${o.heading}] ${o.text}`);
 if (problems.length) console.log(`problems with the tables:\n${problems.map((p) => `  - ${p}`).join('\n')}`);
 
-const holds = hAt >= 0 && out.neither.length === 0 && newItems.length === 0 && problems.length === 0;
+const holds =
+  hAt >= 0 &&
+  out.neither.length === 0 &&
+  out.confirmedStillNamed.length === 0 &&
+  newItems.length === 0 &&
+  problems.length === 0;
 console.log(holds ? 'item 11 holds.' : 'item 11 does NOT hold.');
 process.exit(holds ? 0 : 1);

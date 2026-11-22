@@ -807,6 +807,8 @@ A browser/macOS port has no Win32 COM ports. Faithful behaviour for "no such por
 - Else, or if no slot is free: `D0.W = 2`, **`D1.L = $FFFFFFFF`** (-1).
 - The file is not created if missing. Position 0.
 
+> **Corrected (erratum STDIO 2 and 5).** "Writes to it fail with 2" holds only for a write of more than 512 bytes. The run-time's `fwrite` does not look at the stream's mode: a write of up to 512 bytes to a read-only stream is copied into the stream's buffer and task 54 gives `D0.W = 0`; the flush fails, so task 56 gives 2, and the stream and its handle stay open until the program ends (the file cannot be deleted meanwhile). Measured in the official program under Wine (probe `e3`, `engine/sim/shim/STDIO-MODEL.md` section 9). Also measured: the run-time has 47 free stream entries; a stream whose close failed, or that a simulator reset forgot, keeps its entry until the program ends, and while a log runs its files take one or two entries. With no entry free, tasks 51, 52 and 59 fail without opening the file, and task 52 then neither creates nor truncates it (conformance programs trap15-a `a66` and `a69`).
+
 ### Task 52 - open new file
 `CODE9.CPP:1000-1009`, `SIMOPS2.CPP:94-109`. `fopen(name, "w+b")`: creates the file, or **truncates an existing one to zero length**; readable and writable. Success: `D0.W = 0`, `D1.L` = FID. Failure or no free slot: `D0.W = 2`, `D1.L = $FFFFFFFF`. A name that cannot be opened is tried once per free slot: `openFile` and `newFile` (`SIMOPS2.CPP:68-109`) call `fopen` inside the loop over the eight slots and leave it only on success, so with no file open a failing task 52 calls `fopen` 8 times and a failing task 51 calls it 16 times (update, then read, per slot). The results in D0 and D1 are as above (erratum W4 7).
 
@@ -825,11 +827,13 @@ A browser/macOS port has no Win32 COM ports. Faithful behaviour for "no such por
 
 > **Corrected (erratum W4 14).** Measured on the official program (T3 F3, F4): task 53 with A1 = $2000 and D2 = $FFFFFFFF, whose bounds test wraps, gives D0.W = 0, leaves D2 at $FFFFFFFF and reads nothing; task 54 with D2 = 0 gives D0.W = 0. The engine answers exactly these two requests as Borland's `fread` / `fwrite` do (`shim/hostfile.cpp`, `PATCHES.md` section 3); the measurement wins over the expectation this section gave before (erratum SH6 E1).
 
+> **Corrected (erratum STDIO 3).** The result above holds for `D2 = $FFFFFFFF` only: `ReadFile` refuses the count and returns -1, and the run-time compares that -1 with the requested count, which matches only for `$FFFFFFFF`. Any other count of 2 GB or more that wraps the bounds test (for example A1 = $2000, D2 = $FFFFF000) sets the stream's error flag and gives `D0.W = 2` (conformance program trap15-a `a67`). While the error flag is set (a seek does not clear it), a read of fewer than 512 bytes from an empty buffer returns nothing and reports end of file (`D0.W = 1`); a read of 512 bytes or more still reads the multiples of 512 from the file (trap15-a `a61`, `a67`). What tasks 53 and 54 do right after each other without a task 55 between them is the run-time's and is specified in `engine/sim/shim/STDIO-MODEL.md` (rules R3 to R12).
+
 ### Task 54 - write
 `CODE9.CPP:1023-1034`, `SIMOPS2.CPP:137-149`.
 - Inputs: `D1.L` = FID; `A1` = data; `D2.L` = number of bytes.
 - `(A1 & ADDRMASK) + D2 > MEMSIZE` -> `D0.W = 2`. Memory-map check `Invalid`. Invalid FID -> 2.
-- `r = fwrite(buf, D2, 1, fp)` - one item of `D2` bytes - and `D0.W = 0` if `r >= 1`, else 2 (`SIMOPS2.CPP:145-148`). There is no partial-write result. Writing to a handle opened read-only (task 51 result 3) returns 2. D2 is never modified.
+- `r = fwrite(buf, D2, 1, fp)` - one item of `D2` bytes - and `D0.W = 0` if `r >= 1`, else 2 (`SIMOPS2.CPP:145-148`). There is no partial-write result. Writing to a handle opened read-only (task 51 result 3) returns 2 (corrected, erratum STDIO 2: only for more than 512 bytes; up to 512 bytes give 0 and the close fails, see the note under task 51). D2 is never modified.
 - **Zero-length write (`D2 = 0`): UNVERIFIED.** The result is whatever the C library's `fwrite` returns for an item size of 0. A C99 library (including the one the port is built with) returns 0, giving `D0.W = 2`; older Borland run-times returned the item count for a zero item size, which would give `D0.W = 0`. Check on real EASy68K and special-case `D2 = 0` in the port to match.
 - The same 32-bit wrap as in task 53 exists in the bounds test (`CODE9.CPP:1025`); here a wrapped request makes the original read far past the 68000 memory array and crash or write garbage. The port must fail such a request with `D0.W = 2`.
 
@@ -1055,7 +1059,7 @@ Files
 - Task 52 `'t.bin'` -> `D0.W = 0`, `D1 = 0`. Second task 52 `'u.bin'` -> `D1 = 1`. Close FID 0, open another -> `D1 = 0` again (lowest free slot).
 - Nine opens without closing: the ninth gives `D0.W = 2`, `D1 = $FFFFFFFF`.
 - Task 51 on a missing file: `D0.W = 2`, `D1 = $FFFFFFFF`; the file is not created.
-- Task 51 on a read-only file: `D0.W = 3`, valid FID; task 53 works; task 54 gives 2.
+- Task 51 on a read-only file: `D0.W = 3`, valid FID; task 53 works; task 54 gives 2 for more than 512 bytes and 0 for up to 512, after which task 56 gives 2 (corrected, erratum STDIO 2).
 - Write 10 bytes, task 55 to 0, read 20 bytes: `D0.W = 0`, `D2 = 10`. Read again 20 bytes: `D0.W = 1`, `D2` still 20.
 - Task 53 with `D2 = 0` on a freshly opened file: `D0.W = 2`. Task 54 with `D2 = 0`: record what real EASy68K returns (0 or 2, see task 54) and make the port match.
 - Task 53 with `A1 = $2000`, `D2 = $FFFFFFFF` on a 10-byte file: expected `D0.W = 0`, `D2 = 10` (32-bit wrap in the bounds test; confirm on real EASy68K).

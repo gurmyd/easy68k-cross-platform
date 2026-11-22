@@ -20,6 +20,7 @@ import { canonicalHashes } from '../../../conformance/asm/compare.ts';
 import { goldenDirectory, loadManifest, loadOptionSubset, sha256Hex } from '../../../corpus/index.ts';
 import { SINGLE_OPTION_SETS, optionLabel } from './settings.ts';
 import {
+  HOST_DEPENDENT_RUNS,
   LARGE_SOURCE_BYTES,
   REPORT_PATH,
   addSingleOptionRuns,
@@ -32,6 +33,7 @@ import {
   renderReport,
   runDifferences,
   storeRun,
+  withoutWineThreadIds,
 } from './regenerate.mjs';
 
 const bytes = (text) => Uint8Array.from(Buffer.from(text, 'latin1'));
@@ -314,6 +316,61 @@ describe('ingestRun', () => {
       expect(crashed.run.outputsKept).toBeUndefined();
       expect(crashed.run.l68).toBeNull();
     });
+  });
+
+  // Run 45034017858: on GitHub's runner richedit/s03_long_line_4000.X68 ended cleanly; under Docker
+  // Desktop the same image shows an "Access violation" or a "File Access Error" box after the outputs
+  // are written. All three must give one and the same manifest entry (erratum T1 27).
+  describe('a run whose end depends on the host (HOST_DEPENDENT_RUNS)', () => {
+    const hostDependent = HOST_DEPENDENT_RUNS['richedit/s03_long_line_4000.X68#default'];
+    const clean = { status: 'ok', exit: 'clean', stray_windows: [], status_title: 'Assembler Status - prog.X68' };
+    const accessViolation = {
+      status: 'fail',
+      error: 'unexpected window "EASy68K" above the Assembler Status dialog',
+      status_title: 'Assembler Status - prog.X68',
+      stray_windows: [{ title: 'EASy68K', when: 'status' }],
+    };
+    const fileAccessError = {
+      status: 'fail',
+      error: 'unexpected window "Error" while the editor assembled',
+      stray_windows: [{ title: 'Error', when: 'assemble' }],
+    };
+
+    it('records the same entry for a clean end and for each box the host may show', () => {
+      expect(hostDependent).toBeDefined();
+      const entries = [clean, accessViolation, fileAccessError].map(
+        (record, i) =>
+          ingestRun({
+            options: {},
+            record: { ...record, outDirectory: outputs(`host-${i}`, modelText) },
+            source,
+            hostDependent,
+          }).run,
+      );
+      expect(entries[0]).toMatchObject({ status: 'ok', notes: [hostDependent.note] });
+      expect(entries[1]).toEqual(entries[0]);
+      expect(entries[2]).toEqual(entries[0]);
+    });
+
+    it('still fails on any other window, or when an output is missing', () => {
+      const other = { ...accessViolation, error: 'unexpected window "Confirm" after Alt+F4' };
+      const run = (record, name) =>
+        ingestRun({ options: {}, record: { ...record, outDirectory: name }, source, hostDependent }).run;
+      expect(run(other, outputs('host-other', modelText))).toMatchObject({ status: 'failed', reason: other.error });
+      const empty = join(scratch, 'host-empty');
+      mkdirSync(empty, { recursive: true });
+      expect(run(fileAccessError, empty)).toMatchObject({ status: 'failed', reason: fileAccessError.error });
+    });
+  });
+
+  it("records a crash without the id of Wine's thread, which differs from run to run", () => {
+    const crash = (id) => ({
+      status: 'fail',
+      error: `EDIT68K exited unexpectedly (crash?) exit code 1; wine: ${id}:err:virtual:virtual_setup_exception stack overflow 836 bytes`,
+    });
+    expect(failureOf(crash('01e0'))).toBe(failureOf(crash('03a0')));
+    expect(failureOf(crash('01e0'))).toContain('; wine: err:virtual:virtual_setup_exception');
+    expect(withoutWineThreadIds('0210:err:a | 044c:fixme:b')).toBe('err:a | fixme:b');
   });
 });
 

@@ -19,6 +19,7 @@ import {
   tool,
   step,
   pressInListing,
+  reload,
 } from './sim';
 
 /** A call to a subroutine between two plain instructions, then SIMHALT. */
@@ -188,7 +189,8 @@ test('Rewind keeps memory and resets the registers; Reload loads the program afr
   await tool(app, 'sim.run.run');
   await expectState(app, 'Halted');
   await expectReg(app, 'D1', '00000001', 'after Rewind the variable keeps the value the first run wrote');
-  await pressInListing(app, 'sim.run.reload');
+  // The load has ended before Run is given (a Run given during it would be kept, SH8 entry 47).
+  await reload(app);
   await expectState(app, 'Stopped');
   await expect.poll(() => messages(app)).toContain('.S68 file read successful');
   await tool(app, 'sim.run.run');
@@ -202,7 +204,7 @@ test('the message area of a load: the S0 line and the success line, cleared by t
   await expect.poll(() => messages(app)).toEqual(loaded);
   await step(app);
   await expect.poll(async () => (await messages(app)).length).toBe(3);
-  await pressInListing(app, 'sim.run.reload');
+  await reload(app);
   await expect.poll(() => messages(app)).toEqual(loaded);
 });
 

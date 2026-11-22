@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../../tests/browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../../..');
@@ -166,7 +167,7 @@ async function themePass(browser, name, theme) {
   await page.screenshot({ path: join(outDir, `${name}-${theme}-narrow.png`) });
 
   check(`${name} ${theme}: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 // --- keyboard pass -----------------------------------------------------------------
@@ -1201,7 +1202,7 @@ async function keyboardPass(browser, name) {
   );
 
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 // --- run ------------------------------------------------------------------------------
@@ -1227,16 +1228,16 @@ async function main() {
         for (const theme of THEMES) await themePass(browser, name, theme);
         await keyboardPass(browser, name);
       } finally {
-        await browser.close();
+        await doneWith(browser, { last: name === browsers.at(-1) });
       }
     }
   } finally {
-    await server.close();
+    closeAtEnd(server);
   }
 
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
-  process.exit(failures ? 1 : 0);
+  await endChecks(failures ? 1 : 0);
 }
 
 await main();

@@ -4,7 +4,10 @@
 // `!cancelled()`: the download of the official programs was skipped, the regenerations failed
 // with secondary errors, "What changed" reported that the official programs had produced what the
 // repository holds, and the conformance tests passed against goldens that nothing had
-// regenerated (erratum T1 23). These tests read the workflow (js-yaml, which the lockfile pins as
+// regenerated (erratum T1 23). Run 45034017858 showed two more: the conformance tests compared the
+// committed MISMATCHES.md with what the regenerated goldens give, and the job `propose` failed
+// because the repository does not let GitHub Actions open pull requests (erratum T1 27). These
+// tests read the workflow (js-yaml, which the lockfile pins as
 // a dependency of ESLint) and need neither Docker nor GitHub.
 //
 // Part of easy68k-cross-platform, an unofficial port of EASy68K. GPL-2.0-or-later.
@@ -38,7 +41,15 @@ const regenerateAsm = index(/oracle:wine:asm/);
 const regenerateSim = index(/oracle:wine:sim/);
 const whatChanged = steps.findIndex((step) => step.id === 'diff');
 const siteCheck = index(/--sets site --check/);
-const conformance = index(/npm run test:conformance/);
+const committed = steps.findIndex((step) => step.id === 'committed');
+const regenerated = steps.findIndex((step) => step.id === 'regenerated');
+const committedVerdict = steps.findIndex((step) =>
+  /steps\.committed\.outcome == 'failure'/.test(String(step.if ?? '')),
+);
+const candidateVerdict = steps.findIndex(
+  (step) => step.id !== 'diff' && /steps\.diff\.outputs\.changed == 'true'/.test(String(step.if ?? '')) && step.run,
+);
+const propose = workflow.jobs.propose;
 
 describe('oracle.yml, job wine', () => {
   it('fetches the official programs before it builds or loads the image (the download needs no image)', () => {
@@ -64,9 +75,34 @@ describe('oracle.yml, job wine', () => {
     expect(steps[regenerateSim].id).toBe('sim');
   });
 
-  it('runs the conformance tests only after a completed regeneration of the assembler goldens', () => {
-    expect(conformance).toBeGreaterThan(regenerateAsm);
-    expect(condition(conformance)).toContain("steps.asm.outcome == 'success'");
+  it('runs the conformance tests against the committed goldens before anything is regenerated', () => {
+    expect(committed).toBeGreaterThanOrEqual(0);
+    expect(steps[committed].run).toContain('npm run test:conformance');
+    expect(committed).toBeLessThan(Math.min(regenerateAsm, regenerateSim));
+    // Its failure does not stop the regeneration, but a later step fails the job for it.
+    expect(steps[committed]['continue-on-error']).toBe(true);
+    expect(committedVerdict).toBeGreaterThan(committed);
+    expect(steps[committedVerdict].run).toContain('exit 1');
+  });
+
+  it('runs the conformance tests against the regenerated goldens only after a completed regeneration', () => {
+    expect(regenerated).toBeGreaterThan(Math.max(regenerateAsm, regenerateSim, siteCheck));
+    expect(steps[regenerated].run).toContain('npm run test:conformance');
+    expect(condition(regenerated)).toContain("steps.asm.outcome == 'success'");
+    // There MISMATCHES.md is written from the regenerated goldens, not compared with the committed one.
+    expect(steps[regenerated].env).toMatchObject({ EASY68K_SIM_REPORT: '1' });
+    // ... before "What changed", so that a changed report is part of the candidate.
+    expect(whatChanged).toBeGreaterThan(regenerated);
+  });
+
+  it('fails while the official programs produce something the repository does not hold, naming the files', () => {
+    expect(candidateVerdict).toBeGreaterThan(whatChanged);
+    expect(condition(candidateVerdict)).toContain('!cancelled()');
+    const script = steps[candidateVerdict].run ?? '';
+    expect(script).toContain('changed.txt');
+    expect(script).toContain('exit 1');
+    expect(steps[whatChanged].run).toContain('$GITHUB_STEP_SUMMARY');
+    expect(steps[whatChanged].run).toContain('git diff --cached --name-status');
   });
 
   it('proposes no files and claims no result unless every regeneration that ran completed', () => {
@@ -89,5 +125,27 @@ describe('oracle.yml, job wine', () => {
       const branch = script.slice(start, script.indexOf('exit 0', start));
       expect(branch).toContain('echo "changed=false" >> "$GITHUB_OUTPUT"');
     }
+  });
+});
+
+describe('oracle.yml, job propose', () => {
+  const script = propose.steps.map((step) => step.run ?? '').join('\n');
+
+  it('runs only for a candidate of the job wine, also when that job failed for it', () => {
+    expect(propose.needs).toEqual(['wine']);
+    expect(String(propose.if)).toContain("needs.wine.outputs.changed == 'true'");
+    expect(String(propose.if)).toContain('!cancelled()');
+  });
+
+  it('pushes the branch and names the address of a new pull request instead of opening one', () => {
+    expect(propose.permissions).toEqual({ contents: 'write' });
+    expect(script).not.toMatch(/gh pr create/);
+    expect(script).toContain('git push');
+    expect(script).toContain('$GITHUB_STEP_SUMMARY');
+    const env = Object.assign({}, ...propose.steps.map((step) => step.env ?? {}));
+    expect(env.NEW_PR_URL).toBe(
+      '${{ github.server_url }}/${{ github.repository }}/pull/new/oracle/regenerated-${{ github.run_id }}',
+    );
+    expect(env.BRANCH).toBe('oracle/regenerated-${{ github.run_id }}');
   });
 });

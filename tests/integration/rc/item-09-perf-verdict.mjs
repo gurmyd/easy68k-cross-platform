@@ -1,7 +1,7 @@
 // Release candidate, ARCHITECTURE.md 6.9 item 9 ("Performance, measured by tests/perf/ in Chromium on
-// ubuntu-latest"), with errata P1 1 to P1 4 and P1 10. Owner: I3.
+// ubuntu-latest"), with errata P1 1 to P1 4, P1 10 and P1 13. Owner: I3.
 //
-//   node tests/integration/rc/item-09-perf-verdict.mjs <log> [--rule document|corrected] [--require-ubuntu]
+//   node tests/integration/rc/item-09-perf-verdict.mjs <log> [--rule document|as-printed] [--require-ubuntu]
 //
 // No browser, no measurement of its own. It reads the output of tests/perf/check-perf.mjs - a local
 // run (`npm run check:perf -- --browser chromium > perf.log`) or a CI job log of the job
@@ -15,14 +15,16 @@
 //   2. frame intervals while draw.X68 runs: p95 < 20 ms with the 60 Hz source, < 12 ms with 120 Hz;
 //   3. Maximum, spin.X68 for 10 s, judged with the 60 Hz frame source (the 120 Hz one is printed;
 //      erratum P1 13):
-//        --rule document             at least 200 million instructions (6.9 item 9 as printed
-//                                    before erratum P1 13);
-//        --rule corrected (default)  at least 100 million AND at least 85 % of what the engine alone
-//                                    executes in 5 s on the same runner in the same job (erratum
-//                                    P1 13, decided by the architect on 22 November 2026; the figure
-//                                    of "the engine alone" is the line check-perf.mjs prints,
-//                                    instructions per second x 5);
-//      both rules are always printed (6.9 carries the correction as a note under its list);
+//        --rule document (default)   the rule of the document: at least 100 million AND at least
+//                                    85 % of what the engine alone executes in 5 s on the same
+//                                    runner in the same job (6.9 item 9 with the architect's
+//                                    correction note of 22 November 2026, erratum P1 13; the figure
+//                                    of "the engine alone" is check-perf.mjs's summary line "the
+//                                    engine alone, the best of N blocks of 5 s: R instructions per
+//                                    second", R x 5; a log without that line misses);
+//        --rule as-printed           at least 200 million (the bullet's figure before the note; for
+//                                    information only, it is not the rule);
+//      (--rule corrected is accepted as another name of document.) Both are always printed;
 //   4. assembling the largest corpus file under Node: < 1 s, as GFX.X68 alone and as MAIN.X68 with
 //      its includes (erratum P1 4).
 //
@@ -42,10 +44,10 @@ const option = (name, fallback) => {
   return index >= 0 && args[index + 1] ? args[index + 1] : fallback;
 };
 const file = args.find((arg, i) => !arg.startsWith('--') && !['--rule'].includes(args[i - 1]));
-const rule = option('--rule', 'corrected');
-if (!file || !['document', 'corrected'].includes(rule)) {
+const rule = option('--rule', 'document').replace(/^corrected$/, 'document');
+if (!file || !['document', 'as-printed'].includes(rule)) {
   console.error(
-    'usage: node tests/integration/rc/item-09-perf-verdict.mjs <log> [--rule document|corrected] [--require-ubuntu]',
+    'usage: node tests/integration/rc/item-09-perf-verdict.mjs <log> [--rule document|as-printed] [--require-ubuntu]',
   );
   process.exit(2);
 }
@@ -126,7 +128,12 @@ const m120 = figure(
   [/chromium: spin\.X68 at Maximum with the 120 Hz frame source: at least/],
   /best ([\d,]+) instructions/,
 );
-const alone = figure([/chromium: the engine alone/], /: ([\d,]+) instructions per second/);
+// check-perf.mjs (since the fixup of round 5) measures two 5 s blocks of the engine alone, one before
+// and one after the 60 Hz Maximum runs, and prints the better one on this summary line.
+const alone = figure(
+  [/chromium: the engine alone, the best of \d+ blocks? of 5 s/],
+  /: ([\d,]+) instructions per second/,
+);
 const inFive = alone ? alone.value * 5 : null;
 const floor = inFive ? Math.ceil(0.85 * inFive) : null;
 const fmt = (n) => n.toLocaleString('en-US');
@@ -137,21 +144,21 @@ for (const [name, m] of [
   ['60 Hz frame source', m60],
   ['120 Hz frame source', m120],
 ]) {
-  const doc = m ? m.value >= 200_000_000 : false;
-  const corr = m && floor ? m.value >= 100_000_000 && m.value >= floor : false;
-  const shortDoc = m && !doc ? `, short by ${fmt(200_000_000 - m.value)}` : '';
+  const printed = m ? m.value >= 200_000_000 : false;
+  const doc = m && floor ? m.value >= 100_000_000 && m.value >= floor : false;
+  const shortPrinted = m && !printed ? `, short by ${fmt(200_000_000 - m.value)}` : '';
   console.log(
-    `  --     ${name}: ${m ? fmt(m.value) : 'not printed'}; document rule (>= 200,000,000): ${doc ? 'holds' : 'misses'}${shortDoc}; corrected rule (>= 100,000,000 and >= ${floor ? fmt(floor) : '?'}): ${corr ? 'holds' : 'misses'}`,
+    `  --     ${name}: ${m ? fmt(m.value) : 'not printed'}; the document's rule (>= 100,000,000 and >= ${floor ? fmt(floor) : '?'}): ${doc ? 'holds' : 'misses'}; the figure as printed before the note (>= 200,000,000, information): ${printed ? 'holds' : 'misses'}${shortPrinted}`,
   );
   // Erratum P1 13: the 60 Hz source is judged, the 120 Hz source printed.
   if (name.startsWith('60'))
     verdict(
       `${name} (${rule} rule)`,
       m && fmt(m.value),
-      rule === 'document' ? doc : corr,
-      rule === 'document'
+      rule === 'as-printed' ? printed : doc,
+      rule === 'as-printed'
         ? '>= 200,000,000'
-        : `>= 100,000,000 and >= ${floor ? fmt(floor) : '85 % of the engine alone in 5 s'}`,
+        : `>= 100,000,000 and >= ${floor ? fmt(floor) : '85 % of the engine alone in 5 s (its line is missing)'}`,
     );
 }
 

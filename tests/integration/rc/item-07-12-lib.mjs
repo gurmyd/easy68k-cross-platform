@@ -307,28 +307,29 @@ export async function walkA1(page, report, prefix, shot, { manualWording = true 
     return ok;
   };
   await chooseMenu(page, 'Help', 'Examples...');
-  const folder = await until(() => treeItem(page, 'Examples').isVisible(), 30_000);
+  const examples = treeItem(page, 'Examples');
+  const folder = await until(() => examples.isVisible(), 30_000);
   step('step 2: Help > Examples... shows the Files panel with a folder Examples', Boolean(folder));
   await shot('a1-examples');
+  // Step 2 says: "a folder `Examples`, selected but closed".
+  // The panel selects the folder once it has shown it; give that a moment, as a person would.
+  if (folder) await until(async () => ((await examples.getAttribute('aria-selected')) === 'true' ? true : null), 5_000);
+  const expanded = folder ? await examples.getAttribute('aria-expanded') : null;
+  const selected = folder ? await examples.getAttribute('aria-selected') : null;
+  const wording = 'step 2 as written: the folder Examples is selected but closed';
+  if (manualWording)
+    step(wording, selected === 'true' && expanded === 'false', `aria-selected=${selected}, aria-expanded=${expanded}`);
+  else report.note(`${prefix}A1: ${wording}: aria-selected=${selected}, aria-expanded=${expanded}`);
+  if (!folder) return false;
+  // Step 3 as written: "click the small arrow in front of `Examples`"; then its files appear below it.
   const file = treeItem(page, 'tutorial1.X68');
-  let listed = await until(() => file.isVisible(), 10_000);
-  const expanded = await treeItem(page, 'Examples').getAttribute('aria-expanded');
-  const wording =
-    'step 3 as written: tutorial1.X68 is listed in the panel right after Help > Examples... (the manual says "Double-click tutorial1.X68")';
-  if (manualWording) step(wording, Boolean(listed), `folder Examples aria-expanded=${expanded}`);
-  else
-    report.note(
-      `${prefix}A1: ${wording}: ${listed ? 'yes' : 'no'} (folder Examples aria-expanded=${expanded}; judged by item-12-check-part-a.mjs)`,
-    );
-  if (!listed && folder) {
-    // What a person does next: open the folder (Right arrow on the selected folder, or its arrow).
-    await treeItem(page, 'Examples').click();
-    await page.keyboard.press('ArrowRight');
-    listed = await until(() => file.isVisible(), 10_000);
-    report.note(
-      `${prefix}A1: after a click on Examples and Right arrow, tutorial1.X68 is ${listed ? '' : 'still not '}listed`,
-    );
-  }
+  if (expanded !== 'true') await examples.locator('.e68-files__twisty').click();
+  const listed = await until(() => file.isVisible(), 10_000);
+  step(
+    'step 3: a click on the small arrow in front of Examples opens the folder: tutorial1.X68 is listed below it',
+    Boolean(listed),
+    `aria-expanded=${await examples.getAttribute('aria-expanded')}`,
+  );
   if (!listed) return false;
   await file.dblclick();
   const opened = await until(

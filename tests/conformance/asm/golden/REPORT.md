@@ -14,7 +14,7 @@ result" means that the run was not a clean run of the official program.
 | conformance (checklist) | 99 | 290 | 288 | 0 | 2 |
 | github-mit | 42 | 148 | 136 | 10 | 2 |
 | official | 10 | 68 | 68 | 0 | 0 |
-| conformance (richedit) | 25 | 33 | 31 | 0 | 2 |
+| conformance (richedit) | 25 | 33 | 32 | 0 | 1 |
 | site | 134 | 268 | 0 | 267 | 1 |
 
 ## Runs without a result
@@ -23,11 +23,10 @@ The automation could not get a clean run of the official program for these: it c
 too long, or showed a window that a run must not show. No golden exists and the comparison test
 skips them, except where the next section says that the outputs were kept.
 
-- `checklist/macro-10-expanded-line-longer-than-255-characters` (default): EDIT68K exited unexpectedly (crash?) exit code 1; wine: 01e0:err:virtual:virtual_setup_exception stack overflow 836 bytes addr 0x2c312c31 stack 0x120cbc (0x120000-0x121000-0x220000)
-- `checklist/macro-13-recursion-to-the-limit` (default): EDIT68K exited unexpectedly (crash?) exit code 1; wine: 0210:err:virtual:virtual_setup_exception stack overflow 1348 bytes addr 0x4e6659 stack 0x120abc (0x120000-0x121000-0x220000)
+- `checklist/macro-10-expanded-line-longer-than-255-characters` (default): EDIT68K exited unexpectedly (crash?) exit code 1; wine: err:virtual:virtual_setup_exception stack overflow 836 bytes addr 0x2c312c31 stack 0x120cbc (0x120000-0x121000-0x220000)
+- `checklist/macro-13-recursion-to-the-limit` (default): EDIT68K exited unexpectedly (crash?) exit code 1; wine: err:virtual:virtual_setup_exception stack overflow 1348 bytes addr 0x4e6659 stack 0x120abc (0x120000-0x121000-0x220000)
 - `github/pacman-mc68000/GAME/GFX.X68` (default): not tried: the source has 2,438,385 bytes, and under Wine the official editor needs more than an hour to load a source above about 1 MB (official-oracle §3.2.1)
 - `github/pacman-mc68000/GAME/GFX.X68` (expand): not tried: the source has 2,438,385 bytes, and under Wine the official editor needs more than an hour to load a source above about 1 MB (official-oracle §3.2.1)
-- `richedit/s03_long_line_4000.X68` (default): unexpected window "EASy68K" above the Assembler Status dialog
 - `richedit/s21_trailer_short_tab_size.X68` (default): unexpected window "Information" before the editor window appeared
 - `site/games/AlienInvasion_Pucky_Protector/ALLGAMES4.1.X68` (expand): not tried: the source has 1,242,388 bytes, and under Wine the official editor needs more than an hour to load a source above about 1 MB (official-oracle §3.2.1)
 
@@ -37,7 +36,7 @@ In these runs the official program had finished assembling (its status dialog wa
 run went wrong. The `.L68` and `.S68` it had written are kept as `<label>.failed.L68` / `.S68`
 (official-oracle §4 item 7), and the comparison test compares them like goldens.
 
-- `richedit/s03_long_line_4000.X68` (default): 14 errors, 1 warning; in this folder
+None.
 
 ## Text that differs from the editor model
 
@@ -72,6 +71,7 @@ What the driver saw besides the expected windows.
 - `checklist/include-04-include-error-inside-nested-include-line-numbers` (default): status dialog names another file: Assembler Status - A.X68
 - `checklist/include-06-include-last-line-without-line-end-bare-label-an` (default): status dialog names another file: Assembler Status - L.X68
 - `checklist/include-09-include-that-includes-itself-stops-when-no-file` (default): status dialog names another file: Assembler Status - SELF.X68
+- `richedit/s03_long_line_4000.X68` (default): host-dependent end of the run: after writing its outputs the official editor reads through a pointer made of the 4000-character line's text (official-oracle §3.4); depending on the host it then shows nothing (GitHub's ubuntu-24.04 runner), "Access violation at address 00479971 ... Read of address 58585B44" above the status dialog, or "File Access Error" (Docker Desktop on Windows 11); the outputs are the same in all three (erratum T1 27)
 - `site/games/AlienInvasion_Pucky_Protector/ALLGAMES4.1.X68` (default): result of the run of 2026-11-20 with a one-hour limit (the editor window appeared after 2,907 s); not repeated with the rebuilt image
 - `site/games/lightsout/lightsout.x68` (default): status dialog names another file: Assembler Status - MOUSE.X68
 - `site/games/lightsout/lightsout.x68` (expand): status dialog names another file: Assembler Status - MOUSE.X68

@@ -34,6 +34,8 @@
 // that nothing is being kept. Start-up waits at most START_WAIT_MS for the database; a store that
 // has not answered by then is mounted as a PendingBrowserStore, whose operations wait for it (up to
 // OPEN_TIMEOUT_MS, after which it becomes the memory stand-in), so the application is shown at once.
+// The time limit covers the reading of the index as well as indexedDB.open, so no wait at start is
+// unbounded, not even behind a transaction the browser keeps for a page that died (errata entry 29).
 //
 // Owner: FS1.
 
@@ -47,7 +49,10 @@ export const BROWSER_CHANNEL_NAME = 'easy68k.files';
 export const BROWSER_STORE_LABEL = 'My Programs';
 /** A file with more appended segments than this is merged at once (3.8.1). */
 export const MAX_SEGMENTS = 256;
-/** How long opening the database may take before the port gives up and keeps files in memory. */
+/**
+ * How long opening the database and reading its index may take together before the port gives up
+ * and keeps files in memory (also when the index waits behind a transaction of a page that died).
+ */
 export const OPEN_TIMEOUT_MS = 20_000;
 /**
  * How long start-up waits for the database before the application is shown anyway. A store that
@@ -249,20 +254,50 @@ export class BrowserBackend implements FileSystemBackend {
     }
   }
 
-  /** Opens (and if need be creates) the store and loads its index. Rejects if IndexedDB fails. */
+  /**
+   * Opens (and if need be creates) the store and loads its index. Rejects if IndexedDB fails, or
+   * if the two together take longer than `openTimeoutMs` (OPEN_TIMEOUT_MS): the time limit covers
+   * the reading of the index too, because a read-write transaction that the browser still keeps for
+   * a page that died in the middle of a write holds up every later transaction on the store, for
+   * as long as the browser keeps it (CI run 45034021673; docs/porting/errata/FS1.md entry 29). The
+   * rejection names the step that waited. A database or an index that answers after the time limit
+   * is closed at once.
+   */
   static async open(deps: BrowserBackendDeps = {}): Promise<BrowserBackend> {
     const factory = deps.indexedDB ?? globalThis.indexedDB;
     const range = deps.keyRange ?? globalThis.IDBKeyRange;
     if (!factory || !range) throw fsError('io', 'IndexedDB does not exist here');
-    const db = await openDatabase(factory, deps.dbName ?? BROWSER_DB_NAME, deps.openTimeoutMs ?? OPEN_TIMEOUT_MS);
-    const backend = new BrowserBackend(db, range, deps);
+    const timeoutMs = deps.openTimeoutMs ?? OPEN_TIMEOUT_MS;
+    let step: 'opening the database' | 'reading the list of files' = 'opening the database';
+    let gaveUp = false;
+    let backend: BrowserBackend | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const limit = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        gaveUp = true;
+        backend?.abandon();
+        reject(fsError('io', `${step} took longer than ${timeoutMs / 1000} s`));
+      }, timeoutMs);
+    });
+    const opening = (async () => {
+      const db = await openDatabase(factory, deps.dbName ?? BROWSER_DB_NAME, () => gaveUp);
+      backend = new BrowserBackend(db, range, deps);
+      step = 'reading the list of files';
+      try {
+        await backend.loadIndex();
+      } catch (error) {
+        backend.abandon();
+        throw error;
+      }
+      if (gaveUp) backend.abandon(); // answered too late: the page already runs without the store
+      return backend;
+    })();
+    opening.catch(() => {}); // after the time limit its outcome is not wanted
     try {
-      await backend.loadIndex();
-    } catch (error) {
-      await backend.close();
-      throw error;
+      return await Promise.race([opening, limit]);
+    } finally {
+      clearTimeout(timer);
     }
-    return backend;
   }
 
   // ---- FileSystemBackend --------------------------------------------------------------------
@@ -441,6 +476,21 @@ export class BrowserBackend implements FileSystemBackend {
       this.channel.close();
     }
     this.closed = true;
+    this.db.onclose = null;
+    this.db.close();
+  }
+
+  /**
+   * Ends a store that open() gave up on, without waiting: nothing has used it yet. IDBDatabase.close
+   * lets a transaction already made (the index's) finish and then closes the connection, so that it
+   * holds up no version change of another page.
+   */
+  private abandon(): void {
+    this.closed = true;
+    if (this.channel) {
+      this.channel.onmessage = null;
+      this.channel.close();
+    }
     this.db.onclose = null;
     this.db.close();
   }
@@ -826,18 +876,16 @@ function defaultChannel(name: string): ChannelLike {
   return new BroadcastChannel(name) as unknown as ChannelLike;
 }
 
-function openDatabase(factory: IDBFactory, name: string, timeoutMs: number): Promise<IDBDatabase> {
+/**
+ * Opens the database. The time limit is BrowserBackend.open's; `tooLate()` says that it has passed,
+ * and a database that answers after it is closed at once.
+ */
+function openDatabase(factory: IDBFactory, name: string, tooLate: () => boolean): Promise<IDBDatabase> {
   return new Promise<IDBDatabase>((resolve, reject) => {
     let settled = false;
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      reject(fsError('io', `opening the database took longer than ${Math.round(timeoutMs / 1000)} s`));
-    }, timeoutMs);
     const finish = (fn: () => void) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
       fn();
     };
     let request: IDBOpenDBRequest;
@@ -853,8 +901,9 @@ function openDatabase(factory: IDBFactory, name: string, timeoutMs: number): Pro
     };
     request.onsuccess = () => {
       const db = request.result;
-      if (settled) {
+      if (tooLate()) {
         db.close(); // too late: the page already runs without the store
+        finish(() => reject(fsError('io', 'the database answered after the time limit')));
         return;
       }
       finish(() => resolve(db));

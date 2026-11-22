@@ -362,6 +362,69 @@ fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`.
         visible focus.
       - The engine rule `engineOf` moved to `core/help/engine.ts` (erratum H1 11), where the Help
         frame uses it too; `storage-notice.ts` re-exports it under the same name.
+29. **The time limit of opening covers the reading of the index (follow-up of CI run 45034021673).**
+    In the manual CI run 45034021673 (job "browser-checks (windows-latest, interface)") the kill
+    pass of `check-files.mjs` stopped in WebKit at "delay 2 ms: reading the files in the new page"
+    and ran into its 360 s limit; the same pass had once waited 39 minutes in WebKit on Windows
+    (run 44937920498, entry 23). Of the fourteen Windows CI runs of the last day those two stalled,
+    the other twelve passed (12.4 to 28.8 s); macOS and Linux never stalled.
+    - *What the store waited for, and why it could wait for ever.* The store takes no Web Lock
+      (the locks of 3.8.6 are the window's and the drafts', and a dead page's locks hold up nothing
+      the store does); the write-behind is per page and the new page has none. What a page that
+      dies in the middle of a write can leave is a read-write transaction on the object store
+      `files` that the browser has not ended yet. IndexedDB runs a later transaction on the same
+      store only after an earlier read-write one, so the new page's first transaction - the
+      read-only one that loads the index - waits for it. The time limit `OPEN_TIMEOUT_MS` (20 s)
+      covered `indexedDB.open` only: once the database had answered, the loading of the index had
+      no limit. At start-up the page is shown after `START_WAIT_MS` with a `PendingBrowserStore`
+      whose operations wait for the store opening gives; that store never came, so every
+      operation on `/browser` (here the check's `stat`) waited for ever, and the Files panel said
+      "still opening" for ever. That is a defect of the store whatever the browser does: the
+      design (entry 5) promises the stand-in after 20 s.
+    - *The repair.* `BrowserBackend.open` puts one time limit around both steps; the rejection
+      names the step (`opening the database took longer than 20 s` or `reading the list of files
+      took longer than 20 s`), which `UnsavedBrowserStore`'s message then shows as its reason, so
+      the next page always comes up and answers within 20 s plus the start-up wait. A database or
+      an index that answers after the limit is closed at once (no connection is left to hold up a
+      version change). Nothing about torn writes changes: every operation is one transaction, so a
+      write the browser ends without committing leaves the file as it was; the next start after
+      the browser has ended the dead page's transaction sees every completely written file.
+      Unit tests (`browser-backend.test.ts`, "a page that died in the middle of a write"): a
+      fake-indexeddb connection whose read-write transaction holds a torn write and is kept alive
+      stands for the dead page; the next page's `stat` answers within the limit with the stand-in
+      and the reason (before the repair it waited for ever: the test ran into its 10 s guard),
+      and after that transaction is aborted every completely written file is there, whole, with
+      the index agreeing, and the torn write is gone; the late connections are closed.
+    - *Where the pass now says it waited.* The kill pass records every `indexedDB.open` and every
+      transaction of its pages (`traceIndexedDB`) and gives the reading in each new page its own
+      limit (`SURVIVOR_LIMIT_MS`, 60 s). A new check requires that each new page has the real
+      store (`BrowserBackend`) and no request left unanswered for over a second; when one has not,
+      its line names the store and its banner, each IndexedDB request that did not answer (made
+      when, waiting how long, `blocked` or not) or took over a second, and the Web Locks held and
+      waited for. Slow requests that did answer are printed without failing.
+    - *The browser check of the repair.* A new pass, "a store held by a transaction that never
+      ends", makes in both browsers what a dead page can leave: another page holds a read-write
+      transaction on `files` open (a torn write in it, a request after each answer). The next page
+      must answer within the limit (20.0 s after opening began, here in both browsers), with the
+      stand-in and the reason on the screen and no console error; once the transaction is aborted
+      a reload has the real store, the whole file, and no torn write. Run against the store before
+      the repair, the same pass failed in both browsers with "no answer after 90 s: store
+      PendingBrowserStore ("My Programs is still opening..."); IndexedDB: readonly transaction
+      made at 523 ms: no answer after 93526 ms" (Chromium; WebKit the same at 3469 ms) - the
+      reading of the index, the CI run's stall.
+    - *Reproduction here, and what stays open.* With a hard limit around each run, the kill pass's
+      five delays (0, 2, 10, 30, 80 ms) ran 100 times in WebKit and 50 times in Chromium on this
+      PC, the delays 40 to 600 ms (where the 8 MB write commits, from about 80 to 180 ms in WebKit
+      here) 36 times more in WebKit, and the pass itself 5 times in WebKit: no run stalled, every
+      new page had the real store (3 to 7 s per run in WebKit, 1.3 to 3.1 s in Chromium). So the
+      stall of the Windows runners was not reproduced, and whether WebKit's Windows build there
+      keeps a dead page's transaction for ever, or only for long, is not known; the pass now says
+      which request waited when it happens again. On real Safari the WebContent process of a
+      closed or crashed tab ends with it and the storage process aborts its transactions, so a
+      student should not meet this at all; if a browser does keep such a transaction, the next
+      page now comes up with the stand-in and the reason after 20 s, and a reload once the browser
+      has let go shows every completely written file (a manual step for a Mac is proposed in the
+      follow-up report for `docs/MANUAL-TEST-MAC.md`).
 
 ## Contract
 

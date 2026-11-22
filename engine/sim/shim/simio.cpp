@@ -394,6 +394,7 @@ void TsimIO::fileDialogReply(bool accepted, const char *chosen) {
   AnsiString fileName;
 
   if (accepted) {
+    easy68k_files_folder_changed(); // the dialog moves the current folder
     // Execute() returned true: the dialog's FileName is the chosen file.
     AnsiString &dialogFileName = (fileDialog.dialog == 0) ? OpenDialogIO_FileName : SaveDialogIO_FileName;
     dialogFileName = AnsiString(chosen ? chosen : "");

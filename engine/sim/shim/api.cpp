@@ -28,8 +28,7 @@ unsigned int easy68k_hw_interval_box();  // hardware.cpp
 // objects").  The extra bytes here take those accesses; they start as zero
 // and are never 68000 memory.
 // ---------------------------------------------------------------------------
-enum { MEMORY_PADDING = 0x10000 };
-static char memoryBlock[MEMSIZE + MEMORY_PADDING];
+static char memoryBlock[MEMSIZE + EASY68K_MEMORY_PADDING];
 
 static bool booted = false;
 

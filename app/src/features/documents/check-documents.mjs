@@ -40,6 +40,7 @@ import { fileURLToPath } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../tests/browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -332,7 +333,7 @@ async function documentsPass(browser, name) {
     closed && asked === 1,
     `asked ${asked}`,
   );
-  await context.close();
+  await closeWithin(context);
 }
 
 /** Drafts in the real IndexedDB under the real Web Locks (3.9.4). */
@@ -432,7 +433,7 @@ async function draftsPass(browser, name) {
   }
   check(`${p} drafts: no console errors in the new window`, third.errors.length === 0, third.errors.join(' | '));
   await third.page.close({ runBeforeUnload: false });
-  await context.close();
+  await closeWithin(context);
 }
 
 /**
@@ -523,16 +524,16 @@ async function main() {
           }
         }
       } finally {
-        await browser.close();
+        await doneWith(browser, { last: name === browsers.at(-1) });
       }
     }
   } finally {
-    await server.close();
+    closeAtEnd(server);
   }
   writeFileSync(join(outDir, 'results.json'), JSON.stringify(results, null, 2));
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
-  process.exit(failures ? 1 : 0);
+  await endChecks(failures ? 1 : 0);
 }
 
 await main();

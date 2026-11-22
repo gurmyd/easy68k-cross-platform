@@ -133,6 +133,72 @@ describe.skipIf(!enginesBuilt)(
       expect(kit.controller.keptLength).toBe(0);
     });
 
+    interface Told {
+      phase: string;
+      path: string | null;
+      halted: boolean;
+      /** Instructions the engine of that moment has executed. */
+      steps: number;
+      kept: number;
+    }
+    /** What every subscriber is told from now on: phase, program, halt flag, steps, kept commands. */
+    function recordPublishes(): Told[] {
+      const seen: Told[] = [];
+      kit.controller.subscribe(() =>
+        seen.push({
+          phase: kit.controller.phase,
+          path: kit.controller.program?.path ?? null,
+          halted: kit.controller.snapshot.halted,
+          steps: kit.controller.engine.stepCount,
+          kept: kit.controller.keptLength,
+        }),
+      );
+      return seen;
+    }
+    /** The states told of the new program before it executed an instruction. */
+    const unrun = (seen: Told[]) => seen.filter((state) => state.path === NEW_PATH && state.steps === 0);
+
+    // Errata SH8.md entry 48: in the original the queued key is delivered when the load returns,
+    // before anything paints; no subscriber may see the new program loaded, idle and unrun.
+    it('a kept Run: no subscriber is told of the new program idle and unrun before the Run', async () => {
+      const load = await executeWhileRunning();
+      kit.controller.run();
+      const seen = recordPublishes();
+      await finish(load);
+      expect(unrun(seen), JSON.stringify(seen)).toEqual([]);
+      expect(seen.filter((state) => state.path === NEW_PATH && state.phase === 'idle')).toEqual([]);
+      expect(seen.find((state) => state.path === NEW_PATH)).toMatchObject({ phase: 'running', kept: 0 });
+    });
+
+    it('a kept Run of a program that halts at once: the first state told is the halt', async () => {
+      const load = await executeWhileRunning(undefined, halting);
+      kit.controller.run();
+      const seen = recordPublishes();
+      await finish(load);
+      expect(unrun(seen), JSON.stringify(seen)).toEqual([]);
+      expect(seen.find((state) => state.path === NEW_PATH)).toMatchObject({ phase: 'idle', halted: true, kept: 0 });
+      expect(register(Reg.D5)).toBe(7);
+    });
+
+    it('a kept Trace Into: the first state told is the one after the traced instruction', async () => {
+      const load = await executeWhileRunning();
+      kit.controller.traceInto();
+      const seen = recordPublishes();
+      await finish(load);
+      expect(unrun(seen), JSON.stringify(seen)).toEqual([]);
+      expect(seen.find((state) => state.path === NEW_PATH)).toMatchObject({ phase: 'idle', steps: 1, kept: 0 });
+      expect(register(Reg.D1)).toBe(1); // MOVEQ #1,D1 was traced
+    });
+
+    it('nothing kept: the end of the load is told once, idle and unrun, as before', async () => {
+      const load = await executeWhileRunning();
+      const seen = recordPublishes();
+      await finish(load);
+      expect(seen.filter((state) => state.path === NEW_PATH)).toEqual([
+        { phase: 'idle', path: NEW_PATH, halted: false, steps: 0, kept: 0 },
+      ]);
+    });
+
     it('Step Over given during the load steps the new program', async () => {
       const load = await executeWhileRunning();
       kit.controller.stepOver();

@@ -7,6 +7,7 @@
 // automation does not pass through the browser's own shortcut handling.
 
 import { expect, playwrightKey, recordPrints, test, type App, type KeyMap } from '../fixtures';
+import { printsSettled } from '../fixtures/printing';
 
 // Ctrl+P prints: without this, Playwright's WebKit returns from the hidden print frame's print()
 // without `afterprint`, the frame keeps the keyboard focus, and the chords pressed next go to the
@@ -78,6 +79,9 @@ async function pressAll(app: App, chords: string[]): Promise<string[]> {
       }
     }
     await expect(open).toHaveCount(0);
+    // Ctrl+P / Cmd+P printed: until its hidden frame is gone the next key goes to that frame (CI run
+    // 45034018006: "Ctrl+F ([])" right after Ctrl+P), and afterwards the focus must be back here.
+    await printsSettled(app.page);
   }
   return missed;
 }

@@ -39,6 +39,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../../..');
@@ -285,9 +286,9 @@ async function main() {
           }
         }
         check(`${name}: the page logged no console error`, errors.length === 0, errors.slice(0, 3).join(' | '));
-        await context.close();
+        await closeWithin(context);
       } finally {
-        await browser.close();
+        await doneWith(browser, { last: name === browsers.at(-1) });
       }
     }
 
@@ -302,10 +303,10 @@ async function main() {
       }
     }
   } finally {
-    await server.close();
+    closeAtEnd(server);
   }
   console.log(`\n${total - failures} of ${total} checks passed`);
-  process.exit(failures === 0 ? 0 : 1);
+  await endChecks(failures === 0 ? 0 : 1);
 }
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);

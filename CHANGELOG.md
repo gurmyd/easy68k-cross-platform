@@ -23,11 +23,11 @@ The first version is being prepared. What the repository holds today:
   the eight options switched alone; of 801 runs with an official result, 654 are byte-identical,
   143 identical once the bytes of statements with an undefined symbol are masked, and 4 differ for
   recorded causes (part T1 of `docs/DIFFERENCES.md`, which also lists the 6 runs the official
-  program gives no result for). Simulator: 172 of 178 self-reporting programs and 31 of 32
-  execution logs (126,427 instructions) give the official result; the 7 others are listed in
-  `docs/DIFFERENCES.md`: 3 accepted, 2 defects of the port with a repair pending (a read right
-  after a write, or a write right after a read, on one file without a seek), and 2 not yet
-  confirmed on real Windows.
+  program gives no result for). Simulator: 184 of 187 self-reporting programs and 31 of 32
+  execution logs (126,427 instructions) give the official result; the 4 others are listed in
+  `docs/DIFFERENCES.md`: 3 accepted and 1 not yet confirmed on real Windows. The file streams of
+  TRAP #15 tasks 50 to 59 follow the C run-time inside the original's simulator, also where C
+  leaves the outcome undefined (a read right after a write without a seek).
 
 ### The application
 
