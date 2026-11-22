@@ -16,7 +16,7 @@
  *   --out      write the transcript there instead of to standard output
  *
  * The host records every call the engine makes (except the file calls, which go to real files
- * here) as a line "@name arguments", in the names and argument forms of the JavaScript SimHost
+ * here, host-native.cpp) as a line "@name arguments", in the names and argument forms of the JavaScript SimHost
  * (engine/sim/sim68k.mjs), and answers as the JavaScript defaults do (HOST_DEFAULTS): register
  * results are left unchanged, the window size is 640 x 480, everything else returns 0.
  *
@@ -135,19 +135,12 @@ void host_hw_timer(int level, int enabled, unsigned intervalMs) { Call("hardware
 void host_hw_show(void) { Call("hardwareShow"); }
 void host_hw_controls(void) { Call("hardwareControls"); }
 
-void host_log_write(const char *, int) {} // not used: the twin's execution log is a real file
 void host_log_state(int logging) { Call("logState").b(logging); }
 void host_output_log_write(const char *data, int length) { Call("outputLogWrite").bytes(data, length); }
 
 unsigned host_time_centiseconds(void) { Call("timeCentiseconds"); return timeValue; }
 
-// The program's files are real files here (hostfile-native.cpp); these are never called.
-int host_file_open(const char *, int) { return 0; }
-int host_file_read(int, char *, int) { return -1; }
-int host_file_write(int, const char *, int) { return -1; }
-int host_file_seek(int, int, int) { return -1; }
-int host_file_close(int) { return -1; }
-int host_file_remove(const char *) { return -1; }
+// host_file_open ... host_file_remove and host_log_write are in host-native.cpp.
 void host_file_dialog(int mode, const char *title, const char *filter, const char *fileName) {
   Call("fileDialog").i(mode).str(title).str(filter).str(fileName);
 }
@@ -485,10 +478,10 @@ static void dump(const std::vector<Token> &t) {
     }
     line(s);
   } else if (what == "log") {
-    std::vector<unsigned char> data;
-    readFile(twin_log_path(), data);
+    int length = 0;
+    const unsigned char *data = twin_log_data(&length);
     std::string s = "log ";
-    escaped(s, data.empty() ? (const unsigned char *)"" : &data[0], data.size());
+    escaped(s, data, (size_t)length);
     line(s);
   } else if (what == "files") {
     dumpFiles();

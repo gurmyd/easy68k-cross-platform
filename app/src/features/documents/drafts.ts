@@ -19,6 +19,13 @@
 // A document moved by DocumentService.relocate (ARCHITECTURE-PLUS P3.2.4, P4.4) has its draft
 // rewritten at once under the same key, with the new path (the hook: N6).
 //
+// Every operation of the IndexedDB store has a time limit (DRAFTS_TIMEOUT_MS, 20 s, as the browser
+// store's OPEN_TIMEOUT_MS): a read-write transaction that the browser keeps for a page that died in
+// the middle of writing its drafts would otherwise hold up every later read and write for ever, and
+// the offer would never come while the window went on believing its work was kept. When the limit
+// passes, drafts are off for the rest of the session and the window says so once (draftsOffText);
+// the drafts already stored stay for a later start (errata E1.md entry 22).
+//
 // Owner: E1.
 
 import type { AppContext, DocumentState } from '../../contracts';
@@ -49,6 +56,13 @@ export interface DraftStore {
 /** IndexedDB database and object store of the drafts. */
 export const DRAFTS_DATABASE = 'easy68k.drafts';
 export const DRAFTS_STORE = 'drafts';
+/**
+ * How long one operation of the IndexedDB drafts store (opening the database included) may take
+ * before the store gives up for the rest of the session: the same limit as the browser store's
+ * OPEN_TIMEOUT_MS, for the same reason (a transaction the browser keeps for a page that died in
+ * the middle of a write; errata E1.md entry 22, FS1.md entry 29).
+ */
+export const DRAFTS_TIMEOUT_MS = 20_000;
 /** The Web Lock held while drafts are offered. */
 export const DRAFTS_OFFER_LOCK = 'easy68k.drafts.offer';
 /**
@@ -89,9 +103,38 @@ function done(tx: IDBTransaction): Promise<void> {
   });
 }
 
-/** The drafts in IndexedDB (`easy68k.drafts`, store `drafts`, key path `key`). */
-export function createIndexedDbDraftStore(factory: IDBFactory): DraftStore {
+/**
+ * An operation of the drafts store took longer than its time limit (DRAFTS_TIMEOUT_MS). The store
+ * is off from then on: every later call rejects with this same error at once. The message names the
+ * step that waited (`reading the drafts took longer than 20 s`).
+ */
+export class DraftsTimeoutError extends Error {
+  override name = 'DraftsTimeoutError';
+}
+
+export interface IndexedDbDraftStoreOptions {
+  /** Milliseconds one operation may take; default DRAFTS_TIMEOUT_MS. */
+  timeoutMs?: number;
+}
+
+/**
+ * The drafts in IndexedDB (`easy68k.drafts`, store `drafts`, key path `key`).
+ *
+ * Every operation has a time limit (DRAFTS_TIMEOUT_MS) that covers the opening of the database as
+ * well as its transaction. IndexedDB runs a transaction on the store only after every earlier
+ * read-write one, and a browser can keep such a transaction for a page that died in the middle of
+ * writing its drafts for as long as it likes; without the limit every later read and write of every
+ * page of the site waited behind it for ever (errata E1.md entry 22). When the limit passes, the
+ * waiting transaction is aborted (a write that gave up never lands late, where nothing would remove
+ * it), the connection is closed, and the store is off for the session.
+ */
+export function createIndexedDbDraftStore(factory: IDBFactory, options: IndexedDbDraftStoreOptions = {}): DraftStore {
+  const timeoutMs = options.timeoutMs ?? DRAFTS_TIMEOUT_MS;
   let opened: Promise<IDBDatabase> | null = null;
+  let connection: IDBDatabase | null = null;
+  /** Set when an operation ran out of time: the store is off from then on. */
+  let broken: DraftsTimeoutError | null = null;
+
   const db = () => {
     opened ??= new Promise<IDBDatabase>((resolve, reject) => {
       const open = factory.open(DRAFTS_DATABASE, 1);
@@ -100,31 +143,89 @@ export function createIndexedDbDraftStore(factory: IDBFactory): DraftStore {
           open.result.createObjectStore(DRAFTS_STORE, { keyPath: 'key' });
         }
       };
-      open.onsuccess = () => resolve(open.result);
+      open.onsuccess = () => {
+        if (broken) {
+          open.result.close(); // answered after the store gave up
+          reject(broken);
+          return;
+        }
+        connection = open.result;
+        resolve(open.result);
+      };
       open.onerror = () => reject(open.error ?? new Error('IndexedDB open failed'));
     });
     return opened;
   };
+
+  /** Runs `work` on a transaction it makes, within the time limit. */
+  const limited = async <T>(
+    what: string,
+    mode: IDBTransactionMode,
+    work: (store: IDBObjectStore, tx: IDBTransaction) => Promise<T>,
+  ): Promise<T> => {
+    if (broken) throw broken;
+    let step = 'opening the drafts database';
+    let tx: IDBTransaction | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const limit = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        broken ??= new DraftsTimeoutError(`${step} took longer than ${timeoutMs / 1000} s`);
+        try {
+          tx?.abort();
+        } catch {
+          // already finished
+        }
+        connection?.close();
+        reject(broken);
+      }, timeoutMs);
+    });
+    const doing = (async () => {
+      const database = await db();
+      if (broken) throw broken;
+      step = what;
+      tx = database.transaction(DRAFTS_STORE, mode);
+      return work(tx.objectStore(DRAFTS_STORE), tx);
+    })();
+    doing.catch(() => {}); // after the time limit its outcome is not wanted
+    try {
+      return await Promise.race([doing, limit]);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
   return {
     async put(records) {
       if (records.length === 0) return;
-      const tx = (await db()).transaction(DRAFTS_STORE, 'readwrite');
-      const store = tx.objectStore(DRAFTS_STORE);
-      for (const record of records) store.put(record);
-      await done(tx);
+      await limited('writing the drafts', 'readwrite', (store, tx) => {
+        for (const record of records) store.put(record);
+        return done(tx);
+      });
     },
     async remove(keys) {
       if (keys.length === 0) return;
-      const tx = (await db()).transaction(DRAFTS_STORE, 'readwrite');
-      const store = tx.objectStore(DRAFTS_STORE);
-      for (const key of keys) store.delete(key);
-      await done(tx);
+      await limited('removing drafts', 'readwrite', (store, tx) => {
+        for (const key of keys) store.delete(key);
+        return done(tx);
+      });
     },
-    async all() {
-      const tx = (await db()).transaction(DRAFTS_STORE, 'readonly');
-      return (await request(tx.objectStore(DRAFTS_STORE).getAll())) as DraftRecord[];
+    all() {
+      return limited('reading the drafts', 'readonly', (store) => request(store.getAll()) as Promise<DraftRecord[]>);
     },
   };
+}
+
+/**
+ * Shown once, until dismissed, when the drafts store ran out of time and drafts are off for the rest
+ * of the session (errata E1.md entry 22; the design has no text for drafts that cannot be kept).
+ * `detail` is the DraftsTimeoutError's message.
+ */
+export function draftsOffText(detail: string): string {
+  return (
+    'Unsaved changes are NOT being kept as drafts in this window: the browser did not answer ' +
+    `(${detail}; another tab of this site may be holding the storage). ` +
+    'Save your work to keep it. Drafts kept before stay for a later start.'
+  );
 }
 
 /** Drafts in memory: shared by the windows of one test. */
@@ -172,10 +273,25 @@ export function startDraftKeeper(deps: DraftKeeperDeps): DraftKeeper {
   let chain: Promise<void> = Promise.resolve();
   let cancelTimer: (() => void) | null = null;
   let disposed = false;
+  /**
+   * Set when the store ran out of time (DraftsTimeoutError): drafts are off for the rest of the
+   * session. Nothing more is written, removed or queued, and the user is told once.
+   */
+  let off = false;
 
-  /** Runs storage work one piece at a time, in order. */
+  /** A storage error: told to onError; a time-out also turns drafts off (errata E1.md entry 22). */
+  const failed = (error: unknown) => {
+    onError(error);
+    if (!(error instanceof DraftsTimeoutError) || off) return;
+    off = true;
+    cancelTimer?.();
+    cancelTimer = null;
+    if (!disposed) ctx.dialogs.toast(draftsOffText(error.message), undefined, { duration: 0 });
+  };
+
+  /** Runs storage work one piece at a time, in order; nothing once drafts are off. */
   const enqueue = (work: () => Promise<void>) => {
-    chain = chain.then(work).catch(onError);
+    chain = chain.then(() => (off ? undefined : work())).catch(failed);
     return chain;
   };
 
@@ -205,6 +321,7 @@ export function startDraftKeeper(deps: DraftKeeperDeps): DraftKeeper {
 
   /** Removes at once the drafts of documents that are no longer modified or no longer open. */
   const removeStale = () => {
+    if (off) return;
     const modified = new Set(modifiedDocs().map((doc) => doc.id));
     const stale = [...written.keys()].filter((id) => !modified.has(id));
     if (stale.length === 0) return;
@@ -222,7 +339,7 @@ export function startDraftKeeper(deps: DraftKeeperDeps): DraftKeeper {
 
   let lastSeen = new Map<string, number>();
   const onStore = () => {
-    if (disposed) return;
+    if (disposed || off) return;
     removeStale();
     const now = new Map(modifiedDocs().map((doc) => [doc.id, doc.revision]));
     const changed = [...now].some(([id, revision]) => lastSeen.get(id) !== revision && written.get(id) !== revision);
@@ -233,11 +350,11 @@ export function startDraftKeeper(deps: DraftKeeperDeps): DraftKeeper {
   // ARCHITECTURE-PLUS P4.4 (N6): a document that relocate() moved has its draft rewritten at once,
   // naming the new path, before relocate's promise resolves.
   const stopRelocated = documents.onRelocated((ids) => {
-    if (disposed) return;
+    if (disposed || off) return;
     for (const id of ids) written.delete(id);
     return flush();
   });
-  const stopHidden = deps.onHidden?.(() => void flush()) ?? (() => {});
+  const stopHidden = deps.onHidden?.(() => void (off || flush())) ?? (() => {});
 
   const sleep = (ms: number) => new Promise<void>((resolve) => ctx.scheduler.setTimer(ms, resolve));
 
@@ -315,7 +432,7 @@ export function startDraftKeeper(deps: DraftKeeperDeps): DraftKeeper {
     try {
       await locks.request(`${DRAFTS_CHECK_LOCK_PREFIX}${windowId}`, check);
     } catch (error) {
-      onError(error);
+      failed(error);
     }
   })();
 

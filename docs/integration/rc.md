@@ -32,25 +32,29 @@ see the table and "Before version 1.0.0 may be tagged".
   `node tests/integration/rc/fetch-ci.mjs build/rc-logs` then `npm run check:rc -- --logs
   build/rc-logs --browsers` (`tests/integration/rc/README.md` says what proves each item and how to
   run each part alone). On this check it printed every verdict of the table below and exited 1
-  (items 2 and 6 do not hold). Since the reviews of this check, `check:rc` first runs the
-  comparisons that items 2 and 5 read (the sim project of `npm run test:conformance` and the files
-  the parity matrix's unit entries name) and passes their reports to the judges.
+  (items 2 and 6 did not hold on `b247e17`). Since the reviews of this check, `check:rc` first runs
+  the comparisons that items 2 and 5 read (the sim project of `npm run test:conformance` and the
+  files the parity matrix's unit entries name) and passes their reports to the judges.
+- **Items 2 and 6 after the merge of the file-stream repair** (commits 49a2e6d and 43282ba): the
+  text of item 2 describes the state after the merge; the commit judged, its runs, the counts and
+  the verdicts of items 2 and 6: TO BE FILLED FROM THE FINAL COMPARISON. Everything else above
+  describes the check of `b247e17`.
 
 ## The twelve items
 
 | # | What it asks | Verdict | The evidence in one line |
 |---|---|---|---|
 | 1 | Assembler: every file of the four sets and a fixed 30-file subset with each option, byte-identical with the Wine goldens; every exception in DIFFERENCES.md | Holds | Default runs with an official result: official 10 of 10 equal, github-mit 41 of 41, conformance 118 of 121 equal and 3 accepted differences (`dir-11`, `macro-09`, `stc-03`), site 134 of 134 (4 files without an official result, each named with its cause); 240 of 240 subset runs equal; 10 of 10 exceptions named; the `site` set re-run on GitHub "every run equals the manifest" |
-| 2 | Simulator: at least 150 self-reporting programs, coverage, 20 logs of 100,000 instructions, checklists | **Does not hold** | 178 programs, 172 equal, 2 accepted, 2 unconfirmed, **2 against the item (a51, a52)**; 31 logs with 126,427 identical instructions; 86 of 87 table entries in the assembled programs plus LINE_1010 as DC.W; every non-interactive task; checklists 60/60, 37/37, 16/16 |
+| 2 | Simulator: at least 150 self-reporting programs, coverage, 20 logs of 100,000 instructions, checklists | TO BE FILLED FROM THE FINAL COMPARISON | The file-stream repair is merged (49a2e6d): `a51`, `a52`, `a53` produce their goldens and are no longer listed; nine new programs `a61` to `a69`; listed: accepted `b06`, `b20` (and `a55`'s output log, the log `l14`), unconfirmed `b19`; counts: TO BE FILLED FROM THE FINAL COMPARISON |
 | 3 | Drawing: the thresholds of 6.5 | Holds | 26,826 of 26,826 primitive cases; ellipses 8,192/8,192, 3,000/3,000; text 16,902 of 16,902 required cases as decided under 6.5.3; check:text 78/78 and check:examples 309/309 in CI |
 | 4 | Twins: zero differences | Holds | windows-oracles of run 45034018006: 935 runs per assembler twin, 1,114 of 1,114 simulator twin runs, "No unexpected differences." |
 | 5 | Parity: every row of 1.3 in the matrix; web-e2e, desktop-e2e and unit entries pass; manual entries signed off | Holds except the part a person must do | 179 of 179 rows; 308 of 308 web-e2e entries of 1.3 (325 with 1.5) in each browser over the six e2e jobs; 13 of 13 desktop-e2e entries of 1.3 (17 with 1.5); 10 of 10 unit entries of 1.3 (12 with 1.5) in local runs; **15 manual entries (8 items) not signed off** |
-| 6 | Platforms: the CI matrix of 7.4 green; the packaged-app checks on arm64 and Intel | **Does not hold** | Push run: `e2e (macos-latest, chromium)` failed (it passed in the manual run of the same commit); release run: check 7 failed on arm64; oracle run: `wine` and `propose` failed; three more red jobs beyond 7.4 |
+| 6 | Platforms: the CI matrix of 7.4 green; the packaged-app checks on arm64 and Intel | TO BE FILLED FROM THE FINAL COMPARISON | Runs of the final commit: TO BE FILLED FROM THE FINAL COMPARISON. On `b247e17`: push run: `e2e (macos-latest, chromium)` failed (it passed in the manual run of the same commit); release run: check 7 failed on arm64; oracle run: `wine` and `propose` failed; three more red jobs beyond 7.4 |
 | 7 | Offline: the offline test passes; the app installs in Chromium | Holds except the part a person must do | offline.spec.ts 4 of 4 in all six e2e jobs; check:pwa 114/114 on three systems; the offline walk 27/27 here; installing from a real Chrome not done by a person |
 | 8 | Accessibility: no serious automated finding; the manual list signed off | Holds except the part a person must do | 324 of 324 axe checks in each of the three audit jobs, no serious or critical finding; a11y.spec.ts 16/16 in all six e2e jobs; **the manual list not signed off** (one keyboard-walk check red on macOS: item 6) |
 | 9 | Performance in Chromium on ubuntu-latest | Holds | Run 45034021673, `perf (ubuntu-latest, chromium)`: 7 of 7 verdicts; TaskDuration 1.11 s; p95 17.5 ms and 9.1 ms; Maximum 143,009,668 (needs 139,480,070); assembly 258 and 270 ms |
 | 10 | Stability: the e2e suites 20 times in a row in each browser | Holds | Run 45034021673, six shards, each on `ubuntu-26.04` (`ubuntu-latest`): Chromium 6,140 of 6,140 passed, WebKit 6,080 passed and 60 skipped of 6,140, 0 failed, 0 flaky, 307 tests per repetition as in the checkout |
-| 11 | Open verification items: confirmed, or listed under "not yet confirmed" with the port's behaviour | Holds | 108 occurrences of UNVERIFIED accounted for; 25 items confirmed; 56 open items each a row of part 4 of DIFFERENCES.md with the port's behaviour; 0 in neither place; of 7 occurrences in lower case, 3 statements of erratum E4 await their owner's decision |
+| 11 | Open verification items: confirmed, or listed under "not yet confirmed" with the port's behaviour | Holds | 108 occurrences of UNVERIFIED accounted for; 25 items confirmed; 59 open items each a row of part 4 of DIFFERENCES.md with the port's behaviour (3 of them statements of erratum E4, by the architect's decision); 0 in neither place; 7 occurrences in lower case, each accounted for, 0 awaiting a decision |
 | 12 | Manual: MANUAL-TEST-MAC.md completed for the release candidate | **Open: a person must do it** | The manual covers 6.8 (34 of 34 checks) and part A can be followed as written (71 of 71 browser checks); nobody has worked through it on a Mac, and part B3 needs a downloadable build, which does not exist |
 
 ## Item 1 - Assembler
@@ -113,33 +117,47 @@ symbols / a known difference / no official result):
 
 ## Item 2 - Simulator
 
-**Does not hold.** Two self-reporting programs, `trap15-a/a51-files-read-after-write` and
-`trap15-a/a52-files-write-after-read`, give other results than the official simulator, and the
-port is at fault (a read right after a write on one file, or a write right after a read, without a
-seek between them; part 5 of `docs/DIFFERENCES.md`). A repair of the simulator engine exists on
-the branch `gate3/stdio`; it can be merged only after its model has been measured in the official
-program under Wine. That needs Docker on the development PC, which was hung and may be restarted
-only by the project's owner; at the end of this check Docker answered again (Docker 29.5.3), so the
-measurement can now be made. Everything else of the item holds.
+**Verdict: TO BE FILLED FROM THE FINAL COMPARISON.**
 
-`node tests/integration/rc/item-02-sim-evidence.mjs`, exit 1 (since the reviews it reads the
-comparison's own result: `--sim-report`, the file the sim project of `npm run test:conformance`
-writes with `EASY68K_SIM_REPORT_JSON`, and `--sim-vitest`, Vitest's report of the same run;
-`check:rc` runs that project and passes both; the run here: "Tests 294 passed | 4 skipped (298)",
-209 programs, 233 artifacts compared, 226 equal, 7 differences measured, every one listed):
+On `b247e17` the item did not hold: `trap15-a/a51-files-read-after-write` and
+`trap15-a/a52-files-write-after-read` gave other results than the official simulator, and the port
+was at fault (a read right after a write on one file, or a write right after a read, without a seek
+between them). The repair of the simulator engine is merged since (commit 49a2e6d, from the branch
+`gate3/stdio`; its documents in commit 43282ba): the engine's file streams follow the stream of the
+Borland C run-time inside `SIM68K.exe`, read in the program's machine code and measured in the
+official program under Wine (`engine/sim/shim/STDIO-MODEL.md`, `docs/porting/errata/STDIO.md`,
+parts SH6 and T3 of `docs/DIFFERENCES.md`). What follows describes the state after the merge; the
+figures are those of the final comparison, which runs on the finished suite.
 
-- Self-reporting programs: **178** (at least 150): exceptions 16, hardware 10, instructions 62,
-  quirks 10, trap15-a 60, trap15-b 20; all 178 have an official result; **172** write the golden
-  result file byte for byte, as the comparison measured them.
+`node tests/integration/rc/item-02-sim-evidence.mjs --sim-report <file> --sim-vitest <file>` (it
+reads the comparison's own result: `--sim-report`, the file the sim project of `npm run
+test:conformance` writes with `EASY68K_SIM_REPORT_JSON`, and `--sim-vitest`, Vitest's report of the
+same run; `check:rc` runs that project and passes both): exit code, Vitest's totals, programs,
+artifacts compared, equal and measured differences: TO BE FILLED FROM THE FINAL COMPARISON.
+
+- `a51`, `a52` and `a53` produce their goldens and are no longer listed in
+  `tests/conformance/sim/known-differences.json`; part 5 of `docs/DIFFERENCES.md` no longer lists
+  the read after a write. One point of `a53` still waits for Windows although the port already
+  gives the result seen under Wine: its close fails because the system refuses a write of more
+  than 4 GB, measured under Wine only; it stays a row of part 4 of `docs/DIFFERENCES.md` and an
+  open item of item 11, not a listed difference of item 2.
+- Nine new programs of trap15-a pin the run-time's stream down against the official program:
+  `a61` to `a68` self-reporting (write state, read state, defined sequences, handles, crossing,
+  the limit of the stream table, edges, reuse of the buffer), and `a69`, whose golden is an output
+  log (a log started on a full stream table).
+- Self-reporting programs (at least 150), by folder, with an official result, and how many write
+  the golden result file byte for byte as the comparison measured them:
+  TO BE FILLED FROM THE FINAL COMPARISON.
 - Sorted by the correction note of 6.9 item 2 (erratum T3 14), from
-  `tests/conformance/sim/known-differences.json`: accepted (named in DIFFERENCES.md with their
-  cause, not counted): `b06`, `b20` (and, outside the result files, the output log of `a55` and the
-  execution log `l14`); unconfirmed (part 4 of DIFFERENCES.md, open items of item 11, not counted):
-  `a53`, `b19`; **counted against the item: `a51`, `a52`**. 176 of 178 produce the golden or an
-  accepted or unconfirmed difference.
-- Execution logs: 32 runs with an official log, 126,432 instructions; **31 identical runs with
-  126,427 instructions** after masking the date, as the comparison measured them (at least 20 runs
-  and 100,000 instructions); `l14` is the accepted one.
+  `tests/conformance/sim/known-differences.json` as it is after the merge: accepted (named in
+  DIFFERENCES.md with their cause, not counted): `b06`, `b20` (and, outside the result files, the
+  output log of `a55`, masked, and the execution log `l14`); unconfirmed (part 4 of
+  DIFFERENCES.md, open items of item 11, not counted): `b19`; counted against the item: none is
+  listed. How many produce the golden or an accepted or unconfirmed difference, and whether the
+  comparison finds a difference the list does not name: TO BE FILLED FROM THE FINAL COMPARISON.
+- Execution logs (at least 20 runs and 100,000 instructions; `l14` is the accepted one): runs with
+  an official log, instructions, identical runs and instructions after masking the date:
+  TO BE FILLED FROM THE FINAL COMPARISON.
 - sim-core 3.16: 86 of 87 table entries are present as instructions in the self-reporting
   programs as assembled (the judge decodes the first word of every instruction line of the port's
   listing of each program; it does not trace a run, so an instruction in code that never runs
@@ -156,10 +174,13 @@ writes with `EASY68K_SIM_REPORT_JSON`, and `--sim-vitest`, Vitest's report of th
   because its last clause (no live update at address 0) is a deliberate difference by the
   architect's decision (erratum U2 S6), as the review said it would be.
 - The comparison is the sim project of `npm run test:conformance` (run here by `check:rc`, see
-  above); in CI, run 45034018006, `conformance (ubuntu-latest)` and `(macos-latest)` passed ("Test
+  above). In CI, the runs of the final commit: TO BE FILLED FROM THE FINAL COMPARISON. On
+  `b247e17`, run 45034018006, `conformance (ubuntu-latest)` and `(macos-latest)` passed ("Test
   Files 40 passed | 1 skipped", "Tests 1011 passed | 410 skipped"); the unit jobs on three systems
   "Tests 4230 passed | 61 skipped".
-- The goldens on GitHub (`oracle.yml` run 45034017858): the official `SIM68K.exe` was run again for
+- The goldens on GitHub, after the merge: TO BE FILLED FROM THE FINAL COMPARISON (no `oracle.yml`
+  run of a commit with `a61` to `a69` is read here). On `b247e17` (`oracle.yml` run 45034017858):
+  the official `SIM68K.exe` was run again for
   every program; every result file came out as committed, and one other file changed
   (`a55-task0-negative-count-first.OutLog.txt`, the residue byte of an accepted difference). The job
   then failed only at "MISMATCHES.md is what this run writes", because it compared the committed
@@ -168,8 +189,8 @@ writes with `EASY68K_SIM_REPORT_JSON`, and `--sim-vitest`, Vitest's report of th
   nor unconfirmed counts against the item; an accepted one must be named in DIFFERENCES.md, an
   unconfirmed one in its part 4); the interactive tasks of erratum T3 11 after its review; T3's
   reviewed mapping of the checklists; a proof is found by its exact title (a template's `${...}`
-  matches any text), not as a substring of the file. Shown to fail: with a copy of
-  `known-differences.json` without `a53`'s `unconfirmed` field, `a53` is counted against the item
+  matches any text), not as a substring of the file. Shown to fail (on `b247e17`, when `a53` was
+  still listed): with a copy of `known-differences.json` without `a53`'s `unconfirmed` field, `a53` is counted against the item
   (exit 1); with a checklist proof whose title lost its last six characters, "has no test titled
   exactly" (exit 1). After the reviews: the identical programs and logs are those the comparison
   measured, not "the programs the list does not name". With a copy of `known-differences.json`
@@ -182,7 +203,8 @@ writes with `EASY68K_SIM_REPORT_JSON`, and `--sim-vitest`, Vitest's report of th
   test of the run.
 
 Open for a person: the Windows session (`docs/porting/windows-confirmation.md`, decision O-2) would
-settle `a53` and `b19`; it needs the owner's permission. It is not required by item 2.
+settle `b19` and the one remaining point of `a53`; it needs the owner's permission. It is not
+required by item 2.
 
 ## Item 3 - Drawing
 
@@ -296,7 +318,12 @@ owner of `engine/asm`.
 
 ## Item 6 - Platforms
 
-**Does not hold.** `node tests/integration/rc/item-06-platforms.mjs --run ci=<push> --run
+**Verdict: TO BE FILLED FROM THE FINAL COMPARISON.** The runs of the final commit (`ci.yml` push
+and manual, `release.yml`, `oracle.yml`, `pages.yml`; their ids in `tests/integration/rc/lib/runs.mjs`)
+and what the judge prints on them: TO BE FILLED FROM THE FINAL COMPARISON. Everything below is the
+check of `b247e17`, where the item did not hold.
+
+On `b247e17`: `node tests/integration/rc/item-06-platforms.mjs --run ci=<push> --run
 ci=<manual> --run release=<release> --run oracle=<oracle> --mac arm64=<log> --mac x64=<log>`: 7
 problems (the jobs of 7.4 below; the failed `browser-checks` jobs are beyond 7.4 and printed as
 notes).
@@ -446,11 +473,11 @@ the repairs named under item 6 change tests that these suites run.
 `node tests/integration/rc/item-11-unverified.mjs`, exit 0: 108 occurrences of UNVERIFIED in
 `docs/porting` and its errata, each accounted for (11 define the marker, 16 inside a spec's list,
 65 carried by a list item, 13 errata about one, 2 settled where they stand, 1 superseded, 0 in no
-list); 83 list items, of which 2 are decisions, **25 confirmed** (by the GDI capture or by the
-official programs under Wine; none still a row of part 4) and **56 open, each a row of its own in
+list); 86 list items, of which 2 are decisions, **25 confirmed** (by the GDI capture or by the
+official programs under Wine; none still a row of part 4) and **59 open, each a row of its own in
 part 4 of `docs/DIFFERENCES.md`** ("Not yet confirmed against the original") whose third cell says
-what the port does; 0 in neither place. The unconfirmed conformance programs `a53` and `b19` are
-among the 56.
+what the port does; 0 in neither place. The conformance programs `b19` (unconfirmed) and `a53` (its
+one point seen only under Wine) are among the 59, and so are the three statements of erratum E4 (below).
 
 What changed in the judge: an open item needs a row of its own in part 4 with the port's chosen
 behaviour (before, a mention of its list was enough); a confirmed item must have left part 4; the
@@ -464,21 +491,24 @@ After the reviews:
   7 times: 2 carried by a list item (`speed.md`, the original's instructions per second, sim-core
   13 item 8; erratum SH5, trap15-b V14), 1 settled where it stands (`official-oracle.md`, the
   oracle tool's own cases under Wine, its section 3.4), 1 not the marker (the name of this judge's
-  file in erratum DOC1), and **3 statements of erratum E4 that await E4's owner**: the settings
-  reader's `atoi` past 32 bits (part 4 row 6 of DIFFERENCES.md is task 4's `atoi`, not this one),
-  Ctrl-Z as an end of file in the settings reader, and the line break after the last line of
-  `template.NEW` on Save Template. Whether these are items of item 11 (each then a row of part 4 of
-  DIFFERENCES.md) or settled is for E4's owner and the owner of DIFFERENCES.md to decide; they are
-  errata of the port, not statements of a spec, which item 11 names, so the verdict stands until
-  then. The judge prints them by name; any other lower-case occurrence fails it (shown on a copy of
-  `docs/porting` with one more such line in erratum E2: "1 unaccounted", exit 1,
+  file in erratum DOC1), and 3 statements of erratum E4, carried by list items of their own: the
+  settings reader's `atoi` past 32 bits (part 4 row 6 of DIFFERENCES.md is task 4's `atoi`, not
+  this one), Ctrl-Z as an end of file in the settings reader, and the line break after the last
+  line of `template.NEW` on Save Template. The judge first printed these three as awaiting their
+  owner; the architect decided on 22 November 2026 that they are open items of item 11, because
+  each says something about the original that nobody confirmed, so each is now a row of the table
+  "The editor" in part 4 of DIFFERENCES.md and the statement in erratum E4 names its row (erratum
+  I3 4). 0 await a decision. Shown to fail: with a copy of DIFFERENCES.md without one of the three
+  rows (each tried, `EASY68K_RC_DIFFERENCES=<file>`), "open and in NEITHER place: 1" naming that
+  item, exit 1. Any lower-case occurrence that no table accounts for fails the judge too (shown on
+  a copy of `docs/porting` with one more such line in erratum E2: "1 unaccounted", exit 1,
   `EASY68K_RC_PORTING=<folder>`).
 - A row of part 4 is read cell by cell with empty cells kept, and its third cell ("What the port
   does") must state something: neither empty nor a dash. Shown to fail: with row 6's third cell
   emptied, and with it set to "-": "a12.6 atoi overflow (task 4/18) (its row gives no chosen
   behaviour)", "open and in NEITHER place: 1", exit 1 (before, the emptied cell passed).
 
-Open for a person, not required by the item: the Windows session would confirm many of the 56.
+Open for a person, not required by the item: the Windows session would confirm many of the 59.
 
 ## Item 12 - Manual
 
@@ -507,15 +537,13 @@ build of the Mac app exists (no release and no pre-release).
 In order; each with who must act.
 
 1. **Item 2: repair a51 and a52** (the file streams after a read right after a write, or a write
-   right after a read). Docker answers again on the development PC; the engineer of the simulator
-   engine's repair on the branch `gate3/stdio` (with SH6 for the file part) measures its model in
-   the official program under Wine, merges the repair, removes the two entries from
-   `known-differences.json` and part 5 of DIFFERENCES.md. The same measurement decides `a53`:
-   either it stays unconfirmed (Wine suspected), or it becomes a defect of the port that counts
-   against item 2, or it is repaired with `a51` and `a52`. Done means both: the sim project of `npm
-   run test:conformance` passes, and `item-02-sim-evidence.mjs` with that run's report
+   right after a read). The repair is merged (commit 49a2e6d, measured in the official program
+   under Wine): `a51`, `a52` and `a53` have left `known-differences.json`, the read after a write
+   has left part 5 of DIFFERENCES.md, and `a53`'s one remaining point is a row of part 4. Still to
+   do: the final comparison on the finished suite. Done means both: the sim project of `npm run
+   test:conformance` passes, and `item-02-sim-evidence.mjs` with that run's report
    (`--sim-report`, as `npm run check:rc` runs it) exits 0; an exit 0 of the judge alone, without
-   the comparison, is not enough.
+   the comparison, is not enough. Result: TO BE FILLED FROM THE FINAL COMPARISON.
 2. **Item 6: commit the repairs in the tree, then one more.** The orchestrator commits the repairs
    listed under item 6 (print focus for `chords.spec.ts:85`; the guarded ending of every
    `check-*.mjs` for `check:wave2` on Windows; walk-run and the phase `waitInput`; check 7 on arm64;
@@ -542,7 +570,8 @@ In order; each with who must act.
    fills in the report form, and signs off the release's copy of the manual list. Nobody has tried
    the application on a Mac yet.
 5. **Optional, with the owner's permission (O-2):** the Windows session of
-   `docs/porting/windows-confirmation.md` (settles `a53`, `b19` and other items of part 4). Not
+   `docs/porting/windows-confirmation.md` (settles `b19`, the remaining point of `a53` and other
+   items of part 4). Not
    required by 6.9.
 
 ## Repaired in this step

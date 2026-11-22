@@ -57,9 +57,14 @@ against its SHA-256 and unpacked below `build/native-twin/original/`.
 
 The simulator twin is new here: `sim-twin/driver.cpp` is a headless host (every host call is
 recorded as text, files of the 68000 program are real files in a sandbox folder, no graphics) with
-a small script language; `sim-twin/hostfile-native.cpp` replaces the engine's `shim/hostfile.cpp`,
-which needs `fopencookie()`; `sim-twin/native-prelude.h` and `sim-twin/include/emscripten/` let the
-engine's shim compile with MSVC unchanged. There is no _unpatched_ simulator twin: the engine's
+a small script language; the engine's whole shim is compiled, `shim/hostfile.cpp` with its streams
+of the Borland run-time (`engine/sim/shim/STDIO-MODEL.md`) included. `sim-twin/host-native.cpp` is
+what runs below it: the host's file interface (`host_file_open` ... `host_file_remove`) over real
+files of the sandbox folder with the rules of the WebAssembly side's `Sandbox` (`sim-script.mjs`),
+the `fopencookie()` that the Microsoft C library lacks (a read cookie is read into a temporary
+file; a write cookie - the execution log - is a temporary file handed to the cookie at every
+`fflush()`), and `host_log_write()`. `sim-twin/native-prelude.h` and `sim-twin/include/emscripten/`
+let the engine's shim compile with MSVC unchanged. There is no _unpatched_ simulator twin: the engine's
 shim depends on the patches that make `runprog()` resumable (engine/sim/PATCHES.md P04, P05, P07),
 so the unpatched simulator sources cannot be built with it (docs/porting/errata/T4.md).
 
@@ -130,8 +135,10 @@ recorded (the twin's are real file operations); the files themselves are compare
 - Clang flags with no MSVC equivalent: `-fwrapv`, `-fwrapv-pointer` and
   `-ftrivial-auto-var-init=zero` (engine/sim/PATCHES.md, "Compiler flags"). A result that depends
   on them is exactly what the twin is meant to find.
-- The engine's file layer (`shim/hostfile.cpp`) is replaced: a difference that only the C library's
-  stream implementation could cause (buffering, end-of-file flags after unusual call sequences)
-  would show as a difference here too and must be read with that in mind.
+- The operating system below the engine's streams: in the twin, real files of a Windows folder; in
+  the WebAssembly runner, the in-memory `Sandbox`. Both follow the same rules (plain names only, one
+  stream per file, every call reaches the file at once), so a difference in a program's files points
+  at the compiler, not at them. Device names and paths beyond a plain name are refused on both
+  sides; the port's own file views (`app/src/core/sim-host/files`) are tested elsewhere.
 - Equality with the Borland build of the original: the twins show that two modern compilers agree,
   not what Borland C++ 5.6 generated.

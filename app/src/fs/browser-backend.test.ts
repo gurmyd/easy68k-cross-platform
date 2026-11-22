@@ -281,8 +281,13 @@ describe('BrowserBackend', { timeout: 60_000 }, () => {
     expect(backend).toBeInstanceOf(UnsavedBrowserStore);
     expect([backend.mount, backend.kind, backend.label]).toEqual(['browser', 'browser', 'My Programs']);
     const problem = storageProblem(backend);
-    expect(problem).toContain('Files are NOT being saved');
-    expect(problem).toContain('SecurityError');
+    // A store that is refused keeps the text of `unavailable`, word for word (errata FS1 entry 30).
+    expect((backend as UnsavedBrowserStore).cause).toBe('refused');
+    expect(problem).toBe(
+      'Files are NOT being saved: this browser does not let the page keep files ' +
+        '(SecurityError: The operation is insecure; for example in a private window, or when storage is blocked for this site). ' +
+        'Everything you save is lost when this tab closes. Use Export... in the Files panel to keep your work.',
+    );
     // The stand-in still works for the session.
     await backend.writeFile('a.txt', ascii('ok'));
     expect(text(await backend.readFile('a.txt'))).toBe('ok');
@@ -291,7 +296,23 @@ describe('BrowserBackend', { timeout: 60_000 }, () => {
   it('a page where opening never finishes gives up after the time limit', async () => {
     const hanging = { open: () => ({}) } as unknown as IDBFactory;
     const backend = await openBrowserStore({ indexedDB: hanging, keyRange: IDBKeyRange, openTimeoutMs: 50 });
-    expect(storageProblem(backend)).toContain('took longer than');
+    // A store that did not answer has a text of its own: the files are still in the browser.
+    expect((backend as UnsavedBrowserStore).cause).toBe('timeout');
+    expect(storageProblem(backend)).toBe(
+      "Files are NOT being saved right now: the browser's storage did not answer " +
+        '(opening the database took longer than 0.05 s; another tab of this site, or a page that was closed during a save, may still be holding it). ' +
+        'The programs you saved before are still in the browser: reload the page in a minute to see them. ' +
+        'What you save until then is lost when this tab closes. Use Export... in the Files panel to keep it.',
+    );
+  });
+
+  it('which text: a refusal that answers late is still a refusal, a time limit in either step is not', () => {
+    expect(STORE_MESSAGES.unavailable('x.')).toContain('this browser does not let the page keep files (x;');
+    expect(STORE_MESSAGES.notAnswering('reading the list of files took longer than 20 s.')).toContain(
+      "the browser's storage did not answer (reading the list of files took longer than 20 s; another tab",
+    );
+    expect(new UnsavedBrowserStore('blocked').problem).toBe(STORE_MESSAGES.unavailable('blocked'));
+    expect(new UnsavedBrowserStore('late', 'timeout').problem).toBe(STORE_MESSAGES.notAnswering('late'));
   });
 
   it('storageProblem is null for the real store', async () => {
@@ -432,8 +453,9 @@ describe('a page that died in the middle of a write (CI run 45034021673)', { tim
       expect(Date.now() - started).toBeLessThan(5_000);
       expect((backend as PendingBrowserStore).current).toBeInstanceOf(UnsavedBrowserStore);
       const problem = storageProblem(backend) ?? '';
-      expect(problem).toContain('Files are NOT being saved');
-      expect(problem).toContain('reading the list of files took longer than 0.3 s');
+      // The text of a store that did not answer, not that of a refused one (errata FS1 entry 30).
+      expect(problem).toBe(STORE_MESSAGES.notAnswering('reading the list of files took longer than 0.3 s'));
+      expect(problem).not.toContain('private window');
       // The session goes on in memory.
       await backend.writeFile('session.txt', ascii('s'));
       expect(text(await backend.readFile('session.txt'))).toBe('s');
@@ -478,7 +500,9 @@ describe('a page that died in the middle of a write (CI run 45034021673)', { tim
       openTimeoutMs: 100,
     });
     expect(backend).toBeInstanceOf(UnsavedBrowserStore);
-    expect(storageProblem(backend)).toContain('reading the list of files took longer than 0.1 s');
+    expect(storageProblem(backend)).toBe(
+      STORE_MESSAGES.notAnswering('reading the list of files took longer than 0.1 s'),
+    );
     expect(connections.length).toBe(1);
     expect(closeCalled(connections[0] as IDBDatabase)).toBe(true);
     await dead.abort();
@@ -491,7 +515,7 @@ describe('a page that died in the middle of a write (CI run 45034021673)', { tim
       channel: null,
       openTimeoutMs: 50,
     });
-    expect(storageProblem(late)).toContain('opening the database took longer than 0.05 s');
+    expect(storageProblem(late)).toBe(STORE_MESSAGES.notAnswering('opening the database took longer than 0.05 s'));
     await until(() => connections.length === 2, 'the late connection arrives');
     expect(closeCalled(connections[1] as IDBDatabase)).toBe(true);
   });
@@ -532,7 +556,7 @@ describe('start-up (review FS1: the page must not wait up to 20 s for a store th
     await (backend as PendingBrowserStore).whenReady();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect((backend as PendingBrowserStore).current).toBeInstanceOf(UnsavedBrowserStore);
-    expect(storageProblem(backend)).toContain('Files are NOT being saved');
+    expect(storageProblem(backend)).toBe(STORE_MESSAGES.notAnswering('opening the database took longer than 2 s'));
     expect(messages.length).toBe(1);
     expect(messages[0]).toContain('Files are NOT being saved');
     expect(changed).toBe(1);

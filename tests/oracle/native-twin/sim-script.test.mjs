@@ -74,7 +74,7 @@ describe('the sandbox of program files', () => {
   });
 
   // Gate I2: T3's programs a35 and a56 remove an open file and open one file twice. The twin
-  // keeps a file open in at most one stream (sim-twin/hostfile-native.cpp); the sandbox must agree.
+  // keeps a file open in at most one stream (sim-twin/host-native.cpp); the sandbox must agree.
   it('lets a file be open in one stream at a time and not be removed while open', () => {
     const s = new Sandbox();
     const w = s.open(bytes('two.bin'), 2);

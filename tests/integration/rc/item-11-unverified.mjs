@@ -29,7 +29,8 @@
 // case is accounted for by LOWER_CASE.
 //
 // Exit code 0 only when the heading exists and no item and no occurrence is in neither place. The
-// tables below are the I3 reading of 2026-11-22; when a spec, an erratum or DIFFERENCES.md changes,
+// tables below are the I3 reading of 2026-11-22 (the three lower-case statements of erratum E4 are
+// open items since the architect's decision of that day, erratum I3 4); when a spec, an erratum or DIFFERENCES.md changes,
 // the script says which table entry no longer matches. --all prints every occurrence.
 //
 // Part of easy68k-cross-platform, an unofficial port of EASy68K. GPL-2.0-or-later.
@@ -189,21 +190,12 @@ const LOWER_CASE = [
   ['speed.md', '(0.3 to 3 million, unverified) brackets it', 'c13.8'],
   ['errata/SH5.md', '(V14 unverified)', 'b15.V14'],
   ['errata/DOC1.md', 'tests/integration/rc/item-11-unverified.mjs', { notTheMarker: "the name of this judge's file" }],
-  [
-    'errata/E4.md',
-    '`atoi` past 32 bits wraps (unverified on the binary',
-    { awaiting: 'E4', why: "the settings reader's atoi; DIFFERENCES.md part 4 row 6 is task 4's atoi, not this one" },
-  ],
-  [
-    'errata/E4.md',
-    'Ctrl-Z (0x1A) is not treated as an end of file',
-    { awaiting: 'E4', why: 'the settings reader and Ctrl-Z; no row of part 4' },
-  ],
-  [
-    'errata/E4.md',
-    'Unverified on the binary (Wine is not set up on this PC)',
-    { awaiting: 'E4', why: 'the line break after the last line of template.NEW on Save Template; no row of part 4' },
-  ],
+  // The three statements of erratum E4 are open items of item 11 by the architect's decision of
+  // 22 November 2026 (each says something about the original that nobody confirmed); each is a row
+  // of part 4 (ROWS below). The settings reader's atoi is not task 4's (part 4, tasks 0 to 59, row 6).
+  ['errata/E4.md', '`atoi` past 32 bits wraps (unverified on the binary', 'ed.E4.3a'],
+  ['errata/E4.md', 'Ctrl-Z (0x1A) is not treated as an end of file', 'ed.E4.3b'],
+  ['errata/E4.md', 'Unverified on the binary (Wine is not set up on this PC)', 'ed.E4.11'],
 ];
 
 // ---- step 3: the items of the lists ----------------------------------------------------------------
@@ -483,6 +475,9 @@ const ITEMS = [
   ['ed.8.3', 'tab stops out of order, spacing beyond the 20th (editor-ui 8.3)', 'open'],
   ['ed.E6.4', 'word characters of Match whole word only (editor-ui 14.2, erratum E6 4)', 'open'],
   ['ed.E6.5', 'the Find box and a line break (erratum E6 5)', 'open'],
+  ['ed.E4.3a', "the settings reader's atoi past 32 bits (erratum E4 3)", 'open'],
+  ['ed.E4.3b', 'Ctrl-Z in the settings files (erratum E4 3)', 'open'],
+  ['ed.E4.11', 'the line break after the last line of template.NEW on Save Template (erratum E4 11)', 'open'],
   ['hw.9.2.8', 'a push button whose release never arrives (hardware 9.2 item 8)', 'open'],
   ['a.3.1', 'which pen task 96 reads after text output (trap15-a 3.1)', 'open'],
   ['b.12.2', 'task 107 over TCP: the address at (A2) (trap15-b 12.2)', 'open'],
@@ -527,6 +522,9 @@ const ROWS = {
   'ed.8.3': ['The editor', 'Tab stops (§8.3, in the text)'],
   'ed.E6.4': ['The editor', 'Match whole word only (§14.2, erratum E6 4)'],
   'ed.E6.5': ['The editor', 'The Find box and a line break (erratum E6 5)'],
+  'ed.E4.3a': ['The editor', '`atoi` in the settings files (erratum E4 3)'],
+  'ed.E4.3b': ['The editor', 'Ctrl-Z in the settings files (erratum E4 3)'],
+  'ed.E4.11': ['The editor', 'Save Template and the last line break (erratum E4 11)'],
   'hw.9.2.8': ['The hardware window', '§9.2 item 8 (in the text)'],
   'a.3.1': ['TRAP #15 tasks 0 to 59', '§3.1 (in the text)'],
   'b.12.2': ['TRAP #15 tasks 60 and up', '§12.2 (in the text)'],

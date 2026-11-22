@@ -793,8 +793,8 @@ async function heldStorePass(browser, name) {
     `${p} a store held for ever: the next page keeps files in memory and says why`,
     outcome?.kind === 'UnsavedBrowserStore' &&
       outcome.stat === null &&
-      banner.includes('Files are NOT being saved') &&
-      banner.includes('reading the list of files took longer than 20 s'),
+      banner.includes(notAnsweringText('reading the list of files took longer than 20 s')) &&
+      !banner.includes('private window'),
     `${outcome?.kind}: ${banner.slice(0, 200)}`,
   );
   await next.page.screenshot({ path: join(outDir, `${name}-store-held.png`) });
@@ -824,6 +824,19 @@ async function heldStorePass(browser, name) {
   await closeWithin(context);
 }
 
+/**
+ * The texts of fs/browser-backend.ts STORE_MESSAGES (errata FS1 entry 30): a store that did not
+ * answer in time (`notAnswering`), and the end of the text of a store that is refused (`unavailable`).
+ */
+const notAnsweringText = (detail) =>
+  "Files are NOT being saved right now: the browser's storage did not answer " +
+  `(${detail}; another tab of this site, or a page that was closed during a save, may still be holding it). ` +
+  'The programs you saved before are still in the browser: reload the page in a minute to see them. ' +
+  'What you save until then is lost when this tab closes. Use Export... in the Files panel to keep it.';
+const REFUSED_TEXT_END =
+  '; for example in a private window, or when storage is blocked for this site). ' +
+  'Everything you save is lost when this tab closes. Use Export... in the Files panel to keep your work.';
+
 /** IndexedDB refuses to open (a private window): the page works and says nothing is kept. */
 async function blockedPass(browser, name) {
   const p = `${name}:`;
@@ -835,9 +848,10 @@ async function blockedPass(browser, name) {
     .innerText()
     .catch(() => '');
   check(
-    `${p} blocked storage: the Files panel says files are not being saved`,
-    banner.includes('Files are NOT being saved'),
-    banner.slice(0, 80),
+    `${p} blocked storage: the Files panel says files are not being saved, with the text of a refused store`,
+    banner.startsWith('Files are NOT being saved: this browser does not let the page keep files (') &&
+      banner.includes(REFUSED_TEXT_END),
+    banner.slice(0, 300),
   );
   const kind = await page.evaluate(
     () => window.__easy68k.ctx.vfs.backends().find((b) => b.mount === 'browser')?.constructor.name,
@@ -921,7 +935,7 @@ async function hangingPass(browser, name) {
     r.sinceOpen !== null &&
     (r.sinceOpen < OPEN_TIMEOUT_MS
       ? r.banner.includes('still opening')
-      : r.banner.includes('Files are NOT being saved'));
+      : r.banner.includes(notAnsweringText('opening the database took longer than 20 s')));
   const early = readings.filter((r) => r.sinceOpen !== null && r.sinceOpen < OPEN_TIMEOUT_MS).length;
   const described = readings
     .map((r) => `${r.sinceOpen} ms: ${r.banner.slice(0, 40)} (page saw "still opening" at ${r.stillOpeningAt} ms)`)

@@ -199,7 +199,7 @@ const text1 = (bytes) => String.fromCharCode(...bytes);
  * with '.', and not a Windows device name (CON, PRN, AUX, NUL, COM0-9, LPT0-9, with or without an
  * extension). The twin opens real Windows files, where a trailing dot is dropped ('DATA.TXT.'
  * opens data.txt) and a device name opens the device; neither has a counterpart here, so both
- * sides refuse such names (twin_plain_name in sim-twin/hostfile-native.cpp is the same rule).
+ * sides refuse such names (twin_plain_name in sim-twin/host-native.cpp is the same rule).
  */
 export function isPlainName(name) {
   if (!/^[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}$/.test(name) || name.endsWith('.')) return false;
@@ -293,9 +293,10 @@ export function parseNumber(
 
 /**
  * In-memory files of the 68000 program with the semantics of the twin's real files
- * (fopen "r+b" / "rb" / "w+b" on a case-insensitive file system, unbuffered). A file is open in at
+ * (fopen "r+b" / "rb" / "w+b" on a case-insensitive file system; the engine's own streams buffer
+ * above it, as they do above the twin's real files). A file is open in at
  * most one stream: a second open of it fails, and so does its removal, until the stream is closed
- * (the twin keeps the same rule in sim-twin/hostfile-native.cpp). What Windows does with two
+ * (the twin keeps the same rule in sim-twin/host-native.cpp). What Windows does with two
  * streams on one file has no counterpart here, so neither side allows it.
  */
 export class Sandbox {
