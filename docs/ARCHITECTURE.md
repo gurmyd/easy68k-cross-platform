@@ -1388,6 +1388,8 @@ What the simulator engine does itself, so that no application package re-impleme
 | The execution-log records and header, the Rewind/Reload notes and their snapshot rule | The host owns the files and the output log's contents |
 | The file-task results and the eight-slot table (`SIMOPS2.CPP`). The engine's file streams are unbuffered: the host sees every read, write, seek and close of the program in program order | The host is a byte-level file device (`fileOpen` ... `fileRemove`) and models the C library's buffering itself (3.8.4) |
 
+> **Corrected (erratum STDIO 1; architect's decision of 22 November 2026).** The last row no longer holds as written. The engine's file streams are not unbuffered: they are the streams of the Borland C run-time that is linked into the official `SIM68K.exe` (a 512-byte buffer per stream, one level counter for both directions, the run-time's flags, 47 free stream entries shared with the log files, a close that can fail and keeps its handle), because that run-time decides what a program observes where C leaves the outcome undefined (a read right after a write, a write right after a read, without a seek). The model, read in the program's machine code and measured in the official program under Wine, is `engine/sim/shim/STDIO-MODEL.md`; the implementation is `engine/sim/shim/hostfile.cpp`. The host interface is unchanged: the host is the operating system below those streams (`ReadFile`, `WriteFile`, `SetFilePointer`, `CloseHandle`, `DeleteFile`). What the host sees: a read of fewer than 512 bytes arrives as a read of 512 at the run-time's position; writes arrive when the run-time's buffer is flushed; seeks arrive as before.
+
 Three statements of the **assembler** module that the application relies on; W4 has a test for each:
 
 1. It emulates Windows text mode itself (CR LF and Ctrl-Z on input, CR LF on output, two bytes per
@@ -2405,6 +2407,8 @@ and opening one fails.
 **Layer 2 - what the program observes: the C library's files.** The original opens these files with
 `fopen` and the Borland run-time library buffers them. The engine passes the program's operations to
 the host unbuffered and in order (3.2), so `ProgramFiles` models the stream itself:
+
+> **Corrected (erratum STDIO 1; architect's decision of 22 November 2026).** The sentence above reads now: the engine has the run-time's streams (`engine/sim/shim/STDIO-MODEL.md`) and uses the host as the operating system below them; `ProgramFiles` is that operating system, and its pending bytes carry the bytes a stream's flush would write to the end of the process. `ProgramFiles` itself is unchanged. The engine relies on two of its properties: a write of 512 bytes or fewer stays pending until the next call on the handle, and pending bytes are written at `exit()` / `exitNow()`; through them the bytes of a stream the program never closed reach the file when the original's process would write them (STDIO-MODEL.md section 10). `STDIO_BUFFER = 512` is the size measured in the official program under Wine (erratum SH6 12); `tests/conformance/windows-confirm/stdio-buffer.X68` repeats the measurement on Windows. What remains different for a program is recorded in `docs/differences/SH6.md` ("The stream's buffer memory").
 
 ```ts
 // app/src/core/sim-host/files/program-files.ts

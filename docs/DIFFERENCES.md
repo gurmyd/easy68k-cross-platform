@@ -34,8 +34,11 @@ program can notice. If your program or your course depends on one of them, read 
   (Note 46, parts SH6, FS2 and DV2.) In the Mac app, on a disk that tells letter case apart (not
   the default on a Mac), a name that leaves the program's folders with `..` and comes back in
   another letter case is not found (part W1). A read right after a write on one file, or a write
-  right after a read, without a seek between them, gives other results than in the original: a
-  defect of the port, not repaired yet (part 5).
+  right after a read, without a seek between them (C leaves both undefined) gives the original's
+  results, with two exceptions: bytes the program never wrote, which the original takes from its
+  own memory, are zeros in the port; and a write that runs past the end of the file's 512-byte
+  buffer, whose outcome in the original depends on the layout of its memory, always ends the same
+  way in the port (part SH6, "The stream's buffer memory").
 - **Serial port and network** (TRAP #15 tasks 40-43 and 100-107) work only in the Mac app. In a
   browser they return the original's "not available" results (note 37).
 - **The Output window** is at most 4096 x 4096 pixels (part SH1), and Windows' system colours are
@@ -852,6 +855,64 @@ measurements of docs/porting/errata/T3.md F2.
 | Printer page | The real printer's page and the Printer Font measured on it | A letter page at 600 dpi, cell from the Printer Font size (3.8.4) | No printer to ask in a browser |
 | Printer Font changed in the middle of a page | The next character makes the printer library fail ("Printing in progress"), which the simulator reports as `ERROR: An exception occurred in routine 'exec_inst'.` and switches to trace mode | The open job is ended as it stands and a new one starts | A defect of the original caused by the user's action; recorded so it can be reverted if it must be reproduced |
 
+#### The stream's buffer memory (gate I3, stdio work; engine/sim/shim/STDIO-MODEL.md)
+
+Since gate I3 the engine has the file streams of the Borland run-time linked into SIM68K.exe, so
+the sequences C leaves undefined - a read right after a write, a write right after a read, without
+a seek between them - give the official results (trap15-a `a51`, `a52`, `a53`, and `a61`-`a69`).
+Two things remain different, both reached only through those undefined sequences. All of it was
+measured in the official program under Wine (STDIO-MODEL.md sections 7 and 9).
+
+**Heap residue.** A stream's 512-byte buffer comes from the original's heap. A read right after a
+write takes its bytes from the buffer behind the written ones (in `a51` the 4 bytes after
+`ABCDE`), a read in the read state after a write there can run past the bytes that came from the
+file, and a flush after a read in the write state writes such bytes into the file. Those bytes are
+whatever the heap held: remains of what the simulator loaded before (text of the listing such as
+`00001000 Starting Address`, Windows help strings such as `Primary screen = 1`), the heap's own
+bookkeeping (pointers and sizes in bytes 0-7 of a buffer that an earlier stream freed, e.g. `3A 02`
+in bytes 2-3, a small number in byte 5), and heap pointers past the end of the buffer. They are the
+same in every run of one program but differ between programs, and depend on more than the program
+did. In `a51` they are `0A 00 00 44`. The port does what is measured about which block a stream gets
+(the lowest freed one, with its old bytes from the ninth on) and gives zeros for everything that
+depends on the heap's history: `00 00 00 00` in `a51`. What a student sees: in the original, a few
+bytes the program never wrote - in its memory after such a read, and in the file after such a flush
+(a file that ends in, say, `27 00` after a program wrote `ABCDE`, read 2 and wrote 4 without a
+seek); in the port, zero bytes in the same places, the file of the same length.
+
+**A write past the end of the buffer.** A write right after a read that had left the buffer nearly
+empty (fewer free bytes than the write's length) is copied past the end of the buffer over the
+next heap block. In the original, 1 to 3 bytes past the end were harmless in every run; 4 bytes
+were harmless in most layouts, but in the reviewer's program q02 under the file name
+`q02-end-of-buffer.X68` the simulator process ended at once (the same program under another name
+completed); 5 or more bytes made the next open, close or task 59 end in the box `ERROR: An exception
+occurred in routine 'exec_inst'.` in most layouts, but 8 zero bytes in one layout were harmless.
+So the outcome depends on the bytes and on the heap's layout, which even the program file's name
+changes. The port's choice: up to 4 bytes are harmless; from 5 bytes on the next and every later
+open or close of a file (and task 59) shows that box, which is what the original did after the
+first box in every probe (e4: OK and Run, then each later open showed the box again, D0.W = 2,
+D1 = -1). A student who writes past a stream's buffer therefore sees the box in the port where
+the original showed it in most measured cases, sees nothing where the original ended (q02's 4
+bytes), and sees the box where the original's heap happened to accept the bytes (x3's zeros).
+
+**A log started with a nearly full stream table.** While a log runs, its files are streams of the
+same table as the program's files (STDIO-MODEL.md section 8; this the port reproduces). When a log
+starts and the table has no free entry for one of its files, the original does not open that file:
+measured (probe e6: 46 streams whose close failed, then Log Start with both logs selected), the
+execution log was created, the box `Error` / `Can't open log file, error 0` appeared, the output
+log was not written, and the log stayed marked as running. In the port the log service opens and
+writes both logs; no box appears. A student meets this only after more than 44 opened files whose
+close failed in one session. Read in the code, not measured: the original's Log Stop closes the
+execution log's file pointer even when only an output log was started, so a pointer left from an
+earlier execution log could close a program's stream that has since taken its entry; the port
+has no such pointer.
+
+Two smaller differences: if a stream that has been read in the write state is left open while a
+task 58 dialog moves the current folder, the bytes the host writes for it at the end of the program
+can be more than the original's flush would write (STDIO-MODEL.md section 10); and a copy of a read
+in the write state whose count wrapped the bounds test of task 53 ends in the `exec_inst` error box
+in both (probe p13), but the port copies nothing first, while the original copies heap memory into
+the 68000 memory until its access violation (how far is not measured).
+
 ### Differences from the original: U3 (Advanced breakpoints)
 
 (`docs/differences/U3.md`)
@@ -1126,27 +1187,33 @@ list with evidence is `tests/conformance/sim/MISMATCHES.md`; the owners are in
 The official program was run only under Wine 8.0 (the oracle image). For the programs below the
 port's `result.bin` differed from the golden. Their state today:
 
-- **Defects of the port, with a repair pending: `a51` and `a52`.** A read right after a write on
-  one file, or a write right after a read, without a seek between them: C leaves both undefined, and
-  what happens is decided by the Borland C run-time inside `SIM68K.exe`, which behaves the same
-  under Wine as on Windows. So the official answer is known, and the port differs from it: a
-  student's program that reads right after writing without a seek, or writes right after reading,
-  gets other results than in the original. Cause: the port's file streams do not yet follow the
-  original's run-time in sequences that C leaves undefined; a repair of the simulator engine exists
-  on a branch and waits for measurements in the official program before it is merged. By the
-  architect's ruling of 22 November 2026 the two **count against 6.9 item 2** until the port
-  imitates the run-time's stream state. They are listed in
-  `tests/conformance/sim/known-differences.json` without `unconfirmed`, and they are not part of
-  the Windows session (a person who runs them there anyway loses nothing).
-- **Not yet confirmed against the original: `a53` and `b19`.** Each is listed in
-  `known-differences.json` with `unconfirmed`, because only the official program on real Windows
-  can say whether the golden is the original's answer or Wine's. The port keeps its behaviour until
-  then; `docs/porting/windows-confirmation.md` part A has the steps (one session) and the lines to
-  read. By the architect's decision of 22 November 2026 (erratum T3, ARCHITECTURE.md 6.9) such a
-  program does not count against 6.9 item 2, and it counts as an open verification item of item 11
-  (`docs/DIFFERENCES.md` part 4). For a53 the engine work that repairs a51 and a52 explains the
-  failing close by the run-time itself, but that part is read from the program's code and not yet
-  measured; b19 is most likely Wine's.
+- **`a51`, `a52` and `a53`: the port's differences, repaired (gate I3, branch `gate3/stdio`).** A
+  read right after a write on one file, or a write right after a read, without a seek between
+  them: C leaves both undefined, and what happens is decided by the Borland C run-time inside
+  `SIM68K.exe`. The simulator engine now has that run-time's stream, read in the program's machine
+  code and measured in the official program with the probes and conformance programs of
+  `engine/sim/shim/STDIO-MODEL.md` (trap15-a `a61`-`a68`). All three produce their goldens and have
+  left `known-differences.json`. What a program can still see differently are bytes of the heap the
+  program never wrote (the buffer's old contents a read in the write state returns):
+  `docs/differences/SH6.md`, which also records what happens when a write runs past the end of a
+  stream's buffer (measured; it depends on the original's heap layout, so no conformance program
+  holds it).
+- **`a53`'s one remaining question for Windows.** Its failing close is the run-time's: the read in
+  the write state leaves the flush a count of -3, which the run-time passes to `WriteFile` as a
+  count above 4 GB. That `WriteFile` refuses such a count without writing is measured under Wine
+  (a53 itself, and trap15-a `a67`: `ReadFile` and `WriteFile` of `$FFFFF000` bytes fail); that the
+  run-time's close then fails, keeps the handle and the file cannot be deleted is measured without
+  any system call deciding it (trap15-a `a61`, case C: a count of -1, which the run-time answers
+  without calling `WriteFile`). On Windows the kernel refuses a buffer range that wraps the address
+  space before it writes, so the answer is very likely the same; the Windows session keeps a53 to
+  confirm exactly that (`docs/porting/windows-confirmation.md`). If Windows wrote instead, only
+  `osWrite` of `engine/sim/shim/hostfile.cpp` would change.
+- **Not yet confirmed against the original: `b19`.** Listed in `known-differences.json` with
+  `unconfirmed`, because only the official program on real Windows can say whether the golden is
+  the original's answer or Wine's (most likely Wine's); `docs/porting/windows-confirmation.md` part
+  A has the steps. By the architect's decision of 22 November 2026 (erratum T3, ARCHITECTURE.md 6.9)
+  such a program does not count against 6.9 item 2, and it counts as an open verification item of
+  item 11 (`docs/DIFFERENCES.md` part 4).
 - **`a58`: the port's difference, repaired.** It produces its golden and has left
   `known-differences.json` and the Windows session.
 - **`b06`: settled by measurement on Windows.** The GDI calls the original makes were measured on
@@ -1154,7 +1221,7 @@ port's `result.bin` differed from the golden. Their state today:
   `known-differences.json` as an accepted difference with that cause (the golden cannot be replaced
   without the official program on real Windows), and it has left the Windows session.
 
-##### `trap15-a/a51-files-read-after-write` (owner SH6)
+##### `trap15-a/a51-files-read-after-write` (owner SH6; repaired, no longer listed)
 
 - Program: task 52 creates a file, task 54 writes `ABCDE`, task 53 reads 4 bytes **without a seek**
   in between, task 56 closes; a new stream (task 51) reads the file back.
@@ -1166,19 +1233,21 @@ port's `result.bin` differed from the golden. Their state today:
   happens is decided by the Borland run-time inside `SIM68K.exe`, which is the same under Wine and
   on Windows. Wine only answers the run-time's `ReadFile`, `WriteFile` and `SetFilePointer` calls,
   and the result (a write that lands short) is the kind of thing a stream state machine does with
-  an ordinary file system. The golden is the original's answer; the difference is the port's
-  (counts against 6.9 item 2; a repair of the engine waits on a branch, see above).
+  an ordinary file system. The golden is the original's answer. Repaired at gate I3: the engine's
+  stream gives the same (STDIO-MODEL.md R3, R6; the 4 bytes read come from the buffer's heap memory,
+  `0A 00 00 44` in every official run, which the port cannot know and gives as zeros; they are not
+  part of the golden).
 
-##### `trap15-a/a52-files-write-after-read` (owner SH6)
+##### `trap15-a/a52-files-write-after-read` (owner SH6; repaired, no longer listed)
 
 - Program: write `ABCDE`, task 55 seek to 1, task 53 read 2 (`BC`), task 54 write `X` **without a
   seek**, close, read the file back.
 - Differs: line 7 only (the file after the close): golden `41 42 43 44 45` (unchanged; the write
   reported success, D0.W = 0), port `41 42 43 58 45` (`ABCXE`).
 - Why Wine is not the cause: as for a51, the run-time's stream state decides; Wine's part is the
-  file system calls. The port's difference (counts against 6.9 item 2; repair pending, as for a51).
+  file system calls. Repaired at gate I3 (STDIO-MODEL.md R8).
 
-##### `trap15-a/a53-files-past-end-then-read` (owner SH6)
+##### `trap15-a/a53-files-past-end-then-read` (owner SH6; repaired, no longer listed)
 
 - Program: write `ABCDE`, seek to 25 (20 bytes past the end), write `X`, task 53 read 4 **without a
   seek**, close, then a new stream reads the file and task 57 deletes it.
@@ -1189,9 +1258,10 @@ port's `result.bin` differed from the golden. Their state today:
 - Why Wine is a suspect: here more than for a51 and a52. A failing `fclose` means a `WriteFile` (the
   flush of the buffer) or a `CloseHandle` failed, after a `SetFilePointer` past the end of the file.
   On Windows a write past the end extends the file with zeros; that a Win32 call fails here is the
-  one point where Wine's answer, not the run-time, may decide the result. The engine work that
-  repairs a51 and a52 explains the failing close by the run-time itself; that is read from the
-  program's code and not yet measured, so a53 stays unconfirmed and stays in the Windows session.
+  one point where Wine's answer, not the run-time, may decide the result. Repaired at gate I3: the
+  run-time's flush has a count of -3 here, which reaches `WriteFile` as a count above 4 GB
+  (STDIO-MODEL.md R6, section 3); see the bullet above for what is measured and what the Windows
+  session still confirms.
 
 ##### `trap15-a/a58-files-devices` (owner SH6; repaired, no longer listed)
 
@@ -1687,14 +1757,17 @@ program whose golden is in doubt because Wine's own behaviour is suspected is li
 `tests/conformance/sim/MISMATCHES.md` and the details in part T3 above. The Windows session, part
 A, settles both.
 
-Two programs that were listed here are not in doubt: `a51` and `a52` (a read right after a write,
-a write right after a read, without a seek). The C run-time that decides them is inside the
-official simulator and behaves the same under Wine, so the official answer is known and the port
-differs from it. They are a defect of the port, listed in part 5 below.
+Three programs that were listed here have left the list: `a51`, `a52` and `a53` (a read right
+after a write, a write right after a read, a write past the end followed by a read, without a
+seek). The C run-time that decides them is inside the official simulator and behaves the same
+under Wine; the port's file streams follow that run-time now and all three produce the official
+results (part T3 above). One point of `a53` still waits for Windows, although the port already
+gives the result seen under Wine: its close fails because the system refuses a write of more than
+4 GB, which was measured under Wine only.
 
 | Program | Golden (official program under Wine) | What the port does |
 |---|---|---|
-| `trap15-a/a53-files-past-end-then-read` | After a write 20 bytes past the end and a read, the close fails (`D0.W = 2`) and the file keeps five bytes | The close succeeds; the file has 26 bytes, the gap filled with zeros |
+| `trap15-a/a53-files-past-end-then-read` | After a write 20 bytes past the end and a read, the close fails (`D0.W = 2`) and the file keeps five bytes | The same. Not listed in `known-differences.json`; the Windows session confirms that Windows refuses the write as Wine does |
 | `trap15-b/b19-net-send-uninitialised` | Tasks 102 and 106 before any task 100 or 101 give `$27360001` (WSAENOTSOCK) | `$276D0001` (WSANOTINITIALISED), what Windows Sockets documents for every call made before start-up |
 
 ### Two measurements
@@ -1712,20 +1785,6 @@ differs from it. They are a defect of the port, listed in part 5 below.
 
 These are not decisions: they are things the project knows of and has not repaired or proven yet.
 They stay here until they are.
-
-- **A read right after a write on one file, or a write right after a read, without a seek
-  between them, gives other results than in the original.** This is a defect of the port. C leaves
-  such a sequence undefined, and the original's C run-time (inside the official simulator) does
-  something definite with it: after writing `ABCDE`, a read of 4 bytes succeeds and the file then
-  holds one byte; a write right after a read reports success and changes nothing. The port's file
-  streams do not follow the run-time there yet: the read is at end of file and the file holds
-  `ABCDE`; the write lands at the read position. A student's program that reads right after
-  writing without a seek, or writes right after reading, therefore gets other results than in the
-  original. A program that seeks (task 55) between a write and a read, as C asks, is not
-  affected: the conformance programs that do so give the official results. A repair of the simulator engine exists on a branch and waits for measurements in the
-  official program before it is merged. (Conformance programs `trap15-a/a51` and `a52`, part T3;
-  they count against item 2 of the definition of done in `docs/ARCHITECTURE.md` 6.9 until the
-  repair is in.)
 
 - **Nobody has used the port on a real Mac yet.** Everything is tested automatically on GitHub's
   macOS, Linux and Windows machines, but the checks only a person can make

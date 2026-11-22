@@ -111,3 +111,15 @@ These entries name the places where the documents say something else.
    files-4 expects the measured read-only write (entry 2). `doubles.ts` still lists a51-a53 in
    `NOT_MODELLED_BY_DOUBLES`, which stays true for the doubles (the new programs need the real
    parts as well; the doubles mode was not run).
+
+## Status
+
+9. **Entries 1 to 3 are in the documents (22 November 2026, after the merge into the main
+   branch).** `docs/ARCHITECTURE.md` 3.2 and 3.8.4 carry a correction note each (entry 1);
+   `docs/porting/trap15-tasks-0-59.md` carries the notes under task 51 (entries 2 and 5: the
+   read-only write and the stream table), under task 53 (entry 3 and the error flag) and the
+   corrected lines of task 54 and of the test list of section 13. `docs/DIFFERENCES.md`
+   (introduction, parts 4 and 5), `README.md` and `CHANGELOG.md` no longer call the three
+   sequences a defect of the port: they give the figures of the comparison after the merge (183
+   of 186 self-reporting programs byte-identical; the three others are two accepted differences
+   and one result not yet confirmed on Windows).
