@@ -2,7 +2,21 @@
 // Owner: X2.
 
 import { expect, test, type App } from '../fixtures';
-import { execute, expectReg, expectState, messages, panel, program, reg, tool, typeInto, view, step } from './sim';
+import {
+  execute,
+  expectReg,
+  expectState,
+  gutter,
+  listingRow,
+  messages,
+  panel,
+  program,
+  reg,
+  tool,
+  typeInto,
+  view,
+  step,
+} from './sim';
 
 /**
  * The program's interrupt handlers (autovectors 25 and 26, at $64 and $68) count in D7 and D6 and
@@ -162,17 +176,83 @@ test('Reset loads SSP and PC from vectors 0 and 1 and sets the interrupt mask to
 });
 
 test('Memory Map: an Invalid range makes an access a bus error that halts the program', async ({ app }) => {
-  await execute(app, program('    MOVE.B  #1,$3000', '    MOVE.B  #2,$5000', '    SIMHALT'));
+  await execute(app, program('    LEA     $3000,A0', '    MOVE.B  #1,$3000', '    MOVE.B  #2,$5000', '    SIMHALT'));
   const hw = await hardware(app);
   await hw.getByRole('checkbox', { name: 'Invalid:' }).check();
   await typeInto(hw.getByLabel('Invalid start'), '003000');
   await typeInto(hw.getByLabel('Invalid end'), '003FFF');
   await tool(app, 'sim.run.run');
   await expectState(app, 'Halted');
-  await expect.poll(() => messages(app)).toContain('Bus Error: Instruction at 1000 accessing address 3000');
+  const faulting = (await listingRow(app, 'MOVE.B  #1,$3000').textContent())!.trim().slice(0, 8);
+  await expect
+    .poll(() => messages(app))
+    .toContain(`Bus Error: Instruction at ${parseInt(faulting, 16).toString(16)} accessing address 3000`);
   await expect.poll(() => messages(app)).toContain('Execution halted');
-  // The Invalid range shows red in the Stack panel too (sim-ui §11.3).
-  await expect(panel(app, 'hardware')).toBeVisible();
+  // A bus error with exceptions off disables the hardware: the IRQ and Reset buttons (hardware §3.7).
+  for (const level of [1, 2, 3, 4, 5, 6, 7])
+    await expect(hw.getByRole('button', { name: `IRQ ${level}` })).toBeDisabled();
+  await expect(hw.getByRole('button', { name: 'Reset', exact: true })).toBeDisabled();
+  // The bytes of the Invalid range are red in the Stack panel (sim-ui §11.3): A0 points at $3000.
+  const stack = await view(app, 'Stack', 'stack');
+  await stack.getByLabel('View').selectOption({ label: 'A0' });
+  const invalid = (address: string) =>
+    stack
+      .locator('.e68-stack__row:not(.e68-stack__measure)')
+      .filter({ hasText: new RegExp(`^${address}:`) })
+      .locator('.e68-stack__byte')
+      .evaluateAll((bytes) => bytes.map((b) => b.getAttribute('data-invalid') === 'true'));
+  await expect.poll(() => invalid('00003000')).toEqual([true, true, true, true]);
+  expect(await invalid('00002FFC')).toEqual([false, false, false, false]);
+});
+
+test('Memory Map: ROM ignores writes; Read allows reads and faults on a write; Protected faults in user mode', async ({
+  app,
+}) => {
+  // hardware §4.1 and §4.4 item 1: the Protected check reads the SR the registers show, which a stop
+  // refreshes; so the program stops at a breakpoint in user mode before it touches the range.
+  await execute(
+    app,
+    program(
+      '    MOVE.B  #1,$3000',
+      '    MOVE.B  $3000,D1',
+      '    MOVE.B  $4000,D2',
+      '    ANDI.W  #$DFFF,SR',
+      '    MOVE.B  #3,$5000',
+      '    MOVE.B  #4,$4000',
+      '    SIMHALT',
+    ),
+  );
+  const hw = await hardware(app);
+  for (const [name, start, end] of [
+    ['ROM', '003000', '003FFF'],
+    ['Read', '004000', '004FFF'],
+    ['Protected', '005000', '005FFF'],
+  ] as const) {
+    await hw.getByRole('checkbox', { name: `${name}:` }).check();
+    await typeInto(hw.getByLabel(`${name} start`), start);
+    await typeInto(hw.getByLabel(`${name} end`), end);
+  }
+  const protectedRow = listingRow(app, 'MOVE.B  #3,$5000');
+  const at = (await protectedRow.textContent())!.trim().slice(0, 8);
+  const address = parseInt(at, 16).toString(16);
+  await gutter(protectedRow).click();
+  await tool(app, 'sim.run.run');
+  await expectReg(app, 'PC', at);
+  // The ROM byte kept its $FF; the Read range was read.
+  expect(await reg(app, 'D1')).toBe('000000FF');
+  expect(await reg(app, 'D2')).toBe('000000FF');
+  await tool(app, 'sim.run.run');
+  await expectState(app, 'Halted');
+  await expect.poll(() => messages(app)).toContain(`Bus Error: Instruction at ${address} accessing address 5000`);
+  // Without the Protected range the next write, into the Read range, is the bus error.
+  await hw.getByRole('checkbox', { name: 'Protected:' }).uncheck();
+  await tool(app, 'sim.run.rewind');
+  await tool(app, 'sim.run.run');
+  await expectReg(app, 'PC', at);
+  await tool(app, 'sim.run.run');
+  await expectState(app, 'Halted');
+  const next = parseInt((await listingRow(app, 'MOVE.B  #4,$4000').textContent())!.trim().slice(0, 8), 16).toString(16);
+  await expect.poll(() => messages(app)).toContain(`Bus Error: Instruction at ${next} accessing address 4000`);
 });
 
 test('the device address fields: a conflicting address is marked', async ({ app }) => {

@@ -102,20 +102,34 @@ test('the gutter context menu clears all PC breakpoints', async ({ app }) => {
 });
 
 test('the 101st breakpoint: Breakpoint Limit Reached!', async ({ app, page }) => {
-  test.setTimeout(180_000);
-  await execute(app, program(...Array.from({ length: 101 }, () => '    NOP'), '    SIMHALT'));
-  // Keyboard of the listing (docs/differences/U1.md): arrows move the selection, Space toggles.
-  const first = listingRow(app, /00001000 {2}4E71/);
-  await first.click();
+  // A hundred breakpoints from *[sim68k]break directives (sim-ui §8.2), each on the NOP after it; the
+  // 101st is set from the keyboard of the listing (docs/differences/U1.md): arrows move the
+  // selection, Space toggles.
+  const body = Array.from({ length: 100 }, () => ['*[sim68k]break', '    NOP']).flat();
+  await execute(app, program(...body, '    NOP', '    NOP', '    SIMHALT'));
+  // Only the rows on screen exist in the page (a virtual list), so the hundred are counted by the
+  // limit itself.
+  const row = (address: string) => listingRow(app, new RegExp(`${address} {2}4E71`));
+  // The last NOPs are near the end of the listing: scrolled there as with the scroll bar.
+  await listing(app).evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(row('000010C6')).toHaveAttribute('data-bp', 'on');
+  await row('000010C6').click();
   await listing(app).focus();
-  for (let i = 0; i < 100; i++) {
-    await page.keyboard.press('Space');
-    await page.keyboard.press('ArrowDown');
-  }
-  await expect.poll(async () => listingRows(app).and(page.locator('[data-bp="on"]')).count()).toBeGreaterThan(0);
+  await page.keyboard.press('ArrowDown');
+  await expect.poll(() => selectedRowText(app)).toMatch(/^000010C8 {2}4E71/);
+  await expect(row('000010C8')).toHaveAttribute('data-bp', 'off');
   await page.keyboard.press('Space');
   expect(await answer(app, 'OK')).toBe('Breakpoint Limit Reached!');
   expect(await listing(app).locator('[aria-selected="true"]').getAttribute('data-bp')).toBe('off');
+  // Space on a set breakpoint clears it, and then there is room for one more.
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('Space');
+  await expect(row('000010C6')).toHaveAttribute('data-bp', 'off');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Space');
+  await expect(row('000010C8')).toHaveAttribute('data-bp', 'on');
 });
 
 test('a click selects a row; a double-click on an instruction row puts its address into the PC field', async ({
@@ -182,29 +196,99 @@ test('*[sim68k]bitfield turns on bit-field instructions; *[sim68k]simhalt_off ma
     .toContain(`Line 1111 Emulator exception occurred at location ${simhalt.toString(16)}. Execution halted`);
 });
 
-test('the listing scrolls sideways with its heading (note 33)', async ({ app }) => {
-  // Finding for U1 (features/sim-main): the heading strip is only as wide as its own text, so its
-  // scrollLeft stays 0 while the rows scroll (measured: rows 200, heading 0) and the column titles
-  // no longer stand over their columns. Expected to fail until U1 repairs it; then delete this line.
-  test.fail(true, 'U1: the listing heading does not scroll with the rows');
-  await execute(app, program(`    MOVE.L  #1,D1   * ${'x'.repeat(300)}`, '    SIMHALT'));
+/** A program whose listing has one row of more than 250 characters. */
+const WIDE = program(`    MOVE.L  #1,D1   * ${'x'.repeat(200)}`, '    SIMHALT');
+
+/** Where the heading's text and the rows' text start on screen, and the scroll positions. */
+async function sideways(app: App) {
   const list = listing(app);
   const heading = panel(app, 'listing').locator('.e68-listing__heading');
+  return {
+    list: await list.evaluate((e) => e.scrollLeft),
+    heading: await heading.evaluate((e) => e.scrollLeft),
+    // The heading's text box and the first row's text box: both start with the same padding.
+    headingLeft: await heading.locator('.e68-listing__heading-text').evaluate((e) => e.getBoundingClientRect().left),
+    rowLeft: await listingRows(app)
+      .first()
+      .locator('.e68-listing__text')
+      .evaluate((e) => e.getBoundingClientRect().left),
+    cell: await heading
+      .locator('.e68-listing__heading-text > span')
+      .evaluate((e) => e.getBoundingClientRect().width / (e.textContent ?? '').length),
+  };
+}
+
+test('the listing scrolls sideways with its heading (note 33)', async ({ app }) => {
+  await execute(app, WIDE);
+  const list = listing(app);
   await list.evaluate((element) => {
     element.scrollLeft = 200;
     element.dispatchEvent(new Event('scroll'));
   });
-  await expect.poll(() => list.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
-  const positions = async () => ({
-    list: await list.evaluate((e) => e.scrollLeft),
-    heading: await heading.evaluate((e) => e.scrollLeft),
+  await expect.poll(() => list.evaluate((element) => element.scrollLeft)).toBe(200);
+  // The column titles stay over their columns: the heading moved as far as the rows.
+  await expect
+    .poll(async () => {
+      const p = await sideways(app);
+      return p.heading === p.list && Math.abs(p.headingLeft - p.rowLeft) < 1 ? 'same' : JSON.stringify(p);
+    })
+    .toBe('same');
+  // Past 39 character cells the heading keeps its last place, as the original's (sim-ui §6.3):
+  // `Source----------->>` stays in view while the rows go on.
+  await list.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+    element.dispatchEvent(new Event('scroll'));
   });
   await expect
     .poll(async () => {
-      const p = await positions();
-      return p.heading === p.list ? 'same' : JSON.stringify(p);
+      const p = await sideways(app);
+      return p.list > 39 * p.cell + 100 && Math.abs(p.heading - 39 * p.cell) < 1 ? 'kept' : JSON.stringify(p);
     })
-    .toBe('same');
+    .toBe('kept');
+});
+
+test('the horizontal scroll bar reaches the end of the longest row; the rows scroll, the gutter stays (note 33)', async ({
+  app,
+  page,
+}) => {
+  await execute(app, WIDE);
+  const list = listing(app);
+  const wide = listingRow(app, /\*\s*x{200}$/);
+  // Ordinary scrolling (note 33, in place of the original's 1..200 characters): the range is the
+  // width of the longest row, the 200 x and the 62 characters before them.
+  const range = await list.evaluate((e) => ({ scroll: e.scrollWidth, client: e.clientWidth }));
+  const cell = (await sideways(app)).cell;
+  expect(range.scroll, JSON.stringify({ ...range, cell })).toBeGreaterThan(range.client);
+  expect(range.scroll).toBeGreaterThanOrEqual(Math.floor(262 * cell));
+  // The mouse wheel sideways (a trackpad's swipe, Shift+wheel) moves the rows.
+  await list.hover();
+  const before = await sideways(app);
+  await page.mouse.wheel(240, 0);
+  await expect
+    .poll(async () => {
+      const after = await sideways(app);
+      return after.list > 0 && Math.abs(before.rowLeft - after.list - after.rowLeft) < 1
+        ? 'moved by the scroll position'
+        : JSON.stringify({ before, after });
+    })
+    .toBe('moved by the scroll position');
+  // At the end of the range the last x is in view, and the gutter is still at the left edge.
+  await list.evaluate((e) => {
+    e.scrollLeft = e.scrollWidth;
+    e.dispatchEvent(new Event('scroll'));
+  });
+  const box = await list.evaluate((e) => {
+    const r = e.getBoundingClientRect();
+    return { left: r.left, right: r.left + e.clientWidth };
+  });
+  await expect
+    .poll(async () => {
+      const text = await wide.locator('.e68-listing__text').evaluate((e) => e.getBoundingClientRect().right);
+      return text <= box.right + 1 && text > box.right - 4 * cell ? 'end in view' : JSON.stringify({ text, box });
+    })
+    .toBe('end in view');
+  const gutterLeft = await gutter(wide).evaluate((e) => e.getBoundingClientRect().left);
+  expect(Math.abs(gutterLeft - box.left)).toBeLessThan(1);
 });
 
 test('the PC row is selected and marked; after SIMHALT the row after it is selected (highlight rule)', async ({

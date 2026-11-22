@@ -1,10 +1,10 @@
 {
   "$comment": [
-    "The parity matrix of ARCHITECTURE.md 6.6 (owner X2): every row of section 1.3 (1.3.1 to 1.3.8) and of",
-    "the extension of 1.3.8 in docs/porting/easybin.md 21.4, with what verifies it. The first entry of",
-    "verifiedBy is the row's kind; further entries add evidence. tests/parity/matrix.test.ts checks that",
-    "the rows are exactly those of the two documents and that every named test exists. README.md explains",
-    "the kinds and how to keep this file up to date."
+    "The parity matrix of ARCHITECTURE.md 6.6 (owner X2): every row of section 1.3 (1.3.1 to 1.3.8, where",
+    "1.3.8 holds the rows of docs/porting/easybin.md 21.4) and of the table of added commands in 1.5, with",
+    "what verifies it. The first entry of verifiedBy is the row's kind; further entries add evidence.",
+    "tests/parity/matrix.test.ts checks that the rows are exactly those of the document and that every named",
+    "test exists. README.md explains the kinds and how to keep this file up to date."
   ],
   "kinds": {
     "web-e2e": "a Playwright test of tests/e2e (6.6): { file, test } - runs in Chromium and WebKit on every push",
@@ -1567,7 +1567,8 @@
           "file": "tests/e2e/sim/log.spec.ts",
           "test": "Log File Options: Append adds to an existing log, Replace starts it again, Cancel does not log (note 41)"
         }
-      ]
+      ],
+      "note": "The test presses Log Stop (its chord, in the listing) twice: LOGGING goes, Log Stop is disabled again, and an instruction traced after the first Log Stop is not in the execution log."
     },
     {
       "section": "1.3.4",
@@ -1580,7 +1581,8 @@
           "file": "tests/e2e/sim/menus.spec.ts",
           "test": "View shows and focuses each tool panel; Output Window focuses the Output panel"
         }
-      ]
+      ],
+      "note": "One test for the View items: it chooses View > Memory, Stack, Hardware, Break Points and Log in turn and asserts for each that its panel is shown and has the keyboard focus; for Output Window it collapses the Output panel first and asserts that the item shows it again and focuses it."
     },
     {
       "section": "1.3.4",
@@ -1593,7 +1595,8 @@
           "file": "tests/e2e/sim/menus.spec.ts",
           "test": "View shows and focuses each tool panel; Output Window focuses the Output panel"
         }
-      ]
+      ],
+      "note": "One test for the View items: it chooses View > Memory, Stack, Hardware, Break Points and Log in turn and asserts for each that its panel is shown and has the keyboard focus; for Output Window it collapses the Output panel first and asserts that the item shows it again and focuses it."
     },
     {
       "section": "1.3.4",
@@ -1606,7 +1609,8 @@
           "file": "tests/e2e/sim/menus.spec.ts",
           "test": "View shows and focuses each tool panel; Output Window focuses the Output panel"
         }
-      ]
+      ],
+      "note": "One test for the View items: it chooses View > Memory, Stack, Hardware, Break Points and Log in turn and asserts for each that its panel is shown and has the keyboard focus; for Output Window it collapses the Output panel first and asserts that the item shows it again and focuses it."
     },
     {
       "section": "1.3.4",
@@ -1619,7 +1623,8 @@
           "file": "tests/e2e/sim/menus.spec.ts",
           "test": "View shows and focuses each tool panel; Output Window focuses the Output panel"
         }
-      ]
+      ],
+      "note": "One test for the View items: it chooses View > Memory, Stack, Hardware, Break Points and Log in turn and asserts for each that its panel is shown and has the keyboard focus; for Output Window it collapses the Output panel first and asserts that the item shows it again and focuses it."
     },
     {
       "section": "1.3.4",
@@ -1632,7 +1637,8 @@
           "file": "tests/e2e/sim/menus.spec.ts",
           "test": "View shows and focuses each tool panel; Output Window focuses the Output panel"
         }
-      ]
+      ],
+      "note": "One test for the View items: it chooses View > Memory, Stack, Hardware, Break Points and Log in turn and asserts for each that its panel is shown and has the keyboard focus; for Output Window it collapses the Output panel first and asserts that the item shows it again and focuses it."
     },
     {
       "section": "1.3.4",
@@ -1917,7 +1923,8 @@
           "file": "tests/desktop/dev/menu.spec.ts",
           "test": "after task 24, F9 pressed in the Output panel reaches the program and runs nothing"
         }
-      ]
+      ],
+      "note": "Tested in the task 24 test: F6 reaches the program, F1 in the listing opens no help, Alt+Enter in the Output panel enters no full screen, the paste chord (Shift+Insert; Cmd+V on the macOS key map) has its key-down cancelled and a paste event that comes anyway types nothing (a task 5 read still waits), and the keyboard-release chord still works; F9 is the test after it. Ctrl+Tab is the desktop app's (tests/desktop/dev)."
     },
     {
       "section": "1.3.5",
@@ -2067,9 +2074,18 @@
           "kind": "web-e2e",
           "file": "tests/e2e/sim/listing.spec.ts",
           "test": "the listing scrolls sideways with its heading (note 33)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/listing.spec.ts",
+          "test": "the horizontal scroll bar reaches the end of the longest row; the rows scroll, the gutter stays (note 33)"
+        },
+        {
+          "kind": "unit",
+          "file": "app/src/features/sim-main/selection.test.ts",
+          "test": "follows the rows pixel for pixel up to 39 character cells, then keeps its place"
         }
-      ],
-      "note": "Finding for U1: the heading strip does not scroll with the rows; the test is an expected failure until U1 repairs it."
+      ]
     },
     {
       "section": "1.3.5",
@@ -2299,9 +2315,17 @@
         {
           "kind": "browser-check",
           "file": "app/src/core/sim-host/surface/check-surface.mjs"
+        },
+        {
+          "kind": "unit",
+          "file": "tests/conformance/examples/examples.test.ts",
+          "test": "ends where the golden says and draws the golden picture"
+        },
+        {
+          "kind": "browser-check",
+          "file": "tests/conformance/examples/check-examples.mjs"
         }
-      ],
-      "note": "That the pixels of whole programs do not depend on the browser is X3's (tests/conformance/examples, 6.5.4), written in the same wave; add it here when it has landed."
+      ]
     },
     {
       "section": "1.3.6",
@@ -2391,7 +2415,8 @@
           "kind": "manual",
           "item": "Keyboard on a real MacBook"
         }
-      ]
+      ],
+      "note": "Not tested automatically: the blinking `_` input prompt, which is drawn over the presented picture only (2.5), never into the canvas the tests read. It is on screen during step P1 of docs/MANUAL-TEST-MAC.md (the echo program waits in task 2), which does not ask about it by name."
     },
     {
       "section": "1.3.6",
@@ -2503,8 +2528,14 @@
           "kind": "web-e2e",
           "file": "tests/e2e/sim/memory.spec.ts",
           "test": "Stack: the selected pointer on the middle row, aqua and yellow marks, View A0..SS, spin buttons"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/hardware.spec.ts",
+          "test": "Memory Map: an Invalid range makes an access a bus error that halts the program"
         }
-      ]
+      ],
+      "note": "The Stack test covers the View list, the middle row, the marks, the spin buttons and the mouse wheel; the red text of the Invalid range (the data-invalid bytes, coloured by the stylesheet) is asserted in the Hardware panel's Invalid range test."
     },
     {
       "section": "1.3.7",
@@ -2545,6 +2576,11 @@
           "kind": "web-e2e",
           "file": "tests/e2e/sim/hardware.spec.ts",
           "test": "the device address fields: a conflicting address is marked"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/hardware.spec.ts",
+          "test": "Memory Map: ROM ignores writes; Read allows reads and faults on a write; Protected faults in user mode"
         }
       ]
     },
@@ -2629,6 +2665,11 @@
           "kind": "web-e2e",
           "file": "tests/e2e/sim/log.spec.ts",
           "test": "Log File Options: Append adds to an existing log, Replace starts it again, Cancel does not log (note 41)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/log.spec.ts",
+          "test": "log type 3: memory and register blocks before each traced instruction; Rewind notes only after the dialog saw the type (sim-ui §13.5)"
         }
       ]
     },
@@ -2643,10 +2684,16 @@
           "test": "both logs: Log Start shows LOGGING; SIMHALT stops the log with the original box; the files hold the log"
         },
         {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/log.spec.ts",
+          "test": "log type 3: memory and register blocks before each traced instruction; Rewind notes only after the dialog saw the type (sim-ui §13.5)"
+        },
+        {
           "kind": "unit",
           "file": "tests/conformance/sim/logs"
         }
-      ]
+      ],
+      "note": "The end-to-end tests check the file names, the header lines, the instruction lines of type 1, the memory and register blocks of type 3 (type 2, not run by a test, writes the register block of type 3 without the memory rows, sim-ui §13.4), and the Rewind note with its quirk (written only after the Log Output dialog was shown with a type set). The Reload note is the engine's, next to the Rewind note (engine/sim/shim/api.cpp); no test presses Reload while logging. The byte-exact formats are T3's conformance logs (tests/conformance/sim/logs)."
     },
     {
       "section": "1.3.7",
@@ -2703,136 +2750,6 @@
     },
     {
       "section": "1.3.8",
-      "original": "File > New (fill memory with the Fill byte)",
-      "id": "`bin.file.new`",
-      "status": "",
-      "verifiedBy": [
-        {
-          "kind": "web-e2e",
-          "file": "tests/e2e/sim/easybin.spec.ts",
-          "test": "New asks Caution: Cancel keeps memory, OK fills it with FF and resets the fields"
-        },
-        {
-          "kind": "web-e2e",
-          "file": "tests/e2e/sim/easybin.spec.ts",
-          "test": "${title}: the items of EASyBIN v2.5.0 with this key map's shortcuts"
-        }
-      ]
-    },
-    {
-      "section": "1.3.8",
-      "original": "File > Open S-Record...",
-      "id": "`bin.file.openSrec`",
-      "status": "",
-      "verifiedBy": [
-        {
-          "kind": "web-e2e",
-          "file": "tests/e2e/sim/easybin.spec.ts",
-          "test": "Open S-Record fills memory and the S-Record File group; the window title is the file"
-        },
-        {
-          "kind": "web-e2e",
-          "file": "tests/e2e/sim/easybin.spec.ts",
-          "test": "${title}: the items of EASyBIN v2.5.0 with this key map's shortcuts"
-        }
-      ]
-    },
-    {
-      "section": "1.3.8",
-      "original": "File > Open Binary...",
-      "id": "`bin.file.openBinary`",
-      "status": "",
-      "verifiedBy": [
-        {
-          "kind": "web-e2e",
-          "file": "tests/e2e/sim/easybin.spec.ts",
-          "test": "Save Binary writes First Address for Length bytes; Open Binary loads them at First Address"
-        },
-        {
-          "kind": "web-e2e",
-          "file": "tests/e2e/sim/easybin.spec.ts",
-          "test": "${title}: the items of EASyBIN v2.5.0 with this key map's shortcuts"
-        }
-      ]
-    },
-    {
-      "section": "1.3.8",
-      "original": "File > Save S-Record...",
-      "id": "`bin.file.saveSrec`",
-      "status": "",
-      "verifiedBy": [
-        {
-          "kind": "web-e2e",
-          "file": "tests/e2e/sim/easybin.spec.ts",
-          "test": "Save S-Record asks S-Record Creation and writes the records of easybin.md 11.3"
-        },
-        {
-          "kind": "web-e2e",
-          "file": "tests/e2e/sim/easybin.spec.ts",
-          "test": "${title}: the items of EASyBIN v2.5.0 with this key map's shortcuts"
-        }
-      ]
-    },
-    {
-      "section": "1.3.8",
-      "original": "File > Save Binary...",
-      "id": "`bin.file.saveBinary`",
-      "status": "",
-      "verifiedBy": [
-        {
-          "kind": "web-e2e",
-          "file": "tests/e2e/sim/easybin.spec.ts",
-          "test": "Save Binary writes First Address for Length bytes; Open Binary loads them at First Address"
-        },
-        {
-          "kind": "web-e2e",
-          "file": "tests/e2e/sim/easybin.spec.ts",
-          "test": "${title}: the items of EASyBIN v2.5.0 with this key map's shortcuts"
-        }
-      ]
-    },
-    {
-      "section": "1.3.8",
-      "original": "File > Exit",
-      "id": "`bin.file.exit`",
-      "status": "",
-      "verifiedBy": [
-        {
-          "kind": "web-e2e",
-          "file": "tests/e2e/sim/easybin.spec.ts",
-          "test": "File > Exit ends the application as the other modes do (easybin.md 19 item 4)"
-        }
-      ]
-    },
-    {
-      "section": "1.3.8",
-      "original": "Main screen: 16 MB hex/ASCII editor, Address field, Row/Page, wheel; S-Record File group; Binary Output Split (1, 2, 4 files); Binary File(s) group; From / To; Copy; Fill",
-      "status": "",
-      "verifiedBy": [
-        {
-          "kind": "web-e2e",
-          "file": "tests/e2e/sim/easybin.spec.ts",
-          "test": "the memory area: typing hex, the Address field, Row and Page buttons"
-        },
-        {
-          "kind": "web-e2e",
-          "file": "tests/e2e/sim/easybin.spec.ts",
-          "test": "Open S-Record fills memory and the S-Record File group; the window title is the file"
-        },
-        {
-          "kind": "web-e2e",
-          "file": "tests/e2e/sim/easybin.spec.ts",
-          "test": "Binary Input/Output Split: 1, 2 or 4 files, and the File Split digits follow"
-        },
-        {
-          "kind": "web-e2e",
-          "file": "tests/e2e/sim/easybin.spec.ts",
-          "test": "Copy and Fill: From / To, Size and the fill byte"
-        }
-      ]
-    },
-    {
-      "section": "easybin.md 21.4",
       "original": "File > `&New` (fill memory with `$FF` after `Caution` question)",
       "id": "`bin.file.new`",
       "status": "=",
@@ -2850,7 +2767,7 @@
       ]
     },
     {
-      "section": "easybin.md 21.4",
+      "section": "1.3.8",
       "original": "File > `&Open S-Record...`",
       "id": "`bin.file.openSrec`",
       "status": "=",
@@ -2868,7 +2785,7 @@
       ]
     },
     {
-      "section": "easybin.md 21.4",
+      "section": "1.3.8",
       "original": "File > `Open &Binary...`",
       "id": "`bin.file.openBinary`",
       "status": "=",
@@ -2886,7 +2803,7 @@
       ]
     },
     {
-      "section": "easybin.md 21.4",
+      "section": "1.3.8",
       "original": "File > `Save S-&Record...`",
       "id": "`bin.file.saveSrec`",
       "status": "=",
@@ -2904,7 +2821,7 @@
       ]
     },
     {
-      "section": "easybin.md 21.4",
+      "section": "1.3.8",
       "original": "File > `&Save Binary...`",
       "id": "`bin.file.saveBinary`",
       "status": "=",
@@ -2922,7 +2839,7 @@
       ]
     },
     {
-      "section": "easybin.md 21.4",
+      "section": "1.3.8",
       "original": "File > `E&xit`",
       "id": "`bin.file.exit`",
       "status": "~ (quits the application, 19 item 4)",
@@ -2935,7 +2852,7 @@
       ]
     },
     {
-      "section": "easybin.md 21.4",
+      "section": "1.3.8",
       "original": "Help > `&EASyBIN Help`",
       "id": "`bin.help.help`",
       "status": "~ (Help panel)",
@@ -2948,7 +2865,7 @@
       ]
     },
     {
-      "section": "easybin.md 21.4",
+      "section": "1.3.8",
       "original": "Help > `&About EASyBIN`",
       "id": "`bin.help.about`",
       "status": "~ (port notice added)",
@@ -2961,7 +2878,7 @@
       ]
     },
     {
-      "section": "easybin.md 21.4",
+      "section": "1.3.8",
       "original": "Simulator View > `&EASyBIN`",
       "id": "`sim.view.easybin`",
       "status": "~ (note 26)",
@@ -2974,7 +2891,7 @@
       ]
     },
     {
-      "section": "easybin.md 21.4",
+      "section": "1.3.8",
       "original": "Memory area: 16 MB, rows of 16 bytes, hex and ASCII editing, cursor, colours",
       "status": "=",
       "verifiedBy": [
@@ -2990,7 +2907,7 @@
       ]
     },
     {
-      "section": "easybin.md 21.4",
+      "section": "1.3.8",
       "original": "Address field, Row and Page buttons, wheel, Page Up/Down, arrows",
       "status": "=",
       "verifiedBy": [
@@ -3003,12 +2920,16 @@
           "kind": "web-e2e",
           "file": "tests/e2e/sim/easybin.spec.ts",
           "test": "the Address field rounds a typed address down to a multiple of 16 (easybin.md 6.1)"
+        },
+        {
+          "kind": "unit",
+          "file": "app/src/features/easybin/easybin.test.ts",
+          "test": "a last digit other than 0 is undone at once, and the field is drawn again to show it"
         }
-      ],
-      "note": "Finding for B1: the Address field keeps a typed last digit other than 0; that test is an expected failure until B1 repairs it."
+      ]
     },
     {
-      "section": "easybin.md 21.4",
+      "section": "1.3.8",
       "original": "`S-Record File` group: Start Address, Last Address, Length",
       "status": "=",
       "verifiedBy": [
@@ -3020,7 +2941,7 @@
       ]
     },
     {
-      "section": "easybin.md 21.4",
+      "section": "1.3.8",
       "original": "`Binary Input/Output Split` (1, 2, 4 files) and `File Split` digits",
       "status": "=",
       "verifiedBy": [
@@ -3032,7 +2953,7 @@
       ]
     },
     {
-      "section": "easybin.md 21.4",
+      "section": "1.3.8",
       "original": "`Binary File(s)` group: First Address, Length",
       "status": "=",
       "verifiedBy": [
@@ -3049,7 +2970,7 @@
       ]
     },
     {
-      "section": "easybin.md 21.4",
+      "section": "1.3.8",
       "original": "From / To, Size + Copy, fill byte + Fill",
       "status": "=",
       "verifiedBy": [
@@ -3061,7 +2982,7 @@
       ]
     },
     {
-      "section": "easybin.md 21.4",
+      "section": "1.3.8",
       "original": "Window title = opened file",
       "status": "=",
       "verifiedBy": [
@@ -3078,7 +2999,7 @@
       ]
     },
     {
-      "section": "easybin.md 21.4",
+      "section": "1.3.8",
       "original": "F1 in the About box (credits page)",
       "status": "~ (Help panel)",
       "verifiedBy": [
@@ -3090,7 +3011,7 @@
       ]
     },
     {
-      "section": "easybin.md 21.4",
+      "section": "1.3.8",
       "original": "Files dropped on the window",
       "status": "=",
       "verifiedBy": [
@@ -3102,7 +3023,7 @@
       ]
     },
     {
-      "section": "easybin.md 21.4",
+      "section": "1.3.8",
       "original": "Tab order",
       "status": "~ (Q18)",
       "verifiedBy": [
@@ -3114,7 +3035,7 @@
       ]
     },
     {
-      "section": "easybin.md 21.4",
+      "section": "1.3.8",
       "original": "Command line `EASyBIN <file>`",
       "status": "x (19 item 7)",
       "verifiedBy": [
@@ -3125,6 +3046,221 @@
         }
       ],
       "note": "Dropped (x): EASyBIN has no command line. The start-up arguments go to the simulator (an .S68) or the editor, never to EASyBIN; the test shows the .S68 route."
+    },
+    {
+      "section": "1.5",
+      "original": "(mode switch) Editor / Simulator / EASyBIN",
+      "id": "`app.mode.set` (arg: mode), `app.mode.next`",
+      "status": "+",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/app/mode.spec.ts",
+          "test": "three segments, Editor first and checked; each mode brings its own menu bar and toolbar"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/app/mode.spec.ts",
+          "test": "F4 cycles Editor > Simulator > EASyBIN > Editor from every mode (K5)"
+        }
+      ]
+    },
+    {
+      "section": "1.5",
+      "original": "`Theme` > `System`, `Light`, `Dark`",
+      "id": "`app.theme.set` (arg)",
+      "status": "+",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/app/theme.spec.ts",
+          "test": "the Theme menu offers System, Light and Dark; System is the default"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/app/theme.spec.ts",
+          "test": "Light and Dark apply the token sets of 2.8 at once, and the choice survives a reload"
+        }
+      ]
+    },
+    {
+      "section": "1.5",
+      "original": "`Import/Export Settings...`",
+      "id": "`ed.options.transfer`, `sim.options.transfer`",
+      "status": "+",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/options.spec.ts",
+          "test": "Import/Export Settings... exports settings.dat with 57 CR LF lines"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/options.spec.ts",
+          "test": "sim68K.dat: export writes the 37 lines of the original; import applies them (note 21)"
+        }
+      ]
+    },
+    {
+      "section": "1.5",
+      "original": "`Execution Speed...`",
+      "id": "`sim.options.speed`",
+      "status": "+",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/options.spec.ts",
+          "test": "Execution Speed (added): the status bar names the setting"
+        }
+      ],
+      "note": "The test cancels a choice, then chooses Maximum with OK and reads the status bar; the rate a program runs at is P1's (tests/perf)."
+    },
+    {
+      "section": "1.5",
+      "original": "`Examples...`",
+      "id": "`app.help.examples`",
+      "status": "+",
+      "verifiedBy": [
+        {
+          "kind": "unit",
+          "file": "app/src/features/help/examples.test.ts",
+          "test": "copies byte for byte into the browser store, once, and reveals the folder in the Files panel"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/menus.spec.ts",
+          "test": "${title}: the original's items in order, with access keys and this key map's shortcuts"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "${title}: the original's items in order, with this key map's shortcuts, then the port's additions"
+        }
+      ],
+      "note": "The end-to-end tests show the item at the end of the Help menus of Editor and Simulator mode, enabled; that it copies the examples and shows their folder is the unit test."
+    },
+    {
+      "section": "1.5",
+      "original": "`Differences from EASy68K`",
+      "id": "`app.help.differences`",
+      "status": "+",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "Help > Differences from EASy68K (added) opens the port page of differences in the Help panel"
+        },
+        {
+          "kind": "unit",
+          "file": "app/src/features/help/help.test.ts",
+          "test": "Differences from EASy68K opens the generated page"
+        }
+      ]
+    },
+    {
+      "section": "1.5",
+      "original": "(next panel)",
+      "id": "`sim.panel.next`",
+      "status": "+",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "F2 moves through the visible panels in the order of the original Ctrl+Tab; Ctrl+Alt+O leaves the Output panel (note 30)"
+        }
+      ]
+    },
+    {
+      "section": "1.5",
+      "original": "(release keyboard from the Output panel: focus to the next panel)",
+      "id": "`sim.output.releaseKeyboard`",
+      "status": "+",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "F2 moves through the visible panels in the order of the original Ctrl+Tab; Ctrl+Alt+O leaves the Output panel (note 30)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/input.spec.ts",
+          "test": "task 24: the simulator keys go to the program; Ctrl+Alt+O still leaves the Output panel (note 44)"
+        }
+      ]
+    },
+    {
+      "section": "1.5",
+      "original": "`New Window`",
+      "id": "`app.window.new`",
+      "status": "+",
+      "verifiedBy": [
+        {
+          "kind": "desktop-e2e",
+          "file": "tests/desktop/dev/windows.spec.ts",
+          "test": "New Window gives a second window with its own simulator"
+        },
+        {
+          "kind": "desktop-e2e",
+          "file": "tests/desktop/dev/unit.spec.ts",
+          "test": "macOS with no window left: the bar gets a menu whose New Window opens one"
+        }
+      ],
+      "note": "In a browser the command opens the same address in another tab; no browser test runs it (the suites of tests/e2e/app/two-windows.spec.ts open their second page themselves)."
+    },
+    {
+      "section": "1.5",
+      "original": "`Files` panel show/hide",
+      "id": "`app.files.toggle`",
+      "status": "+",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/app/layout.spec.ts",
+          "test": "the Files panel stays hidden after a reload once it is hidden"
+        }
+      ]
+    },
+    {
+      "section": "1.5",
+      "original": "`Log` panel show (erratum W3 40)",
+      "id": "`sim.view.log`",
+      "status": "+",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "View shows and focuses each tool panel; Output Window focuses the Output panel"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "${title}: the original's items in order, with this key map's shortcuts, then the port's additions"
+        }
+      ]
+    },
+    {
+      "section": "1.5",
+      "original": "`Serial Ports...` (erratum DV4 2, W3 43; enabled in the desktop app only)",
+      "id": "`sim.options.serialPorts`",
+      "status": "+",
+      "verifiedBy": [
+        {
+          "kind": "desktop-e2e",
+          "file": "tests/desktop/dev/dv4-serial.spec.ts",
+          "test": "the Serial Ports dialog edits AppSettings.serialPortMap"
+        },
+        {
+          "kind": "desktop-e2e",
+          "file": "tests/desktop/dev/menu.spec.ts",
+          "test": "the native menu equals the command tables in ${mode} mode"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "${title}: the original's items in order, with this key map's shortcuts, then the port's additions"
+        }
+      ],
+      "note": "The desktop dialog test opens the dialog through the feature (openSerialPortsDialog), not through the menu, and edits the map; the native menu test shows the item in the Options menu; the browser test shows it last in the Options menu, below a separator after Execution Speed..., greyed."
     }
   ]
 }

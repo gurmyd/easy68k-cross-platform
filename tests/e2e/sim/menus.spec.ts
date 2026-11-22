@@ -7,7 +7,7 @@
 // not read from the application's tables, so that a change of a table is caught.
 
 import { expect, test, type App, type KeyMap } from '../fixtures';
-import { execute, panel, pressCommand, program, switchMode, view, workspace, step } from './sim';
+import { execute, panel, program, switchMode, view, workspace, step } from './sim';
 
 /** A menu row: caption with `&` before the access key, and the shortcut on each key map. */
 type Row = [caption: string, windows?: string, mac?: string];
@@ -50,9 +50,16 @@ const MENUS: Record<string, Row[]> = {
 /** Items the port added after the original's items of a menu (1.5), in order. */
 const ADDED: Record<string, string[]> = {
   View: ['Log'],
-  Options: ['Import/Export Settings...', 'Execution Speed...'],
+  // Serial Ports... is the desktop app's (erratum W3 43): shown greyed in a browser.
+  Options: ['Import/Export Settings...', 'Execution Speed...', 'Serial Ports...'],
   Help: ['Examples...', 'Differences from EASy68K'],
 };
+
+/** Added items that a browser shows greyed: they act in the desktop app only (1.5). */
+const DESKTOP_ONLY = new Set(['Serial Ports...']);
+
+/** Added items that stand below a separator of their own (1.5), and the item they follow. */
+const AFTER_SEPARATOR: Record<string, string> = { 'Serial Ports...': 'Execution Speed...' };
 
 const SIZES = [
   '640x480',
@@ -137,7 +144,32 @@ test.describe('menu bar', () => {
         .locator(':scope > [role^=menuitem]')
         .evaluateAll((items) => items.map((item) => item.querySelector('.e68-mnemonic')?.textContent ?? null));
       expect(keys.slice(0, rows.length)).toEqual(rows.map(([caption]) => shownKey(caption, app.keys)));
-      expect(entries.slice(rows.length).map((e) => e.caption)).toEqual(ADDED[title] ?? []);
+      const added = entries.slice(rows.length);
+      expect(added.map((e) => e.caption)).toEqual(ADDED[title] ?? []);
+      // Each added item is enabled in a browser, except the desktop app's, which is greyed.
+      expect(added.map((e) => [e.caption, e.disabled])).toEqual(
+        (ADDED[title] ?? []).map((caption) => [caption, DESKTOP_ONLY.has(caption)]),
+      );
+      // The order of items and separators: an item of AFTER_SEPARATOR follows its item and a separator.
+      const sequence = await menu
+        .locator(':scope > [role^=menuitem], :scope > [role=separator]')
+        .evaluateAll((items) =>
+          items.map((item) =>
+            item.getAttribute('role') === 'separator'
+              ? '-'
+              : (item.querySelector('.e68-menu__caption')?.textContent ?? ''),
+          ),
+        );
+      for (const caption of ADDED[title] ?? []) {
+        const before = AFTER_SEPARATOR[caption];
+        if (!before) continue;
+        const at = sequence.indexOf(caption);
+        expect(sequence.slice(at - 2, at + 1), `${caption} below a separator after ${before}`).toEqual([
+          before,
+          '-',
+          caption,
+        ]);
+      }
       await app.page.keyboard.press('Escape');
     });
   }
@@ -234,7 +266,7 @@ test('F2 moves through the visible panels in the order of the original Ctrl+Tab;
   await expect.poll(() => focusedPanel(app)).toBe('output');
   seen.push(await focusedPanel(app));
   // F2 belongs to the program in the Output panel (K5): the release chord moves on.
-  await pressCommand(app, 'sim.output.releaseKeyboard');
+  await app.press('sim.output.releaseKeyboard');
   await expect.poll(() => focusedPanel(app)).toBe('memory');
   seen.push(await focusedPanel(app));
   for (const next of ['stack', 'hardware', 'breakpoints', 'listing']) {
@@ -288,6 +320,14 @@ test('Help > Sim68K Help opens the simulator page; About Sim68K shows the origin
   expect(text, 'the port names itself unofficial (note 11)').toMatch(/unofficial/i);
   await app.button(about, 'OK').click();
   await expect(about).toBeHidden();
+});
+
+test('Help > Differences from EASy68K (added) opens the port page of differences in the Help panel', async ({
+  app,
+}) => {
+  await simulatorMode(app);
+  await app.chooseMenu('Help', 'Differences from EASy68K');
+  await expect.poll(() => helpPage(app)).toMatch(/Port\/differences\.htm/i);
 });
 
 test('Enable Exceptions and Enable Bit Field Instructions are check items shown in the status bar (note 34)', async ({

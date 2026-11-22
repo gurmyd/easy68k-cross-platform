@@ -9,7 +9,9 @@
 //     (added, 1.3.5).
 //   - One selected row, moved by clicks and arrow keys and by the highlight rule of 3.11.4; a
 //     double-click on an instruction row puts its address into the PC field.
-//   - Horizontal scrolling is ordinary scrolling; the heading scrolls with the text (1.4 note 33).
+//   - Horizontal scrolling is ordinary scrolling (1.4 note 33). The heading scrolls with the text up
+//     to 39 character cells and then keeps its place, as the original's does (`headingScroll`,
+//     sim-ui §6.3); its strip has room to scroll that far whatever the panel's width.
 //   - Added for the keyboard (docs/differences/U1.md): Enter does what a double-click does, Space
 //     toggles the breakpoint of the selected row, Shift+F10 or the Menu key opens the gutter menu.
 //   - For screen readers a row with a breakpoint or the PC is described as such (`ROW_NOTES`).
@@ -28,7 +30,7 @@ import { useAppContext, useAppState } from '../../state/context';
 import { useStoreValue } from '../../state/store';
 import { ContextMenu, VirtualList, useContextMenu, type MenuEntry, type VirtualListHandle } from '../../ui/components';
 import { simMainOf } from './model';
-import { expandTabs, fullyVisibleRows, listingMetrics, thirdRowScroll } from './selection';
+import { expandTabs, fullyVisibleRows, headingScroll, listingMetrics, thirdRowScroll } from './selection';
 
 /** The heading label above the pane (SIM68Ku.cpp:33). */
 export const LISTING_HEADING = ' Address  --------Code---------   Line -----------Source----------->>';
@@ -69,6 +71,7 @@ export function ListingPanel() {
   const pcRow = useAppState(() => ctx.sim.controller.snapshot.highlight);
   const list = useRef<VirtualListHandle>(null);
   const heading = useRef<HTMLDivElement>(null);
+  const headingChars = useRef<HTMLSpanElement>(null);
   const applied = useRef(0);
   const context = useContextMenu();
   const { rows, breakpoints } = view;
@@ -101,10 +104,13 @@ export function ListingPanel() {
     if (next !== null) list.current?.scrollToIndex(next, 'start');
   }, [view.scroll, rows.length, rowHeight]);
 
-  // The heading follows the text sideways.
+  // The heading follows the text sideways (as far as the original's does).
   const onScroll = () => {
     const element = list.current?.element();
-    if (element && heading.current) heading.current.scrollLeft = element.scrollLeft;
+    const chars = headingChars.current;
+    if (!element || !heading.current || !chars) return;
+    const cellWidth = chars.getBoundingClientRect().width / LISTING_HEADING.length;
+    heading.current.scrollLeft = headingScroll(element.scrollLeft, cellWidth);
   };
   useEffect(onScroll, [rows]);
 
@@ -205,7 +211,9 @@ export function ListingPanel() {
   return (
     <div className="e68-listing" style={style} onContextMenu={onContextMenu}>
       <div className="e68-listing__heading" ref={heading} aria-hidden="true">
-        <span className="e68-listing__heading-text">{LISTING_HEADING}</span>
+        <span className="e68-listing__heading-text">
+          <span ref={headingChars}>{LISTING_HEADING}</span>
+        </span>
       </div>
       <VirtualList
         ref={list}

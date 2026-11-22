@@ -48,13 +48,15 @@ export interface Repo {
 
 /**
  * The rows of the Markdown tables under the headings that `heading` matches (its group 1 is the
- * section name), up to the next line that `stop` matches. The header row (first cell `Original`)
- * and the separator rows are left out; cells are trimmed.
+ * section name), up to the next line that `stop` matches. The header row of a table (the row just
+ * above its separator row) and the separator rows are left out; cells are trimmed.
  */
 export function tableRows(text: string, heading: RegExp, stop: RegExp, name?: string): DocumentRow[] {
   const rows: DocumentRow[] = [];
+  const lines = text.split(/\r?\n/);
+  const separator = (line: string | undefined) => line !== undefined && /^\|[-:| ]+\|\s*$/.test(line);
   let section: string | null = null;
-  for (const line of text.split(/\r?\n/)) {
+  for (const [index, line] of lines.entries()) {
     const match = heading.exec(line);
     if (match) {
       section = name ?? match[1] ?? null;
@@ -64,21 +66,29 @@ export function tableRows(text: string, heading: RegExp, stop: RegExp, name?: st
       section = null;
       continue;
     }
-    if (section === null || !line.startsWith('|') || /^\|[-:| ]+\|\s*$/.test(line)) continue;
-    const first = line.slice(1).split('|')[0]?.trim() ?? '';
-    if (first === 'Original') continue;
-    rows.push({ section, original: first });
+    if (section === null || !line.startsWith('|') || separator(line) || separator(lines[index + 1])) continue;
+    rows.push({ section, original: line.slice(1).split('|')[0]?.trim() ?? '' });
   }
   return rows;
 }
 
-/** Every row of ARCHITECTURE.md 1.3.1 to 1.3.8 and of the 1.3.8 extension in easybin.md 21.4. */
-export function documentRows(architecture: string, easybin: string): DocumentRow[] {
+/**
+ * Every row of ARCHITECTURE.md 1.3.1 to 1.3.8, and of the table of added commands in 1.5 (section
+ * `1.5`; errata X2 entry 8). 1.3.8 holds the rows of easybin.md 21.4, copied there (errata X2
+ * entry 3).
+ */
+export function documentRows(architecture: string): DocumentRow[] {
   return [
     ...tableRows(architecture, /^#### (1\.3\.\d) /, /^### 1\.4 /),
-    ...tableRows(easybin, /^### (21\.4) /, /^---\s*$/, 'easybin.md 21.4'),
+    ...tableRows(architecture, /^### (1\.5) /, /^---\s*$|^##? /),
   ];
 }
+
+/**
+ * The sections whose rows are the simulator's and EASyBIN's: their kind is `web-e2e` and their first
+ * entry names a test (9.6 X2: "a test for every simulator and EASyBIN row of 1.3").
+ */
+export const WEB_E2E_SECTIONS = /^1\.3\.[4-8]$/;
 
 /** The text of ARCHITECTURE.md 6.8 (the manual list), which `manual` entries quote. */
 export function manualSection(architecture: string): string {
@@ -150,6 +160,12 @@ export function checkMatrix(matrix: Matrix, rows: DocumentRow[], repo: Repo, man
       problems.push({
         row: where,
         problem: `the first entry gives the row's kind and must be one of ${PRIMARY_KINDS.join(', ')}, not ${first.kind}`,
+      });
+    }
+    if (WEB_E2E_SECTIONS.test(row.section) && (first.kind !== 'web-e2e' || !first.test)) {
+      problems.push({
+        row: where,
+        problem: `a simulator or EASyBIN row (${row.section}) is verified first by a web-e2e test, not by ${first.kind}${first.test ? '' : ' without a test title'}`,
       });
     }
     for (const entry of row.verifiedBy) problems.push(...checkEntry(entry, where, repo, manual, titlesOf));

@@ -14,13 +14,13 @@ import {
   expectReg,
   expectState,
   hold,
+  listing,
   outputText,
   panel,
   program,
   programKeys,
   reg,
   tool,
-  pressCommand,
 } from './sim';
 
 /** Task 2 into BUF, the length into D7, then the string again with task 13. */
@@ -61,21 +61,25 @@ async function run(app: App): Promise<void> {
  * The paste chord in the Output panel (Shift+Insert; Cmd+V on macOS) with `text` on the clipboard,
  * as a browser delivers it: the chord's key-down, which the panel leaves to the browser, then the
  * browser's `paste` event with the text, then the key-up. Dispatched in the page, because the
- * clipboard of a headless browser cannot be filled the same way in Chromium and WebKit.
+ * clipboard of a headless browser cannot be filled the same way in Chromium and WebKit. Returns
+ * whether the page cancelled the key-down.
  */
-async function pasteChord(app: App, text: string): Promise<void> {
+async function pasteChord(app: App, text: string): Promise<boolean> {
   const mac = app.keys === 'mac';
-  await programKeys(app).evaluate(
+  return programKeys(app).evaluate(
     (element, [value, onMac]) => {
       const chord = onMac
         ? { key: 'v', code: 'KeyV', keyCode: 86, metaKey: true, shiftKey: false }
         : { key: 'Insert', code: 'Insert', keyCode: 45, metaKey: false, shiftKey: true };
       const init = { ...chord, bubbles: true, cancelable: true };
-      element.dispatchEvent(new KeyboardEvent('keydown', init));
+      const down = new KeyboardEvent('keydown', init);
+      element.dispatchEvent(down);
       const data = new DataTransfer();
       data.setData('text/plain', value);
       element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
       element.dispatchEvent(new KeyboardEvent('keyup', init));
+      // Whether the page cancelled the chord's key-down (then a real browser fires no paste at all).
+      return down.defaultPrevented;
     },
     [text, mac] as const,
   );
@@ -214,24 +218,39 @@ test('F1, F2, F4 and Shift+F2 reach the program in the Output panel and do nothi
   app,
   page,
 }) => {
-  for (const [vk, key] of [
+  // One program waits for each key in turn (task 19) and says which it saw (task 13).
+  const keys = [
     [0x70, 'F1'],
     [0x71, 'F2'],
     [0x73, 'F4'],
     [0x71, 'Shift+F2'],
-  ] as const) {
-    await execute(app, waitForKey(vk));
-    await run(app);
-    await expectState(app, 'Running');
+  ] as const;
+  const body = keys.flatMap(([vk], i) => [
+    `KEY${i} MOVE.L  #$${vk.toString(16).toUpperCase()},D1`,
+    '    MOVE.B  #19,D0',
+    '    TRAP    #15',
+    '    TST.B   D1',
+    `    BEQ     KEY${i}`,
+    `    LEA     SEEN${i},A1`,
+    '    MOVE.B  #13,D0',
+    '    TRAP    #15',
+  ]);
+  const texts = keys.map(([, key], i) => `SEEN${i} DC.B    'seen ${key}',0`);
+  await execute(app, program(...body, '    SIMHALT', ...texts));
+  await run(app);
+  await expectState(app, 'Running');
+  for (const [, key] of keys) {
     const [modifier, name] = key.includes('+') ? key.split('+') : [null, key];
     if (modifier) await page.keyboard.down(modifier);
-    await hold(page, name!, () => expectState(app, 'Halted'));
+    await hold(page, name!, () => expectOutputLine(app, `seen ${key}`));
     if (modifier) await page.keyboard.up(modifier);
     expect(await app.mode(), `${key}: no mode switch`).toBe('simulator');
     expect(await focusedPanel(app), `${key}: the Output panel keeps the keyboard`).toBe('output');
-    expect(await reg(app, 'PC'), `${key}: no Rewind`).not.toBe('00001000');
     await expect(app.page.locator('[data-e68-panel="help"] iframe'), `${key}: no help`).toHaveCount(0);
   }
+  // Shift+F2 did not rewind: the program went on to its end.
+  await expectState(app, 'Halted');
+  expect(await reg(app, 'PC')).not.toBe('00001000');
 });
 
 test('task 24: the simulator keys go to the program; Ctrl+Alt+O still leaves the Output panel (note 44)', async ({
@@ -244,14 +263,32 @@ test('task 24: the simulator keys go to the program; Ctrl+Alt+O still leaves the
   await expectState(app, 'Running');
   await page.keyboard.press('F6');
   await expectState(app, 'Stopped');
-  // With task 24, F6 is a key of the program.
-  await execute(app, waitForKey(0x75, '    MOVE.L  #1,D1', '    MOVE.B  #24,D0', '    TRAP    #15'));
+  // With task 24, F6 is a key of the program; after it the program reads one character (task 5).
+  const keys = waitForKey(0x75, '    MOVE.L  #1,D1', '    MOVE.B  #24,D0', '    TRAP    #15');
+  keys.splice(keys.indexOf('    SIMHALT'), 0, '    MOVE.B  #5,D0', '    TRAP    #15');
+  await execute(app, keys);
   await run(app);
   await expectState(app, 'Running');
-  await hold(page, 'F6', () => expectState(app, 'Halted'));
+  // Alt+Enter in the Output panel and F1 in the main window are ignored after task 24 (sim-ui §3.5):
+  // no full screen, no help page; two frames later the program still runs.
+  await page.keyboard.press('Alt+Enter');
+  await listing(app).focus();
+  await page.keyboard.press('F1');
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+  expect(await page.evaluate(() => document.fullscreenElement === null), 'Alt+Enter: no full screen').toBe(true);
+  await expect(app.page.locator('[data-e68-panel="help"] iframe'), 'F1: no help').toHaveCount(0);
+  await expectState(app, 'Running');
+  // The paste chord is an ordinary key now: its key-down is cancelled, so a browser pastes nothing,
+  // and a paste event that came anyway types nothing (the task 5 below still waits).
+  await programKeys(app).focus();
+  expect(await pasteChord(app, 'Z'), 'the paste chord is cancelled after task 24').toBe(true);
+  await hold(page, 'F6', () => expectState(app, 'Waiting for input'));
+  await page.keyboard.press('KeyQ');
+  await expectState(app, 'Halted');
+  expect((await reg(app, 'D1')).slice(6)).toBe('71');
   // The keyboard-release chord works in every state.
   await programKeys(app).focus();
-  await pressCommand(app, 'sim.output.releaseKeyboard');
+  await app.press('sim.output.releaseKeyboard');
   await expect.poll(() => focusedPanel(app)).not.toBe('output');
   // The toolbar still works after task 24 (only the keys were taken).
   await tool(app, 'sim.run.rewind');

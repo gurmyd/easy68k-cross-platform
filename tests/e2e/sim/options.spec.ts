@@ -173,12 +173,22 @@ test('remembered across a reload: options, tool panels and the stack register; n
 
 test('Execution Speed (added): the status bar names the setting', async ({ app }) => {
   await simulatorMode(app);
-  await expect(app.page.locator('[data-e68-status="speed"]')).toHaveText('speed: EASy68K-like');
+  const speed = app.page.locator('[data-e68-status="speed"]');
+  await expect(speed).toHaveText('speed: EASy68K-like');
   await app.chooseMenu('Options', 'Execution Speed...');
   const dialog = app.dialog('Execution Speed');
   await expect(dialog).toBeVisible();
+  // Cancel changes nothing; OK applies the choice and the status bar names it (4.5.6).
+  await dialog.getByRole('radio', { name: 'Maximum' }).check();
   await app.button(dialog, 'Cancel').click();
   await expect(dialog).toBeHidden();
+  await expect(speed).toHaveText('speed: EASy68K-like');
+  await app.chooseMenu('Options', 'Execution Speed...');
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('radio', { name: 'Maximum' }).check();
+  await app.button(dialog, 'OK').click();
+  await expect(dialog).toBeHidden();
+  await expect(speed).toHaveText('speed: Maximum');
   await expect(runState(app)).toBeVisible();
 });
 

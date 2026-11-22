@@ -3,7 +3,15 @@
 
 import { describe, expect, it } from 'vitest';
 import { ListingFinder } from './find-model';
-import { cyclesText, expandTabs, fullyVisibleRows, listingMetrics, thirdRowScroll } from './selection';
+import {
+  HEADING_FOLLOW_CELLS,
+  cyclesText,
+  expandTabs,
+  fullyVisibleRows,
+  headingScroll,
+  listingMetrics,
+  thirdRowScroll,
+} from './selection';
 
 describe('thirdRowScroll (sim-ui §6.4)', () => {
   // 1000 rows, 10 on screen.
@@ -44,6 +52,23 @@ describe('fullyVisibleRows and listingMetrics', () => {
     expect(listingMetrics(12)).toEqual({ fontPx: 16, rowHeight: 19 });
     expect(listingMetrics(8).rowHeight).toBe(13);
     expect(listingMetrics(Number.NaN)).toEqual(listingMetrics(10));
+  });
+});
+
+describe('headingScroll (the heading follows the rows sideways, sim-ui §6.3, section 1.4 note 33)', () => {
+  it('follows the rows pixel for pixel up to 39 character cells, then keeps its place', () => {
+    expect(HEADING_FOLLOW_CELLS).toBe(39); // positions 1 to 40 of the original's HEADING_LIMIT = 41
+    expect(headingScroll(0, 8)).toBe(0);
+    expect(headingScroll(200, 8)).toBe(200);
+    expect(headingScroll(312, 8)).toBe(312);
+    expect(headingScroll(313, 8)).toBe(312);
+    expect(headingScroll(5000, 7.8)).toBeCloseTo(304.2);
+  });
+
+  it('never goes below 0, and stays at 0 while the cell width is not known', () => {
+    expect(headingScroll(-5, 8)).toBe(0);
+    expect(headingScroll(100, 0)).toBe(0);
+    expect(headingScroll(100, Number.NaN)).toBe(0);
   });
 });
 

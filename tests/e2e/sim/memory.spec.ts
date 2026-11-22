@@ -227,4 +227,12 @@ test('Stack: the selected pointer on the middle row, aqua and yellow marks, View
   await expect.poll(middleText).toMatch(/^00FF0004: /);
   await stack.getByRole('button', { name: 'Lower addresses' }).click();
   await expect.poll(middleText).toMatch(/^00FF0000: /);
+  // The mouse wheel moves the view by rows of 4 bytes too, and back (sim-ui §11).
+  await stack.locator('.e68-stack__rows').hover();
+  await app.page.mouse.wheel(0, 100);
+  await expect.poll(middleText).not.toMatch(/^00FF0000: /);
+  const moved = await middleText();
+  expect(moved).toMatch(/^00FF[0-9A-F]{3}[048C]: /);
+  await app.page.mouse.wheel(0, -100);
+  await expect.poll(middleText).toMatch(/^00FF0000: /);
 });

@@ -5,7 +5,19 @@
 // 41, 42; sim-ui §13; trap15-a §3.11). Owner: X2.
 
 import { expect, test, type App } from '../fixtures';
-import { answer, execute, expectState, panel, program, switchMode, tool, view, step, pressInListing } from './sim';
+import {
+  answer,
+  execute,
+  expectState,
+  panel,
+  program,
+  switchMode,
+  tool,
+  typeInto,
+  view,
+  step,
+  pressInListing,
+} from './sim';
 
 const NAME = 'logme';
 
@@ -81,8 +93,15 @@ test('Log File Options: Append adds to an existing log, Replace starts it again,
   await chooseLogTypes(app, 'Instruction only', 'Text Only');
   await pressInListing(app, 'sim.run.logStart');
   await expect(logging(app)).toBeVisible();
+  await step(app);
   await pressInListing(app, 'sim.run.logStop');
   await expect(logging(app)).toHaveCount(0);
+  await expect(app.toolbarButton('sim.run.logStop')).toBeDisabled();
+  // Log Stop closed the log: the step after it is not in the file.
+  await step(app);
+  const stopped = await fileText(app, `${NAME}_RunLog.txt`);
+  expect(stopped).toContain('MOVE.L  #$11,D1');
+  expect(stopped).not.toContain('MOVE.L  #$22,D2');
 
   await pressInListing(app, 'sim.run.logStart');
   const options = app.dialog('Log File Options');
@@ -137,4 +156,71 @@ test('the Log Output dialog: Cancel keeps the earlier choice; the memory range s
   await expect(dialog.getByRole('radio', { name: 'Disabled' }).first()).toBeChecked();
   await app.button(dialog, 'Cancel').click();
   await expect(panel(app, 'listing')).toBeVisible();
+});
+
+test('log type 3: memory and register blocks before each traced instruction; Rewind notes only after the dialog saw the type (sim-ui §13.5)', async ({
+  app,
+}) => {
+  await execute(app, PROGRAM, `${NAME}.X68`);
+  // The dialog is shown while both types are still Disabled: the notes' snapshot is 0 (the quirk).
+  await app.chooseMenu('Options', 'Log Output...');
+  const dialog = app.dialog('Log Output');
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('radio', { name: 'Instruction, Registers and Memory', exact: true }).check();
+  await dialog.getByRole('radio', { name: 'Text Only', exact: true }).check();
+  // Two rows of memory from the program's first instruction.
+  await typeInto(dialog.getByLabel('From:'), '00001000');
+  await typeInto(dialog.getByLabel('Bytes'), '20');
+  await app.button(dialog, 'OK').click();
+  await expect(dialog).toBeHidden();
+  await pressInListing(app, 'sim.run.logStart');
+  await expect(logging(app)).toBeVisible();
+  await step(app);
+  await pressInListing(app, 'sim.run.rewind');
+  await expect(app.toolbarButton('sim.run.traceInto')).toBeEnabled();
+  await pressInListing(app, 'sim.run.logStop');
+  await expect(logging(app)).toHaveCount(0);
+  const first = await fileText(app, `${NAME}_RunLog.txt`);
+  expect(first).not.toContain('Reset Program Pressed');
+  // Type 3: a blank line and memory rows of 16 bytes, a blank line and the four register lines, then
+  // the instruction line, all before the instruction executes (sim-ui §13.4).
+  expect(first).toMatch(/\r?\n\r?\n00001000: (?:[0-9A-F]{2} ){16}[^\r\n]{16}\r?\n00001010: /);
+  expect(first).toMatch(
+    new RegExp(
+      [
+        '',
+        '',
+        'D0=00000000 D4=00000000 A0=00000000 A4=00000000    T_S__INT___XNZVC',
+        'D1=00000000 D5=00000000 A1=00000000 A5=00000000 SR=0010000000000000',
+        'D2=00000000 D6=00000000 A2=00000000 A6=00000000 US=00FF0000',
+        'D3=00000000 D7=00000000 A3=00000000 A7=01000000 SS=01000000',
+        'PC=00001000  Code=',
+      ].join('\\r?\\n'),
+    ),
+  );
+
+  // Shown again with the types set, the dialog takes the snapshot: now Rewind writes its note in both
+  // logs.
+  await app.chooseMenu('Options', 'Log Output...');
+  await expect(dialog).toBeVisible();
+  await app.button(dialog, 'Cancel').click();
+  await expect(dialog).toBeHidden();
+  await pressInListing(app, 'sim.run.logStart');
+  const options = app.dialog('Log File Options');
+  await expect(options).toBeVisible();
+  await app.button(options, 'Append').click();
+  await expect(options).toContainText('Output Log File exists!');
+  await app.button(options, 'Append').click();
+  await expect(options).toBeHidden();
+  await expect(logging(app)).toBeVisible();
+  await pressInListing(app, 'sim.run.rewind');
+  await expect(app.toolbarButton('sim.run.traceInto')).toBeEnabled();
+  await pressInListing(app, 'sim.run.logStop');
+  await expect(logging(app)).toHaveCount(0);
+  const note = /\r?\n\*{5} Reset Program Pressed \*{5}\r?\n/g;
+  const run = await fileText(app, `${NAME}_RunLog.txt`);
+  expect(run.match(note)).toHaveLength(1);
+  expect(run.indexOf('Reset Program Pressed')).toBeGreaterThan(run.lastIndexOf('EASy68K execution log file: '));
+  const out = await fileText(app, `${NAME}_OutLog.txt`);
+  expect(out.match(note)).toHaveLength(1);
 });

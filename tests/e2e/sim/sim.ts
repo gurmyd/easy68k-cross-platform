@@ -19,7 +19,7 @@
 import { createHash } from 'node:crypto';
 import type { Locator, Page } from '@playwright/test';
 import type { KnownCommandId } from '../../../app/src/commands/ids';
-import { chordOf, expect, type App } from '../fixtures';
+import { expect, type App } from '../fixtures';
 
 /** Register field numbers (contracts `Box`): D0-D7, A0-A7, US, SS, PC, SR. */
 export const BOX = {
@@ -357,16 +357,6 @@ export async function answer(app: App, button: string, title?: string): Promise<
   });
   await expect(box).toBeHidden();
   return text;
-}
-
-/**
- * Presses the first chord of a command on the page's key map, like `App.press`, also for the chords
- * the macOS key map writes with `Option` (`Ctrl+Option+O`, `Option+Return`): Option is the Alt key,
- * and the letter is pressed by its position (rule K6).
- */
-export async function pressCommand(app: App, id: KnownCommandId): Promise<void> {
-  const chord = chordOf(id, app.keys).replace(/\bOption\b/g, 'Alt');
-  await app.pressChord(chord);
 }
 
 /** Presses a key with a hold, so that a polling program sees it (6.6, "hold keys and buttons"). */

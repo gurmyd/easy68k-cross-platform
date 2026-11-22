@@ -13,6 +13,7 @@ import {
   useId,
   useLayoutEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
   useSyncExternalStore,
@@ -28,6 +29,7 @@ import {
   SPLIT_ITEMS,
   hexText,
   type EasybinFields,
+  type EasybinModel,
   type EditableField,
   type Split,
   type ViewRow,
@@ -306,11 +308,25 @@ const Controls = memo(function Controls({ fields, split }: { fields: EasybinFiel
   );
 });
 
+/**
+ * Hands the text typed into the Address field to the model, which rounds it down to a multiple of 16
+ * at once (`Address1Change`, docs/porting/easybin.md 6.1), and says whether the field must be drawn
+ * again: when the rounded text is what the field showed before the key (`003000`, then `5` typed
+ * into the last place), the field's value does not change, so nothing else would replace the
+ * `003005` the field already shows.
+ */
+export function typeAddress(model: EasybinModel, typed: string): { shown: string; redraw: boolean } {
+  model.setField('address', typed);
+  const shown = model.getState().fields.address;
+  return { shown, redraw: shown !== typed };
+}
+
 /** The Address field (6.1, 6.2). */
 const AddressLine = memo(function AddressLine({ address }: { address: string }) {
   const ctx = useAppContext();
   const session = easybinOf(ctx);
   const { model } = session;
+  const [, redraw] = useReducer((count: number) => count + 1, 0);
 
   // F1 is not handled here: the dispatcher binds it to `bin.help.help` in EASyBIN mode (tables/keys.ts).
   const onAddressKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -343,7 +359,9 @@ const AddressLine = memo(function AddressLine({ address }: { address: string }) 
         width={Math.max(FIELD_WIDTHS.address, address.length)}
         prefix={CAPTIONS.zeroByte}
         value={address}
-        onChange={(text) => model.setField('address', text)}
+        onChange={(text) => {
+          if (typeAddress(model, text).redraw) redraw();
+        }}
         onReject={() => beep(ctx)}
         onKeyDown={onAddressKeyDown}
         className="e68-easybin__field"

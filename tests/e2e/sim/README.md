@@ -48,4 +48,5 @@ A test that reloads the page saves its program first, or the reload would offer 
 
 A test of a feature that is wrong is kept and marked `test.fail(true, '<owner>: <defect>')` with the
 evidence in a comment. When the owner repairs the feature, the test reports "expected to fail, but
-passed": then delete the line. The current ones are listed in `docs/porting/errata/X2.md`.
+passed": then delete the line. The findings are listed in `docs/porting/errata/X2.md`; both are
+repaired, and no test is an expected failure now.

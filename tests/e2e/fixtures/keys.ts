@@ -36,7 +36,7 @@ export function pretendPlatform(platform: string): void {
   Object.defineProperty(Navigator.prototype, 'userAgentData', { get: () => undefined, configurable: true });
 }
 
-const MODIFIERS: Record<string, string> = { Ctrl: 'Control', Alt: 'Alt', Shift: 'Shift', Cmd: 'Meta' };
+const MODIFIERS: Record<string, string> = { Ctrl: 'Control', Alt: 'Alt', Option: 'Alt', Shift: 'Shift', Cmd: 'Meta' };
 const KEY_NAMES: Record<string, string> = {
   '.': 'Period',
   ',': 'Comma',

@@ -147,14 +147,15 @@ test('New asks Caution: Cancel keeps memory, OK fills it with FF and resets the 
 });
 
 test('the Address field rounds a typed address down to a multiple of 16 (easybin.md 6.1)', async ({ app }) => {
-  // Finding for B1 (features/easybin): the model rounds (the rows start at $3000), but the field keeps
-  // showing what was typed when the rounded text equals the text before the last key, because the
-  // controlled field is not re-rendered (measured: field 003005). Expected to fail until B1 repairs
-  // it; then delete this line.
-  test.fail(true, 'B1: the Address field shows 003005 instead of 003000');
+  // The original undoes a last digit other than 0 at once (Address1Change). Found by this test and
+  // repaired in features/easybin (errata X2.md entry 5): the field kept showing 003005.
   await switchMode(app, 'EASyBIN');
   await typeInto(field(app, 'Address'), '003005');
-  await expect(field(app, 'Address')).toHaveValue('003000', { timeout: 5_000 });
+  await expect(field(app, 'Address')).toHaveValue('003000');
+  await expect.poll(async () => (await memoryRows(app))[0]).toMatch(/^00003000:/);
+  // A digit other than 0 in the last place but one stays: 003010 after 00301F.
+  await typeInto(field(app, 'Address'), '00301F');
+  await expect(field(app, 'Address')).toHaveValue('003010');
 });
 
 test('the memory area: typing hex, the Address field, Row and Page buttons', async ({ app, page }) => {

@@ -1,7 +1,8 @@
 // The unit test on tests/parity/matrix.json (ARCHITECTURE.md 6.6, 9.6 X2): every row of section 1.3
-// (and of its EASyBIN extension in docs/porting/easybin.md 21.4) is in the matrix exactly once, every
-// row has a verification, and every verification names something that exists: a test title in a
-// test file, a conformance folder, a browser check or an item of the manual list (6.8). Owner: X2.
+// and of the table of added commands in 1.5 is in the matrix exactly once, every row has a
+// verification, every simulator and EASyBIN row a web-e2e test first, and every verification names
+// something that exists: a test title in a test file, a conformance folder, a browser check or an
+// item of the manual list (6.8). Owner: X2.
 //
 //   npx vitest run --config tests/parity/vitest.config.ts     (also part of npm run test:conformance)
 
@@ -18,6 +19,7 @@ import {
   tableRows,
   testTitles,
   unreferencedTests,
+  WEB_E2E_SECTIONS,
   type Matrix,
   type Repo,
 } from './matrix';
@@ -34,35 +36,27 @@ const diskRepo: Repo = {
 };
 
 const architecture = readFileSync(join(repoRoot, 'docs', 'ARCHITECTURE.md'), 'utf8');
-const easybin = readFileSync(join(repoRoot, 'docs', 'porting', 'easybin.md'), 'utf8');
 const matrix = JSON.parse(readFileSync(join(here, 'matrix.json'), 'utf8')) as Matrix;
-const rows = documentRows(architecture, easybin);
+const rows = documentRows(architecture);
 const manual = manualSection(architecture);
 
 describe('the real matrix', () => {
-  it('has every row of 1.3 and easybin.md 21.4 once, each verified by tests that exist', () => {
+  it('has every row of 1.3 and 1.5 once, each verified by tests that exist', () => {
     const problems = checkMatrix(matrix, rows, diskRepo, manual);
     // Printed so that a failure in CI can be read from the log alone.
     for (const problem of problems) console.log(`matrix: ${problem.row}: ${problem.problem}`);
     expect(problems).toEqual([]);
   });
 
-  it('covers the sections 1.3.1 to 1.3.8 and the EASyBIN extension', () => {
+  it('covers the sections 1.3.1 to 1.3.8 and the added commands of 1.5', () => {
     const sections = [...new Set(rows.map((row) => row.section))];
-    expect(sections).toEqual([
-      '1.3.1',
-      '1.3.2',
-      '1.3.3',
-      '1.3.4',
-      '1.3.5',
-      '1.3.6',
-      '1.3.7',
-      '1.3.8',
-      'easybin.md 21.4',
-    ]);
+    expect(sections).toEqual(['1.3.1', '1.3.2', '1.3.3', '1.3.4', '1.3.5', '1.3.6', '1.3.7', '1.3.8', '1.5']);
     expect(matrix.rows).toHaveLength(rows.length);
-    // The counts of the documents as written when the matrix was made, so that a lost table shows.
-    expect(rows.length).toBeGreaterThanOrEqual(186);
+    // The counts of the document when the matrix was last brought up to date, so that a lost table
+    // shows: 1.3.8 has the twenty rows of easybin.md 21.4, 1.5 twelve added commands.
+    expect(rows.filter((row) => row.section === '1.3.8')).toHaveLength(20);
+    expect(rows.filter((row) => row.section === '1.5').length).toBeGreaterThanOrEqual(12);
+    expect(rows.length).toBeGreaterThanOrEqual(191);
     console.log(`matrix: ${rows.length} rows; kinds ${JSON.stringify(kindCounts(matrix))}`);
   });
 
@@ -72,11 +66,10 @@ describe('the real matrix', () => {
     expect(unreferencedTests(matrix, files, diskRepo)).toEqual([]);
   });
 
-  it('gives every simulator and EASyBIN row whose kind is web-e2e a test (9.6 X2 acceptance)', () => {
-    const simulator = matrix.rows.filter((row) => /^1\.3\.[4-8]$|^easybin/.test(row.section));
-    const web = simulator.filter((row) => row.verifiedBy[0]?.kind === 'web-e2e');
-    expect(web.length).toBe(simulator.length);
-    for (const row of web) expect(row.verifiedBy[0]?.test, row.original).toBeTruthy();
+  it('has simulator and EASyBIN rows (1.3.4 to 1.3.8), which checkMatrix requires to be web-e2e', () => {
+    // The rule itself is in checkMatrix (proved below on made-up rows); here: it has rows to judge.
+    const simulator = matrix.rows.filter((row) => WEB_E2E_SECTIONS.test(row.section));
+    expect(simulator.length).toBeGreaterThanOrEqual(99);
   });
 });
 
@@ -205,6 +198,45 @@ describe('the rules', () => {
       'row appears more than once',
       'row is not in the document',
       'row of the document is missing from the matrix',
+    ]);
+  });
+
+  it('fails a simulator or EASyBIN row (1.3.4 to 1.3.8) whose first entry is not a web-e2e test', () => {
+    // The verifier's case: a simulator row changed to kind unit (errata X2 entry 8).
+    const simDoc = DOC.replace('#### 1.3.1 Editor - menus', '#### 1.3.4 Simulator - menus');
+    const simRows = tableRows(simDoc, /^#### (1\.3\.\d) /, /^### 1\.4 /);
+    const sim = good();
+    for (const row of sim.rows) row.section = '1.3.4';
+    const checkSim = (m: Matrix) => checkMatrix(m, simRows, repo, manualSection(simDoc)).map((p) => p.problem);
+    expect(checkSim(sim)).toEqual([]);
+    sim.rows[0]!.verifiedBy = [{ kind: 'unit', file: 'app/src/x.test.ts', test: 'a unit test' }];
+    sim.rows[1]!.verifiedBy[0] = { kind: 'web-e2e', file: 'tests/e2e/editor/a.spec.ts' };
+    expect(checkSim(sim)).toEqual([
+      'a simulator or EASyBIN row (1.3.4) is verified first by a web-e2e test, not by unit',
+      'a simulator or EASyBIN row (1.3.4) is verified first by a web-e2e test, not by web-e2e without a test title',
+      'tests/e2e/editor/a.spec.ts: a web-e2e entry names its test',
+    ]);
+    // Rows of other sections may be of any primary kind.
+    expect(
+      check({ rows: [{ ...good().rows[0]!, verifiedBy: [{ kind: 'manual', item: 'Sound' }] }, good().rows[1]!] }),
+    ).toEqual([]);
+  });
+
+  it('reads the table of added commands of 1.5, whose header is not "Original"', () => {
+    const text = [
+      '### 1.5 Additions (none changes program behaviour)',
+      '',
+      '| Caption | id | Where |',
+      '|---|---|---|',
+      '| `New Window` | `app.window.new` | menu |',
+      '| (next panel) | `sim.panel.next` | key only |',
+      '',
+      '---',
+      '| not | a | row |',
+    ].join('\n');
+    expect(documentRows(text)).toEqual([
+      { section: '1.5', original: '`New Window`' },
+      { section: '1.5', original: '(next panel)' },
     ]);
   });
 

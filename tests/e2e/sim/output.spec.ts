@@ -17,7 +17,6 @@ import {
   programKeys,
   surface,
   tool,
-  pressCommand,
   step,
 } from './sim';
 
@@ -199,7 +198,7 @@ test('full screen: the button enters, Alt+Enter in the Output panel leaves; the 
   }
   expect((await surface(app)).width).toBe(before.width);
   await programKeys(app).focus();
-  await pressCommand(app, 'sim.output.fullscreen');
+  await app.press('sim.output.fullscreen');
   await expect(output).not.toHaveAttribute('data-fullscreen', 'true');
 });
 

@@ -2,8 +2,9 @@
 
 Owner: X2. ARCHITECTURE.md 6.6 and 6.9 item 5.
 
-`matrix.json` lists every row of the parity tables of ARCHITECTURE.md 1.3 (1.3.1 to 1.3.8) and of
-the extension of 1.3.8 in `docs/porting/easybin.md` 21.4, each with what verifies it:
+`matrix.json` lists every row of the parity tables of ARCHITECTURE.md 1.3 (1.3.1 to 1.3.8; 1.3.8
+holds the rows of `docs/porting/easybin.md` 21.4) and of the table of added commands in 1.5
+(section `1.5`), each with what verifies it:
 
 ```json
 {
@@ -43,14 +44,15 @@ It fails when
 - an entry names a file that does not exist, a file where its kind does not live, a test title that
   the file does not have, or a manual item that 6.8 does not contain;
 - a test of `tests/e2e/sim` is named by no row (every simulator test is accounted for);
-- a simulator or EASyBIN row (1.3.4 to 1.3.8 and easybin.md 21.4) is not of kind `web-e2e`.
+- a simulator or EASyBIN row (1.3.4 to 1.3.8) is not verified first by a `web-e2e` test with a
+  title (a rule of `checkMatrix` itself, so every user of the function gets it).
 
 Every problem is printed with its row, so a failure can be read from the CI log alone.
 
 ## Keeping it up to date
 
 - A test renamed or moved: change the entries that name it (the unit test says which).
-- A row added to 1.3 or easybin.md 21.4: add it here with its verification.
+- A row added to 1.3 or to the added commands of 1.5: add it here with its verification.
 - A finding (a test that is an expected failure because the feature is wrong) keeps its entry and
   says so in the row's `note`; when the owner repairs it, the test reports "expected to fail, but
   passed": delete its `test.fail` line and the note.
