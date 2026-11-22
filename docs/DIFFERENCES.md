@@ -9,6 +9,14 @@ Some things could not stay the same, because a web page or a Mac is not Windows,
 the original's windows and dialogs were fixed on purpose. This page lists every such difference and
 why it exists. You can also open it from the application: Help > Differences from EASy68K.
 
+The application also has additions that the original does not have: panels that can be moved, a Files
+panel with several selected files, earlier versions of files and a Trash, and a viewer for PDF files
+and pictures (the guide's section "Beyond the original" explains them). They change nothing a program
+can observe, no file the application writes, and no menu, command or key of the original. One detail
+lies at the edge of that: in a program's folder that is beyond the web version's limits, the files
+of a `.git` folder are now the ones left out first (part 5, "A folder with a very large `.git`").
+Where the additions do something else than the faithful port, the parts N0 to N8 of part 2 say so.
+
 ## What could change the results of a program
 
 Most differences below concern only the editor and the simulator's windows. These are the ones a
@@ -58,7 +66,7 @@ program can notice. If your program or your course depends on one of them, read 
 
 Part 1 is the list of changes decided when the port was designed (`docs/ARCHITECTURE.md`, section
 1.4), with the features the port added. Part 2 holds the notes of each part of the port, word for
-word. Part 3 lists the keyboard shortcuts that a browser does not give up. Part 4 lists what has
+word (N0 to N8 are the additions). Part 3 lists the keyboard shortcuts that a browser does not give up. Part 4 lists what has
 not been checked against the original yet. Part 5 lists the limitations the project knows of and
 has not repaired yet.
 
@@ -225,6 +233,12 @@ items keep their positions:
 | `Files` panel show/hide | `app.files.toggle` | button at the left of the editor toolbar | - | - |
 | `Log` panel show (erratum W3 40) | `sim.view.log` | end of the simulator's View menu | - | - |
 | `Serial Ports...` (erratum DV4 2, W3 43; enabled in the desktop app only) | `sim.options.serialPorts` | end of the simulator's Options menu, after `Execution Speed...`, below a separator | - | - |
+| `Move Panel To...` (stage of additions, `ARCHITECTURE-PLUS.md` P3.1.4, P3.6) | `app.layout.move` (arg: `{ panel? }`) | Editor: Window menu, after the document list, below a separator; Simulator: end of the View menu, below a separator | - | - |
+| `Split Editor Right`, `Split Editor Down`, `Close Split` (P3.1.4) | `ed.window.splitRight`, `ed.window.splitDown`, `ed.window.unsplit` | Editor: Window menu, after `Move Panel To...` | - | - |
+| `Lock Layout` (a check item), `Reset Layout` (Simulator: `Reset Layout` with another access key) (P3.1.4) | `app.layout.lock`, `app.layout.reset` | Editor: Window menu, below a separator; Simulator: View menu, after `Move Panel To...` | - | - |
+| `Earlier Versions...` (P3.3.3) | `ed.file.history` (arg: `{ path? }`) | end of the Editor's File menu, below a separator; end of the editor's context menu; the Files panel's context menu | - | - |
+| `Trash...` (P3.3.3) | `app.files.trash` | end of the Editor's File menu, after `Earlier Versions...`; the Files panel's strip | - | - |
+| `Port Additions...` (P3.5) | `app.additions.options` (arg: `{ group?: 'storage' }`) | end of the Options menu in Editor and Simulator mode, below a separator | - | - |
 
 ## 2. Differences recorded by each part of the port
 
@@ -1600,6 +1614,170 @@ LED is as light as the grey.
   (`docs/differences/W2.md`, last row). The keyboard-only walk-throughs of the audit take that rule
   into account and pass on the macOS key map.
 
+### Differences introduced by N0 (foundation of the additions: security policy, PDF frame)
+
+(`docs/differences/N0.md`)
+
+Deliberate differences between the application with the additions of `docs/ARCHITECTURE-PLUS.md`
+and the faithful port or the original, that this package introduces. The rule of that stage (P1.1)
+is that nothing a 68000 program can observe changes; a row marked **program** is the one place
+where the design allows an exception. N10 merges this file into `docs/DIFFERENCES.md`.
+
+| Where | Faithful port | With the additions | Why |
+|---|---|---|---|
+| The page's content security policy (web, and the desktop app's header) | `frame-src 'self'` | `frame-src 'self' blob:`. Nothing else of the policy changes | The viewer shows a PDF in a frame whose address is a `blob:` made by the page itself, from bytes it read, with the type `application/pdf` (P3.4.2). `tools/check-frame-policy.mjs` checks the policy, and that the frames refuse every other address |
+| The PDF frame before the service worker controls the page (a first visit; the desktop app has no worker) | Not present | The frame has no `sandbox` (a sandboxed frame blocks the browser's PDF viewer), and nothing answers a navigation of the frame but the server. If the page's own code, or a link that a person follows inside a PDF, sends the frame to the application's address, it shows a second copy of the application inside the frame, with the same storage as a second tab. Once the worker controls the page, the frame can be sent only to a page of the help | A `blob:` PDF cannot be framed under a sandbox. Measured in Chromium and WebKit; accepted (`docs/porting/errata/N0.md`, entry 11) |
+| The desktop app's window preferences | `plugins` not set | `plugins: true` for the application window, `false` for content windows | Electron's PDF viewer. In Electron 45 the viewer draws in a window with `plugins: false` as well, so the setting does not keep it out of content windows (erratum N0, entry 5) |
+| The browsers' own PDF viewers | Not present | No person has tried the PDF viewer yet, in any browser or in the desktop app. On Windows a test machine saw Chromium, Chrome, Edge and Electron draw a PDF in a `blob:` frame under the production policy; Safari has not been tried at all. Playwright's WebKit on Windows says it has a PDF viewer and draws an empty frame | If a browser draws nothing, the line under the strip says to use Export (risk R4; `docs/MANUAL-TEST-MAC.md`, checks E1 to E4) |
+
+### Differences introduced by N1 (movable panels, the dock)
+
+(`docs/differences/N1.md`)
+
+Deliberate differences between the application with the additions of `docs/ARCHITECTURE-PLUS.md`
+and the faithful port or the original, that this package introduces. None changes what a 68000
+program can observe. N10 merges this file into `docs/DIFFERENCES.md`.
+
+| Where | Faithful port | With the additions | Why |
+|---|---|---|---|
+| Panels | Each panel has a fixed place | A panel can be moved by dragging its tab (when Lock Layout is unchecked), with Move Panel To..., and with the tab menu: into the group of another panel, beside a panel, or at an edge of the window. The arrangement is stored per window and survives a reload | The owner asked for panels that can be rearranged (P3.1) |
+| Lock Layout | Not present | Checked at first: the window looks as before, a group shows a tab strip only where the faithful port did, and tabs cannot be dragged. Unchecked: every group shows a tab strip about 30 pixels high | Today's look stays the default (decision D2) |
+| Reset Layout | Not present | Puts the current mode's panels back where the faithful port has them. It does not show or hide a panel and does not change Lock Layout | P3.1.3 |
+| The Simulator's narrow arrangement (a window under 1100 pixels wide) | Used whenever the window is narrow | Used while the arrangement is the default. After a panel has been moved, the same arrangement is used at every width | A changed arrangement has no narrow twin |
+| The names of splitters | Four, with fixed names | The four of the default arrangement keep their names. A splitter anywhere else is named from the two panels beside it (`Resize Files and Editor`) | P2.2 |
+| Moves | Not present | A polite message announces each move (`Files moved beside Editor, left.`) | Screen readers (P3.1.8) |
+| The Registers panel's height and the Editor's message list height | Fixed rules | The same rules while the panel is in its default place; elsewhere it has an ordinary size | P3.1.5 |
+| Showing and hiding panels | The View menu and the `x` of a tab | The same. Moving a panel never shows or hides it, so the Hardware panel's switches are cleared only when it is shown, as before | P1.1 rule 4 |
+| Touch screens | Not present | Dragging a tab may not work; Move Panel To... and the tab menu do the same | HTML drag and drop on touch screens |
+
+### Differences introduced by N2 (editor panes and document tabs)
+
+(`docs/differences/N2.md`)
+
+Deliberate differences between the application with the additions of `docs/ARCHITECTURE-PLUS.md`
+and the faithful port or the original, that this package introduces. None changes what a 68000
+program can observe. N10 merges this file into `docs/DIFFERENCES.md`.
+
+| Where | Faithful port | With the additions | Why |
+|---|---|---|---|
+| Window menu (Editor) | Arrange, Cascade, Tile Horizontally, Tile Vertically, Minimize All, the document list | The same items first; then, below a separator, Move Panel To..., Split Editor Right, Split Editor Down and Close Split | The three split commands are Tile Vertically, Tile Horizontally and Cascade under names that a student of another editor looks for (P3.1.4) |
+| A document's tab | Can be sent to the other pane from the editor's menu | Can also be dragged onto the other pane. The drag carries the document's number and a token of this window, so a tab dragged from another window moves nothing | P5 N2 |
+| Two panes after a Split Editor Down that follows a Split Editor Right | Not present | One pane may be left empty; it says `No document in this pane. New and Open put a document here after a click into it.` Close Split gathers the documents again | The rule of P3.1.4 moves the active document to the other pane |
+| The editor's context menu | Ends with Reload File (and Move to the Other Pane when two panes are shown) | Earlier Versions... is added below a separator after Reload File | P3.3.3 |
+
+### Differences introduced by N3 (the history store)
+
+(`docs/differences/N3.md`)
+
+Deliberate differences between the application with the additions of `docs/ARCHITECTURE-PLUS.md`
+and the faithful port or the original, that this package introduces. None changes what a 68000
+program can observe: a program's own writes are never recorded. N10 merges this file into
+`docs/DIFFERENCES.md`.
+
+| Where | Faithful port | With the additions | Why |
+|---|---|---|---|
+| Saving, opening and importing | Write the file and nothing else | The same bytes are written to the file, and (with the switch `history` on) a compressed copy is also kept in a database of this browser (IndexedDB). It is never written into a folder of the student's computer. A save never waits for the history and never fails because of it | P1.1 rule 2, P3.3.1 |
+| What gets earlier versions | Not present | Text files of at most 1 MB, not listings or S-record files, not below a folder named `.git`. Before a Delete or a Replace, any file of at most 20 MB is kept in the Trash | P3.3.3, P3.3.4 |
+| How many are kept | Not present | At most 200 per file; the newest ten always, then one per five minutes for a day, one an hour for a week, one a day for two months. At most half of a budget (64 MB, or a tenth of the browser's quota if that is smaller) for earlier versions and half for the Trash; the oldest go first. A deleted file stays in the Trash for 30 days | P3.3.4 |
+| What a busy term does to it | Not present | In the package's stress run (10,000 saves over 200 files in 90 days, a few files near 1 MB that do not compress) the half for versions fills up and the versions of the sources are all younger than 1.3 days: the version that worked last week may be gone. The Trash did not fill. Whether to keep differences between versions instead is the owner's decision D4 | `docs/porting/errata/N3.md`, "The typical-student figure" |
+| Storage nearly full (under 32 MB free) | Not present | No new earlier versions or Trash items are kept, the oldest are removed, and one note says so | The student's files keep room to be saved |
+| The history cannot be opened (a private window, a blocked database) | Not present | Everything else works. Delete, Replace and Restore say `This cannot be undone.`; the dialogs say that the history cannot be read and offer Delete History and Trash | P3.3.7 |
+| An opened folder that is itself a `.git` folder | Not present | Nothing is recorded there and no Trash item is restored into it | P1.1 rule 2 |
+| Clearing the site's data | Removes My Programs | Removes My Programs, the earlier versions and the Trash together | One browser store |
+
+### Differences introduced by N4 (Earlier Versions and Trash dialogs)
+
+(`docs/differences/N4.md`)
+
+Deliberate differences between the application with the additions of `docs/ARCHITECTURE-PLUS.md`
+and the faithful port or the original, that this package introduces. None changes what a 68000
+program can observe. N10 merges this file into `docs/DIFFERENCES.md`.
+
+| Where | Faithful port | With the additions | Why |
+|---|---|---|---|
+| File menu (Editor) | Ends with Exit | Ends with Exit, then, below a separator, Earlier Versions... and Trash... | P3.6 |
+| Earlier Versions | Not present | A list of the kept versions of a file (Kept, Size, Kind), the selected one beside the file as it is now, Restore and Open as New Document. A restore keeps the file as it was, as `Before restore`; it is refused while the file is open with unsaved changes | P3.3.8 |
+| Trash | Not present | A list of deleted and replaced items with Restore, Delete for Good and Empty Trash; several rows can be selected. A restore into a place that is taken asks first, and the file that is there goes to the Trash. An item from an opened folder that is not open now, or from a place of the desktop app's disk that it cannot reach now, can go to My Programs/Restored | P3.3.8 |
+| A copy that cannot be kept | Not present | The dialogs and the Files panel ask once (`EASy68K cannot keep a copy of ... anyway? This cannot be undone.`); No leaves everything as it was | P3.3.4 |
+| The comparison | Not present | Each inserted line is marked + and each deleted line -, so that colour is not the only sign | Accessibility (P3.3.8) |
+
+### Differences introduced by N5 (the Files panel)
+
+(`docs/differences/N5.md`)
+
+Deliberate differences between the application with the additions of `docs/ARCHITECTURE-PLUS.md`
+and the faithful port or the original, that this package introduces. None changes what a 68000
+program can observe. N10 merges this file into `docs/DIFFERENCES.md`.
+
+| Where | Faithful port | With the additions | Why |
+|---|---|---|---|
+| Selecting in the Files panel | One row at a time | Shift+click, Ctrl+click (Cmd+click on a Mac), Shift+Up and Shift+Down, Ctrl+A (all visible rows) and Esc select and unselect several rows. A store's root row is never selected together with other rows | P3.2.1 |
+| Delete | Asks, then removes the file or folder for good | Acts on the whole selection and asks the same question with No chosen. With the history on, what is deleted goes to the Trash (30 days) and the toast offers Undo; with it off, or when no copy can be kept, the question says `This cannot be undone.` In an opened folder or on the desktop app's disk the files are removed there and a copy stays in the Trash of the application. A file that changed meanwhile is not removed | P3.2.2, P3.3.4 |
+| Delete of a linked file | Removed the entry | The command is Remove from List; the file on the computer is not changed | P3.2.2 |
+| The Delete button's icon | The trash can | A cross; the trash can is the new Trash... button. The names are unchanged | One icon, one meaning (erratum N5 entry 9) |
+| Export | The caption is Export... | The button, its tool tip and the menu item say what will be exported (one file, one folder, several items, a whole store). Several items become one `EASy68K export.zip`; folders named `.git` are left out of every export | P3.2.3 |
+| Moving files | Rename only | Drag the selection onto a folder, or use Move To... in the context menu. Between My Programs and an opened folder the items are copied. An open file follows its move or rename. Replacing a file that is at the target asks first and puts the old one in the Trash | P3.2.4 |
+| Undo | Not present | Ctrl+Z (Cmd+Z), the toast and the context menu undo the last of 20 operations of this window (delete, move, rename, copy); they are forgotten at a reload | P3.2.7 |
+| Folders that hold a Git repository | Treated as any folder | Not deleted, moved, copied or renamed in the Files panel (the message says to use one's own tools); no name can become `.git`, and nothing is written below a `.git` folder by a command of the panel. The panel does not list `.git`; the tool tip of the folder that holds one says so. An import leaves out a folder named `.git` at its top; a repository inside an imported folder is imported as before. Save, Save As and a program's own file operations are unchanged | P1.1 rule 2, P3.2.2, P3.2.4; erratum N5 entry 15 |
+| An opened folder that is itself a `.git` folder | Could be changed like any folder | Delete, Rename, New Folder, Import, Move and Copy into or out of it, and Undo there, are refused with `The folder ".git" is the .git folder of a Git repository. The Files panel changes nothing in it.` Save and a program's writes there are unchanged | Erratum N5 entries 15 and 19. Import is refused there although P1.1 rule 2 leaves Import unchanged below `.git`: the integration pass may decide otherwise |
+| Opened from this computer | Not present as a root | A third root lists every linked file under its own name, with the note `edited in place` | P3.2.5 |
+| A large import | No question | More than 100 files or 10 MB into the browser's storage asks first; an import that cannot fit is refused with a message and imports nothing | P3.2.6 |
+| The line at the bottom of the panel | Not present | `This site uses ... in this browser - Earlier versions and Trash: ... - About ... free`; a button that opens the Storage part of Port Additions | P3.2.6 |
+| Files tree: refreshing | The tree is read when it is opened and changed | The expanded folders of an opened folder or of the disk are read again when the window regains the focus | P3.3.10 |
+
+### Differences introduced by N6 (the viewer for PDF files and pictures)
+
+(`docs/differences/N6.md`)
+
+Deliberate differences between the application with the additions of `docs/ARCHITECTURE-PLUS.md`
+and the faithful port or the original, that this package introduces. None changes what a 68000
+program can observe. N10 merges this file into `docs/DIFFERENCES.md`.
+
+| Where | Faithful port | With the additions | Why |
+|---|---|---|---|
+| Opening a `.pdf` or a picture (`.png`, `.jpg`, `.jpeg`, `.gif`, `.bmp`, `.webp`, `.svg`, `.ico`) from the Files panel, Open File..., a drop or a start-up argument | Opens as text, which shows nonsense | Opens in a viewer: a tab beside the Editor. It is not a document (Save and Assemble do not act on it, the Window menu does not list it) and is closed by a reload. Options > Port Additions... switches it off, and then every file opens as text as in the original | P3.4 |
+| A file that is not text (a zero byte in its first 8,192 bytes) | Opens as text | Shows a notice with Open as Text and Export. `.X68`, `.L68` and `.S68` always open as text | P3.4.1 |
+| The PDF | Not present | Drawn by the browser's own viewer in a frame. Where the browser has none (`navigator.pdfViewerEnabled` is false) the viewer says so and offers Export. Where the browser says it has one and draws nothing (seen in Playwright's WebKit on Windows), a line under the strip says to use Export. Safari itself was not tried by a person | P3.4.2; erratum N0 entry 6; risk R4 |
+| Export of a viewed file (web) | Not present | Downloads the file with the type `application/octet-stream`. The desktop app shows no Export and says to open the file from its folder | P3.4.2 |
+| The include files that the assembler names in its error messages | Open as text | The same: they always open as text, whatever their extension | Erratum N6 entry 13 |
+| The picture is read once | Not present | A later change of the file is not followed until the file is opened again | P3.4.2 |
+
+### Differences introduced by N7 (Options > Port Additions...)
+
+(`docs/differences/N7.md`)
+
+Deliberate differences between the application with the additions of `docs/ARCHITECTURE-PLUS.md`
+and the faithful port or the original, that this package introduces. None changes what a 68000
+program can observe. N10 merges this file into `docs/DIFFERENCES.md`.
+
+| Where | Faithful port | With the additions | Why |
+|---|---|---|---|
+| Options menu (Editor and Simulator) | Ends with Import/Export Settings... (Editor) and Serial Ports... (Simulator) | Port Additions... is added below a separator at the end | P3.5 |
+| The two switches | Not present | Show PDF files and pictures in a viewer instead of as text, and Keep earlier versions of saved files and a Trash for deleted files. Both are on at first. Off, the application behaves as the faithful port: every file opens as text, and Delete, Replace and Restore say `This cannot be undone.` What was kept stays until the student deletes it. The settings are the port's own and are not in `settings.dat`, `sim68K.dat` or `template.NEW` | P1.2, decision D10 |
+| Storage | Not present | The numbers of files, versions and Trash items and what the site uses, with Empty Trash and Delete Earlier Versions, which act at once after a question. In the desktop app the last two lines say that the versions and the Trash are kept in the app's own storage | P3.5 |
+| Sizes in this dialog | Not present | Written with the units of the Files panel (1 kB is 1024 bytes), so the example figures of the design read `921.6 kB` and `307.2 kB` | Erratum N7 entry 2 |
+
+### Differences introduced by N8 (status bar, reload offer, Git folders)
+
+(`docs/differences/N8.md`)
+
+Deliberate differences between the application with the additions of `docs/ARCHITECTURE-PLUS.md`
+and the faithful port or the original, that this package introduces. None is marked **program**.
+The one change that comes near a program is the order in which the web version loads a program's
+folder: the files below a folder named `.git` are taken after all the others. Within the limits
+(2,000 files, 32 MB for one file, 256 MB in all, four levels) a program reaches exactly the same
+files as before (a property test over 300 random trees). Beyond them only the choice of the files
+that are left out changes, where the original's own result depends on the order of a listing too.
+The design accepts this (P1.1 rule 1, risk R6) and records it not as a difference but as a known
+limitation: part 5 of `docs/DIFFERENCES.md`, "A folder with a very large `.git`". N10 merges this
+file into `docs/DIFFERENCES.md`.
+
+| Where | Faithful port | With the additions | Why |
+|---|---|---|---|
+| The editor's status bar and the tool tip of a document's tab | The internal path of the store (`/browser/demo/prog.X68`, `/linked/...`) | `My Programs/demo/prog.X68`; for a linked file `lab1.X68 - on this computer, edited in place`; in an opened folder `Lab/prog.X68 - in the folder "Lab" on this computer`; in the desktop app the real path. A message names a linked file `lab1.X68 (on this computer)` | P3.2.5, P4.5 |
+| A file changed outside the window | Found when the file is saved (the question of main 3.8.6) | An open, unmodified document whose file was changed by another window, or by another program in an opened folder or on the disk, shows `"prog.X68" was changed outside this window.` with Reload when the window regains the focus. A modified document is left alone; Save asks as before | P3.3.10. In every store, with no switch |
+| The message area when a program's folder is beyond the limits | Every file that is left out is named: `Not available to the program: <path> (<reason>)` | A file below a folder named `.git` that is left out is not named; the others still are | P3.3.10 |
+
 ## 3. Shortcuts a browser does not give up
 
 Some keys belong to the browser or to the operating system, and a web page cannot have them. The
@@ -1793,15 +1971,33 @@ They stay here until they are.
 - **Firefox is not tested.** The automatic tests run in the engines of Chrome (Chromium) and Safari
   (WebKit) only, as Playwright ships them, not in Safari itself. Firefox may work; nothing proves
   it. ChromeOS and phones are not tested either.
-- **A folder with a very large `.git`** (a Git repository) can crowd a program's own files out of
-  what it may open. When a program runs from a folder of the web version (My Programs, or a folder
-  of the disk opened in Chrome or Edge), the simulator loads that folder and the folders below it
-  into memory, up to 2,000 files (and 32 MB per file, 256 MB in all). The files below `.git` count
-  too, so in a large repository some of the program's own files may be left out; each one is named
-  in the message area as `Not available to the program: <path> (<reason>)`. Use a folder that
-  holds only the course's files, or open the program's own sub-folder. The Mac app reads the disk
-  directly and is not affected. (The repair, taking the files of `.git` last, is described in
-  `docs/ARCHITECTURE-PLUS.md` P3.3.10, package N8, and is not built yet.)
+- **A folder with a very large `.git`** is repaired only as far as the order goes. When
+  a program runs from a folder of the web version (My Programs, or a folder of the disk opened in
+  Chrome or Edge), the simulator loads that folder and the folders below it into memory, up to 2,000
+  files (and 32 MB per file, 256 MB in all, four levels deep). Since the additions (part N8) the files
+  below a `.git` folder are taken after all the others, so a repository no longer crowds a program's
+  own files out, and a `.git` file that is left out is not named in the message area. What remains is
+  the limit itself: a folder with more than 2,000 files of its own, or more than 256 MB, still has
+  some of them left out, each named as `Not available to the program: <path> (<reason>)`; a program
+  that opens a file below `.git` gets it only while it fits. Use a folder that holds only the course's
+  files, or open the program's own sub-folder. The Mac app reads the disk directly and is not affected.
+- **The earlier versions of a busy term.** The versions the browser keeps are limited (part N3). In the
+  package's stress run, 90 days of heavy use filled the half of the budget for earlier versions; the
+  versions of the sources were then all younger than 1.3 days, so "the version that worked last week"
+  could be gone, while deleted files were still in the Trash. Whether to keep differences between
+  versions instead (to make room for more) is for the project's owner to decide.
+- **No person has tried the PDF viewer yet**, in any browser or in the desktop app. On Windows a
+  test machine saw Chromium, Chrome, Edge and Electron draw a PDF under the production policy;
+  Safari has not been tried at all, and Playwright's WebKit draws an empty frame. If a browser draws nothing, the line under
+  the viewer's strip says to use Export. The checks for a person are E1 to E4 in
+  `docs/MANUAL-TEST-MAC.md`. Before a service worker controls the page (a first visit, and in the
+  desktop app) the PDF frame can be sent to the application's own page by the page's code or by a link
+  inside the PDF; it then shows a second copy of the application (part N0).
+- **An opened folder that is itself a `.git` folder refuses Import**, although the design leaves Import
+  unchanged below `.git` (part N5). The project's owner has not decided whether that stays.
+- **Moving panels has not been tried with a screen reader.** The announcements of a move and the
+  order of the panels for the Tab key are checked automatically; VoiceOver over a move is checks V10
+  and V11 of `docs/MANUAL-TEST-MAC.md`.
 - **Speed at `Maximum`, and frames while a program draws, are not proven yet.** The design asks
   that at the `Maximum` setting a program executes at least 100 million instructions in 10 seconds,
   and at least 85 % of what the simulator's engine alone executes in 5 seconds on the same machine

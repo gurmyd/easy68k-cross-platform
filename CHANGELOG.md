@@ -62,6 +62,28 @@ The first version is being prepared. What the repository holds today:
   tested in the engines of Chrome and Safari; with another program they are a step of the manual
   list.
 
+### Beyond the original
+
+Additions to the application, part of the first version. None changes what a 68000 program can observe (except which files are left out first in a program's folder beyond the web version's limits),
+a file the application writes, or an item, command or key of the original's menus
+(`docs/ARCHITECTURE-PLUS.md`; the section "Beyond the original" of [docs/USER-GUIDE.md](docs/USER-GUIDE.md)).
+
+- Panels that can be moved, docked beside each other or put into one group, in the Editor and in the
+  Simulator: by dragging a tab, or with Move Panel To... and the tab menu. Lock Layout (checked at first,
+  so that the window looks as it always did) and Reset Layout. Split Editor Right, Split Editor Down
+  and Close Split.
+- The Files panel: several files selected with the mouse or the keyboard, deleted, moved, copied and
+  exported together (Export says what it will export), Undo of the last twenty operations, the names of
+  linked files and opened folders in the status bar, a question before a large import, and a line that
+  says how much the browser stores. Folders that hold a Git repository are never deleted, moved,
+  copied or renamed there.
+- Earlier versions of the files you save, and a Trash for the files you delete or replace (30 days),
+  kept in the browser and never written into a folder of your computer: File > Earlier Versions... and
+  File > Trash..., with a comparison and Restore. A message offers a reload when a file you have open is
+  changed outside the window. Files below a `.git` folder are loaded last for a program's folder.
+- A viewer for PDF files and pictures, shown in a tab beside the Editor instead of as nonsense text.
+- Options > Port Additions... switches the viewer and the earlier versions off, and shows what is stored.
+
 ### The macOS app
 
 - The same application in Electron, with direct disk access, file associations for `.X68`, `.L68`
@@ -75,8 +97,8 @@ The first version is being prepared. What the repository holds today:
 ### Known limitations
 
 - Listed in part 5 of [docs/DIFFERENCES.md](docs/DIFFERENCES.md): among them, nobody has tried the
-  port on a real Mac yet, Firefox is not tested, a folder holding a large Git repository can
-  crowd a program's own files out of what it may open in the web version, and the speed at
+  port on a real Mac yet, Firefox is not tested, a program in the web version can open at most 2,000 files of its folder (a `.git` folder's files are
+  counted last), no person has tried the PDF viewer yet, and the speed at
   `Maximum` and the frame rate while a program draws are decided only by the performance job of a
   manual test run on GitHub's Linux machine, which has not run since the rule for `Maximum` was
   corrected (at least 100 million instructions in 10 s and at least 85 % of what the engine alone

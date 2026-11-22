@@ -496,6 +496,18 @@ items keep their positions:
 | `Files` panel show/hide | `app.files.toggle` | button at the left of the editor toolbar | - | - |
 | `Log` panel show (erratum W3 40) | `sim.view.log` | end of the simulator's View menu | - | - |
 | `Serial Ports...` (erratum DV4 2, W3 43; enabled in the desktop app only) | `sim.options.serialPorts` | end of the simulator's Options menu, after `Execution Speed...`, below a separator | - | - |
+| `Move Panel To...` (stage of additions, `ARCHITECTURE-PLUS.md` P3.1.4, P3.6) | `app.layout.move` (arg: `{ panel? }`) | Editor: Window menu, after the document list, below a separator; Simulator: end of the View menu, below a separator | - | - |
+| `Split Editor Right`, `Split Editor Down`, `Close Split` (P3.1.4) | `ed.window.splitRight`, `ed.window.splitDown`, `ed.window.unsplit` | Editor: Window menu, after `Move Panel To...` | - | - |
+| `Lock Layout` (a check item), `Reset Layout` (Simulator: `Reset Layout` with another access key) (P3.1.4) | `app.layout.lock`, `app.layout.reset` | Editor: Window menu, below a separator; Simulator: View menu, after `Move Panel To...` | - | - |
+| `Earlier Versions...` (P3.3.3) | `ed.file.history` (arg: `{ path? }`) | end of the Editor's File menu, below a separator; end of the editor's context menu; the Files panel's context menu | - | - |
+| `Trash...` (P3.3.3) | `app.files.trash` | end of the Editor's File menu, after `Earlier Versions...`; the Files panel's strip | - | - |
+| `Port Additions...` (P3.5) | `app.additions.options` (arg: `{ group?: 'storage' }`) | end of the Options menu in Editor and Simulator mode, below a separator | - | - |
+
+---
+
+### 1.6 Additions of the Plus stage
+
+The stage of additions (movable and dockable panels, a Files panel with multiple selection, earlier versions and a Trash, a viewer for PDF files and pictures, and the dialog `Port Additions...`) is specified in `docs/ARCHITECTURE-PLUS.md`, which is part of this contract for those additions. It changes nothing in sections 0 to 1.4 that a 68000 program can observe; the commands it adds are listed at the end of the table of section 1.5, and the places where the application with the additions does something else than the faithful port are in `docs/differences/N0.md` to `N8.md` (copied into `docs/DIFFERENCES.md`, part 2).
 
 ---
 
@@ -1032,7 +1044,7 @@ Dependency rules, enforced by the local ESLint rule `easy68k/layer-imports` in `
 - `ui/shell/` imports features only through `features/index.ts`.
 
 Runtime dependencies (closed list). Web application: `react`, `react-dom`, `@codemirror/state`,
-`@codemirror/view`, `@codemirror/commands`, `@codemirror/search` (its search cursor only). Desktop main
+`@codemirror/view`, `@codemirror/commands`, `@codemirror/search` (its search cursor only), and, for the stage of additions (`docs/ARCHITECTURE-PLUS.md` P2.4), `flexlayout-react` (the movable panels) and `@codemirror/merge` (the comparison of Earlier Versions, loaded on demand). Desktop main
 process, in addition to Electron itself: `serialport` (3.3.4). Anything else needs a change to this
 document. Development dependencies are listed in 7.1.
 
@@ -4215,6 +4227,7 @@ On a Mac, before each release (`docs/MANUAL-TEST-MAC.md`, owner DOC1):
   Browsing: text in every font is the same on every run.
 - A long session: one hundred Execute cycles and several hundred assemblies in Safari without a
   failure (R-19).
+- The PDF viewer of the stage of additions (`docs/ARCHITECTURE-PLUS.md` P3.4.2): a PDF appears under the production policy in Chrome and Edge on macOS and on Windows, in Safari, and in the desktop app.
 
 On real Windows, once (needs the owner's permission, O-2, because the project rule forbids running the
 official binaries on the development host):

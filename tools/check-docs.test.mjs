@@ -163,7 +163,7 @@ test('the manual list has every item of 6.8 and the browser shortcut table', () 
   const items = section(arch, '### 6.8 What only a person can check', '### 6.9 Definition of done')
     .split('\n')
     .filter((line) => /^- /.test(line));
-  assert.equal(items.length, 15, '6.8 has 12 Mac items and 3 Windows items');
+  assert.equal(items.length, 16, '6.8 has 12 Mac items, 3 Windows items and the PDF viewer item of the additions');
   const coverage = manual.slice(manual.indexOf('## Which check covers which item of the plan'));
   const rows = coverage.split('\n').filter((line) => /^\| (?!Item|---|From)/.test(line));
   // 11 Mac rows + one row for the three Windows items + 7 rows of the packages' items
@@ -182,6 +182,7 @@ test('the manual list has every item of 6.8 and the browser shortcut table', () 
     'Safari itself',
     'long session',
     'real Windows',
+    'PDF viewer',
   ];
   for (const phrase of keyPhrase)
     assert.ok(
