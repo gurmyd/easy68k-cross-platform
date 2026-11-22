@@ -17,8 +17,13 @@
 // run that has an official result, and how those compare; then, for each of the eight assembler
 // options switched alone from its default, the files compared; then whether a fixed subset of 30
 // files exists; then the exceptions and whether docs/DIFFERENCES.md names them. Exit code 1 when
-// item 1 does not hold (any of: a file without an official comparison, fewer than 240 single-option
-// comparisons on a fixed 30-file subset, an exception docs/DIFFERENCES.md does not name). It is
+// item 1 does not hold, as the item reads with the correction note of erratum T1 26: a file without
+// a default-option run; a run without an official result that docs/DIFFERENCES.md does not name (a
+// named one is an exception with its cause and does not count against the item); a difference not
+// in known-differences.json or not named; fewer than 240 of the 30 x 8 runs of the fixed subset
+// (tests/corpus/option-subset.json) shown equal; a run with an official result that the last report
+// did not judge (a stale report, or the site set not fetched). EASY68K_RC_DIFFERENCES=<file> reads
+// another DIFFERENCES.md (to show that the judge fails when an exception is not named). It is
 // evidence for docs/integration/rc.md item 1 (I3); it changes nothing.
 
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -30,8 +35,11 @@ const args = process.argv.slice(2);
 const jsonOut = args.includes('--json') ? args[args.indexOf('--json') + 1] : null;
 const manifest = JSON.parse(readFileSync(join(repo, 'tests', 'corpus', 'manifest.json'), 'utf8'));
 const known = JSON.parse(readFileSync(join(repo, 'tests', 'conformance', 'asm', 'known-differences.json'), 'utf8'));
-const differencesMd = readFileSync(join(repo, 'docs', 'DIFFERENCES.md'), 'utf8');
+const differencesMd = readFileSync(process.env.EASY68K_RC_DIFFERENCES ?? join(repo, 'docs', 'DIFFERENCES.md'), 'utf8');
+const knownIds = new Set(known.differences.map((d) => d.id));
 const fails = [];
+/** Runs with an official result that the last conformance report did not judge. */
+const unjudged = [];
 
 // The verdicts of the last npm run test:conformance on this machine.
 const verdict = new Map();
@@ -79,11 +87,19 @@ for (const set of SETS) {
     if (!run) continue;
     row.withDefaultRun += 1;
     const v = verdict.get(`${p.id}|default`);
-    if (run.status === 'ok' || run.outputsKept) row.officialResult += 1;
+    const official = run.status === 'ok' || run.outputsKept;
+    if (official) row.officialResult += 1;
     if (v === 'identical') row.identical += 1;
     else if (v === 'identical-masked') row.identicalMasked += 1;
-    else if (v === 'differs') row.differs += 1;
-    else if (v === undefined) {
+    else if (v === 'differs') {
+      row.differs += 1;
+      if (!knownIds.has(p.id)) fails.push(`${p.id} (default) differs and is not in known-differences.json`);
+    } else if (v === undefined && official) {
+      // The official result exists but the last report has no verdict for it: the report is stale,
+      // or the site set was not fetched. That is never an exception with a cause.
+      row.notCompared += 1;
+      unjudged.push(`${p.id} (default)`);
+    } else if (v === undefined) {
       row.notCompared += 1;
       notCompared.push(`${p.id} (default): ${run.status}${run.reason ? ` - ${run.reason.slice(0, 120)}` : ''}`);
     } else row.otherVerdict += 1;
@@ -102,10 +118,10 @@ const withoutDefault = manifest.programs.filter((p) => !p.runs.default).map((p) 
 console.log(
   `files without a default-option run: ${withoutDefault.length}${withoutDefault.length ? ` (${withoutDefault.join(', ')})` : ''}`,
 );
-console.log(`default-option runs without an official comparison: ${notCompared.length}`);
+console.log(
+  `default-option runs without an official result (exceptions; each must be named in docs/DIFFERENCES.md, erratum T1 26): ${notCompared.length}`,
+);
 for (const n of notCompared) console.log(`   ${n}`);
-if (notCompared.length > 0)
-  fails.push(`${notCompared.length} default-option runs have no official result to compare with (golden/REPORT.md)`);
 if (withoutDefault.length > 0)
   fails.push(
     `${withoutDefault.length} conformance files have no default-option run at all (checklist/programs.json gives them other option sets only)`,
@@ -119,7 +135,10 @@ for (const p of manifest.programs) {
   const v = verdict.get(`${p.id}|expand`);
   if (v === 'identical') expand.identical += 1;
   else if (v === 'identical-masked') expand.identicalMasked += 1;
-  else if (v === 'differs') expand.differs += 1;
+  else if (v === 'differs') {
+    expand.differs += 1;
+    if (!knownIds.has(p.id)) fails.push(`${p.id} (expand) differs and is not in known-differences.json`);
+  } else if (p.runs.expand.status === 'ok') unjudged.push(`${p.id} (expand)`);
   else expand.notCompared.push(`${p.id}: ${p.runs.expand.reason?.slice(0, 100) ?? p.runs.expand.status}`);
 }
 console.log(
@@ -152,18 +171,45 @@ for (const [option, label] of OPTIONS) {
 console.log(
   `   together: ${singleRuns} single-option comparisons over ${singleFiles.size} distinct files (item 1 asks for 30 files x 8 options = 240)`,
 );
-const subsetCandidates = [
-  'tests/conformance/asm/option-subset.json',
-  'tests/corpus/option-subset.json',
-  'tests/conformance/asm/options-subset.json',
-];
-const subset = subsetCandidates.find((f) => existsSync(join(repo, f)));
+// The fixed subset (tests/corpus/option-subset.json, T1): 30 files, each with a run for each of
+// the eight options switched alone, each run with an official result and judged equal (byte for
+// byte, or after masking undefined symbols) or a known difference that DIFFERENCES.md names.
+const subset = 'tests/corpus/option-subset.json';
+const subsetFiles = existsSync(join(repo, subset))
+  ? JSON.parse(readFileSync(join(repo, subset), 'utf8')).files.map((f) => f.id)
+  : [];
+const cells = { equal: 0, knownDifference: 0 };
+const badCells = [];
+for (const id of subsetFiles) {
+  const p = manifest.programs.find((x) => x.id === id);
+  for (const [option, label] of OPTIONS) {
+    const entry = p
+      ? Object.entries(p.runs).find(
+          ([, r]) => Object.keys(r.options ?? {}).length === 1 && Object.keys(r.options)[0] === option,
+        )
+      : undefined;
+    if (!entry) {
+      badCells.push(`${id} ${label}: no run`);
+      continue;
+    }
+    const [l, run] = entry;
+    const v = verdict.get(`${id}|${l}`);
+    if (run.status !== 'ok') badCells.push(`${id} ${label}: no official result (${run.status})`);
+    else if (v === 'identical' || v === 'identical-masked') cells.equal += 1;
+    else if (v === 'differs' && knownIds.has(id)) cells.knownDifference += 1;
+    else badCells.push(`${id} ${label}: ${v ?? 'not judged by the last report'}`);
+  }
+}
+const distinctSubset = new Set(subsetFiles).size;
 console.log(
-  `   a fixed list of 30 files in the repository: ${subset ?? 'none found (looked for a list of the subset in the manifest and at ' + subsetCandidates.join(', ') + ')'}`,
+  `   the fixed subset ${subset}: ${subsetFiles.length} files (${distinctSubset} distinct) x 8 options; ${cells.equal} equal, ${cells.knownDifference} known differences, ${badCells.length} not shown`,
 );
-if (!subset || singleRuns < 240)
+for (const b of badCells) console.log(`      NOT SHOWN ${b}`);
+if (distinctSubset !== 30 || subsetFiles.length !== 30)
+  fails.push(`option matrix: the fixed subset has ${subsetFiles.length} files (${distinctSubset} distinct), not 30`);
+if (cells.equal + cells.knownDifference < 240)
   fails.push(
-    `option matrix: ${singleRuns} single-option comparisons on ${singleFiles.size} files, no fixed 30-file subset; ${240 - singleRuns} short of 240`,
+    `option matrix: ${cells.equal + cells.knownDifference} of the 240 subset runs shown equal; ${240 - cells.equal - cells.knownDifference} short`,
   );
 
 // ---------------------------------------------------------------- exceptions and DIFFERENCES.md
@@ -197,10 +243,28 @@ const missing = exceptions.filter((e) => !e.named);
 if (missing.length > 0)
   fails.push(`${missing.length} of ${exceptions.length} exceptions are not named in docs/DIFFERENCES.md`);
 
+// Every run with an official result must have been judged by the last npm run test:conformance
+// (with the site set fetched); a run it did not judge is not evidence.
+for (const p of manifest.programs)
+  for (const [l, run] of Object.entries(p.runs))
+    if (l !== 'default' && l !== 'expand' && run.status === 'ok' && !verdict.has(`${p.id}|${l}`)) {
+      unjudged.push(`${p.id} (${l})`);
+    }
+const officialRuns = manifest.programs.flatMap((p) => Object.values(p.runs)).filter((r) => r.status === 'ok').length;
+console.log(
+  `\nruns with an official result: ${officialRuns}; judged by the last report: ${officialRuns - unjudged.length}; not judged: ${unjudged.length}`,
+);
+for (const u of unjudged.slice(0, 20)) console.log(`   NOT JUDGED ${u}`);
+if (unjudged.length > 20) console.log(`   ... and ${unjudged.length - 20} more`);
+if (unjudged.length > 0)
+  fails.push(
+    `${unjudged.length} runs with an official result were not judged by the last conformance report (stale report, or the site set not fetched)`,
+  );
+
 if (jsonOut)
   writeFileSync(
     jsonOut,
-    `${JSON.stringify({ perSet, expand, optionRows, singleRuns, subset: subset ?? null, exceptions, notCompared, fails }, null, 2)}\n`,
+    `${JSON.stringify({ perSet, expand, optionRows, singleRuns, subset, cells, badCells, exceptions, notCompared, unjudged, fails }, null, 2)}\n`,
   );
 console.log(
   fails.length === 0 ? '\nitem 1 holds on these counts' : `\nitem 1 does not hold:\n - ${fails.join('\n - ')}`,

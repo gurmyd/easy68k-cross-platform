@@ -43,6 +43,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { chromium, webkit } from '@playwright/test';
 import { bundleServiceWorker, finishPwaBuild, readServiceWorkerManifest, summarize } from './build/pwa-build.mjs';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../tests/browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -611,7 +612,7 @@ async function browserPass(name, serve, siteA, siteB) {
       check(`${p} no Content Security Policy violation`, (await violations(page1)).length === 0);
       check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
       await page1.screenshot({ path: join(outDir, `${name}-online.png`) });
-      await context.close();
+      await closeWithin(context);
       return;
     }
 
@@ -816,9 +817,9 @@ async function browserPass(name, serve, siteA, siteB) {
     const policy = [...(await violations(page1))];
     check(`${p} no Content Security Policy violation`, policy.length === 0, policy.slice(0, 3).join(' | '));
     check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-    await context.close();
+    await closeWithin(context);
   } finally {
-    await browser.close();
+    await doneWith(browser, { last: name === browsers.at(-1) });
   }
 }
 
@@ -864,7 +865,7 @@ async function main() {
     }
   } finally {
     serve.server.closeAllConnections?.();
-    await new Promise((done) => serve.server.close(done));
+    closeAtEnd({ close: () => new Promise((done) => serve.server.close(done)) }, 'the server');
   }
 
   const counted = results.filter((r) => !r.skipped);
@@ -874,7 +875,7 @@ async function main() {
     `\n${passed} of ${counted.length} checks passed${failures ? `, ${failures} failed` : ''}` +
       `${skipped ? `; ${skipped} skipped (no service worker in this browser build)` : ''}.`,
   );
-  process.exit(failures ? 1 : 0);
+  await endChecks(failures ? 1 : 0);
 }
 
 await main();

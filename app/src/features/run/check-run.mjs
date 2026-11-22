@@ -69,6 +69,7 @@ import {
   judgeMaximum,
   judgeRate,
 } from './run-verdicts.mjs';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../tests/browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -914,7 +915,7 @@ async function runPass(browser, name, programs) {
   check(`${p} Exit shows the empty workspace`, exitText.includes('You can close this tab.'), exitText);
 
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /** A program named in the URL is loaded in Simulator mode and started by run=1 (5.7). */
@@ -956,7 +957,7 @@ async function startupPass(browser, name, programs) {
     bare.errors.length === 0,
     bare.errors.slice(0, 3).join(' | '),
   );
-  await bare.context.close();
+  await closeWithin(bare.context);
 
   // A first page puts the program into the browser store; a second page of the same browser
   // context is then opened with the start-up arguments. That needs a store that outlives a page:
@@ -968,7 +969,7 @@ async function startupPass(browser, name, programs) {
   );
   if (!persisted) {
     console.log(`  --   ${p} the browser store is the memory backend: the ?open= start cannot be shown yet`);
-    await first.context.close();
+    await closeWithin(first.context);
     return;
   }
   await first.page.close();
@@ -985,7 +986,7 @@ async function startupPass(browser, name, programs) {
     JSON.stringify({ mode: state.mode, program: state.sim.program, halted: state.sim.halted }),
   );
   check(`${p} start-up: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await first.context.close();
+  await closeWithin(first.context);
 }
 
 /**
@@ -1075,7 +1076,7 @@ async function noFramesPass(browser, name, programs) {
   for (const note of verdict.notes) console.log(`  --   ${p} ${note}`);
   await page.evaluate(() => window.__easy68k.ctx.commands.run('sim.run.pause'));
   check(`${p} no frames: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /**
@@ -1140,7 +1141,7 @@ async function stackPass(browser, name, programs) {
   await page.evaluate(() => window.__easy68k.ctx.commands.run('sim.view.stack'));
   await page.screenshot({ path: join(outDir, `${name}-stack-after-trap32.png`) });
   check(`${p} stack: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /**
@@ -1257,7 +1258,7 @@ async function announcePass(browser, name, programs) {
     `during ${JSON.stringify(autoSaid)}, after Pause ${JSON.stringify(autoEnd)}`,
   );
   check(`${p} announcements: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /**
@@ -1268,6 +1269,11 @@ async function announcePass(browser, name, programs) {
  * so the new program runs every time. The load lasts tens of milliseconds in Chromium and a few
  * hundred in WebKit on a fast PC (more on a slow one), so the early keys land inside it; each trial
  * prints the phase the controller was in when the key or click arrived.
+ *
+ * Between the click on OK and the new program's halt the page also records, at every animation
+ * frame, the status bar's run cell and the Output panel's text, and every state the store is given
+ * (errata SH8.md entry 48): after a Run given during the load, neither may ever show the new program
+ * loaded, idle and unrun (the original delivers the queued key before it paints anything).
  */
 async function loadKeyPass(browser, name, programs) {
   const p = `${name}: during a load:`;
@@ -1277,9 +1283,45 @@ async function loadKeyPass(browser, name, programs) {
   // What the controller was doing at each F9 and each click of the Run button or menu item.
   await page.evaluate(() => {
     window.__sh8Arrivals = [];
+    // From the click on OK to the halt of `hello`: what each display frame shows and every state
+    // the store is given, in one sequence with the arrivals.
+    const watch = { on: false, seq: 0, frames: [], states: [] };
+    window.__sh8Watch = watch;
+    const shown = (selector) =>
+      [...document.querySelectorAll(selector)].find((element) => element.closest('[hidden]') === null);
+    const storeState = () => {
+      const { ctx } = window.__easy68k;
+      const sim = ctx.store.getState().sim;
+      return {
+        program: sim.program?.path ?? null,
+        phase: sim.phase,
+        halted: sim.halted,
+        menuState: sim.menuState,
+        steps: ctx.sim.engine.stepCount >>> 0,
+      };
+    };
+    window.__easy68k.ctx.store.subscribe(() => {
+      if (watch.on) watch.states.push({ seq: ++watch.seq, ...storeState() });
+    });
+    const frame = () => {
+      if (watch.on) {
+        const state = storeState();
+        const rows = [...(shown('[data-e68-panel="output"]')?.querySelectorAll('[role=log] > div') ?? [])]
+          .map((row) => row.textContent.replace(/[\s\0]+$/, ''))
+          .filter((row) => row !== '');
+        watch.frames.push({
+          seq: ++watch.seq,
+          program: state.program,
+          run: shown('[data-e68-status="run"]')?.textContent ?? '?',
+          output: rows.join(' / '),
+        });
+      }
+      window.requestAnimationFrame(frame);
+    };
+    window.requestAnimationFrame(frame);
     const note = (what) => {
       const { controller } = window.__easy68k.ctx.sim;
-      window.__sh8Arrivals.push({ what, phase: controller.phase, kept: controller.keepsCommands });
+      window.__sh8Arrivals.push({ what, phase: controller.phase, kept: controller.keepsCommands, seq: ++watch.seq });
     };
     window.addEventListener('keydown', (event) => event.key === 'F9' && note('F9'), { capture: true });
     window.addEventListener(
@@ -1307,6 +1349,13 @@ async function loadKeyPass(browser, name, programs) {
       window.__sh8Load = window.__easy68k.ctx.sim.controller.open('/browser/check/hello.S68', 'execute');
     });
     await box.waitFor({ timeout: UI_TIMEOUT });
+    // The answer comes next: watch from here to the halt.
+    await page.evaluate(() => {
+      const watch = window.__sh8Watch;
+      watch.frames = [];
+      watch.states = [];
+      watch.on = true;
+    });
   };
   /** After the load: did `hello` run (it prints and halts at once)? */
   const outcome = async () => {
@@ -1324,21 +1373,59 @@ async function loadKeyPass(browser, name, programs) {
         () => true,
         () => false,
       );
+    // Two more frames, so that the frames of the halt are in the record.
+    await page.evaluate(
+      () => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))),
+    );
     return page.evaluate((hasRun) => {
       const { ctx } = window.__easy68k;
       const state = ctx.store.getState().sim;
+      const watch = window.__sh8Watch;
+      watch.on = false;
+      const NEW = '/browser/check/hello.S68';
+      // A Run that arrived during the load (or between the answer and the load) must find the new
+      // program never shown idle and unrun after it; one that arrived after the load may.
+      const keptAt = window.__sh8Arrivals.find((a) => a.kept || a.phase === 'loading')?.seq ?? null;
+      const after = (entry) => keptAt !== null && entry.seq > keptAt;
+      const unrunStates = watch.states.filter(
+        (s) => after(s) && s.program === NEW && s.phase === 'idle' && !s.halted && s.steps === 0,
+      );
+      const unrunFrames = watch.frames.filter((f) => after(f) && f.program === NEW && f.run === 'Stopped');
+      const runs = [];
+      for (const f of watch.frames) {
+        const text = `${f.run}${f.program === NEW ? '' : ' (old program)'}`;
+        if (runs.at(-1)?.text === text) runs.at(-1).count++;
+        else runs.push({ text, count: 1 });
+      }
       return {
         ran: hasRun,
         program: state.program?.path?.split('/').pop() ?? null,
         phase: state.phase,
         steps: ctx.sim.engine.stepCount >>> 0,
         arrivals: window.__sh8Arrivals.map((a) => `${a.what}@${a.phase}${a.kept ? '(kept)' : ''}`),
+        kept: keptAt !== null,
+        frames: watch.frames.length,
+        states: watch.states.length,
+        frameRuns: runs.map((r) => `${r.text} x${r.count}`).join(', '),
+        lastOutput: watch.frames.at(-1)?.output ?? '',
+        unrun: [
+          ...unrunStates.map((s) => `store ${s.phase}, ${s.steps} instructions`),
+          ...unrunFrames.map((f) => `frame "${f.run}", output "${f.output}"`),
+        ],
       };
     }, ran);
   };
   const told = (result, extra = '') =>
     `${result.ran ? 'ran' : 'did NOT run'}: ${result.program}, ${result.phase}, ${result.steps} instructions; arrived ${result.arrivals.join(', ') || 'nothing'}${extra}`;
   const loadPhases = [];
+  /** Per trial: the frames and store states watched, and what showed the new program unrun. */
+  const watched = [];
+  const watchOf = (label, result) => {
+    watched.push({ label, ...result });
+    console.log(
+      `    ${label}: ${result.kept ? 'kept' : 'not kept'}; ${result.frames} frames, ${result.states} store states; run cell per frame: ${result.frameRuns}; Output at the end: "${result.lastOutput}"`,
+    );
+  };
 
   // 1. F9 dispatched in the same task as the click on OK: the answer has not reached the controller.
   {
@@ -1354,6 +1441,7 @@ async function loadKeyPass(browser, name, programs) {
     });
     const result = await outcome();
     loadPhases.push(...result.arrivals);
+    watchOf('F9 in the same task as OK', result);
     check(`${p} F9 in the same task as the click on OK runs the new program`, result.ran && !atClick, told(result));
   }
 
@@ -1365,6 +1453,7 @@ async function loadKeyPass(browser, name, programs) {
     await page.keyboard.press('F9');
     const result = await outcome();
     loadPhases.push(...result.arrivals);
+    watchOf(`F9 ${delay} ms after OK`, result);
     check(`${p} F9 ${delay === 0 ? 'at once' : `${delay} ms`} after OK runs the new program`, result.ran, told(result));
   }
 
@@ -1379,6 +1468,7 @@ async function loadKeyPass(browser, name, programs) {
     await runButton.click({ force: true, noWaitAfter: true });
     const result = await outcome();
     loadPhases.push(...result.arrivals);
+    watchOf(`toolbar ${delay} ms after OK`, result);
     check(
       `${p} the toolbar's Run button ${delay === 0 ? 'at once' : `${delay} ms`} after OK runs the new program`,
       result.ran,
@@ -1404,6 +1494,7 @@ async function loadKeyPass(browser, name, programs) {
     });
     const result = await outcome();
     loadPhases.push(...result.arrivals);
+    watchOf('toolbar in the task after OK', result);
     check(
       `${p} the toolbar's Run button in the task after the click on OK runs the new program`,
       result.ran,
@@ -1425,6 +1516,7 @@ async function loadKeyPass(browser, name, programs) {
     await item.click({ force: true, noWaitAfter: true });
     const result = await outcome();
     loadPhases.push(...result.arrivals);
+    watchOf('menu right after OK', result);
     check(
       `${p} Run > Run from the menu right after OK runs the new program`,
       result.ran,
@@ -1440,9 +1532,22 @@ async function loadKeyPass(browser, name, programs) {
     during.length > 0,
     `${during.length} of ${loadPhases.length}: ${loadPhases.join(', ')}`,
   );
+  // Errata SH8.md entry 48: after a Run given during the load nothing showed the new program loaded,
+  // idle and unrun, neither a display frame (run cell, Output panel) nor a state of the store.
+  const keptTrials = watched.filter((trial) => trial.kept);
+  const unrun = watched.filter((trial) => trial.unrun.length > 0);
+  check(
+    `${p} between the answer and the halt no frame and no store state shows the new program idle and unrun after a kept Run`,
+    unrun.length === 0 && keptTrials.length > 0 && keptTrials.every((trial) => trial.frames > 0),
+    `${keptTrials.length} of ${watched.length} trials kept the Run; frames watched per trial ${watched.map((t) => t.frames).join(', ')}; ${
+      unrun.length === 0
+        ? 'never seen'
+        : unrun.map((trial) => `${trial.label}: ${trial.unrun.slice(0, 3).join('; ')}`).join(' | ')
+    }`,
+  );
   await page.screenshot({ path: join(outDir, `${name}-run-key-during-load.png`) });
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 // --- run ----------------------------------------------------------------------------------------
@@ -1495,16 +1600,16 @@ async function main() {
           }
         }
       } finally {
-        await browser.close();
+        await doneWith(browser, { last: name === browsers.at(-1) });
       }
     }
   } finally {
-    await server.close();
+    closeAtEnd(server);
   }
 
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
-  process.exit(failures ? 1 : 0);
+  await endChecks(failures ? 1 : 0);
 }
 
 await main();

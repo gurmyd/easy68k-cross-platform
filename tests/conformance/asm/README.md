@@ -30,7 +30,9 @@ or that differs in any other way than recorded, fails too, until the entry is up
 
 A run that the official program did not finish cleanly (a crash, a window it must not show) has no
 golden, except where it had finished assembling first: then its files are kept as
-`<option label>.failed.L68` / `.S68` and compared like goldens (`golden/REPORT.md` lists them).
+`<option label>.failed.L68` / `.S68` and compared like goldens (`golden/REPORT.md` lists them). A run whose end after
+its outputs depends on the host (`HOST_DEPENDENT_RUNS` in `tests/oracle/wine/asm/regenerate.mjs`) is
+recorded as a clean run either way.
 
 | File                                             | What                                                                                                                                                                                                  |
 | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -50,8 +52,10 @@ summary line.
 
 `npm run oracle:wine:asm` (`tests/oracle/wine/`, needs Docker) runs every program through the
 official editor under Wine and rewrites `golden/`, `tests/corpus/manifest.json` and
-`golden/REPORT.md`. The weekly workflow `.github/workflows/oracle.yml` does the same and opens a
-pull request when something changed. Never edit a golden by hand.
+`golden/REPORT.md`. The weekly workflow `.github/workflows/oracle.yml` does the same; when something
+changed it fails, pushes the files to a branch `oracle/regenerated-<run id>` and names in its summary
+the address at which a person opens the pull request (it opens none itself; erratum T1 27). Never
+edit a golden by hand.
 
 Most checklist programs come from the engine's own test programs (`engine/asm/test/cases.mjs`,
 written for this project); the rest were added for items those do not reach. A new program is a

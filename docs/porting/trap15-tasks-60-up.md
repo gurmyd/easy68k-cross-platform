@@ -359,7 +359,7 @@ Mode values 16 and 17 are the double-buffer switches (5.6). **Values 18-255** ar
 
 All other values from 18 to 255 (171 of them, including 18-21) behave as mode 1. This is an accident of the binary's layout, derived without running it (section 15, V8). PORT: reproduce the table; a program that passes such a value by mistake then draws in white, as it does on the original.
 
-> **Corrected (erratum T3 F6).** Under Wine every mode 18-23 draws the pen unchanged (Wine's `SetROP2` refuses values outside 1-16 and keeps the previous mode), where the table above expects white for mode 20 and the inverted pen for 22 (`trap15-b/b06-modes-above-15`). Whether Windows does the same is open (V8); the port keeps the table until `b06` has run on Windows (`tests/conformance/windows-confirm`), and the difference is listed as unconfirmed with owner SH1.
+> **Corrected (erratum T3 F6).** Under Wine every mode 18-23 draws the pen unchanged (Wine's `SetROP2` refuses values outside 1-16 and keeps the previous mode), where the table above expects white for mode 20 and the inverted pen for 22 (`trap15-b/b06-modes-above-15`). Whether Windows does the same is open (V8); the port keeps the table until `b06` has run on Windows (`tests/conformance/windows-confirm`), and the difference is listed as unconfirmed with owner SH1. (Settled since, 22 November 2026: the GDI calls the original makes were measured on Windows 11, `tests/conformance/gdi/golden/modes.json`, erratum SH1 17, which says what Windows does; the port follows that measurement, and `b06` differs from its golden only because Wine's `SetROP2` differs from Windows'. It is an accepted difference whose golden is Wine's, part T3 of `docs/DIFFERENCES.md`.)
 
 ### 5.5 Current position (pen position)
 

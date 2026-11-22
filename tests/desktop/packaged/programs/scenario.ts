@@ -117,16 +117,37 @@ export async function executeFromStatus(page: Page, start: number): Promise<void
   }
 }
 
-/** Run with the toolbar button; returns the run state once it says Halted, or the last one seen. */
+/** The Registers panel's Cycles count as shown, or null when it is not a number ("Overflow"). */
+export async function cyclesShown(page: Page): Promise<bigint | null> {
+  const text = (await page.locator(`${SIM} .e68-regs__cycles[data-cycles]`).first().innerText()).trim();
+  return /^\d+$/.test(text) ? BigInt(text) : null;
+}
+
+/**
+ * Run with the toolbar button; returns "Halted" once the program has run to its end, or what was
+ * seen last. The end is the halt AFTER instructions were executed: the run state Halted and the
+ * Cycles count above the one before the click. A run state alone is not enough: a Run given while
+ * a load ends is kept and carried out afterwards (errata SH8.md entries 47 and 48), and a state
+ * that is not "Running" says nothing about whether the Run has happened yet.
+ */
 export async function runToHalt(page: Page, ms = STEP_MS): Promise<string> {
+  const before = (await cyclesShown(page).catch(() => null)) ?? 0n;
   await toolbarButton(page, 'sim.run.run').click({ timeout: STEP_MS });
-  const halted = await poll(ms, async () => ((await runState(page).innerText()) === 'Halted' ? 'Halted' : null), 100);
-  return (
-    halted ??
-    (await runState(page)
-      .innerText()
-      .catch(() => '?'))
+  const halted = await poll(
+    ms,
+    async () => {
+      if ((await runState(page).innerText()) !== 'Halted') return null;
+      const after = await cyclesShown(page);
+      return after === null || after > before ? 'Halted' : null; // "Overflow" has run, too
+    },
+    100,
   );
+  if (halted !== null) return halted;
+  const state = await runState(page)
+    .innerText()
+    .catch(() => '?');
+  const cycles = await cyclesShown(page).catch(() => null);
+  return state === 'Halted' ? `Halted, but the Cycles count is ${cycles ?? '?'} as before the Run (${before})` : state;
 }
 
 /** Trace Into with the toolbar button; returns the PC once it has moved away from `from`. */

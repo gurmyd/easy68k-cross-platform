@@ -28,6 +28,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../tests/browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -458,7 +459,7 @@ async function memoryPass(browser, programs, name, theme) {
 
   await page.locator('[data-e68-panel="memory"]').screenshot({ path: join(outDir, `${name}-${theme}-memory.png`) });
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 async function stackPass(browser, programs, name, theme) {
@@ -580,7 +581,7 @@ async function stackPass(browser, programs, name, theme) {
   );
 
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 async function motionPass(browser, programs, name) {
@@ -596,7 +597,7 @@ async function motionPass(browser, programs, name) {
   check(`${name}: the cursor blinks at 500 ms (1 s period)`, blink === 'e68-memory-blink 1s', blink);
   await page.screenshot({ path: join(outDir, `${name}-simulator.png`) });
   check(`${name}: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 async function main() {
@@ -630,15 +631,15 @@ async function main() {
         console.log(`\n[${name}, motion]`);
         await pass(`${name} motion`, () => motionPass(browser, programs, name));
       } finally {
-        await browser.close();
+        await doneWith(browser, { last: name === browsers.at(-1) });
       }
     }
   } finally {
-    await server.close();
+    closeAtEnd(server);
   }
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
-  process.exit(failures ? 1 : 0);
+  await endChecks(failures ? 1 : 0);
 }
 
 await main();

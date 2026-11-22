@@ -103,7 +103,7 @@ places where it has to decide something observable:
 | `new` | Every allocation is zero-filled. | Fields of a symbol created on a line that already has an error are left unwritten by the engine (9.3.3); Borland's heap content there is not knowable, the port gives 0. |
 | `sprintf` to a NULL buffer | Raises the CPU-fault exception (Borland: access violation, caught by the nearest `catch(...)`). Reached only by `listCond()` in the case of 1.8 (`listPtr` still NULL). | Yes. |
 | `exit()` | Unreachable (`effAddr()` with a corrupt table). Aborts the run; the API reports `fatal`. | The original ends the editor. |
-| Macro nesting | 256 levels work (8 MB wasm stack, 16 MB native), the 257th gives "Nested Macro calls are too many levels deep". | The original has a 1 MB stack and about 11.6 KB per level, so it probably overflows its stack at roughly 85 levels (9.3.6); what Borland does then is UNVERIFIED. (The 5.15.4 CLI oracle, also 1 MB, crashes with a stack overflow on such a program.) |
+| Macro nesting | 256 levels work (8 MB wasm stack, 16 MB native), the 257th gives "Nested Macro calls are too many levels deep". | The original has a 1 MB stack and about 11.6 KB per level, so it probably overflows its stack at roughly 85 levels (9.3.6). The official EDIT68K.exe v5.16.1 under Wine crashes with a stack overflow on such a program (`tests/conformance/asm/golden/REPORT.md`, `checklist/macro-13-recursion-to-the-limit`; docs/DIFFERENCES.md part T1); so does the 5.15.4 CLI oracle, also 1 MB. |
 
 ## 4. How the patches were verified
 

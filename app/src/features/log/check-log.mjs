@@ -46,6 +46,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../tests/browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -864,7 +865,7 @@ async function loggingPart(browser, name, programs) {
   check(`${p} Log Start during a run: every byte written after the click is in the log`, judged.ok, judged.detail);
 
   check(`${p} no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /**
@@ -916,7 +917,7 @@ async function placesPart(browser, name, programs) {
     );
   }
   check(`${p} no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /** Flush cost in the real browser store: a 30 MB log against a small one. */
@@ -1050,7 +1051,7 @@ async function flushPart(browser, name, programs) {
     smallThere.reason ?? bigThere.reason ?? '',
   );
   check(`${p} no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 async function optionsPart(browser, name, colorScheme) {
@@ -1203,7 +1204,7 @@ async function optionsPart(browser, name, colorScheme) {
   await full.waitFor({ state: 'detached' });
 
   check(`${p} no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 // --- run -----------------------------------------------------------------------------------------
@@ -1269,16 +1270,16 @@ async function main() {
           }
         }
       } finally {
-        await withLimit(browser.close(), UI_TIMEOUT * 3, `${name} to close`).catch((error) => note(error.message));
+        await doneWith(browser, { last: name === browsers.at(-1) });
       }
     }
   } finally {
-    await withLimit(server.close(), UI_TIMEOUT, 'the dev server to close').catch((error) => note(error.message));
+    closeAtEnd(server);
   }
   if (notes.length > 0) console.log(`\nNotes (not failures):\n${notes.map((text) => `  - ${text}`).join('\n')}`);
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
-  process.exit(failures ? 1 : 0);
+  await endChecks(failures ? 1 : 0);
 }
 
 main().catch((error) => {

@@ -47,6 +47,7 @@ import { fileURLToPath } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../tests/browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -329,7 +330,7 @@ async function backendPass(browser, name) {
     timing.size === (20 << 20) + 12 * 1024 && timing.length === timing.size,
   );
   check(`${p} backend pass: no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /** Reload, two pages, full storage. */
@@ -409,7 +410,7 @@ async function storePass(browser, name) {
 
   const errors = [...a.errors, ...b.errors].filter((text) => !/Failed to load resource|QuotaExceeded/.test(text));
   check(`${p} store pass: no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /** Full storage (Chromium: the origin's quota lowered through the DevTools protocol), on a page of its own. */
@@ -454,7 +455,7 @@ async function quotaPass(browser, name) {
   await cdp.send('Storage.overrideQuotaForOrigin', { origin });
   const errors = a.errors.filter((text) => !/Failed to load resource|QuotaExceeded/.test(text));
   check(`${p} full storage: no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /**
@@ -512,7 +513,7 @@ async function injectedQuotaPass(browser, name) {
   await a.page.screenshot({ path: join(outDir, `${name}-storage-full.png`) });
   const errors = a.errors.filter((text) => !/Failed to load resource|QuotaExceeded/.test(text));
   check(`${p} full storage: no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /**
@@ -585,7 +586,7 @@ async function killPass(browser, name) {
       results.every((r) => !Object.entries(r).some(([k, v]) => !k.endsWith('.log') && v === 'missing')),
     flat.join('; '),
   );
-  await context.close();
+  await closeWithin(context);
 }
 
 /** IndexedDB refuses to open (a private window): the page works and says nothing is kept. */
@@ -619,7 +620,7 @@ async function blockedPass(browser, name) {
   check(`${p} blocked storage: saving still works for the session`, same(works, [7]));
   await page.screenshot({ path: join(outDir, `${name}-blocked-storage.png`) });
   check(`${p} blocked storage: no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /**
@@ -667,7 +668,7 @@ async function hangingPass(browser, name) {
       await page.screenshot({ path: join(outDir, `${name}-store-opening.png`) });
       best = { errors, shownAfter, kind };
     }
-    await context.close();
+    await closeWithin(context);
     if (
       best.shownAfter < 15_000 &&
       readings.some((r) => r.stillOpeningAt !== null && r.stillOpeningAt < OPEN_TIMEOUT_MS)
@@ -1211,7 +1212,7 @@ async function uiPass(browser, name) {
   await page.screenshot({ path: join(outDir, `${name}-files-panel-dark.png`) });
   await scan(page, `${name} dark editor with Files panel`);
   check(`${p} ui pass: no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 
   const fresh = await newContext(browser);
   const second = await openApp(fresh);
@@ -1426,7 +1427,7 @@ async function storageNoticePass(browser, name) {
     JSON.stringify(plainGeometry.notice),
   );
   check(`${p} plain page: no console errors`, plain.errors.length === 0, plain.errors.slice(0, 3).join(' | '));
-  await plainContext.close();
+  await closeWithin(plainContext);
 
   progress('first start with the parameter');
   const context = await newContext(browser);
@@ -1446,7 +1447,7 @@ async function storageNoticePass(browser, name) {
       `${JSON.stringify(geometry)} vs ${JSON.stringify(plainGeometry)}`,
     );
     check(`${p} no console errors`, opened.errors.length === 0, opened.errors.slice(0, 3).join(' | '));
-    await context.close();
+    await closeWithin(context);
     return;
   }
 
@@ -1566,7 +1567,7 @@ async function storageNoticePass(browser, name) {
     opened.errors.length === 0 && second.errors.length === 0,
     [...opened.errors, ...second.errors].slice(0, 3).join(' | '),
   );
-  await context.close();
+  await closeWithin(context);
 
   // The installed app with an empty store: the other variant; Import... brings the .zip over.
   progress('installed app');
@@ -1627,7 +1628,7 @@ async function storageNoticePass(browser, name) {
     installed.errors.length === 0,
     installed.errors.slice(0, 3).join(' | '),
   );
-  await installedContext.close();
+  await closeWithin(installedContext);
 
   // The installed app's Got it is remembered too (the store stays empty, so only that hides it).
   progress('installed app, got it');
@@ -1644,7 +1645,7 @@ async function storageNoticePass(browser, name) {
     `${p} installed app: Got it is remembered with the store still empty`,
     (await empty.page.locator(NOTICE).count()) === 0 && Object.keys(await storeContents(empty.page)).length === 0,
   );
-  await emptyContext.close();
+  await closeWithin(emptyContext);
 }
 
 /** Opens the application without waiting for the Files panel (it may be hidden, or absent in Simulator mode). */
@@ -1718,7 +1719,7 @@ async function firstWriteNoticePass(browser, name) {
       JSON.stringify(await toastsOf(page)),
     );
     check(`${p} no console errors`, hidden.errors.length === 0, hidden.errors.slice(0, 3).join(' | '));
-    await context.close();
+    await closeWithin(context);
     return;
   }
   await page.locator(TOAST).first().waitFor({ timeout: 15_000 });
@@ -1743,7 +1744,7 @@ async function firstWriteNoticePass(browser, name) {
   await page.waitForTimeout(500);
   check(`${p} and the panel, shown again, has no notice`, (await page.locator(NOTICE).count()) === 0);
   check(`${p} panel hidden: no console errors`, hidden.errors.length === 0, hidden.errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 
   // 2. A first visit that starts in Simulator mode (?open= a program), where there is no Files panel.
   progress('simulator mode');
@@ -1788,7 +1789,7 @@ async function firstWriteNoticePass(browser, name) {
   await sim.page.screenshot({ path: join(outDir, `${name}-storage-notice-first-write-simulator.png`) });
   await scan(sim.page, `${name} Simulator mode with the storage note`);
   check(`${p} Simulator mode: no console errors`, sim.errors.length === 0, sim.errors.slice(0, 3).join(' | '));
-  await simContext.close();
+  await closeWithin(simContext);
 
   // 3. The panel showed the notice: the first write needs no note of its own.
   progress('panel visible');
@@ -1801,7 +1802,7 @@ async function firstWriteNoticePass(browser, name) {
     `${p} with the notice on the screen in the panel, a write shows no note`,
     (await visible.page.locator(TOAST).count()) === 0,
   );
-  await visibleContext.close();
+  await closeWithin(visibleContext);
 }
 
 /** Lists and tests a .zip with whatever archive tool this system has. */
@@ -1876,17 +1877,17 @@ async function main() {
       } catch (error) {
         check(`${name}: the pass ran to the end`, false, String(error?.stack ?? error).slice(0, 400));
       } finally {
-        await browser.close();
+        await doneWith(browser, { last: name === browsers.at(-1) });
       }
     }
   } finally {
-    await server.close();
+    closeAtEnd(server);
   }
   for (const file of ['chromium-demo.zip', 'webkit-demo.zip']) rmSync(join(outDir, `${file}.tmp`), { force: true });
   writeFileSync(join(outDir, 'results.json'), JSON.stringify(results, null, 2));
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
-  process.exit(failures ? 1 : 0);
+  await endChecks(failures ? 1 : 0);
 }
 
 await main();

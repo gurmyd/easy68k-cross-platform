@@ -12,7 +12,14 @@
 //   - a "program" proof names a program of tests/conformance/sim with an official result for all its
 //     recipes, not listed in known-differences.json (or listed and marked "accepted" in the json);
 //   - an "asm" proof names a run of the assembler corpus with an official result;
-//   - a "test" proof names a file that exists and contains the title fragment.
+//   - a "test" proof names a file that exists and has a test (it, test, describe, or check() of a
+//     check-*.mjs script) whose title is exactly the one given (tests/integration/rc/lib/test-titles.mjs;
+//     a template's ${...} parts match any text): a comment or a part of a longer title is not a proof;
+//   - a "difference" proof names an accepted difference: the file (docs/DIFFERENCES.md) must contain
+//     the heading or text given (correction note of 6.9 item 2, erratum T3 14).
+//
+// EASY68K_RC_CHECKLISTS=<file> reads another copy of the list (to show that the judge fails when a
+// proof's title is not exact).
 //
 // Whether the named tests pass is shown by the runs they belong to (npm run test:conformance,
 // npm test, node --test in engine/sim and engine/asm, and in CI the jobs conformance and unit); this
@@ -25,7 +32,10 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url));
-const list = JSON.parse(readFileSync(new URL('./item-02-checklists.json', import.meta.url), 'utf8'));
+const list = JSON.parse(
+  readFileSync(process.env.EASY68K_RC_CHECKLISTS ?? new URL('./item-02-checklists.json', import.meta.url), 'utf8'),
+);
+const { hasTitle } = await import(new URL('./lib/test-titles.mjs', import.meta.url).href);
 const simDir = join(repo, 'tests', 'conformance', 'sim');
 const { listPrograms, loadGoldenManifest, recipeId } = await import(pathToFileURL(join(simDir, 'programs.ts')).href);
 const programs = new Map(listPrograms().map((p) => [p.id, p]));
@@ -79,7 +89,14 @@ function checkProof(proof) {
   if (proof.test) {
     const path = join(repo, proof.test);
     if (!existsSync(path)) return `test file ${proof.test} does not exist`;
-    if (!readFileSync(path, 'utf8').includes(proof.title)) return `${proof.test} has no test titled "${proof.title}"`;
+    if (!hasTitle(path, proof.title)) return `${proof.test} has no test titled exactly "${proof.title}"`;
+    return null;
+  }
+  if (proof.difference) {
+    const path = join(repo, proof.difference);
+    if (!existsSync(path)) return `${proof.difference} does not exist`;
+    if (!readFileSync(path, 'utf8').includes(proof.names))
+      return `${proof.difference} does not record "${proof.names}"`;
     return null;
   }
   return `unknown proof ${JSON.stringify(proof)}`;

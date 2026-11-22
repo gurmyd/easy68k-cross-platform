@@ -274,6 +274,67 @@ candidate (`build/gate3/fixup-report.json`).
   `check-run.mjs --pass "run key during a load"` in Chromium and WebKit.
 - Proposed text: a correction note under 4.7 (made in this round; see there).
 
+### 48. The kept commands are carried out before the end of the load is published (entry 47; release run 45034019734)
+
+- Question (after check 7 of the packaged app failed on the Apple Silicon runner for b247e17,
+  errata DV5.md entry 14): can anything outside the controller see the new program loaded, idle
+  and unrun after a Run was given during its load?
+- Seen: yes, though no person could. `finishLoading` set the phase to idle, **published** (every
+  subscriber ran: the session wrote `phase: 'idle'` with the new program into the store, the
+  store's subscribers ran, among them the bootstrap's native-menu sync, which sends the menu to
+  the desktop's main process, and the status bar's announcer), and only then carried out the kept
+  Run, which published again with `running`. All in one task, so React rendered only the second
+  state and no display frame showed the first. Measured with `check-run.mjs --pass "run key during
+  a load"` (the new watch of this entry) on the code before it: no frame showed it, but the store
+  was given "idle, 0 instructions" after a kept F9 in Chromium (4 trials kept) and WebKit (9 of 11
+  trials kept). In the original the load returns and the message queue delivers the queued key
+  before anything is painted or asked; nothing can observe the state in between.
+- Does (`core/run/controller.ts`): `finishLoading(to, endOfRecovery, afterwards)` ends the phase,
+  then runs `afterwards` (by default `deliverKept`; `load` passes the `/f` and `/r` switches of a
+  command line and then `deliverKept`), and publishes last. A kept run command publishes itself,
+  and that publication carries the loaded program together with the command's own state (running,
+  or halted for a program that halts at once, or the state after a traced instruction). When
+  nothing is kept, or a kept command does nothing, the end of the load is published as before. The
+  `/r` switch had the same order and is now published the same way. What a 68000 program can
+  observe is unchanged: the same engine calls in the same order.
+- Not a cause of the failed check 7: that check gives Run after the load has ended (it waits for
+  the PC field to show the start address, which is published only then), so no command was kept.
+  Its cause is in DV5.md entry 14.
+- Tests that fail before this entry and pass after it: `controller.kept.test.ts` ("a kept Run: no
+  subscriber is told of the new program idle and unrun before the Run", "a kept Run of a program
+  that halts at once: the first state told is the halt", "a kept Trace Into: the first state told
+  is the one after the traced instruction"; and "nothing kept: the end of the load is told once,
+  idle and unrun, as before", which passes on both); `session.test.ts` ("a Run kept during a load:
+  the store goes from loading to running, never through idle"; before: `["idle", "running"]`);
+  `check-run.mjs --pass "run key during a load"`, the new check "between the answer and the halt no
+  frame and no store state shows the new program idle and unrun after a kept Run" (before: failed
+  in both browsers; after: passed in both). The pass records, at every animation frame from the
+  answer to the halt, the run cell of the status bar and the Output panel's text, and every store
+  state, and prints them per trial.
+
+### 49. After a typed answer the phase is published at the next display frame; the a11y walk read it once (ci.yml run 45034018006)
+
+- Seen: the accessibility audit (Q1's `tests/a11y/lib/walk.mjs`, walk "run") on `macos-latest` in
+  Chromium for b247e17: "the typed answer reaches the program (D1 = 42) and it goes on running - D1
+  = 42, phase waitInput"; it passed on every system for a31a677 and before, and passes here.
+- Cause: the check waited for D1 = 42 read straight from the engine, then read the store's phase
+  once. A key is queued and delivered in the controller's next tick; when that tick is the timer
+  tick of `requestTick` (not a display frame), the engine completes the read and runs on (D1 = 42,
+  the controller's phase `running`), but `tick(false)` does not publish: a free run publishes at
+  most once per display frame (4.6, entry 18). The store says `waitInput` until the next frame,
+  60 to 130 ms on that runner. The check read inside that gap.
+- Not a defect of the product: what a person sees is painted only at a frame, and at that frame the
+  status bar, the store and every panel change together; the Registers panel shows no new values
+  while a program runs, as in the original; a 68000 program observes nothing of the publishing.
+  Only a reader that mixes an unpublished engine read with the published state can see the gap.
+  Not related to entries 47 and 48 (no load is under way).
+- Does: the walk (repaired here by SH8 for this failure, with Q1's leave in the orchestrator's
+  message) waits until both hold, the engine's D1 = 42 and the store's phase `running`, and prints
+  how long after the engine had D1 the phase was published. On this PC: 0 ms in all four
+  walk-runs (Chromium and WebKit, Windows and Mac key maps), twice; `check-a11y.mjs --only
+  walk-run --browser all` 88 of 88. The gap itself needs a runner whose frames are slow; only a new
+  CI run shows it there.
+
 ## Engine failure (4.8)
 
 ### 13. Where the opcode comes from, and when the cold start begins

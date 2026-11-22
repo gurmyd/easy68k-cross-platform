@@ -1,17 +1,24 @@
 # The oracles that are too slow or too heavy for every push (ARCHITECTURE.md 6.1, 6.2.2, 7.4):
 # weekly and on demand.
 #
-#   wine        fetches the official EASy68K v5.16.1 distribution, builds the Wine container
-#               (restored from the cache while the Dockerfile and the scripts are unchanged), and,
-#               only when both succeeded,
+#   wine        runs the conformance tests against the committed goldens; fetches the official
+#               EASy68K v5.16.1 distribution, builds the Wine container (restored from the cache
+#               while the Dockerfile and the scripts are unchanged), and, only when both succeeded,
 #               - regenerates the goldens of the tracked sets with the official EDIT68K.exe
-#                 (npm run oracle:wine:asm) and, once work package T3 has written it, with the
-#                 official SIM68K.exe (npm run oracle:wine:sim);
+#                 (npm run oracle:wine:asm) and with the official SIM68K.exe (npm run oracle:wine:sim);
 #               - fetches the `site` set (not redistributable, never committed), runs it through
 #                 the official editor and compares the hashes with tests/corpus/manifest.json;
-#               - runs the conformance tests against what it regenerated and over the site set.
-#   propose     opens a pull request when a tracked golden, the manifest or the report changed.
-#               It is the only job with write access, and it handles nothing but those files.
+#               - runs the conformance tests against what it regenerated and over the site set
+#                 (rewriting MISMATCHES.md from the regenerated goldens);
+#               - says what the regeneration changed: nothing, or a candidate (the files, listed in
+#                 the log and the job's summary). The job fails while a candidate exists, because
+#                 the official programs then produce something the repository does not hold and
+#                 nobody has accepted; a person accepts it by merging the branch `propose` pushed.
+#   propose     when the job wine has a candidate: pushes it to the branch
+#               oracle/regenerated-<run id> and names in the job's summary the changed files and
+#               the address at which a person opens the pull request. It opens none itself (the
+#               repository does not let GitHub Actions create pull requests; erratum T1 27). It is
+#               the only job with write access, and it handles nothing but those files.
 #   singlestep  downloads the single-step CPU suites and re-checks the frozen baseline. Written
 #               for work package T4: it is skipped until tests/conformance/cpu/run-singlestep.mjs
 #               exists.
@@ -84,6 +91,15 @@ jobs:
           name: engine-dist
           path: engine/dist
 
+      # The port against the goldens as committed, before anything is regenerated: so that a failure
+      # of the comparison later in this job can be told apart from one the repository already has.
+      # Without the site set, which is fetched further down. Its failure does not stop the steps
+      # below (continue-on-error); the last step but one fails the job for it.
+      - name: Conformance tests against the committed goldens
+        id: committed
+        continue-on-error: true
+        run: npm run test:conformance
+
       # Before the image: the download needs nothing of it.
       - name: Fetch the official EASy68K v5.16.1 distribution
         id: official
@@ -108,14 +124,17 @@ jobs:
           mkdir -p build/oracle-wine
           docker save --output build/oracle-wine/image.tar easy68k-oracle-wine
 
-      # Runs only when every step above succeeded: the image is there and so are the official
-      # programs. Every step below that runs an official program, or reports on what one produced,
-      # requires it, so a failed build or download is not followed by secondary failures or by a
-      # report of results that were never produced (run 45003265263, erratum T1 23).
+      # Runs only when every step above succeeded: the image is there and so are the
+      # official programs. Every step below that runs an official program, or reports on what one
+      # produced, requires it, so a failed build or download is not followed by secondary failures
+      # or by a report of results that were never produced (run 45003265263, erratum T1 23). It also
+      # prints the host's kernel: the same image gives other bytes where the original reads memory it
+      # never wrote (run 45034017858, errata T1 27 and T3 16).
       - name: The image and the official programs are ready
         id: ready
         run: |
           docker image inspect easy68k-oracle-wine --format 'Image {{.Id}}'
+          echo "Host kernel: $(uname -r)"
           echo "ok=true" >> "$GITHUB_OUTPUT"
 
       - name: Regenerate the assembler goldens of the tracked sets
@@ -127,8 +146,28 @@ jobs:
         if: ${{ !cancelled() && steps.ready.outputs.ok == 'true' && hashFiles('tests/oracle/wine/sim/regenerate.mjs') != '' }}
         run: npm run oracle:wine:sim
 
-      # Proposes files only when every regeneration that ran completed; a partial regeneration is
-      # listed for diagnosis but not proposed.
+      - name: Fetch the site set
+        if: ${{ !cancelled() }}
+        run: node tools/fetch-site-examples.mjs
+      - name: The site set through the official assembler, compared with the manifest
+        if: ${{ !cancelled() && steps.ready.outputs.ok == 'true' }}
+        run: node tests/oracle/wine/asm/regenerate.mjs --sets site --check --containers "$CONTAINERS"
+
+      # The port against the regenerated goldens, and over the site set when it was fetched: so only
+      # after a completed regeneration of the assembler goldens. MISMATCHES.md is an output of this
+      # run here (EASY68K_SIM_REPORT=1), not a file to compare with: it describes the regenerated
+      # goldens, and goes into the candidate with them when it changed (run 45034017858 compared it
+      # with the committed one and failed for that alone).
+      - name: Conformance tests against the regenerated goldens
+        id: regenerated
+        if: ${{ !cancelled() && steps.asm.outcome == 'success' }}
+        env:
+          EASY68K_SIM_REPORT: '1'
+        run: npm run test:conformance
+
+      # What the regeneration changed in the repository's files: nothing, or a candidate. A candidate
+      # is proposed only when every regeneration that ran completed; a partial regeneration is listed
+      # for diagnosis but not proposed.
       - name: What changed
         id: diff
         if: ${{ !cancelled() }}
@@ -155,10 +194,21 @@ jobs:
           if git diff --cached --quiet -- "${paths[@]}"; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "The official programs produced what the repository holds."
+            echo "The official programs produced what the repository holds: nothing changed." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            git diff --cached --stat -- "${paths[@]}" | tail -50
             mkdir -p build/oracle-wine/changed
+            git diff --cached --name-status -- "${paths[@]}" > build/oracle-wine/changed/changed.txt
+            {
+              echo 'The regeneration changed these files (A added, M modified, D deleted, R renamed):'
+              cat build/oracle-wine/changed/changed.txt
+              echo
+              echo 'Expected after a change of a program, of the driver or of the image; otherwise the official'
+              echo 'programs gave this runner another result than the machine that made the committed goldens.'
+              echo 'Find out which before accepting: the lines "differ from the manifest" and "changed" of the'
+              echo 'two regeneration steps name the runs, and errata T1 27 and T3 16 the known host-dependent ones.'
+            } | tee -a "$GITHUB_STEP_SUMMARY"
+            git diff --cached --stat -- "${paths[@]}" | tail -50
             git diff --cached --name-only --diff-filter=D -- "${paths[@]}" > build/oracle-wine/changed/deleted.txt
             git diff --cached --name-only --diff-filter=d -z -- "${paths[@]}" |
               tar --create --null --files-from=- --file build/oracle-wine/changed/files.tar
@@ -171,21 +221,23 @@ jobs:
           path: |
             build/oracle-wine/changed/files.tar
             build/oracle-wine/changed/deleted.txt
+            build/oracle-wine/changed/changed.txt
           retention-days: 14
 
-      - name: Fetch the site set
-        if: ${{ !cancelled() }}
-        run: node tools/fetch-site-examples.mjs
-      - name: The site set through the official assembler, compared with the manifest
-        if: ${{ !cancelled() && steps.ready.outputs.ok == 'true' }}
-        run: node tests/oracle/wine/asm/regenerate.mjs --sets site --check --containers "$CONTAINERS"
-
-      # Against the regenerated goldens, and over the site set when it was fetched: so only after a
-      # completed regeneration of the assembler goldens (otherwise it would only repeat ci.yml's
-      # run against the committed ones).
-      - name: Conformance tests
-        if: ${{ !cancelled() && steps.asm.outcome == 'success' }}
-        run: npm run test:conformance
+      # A candidate is accepted by a person, by merging the branch that the job `propose` pushes;
+      # until then the official programs produce something the repository does not hold, and this
+      # job says so and fails.
+      - name: The port passed the conformance tests against the committed goldens
+        if: ${{ !cancelled() && steps.committed.outcome == 'failure' }}
+        run: |
+          echo "::error title=Conformance tests failed::The conformance tests failed against the goldens as committed, before any regeneration: see the step 'Conformance tests against the committed goldens'."
+          exit 1
+      - name: The repository holds what the official programs produced
+        if: ${{ !cancelled() && steps.diff.outputs.changed == 'true' }}
+        run: |
+          echo "::error title=Regenerated goldens differ::The official programs produced files the repository does not hold and nobody has accepted: $(cut -f2- build/oracle-wine/changed/changed.txt | paste -sd ' ' -). The job 'propose the regenerated goldens' pushes them to the branch oracle/regenerated-${GITHUB_RUN_ID}; merging it accepts them."
+          cat build/oracle-wine/changed/changed.txt
+          exit 1
 
       - name: Upload the logs of the runs
         if: ${{ failure() }}
@@ -201,6 +253,10 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # Pushes the candidate of the job wine to a new branch and says in the job's summary what changed
+  # and where a person opens the pull request. It opens none itself: the repository does not let
+  # GitHub Actions create pull requests (run 45034017858: "GitHub Actions is not permitted to create
+  # or approve pull requests"), and the project keeps that setting off (erratum T1 27).
   propose:
     name: propose the regenerated goldens
     needs: [wine]
@@ -209,7 +265,6 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
-      pull-requests: write
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -220,11 +275,12 @@ jobs:
         with:
           name: oracle-changed
           path: build/oracle-changed
-      - name: Open a pull request
+      - name: Push the branch and name it in the summary
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           BRANCH: oracle/regenerated-${{ github.run_id }}
+          NEW_PR_URL: ${{ github.server_url }}/${{ github.repository }}/pull/new/oracle/regenerated-${{ github.run_id }}
         run: |
           set -eu
           # Only files below these folders are accepted from the artifact.
@@ -245,20 +301,25 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git checkout -b "$BRANCH"
-          git add -- tests/corpus/manifest.json tests/conformance
+          git add --all -- tests/corpus/manifest.json tests/conformance
           git commit --quiet -m 'Regenerate the goldens of the official EASy68K (Wine oracle)'
           git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$BRANCH"
           {
-            echo 'The weekly run of the Wine oracle got other results from the official EASy68K v5.16.1 programs than the repository holds.'
+            echo '## Wine oracle: regenerated goldens differ'
             echo
-            echo "Run: $RUN_URL"
+            echo "The official EASy68K v5.16.1 programs gave other results than the repository holds. They are on the branch \`$BRANCH\` (run: $RUN_URL)."
             echo
-            echo 'Read `tests/conformance/asm/golden/REPORT.md` and the diff of `tests/corpus/manifest.json` first: a changed hash or count means that the automation, Wine or a tracked source changed, never the official programs. Do not merge before the cause is known.'
+            echo 'Changed files (A added, M modified, D deleted, R renamed):'
             echo
-            echo 'Pull requests opened by a workflow do not start CI by themselves: close and reopen this one to run it.'
-          } > build/oracle-changed/body.md
-          gh pr create --base "${GITHUB_REF_NAME}" --head "$BRANCH" \
-            --title 'Wine oracle: regenerated goldens differ' --body-file build/oracle-changed/body.md
+            echo '```'
+            cat build/oracle-changed/changed.txt
+            echo '```'
+            echo
+            echo "A person opens the pull request by hand: $NEW_PR_URL"
+            echo
+            echo "Read \`tests/conformance/asm/golden/REPORT.md\` and the diff of \`tests/corpus/manifest.json\` and \`tests/conformance/sim/golden/manifest.json\` first: a changed hash or count means that the automation, Wine, the host or a tracked source changed, never the official programs. Do not merge before the cause is known."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Pushed $BRANCH; open the pull request at $NEW_PR_URL"
 
   singlestep:
     name: single-step CPU suites (frozen baseline)

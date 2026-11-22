@@ -3,7 +3,7 @@
 
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { REPO_ROOT, parseHeader } from '../../../conformance/sim/programs.ts';
+import { ARTIFACT_MASKS, MASKED_TEXT, REPO_ROOT, parseHeader } from '../../../conformance/sim/programs.ts';
 import {
   MAX_CONTAINERS,
   dealOrder,
@@ -15,6 +15,7 @@ import {
   planJobs,
   recipeResult,
   renderReport,
+  updatedDate,
 } from './regenerate.mjs';
 
 const program = (header, suite = 'trap15-a', name = 'x') => parseHeader(header, suite, name, `${suite}/${name}.X68`);
@@ -98,7 +99,8 @@ describe('recipeResult', () => {
     const { entry, bytes: kept } = recipeResult(p, recipe, { status: 'ok', seconds: 3 }, (name) => files[name] ?? null);
     expect(entry.status).toBe('ok');
     expect(entry.instructions).toBe(2);
-    expect(entry.seconds).toBe(3);
+    // Nothing that depends on the machine enters the manifest (run 45034017858).
+    expect(entry.seconds).toBeUndefined();
     expect(Object.keys(entry.artifacts)).toEqual(['runlog', 'outlog']);
     expect(Object.keys(kept)).toEqual(['runlog', 'outlog']);
     // The date does not enter the hash.
@@ -116,6 +118,37 @@ describe('recipeResult', () => {
     const failed = recipeResult(p, recipe, { status: 'failed', error: 'no box' }, () => bytes('x')).entry;
     expect(failed).toMatchObject({ status: 'failed', error: 'no box' });
     expect(recipeResult(p, recipe, undefined, () => null).entry.error).toMatch(/no record/);
+  });
+});
+
+describe('what depends on the host stays out of the manifest (run 45034017858)', () => {
+  it('hashes an artifact of ARTIFACT_MASKS without the bytes it names', () => {
+    const a55 = program('* @item a55\n* @recipe outlog\n', 'trap15-a', 'a55-task0-negative-count-first');
+    expect(ARTIFACT_MASKS['trap15-a/a55-task0-negative-count-first|outlog|outlog']).toBeDefined();
+    const recipe = a55.recipes[0];
+    const log = (third, fourth) =>
+      bytes(`EASy68K output log file: x\r\n\r\n${'A'.repeat(255)}${third}\n${'A'.repeat(255)}${fourth}\n`);
+    const name = 'a55-task0-negative-count-first_OutLog.txt';
+    // Lines 3 and 4 as Docker Desktop's Wine wrote them, and as GitHub's did (run 45034017858).
+    const here = recipeResult(a55, recipe, { status: 'ok' }, (n) => (n === name ? log('\xc0', '\xc0') : null));
+    const github = recipeResult(a55, recipe, { status: 'ok' }, (n) => (n === name ? log('', '\xc0') : null));
+    expect(github.entry.artifacts.outlog.sha256).toBe(here.entry.artifacts.outlog.sha256);
+    expect(MASKED_TEXT).toBe('<masked>');
+    // Any other program keeps every byte.
+    const other = program('* @item o\n* @recipe outlog\n', 'trap15-a', 'other');
+    const read = (third) => (n) => (n === 'other_OutLog.txt' ? log(third, '') : null);
+    expect(recipeResult(other, recipe, { status: 'ok' }, read('')).entry.artifacts.outlog.sha256).not.toBe(
+      recipeResult(other, recipe, { status: 'ok' }, read('\xc0')).entry.artifacts.outlog.sha256,
+    );
+  });
+
+  it('moves the date of the manifest only when its content changes', () => {
+    const before = { wine: 'w', updated: '2026-11-21', programs: { a: { s68Sha256: '1' } } };
+    expect(updatedDate(before, { ...before, updated: '' }, '2026-11-22')).toBe('2026-11-21');
+    expect(updatedDate(before, { ...before, updated: '', programs: { a: { s68Sha256: '2' } } }, '2026-11-22')).toBe(
+      '2026-11-22',
+    );
+    expect(updatedDate(null, { ...before, updated: '' }, '2026-11-22')).toBe('2026-11-22');
   });
 });
 

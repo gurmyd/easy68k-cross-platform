@@ -262,9 +262,10 @@ for (const [item, found] of manualItems) {
 
 /**
  * Results of a Playwright list-reporter log: one record per result line, with the file (forward
- * slashes, relative to tests/), the full title path after the file, and the outcome. Colours are
- * read before they are stripped: a green cross is an expected failure (test.fail), a red one a
- * failure.
+ * slashes, relative to tests/; the duration at the end may be in ms, s, m or h, so that a test of
+ * more than a minute, "(1.2m)", is read too), the full title path after the file, and the outcome.
+ * Colours are read before they are stripped: a green cross is an expected failure (test.fail), a
+ * red one a failure.
  */
 const ESC = String.fromCharCode(27);
 const COLOUR = new RegExp(`${ESC}\\[[0-9;]*m`, 'g');
@@ -278,7 +279,7 @@ function playwrightResults(path) {
     const line = raw.replace(TIMESTAMP, '');
     const plain = line.replace(COLOUR, '');
     const match =
-      /^\s+(✓|✘|ok|x|-)\s+\d+\s+(?:\[([\w-]+)\]\s+›\s+)?(\S+?):\d+:\d+\s+›\s+(.*?)(?:\s+\(\d[\d.]*m?s\))?\s*$/.exec(
+      /^\s+(✓|✘|ok|x|-)\s+\d+\s+(?:\[([\w-]+)\]\s+›\s+)?(\S+?):\d+:\d+\s+›\s+(.*?)(?:\s+\(\d[\d.]*(?:ms|s|m|h)\))?\s*$/.exec(
         plain,
       );
     if (!match) continue;

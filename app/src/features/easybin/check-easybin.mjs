@@ -31,6 +31,7 @@ import { fileURLToPath } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../tests/browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -104,7 +105,7 @@ async function openApp(browser, theme) {
     await page
       .screenshot({ path: join(outDir, `${browser.browserType().name()}-${theme}-start-failure.png`), timeout: WAIT })
       .catch(() => {});
-    await context.close();
+    await closeWithin(context);
     throw new Error(`EASyBIN mode did not start: ${String(error).split('\n')[0]}; page errors: ${errors.join(' | ')}`, {
       cause: error,
     });
@@ -262,7 +263,7 @@ async function functionalPass(browser, name, theme) {
     await page.screenshot({ path: join(outDir, `${name}-${theme}-failure.png`), timeout: WAIT }).catch(() => {});
     throw error;
   } finally {
-    await current.context.close();
+    await closeWithin(current.context);
   }
 }
 
@@ -743,7 +744,7 @@ async function performancePass(browser, name) {
     Math.min(...fills) < 500 && lastByte === 0xa5,
   );
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /** Runs a pass; an exception counts as one failed check and the next pass still runs. */
@@ -782,15 +783,15 @@ async function main() {
         console.log(`\n[${name}, responsiveness]`);
         await guarded(name, () => performancePass(browser, name));
       } finally {
-        await browser.close();
+        await doneWith(browser, { last: name === browsers.at(-1) });
       }
     }
   } finally {
-    await server.close();
+    closeAtEnd(server);
   }
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
-  process.exit(failures ? 1 : 0);
+  await endChecks(failures ? 1 : 0);
 }
 
 await main();

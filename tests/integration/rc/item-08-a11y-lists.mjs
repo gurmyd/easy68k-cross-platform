@@ -14,8 +14,11 @@
 //
 // With --log (the output of `npm run check:a11y`, or a CI job log of the group accessibility
 // fetched with `gh api repos/<owner>/<repo>/actions/jobs/<id>/logs`) it also reads the run: its
-// "N of N checks passed" lines, no FAIL, nothing printed as "known", and the check that proves each
-// of Q1-1 to Q1-6 passing in every browser the log covers. With --e2e-log (the output of
+// "N of N checks passed" lines, no failing check of the automated scan (the "axe ..." checks),
+// nothing printed as "known", and the check that proves each of Q1-1 to Q1-6 passing in every
+// browser the log covers. A failing check of the audit beyond the scan (a keyboard walk, for
+// example) is printed with its text; it makes the CI job red, which item 6 counts, and does not
+// decide item 8. With --e2e-log (the output of
 // `npx playwright test ... tests/e2e/app/a11y.spec.ts`, or a CI e2e job log) it counts the
 // a11y.spec.ts tests that passed and failed.
 //
@@ -33,6 +36,8 @@ const many = (name) => args.flatMap((arg, i) => (args[i - 1] === name ? [resolve
 
 let passed = 0;
 let failed = 0;
+/** Failing checks of the audit that are not part of the automated scan (item 6 counts them). */
+let beyondScan = 0;
 const check = (name, ok, detail = '') => {
   console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? ` - ${detail}` : ''}`);
   if (ok) passed += 1;
@@ -105,13 +110,23 @@ for (const file of many('--log')) {
   console.log(`\n[check-a11y log ${file}]`);
   const lines = clean(readFileSync(file, 'utf8'));
   const totals = lines.filter((line) => /^\d+ of \d+ checks passed/.test(line));
+  check('the audit printed its totals', totals.length > 0, totals.join(' | '));
+  // Item 8 asks that the automated scan (the axe checks, "axe <browser> ...") has no serious
+  // finding. The audit's other checks (keyboard walks, structure) failing make the job red, which
+  // item 6 counts; they are printed here, and they do not decide item 8.
+  const scan = lines.filter((line) => /^\s+(ok|FAIL|known)\s+axe /.test(line));
+  const scanFails = scan.filter((line) => /^\s+FAIL /.test(line));
   check(
-    'the audit printed its totals, each "N of N checks passed"',
-    totals.length > 0 && totals.every((line) => /^(\d+) of \1 checks passed\.?$/.test(line)),
-    totals.join(' | '),
+    'the automated scan ran and no axe check failed',
+    scan.length > 0 && scanFails.length === 0,
+    `${scan.length - scanFails.length} of ${scan.length} axe checks ok${scanFails.length ? `: ${scanFails.slice(0, 3).join(' | ')}` : ''}`,
   );
-  const fails = lines.filter((line) => /^\s+FAIL /.test(line));
-  check('no check failed', fails.length === 0, fails.slice(0, 3).join(' | '));
+  const others = lines.filter((line) => /^\s+FAIL /.test(line) && !/^\s+FAIL\s+axe /.test(line));
+  for (const line of others)
+    console.log(
+      `  --   a check of the audit beyond the scan failed (the job is red: item 6, not item 8):${line.replace(/^\s+FAIL/, '')}`,
+    );
+  beyondScan += others.length;
   const known = lines.filter((line) => /^\s+known /.test(line));
   check('nothing was printed as "known"', known.length === 0, known.slice(0, 3).join(' | '));
   const browsers = ['chromium', 'webkit'].filter((browser) =>
@@ -144,5 +159,9 @@ for (const file of many('--e2e-log')) {
 }
 
 console.log(`\n${passed} of ${passed + failed} checks passed${failed ? `, ${failed} failed` : ''}.`);
+if (beyondScan > 0)
+  console.log(
+    `${beyondScan} check(s) of the audit beyond the automated scan failed: they count under item 6 (a red job).`,
+  );
 console.log('Open for a person: "the manual list is signed off" (docs/MANUAL-TEST-MAC.md B7, V1-V9, and X4).');
 process.exitCode = failed ? 1 : 0;

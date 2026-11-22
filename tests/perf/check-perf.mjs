@@ -77,6 +77,7 @@ import {
   summarize,
   treeMemory,
 } from './perf-verdicts.mjs';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../..');
@@ -567,7 +568,7 @@ async function calibratePart(browser, name, programs) {
   }
   figures.parts[`calibrate-${name}`] = runs;
   check(`${name}: calibrate: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /** 6.9: at the default speed, over 30 s of spin.X68, TaskDuration grows by less than 4.5 s. */
@@ -626,7 +627,7 @@ async function taskDurationPart(browser, name, programs) {
       errors.length === 0,
       errors.slice(0, 3).join(' | '),
     );
-    await context.close();
+    await closeWithin(context);
   }
 }
 
@@ -752,7 +753,7 @@ async function maximumPart(browser, name, programs) {
       errors.length === 0,
       errors.slice(0, 3).join(' | '),
     );
-    await context.close();
+    await closeWithin(context);
   }
 }
 
@@ -862,7 +863,7 @@ async function framesPart(browser, name, programs) {
       errors.length === 0,
       errors.slice(0, 3).join(' | '),
     );
-    await context.close();
+    await closeWithin(context);
   }
 }
 
@@ -1011,7 +1012,7 @@ async function surfacePart(browser, name, programs) {
   figures.parts[`surface-${name}`] = { state, timing, memoryBefore, memoryAfter, heapBefore, heapAfter };
   await shot(page, `${name}-surface-4096`);
   check(`${name}: surface: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /** Chromium's JS heap in use (Performance.getMetrics JSHeapUsedSize), in bytes. */
@@ -1087,18 +1088,18 @@ async function main() {
             }
           }
         } finally {
-          await browser.close();
+          await doneWith(browser, { last: name === browsers.at(-1) });
         }
       }
     } finally {
-      await server.close();
+      closeAtEnd(server);
     }
   }
 
   writeFileSync(join(outDir, 'perf.json'), `${JSON.stringify(figures, null, 2)}\n`);
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
-  process.exit(failures ? 1 : 0);
+  await endChecks(failures ? 1 : 0);
 }
 
 await main();

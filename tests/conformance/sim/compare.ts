@@ -163,6 +163,11 @@ export function renderMismatchReport(
     metrics: string;
     /** Listed differences whose run has no official result yet (measured with a probe so far). */
     pending?: { key: string; known: KnownDifference }[];
+    /**
+     * Listed differences that lie only in bytes the official program does not fix (programs.ts
+     * ARTIFACT_MASKS): equal after masking them, and listed here with what was masked.
+     */
+    masked?: { key: string; known: KnownDifference | null; masked: string }[];
   },
 ): string {
   const lines = [
@@ -179,6 +184,9 @@ export function renderMismatchReport(
     `| Programs compared | ${counts.programs} |`,
     `| Artifacts compared | ${counts.runs} |`,
     `| Equal to the official result | ${counts.equal} |`,
+    ...(counts.masked?.length
+      ? [`| - of these, equal after masking bytes the original does not fix | ${counts.masked.length} |`]
+      : []),
     `| Different, with an owner | ${mismatches.filter((m) => m.known).length} |`,
     `| Different, not yet assigned | ${mismatches.filter((m) => !m.known).length} |`,
     '',
@@ -206,6 +214,25 @@ export function renderMismatchReport(
     lines.push('');
   }
   if (mismatches.length === 0) lines.push('No mismatch.', '');
+  if (counts.masked?.length) {
+    lines.push(
+      '## Equal after masking bytes the original does not fix',
+      '',
+      'The official program leaves these bytes undefined (their value differs between hosts), so the comparison',
+      'masks them in both artifacts (programs.ts ARTIFACT_MASKS); the difference stays listed in',
+      '`known-differences.json`.',
+      '',
+      '| Program | Recipe | Masked | Cause |',
+      '|---|---|---|---|',
+    );
+    for (const { key, known, masked } of counts.masked) {
+      const [id, recipe, kind] = key.split('|');
+      lines.push(
+        `| \`${id}\` | ${recipe} ${kind} | ${escapeCell(masked, 1000)} | ${escapeCell(known?.summary ?? '', 1000)} |`,
+      );
+    }
+    lines.push('');
+  }
   if (counts.pending?.length) {
     lines.push(
       '## Listed, waiting for the official result',

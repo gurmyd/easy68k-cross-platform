@@ -70,6 +70,7 @@ import { fileURLToPath } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../tests/browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -667,7 +668,7 @@ async function presentationPass(browser, name, ratio) {
   check(`${p} the text mirror holds the text the program wrote`, mirrored);
   await h.shot(`${name}-ratio${ratio}-panel.png`);
   noErrors(p, h);
-  await context.close();
+  await closeWithin(context);
 }
 
 /** The prompt overlay, the collapse button, and an accessibility scan. */
@@ -742,7 +743,7 @@ async function panelPass(browser, name) {
     (await page.locator('.e68-output').isVisible()) && (await h.hasKeys()),
   );
   noErrors(p, h);
-  await context.close();
+  await closeWithin(context);
 }
 
 // --- keys (2.9.4) ---------------------------------------------------------------------------
@@ -981,7 +982,7 @@ async function keysPass(browser, name, os) {
   );
   await h.shot(`${name}-${os}-released.png`);
   noErrors(p, h);
-  await context.close();
+  await closeWithin(context);
 }
 
 // --- text: typing, repeat, dead keys, composition --------------------------------------------
@@ -1118,7 +1119,7 @@ async function textPass(browser, name) {
   }
   await h.shot(`${name}-text.png`);
   noErrors(p, h);
-  await context.close();
+  await closeWithin(context);
 }
 
 // --- paste -----------------------------------------------------------------------------------
@@ -1253,7 +1254,7 @@ async function pastePass(browser, name, os) {
     `${p} this headless browser ${realEvents.some((e) => e.type === 'paste') ? 'fired' : 'did not fire'} a paste event for the real ${chord}`,
   );
   noErrors(p, h);
-  await context.close();
+  await closeWithin(context);
 }
 
 // --- focus -----------------------------------------------------------------------------------
@@ -1314,7 +1315,7 @@ async function focusPass(browser, name) {
   );
   await page.keyboard.up('ArrowRight');
   noErrors(p, h);
-  await context.close();
+  await closeWithin(context);
 }
 
 // --- mouse -----------------------------------------------------------------------------------
@@ -1410,7 +1411,7 @@ async function mousePass(browser, name) {
   );
   await page.mouse.up({ button: 'right' });
   noErrors(p, h);
-  await context.close();
+  await closeWithin(context);
 }
 
 // --- full screen (2.5) ------------------------------------------------------------------------
@@ -1433,7 +1434,7 @@ async function probeFullScreen(browser) {
   await page.mouse.click(50, 50);
   await page.waitForFunction(() => window.__probe !== 'none', null, { timeout: 5000 }).catch(() => {});
   const result = await page.evaluate(() => window.__probe);
-  await context.close();
+  await closeWithin(context);
   return result === 'none' ? 'never settled' : result;
 }
 
@@ -1601,7 +1602,7 @@ async function fullScreenPass(browser, name) {
   state = await layout(h);
   check(`${p} ... and the header strip is back`, state.header !== 'none' && !state.covers);
   noErrors(p, h);
-  await context.close();
+  await closeWithin(context);
 
   // 3. Deferred: a program asks (task 33) while no user gesture is active. Everything this
   // script does to a page counts as a user gesture there for a few seconds (the automation
@@ -1644,7 +1645,7 @@ async function fullScreenPass(browser, name) {
     (await isWindowed(h)) && (await prompt.count()) === 0,
   );
   noErrors(p, h);
-  await context.close();
+  await closeWithin(context);
 
   // ... and carried out by the next key, which the program receives as well.
   ({ context, h } = b);
@@ -1657,7 +1658,7 @@ async function fullScreenPass(browser, name) {
   check(`${p} ... and is delivered to the program as well`, keySeen);
   check(`${p} ... and the prompt is gone`, (await h.page.locator('.e68-output__prompt').count()) === 0);
   noErrors(p, h);
-  await context.close();
+  await closeWithin(context);
 
   // ... or by a click on the surface.
   ({ context, h } = c);
@@ -1675,7 +1676,7 @@ async function fullScreenPass(browser, name) {
     hex(await h.long(h.MOUSE.downPosition)),
   );
   noErrors(p, h);
-  await context.close();
+  await closeWithin(context);
 
   // ... or by the full-screen button, which then does not toggle straight back.
   ({ context, h } = d);
@@ -1689,7 +1690,7 @@ async function fullScreenPass(browser, name) {
     await h.fullScreen(),
   );
   noErrors(p, h);
-  await context.close();
+  await closeWithin(context);
 
   // 4. Refused although a gesture was present: the original's failure box.
   ({ context, h } = await fresh());
@@ -1741,7 +1742,7 @@ async function fullScreenPass(browser, name) {
     ),
   );
   noErrors(p, h);
-  await context.close();
+  await closeWithin(context);
 
   // 5. The desktop app: the window goes full screen, the panel fills it; no gesture is needed.
   ({ context, h } = await fresh({ desktop: true }));
@@ -1779,7 +1780,7 @@ async function fullScreenPass(browser, name) {
     `${await h.fullScreen()}, window calls ${JSON.stringify(await h.page.evaluate(() => window.__output.windowFullScreen))}`,
   );
   noErrors(p, h);
-  await context.close();
+  await closeWithin(context);
 }
 
 // --- a device pixel ratio that is not a whole number --------------------------------------
@@ -1870,7 +1871,7 @@ async function fractionalRatioPass(browser, name, ratio) {
   );
   await h.shot(`${name}-ratio${ratio}-fractional.png`);
   noErrors(p, h);
-  await context.close();
+  await closeWithin(context);
 }
 
 // --- the application itself: the real session ------------------------------------------------
@@ -2406,7 +2407,7 @@ async function appPass(browser, name) {
   );
   await h.shot(`${name}-app-narrow.png`);
   noErrors(p, h);
-  await context.close();
+  await closeWithin(context);
 }
 
 // --- run -------------------------------------------------------------------------------------
@@ -2492,16 +2493,16 @@ async function main() {
           }
         }
       } finally {
-        await browser.close();
+        await doneWith(browser, { last: name === browsers.at(-1) });
       }
     }
   } finally {
-    await server.close();
+    closeAtEnd(server);
   }
 
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
-  process.exit(failures ? 1 : 0);
+  await endChecks(failures ? 1 : 0);
 }
 
 await main();

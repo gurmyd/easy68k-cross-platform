@@ -36,6 +36,22 @@ export async function recordPrints(page: Page): Promise<void> {
   await page.addInitScript(recordPrintsInFrame);
 }
 
+/**
+ * Waits until no print is under way: the platform's hidden print frame is gone and the top document
+ * has the keyboard focus again (the print feature gives it back, app/src/features/print/focus.ts).
+ * A key pressed before that goes to the print frame, not to the page (errata/E6.md). The frame is
+ * in the page as soon as the print command has run (Platform.print appends it synchronously), so
+ * this is the moment to call it, after the key that printed. It polls on a timer, not on animation
+ * frames, which GitHub's macOS runner at times does not deliver.
+ */
+export async function printsSettled(page: Page, timeout = 15_000): Promise<void> {
+  await page.waitForFunction(
+    () => document.querySelector('iframe[srcdoc][aria-hidden="true"]') === null && document.hasFocus(),
+    undefined,
+    { polling: 50, timeout },
+  );
+}
+
 /** The documents printed so far, in order. */
 export function printed(page: Page): Promise<Printed[]> {
   return page.evaluate(() => (window as unknown as { __printed?: Printed[] }).__printed ?? []);
