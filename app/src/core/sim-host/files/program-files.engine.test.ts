@@ -339,7 +339,9 @@ describe.skipIf(!enginesBuilt)(
       expect(word(next()), '51 read-only: D0').toBe(3);
       expect(word(next()), '53 on read-only: D0').toBe(0);
       expect(next(), '53 on read-only: D2').toBe(2);
-      expect(word(next()), '54 on read-only: D0').toBe(2);
+      // The Borland fwrite does not look at the mode: the bytes go into the buffer and the task
+      // succeeds; the flush at the close fails (engine/sim/shim/STDIO-MODEL.md R7, R12).
+      expect(word(next()), '54 on read-only: D0').toBe(0);
       expect(word(next()), '59 read-only').toBe(3);
       expect(word(next()), '59 writable').toBe(0);
       expect(word(next()), 'read 20 after write 10: D0').toBe(0);

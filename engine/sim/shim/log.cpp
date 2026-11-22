@@ -24,6 +24,7 @@ void TLog::stopLog() {
   if (logging) { // if log in progress
     // fclose(ElogFile); fclose(OlogFile);  -> the host closes its files
     easy68k_log_open(false);
+    easy68k_files_log_streams(0);
     logging = false;
     host_log_state(0);
   }
@@ -53,6 +54,8 @@ void TLog::startLog(const char *timeStr) {
       logMemBytes -= logMemBytes % 16;   // force to increment of $10
     }
   }
+  // prepareLogFile opens a stream for each selected log (logU.cpp:111-176)
+  easy68k_files_log_streams((ElogFlag ? 1 : 0) + (OlogFlag ? 1 : 0));
   logging = true;
   host_log_state(1);
 }

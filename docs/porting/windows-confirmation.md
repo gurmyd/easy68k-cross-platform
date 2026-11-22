@@ -41,9 +41,14 @@ Four programs that were in this part have left it: `a58` (the device `NUL`) was 
 difference and is repaired; `b06` (drawing modes 18-23) was settled by measuring the GDI calls on
 Windows 11; and `a51` and `a52` (a read right after a write, a write right after a read, without a
 seek) need no Windows run, because the C run-time that decides them is inside `SIM68K.exe` and
-behaves the same under Wine: they are defects of the port with a repair pending
-(`docs/differences/T3.md`, "Seen only under Wine"). If you run `a51` or `a52` anyway, in the same
-way as below, nothing is lost: send their folders with the others.
+behaves the same under Wine; the port follows that run-time since gate I3 and produces their
+goldens (`docs/differences/T3.md`, "Seen only under Wine"). If you run `a51` or `a52` anyway, in the
+same way as below, nothing is lost: send their folders with the others.
+
+`a53` stays for one point only. The port produces its golden too, and every step of it is the
+run-time's except one system call: the run-time asks `WriteFile` to write a count above 4 GB (its
+flush count of -3). Under Wine that call fails without writing (measured), which is why the close
+fails and the file keeps 5 bytes. The Windows run confirms that Windows refuses it the same way.
 
 For each of the two folders, in either order:
 
@@ -65,12 +70,14 @@ Then zip `C:\confirm\a53` and `b19` (the whole folders) and send the zip back. T
 `result.bin` with the golden `tests/conformance/sim/golden/<suite>/<name>.result.bin` (the official
 result under Wine) and with the port's result:
 
-- **Windows result = golden**: Wine is not the cause; the difference is the port's. The owner in
-  `known-differences.json` (SH6 for a53, W1 for b19) repairs the port, T3 removes the
+- **Windows result = golden**: Wine is not the cause. For a53 nothing more is to be done (the port
+  already gives the golden); for b19 the difference is the port's: W1 repairs it, T3 removes the
   `unconfirmed` mark now and the entry when the repair lands.
-- **Windows result = the port's**: the golden was Wine's. T3 replaces the golden with the Windows
+- **Windows result = the port's** (b19): the golden was Wine's. T3 replaces the golden with the Windows
   result (committed as the golden, the Windows version in the commit message) and removes the
   entry; the port needs nothing.
+- **a53 differs from the golden on Windows**: Windows wrote the count above 4 GB (or part of it); T3
+  replaces the golden and the engine's `osWrite` (`engine/sim/shim/hostfile.cpp`) follows Windows.
 - **Anything else**: a third answer; T3 records it and the owner of the spec decides.
 
 If you want to read the answer on the spot instead (open `result.bin` in Notepad; each line is the
@@ -79,9 +86,8 @@ golden holds, "port" what the port writes today.
 
 | Program | Line of `result.bin` | Wine (golden) | Port | What the line is |
 | ------- | -------------------- | ------------- | ---- | ---------------- |
-| a53 | 2 | `D0=00000000` | `D0=00000001` | task 53 right after a write 20 bytes past the end |
-| a53 | 3 | `D0=00000002` | `D0=00000000` | task 56 (close) of that stream: fails or succeeds |
-| a53 | 5 | `D2=00000005` | `D2=0000001A` | bytes a new stream reads: 5 (`ABCDE`) or 26 (`ABCDE`, 20 zeros, `X`) |
+| a53 | 3 | `D0=00000002` | `D0=00000002` | task 56 (close) of that stream: fails if `WriteFile` refused the count above 4 GB; `D0=00000000` on Windows would mean it wrote |
+| a53 | 5 | `D2=00000005` | `D2=00000005` | bytes a new stream reads: 5 (`ABCDE`) as under Wine, or more if Windows wrote |
 | b19 | 1, 2 | `D0=27360001` | `D0=276D0001` | task 102 and task 106 before any network task: "not a socket" (Wine) or "Winsock not initialised" (the Winsock documentation) |
 
 What each difference is, and why Wine is or is not the suspect: `docs/differences/T3.md`

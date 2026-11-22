@@ -19,3 +19,61 @@ measurements of docs/porting/errata/T3.md F2.
 | Printing (task 10) | Each form feed sends a page to the Windows printer at once | Each form feed adds a job to the `Printer Output` dialog, which opens by itself; `Print...` opens the system print dialog. `File > Printer Setup...` opens the same dialog | 1.4 note 2: a page cannot print without the print dialog |
 | Printer page | The real printer's page and the Printer Font measured on it | A letter page at 600 dpi, cell from the Printer Font size (3.8.4) | No printer to ask in a browser |
 | Printer Font changed in the middle of a page | The next character makes the printer library fail ("Printing in progress"), which the simulator reports as `ERROR: An exception occurred in routine 'exec_inst'.` and switches to trace mode | The open job is ended as it stands and a new one starts | A defect of the original caused by the user's action; recorded so it can be reverted if it must be reproduced |
+
+## The stream's buffer memory (gate I3, stdio work; engine/sim/shim/STDIO-MODEL.md)
+
+Since gate I3 the engine has the file streams of the Borland run-time linked into SIM68K.exe, so
+the sequences C leaves undefined - a read right after a write, a write right after a read, without
+a seek between them - give the official results (trap15-a `a51`, `a52`, `a53`, and `a61`-`a69`).
+Two things remain different, both reached only through those undefined sequences. All of it was
+measured in the official program under Wine (STDIO-MODEL.md sections 7 and 9).
+
+**Heap residue.** A stream's 512-byte buffer comes from the original's heap. A read right after a
+write takes its bytes from the buffer behind the written ones (in `a51` the 4 bytes after
+`ABCDE`), a read in the read state after a write there can run past the bytes that came from the
+file, and a flush after a read in the write state writes such bytes into the file. Those bytes are
+whatever the heap held: remains of what the simulator loaded before (text of the listing such as
+`00001000 Starting Address`, Windows help strings such as `Primary screen = 1`), the heap's own
+bookkeeping (pointers and sizes in bytes 0-7 of a buffer that an earlier stream freed, e.g. `3A 02`
+in bytes 2-3, a small number in byte 5), and heap pointers past the end of the buffer. They are the
+same in every run of one program but differ between programs, and depend on more than the program
+did. In `a51` they are `0A 00 00 44`. The port does what is measured about which block a stream gets
+(the lowest freed one, with its old bytes from the ninth on) and gives zeros for everything that
+depends on the heap's history: `00 00 00 00` in `a51`. What a student sees: in the original, a few
+bytes the program never wrote - in its memory after such a read, and in the file after such a flush
+(a file that ends in, say, `27 00` after a program wrote `ABCDE`, read 2 and wrote 4 without a
+seek); in the port, zero bytes in the same places, the file of the same length.
+
+**A write past the end of the buffer.** A write right after a read that had left the buffer nearly
+empty (fewer free bytes than the write's length) is copied past the end of the buffer over the
+next heap block. In the original, 1 to 3 bytes past the end were harmless in every run; 4 bytes
+were harmless in most layouts, but in the reviewer's program q02 under the file name
+`q02-end-of-buffer.X68` the simulator process ended at once (the same program under another name
+completed); 5 or more bytes made the next open, close or task 59 end in the box `ERROR: An exception
+occurred in routine 'exec_inst'.` in most layouts, but 8 zero bytes in one layout were harmless.
+So the outcome depends on the bytes and on the heap's layout, which even the program file's name
+changes. The port's choice: up to 4 bytes are harmless; from 5 bytes on the next and every later
+open or close of a file (and task 59) shows that box, which is what the original did after the
+first box in every probe (e4: OK and Run, then each later open showed the box again, D0.W = 2,
+D1 = -1). A student who writes past a stream's buffer therefore sees the box in the port where
+the original showed it in most measured cases, sees nothing where the original ended (q02's 4
+bytes), and sees the box where the original's heap happened to accept the bytes (x3's zeros).
+
+**A log started with a nearly full stream table.** While a log runs, its files are streams of the
+same table as the program's files (STDIO-MODEL.md section 8; this the port reproduces). When a log
+starts and the table has no free entry for one of its files, the original does not open that file:
+measured (probe e6: 46 streams whose close failed, then Log Start with both logs selected), the
+execution log was created, the box `Error` / `Can't open log file, error 0` appeared, the output
+log was not written, and the log stayed marked as running. In the port the log service opens and
+writes both logs; no box appears. A student meets this only after more than 44 opened files whose
+close failed in one session. Read in the code, not measured: the original's Log Stop closes the
+execution log's file pointer even when only an output log was started, so a pointer left from an
+earlier execution log could close a program's stream that has since taken its entry; the port
+has no such pointer.
+
+Two smaller differences: if a stream that has been read in the write state is left open while a
+task 58 dialog moves the current folder, the bytes the host writes for it at the end of the program
+can be more than the original's flush would write (STDIO-MODEL.md section 10); and a copy of a read
+in the write state whose count wrapped the bounds test of task 53 ends in the `exec_inst` error box
+in both (probe p13), but the port copies nothing first, while the original copies heap memory into
+the 68000 memory until its access violation (how far is not measured).

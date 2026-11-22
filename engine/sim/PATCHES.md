@@ -91,19 +91,40 @@ These keep further lines of the originals unchanged.
   and renames `fopen` and `remove` to `easy68k_fopen` / `easy68k_remove`
   (`shim/hostfile.cpp`), which serve the files of TRAP #15 tasks 50-59 from the
   host and the S-record text from the bytes the host handed over.
-  Since gate I2 it also renames `fread` and `fwrite` (function-like macros) to
-  `easy68k_fread` / `easy68k_fwrite` in `shim/hostfile.cpp`, which answer two
-  requests as the Borland run-time library linked into SIM68K.exe does and pass
-  everything else to the C library: `fwrite` with an item size of 0 returns
-  the item count (task 54 with D2 = 0 gives D0.W = 0, not 2), and `fread` of
-  more than `INT_MAX` single bytes returns the requested count and reads
-  nothing (task 53 whose bounds test wraps, e.g. A1 = $2000 and
-  D2 = $FFFFFFFF, gives D0.W = 0 and leaves D2 unchanged, not 2). Both were
-  measured in the official binary under Wine (T3: `tests/conformance/sim`,
-  trap15-a `a31` and `a32`; errata T3.md F3, F4). Tests: io.test.mjs, "file
-  tasks 50-59 against the host file system" (D2 = 0), and
-  `app/src/engine/trap15.test.ts`, "TRAP #15 edge cases measured in the
-  official binary" (both cases, and P24).
+  Since gate 3 (branch `gate3/stdio`) it also renames `fread`, `fwrite`, `fseek`, `fclose` and
+  `feof` (function-like macros) to `easy68k_*` functions in `shim/hostfile.cpp`. On the files of
+  the 68000 program these are **the stream of the Borland C++ Builder 6 run-time library** that is
+  linked into SIM68K.exe, modelled function by function from its machine code and measured in the
+  official program under Wine: one 512-byte buffer, one signed `level` counter for both directions,
+  the flags `READ`, `WRIT`, `ERR`, `EOF`, ..., 47 free stream entries, and the system calls below
+  (`ReadFile`, `WriteFile`, `SetFilePointer`, `CloseHandle`) taken from the host's file interface,
+  which did not change. `shim/STDIO-MODEL.md` is the specification, with the address of every
+  function in SIM68K.exe and the probe that shows each rule. On any other `FILE*` (loadSrec's
+  `"rt"` stream, the execution log) they are the C library's functions, as before.
+  Until then the streams were unbuffered `fopencookie` streams of this build's C library, and the
+  host imitated the run-time's buffering; the sequences C leaves undefined came out differently
+  (trap15-a `a51`, `a52`, `a53`: a read right after a write, a write right after a read, a close
+  that fails and leaves the file open; they now produce the official results, as do the
+  conformance programs `a61`-`a68` that cover every rule of the model). Observable differences
+  that remain: the bytes a read returns of memory the program never wrote - residue of the
+  original's heap (text loaded earlier, heap pointers) that the port gives as zeros
+  (STDIO-MODEL.md sections 7 and 10; docs/differences/SH6.md). The two special cases that
+  gate I2 measured are part of the model: `fwrite` with an item size of 0 returns the item count
+  (task 54 with D2 = 0 gives D0.W = 0, not 2), and `fread` of 0xFFFFFFFF bytes returns the
+  requested count because the failed `ReadFile` returns -1, which the run-time compares with the
+  count (task 53 whose bounds test wraps, A1 = $2000 and D2 = $FFFFFFFF, gives D0.W = 0 and leaves
+  D2 unchanged; T3: `tests/conformance/sim`, trap15-a `a31` and `a32`; errata T3.md F3, F4). Other
+  wrapping counts now fail as the original's do (D0.W = 2) instead of returning the count. Tests:
+  io.test.mjs ("file tasks 50-59 ..."), `app/src/engine/trap15.test.ts`, and the conformance
+  programs trap15-a `a30`-`a37`, `a51`-`a60` and `a61`-`a68`; `test/stdio.test.mjs` also for what the
+  oracle's recipes cannot drive (Rewind, the end of the process, the heap damage; measured with the
+  probes of STDIO-MODEL.md section 9).
+  `shim/simio.cpp` (`fileDialogReply`) tells `shim/hostfile.cpp` when a task 58 dialog was
+  accepted (`easy68k_files_folder_changed`), `shim/log.cpp` (Log Start, Log Stop) tells it how many
+  log files the original would hold open as streams of the same table (`easy68k_files_log_streams`;
+  measured, STDIO-MODEL.md section 8), and `shim/api.cpp` takes the size of the memory
+  padding from `shim/easy68k.h` (`EASY68K_MEMORY_PADDING`), which the streams use to tell where
+  the 68000 memory ends.
 - **Stand-in headers with the original names**, found through the include
   path: `shim/vcl/vcl.h`, `dos.h`, `Printers.hpp`, `iostream.h`, `conio.h`,
   `net.h`, and the form headers `shim/SIM68Ku.h`, `simIOu.h`, `hardwareu.h`,
@@ -169,9 +190,9 @@ These keep further lines of the originals unchanged.
 | 11.7 `fprintf(ElogFile, listingLine)` | `TForm1::lineToLog` (`shim/form1.cpp`) writes the listing line with `fputs`. For a line that contains `%` the original prints something that depends on printf internals and stack contents; here the line is written literally. **This is the one place where the execution log can differ from the original.** |
 | 11.7 `%u` with a 64-bit argument | P28. |
 | 11.7 `%hc` (found during the port) | P06. |
-| 11.8 Text mode | `loadSrec` reads its file as the Borland C library reads text mode: carriage returns are removed and Ctrl-Z ends the file (`shim/hostfile.cpp`). The execution log is written with `\n` -> CR LF, as a text-mode file on Windows. Files of TRAP #15 tasks are binary in the original too. |
-| 11.8 `initSim` forgets open files | Unchanged: the handles are dropped without closing. The host's `fileClose` is simply never called for them. |
-| 11.9 **Exceptions** | The `try` / `catch (...)` of `loadSrec` is unchanged; that of `exec_inst` moved one call up (P05, P09); those of `runLoop`, `OpenFile`, `OpenDataExecute` and the I/O window functions are in the ported shim code. They catch what the stand-ins throw: `EConvertError` (a memory-map range in an S0 record that is not hexadecimal, register text that is not a number), `EStringListError` (listing index), and `EStackOverflow` (next row). The original's handlers also caught CPU faults (access violations); those cannot occur here. |
+| 11.8 Text mode | `loadSrec` reads its file as the Borland C library reads text mode: carriage returns are removed and Ctrl-Z ends the file (`shim/hostfile.cpp`). The execution log is written with `\n` -> CR LF, as a text-mode file on Windows. Files of TRAP #15 tasks are binary in the original too; their streams are the modelled Borland streams (section 3, `shim/STDIO-MODEL.md`). |
+| 11.8 `initSim` forgets open files | Unchanged: the streams are dropped without closing. As in the original, each keeps its entry of the run-time's stream table (47 in all), its buffer and its open handle until the engine ends; the host's `fileClose` is never called for them, and the bytes their flush would write are already pending in the host, which writes them at its exit (`shim/STDIO-MODEL.md` R13, section 10). |
+| 11.9 **Exceptions** | The `try` / `catch (...)` of `loadSrec` is unchanged; that of `exec_inst` moved one call up (P05, P09); those of `runLoop`, `OpenFile`, `OpenDataExecute` and the I/O window functions are in the ported shim code. They catch what the stand-ins throw: `EConvertError` (a memory-map range in an S0 record that is not hexadecimal, register text that is not a number), `EStringListError` (listing index), `EStackOverflow` (next row), and `EAccessViolation`, which `shim/hostfile.cpp` throws where the original's run-time faults on its own memory: a stream buffer's heap damaged by a write past its end, and a copy past the end of the 68000 memory (`shim/STDIO-MODEL.md` sections 7 and 10). The original's handlers also caught other CPU faults (access violations); no other one can occur here. |
 | 11.9 **Unbounded recursion** | Two cycles: (a) a bus error whose vector fetch `mem_req(0x8, ...)` faults again (vector 8 inside an Invalid range, or a Protected range while the displayed S bit is 0): endless; (b) an exception frame pushed while the supervisor stack is inside a Read / Invalid range: `exceptionHandler -> put -> mem_put -> memoryMapCheck -> exceptionHandler`, which ends when the stack pointer has moved out of the range (4 bytes per level). P10 and P13 count the nesting; beyond 1000 levels `EStackOverflow` is thrown. Inside `exec_inst` that ends in the original handler: the box `ERROR: An exception occurred in routine 'exec_inst'.` and trace mode - which is what a stack overflow most probably caused in the original (not verifiable). Outside `exec_inst` it ends in the surrounding original handler (`Unexpected error in runLoop`, `Error in FormKeyPress`) or, where the original has none, in a message box `Stack overflow`. **Difference:** cycle (b) with a range of more than about 4000 bytes below the stack pointer ends in the error box here, while the original would complete the nesting if its 1 MB stack sufficed. |
 | 11.10 `char` signedness | `-fsigned-char`. |
 | 11.11 Timing | The engine never reads a clock: `gettime()` (task 8) asks the host; delays and timers are driven by the host (README, "Time"). |

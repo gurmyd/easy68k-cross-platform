@@ -1098,7 +1098,7 @@ describe.skipIf(!enginesBuilt)('trap15-a §13 Input, round I3 (needs engine/dist
 
 describe.skipIf(!enginesBuilt)('trap15-a §13 Files and Memory map, round I3 (needs engine/dist)', () => {
   it(
-    'files-4: task 51 on a read-only file gives 3 and a valid FID; task 53 reads through it; task 54 gives 2',
+    'files-4: task 51 on a read-only file gives 3 and a valid FID; task 53 reads through it; task 54 gives 0, the close 2',
     async () => {
       const p = await program([
         '        ORG     $1000',
@@ -1139,7 +1139,10 @@ describe.skipIf(!enginesBuilt)('trap15-a §13 Files and Memory map, round I3 (ne
       expect(outcome.registers.d[5]).toBe(0xabcd0000);
       expect(outcome.registers.d[4]).toBe(5);
       expect([...(outcome.memory.get(buf) ?? [])]).toEqual([...text('hello'), 0xee]);
-      expect(outcome.registers.d[3]).toBe(0xabcd0002);
+      // The Borland fwrite does not look at the mode: 2 bytes go into the buffer (D0.W = 0), and the
+      // flush at the close fails, so task 56 gives 2 (engine/sim/shim/STDIO-MODEL.md R7, R12).
+      expect(outcome.registers.d[3]).toBe(0xabcd0000);
+      expect((outcome.registers.d[0] ?? 0) & 0xffff).toBe(2);
       expect([...(outcome.files['ro.txt'] ?? [])]).toEqual([...text('hello')]); // nothing written
     },
     LONG,

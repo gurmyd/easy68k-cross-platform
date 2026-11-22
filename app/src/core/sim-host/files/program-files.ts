@@ -1,11 +1,16 @@
 // The 68000 program's files (ARCHITECTURE.md 3.8.4): the C library streams of the original over a
 // SyncFiles view, and the task 58 dialog.
 //
-// The engine passes the program's file operations to the host unbuffered and in order (TRAP #15
-// tasks 50-59, trap15-a §7). The original opened these files with fopen() and the Borland run-time
-// library buffered them, which a program can observe: data written and not closed is not in the
-// file yet when the program, or anything else, looks at the file again. This class therefore
-// models the stream:
+// The original opened these files with fopen() and the Borland run-time library buffered them,
+// which a program can observe. Since gate I3 the engine itself has that run-time's streams
+// (engine/sim/shim/STDIO-MODEL.md) and uses this class as the operating system below them: a read
+// of the stream's buffer arrives here as a read of 512 bytes, its flush as a write. The engine
+// relies on two properties of this class: a write of STDIO_BUFFER bytes or fewer into an empty
+// pending buffer stays pending until the next call on the handle (the engine keeps there the bytes
+// its stream's flush would write), and pending bytes are written by exit() / exitNow() (the
+// run-time's flush of every stream at the end of the process). The buffering below was written
+// while the engine passed every request through unbuffered; it still describes what this class
+// does, but the engine's requests never depend on it otherwise (STDIO-MODEL.md section 10):
 //
 // - Names (trap15-a §7.1, §11 item 14): Windows-1252; '\' and '/' separate; relative names resolve
 //   against `currentDir`; letter case is ignored when no exact match exists; a name with a drive

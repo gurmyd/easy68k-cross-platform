@@ -1,0 +1,233 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 12:00:00 PM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : stdio - the Borland run-time's file streams (tasks 50-59)
+00000000                             3  * Written by : easy68k-mac project (test fixture, GPL-2.0-or-later)
+00000000                             4  * Description: The test puts a case number in D7 and runs.  Case n is the
+00000000                             5  *              code at $2000 + n*$100.  D0.W and D2.L after each task are
+00000000                             6  *              stored with (A6)+ in RESULTS (word, long).
+00000000                             7  *              test/stdio.test.mjs asserts; shim/STDIO-MODEL.md has the
+00000000                             8  *              rules (R1-R13) the cases check.
+00000000                             9  *-----------------------------------------------------------
+00000000                            10  T15     MACRO                   TRAP #15 task \1, then D0.W and D2.L to (A6)+
+00000000                            11          MOVEQ   #\1,D0
+00000000                            12          TRAP    #15
+00000000                            13          MOVE.W  D0,(A6)+
+00000000                            14          MOVE.L  D2,(A6)+
+00000000                            15          ENDM
+00000000                            16  
+00001000                            17          ORG     $1000
+00001000  4DF9 00008000             18  START:  LEA     RESULTS,A6
+00001006  E14F                      19          LSL.W   #8,D7
+00001008  41F8 2000                 20          LEA     $2000,A0
+0000100C  4EF0 7000                 21          JMP     0(A0,D7.W)
+00001010                            22  
+00002000                            23          ORG     $2000           case 0: a read right after a write (R3, R6)
+00002000  43F9 00002752             24          LEA     NAME,A1
+00002006                            25m         T15     52              new
+0000200E  2C01                      26          MOVE.L  D1,D6
+00002010  43F9 00002760             27          LEA     ABC,A1
+00002016  7405                      28          MOVEQ   #5,D2
+00002018                            29m         T15     54              write ABCDE
+00002020  2206                      30          MOVE.L  D6,D1
+00002022  43F9 00002768             31          LEA     BUF,A1
+00002028  7404                      32          MOVEQ   #4,D2
+0000202A                            33m         T15     53              read 4: from the buffer, D2 = 4
+00002032  2206                      34          MOVE.L  D6,D1
+00002034                            35m         T15     56              close: the flush writes 1 byte
+0000203C  FFFF FFFF                 36          SIMHALT
+00002040                            37  
+00002100                            38          ORG     $2100           case 1: a write right after a read (R8)
+00002100  43F9 00002752             39          LEA     NAME,A1
+00002106                            40m         T15     52
+0000210E  2C01                      41          MOVE.L  D1,D6
+00002110  43F9 00002760             42          LEA     ABC,A1
+00002116  7405                      43          MOVEQ   #5,D2
+00002118                            44m         T15     54              write ABCDE
+00002120  2206                      45          MOVE.L  D6,D1
+00002122  7401                      46          MOVEQ   #1,D2
+00002124                            47m         T15     55              seek 1
+0000212C  2206                      48          MOVE.L  D6,D1
+0000212E  43F9 00002768             49          LEA     BUF,A1
+00002134  7402                      50          MOVEQ   #2,D2
+00002136                            51m         T15     53              read 2 (BC)
+0000213E  2206                      52          MOVE.L  D6,D1
+00002140  43F9 00002765             53          LEA     XYZ,A1
+00002146  7401                      54          MOVEQ   #1,D2
+00002148                            55m         T15     54              write X: into the read buffer only
+00002150  2206                      56          MOVE.L  D6,D1
+00002152                            57m         T15     56
+0000215A  FFFF FFFF                 58          SIMHALT
+0000215E                            59  
+00002200                            60          ORG     $2200           case 2: a flush that fails (R6, R12)
+00002200  43F9 00002752             61          LEA     NAME,A1
+00002206                            62m         T15     52
+0000220E  2C01                      63          MOVE.L  D1,D6
+00002210  43F9 00002760             64          LEA     ABC,A1
+00002216  7405                      65          MOVEQ   #5,D2
+00002218                            66m         T15     54              write ABCDE
+00002220  2206                      67          MOVE.L  D6,D1
+00002222  7419                      68          MOVEQ   #25,D2
+00002224                            69m         T15     55              seek 25: ABCDE is written
+0000222C  2206                      70          MOVE.L  D6,D1
+0000222E  43F9 00002765             71          LEA     XYZ,A1
+00002234  7401                      72          MOVEQ   #1,D2
+00002236                            73m         T15     54              write X
+0000223E  2206                      74          MOVE.L  D6,D1
+00002240  43F9 00002768             75          LEA     BUF,A1
+00002246  7404                      76          MOVEQ   #4,D2
+00002248                            77m         T15     53              read 4: the flush would now write -3 bytes
+00002250  2206                      78          MOVE.L  D6,D1
+00002252                            79m         T15     56              close fails: D0.W = 2, the handle stays open
+0000225A  43F9 00002752             80          LEA     NAME,A1
+00002260                            81m         T15     57              delete fails: the file is open
+00002268  FFFF FFFF                 82          SIMHALT
+0000226C                            83  
+00002300                            84          ORG     $2300           case 3: the error flag (R5, R11)
+00002300  43F9 00002752             85          LEA     NAME,A1
+00002306                            86m         T15     52
+0000230E  2C01                      87          MOVE.L  D1,D6
+00002310  43F9 00002B68             88          LEA     BIG,A1
+00002316  243C 00000258             89          MOVE.L  #600,D2
+0000231C                            90m         T15     54              600 bytes: written at once
+00002324  2206                      91          MOVE.L  D6,D1
+00002326  43F9 00002760             92          LEA     ABC,A1
+0000232C  7405                      93          MOVEQ   #5,D2
+0000232E                            94m         T15     54              5 bytes into the buffer
+00002336  2206                      95          MOVE.L  D6,D1
+00002338  43F9 00002768             96          LEA     BUF,A1
+0000233E  7407                      97          MOVEQ   #7,D2
+00002340                            98m         T15     53              read 7 in the write state
+00002348  2206                      99          MOVE.L  D6,D1
+0000234A  7400                     100          MOVEQ   #0,D2
+0000234C                           101m         T15     55              seek: the flush fails, D0.W = 2
+00002354  2206                     102          MOVE.L  D6,D1
+00002356  7400                     103          MOVEQ   #0,D2
+00002358                           104m         T15     55              seek again: 0
+00002360  2206                     105          MOVE.L  D6,D1
+00002362  43F9 00002768            106          LEA     BUF,A1
+00002368  7403                     107          MOVEQ   #3,D2
+0000236A                           108m         T15     53              read 3: the error flag stays, D0.W = 2
+00002372  2206                     109          MOVE.L  D6,D1
+00002374  43F9 00002768            110          LEA     BUF,A1
+0000237A  243C 00000258            111          MOVE.L  #600,D2
+00002380                           112m         T15     53              read 600: 512 straight from the file, D2 = 512
+00002388  2206                     113          MOVE.L  D6,D1
+0000238A                           114m         T15     56              close: 0
+00002392  FFFF FFFF                115          SIMHALT
+00002396                           116  
+00002400                           117          ORG     $2400           case 4: a write after a read that emptied the buffer (R10)
+00002400  43F9 00002759            118          LEA     DATA,A1
+00002406                           119m         T15     51              open the 300-byte file
+0000240E  2C01                     120          MOVE.L  D1,D6
+00002410  43F9 00002768            121          LEA     BUF,A1
+00002416  7464                     122          MOVEQ   #100,D2
+00002418                           123m         T15     53
+00002420  2206                     124          MOVE.L  D6,D1
+00002422  43F9 00002768            125          LEA     BUF,A1
+00002428  243C 000000C8            126          MOVE.L  #200,D2
+0000242E                           127m         T15     53              all 300 read: level 0, curp at 300
+00002436  2206                     128          MOVE.L  D6,D1
+00002438  43F9 00002765            129          LEA     XYZ,A1
+0000243E  7402                     130          MOVEQ   #2,D2
+00002440                           131m         T15     54              write XY at curp; the flush writes buffer[0..2)
+00002448  2206                     132          MOVE.L  D6,D1
+0000244A                           133m         T15     56
+00002452  FFFF FFFF                134          SIMHALT
+00002456                           135  
+00002500                           136          ORG     $2500           case 5: streams whose close failed are never freed (section 8)
+00002500  7A3C                     137          MOVEQ   #60,D5
+00002502  43F9 00002752            138  LEAK:   LEA     NAME,A1
+00002508  7034                     139          MOVEQ   #52,D0
+0000250A  4E4F                     140          TRAP    #15
+0000250C  4A40                     141          TST.W   D0
+0000250E  662C                     142          BNE.S   FULL
+00002510  2C01                     143          MOVE.L  D1,D6
+00002512  43F9 00002760            144          LEA     ABC,A1
+00002518  7405                     145          MOVEQ   #5,D2
+0000251A  7036                     146          MOVEQ   #54,D0
+0000251C  4E4F                     147          TRAP    #15
+0000251E  2206                     148          MOVE.L  D6,D1
+00002520  43F9 00002768            149          LEA     BUF,A1
+00002526  7407                     150          MOVEQ   #7,D2
+00002528  7035                     151          MOVEQ   #53,D0
+0000252A  4E4F                     152          TRAP    #15
+0000252C  2206                     153          MOVE.L  D6,D1
+0000252E  7038                     154          MOVEQ   #56,D0
+00002530  4E4F                     155          TRAP    #15
+00002532  5239 00002753            156          ADDQ.B  #1,NAME+1
+00002538  5345                     157          SUBQ.W  #1,D5
+0000253A  66C6                     158          BNE     LEAK
+0000253C  3CC5                     159  FULL:   MOVE.W  D5,(A6)+        60 - number of streams that were opened
+0000253E  FFFF FFFF                160          SIMHALT
+00002542                           161  
+00002600                           162          ORG     $2600           case 6: a stream a Rewind forgets (R13; probe e2)
+00002600  43F9 00002752            163          LEA     NAME,A1
+00002606                           164m         T15     51              second run: the file exists
+0000260E  4A40                     165          TST.W   D0
+00002610  6722                     166          BEQ.S   SECOND
+00002612  43F9 00002752            167          LEA     NAME,A1
+00002618                           168m         T15     52              first run: create, write ABCDE, never close
+00002620  43F9 00002760            169          LEA     ABC,A1
+00002626  7405                     170          MOVEQ   #5,D2
+00002628                           171m         T15     54
+00002630  FFFF FFFF                172          SIMHALT
+00002634  2C01                     173  SECOND: MOVE.L  D1,D6
+00002636  43F9 00002768            174          LEA     BUF,A1
+0000263C  740A                     175          MOVEQ   #10,D2
+0000263E                           176m         T15     53              the bytes are still in the forgotten buffer: end of file
+00002646  2206                     177          MOVE.L  D6,D1
+00002648                           178m         T15     56
+00002650  43F9 00002752            179          LEA     NAME,A1
+00002656                           180m         T15     57              the forgotten stream keeps the file open: 2
+0000265E  FFFF FFFF                181          SIMHALT
+00002662                           182  
+00002700                           183          ORG     $2700           case 7: a write in the read state 10 bytes past the buffer (section 7; p10a)
+00002700  43F9 00002759            184          LEA     DATA,A1
+00002706                           185m         T15     51
+0000270E  2C01                     186          MOVE.L  D1,D6
+00002710  43F9 00002768            187          LEA     BUF,A1
+00002716  740A                     188          MOVEQ   #10,D2
+00002718                           189m         T15     53
+00002720  2206                     190          MOVE.L  D6,D1
+00002722  43F9 00002B68            191          LEA     BIG,A1
+00002728  243C 00000200            192          MOVE.L  #512,D2
+0000272E                           193m         T15     54              into the buffer at 10: 10 bytes past its end
+00002736  2206                     194          MOVE.L  D6,D1
+00002738                           195m         T15     56              the release of the buffer: access violation
+00002740  43F9 00002752            196          LEA     NAME,A1
+00002746                           197m         T15     52              (after Run again) the next allocation fails too
+0000274E  FFFF FFFF                198          SIMHALT
+00002752                           199  
+00002752= 78 41 2E 62 69 6E 00     200  NAME    DC.B    'xA.bin',0
+00002759= 69 6E 2E 62 69 6E 00     201  DATA    DC.B    'in.bin',0
+00002760= 41 42 43 44 45           202  ABC     DC.B    'ABCDE'
+00002765= 58 59 5A                 203  XYZ     DC.B    'XYZ'
+00002768                           204          DS.W    0
+00002768                           205  BUF     DS.B    1024
+00002B68= 7A 7A 7A 7A 7A 7A ...    206  BIG     DCB.B   600,'z'
+00008000                           207          ORG     $8000
+00008000                           208  RESULTS DS.B    256
+00008100                           209          END     START
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+ABC                 2760
+BIG                 2B68
+BUF                 2768
+DATA                2759
+FULL                253C
+LEAK                2502
+NAME                2752
+RESULTS             8000
+SECOND              2634
+START               1000
+T15                 0
+XYZ                 2765
