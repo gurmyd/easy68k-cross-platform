@@ -1,6 +1,10 @@
 # Request from DV5: the desktop app must find the `.L68` next to an `.S68` (owners W1, DV2, SH8; DV3)
 
-Status: open.
+Status: done in the repair of D1. Item 1 (W1, `app/src/fs/vfs.ts`): a folder that may not be listed no longer
+ends the walk; its segment is kept as given and the path is confirmed by a later listing or a `stat`
+(rule and tests: `docs/porting/errata/W1.md` entry 15). Items 2 and 3 not needed and not taken (3 would
+show the page names above the granted roots; DV2.md entry D1). Item 4 done (DV3.md entry 22). The runs
+of release.yml are in `docs/porting/errata/DV5.md` entry 10.
 
 Check 7 of `docs/ARCHITECTURE.md` 6.7 (`tests/desktop/packaged/programs/programs.spec.ts`, DV5)
 fails on both Mac runners of release.yml (run 44960702355, jobs `mac-arm64` and `mac-x64`) on one

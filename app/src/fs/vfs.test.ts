@@ -158,6 +158,202 @@ describe('vfs.resolve (Windows-style names)', () => {
     expect(await vfs.resolve('/browser/demo', 'prog.X68')).toBeNull();
     expect(await vfs.resolve('/memory/nofolder', 'prog.X68')).toBeNull();
   });
+
+  it('on a backend that refuses nothing, lists each folder on the way once and asks nothing else', async () => {
+    const backend = new CountingBackend();
+    const vfs = createVfs();
+    vfs.mount(backend);
+    for (const [rel, content] of Object.entries(files)) await backend.writeFile(rel, text(content));
+    backend.calls.length = 0;
+    expect(await vfs.resolve('/memory/demo', 'SUB DIR\\INC.X68')).toBe('/memory/demo/Sub Dir/inc.x68');
+    expect(backend.calls).toEqual(['list ', 'list demo', 'list demo/Sub Dir']);
+    backend.calls.length = 0;
+    expect(await vfs.resolve('/memory/demo', 'missing\\x.X68')).toBeNull();
+    expect(backend.calls).toEqual(['list ', 'list demo']);
+    backend.calls.length = 0;
+    expect(await vfs.resolve('/memory/demo', 'prog.X68\\x')).toBeNull();
+    expect(backend.calls).toEqual(['list ', 'list demo']);
+  });
+});
+
+/** A MemoryBackend that records the calls resolve makes. */
+class CountingBackend extends MemoryBackend {
+  readonly calls: string[] = [];
+  override async list(rel: string): Promise<DirEntry[]> {
+    this.calls.push(`list ${rel}`);
+    return super.list(rel);
+  }
+  override async stat(rel: string): Promise<FileStat | null> {
+    this.calls.push(`stat ${rel}`);
+    return super.stat(rel);
+  }
+}
+
+/**
+ * The desktop app's /disk as the main process serves it (desktop/src/fs-ipc.ts, security.ts):
+ * stat, list and readFile refuse every path that is not inside a granted root, with the code and
+ * the message the bridge gives (`io`, "refused: ..."). With `caseInsensitive` it behaves like a
+ * macOS or Windows disk: a path in another letter case names the same entry, and the granted-root
+ * check is made on the stored spelling (the main process's canonicalPath). Folders listed in
+ * `unreadable` exist but cannot be listed (code `read-only`, as EACCES arrives).
+ */
+class GrantedDisk extends MemoryBackend {
+  readonly calls: string[] = [];
+  constructor(
+    private readonly granted: readonly string[],
+    private readonly options: { caseInsensitive?: boolean; unreadable?: readonly string[] } = {},
+  ) {
+    super({ mount: 'disk', kind: 'disk', label: 'This Mac' });
+  }
+
+  /** The stored spelling of `rel` where the disk ignores case (as far as it exists). */
+  private async canonical(rel: string): Promise<string> {
+    if (!this.options.caseInsensitive || rel === '') return rel;
+    const out: string[] = [];
+    let exists = true;
+    for (const segment of rel.split('/')) {
+      let chosen = segment;
+      if (exists) {
+        const entries = await super.list(out.join('/')).catch(() => null);
+        const hit = entries?.find((e) => e.name.toLowerCase() === segment.toLowerCase());
+        if (hit) chosen = hit.name;
+        else exists = false;
+      }
+      out.push(chosen);
+    }
+    return out.join('/');
+  }
+
+  private async allowed(rel: string): Promise<string> {
+    const real = await this.canonical(rel);
+    if (!this.granted.some((root) => real === root || real.startsWith(`${root}/`))) {
+      throw fsError('io', `refused: outside the folders this app may use: /disk/${rel}`);
+    }
+    return real;
+  }
+
+  override async list(rel: string): Promise<DirEntry[]> {
+    this.calls.push(`list ${rel}`);
+    const real = await this.allowed(rel);
+    if (this.options.unreadable?.includes(real)) throw fsError('read-only', `not permitted: /disk/${rel}`);
+    return super.list(real);
+  }
+
+  override async stat(rel: string): Promise<FileStat | null> {
+    this.calls.push(`stat ${rel}`);
+    return super.stat(await this.allowed(rel));
+  }
+
+  override async readFile(rel: string): Promise<Bytes> {
+    this.calls.push(`readFile ${rel}`);
+    return super.readFile(await this.allowed(rel));
+  }
+}
+
+describe('vfs.resolve on a mount that refuses to list above a granted folder (defect D1)', () => {
+  const DEMO = '/disk/Users/me/demo';
+  async function diskWith(options: ConstructorParameters<typeof GrantedDisk>[1] = {}) {
+    const disk = new GrantedDisk(['Users/me/demo'], options);
+    for (const [rel, content] of Object.entries({
+      'Users/me/demo/tutorial1.X68': 's',
+      'Users/me/demo/tutorial1.L68': 'l',
+      'Users/me/demo/Sub/Data.TXT': 'd',
+      'Users/me/demo/locked/inside.txt': 'i',
+      'Users/me/other/secret.txt': 'x',
+    })) {
+      await disk.writeFile(rel, text(content));
+    }
+    const vfs = createVfs();
+    vfs.mount(disk);
+    disk.calls.length = 0;
+    return { vfs, disk };
+  }
+
+  it('DV5 reproduction: stat finds the .L68, and so does resolve', async () => {
+    const { vfs } = await diskWith();
+    expect((await vfs.stat(`${DEMO}/tutorial1.L68`))?.kind).toBe('file');
+    expect(await vfs.resolve(DEMO, 'tutorial1.L68')).toBe(`${DEMO}/tutorial1.L68`);
+  });
+
+  for (const caseInsensitive of [false, true]) {
+    const disk = caseInsensitive ? 'a disk that ignores letter case' : 'a case-sensitive disk';
+    describe(`on ${disk}`, () => {
+      it.each([
+        ['tutorial1.L68', `${DEMO}/tutorial1.L68`, 'the name exists exactly as given'],
+        ['TUTORIAL1.l68', `${DEMO}/tutorial1.L68`, 'another letter case in the last segment: the stored spelling'],
+        ['sub\\DATA.txt', `${DEMO}/Sub/Data.TXT`, 'another letter case in a folder below the granted root'],
+        ['.\\Sub/..\\tutorial1.X68', `${DEMO}/tutorial1.X68`, "'.', '..' and both separators"],
+        ['..\\demo\\tutorial1.L68', `${DEMO}/tutorial1.L68`, 'out of the granted root and back in the same case'],
+        ['Sub', `${DEMO}/Sub`, 'a folder'],
+      ])('%j -> %j (%s)', async (name, expected) => {
+        const { vfs } = await diskWith({ caseInsensitive });
+        expect(await vfs.resolve(DEMO, name)).toBe(expected);
+      });
+
+      it.each([
+        ['missing.L68', 'a name that does not exist'],
+        ['Sub\\missing\\x.txt', 'a folder that does not exist'],
+        ['tutorial1.X68\\x', 'a file used as a folder'],
+        ['..\\other\\secret.txt', 'a file outside the granted roots, although it exists'],
+        ['..\\..\\me\\other\\secret.txt', 'the same, through more folders'],
+        ['..', 'the folder above the granted root'],
+        ['C:\\Users\\me\\demo\\tutorial1.L68', 'a drive letter'],
+        ['', 'an empty name'],
+      ])('%j -> null (%s)', async (name) => {
+        const { vfs } = await diskWith({ caseInsensitive });
+        expect(await vfs.resolve(DEMO, name)).toBeNull();
+      });
+
+      it('the granted folder itself, named from the folder above it', async () => {
+        const { vfs } = await diskWith({ caseInsensitive });
+        expect(await vfs.resolve('/disk/Users/me', 'demo')).toBe(DEMO);
+      });
+
+      it('a folder that may not be listed for another reason: the name as given, if it is there', async () => {
+        const { vfs } = await diskWith({ caseInsensitive, unreadable: ['Users/me/demo/locked'] });
+        expect(await vfs.resolve(DEMO, 'locked\\inside.txt')).toBe(`${DEMO}/locked/inside.txt`);
+        expect(await vfs.resolve(DEMO, 'locked\\missing.txt')).toBeNull();
+        // The spelling cannot be learnt there; a disk that ignores case still finds the file.
+        expect(await vfs.resolve(DEMO, 'locked\\INSIDE.TXT')).toBe(
+          caseInsensitive ? `${DEMO}/locked/INSIDE.TXT` : null,
+        );
+      });
+    });
+  }
+
+  it('a segment above the granted root in another letter case: found where the disk ignores case', async () => {
+    // Only a name that leaves the granted root and comes back can do this. The stored spelling of
+    // the climbed segment cannot be learnt without listing /Users/me, which is not granted.
+    expect(await (await diskWith({ caseInsensitive: true })).vfs.resolve(DEMO, '..\\DEMO\\tutorial1.l68')).toBe(
+      '/disk/Users/me/DEMO/tutorial1.L68',
+    );
+    expect(await (await diskWith({ caseInsensitive: false })).vfs.resolve(DEMO, '..\\DEMO\\tutorial1.l68')).toBeNull();
+  });
+
+  it('asks for the listings on the way and, where the last one is refused, a stat of that path; reads nothing', async () => {
+    const { vfs, disk } = await diskWith();
+    expect(await vfs.resolve(DEMO, 'sub\\data.txt')).toBe(`${DEMO}/Sub/Data.TXT`);
+    expect(disk.calls).toEqual([
+      'list ',
+      'list Users',
+      'list Users/me',
+      'list Users/me/demo',
+      'list Users/me/demo/Sub',
+    ]);
+    disk.calls.length = 0;
+    expect(await vfs.resolve('/disk/Users/me', 'demo')).toBe(DEMO);
+    expect(disk.calls).toEqual(['list ', 'list Users', 'list Users/me', 'stat Users/me/demo']);
+    disk.calls.length = 0;
+    expect(await vfs.resolve(DEMO, '..\\other\\secret.txt')).toBeNull();
+    expect(disk.calls).toEqual([
+      'list ',
+      'list Users',
+      'list Users/me',
+      'list Users/me/other',
+      'stat Users/me/other/secret.txt',
+    ]);
+    expect(disk.calls.some((call) => call.startsWith('readFile'))).toBe(false);
+  });
 });
 
 /** A backend whose operations finish in an order chosen by the test (later calls first). */

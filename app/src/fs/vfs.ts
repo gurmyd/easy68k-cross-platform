@@ -19,6 +19,9 @@
 //   existed already. mount() and unmount() are reported, synchronously, as a 'write' and a
 //   'remove' of "/<mount>" (gate I2, errata FS2.md C1, errata W1.md entry 14); an unmount of a
 //   name that is not mounted reports nothing.
+// - resolve() finds each segment's stored spelling in the listing of its folder. A folder that may
+//   not be listed (the desktop app's folders above the granted roots, 7.6) keeps the segment as
+//   given; it does not make the name "not found" (defect D1, errata W1.md entry 15).
 // - Failures reject with an FsError (fsError(), isFsError()).
 //
 // Owner: W1.
@@ -148,25 +151,38 @@ class VirtualFileSystem implements Vfs {
     const { mount, rel } = splitVPath(lexical);
     const mounted = this.mounts.get(mount);
     if (!mounted) return null;
-    // Walk from the mount root and take each segment's stored spelling: the exact one if it
-    // exists, otherwise the first entry that matches without regard to case.
+    // Walk from the mount root and take each segment's stored spelling from the listing of its
+    // folder: the exact one if it exists, otherwise the first entry that matches without regard to
+    // case. A folder that is missing or a file ends the walk. A folder that may not be listed (the
+    // desktop app's folders above the granted roots, 7.6) cannot tell spellings: its segment is
+    // kept as given, and a last segment kept that way must then be found by stat (errata W1.md
+    // entry 15). Nothing the backend refuses is asked for in another way.
     const segments = rel === '' ? [] : rel.split('/');
     const stored: string[] = [];
+    let lastUnlisted = false;
     for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i] as string;
+      const isLast = i === segments.length - 1;
       let entries: DirEntry[];
       try {
         entries = await mounted.backend.list(stored.join('/'));
-      } catch {
-        return null;
+      } catch (error) {
+        if (isFsError(error, 'not-found') || isFsError(error, 'not-directory')) return null;
+        stored.push(segment);
+        lastUnlisted = isLast;
+        continue;
       }
-      const isLast = i === segments.length - 1;
       const candidates = isLast ? entries : entries.filter((e) => e.kind === 'dir');
       const match = matchName(
         candidates.map((e) => e.name),
-        segments[i] as string,
+        segment,
       );
       if (match === null) return null;
       stored.push(match);
+    }
+    if (lastUnlisted) {
+      const found = await mounted.backend.stat(stored.join('/')).catch(() => null);
+      if (found === null) return null;
     }
     return joinVPath(mount, stored.join('/'));
   }

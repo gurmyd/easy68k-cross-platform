@@ -288,3 +288,12 @@ and why. No entry concerns `app/src/contracts/`, so there is no **Contract** sec
   the runner, not a detection (no malware name is given, and the same app passes Gatekeeper's
   signature checks except notarisation); it could not be examined further there. The manual test
   (6.8) should note whether a real Mac shows any XProtect message.
+### 22. Check 3 now requires the listing itself (DV5's request, defect D1)
+
+- `association.spec.ts` required only that a `.e68-listing__row` be attached, which the rows of
+  the text "A matching .L68 file was not found. ..." are too, so check 3 passed while the
+  packaged app had no listing (`docs/porting/errata/DV5.md` entry D1). It now waits up to 30 s for
+  the first row to begin with an eight-digit address, as every row of a listing does (the first
+  row is the "Starting Address" line, `00001000 Starting Address` for a program at $1000), prints
+  that row, and fails otherwise. The
+  repair of D1 itself is in `app/src/fs/vfs.ts` (`docs/porting/errata/W1.md` entry 15).

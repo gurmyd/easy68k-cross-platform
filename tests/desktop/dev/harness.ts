@@ -237,7 +237,7 @@ export async function waitForApplication(page: Page): Promise<void> {
   }
 }
 
-/** The page modules the tests import by path (disk, menu and windows specs). */
+/** The page modules the tests import by path (disk, menu, windows and programs specs). */
 const TEST_MODULES = [
   '/src/fs/backend-contract.ts',
   '/src/fs/disk-backend.ts',
@@ -247,6 +247,8 @@ const TEST_MODULES = [
   '/src/engine/loader.ts',
   '/src/engine/testing.ts',
   '/src/features/output/testing/programs.ts',
+  '/src/features/assemble/collect.ts',
+  '/src/features/files/store.ts',
 ];
 
 /**

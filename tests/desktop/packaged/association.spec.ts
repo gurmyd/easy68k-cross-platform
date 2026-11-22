@@ -34,8 +34,18 @@ test('an .S68 opened through Launch Services starts Simulator mode with the prog
   // Simulator mode, with the program's start address in the PC.
   await expect(page.locator('footer.e68-statusbar[data-mode="simulator"]')).toBeVisible({ timeout: 90_000 });
   await expect(pc).toHaveValue(registerText(program.start), { timeout: 60_000 });
-  // The listing of tutorial1.L68 (found next to the .S68, 4.7) is shown.
-  await expect(page.locator('.e68-listing__row').first()).toBeAttached({ timeout: 30_000 });
+  // The listing of tutorial1.L68 (found next to the .S68, 4.7) is shown: its rows begin with an
+  // address. Without the .L68 the panel shows rows too, of the text "A matching .L68 file was not
+  // found. ..." (defect D1, docs/porting/errata/DV5.md), which must fail here.
+  const firstRow = page.locator('.e68-listing__row').first();
+  await expect(firstRow).toBeAttached({ timeout: 30_000 });
+  await expect
+    .poll(async () => (await firstRow.innerText()).trim(), {
+      timeout: 30_000,
+      message: 'the first listing row is a row of tutorial1.L68, not the "A matching .L68 file was not found" text',
+    })
+    .toMatch(/^[0-9A-F]{8}\s/);
+  console.log(`first listing row: ${JSON.stringify((await firstRow.innerText()).trim())}`);
   await running.screenshot('loaded');
 
   // Not running: no run state of a running program, and the PC stays where it is.
