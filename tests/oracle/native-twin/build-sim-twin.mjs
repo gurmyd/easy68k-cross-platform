@@ -8,8 +8,10 @@
 //
 // Sources: the patched original files of engine/sim/src and the engine's shim (engine/sim/shim),
 // the same lists engine/sim/build.mjs compiles (read from that file, so that they cannot drift
-// apart), except shim/hostfile.cpp, which needs fopencookie() and is replaced by
-// sim-twin/hostfile-native.cpp; plus the twin's driver (sim-twin/driver.cpp).
+// apart), all of them - shim/hostfile.cpp included, whose streams of the Borland run-time
+// (engine/sim/shim/STDIO-MODEL.md) are exactly the kind of code this oracle exists for - plus
+// sim-twin/host-native.cpp (the host's file interface over real files, and fopencookie(), which
+// the Microsoft C library lacks) and the twin's driver (sim-twin/driver.cpp).
 //
 // Flags, against the Emscripten build (engine/sim/PATCHES.md, "Compiler flags"):
 //   /EHa         C++ exceptions, and catch (...) also catches access violations, as Borland's did
@@ -119,8 +121,7 @@ export async function buildSimTwin(variant, options = {}) {
   const outDir = dirname(simTwinPath(variant));
   rmSync(outDir, { recursive: true, force: true });
   for (const sub of ['src', 'shim', 'twin']) mkdirSync(join(outDir, 'obj', sub), { recursive: true });
-  const shimSources = shim.filter((name) => name !== 'hostfile.cpp');
-  if (shimSources.length !== shim.length - 1) throw new Error('engine/sim/build.mjs no longer lists shim/hostfile.cpp');
+  const shimSources = shim;
 
   const common = [
     '/nologo',
@@ -142,7 +143,7 @@ export async function buildSimTwin(variant, options = {}) {
   const exe = simTwinPath(variant);
   const output = await runWithVcvars(join(outDir, 'build.cmd'), [
     `cl ${common} /w ${obj('src')} ${original.map((n) => quote(join(simDir, 'src', n))).join(' ')}`,
-    `cl ${common} /W3 /wd4996 ${obj('shim')} ${shimSources.map((n) => quote(join(simDir, 'shim', n))).join(' ')} ${quote(join(twinDir, 'hostfile-native.cpp'))}`,
+    `cl ${common} /W3 /wd4996 ${obj('shim')} ${shimSources.map((n) => quote(join(simDir, 'shim', n))).join(' ')} ${quote(join(twinDir, 'host-native.cpp'))}`,
     `cl /nologo /c /${variant} /EHa /MT /W3 /D_CRT_SECURE_NO_WARNINGS /I${quote(join(simDir, 'shim'))} /I${quote(twinDir)} ${obj('twin')} ${quote(join(twinDir, 'driver.cpp'))}`,
     `link /nologo /OUT:${quote(exe)} ${quote(join(outDir, 'obj', 'src', '*.obj'))} ${quote(join(outDir, 'obj', 'shim', '*.obj'))} ${quote(join(outDir, 'obj', 'twin', '*.obj'))} /STACK:16777216`,
   ]);
