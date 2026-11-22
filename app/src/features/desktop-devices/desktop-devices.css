@@ -1,0 +1,42 @@
+/* The Serial Ports dialog (SerialPortsDialog.tsx). Owner: DV4. */
+
+.e68-serial-ports {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.e68-serial-ports__note {
+  margin: 0;
+  color: var(--c-text-muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+  white-space: normal;
+}
+
+.e68-serial-ports__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.e68-serial-ports__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--sp-2);
+}
+
+.e68-serial-ports__row > :nth-child(2) {
+  flex: 1 1 12em;
+  min-width: 0;
+}
+
+.e68-serial-ports__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
