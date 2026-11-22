@@ -1,0 +1,3130 @@
+{
+  "$comment": [
+    "The parity matrix of ARCHITECTURE.md 6.6 (owner X2): every row of section 1.3 (1.3.1 to 1.3.8) and of",
+    "the extension of 1.3.8 in docs/porting/easybin.md 21.4, with what verifies it. The first entry of",
+    "verifiedBy is the row's kind; further entries add evidence. tests/parity/matrix.test.ts checks that",
+    "the rows are exactly those of the two documents and that every named test exists. README.md explains",
+    "the kinds and how to keep this file up to date."
+  ],
+  "kinds": {
+    "web-e2e": "a Playwright test of tests/e2e (6.6): { file, test } - runs in Chromium and WebKit on every push",
+    "desktop-e2e": "an Electron test of tests/desktop (6.7): { file, test } - the desktop jobs",
+    "unit": "a unit or conformance test: { file, test? }, or a conformance folder { file } - every push",
+    "manual": "an item of the manual list (6.8, docs/MANUAL-TEST-MAC.md): { item } quotes its text - before each release",
+    "browser-check": "a check-<name>.mjs browser check (errata X2 entry 2): { file } - every push, never a row's first entry"
+  },
+  "rows": [
+    {
+      "section": "1.3.1",
+      "original": "File > `&New X68 Source File`",
+      "id": "`ed.file.new`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "File > New X68 Source File opens untitled2.x68 with the template, not modified"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/menus.spec.ts",
+          "test": "${title}: the original's items in order, with access keys and this key map's shortcuts"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "File > `&Open File...`",
+      "id": "`ed.file.open`",
+      "status": "~1",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "the Open dialog offers the five filters of the original, the first preselected"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/shortcuts.spec.ts",
+          "test": "Open File, Save (Save As for an unnamed document) and Save As"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "File > `&Save`",
+      "id": "`ed.file.save`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "Save clears Modified; a second Save writes without a dialog"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/shortcuts.spec.ts",
+          "test": "Open File, Save (Save As for an unnamed document) and Save As"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "File > `Save &As...`",
+      "id": "`ed.file.saveAs`",
+      "status": "~1",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "Save As shows the two filters of the original"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/shortcuts.spec.ts",
+          "test": "Open File, Save (Save As for an unnamed document) and Save As"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "File > `&Print`",
+      "id": "`ed.file.print`",
+      "status": "~2",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/print.spec.ts",
+          "test": "Print sends the whole document: tabs expanded with its rule, monochrome, a new page at the PAGE marker"
+        },
+        {
+          "kind": "manual",
+          "item": "Printing a source file and task 10 output on a real printer"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "File > `Printer Setup...`",
+      "id": "`ed.file.printerSetup`",
+      "status": "~2",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/print.spec.ts",
+          "test": "Printer Setup... is enabled and opens the same system print path (note 2)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "File > `C&lose File`",
+      "id": "`ed.file.close`",
+      "status": "~3",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "Close File on a modified document asks Yes/No/Cancel with the exact text; Cancel keeps it, No closes it"
+        },
+        {
+          "kind": "desktop-e2e",
+          "file": "tests/desktop/dev/menu.spec.ts",
+          "test": "the native menu equals the command tables in ${mode} mode"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "File > `E&xit`",
+      "id": "`ed.file.exit`",
+      "status": "~4",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "Exit runs the close prompts, then shows \"You can close this tab.\" (note 4)"
+        },
+        {
+          "kind": "desktop-e2e",
+          "file": "tests/desktop/packaged/quit.spec.ts",
+          "test": "quit with a modified document asks first, and Cancel (Stay) keeps the app running"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Edit > `&Undo`",
+      "id": "`ed.edit.undo`",
+      "status": "~5",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Undo reverses typing, a paste and a comment, each paste and comment as one step; Redo restores"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Undo and Redo of the toolbar and the Edit menu"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Edit > `&Redo`",
+      "id": "`ed.edit.redo`",
+      "status": "~5",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Undo reverses typing, a paste and a comment, each paste and comment as one step; Redo restores"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/shortcuts.spec.ts",
+          "test": "Comment, Uncomment, Indent, Outdent, Redo and Insert/Replace from every chord"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Edit > `Cu&t`",
+      "id": "`ed.edit.cut`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Cut, Copy and Paste with the keyboard move text through the clipboard"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Cut and Copy are disabled without a selection and enabled with one"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Edit > `&Copy`",
+      "id": "`ed.edit.copy`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Cut, Copy and Paste with the keyboard move text through the clipboard"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Edit > `&Paste`",
+      "id": "`ed.edit.paste`",
+      "status": "~45",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Cut, Copy and Paste with the keyboard move text through the clipboard"
+        },
+        {
+          "kind": "unit",
+          "file": "app/src/ui/editor/extensions.test.ts",
+          "test": "Ctrl+V pastes as Paste from the menu does, and says Press Cmd+V to paste when refused"
+        },
+        {
+          "kind": "manual",
+          "item": "Paste from the editor's menu, toolbar and context menu in each (note 45)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Edit > `Select &All`",
+      "id": "`ed.edit.selectAll`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Select All selects the whole document, from its chord and from the Edit menu"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Edit > `C&omment Selection`",
+      "id": "`ed.edit.comment`",
+      "status": "~6",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Comment Selection puts * in column 0 of each selected line; Uncomment removes one * only there"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "every chord of Comment and Uncomment on this key map acts"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Edit > `Unco&mment Selection`",
+      "id": "`ed.edit.uncomment`",
+      "status": "~6",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Comment Selection puts * in column 0 of each selected line; Uncomment removes one * only there"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "every chord of Comment and Uncomment on this key map acts"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Edit > `&Find...`",
+      "id": "`ed.edit.find`",
+      "status": "~7",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/find.spec.ts",
+          "test": "the dialog: Find what, the two options, \"Find  (F3)\" disabled while empty, Cancel; modeless"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/shortcuts.spec.ts",
+          "test": "Find (Ctrl+F / Cmd+F), Find Next (F3, Cmd+G) and Find And Replace (Ctrl+R) open and act (E6)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Edit > `Find &Next`",
+      "id": "`ed.edit.findNext`",
+      "status": "~7",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/find.spec.ts",
+          "test": "a selected word preloads the dialog; Enter finds the next one; at the end the box; F3 then starts at the top"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/shortcuts.spec.ts",
+          "test": "Find (Ctrl+F / Cmd+F), Find Next (F3, Cmd+G) and Find And Replace (Ctrl+R) open and act (E6)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Edit > `Find And &Replace...`",
+      "id": "`ed.edit.replace`",
+      "status": "~7",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/find.spec.ts",
+          "test": "Replace All D0 -> D1 replaces all three and ends with the end-of-document box"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/shortcuts.spec.ts",
+          "test": "Find (Ctrl+F / Cmd+F), Find Next (F3, Cmd+G) and Find And Replace (Ctrl+R) open and act (E6)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Project > `&Assemble Source...`",
+      "id": "`ed.project.assemble`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/shortcuts.spec.ts",
+          "test": "Assemble Source (F9, Cmd+B) opens the Assembler Status dialog (E5)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/assemble.spec.ts",
+          "test": "F9 on the template: Warnings 0, Errors 0, Execute enabled; the .L68 and .S68 are written"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Options > `&Assembler Options...`",
+      "id": "`ed.options.assembler`",
+      "status": "~8",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/options.spec.ts",
+          "test": "two tabs, the nine check boxes with their defaults, OK and Cancel"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Options > `&Editor Options...`",
+      "id": "`ed.options.editor`",
+      "status": "~8",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/options.spec.ts",
+          "test": "the General tab: font, size, fixed tab size, tab type, Current File Info, Auto Indent, Real Tabs; OK, Cancel, Help"
+        },
+        {
+          "kind": "desktop-e2e",
+          "file": "tests/desktop/dev/menu.spec.ts",
+          "test": "the native menu equals the command tables in ${mode} mode"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Window > `&Arrange`",
+      "id": "`ed.window.arrange`",
+      "status": "x9",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/menus.spec.ts",
+          "test": "Window: Arrange and Minimize All are shown and always disabled; the documents follow with a check on the active one (note 9)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Window > `&Cascade`",
+      "id": "`ed.window.cascade`",
+      "status": "~9",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/windows.spec.ts",
+          "test": "Tile Horizontally and Tile Vertically show two panes; Cascade one pane with every document as a tab"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Window > `Tile &Horizontally`",
+      "id": "`ed.window.tileH`",
+      "status": "~9",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/windows.spec.ts",
+          "test": "Tile Horizontally and Tile Vertically show two panes; Cascade one pane with every document as a tab"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Window > `&Tile Vertically`",
+      "id": "`ed.window.tileV`",
+      "status": "~9",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/windows.spec.ts",
+          "test": "Tile Horizontally and Tile Vertically show two panes; Cascade one pane with every document as a tab"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Window > `&Minimize All`",
+      "id": "`ed.window.minimizeAll`",
+      "status": "x9",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/menus.spec.ts",
+          "test": "Window: Arrange and Minimize All are shown and always disabled; the documents follow with a check on the active one (note 9)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Window > `1 <name>`, `2 <name>`, ...",
+      "id": "`ed.window.select` (arg: index)",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/menus.spec.ts",
+          "test": "Window: Arrange and Minimize All are shown and always disabled; the documents follow with a check on the active one (note 9)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Help > `Hel&p`",
+      "id": "`ed.help.help`",
+      "status": "~10",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/menus.spec.ts",
+          "test": "Help > Help opens the Help panel at the introduction page (main.htm)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.1",
+      "original": "Help > `&About`",
+      "id": "`ed.help.about`",
+      "status": "~11",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/menus.spec.ts",
+          "test": "About: the original credits and the port notice; Enter presses OK, Esc closes too"
+        }
+      ]
+    },
+    {
+      "section": "1.3.2",
+      "original": "Toolbar: New, Open, Save, Print, Find, Cut, Copy, Paste, Undo, Redo, Comment Selection, Uncomment Selection, Assemble Source (13 buttons, 6 separators, this order)",
+      "id": "the ids above",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/menus.spec.ts",
+          "test": "13 buttons and 6 separators in the original order, named by their hint and this key map's shortcut"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/menus.spec.ts",
+          "test": "New and Open act from the toolbar"
+        }
+      ]
+    },
+    {
+      "section": "1.3.2",
+      "original": "Editor context menu: Undo, Redo, Cut, Copy, Paste, Select All, Comment Selection, Uncomment Selection, `&Reload File`",
+      "id": "the ids above, `ed.edit.reload`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/menus.spec.ts",
+          "test": "the editor context menu holds the nine items of the original, Reload File last"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/menus.spec.ts",
+          "test": "Comment Selection from the context menu acts on the selection"
+        }
+      ]
+    },
+    {
+      "section": "1.3.2",
+      "original": "Message list context menu: `&Clear Error Messages`",
+      "id": "`ed.msg.clear`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/assemble.spec.ts",
+          "test": "the message list context menu clears the messages (Clear Error Messages)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.2",
+      "original": "F1 in the editor: context help on the selection or the word at the caret",
+      "id": "`ed.help.context`",
+      "status": "~10",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/menus.spec.ts",
+          "test": "F1 in the editor opens the help page of the word at the caret (editor-ui §15.3)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.2",
+      "original": "F1 on the frame",
+      "id": "`ed.help.help`",
+      "status": "~10",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/shortcuts.spec.ts",
+          "test": "F1 opens context help; F4 cycles the modes (K5)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.2",
+      "original": "Insert: toggle Insert/Replace",
+      "id": "`ed.edit.toggleInsert`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "the Insert key (Ctrl+Shift+I on a Mac) switches the status bar and overtypes; a click on the cell switches back"
+        }
+      ]
+    },
+    {
+      "section": "1.3.2",
+      "original": "Shift+Insert: paste as plain text",
+      "id": "`ed.edit.paste`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "pasted rich text arrives as plain text"
+        },
+        {
+          "kind": "manual",
+          "item": "Paste into a task 2 prompt with Cmd+V in Safari, Chrome and the desktop app, and with Shift+Insert in"
+        }
+      ]
+    },
+    {
+      "section": "1.3.2",
+      "original": "Tab (spaces to the next tab stop unless Real Tabs)",
+      "status": "~12",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Real Tabs off, Fixed tabs of 4: Tab at columns 0, 1, 3, 4 inserts 4, 3, 1, 4 blanks"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Real Tabs off, Assembly tabs: Tab at column 0, 5, 13, 21 inserts 12, 7, 7, 23 blanks"
+        }
+      ]
+    },
+    {
+      "section": "1.3.2",
+      "original": "Ctrl+Shift+`.` indent / Ctrl+Shift+`,` outdent by one space",
+      "id": "`ed.edit.indent`, `ed.edit.outdent`",
+      "status": "~6",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Ctrl+Shift+. adds and Ctrl+Shift+, removes one space per selected line"
+        }
+      ]
+    },
+    {
+      "section": "1.3.2",
+      "original": "Enter with Auto Indent",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Enter at the end of an indented line repeats its leading white space; in the middle it adds none"
+        }
+      ]
+    },
+    {
+      "section": "1.3.2",
+      "original": "Ctrl+Backspace, Ctrl+Delete, Ctrl+E, and every other Ctrl+Shift key swallowed",
+      "status": "x13",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "standard editor keys work: the word-delete key is not swallowed (note 13)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.2",
+      "original": "Alt+F, Alt+E, Alt+P, Alt+O, Alt+W, Alt+H open the menus",
+      "status": "~14",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/menus.spec.ts",
+          "test": "the menus open from the keyboard: Alt+letter on Windows and Linux (note 14), arrows and Enter"
+        }
+      ]
+    },
+    {
+      "section": "1.3.2",
+      "original": "Dialog keys (Enter = default button, F1 in the option dialogs, B M W in the About box)",
+      "status": "~11",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/menus.spec.ts",
+          "test": "About: the original credits and the port notice; Enter presses OK, Esc closes too"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Start-up: one new document from the template; title `EASy68K Editor/Assembler v5.16.01`; command-line file",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/startup.spec.ts",
+          "test": "one new document from the template, not modified, title with the port name"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/startup.spec.ts",
+          "test": "?open=<path> opens a file of the browser store in Editor mode"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "MDI child windows, any number, title = file name",
+      "status": "~9",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/windows.spec.ts",
+          "test": "one tab per document in the order of opening; a click on a tab activates it"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "the tab shows the file name, a dot while modified, and the full path as its tool-tip"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Per-document state: path, tab type, tab size, font, Insert/Replace, modified, source/list kind",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/windows.spec.ts",
+          "test": "each document keeps its own text, caret and Insert/Replace state"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Open dialog filters (5 entries), single selection",
+      "status": "~1",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "the Open dialog offers the five filters of the original, the first preselected"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Open of a file that is already open (reopen, discard question)",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "opening an open, modified file asks to discard; No keeps the edits, Yes reopens it"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Source document versus list document (`.L68`, `.S68`): list documents are editable, not highlighted, no trailer",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "a list document (.L68) opens without highlighting, stays editable and saves without a trailer"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/highlight.spec.ts",
+          "test": "list documents (.L68, .S68) are not highlighted"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Font/tab trailer read (last four lines) and written (`.X68` only)",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "a file opens with its trailer removed and its font and tab values taken (editor-ui §20.2)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "a new file saved as t.X68 is the template text, one CR LF, then the four trailer lines"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "the same text saved as t.ASM has no trailer"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Save, Save As, `File exists! OK to overwrite?`, `IsSource` update on Save As",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "Save As onto an existing name asks \"File exists! OK to overwrite?\"; No keeps the file, Yes writes it"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Reload File with the discard question",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "Reload File on a modified document asks \"is modified\"; Yes reloads the stored text"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Close with `File modified, do you wish to save '<name>' before closing?` Yes/No/Cancel",
+      "status": "~3",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "Close File on a modified document asks Yes/No/Cancel with the exact text; Cancel keeps it, No closes it"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "Close with Yes saves the document being closed; a cancelled Save As cancels the close (note 3)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Exit closes every document with its prompt, then saves settings",
+      "status": "~4",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "Exit runs the close prompts, then shows \"You can close this tab.\" (note 4)"
+        },
+        {
+          "kind": "desktop-e2e",
+          "file": "tests/desktop/packaged/quit.spec.ts",
+          "test": "quit with a modified document asks first, and Cancel (Stay) keeps the app running"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Encoding: ANSI (Windows-1252), CR LF, no BOM, tabs never converted",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "bytes 0x80-0xFF in a DC.B string survive an open and save round trip (Windows-1252)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "New document names `untitledN.x68`",
+      "status": "~15",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "untitled numbers increase by one per new document and do not skip (note 15)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Editor: plain text, no wrap, scroll bars, selection visible",
+      "status": "~16",
+      "verifiedBy": [
+        {
+          "kind": "unit",
+          "file": "app/src/core/settings/defaults.test.ts",
+          "test": "port settings of 3.10: preset Auto, line numbers on"
+        },
+        {
+          "kind": "unit",
+          "file": "app/src/ui/editor/markers.test.ts",
+          "test": "one marker per line with messages; lines beyond the end are ignored"
+        },
+        {
+          "kind": "browser-check",
+          "file": "app/src/ui/editor/check-editor.mjs"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Status bar: `line: column`, `Modified`, `Insert`/`Replace`, empty panel, 64 underscores and `^`",
+      "status": "~17",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "line: column follows the caret; Modified after an edit and empty after Save"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "the column is the true visual column across a tab character"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "the information cell shows encoding, line ends and tab mode"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Message list: columns `Line ` and `Error Message`, tool-tip, double-click selects the line, clear, collapse rules, include-file routing",
+      "status": "~18",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/assemble.spec.ts",
+          "test": "one bad opcode: Errors 1, Execute disabled, one message row; a double-click selects that line"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/assemble.spec.ts",
+          "test": "messages of an include file open that file; the assembled document stays active (note 18)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Tab model: Assembly stops 12/20/44, Fixed size, Real Tabs, display of tab characters",
+      "status": "~12",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Real Tabs off, Assembly tabs: Tab at column 0, 5, 13, 21 inserts 12, 7, 7, 23 blanks"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/options.spec.ts",
+          "test": "Real Tabs on: Tab stores one tab character"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/options.spec.ts",
+          "test": "Assembly Tabs and the fixed tab size reach new documents; Cancel changes nothing (note 8)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Auto indent",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Enter at the end of an indented line repeats its leading white space; in the middle it adds none"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/options.spec.ts",
+          "test": "Auto Indent off: Enter adds no white space"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Insert / overwrite",
+      "status": "~5",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "overwrite typing is undoable (note 5)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Clipboard: paste arrives as plain text",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "pasted rich text arrives as plain text"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Mouse: select, double-click word, drag-move of text, file drop opens files",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "two files dropped on the window open as two documents, in the order of the drop"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Undo/redo, unlimited",
+      "status": "~5",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Undo reverses typing, a paste and a comment, each paste and comment as one step; Redo restores"
+        },
+        {
+          "kind": "unit",
+          "file": "app/src/ui/editor/editing.test.ts",
+          "test": "typed characters are grouped; a paste, a cut and a comment are single steps; redo works"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Syntax highlighting: 8 styles + background, per-line algorithm, bit-field dependence, presets",
+      "status": "~19",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/highlight.spec.ts",
+          "test": "lines of editor-ui §20.1 are coloured by element as soon as they are shown"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/highlight.spec.ts",
+          "test": "a long source is highlighted to its last line, without scrolling (note 19)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/highlight.spec.ts",
+          "test": "the Auto preset uses the original colours in the light theme and the dark set in the dark theme (2.8)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Assemble: auto-save option, flags, editor buffer is assembled, working directory = source folder, outputs `<name>.L68`/`.S68`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/assemble.spec.ts",
+          "test": "Auto Save on: a modified named document is saved before assembling (E4 and E5)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/assemble.spec.ts",
+          "test": "Auto Save off (default): the stored file stays as it was, the outputs follow the edited text"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "`Assembler Status - <name>` dialog: Warnings, Errors, `&Execute`, `&Load L68`, `&Close`",
+      "status": "~20",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/assemble.spec.ts",
+          "test": "F9 on the template: Warnings 0, Errors 0, Execute enabled; the .L68 and .S68 are written"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/assemble.spec.ts",
+          "test": "Execute switches to Simulator mode with the program loaded and not running (note 20)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/assemble.spec.ts",
+          "test": "Load L68 opens the listing in a new, uncoloured tab"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Messages from include files open the include file",
+      "status": "~18",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/assemble.spec.ts",
+          "test": "messages of an include file open that file; the assembled document stays active (note 18)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Assembler Options dialog: two tabs, nine check boxes with tool-tips, Template tab with `&Save Template`, `&OK`, `C&ancel`, the Sim68K question",
+      "status": "~8",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/options.spec.ts",
+          "test": "two tabs, the nine check boxes with their defaults, OK and Cancel"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/options.spec.ts",
+          "test": "Cancel restores every box (note 8)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/options.spec.ts",
+          "test": "unchecking Generate List File and pressing OK asks the Sim68K question; No re-checks both boxes"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Editor Options dialog: General (font, size, fixed tab size, tab type, Current File Info, Auto Indent, Real Tabs), Colors (element list, attributes, presets, `Print w/Black`, 4x4 colour grid, preview), `&OK`, `&Cancel`, `&Help`",
+      "status": "~8",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/options.spec.ts",
+          "test": "the General tab: font, size, fixed tab size, tab type, Current File Info, Auto Indent, Real Tabs; OK, Cancel, Help"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/options.spec.ts",
+          "test": "the Colors tab: elements, attributes, presets with Auto, Print w/Black checked and disabled, 16 colours"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "`settings.dat` (57 lines) next to the EXE",
+      "status": "~21",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/options.spec.ts",
+          "test": "Import/Export Settings... exports settings.dat with 57 CR LF lines"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/options.spec.ts",
+          "test": "importing a settings.dat changes the options the dialogs show"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "`template.NEW` next to the EXE",
+      "status": "~21",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/options.spec.ts",
+          "test": "Template tab: Save Template changes what New puts into a new document (editor-ui §12)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Print: selection or all, tabs expanded, monochrome, document font, no header, new page at the PAGE marker line",
+      "status": "~2",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/print.spec.ts",
+          "test": "Print sends the whole document: tabs expanded with its rule, monochrome, a new page at the PAGE marker"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/print.spec.ts",
+          "test": "Print with a selection asks All or Selection first; Selection sends only the selection"
+        },
+        {
+          "kind": "manual",
+          "item": "Printing a source file and task 10 output on a real printer"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Find dialog (`Fi&nd what:`, two options, `Find  (F3)`, `Cancel`), modeless",
+      "status": "~7",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/find.spec.ts",
+          "test": "the dialog: Find what, the two options, \"Find  (F3)\" disabled while empty, Cancel; modeless"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Replace dialog (`&Find Next`, `&Replace`, `Replace &All`)",
+      "status": "~7",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/find.spec.ts",
+          "test": "the dialog: both boxes take the selection; Find Next, Replace and Replace All disabled while empty"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/find.spec.ts",
+          "test": "Replace replaces a match and selects the next; a selection that is not a match is not replaced (note 7)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Help (`help.chm`), F1 keyword table, context ids",
+      "status": "~10",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/menus.spec.ts",
+          "test": "F1 in the editor opens the help page of the word at the caret (editor-ui §15.3)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/menus.spec.ts",
+          "test": "Help > Help opens the Help panel at the introduction page (main.htm)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "About box with credits, link, `Check for update?`, B-M-W Easter egg",
+      "status": "~11",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/menus.spec.ts",
+          "test": "About: the original credits and the port notice; Enter presses OK, Esc closes too"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Message catalogue (editor-ui §16)",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "unit",
+          "file": "app/src/features/assemble/assemble.test.ts",
+          "test": "step 7: the assembler message boxes, in order, with their captions"
+        },
+        {
+          "kind": "unit",
+          "file": "app/src/features/documents/documents.test.ts",
+          "test": "Close File on a modified document asks with the exact text; Cancel keeps it"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/documents.spec.ts",
+          "test": "Reload File on a modified document asks \"is modified\"; Yes reloads the stored text"
+        }
+      ]
+    },
+    {
+      "section": "1.3.3",
+      "original": "Dead code and unused UI (editor-ui §17), `Print w/Black` effect, print preview",
+      "status": "x",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/options.spec.ts",
+          "test": "the Colors tab: elements, attributes, presets with Auto, Print w/Black checked and disabled, 16 colours"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/print.spec.ts",
+          "test": "Print sends the whole document: tabs expanded with its rule, monochrome, a new page at the PAGE marker"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "File > `&Open...`",
+      "id": "`sim.file.open`",
+      "status": "~22",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/startup.spec.ts",
+          "test": "File > Open loads the program afresh and clears PC breakpoints only when a file was chosen (note 39)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "${title}: the original's items in order, with this key map's shortcuts, then the port's additions"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "the six menus of Sim68K, in order, with their access keys (not shown on macOS)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "File > `Open &Data...`",
+      "id": "`sim.file.openData`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/startup.spec.ts",
+          "test": "File > Open Data overlays memory and appends its messages; the listing stays"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "File > `&Close`",
+      "id": "`sim.file.close`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/startup.spec.ts",
+          "test": "File > Close asks Caution; OK resets the simulator, clears the listing and keeps memory"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "File > `&Printer Setup...`",
+      "id": "`sim.file.printerSetup`",
+      "status": "~2",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/options.spec.ts",
+          "test": "Printer Setup... opens the printer output of the port (note 2)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "File > `E&xit`",
+      "id": "`sim.file.exit`",
+      "status": "~4",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/options.spec.ts",
+          "test": "File > Exit in a browser shows the exit screen after the close prompts (note 4)"
+        },
+        {
+          "kind": "desktop-e2e",
+          "file": "tests/desktop/dev/menu.spec.ts",
+          "test": "the native menu equals the command tables in ${mode} mode"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Search > `&Find...`",
+      "id": "`sim.search.find`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Find: case-insensitive over the whole row, Find (F3) for the next hit, no wrap"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "${title}: the original's items in order, with this key map's shortcuts, then the port's additions"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Search > `&Go to PC`",
+      "id": "`sim.search.gotoPC`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Go to PC selects the current instruction again after another row was clicked"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Run > `&Run`",
+      "id": "`sim.run.run`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Run to SIMHALT: Halted, five run commands off with the halted hint; Pause enables them again (note 22)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "${title}: the original's items in order, with this key map's shortcuts, then the port's additions"
+        },
+        {
+          "kind": "manual",
+          "item": "Browser shortcut table"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Run > `Run To &Cursor`",
+      "id": "`sim.run.runToCursor`",
+      "status": "~23",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Run To Cursor runs to the selected row and stops before it"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Run To Cursor on a row without an address: the original box, and no run (note 23)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Run > `&Auto Trace`",
+      "id": "`sim.run.autoTrace`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Auto Trace traces one instruction per tick until Pause, which enables the commands (note 24)"
+        },
+        {
+          "kind": "manual",
+          "item": "Browser shortcut table"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Run > `&Step Over`",
+      "id": "`sim.run.stepOver`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Step Over runs a subroutine at full speed and stops on the instruction after the call"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Run > `&Trace Into`",
+      "id": "`sim.run.traceInto`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Trace Into executes one instruction, reports it in the message area and follows it in the listing"
+        },
+        {
+          "kind": "manual",
+          "item": "Browser shortcut table"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Run > `&Pause`",
+      "id": "`sim.run.pause`",
+      "status": "~24",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Pause stops a running program where it is; Run continues from there"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Auto Trace traces one instruction per tick until Pause, which enables the commands (note 24)"
+        },
+        {
+          "kind": "manual",
+          "item": "Browser shortcut table"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Run > `R&ewind Program`",
+      "id": "`sim.run.rewind`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Rewind keeps memory and resets the registers; Reload loads the program afresh"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Run > `Re&load Program`",
+      "id": "`sim.run.reload`",
+      "status": "~22",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Rewind keeps memory and resets the registers; Reload loads the program afresh"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Run to SIMHALT: Halted, five run commands off with the halted hint; Pause enables them again (note 22)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Run > `L&og Start`",
+      "id": "`sim.run.logStart`",
+      "status": "~25",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/log.spec.ts",
+          "test": "both logs: Log Start shows LOGGING; SIMHALT stops the log with the original box; the files hold the log"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "${title}: the original's items in order, with this key map's shortcuts, then the port's additions"
+        },
+        {
+          "kind": "desktop-e2e",
+          "file": "tests/desktop/dev/menu.spec.ts",
+          "test": "the native menu equals the command tables in ${mode} mode"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Run > `Lo&g Stop`",
+      "id": "`sim.run.logStop`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/log.spec.ts",
+          "test": "Log File Options: Append adds to an existing log, Replace starts it again, Cancel does not log (note 41)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "View > `&Output Window`",
+      "id": "`sim.view.output`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "View shows and focuses each tool panel; Output Window focuses the Output panel"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "View > `&Memory`",
+      "id": "`sim.view.memory`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "View shows and focuses each tool panel; Output Window focuses the Output panel"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "View > `&Stack`",
+      "id": "`sim.view.stack`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "View shows and focuses each tool panel; Output Window focuses the Output panel"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "View > `&Hardware`",
+      "id": "`sim.view.hardware`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "View shows and focuses each tool panel; Output Window focuses the Output panel"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "View > `&Break Points`",
+      "id": "`sim.view.breakpoints`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "View shows and focuses each tool panel; Output Window focuses the Output panel"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "View > `&EASyBIN`",
+      "id": "`sim.view.easybin`",
+      "status": "~26",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "View > EASyBIN switches to EASyBIN mode (note 26)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Options > `Source Window Font...`",
+      "id": "`sim.options.sourceFont`",
+      "status": "~27",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/options.spec.ts",
+          "test": "Source Window Font changes the listing font; Printer Font offers fonts; both Cancel without effect (note 27)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Options > `Output Window Font...`",
+      "id": "`sim.options.outputFont`",
+      "status": "~27",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/output.spec.ts",
+          "test": "Output Window Font: a font dialog limited to the measured fixed-pitch fonts (note 27)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Options > `Printer Font...`",
+      "id": "`sim.options.printerFont`",
+      "status": "~27",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/options.spec.ts",
+          "test": "Source Window Font changes the listing font; Printer Font offers fonts; both Cancel without effect (note 27)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Options > `&Log Output...`",
+      "id": "`sim.options.logOutput`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/log.spec.ts",
+          "test": "the Log Output dialog: Cancel keeps the earlier choice; the memory range shows only for the third type"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Options > `&Enable Exceptions` (check)",
+      "id": "`sim.options.exceptions`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "Enable Exceptions and Enable Bit Field Instructions are check items shown in the status bar (note 34)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/hardware.spec.ts",
+          "test": "IRQ buttons interrupt the running program with exceptions enabled; each level reaches its handler"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Options > `&Auto Trace Options...`",
+      "id": "`sim.options.autoTrace`",
+      "status": "~28",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/options.spec.ts",
+          "test": "Auto Trace Options: interval 10..1000 in steps of 10, Cancel cancels, OK applies the interval"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Options > `&Fullscreen Options...`",
+      "id": "`sim.options.fullscreen`",
+      "status": "~29",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/options.spec.ts",
+          "test": "Fullscreen Options: the original text; only screen 1 is accepted (note 29)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Options > `Enable &Bit Field Instructions` (check)",
+      "id": "`sim.options.bitField`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "Enable Exceptions and Enable Bit Field Instructions are check items shown in the status bar (note 34)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/listing.spec.ts",
+          "test": "*[sim68k]bitfield turns on bit-field instructions; *[sim68k]simhalt_off makes FFFF FFFF an illegal opcode"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Options > `Output Window &Size` > `640x480`, `800x600`, `1024x768`, `1280x800`, `1280x1024`, `1440x900`, `1680x1050`, `1920x1080`, `1920x1200` (radio)",
+      "id": "`sim.options.size` (arg: index 0-8)",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "Output Window Size: nine radio items, the check mark follows the real size, the surface takes it"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/output.spec.ts",
+          "test": "task 33 sets the surface size; the menu check follows; a size that is not on the menu checks nothing"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Options > `Output Window Text &Wrap` (check)",
+      "id": "`sim.options.textWrap`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/output.spec.ts",
+          "test": "Output Window Text Wrap: off, text runs past the right edge; on, it continues on the next row"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Help > `&Sim68K Help`",
+      "id": "`sim.help.help`",
+      "status": "~10",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "Help > Sim68K Help opens the simulator page; About Sim68K shows the original texts and the notice"
+        }
+      ]
+    },
+    {
+      "section": "1.3.4",
+      "original": "Help > `&About Sim68K`",
+      "id": "`sim.help.about`",
+      "status": "~11",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "Help > Sim68K Help opens the simulator page; About Sim68K shows the original texts and the notice"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "Toolbar: Open, Run, Run To Cursor, Auto Trace, Step Over, Trace Into, Pause, Rewind Program, Reload Program, Log Start, Log Stop, `LOGGING` label",
+      "id": "the ids above",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "the toolbar: eleven buttons in the original order with its hints and this key map shortcut"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/log.spec.ts",
+          "test": "both logs: Log Start shows LOGGING; SIMHALT stops the log with the original box; the files hold the log"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "Gutter context menu `Clear All PC Breakpoints`",
+      "id": "`sim.bp.clearAllPC`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/listing.spec.ts",
+          "test": "the gutter context menu clears all PC breakpoints"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "F1 in the main window and in each tool window (the I/O window has no F1 handler)",
+      "id": "`sim.help.context`",
+      "status": "~10",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "F1 opens the help page of the panel that has the focus (note 10)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/input.spec.ts",
+          "test": "F1, F2, F4 and Shift+F2 reach the program in the Output panel and do nothing else (2.9.4)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "Ctrl+Tab window cycle Main > I/O > Memory > Stack > Hardware > Break Points > Main, skipping hidden windows",
+      "id": "`sim.panel.next`",
+      "status": "~30",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "F2 moves through the visible panels in the order of the original Ctrl+Tab; Ctrl+Alt+O leaves the Output panel (note 30)"
+        },
+        {
+          "kind": "desktop-e2e",
+          "file": "tests/desktop/dev/menu.spec.ts",
+          "test": "the native menu equals the command tables in ${mode} mode"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "Shortcuts act while any simulator window has the focus",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "a run shortcut acts while another simulator panel has the focus"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/input.spec.ts",
+          "test": "task 24: the simulator keys go to the program; Ctrl+Alt+O still leaves the Output panel (note 44)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "TRAP #15 task 24: eleven shortcuts removed, F1 / Ctrl+Tab / Alt+Enter / Shift+Insert ignored; Find and Go to PC keep theirs",
+      "status": "~44",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/input.spec.ts",
+          "test": "task 24: the simulator keys go to the program; Ctrl+Alt+O still leaves the Output panel (note 44)"
+        },
+        {
+          "kind": "desktop-e2e",
+          "file": "tests/desktop/dev/menu.spec.ts",
+          "test": "after task 24, F9 pressed in the Output panel reaches the program and runs nothing"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "Several simulators at once: every Execute, command line and double-click starts another SIM68K",
+      "id": "`app.window.new`",
+      "status": "~43",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/startup.spec.ts",
+          "test": "a second window has a simulator of its own (note 43)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/startup.spec.ts",
+          "test": "Execute starts the simulator afresh: no output size, memory map or breakpoint of the last program (4.7.1)"
+        },
+        {
+          "kind": "desktop-e2e",
+          "file": "tests/desktop/dev/windows.spec.ts",
+          "test": "New Window gives a second window with its own simulator"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "Enabled/disabled state machine: active, busy, halted (sim-ui §3.6)",
+      "status": "~22",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Run to SIMHALT: Halted, five run commands off with the halted hint; Pause enables them again (note 22)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Pause stops a running program where it is; Run continues from there"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/startup.spec.ts",
+          "test": "Execute while a program runs asks Caution first (note 20); Open stays enabled while it runs (note 22)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "Registers: 19 hex fields + SR in binary, label `T S  INT   XNZVC`, refresh moments",
+      "status": "~31",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/registers.spec.ts",
+          "test": "the twenty fields: D0-D7, A0-A7, US, SS, PC in hex, SR in binary under T S  INT   XNZVC"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/registers.spec.ts",
+          "test": "D0 reaches the CPU at the next run command; Pause before that shows the CPU value again"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "Editing registers: overwrite-style hex fields, SR 0/1 only, D0-D7/SR/PC applied at the next run command, A0-A7/US/SS applied at once, A7/US/SS mirroring, double-click on PC and on address registers, tab order",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/registers.spec.ts",
+          "test": "typing overwrites hex digits, lower case becomes upper case, other keys are refused"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/registers.spec.ts",
+          "test": "SR takes 0 and 1 only; another key types a 0; the S bit decides what A7 shows"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/registers.spec.ts",
+          "test": "D0 reaches the CPU at the next run command; Pause before that shows the CPU value again"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/registers.spec.ts",
+          "test": "A1 reaches the CPU at once: Pause keeps it"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/registers.spec.ts",
+          "test": "A7, US and SS mirror each other by the S bit"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/registers.spec.ts",
+          "test": "PC edit moves the listing selection; a double-click on PC finds the PC row again"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/registers.spec.ts",
+          "test": "a double-click on an address register shows the Memory panel at that address"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/registers.spec.ts",
+          "test": "the tab order of the original: D0-D7, A0-A7, SR, PC, SS, Clear Cycles, US"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "Cycle counter and `Clear Cycles`",
+      "id": "`sim.cycles.clear`",
+      "status": "~32",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Clear Cycles sets the counter to 0; a step counts again"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "Listing pane: raw `.L68` rows, heading line, 8-column tabs, nine-line text when no listing exists",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/listing.spec.ts",
+          "test": "the listing shows the raw .L68 rows under the original heading; tabs at 8-column stops"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/startup.spec.ts",
+          "test": "an .S68 without its .L68: Unable to open .L68 file. and the nine explanatory lines"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "Horizontal scroll bar 1..200",
+      "status": "~33",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/listing.spec.ts",
+          "test": "the listing scrolls sideways with its heading (note 33)"
+        }
+      ],
+      "note": "Finding for U1: the heading strip does not scroll with the rows; the test is an expected failure until U1 repairs it."
+    },
+    {
+      "section": "1.3.5",
+      "original": "Current instruction = selected row; `highlight()` rule (last match wins, stale selection, third visible row)",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/listing.spec.ts",
+          "test": "the PC row is selected and marked; after SIMHALT the row after it is selected (highlight rule)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Go to PC selects the current instruction again after another row was clicked"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "Gutter dots: green on instruction rows, red on breakpoints; click toggles; limit 100 with `Breakpoint Limit Reached!`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/listing.spec.ts",
+          "test": "green dots on instruction rows only; a click sets a red breakpoint and Run stops there"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/listing.spec.ts",
+          "test": "the 101st breakpoint: Breakpoint Limit Reached!"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "Single click selects a row (the \"cursor\"); double-click sets the PC field",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/listing.spec.ts",
+          "test": "a click selects a row; a double-click on an instruction row puts its address into the PC field"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "Find dialog (`Fi&nd what:`, `Find  (F3)`, `Cancel`), case-insensitive over the raw row, no wrap, F3 inside the dialog",
+      "id": "`sim.search.find`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Find: case-insensitive over the whole row, Find (F3) for the next hit, no wrap"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "Message area: append only, cleared on load, trace lines, catalogue of sim-ui §7.2",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "the message area of a load: the S0 line and the success line, cleared by the next load"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Trace Into executes one instruction, reports it in the message area and follows it in the listing"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "Status bar (two empty panels)",
+      "status": "~34",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "Enable Exceptions and Enable Bit Field Instructions are check items shown in the status bar (note 34)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/options.spec.ts",
+          "test": "Execution Speed (added): the status bar names the setting"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "Command line `file.S68 /r /f /e /b`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/startup.spec.ts",
+          "test": "the web command line: ?open= loads an .S68 without running it; run, exceptions and bitfield apply"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/startup.spec.ts",
+          "test": "switches with no loadable file still apply and the mode stays (sim-ui §8.1)"
+        },
+        {
+          "kind": "desktop-e2e",
+          "file": "tests/desktop/dev/windows.spec.ts",
+          "test": "a file on the command line is the start-up file, with the switches after it"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "Load sequence, listing lookup, `*[sim68k]break` / `bitfield` / `simhalt_off`, window title = file name",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/listing.spec.ts",
+          "test": "*[sim68k]break sets a breakpoint on the next instruction row; Rewind and Reload keep breakpoints"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/listing.spec.ts",
+          "test": "*[sim68k]bitfield turns on bit-field instructions; *[sim68k]simhalt_off makes FFFF FFFF an illegal opcode"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/startup.spec.ts",
+          "test": "File > Open loads the program afresh and clears PC breakpoints only when a file was chosen (note 39)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "Drag and drop of an `.S68`, `Caution` box",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/startup.spec.ts",
+          "test": "an .S68 dropped on the simulator asks Caution, then loads it (sim-ui §8.4)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "Run, Run To Cursor, Step Over, Trace Into, Auto Trace, Pause, Rewind, Reload, halts, input interplay (sim-ui §9)",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Trace Into executes one instruction, reports it in the message area and follows it in the listing"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Step Over runs a subroutine at full speed and stops on the instruction after the call"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/run.spec.ts",
+          "test": "Rewind keeps memory and resets the registers; Reload loads the program afresh"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/input.spec.ts",
+          "test": "task 2: a typed line is echoed, ends with Enter, and is stored with its length"
+        }
+      ]
+    },
+    {
+      "section": "1.3.5",
+      "original": "Shut-down: settings saved, log stopped, no prompt",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/startup.spec.ts",
+          "test": "leaving the page asks nothing while a program is loaded and stopped (shut-down)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/options.spec.ts",
+          "test": "remembered across a reload: options, tool panels and the stack register; not breakpoints or Live"
+        }
+      ]
+    },
+    {
+      "section": "1.3.6",
+      "original": "Window `Sim68K I/O`, black, fixed size = surface size, always visible at start, shown on text output and on input, close only hides",
+      "status": "~35",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/output.spec.ts",
+          "test": "the Output panel collapses but is not closed; output shows it again (note 35)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/output.spec.ts",
+          "test": "text and graphics share one black surface; the canvas holds exactly its pixels"
+        }
+      ]
+    },
+    {
+      "section": "1.3.6",
+      "original": "One surface for text and graphics, 640x480 to 1920x1200 and any task 33 size",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/output.spec.ts",
+          "test": "text and graphics share one black surface; the canvas holds exactly its pixels"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/output.spec.ts",
+          "test": "task 33 sets the surface size; the menu check follows; a size that is not on the menu checks nothing"
+        },
+        {
+          "kind": "browser-check",
+          "file": "app/src/core/sim-host/surface/check-surface.mjs"
+        }
+      ],
+      "note": "That the pixels of whole programs do not depend on the browser is X3's (tests/conformance/examples, 6.5.4), written in the same wave; add it here when it has landed."
+    },
+    {
+      "section": "1.3.6",
+      "original": "Full screen: Alt+Enter, `/f`, task 33, left automatically on stop",
+      "id": "`sim.output.fullscreen`",
+      "status": "~36",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/output.spec.ts",
+          "test": "full screen: the button enters, Alt+Enter in the Output panel leaves; the surface keeps its size"
+        },
+        {
+          "kind": "desktop-e2e",
+          "file": "tests/desktop/dev/output.spec.ts",
+          "test": "Alt+Enter in the Output panel takes the window into full screen and out again (macOS)"
+        },
+        {
+          "kind": "manual",
+          "item": "Full screen on the built-in display and on an external monitor"
+        }
+      ]
+    },
+    {
+      "section": "1.3.6",
+      "original": "Paste clipboard as typed input (254 characters)",
+      "id": "`sim.output.paste`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/input.spec.ts",
+          "test": "paste chord: one line completes a task 2 input; of several lines the last character is the type-ahead"
+        },
+        {
+          "kind": "desktop-e2e",
+          "file": "tests/desktop/dev/output.spec.ts",
+          "test": "the paste chord and sim.output.paste paste into a task 5 loop as the original does (HELLO stores HO)"
+        },
+        {
+          "kind": "manual",
+          "item": "Paste into a task 2 prompt with Cmd+V in Safari, Chrome and the desktop app, and with Shift+Insert in"
+        }
+      ]
+    },
+    {
+      "section": "1.3.6",
+      "original": "Keyboard input, key state table, key and mouse interrupts, input prompt",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/input.spec.ts",
+          "test": "task 2: a typed line is echoed, ends with Enter, and is stored with its length"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/input.spec.ts",
+          "test": "task 4 reads a number with atoi rules; task 5 reads one character into D1.B"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/input.spec.ts",
+          "test": "type-ahead: keys typed while nothing waits keep the last one for the next input"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/input.spec.ts",
+          "test": "dead-key and composed input arrive as one Windows-1252 character"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/input.spec.ts",
+          "test": "task 19 sees a held letter key"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/input.spec.ts",
+          "test": "tasks 62 and 60: a key-down and a mouse button-down raise their interrupt levels (exceptions on)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/input.spec.ts",
+          "test": "task 61 reads the mouse in surface pixels while the left button is held"
+        },
+        {
+          "kind": "manual",
+          "item": "Keyboard on a real MacBook"
+        }
+      ]
+    },
+    {
+      "section": "1.3.6",
+      "original": "Sound (two players), files, file dialog (task 58), printer (task 10)",
+      "status": "~2",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/files.spec.ts",
+          "test": "tasks 50-59: a new file is written and read back; names match in any case (note 46); task 59 misses"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/files.spec.ts",
+          "test": "task 58 shows the file dialog with the program title; OK returns the path, Cancel returns 0"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/files.spec.ts",
+          "test": "the standard player: busy while a sound plays, free again by time with no audio output (H6)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/files.spec.ts",
+          "test": "task 10 prints into a print job that the Printer Output dialog offers (note 2)"
+        },
+        {
+          "kind": "manual",
+          "item": "Sound: tasks 70-77 audible, in order, loops stop on reset."
+        },
+        {
+          "kind": "desktop-e2e",
+          "file": "tests/desktop/packaged/minimise.spec.ts",
+          "test": "a program in a task 23 delay of 300 units finishes within 3.5 s while the window is minimised"
+        }
+      ]
+    },
+    {
+      "section": "1.3.6",
+      "original": "Serial ports (tasks 40-43), network (tasks 100-107)",
+      "status": "~37",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/files.spec.ts",
+          "test": "serial and network tasks in a browser give the original \"not available\" results (note 37)"
+        },
+        {
+          "kind": "manual",
+          "item": "A serial adapter with tasks 40-43; two windows, and two machines on a LAN, with the network tasks."
+        }
+      ]
+    },
+    {
+      "section": "1.3.7",
+      "original": "`68000 Memory` window: Address / From / To / Bytes fields, Copy, Fill, Save, Row and Page spin buttons, Live, 16 bytes per row with ASCII, cursor editing in hex and ASCII, wheel, arrows, PgUp/PgDn",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/memory.spec.ts",
+          "test": "rows of 16 bytes with the address, hex and ASCII (signed-char rule); the address snaps to 16"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/memory.spec.ts",
+          "test": "Row and Page buttons, the arrow keys in the Address field and the wheel move the view"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/memory.spec.ts",
+          "test": "typing in the hex columns sets nibbles; typing in the ASCII column stores the character"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/memory.spec.ts",
+          "test": "Fill writes a 4-byte pattern From through To; Copy copies Bytes bytes; bad ranges are refused"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/memory.spec.ts",
+          "test": "Save writes From through To as a raw binary file"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/memory.spec.ts",
+          "test": "Save with To before From: Invalid memory range."
+        }
+      ]
+    },
+    {
+      "section": "1.3.7",
+      "original": "Memory window live update not working at address 0",
+      "status": "~38",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/memory.spec.ts",
+          "test": "Live repaints rows the running program changes, also at address 0 (note 38); without Live only at the stop"
+        }
+      ]
+    },
+    {
+      "section": "1.3.7",
+      "original": "`68000 Stack` window: `View` list A0..A6, US, SS; pointer on the middle row; aqua and yellow byte marks; red text in the Invalid range; spin and wheel",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/memory.spec.ts",
+          "test": "Stack: the selected pointer on the middle row, aqua and yellow marks, View A0..SS, spin buttons"
+        }
+      ]
+    },
+    {
+      "section": "1.3.7",
+      "original": "`EASy68K Hardware` window: 7-segment display, LEDs, switches, push buttons, four address fields with conflict colouring, IRQ 1-7 buttons with auto check boxes, `Automatic Enabled/Disabled`, Auto Interval field and level list, Reset, Memory Map (ROM, Read, Protected, Invalid)",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/hardware.spec.ts",
+          "test": "the 7-segment display and the LEDs show the bytes the program writes"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/hardware.spec.ts",
+          "test": "a switch sets its bit in the switch byte; a held push button clears its bit (active low)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/hardware.spec.ts",
+          "test": "IRQ buttons interrupt the running program with exceptions enabled; each level reaches its handler"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/hardware.spec.ts",
+          "test": "auto interval: a checked level interrupts the program every interval while it runs"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/hardware.spec.ts",
+          "test": "Reset loads SSP and PC from vectors 0 and 1 and sets the interrupt mask to 7"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/hardware.spec.ts",
+          "test": "Memory Map: an Invalid range makes an access a bus error that halts the program"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/hardware.spec.ts",
+          "test": "the device address fields: a conflicting address is marked"
+        }
+      ]
+    },
+    {
+      "section": "1.3.7",
+      "original": "Simple PC breakpoints (gutter, `*[sim68k]break`, cleared by Open and Close)",
+      "status": "~39",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/listing.spec.ts",
+          "test": "green dots on instruction rows only; a click sets a red breakpoint and Run stops there"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/startup.spec.ts",
+          "test": "File > Open loads the program afresh and clears PC breakpoints only when a file was chosen (note 39)"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/listing.spec.ts",
+          "test": "*[sim68k]break sets a breakpoint on the next instruction row; Rewind and Reload keep breakpoints"
+        }
+      ]
+    },
+    {
+      "section": "1.3.7",
+      "original": "`EASy68K Advanced Break Points`: Registers, Memory and Expression Builder grids, Set / Clear / Clear All, expression buttons",
+      "status": "~40",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/breakpoints.spec.ts",
+          "test": "the panel: three groups of 49 numbered rows, every button disabled at first"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/breakpoints.spec.ts",
+          "test": "a register condition in an expression stops Run when D0 reaches the value"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/breakpoints.spec.ts",
+          "test": "a memory access condition stops Run after the instruction that accessed the address"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/breakpoints.spec.ts",
+          "test": "the Expression Builder follows the grammar; an undefined condition gives the original box"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/breakpoints.spec.ts",
+          "test": "Clear of a condition that an expression uses asks first and removes the expression (note 40)"
+        }
+      ],
+      "note": "A Write condition never fires for a MOVE to memory (the core reads the destination first and a condition sees the read); the test uses R/W. Engine behaviour, quirk of the original."
+    },
+    {
+      "section": "1.3.7",
+      "original": "`Log Output` dialog (file names, execution log type, memory range, output log type)",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/log.spec.ts",
+          "test": "the Log Output dialog: Cancel keeps the earlier choice; the memory range shows only for the third type"
+        }
+      ]
+    },
+    {
+      "section": "1.3.7",
+      "original": "Log Start, `Log File Options` (Replace / Append / Cancel), Log Stop, `LOGGING`, automatic stops with `Current Log Stopped.`",
+      "status": "~41",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/log.spec.ts",
+          "test": "both logs: Log Start shows LOGGING; SIMHALT stops the log with the original box; the files hold the log"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/log.spec.ts",
+          "test": "Log File Options: Append adds to an existing log, Replace starts it again, Cancel does not log (note 41)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.7",
+      "original": "Execution log and output log formats, file names `<name>_RunLog.txt`, `<name>_OutLog.txt`, Rewind/Reload notes",
+      "status": "~42",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/log.spec.ts",
+          "test": "both logs: Log Start shows LOGGING; SIMHALT stops the log with the original box; the files hold the log"
+        },
+        {
+          "kind": "unit",
+          "file": "tests/conformance/sim/logs"
+        }
+      ]
+    },
+    {
+      "section": "1.3.7",
+      "original": "`Auto Trace Options` dialog (interval 10..1000 step 10, `Disable display update`)",
+      "status": "~28",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/options.spec.ts",
+          "test": "Auto Trace Options: interval 10..1000 in steps of 10, Cancel cancels, OK applies the interval"
+        }
+      ]
+    },
+    {
+      "section": "1.3.7",
+      "original": "`sim68K.dat` (37 lines)",
+      "status": "~21",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/options.spec.ts",
+          "test": "sim68K.dat: export writes the 37 lines of the original; import applies them (note 21)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.7",
+      "original": "Persisted: log types, exceptions, bit field, hardware addresses, fonts, auto-trace settings, visibility of Memory / Stack / Hardware, stack register choice, memory address",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/options.spec.ts",
+          "test": "remembered across a reload: options, tool panels and the stack register; not breakpoints or Live"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/app/layout.spec.ts",
+          "test": "tool panels of Simulator mode shown with the View menu are shown again after a reload; hidden by default"
+        }
+      ]
+    },
+    {
+      "section": "1.3.7",
+      "original": "Window positions and sizes on the Windows desktop",
+      "status": "~21",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/app/layout.spec.ts",
+          "test": "a dragged splitter keeps its size after a reload"
+        }
+      ]
+    },
+    {
+      "section": "1.3.8",
+      "original": "File > New (fill memory with the Fill byte)",
+      "id": "`bin.file.new`",
+      "status": "",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "New asks Caution: Cancel keeps memory, OK fills it with FF and resets the fields"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "${title}: the items of EASyBIN v2.5.0 with this key map's shortcuts"
+        }
+      ]
+    },
+    {
+      "section": "1.3.8",
+      "original": "File > Open S-Record...",
+      "id": "`bin.file.openSrec`",
+      "status": "",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "Open S-Record fills memory and the S-Record File group; the window title is the file"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "${title}: the items of EASyBIN v2.5.0 with this key map's shortcuts"
+        }
+      ]
+    },
+    {
+      "section": "1.3.8",
+      "original": "File > Open Binary...",
+      "id": "`bin.file.openBinary`",
+      "status": "",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "Save Binary writes First Address for Length bytes; Open Binary loads them at First Address"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "${title}: the items of EASyBIN v2.5.0 with this key map's shortcuts"
+        }
+      ]
+    },
+    {
+      "section": "1.3.8",
+      "original": "File > Save S-Record...",
+      "id": "`bin.file.saveSrec`",
+      "status": "",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "Save S-Record asks S-Record Creation and writes the records of easybin.md 11.3"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "${title}: the items of EASyBIN v2.5.0 with this key map's shortcuts"
+        }
+      ]
+    },
+    {
+      "section": "1.3.8",
+      "original": "File > Save Binary...",
+      "id": "`bin.file.saveBinary`",
+      "status": "",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "Save Binary writes First Address for Length bytes; Open Binary loads them at First Address"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "${title}: the items of EASyBIN v2.5.0 with this key map's shortcuts"
+        }
+      ]
+    },
+    {
+      "section": "1.3.8",
+      "original": "File > Exit",
+      "id": "`bin.file.exit`",
+      "status": "",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "File > Exit ends the application as the other modes do (easybin.md 19 item 4)"
+        }
+      ]
+    },
+    {
+      "section": "1.3.8",
+      "original": "Main screen: 16 MB hex/ASCII editor, Address field, Row/Page, wheel; S-Record File group; Binary Output Split (1, 2, 4 files); Binary File(s) group; From / To; Copy; Fill",
+      "status": "",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "the memory area: typing hex, the Address field, Row and Page buttons"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "Open S-Record fills memory and the S-Record File group; the window title is the file"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "Binary Input/Output Split: 1, 2 or 4 files, and the File Split digits follow"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "Copy and Fill: From / To, Size and the fill byte"
+        }
+      ]
+    },
+    {
+      "section": "easybin.md 21.4",
+      "original": "File > `&New` (fill memory with `$FF` after `Caution` question)",
+      "id": "`bin.file.new`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "New asks Caution: Cancel keeps memory, OK fills it with FF and resets the fields"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "${title}: the items of EASyBIN v2.5.0 with this key map's shortcuts"
+        }
+      ]
+    },
+    {
+      "section": "easybin.md 21.4",
+      "original": "File > `&Open S-Record...`",
+      "id": "`bin.file.openSrec`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "Open S-Record fills memory and the S-Record File group; the window title is the file"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "${title}: the items of EASyBIN v2.5.0 with this key map's shortcuts"
+        }
+      ]
+    },
+    {
+      "section": "easybin.md 21.4",
+      "original": "File > `Open &Binary...`",
+      "id": "`bin.file.openBinary`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "Save Binary writes First Address for Length bytes; Open Binary loads them at First Address"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "${title}: the items of EASyBIN v2.5.0 with this key map's shortcuts"
+        }
+      ]
+    },
+    {
+      "section": "easybin.md 21.4",
+      "original": "File > `Save S-&Record...`",
+      "id": "`bin.file.saveSrec`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "Save S-Record asks S-Record Creation and writes the records of easybin.md 11.3"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "${title}: the items of EASyBIN v2.5.0 with this key map's shortcuts"
+        }
+      ]
+    },
+    {
+      "section": "easybin.md 21.4",
+      "original": "File > `&Save Binary...`",
+      "id": "`bin.file.saveBinary`",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "Save Binary writes First Address for Length bytes; Open Binary loads them at First Address"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "${title}: the items of EASyBIN v2.5.0 with this key map's shortcuts"
+        }
+      ]
+    },
+    {
+      "section": "easybin.md 21.4",
+      "original": "File > `E&xit`",
+      "id": "`bin.file.exit`",
+      "status": "~ (quits the application, 19 item 4)",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "File > Exit ends the application as the other modes do (easybin.md 19 item 4)"
+        }
+      ]
+    },
+    {
+      "section": "easybin.md 21.4",
+      "original": "Help > `&EASyBIN Help`",
+      "id": "`bin.help.help`",
+      "status": "~ (Help panel)",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "Help: EASyBIN Help opens easybin.htm; About EASyBIN shows the original texts and the notice"
+        }
+      ]
+    },
+    {
+      "section": "easybin.md 21.4",
+      "original": "Help > `&About EASyBIN`",
+      "id": "`bin.help.about`",
+      "status": "~ (port notice added)",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "Help: EASyBIN Help opens easybin.htm; About EASyBIN shows the original texts and the notice"
+        }
+      ]
+    },
+    {
+      "section": "easybin.md 21.4",
+      "original": "Simulator View > `&EASyBIN`",
+      "id": "`sim.view.easybin`",
+      "status": "~ (note 26)",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/menus.spec.ts",
+          "test": "View > EASyBIN switches to EASyBIN mode (note 26)"
+        }
+      ]
+    },
+    {
+      "section": "easybin.md 21.4",
+      "original": "Memory area: 16 MB, rows of 16 bytes, hex and ASCII editing, cursor, colours",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "the memory area: typing hex, the Address field, Row and Page buttons"
+        },
+        {
+          "kind": "browser-check",
+          "file": "app/src/features/easybin/check-easybin.mjs"
+        }
+      ]
+    },
+    {
+      "section": "easybin.md 21.4",
+      "original": "Address field, Row and Page buttons, wheel, Page Up/Down, arrows",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "the memory area: typing hex, the Address field, Row and Page buttons"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "the Address field rounds a typed address down to a multiple of 16 (easybin.md 6.1)"
+        }
+      ],
+      "note": "Finding for B1: the Address field keeps a typed last digit other than 0; that test is an expected failure until B1 repairs it."
+    },
+    {
+      "section": "easybin.md 21.4",
+      "original": "`S-Record File` group: Start Address, Last Address, Length",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "Open S-Record fills memory and the S-Record File group; the window title is the file"
+        }
+      ]
+    },
+    {
+      "section": "easybin.md 21.4",
+      "original": "`Binary Input/Output Split` (1, 2, 4 files) and `File Split` digits",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "Binary Input/Output Split: 1, 2 or 4 files, and the File Split digits follow"
+        }
+      ]
+    },
+    {
+      "section": "easybin.md 21.4",
+      "original": "`Binary File(s)` group: First Address, Length",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "Open S-Record fills memory and the S-Record File group; the window title is the file"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "Save Binary writes First Address for Length bytes; Open Binary loads them at First Address"
+        }
+      ]
+    },
+    {
+      "section": "easybin.md 21.4",
+      "original": "From / To, Size + Copy, fill byte + Fill",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "Copy and Fill: From / To, Size and the fill byte"
+        }
+      ]
+    },
+    {
+      "section": "easybin.md 21.4",
+      "original": "Window title = opened file",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "Open S-Record fills memory and the S-Record File group; the window title is the file"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "a file dropped on EASyBIN opens it (easybin.md 1.4)"
+        }
+      ]
+    },
+    {
+      "section": "easybin.md 21.4",
+      "original": "F1 in the About box (credits page)",
+      "status": "~ (Help panel)",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "F1 in the About box opens the credits page (easybin.md 15)"
+        }
+      ]
+    },
+    {
+      "section": "easybin.md 21.4",
+      "original": "Files dropped on the window",
+      "status": "=",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "a file dropped on EASyBIN opens it (easybin.md 1.4)"
+        }
+      ]
+    },
+    {
+      "section": "easybin.md 21.4",
+      "original": "Tab order",
+      "status": "~ (Q18)",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/easybin.spec.ts",
+          "test": "the fields follow the layout in the Tab order (easybin.md Q18)"
+        }
+      ]
+    },
+    {
+      "section": "easybin.md 21.4",
+      "original": "Command line `EASyBIN <file>`",
+      "status": "x (19 item 7)",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/sim/startup.spec.ts",
+          "test": "the web command line: ?open= loads an .S68 without running it; run, exceptions and bitfield apply"
+        }
+      ],
+      "note": "Dropped (x): EASyBIN has no command line. The start-up arguments go to the simulator (an .S68) or the editor, never to EASyBIN; the test shows the .S68 route."
+    }
+  ]
+}
