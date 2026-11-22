@@ -1,6 +1,9 @@
 # DV4: the browser check of desktop-devices (for the gate)
 
-Status: open. The script exists and passes; only its root script and its CI step are missing.
+Status: applied in the round that prepares gate I3 (config), as asked: root script
+`check:desktop-devices` and the step "Serial and network in the web build (DV4)" of `browser-checks`,
+group `simulator`, on Ubuntu, macOS and Windows, guarded by the plan output `desktop_devices` and by both
+engines; `build/DV4/desktop-devices-check/` is in the failure upload. Run here: 30 of 30 checks passed.
 
 `app/src/features/desktop-devices/check-desktop-devices.mjs` proves in headless Chromium and
 WebKit that the web build still gives a 68000 program the values of note 37 (1.4) for every

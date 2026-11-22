@@ -11,13 +11,15 @@ EASy68K on a Windows PC is the reference.
 
 ## Which version to use
 
-- **The web version**: <https://gurmyd.github.io/easy68k-cross-platform/>. Works in Chrome, Edge
-  and Safari (the two most recent versions of each), on Windows, macOS, Linux and ChromeOS. Nothing
-  to install, nothing to allow. Firefox will probably work, but it is not tested. On a phone or tablet
-  the page can be read, but you need a real keyboard to work with it.
+- **The web version**: <https://gurmyd.github.io/easy68k-cross-platform/>. Made for Chrome, Edge
+  and Safari on a computer. Nothing to install, nothing to allow. The automatic tests run in the
+  engines of Chrome and Safari on Windows, macOS and Linux (Edge is built on Chrome's engine);
+  ChromeOS, Firefox and phones are not tested. Firefox will probably work. On a phone or tablet the
+  page can be read, but you need a real keyboard to work with it.
 - **The Mac app**: the same program as a Mac application, which reads and writes your files directly
-  on the disk; it is also meant to offer the serial port and network tasks, which a browser cannot.
-  It has not been released yet. When it
+  on the disk; it also offers the serial port and network tasks (TRAP #15 tasks 40-43 and 100-107),
+  which a browser cannot. Options > Serial Ports... says which device of the Mac each port name of
+  a program (`COM1` ...) opens. It has not been released yet. When it
   is, the first start needs a few extra steps, because the app is not notarised by Apple; the
   README's section "Opening the Mac app for the first time" explains them.
 
@@ -95,7 +97,10 @@ Ctrl+F2 to Ctrl+F8 for itself, which is why the Shift forms exist.
   (Shift+F2) or Reload (Shift+F3) to run it again.
 - **Speed**: the simulator runs about one million instructions per second on every computer, so a
   delay loop takes the same time on every machine. Options > Execution Speed... can make it faster;
-  the status bar shows the setting.
+  the status bar shows the setting. The one million is an estimate of how fast the original runs on
+  a typical Windows PC; nobody has measured that yet, and the original's speed depended a lot on the
+  PC. A program that times itself with TRAP #15 task 8 or waits with task 23 behaves the same at
+  any setting; only delays made of counting loops depend on it.
 
 ### The Output panel and the keyboard
 
@@ -206,6 +211,10 @@ nothing, use the menu or the toolbar.
   (some private windows do that). Use a normal window, and Export... what you want to keep.
 - **The simulator or the assembler "could not be loaded"**: reload the page. If it persists, the
   browser may be too old.
+- **The message area says `Not available to the program: ...`**: in the web version, a running
+  program may open at most 2,000 files of its folder and the folders below it (each at most 32 MB).
+  A folder with many other files, for example a Git repository with its `.git` folder, can use up
+  that limit. Run the program from a folder that holds only what it needs.
 - **Something behaves differently from EASy68K on Windows**: Help > Differences from EASy68K lists
   every known difference and why it exists. If yours is not there, please report it at
   <https://github.com/gurmyd/easy68k-cross-platform/issues>, with the program and what you expected.

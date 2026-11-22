@@ -204,3 +204,20 @@ is no **Contract** section.
   both INCLUDEs found; Execute shows its listing with the PC row marked", "Run: the data file named
   in another letter case is read, and the included texts are shown", "the other callers of
   Vfs.resolve find names on /disk in any letter case").
+
+### 13. Round before gate I3: the review's open points
+
+- Check 7 on both Mac runners: met since entry 12 (release run 44972000916, `check 7: passed` on
+  `mac-arm64` and `mac-x64`, 59 of 59 each). No release.yml run was started in this round (none is
+  allowed to make a release, and nothing in DV5's checks changed).
+- A test of the defect that needs no Mac: in the repository since the repair of D1 (W1's
+  `app/src/fs/vfs.test.ts`, "a folder that may not be listed for another reason: the name as
+  given, if it is there", and DV2's `app/src/fs/disk-backend.test.ts`, "the root of /disk may not
+  be listed, the granted folder may", which uses the real handlers of `desktop/src/fs-ipc.ts`);
+  both run in `npm test` on all three systems.
+- The x64 screenshots of the release run have still not been looked at by a person (the logs show
+  the same figures as arm64). The manual list (docs/MANUAL-TEST-MAC.md D2, D6) asks for the app on
+  an Intel Mac.
+- The whole-tree checks (typecheck, lint, format check, `npm test`, `npm run test:conformance`)
+  were run at the end of this round by the engineer who holds DV5's paths; the results are in that
+  engineer's report.

@@ -1,6 +1,6 @@
 # Request from W1 (repair of D1): a case-only rename must compare names without regard to letter case (owner FS1)
 
-Status: open.
+Status: done by FS1 (this round, before I3): `renameEntry` in `app/src/features/files/store.ts` compares with `foldCase` as asked, so a case-only rename is no longer refused as "already exists". One finding against the expected result: for a granted root itself the rename still cannot succeed on the real `/disk`, because a case-only rename goes through a temporary name beside the entry, which lies outside the grant and which the main process refuses (it also refuses `stat` there, so the request's `GrantedDisk` fails the same way). `renameEntry` now finds that out before anything is moved (it lists the parent first) and reports the main process's refusal; nothing is lost. A case-only rename below the granted root works. Tests: `store.test.ts`, "renameEntry: a change of letter case of a granted root on /disk"; errata FS1.md entry 25.
 
 Since the repair of D1 (`docs/porting/errata/W1.md` entry 15.1), `vfs.resolve` keeps the spelling as
 given for a segment whose folder may not be listed. On `/disk` in the desktop app that is every

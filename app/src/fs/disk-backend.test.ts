@@ -105,7 +105,9 @@ describe('DiskBackend', () => {
     }
   });
 
-  it('reports a read-only file', async () => {
+  // A root user may write any file, so nothing is read-only for it (a clean container runs as root;
+  // DOC1's container run of the README).
+  it.skipIf(process.getuid?.() === 0)('reports a read-only file', async () => {
     const grants = new GrantedRoots();
     const dir = emptyFolder(grants);
     writeFileSync(join(dir, 'ro.txt'), 'x');

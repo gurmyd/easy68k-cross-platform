@@ -4,7 +4,7 @@
     "EDIT68K.exe": "8cd7760ef3eb089c07a039d7cfb77b38ca23b859690f44d94ef67cf1d2db513e",
     "SIM68K.exe": "49cee94f462e799081f1b1b546c957fd5c37a54f7819cd84a1e17718c4d0d20e"
   },
-  "updated": "2026-11-21",
+  "updated": "2026-11-22",
   "programs": {
     "exceptions/e01-divide-by-zero": {
       "sourceSha256": "466b5e3a0391c03b5b0a778a2f7c2d941a610e4a2930575c90f175a048608250",
@@ -3311,6 +3311,23 @@
             "result": {
               "sha256": "c78b238b24c6dfb8b1a56ca2148e9ecab4b83cd13a020dad3c2fc300163e7e63",
               "bytes": 217
+            }
+          }
+        }
+      }
+    },
+    "trap15-a/a60-files-large-read": {
+      "sourceSha256": "99cc42b7fe9b3f4790047c5676f28289068f5fe968196d3a50f8f73c9bbf0491",
+      "s68Sha256": "6e958c04b501338e184bae512d236ac09ab269113929bed5d4fb3ac11093e156",
+      "l68Sha256": "8d9379a77613a4afdd4324ee4ec148013b3186e6aea5e9e0ba3abc0788bf3af4",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 21.89,
+          "artifacts": {
+            "result": {
+              "sha256": "4a03fbf7aaf1a8986f7aa70c3f87eb6b0f9852446c57a9be2c61fe5e192b262d",
+              "bytes": 375
             }
           }
         }

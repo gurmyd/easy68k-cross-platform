@@ -5,6 +5,7 @@
 // Owner: W1. Contracts import nothing but other contracts (3.1).
 
 import type { CommandId } from './commands';
+import type { DesktopDeviceBridge } from './devices';
 import type { FileSystemBackend, OpenRequest, SaveRequest, SyncFiles, VPath } from './fs';
 import type { HostNet, HostSerial } from './host';
 
@@ -116,4 +117,11 @@ export interface Platform {
    *  button), which no `fullscreenchange` event of the page reports (2.5). Returns the unsubscribe
    *  function. */
   onFullScreenChange?(listener: (on: boolean) => void): () => void;
+
+  /* ---- added in the round before gate I3; optional (docs/porting/errata/W1.md, entry 16) ---- */
+
+  /** Desktop only: the window's device bridge (3.3.4), the one DesktopSerial and DesktopNet use;
+   *  the Serial Ports dialog (features/desktop-devices) asks it for the machine's serial devices.
+   *  Null or absent in a browser (docs/requests/DV4-platform-device-bridge.md). */
+  readonly deviceBridge?: DesktopDeviceBridge | null;
 }

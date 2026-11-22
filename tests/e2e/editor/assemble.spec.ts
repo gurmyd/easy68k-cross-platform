@@ -10,8 +10,13 @@ test.beforeEach(async ({ app }) => {
   await requirePackage(app, 'E5');
 });
 
-/** The Messages panel of Editor mode. */
-const messages = (app: App) => app.page.locator('[data-e68-workspace="editor"] [data-e68-panel="messages"]');
+/**
+ * The message list of Editor mode: the grid of its Messages panel. Not the whole panel: the panel
+ * also holds the visually hidden log region that reads new messages out to a screen reader (2.11,
+ * Q1-3), whose text repeats the rows.
+ */
+const messages = (app: App) =>
+  app.page.locator('[data-e68-workspace="editor"] [data-e68-panel="messages"]').getByRole('grid');
 
 /** Assembles the active document with F9 and returns the status dialog. */
 async function assemble(app: App, name: string) {
@@ -71,6 +76,10 @@ test('one bad opcode: Errors 1, Execute disabled, one message row; a double-clic
   await expect(panel.getByText('Error Message')).toBeVisible();
   const row = panel.getByText('ERROR: Invalid opcode');
   await expect(row).toHaveCount(1);
+  // The same row is read out once by the panel's polite log region (2.11; Q1-3).
+  await expect(
+    app.page.locator('[data-e68-workspace="editor"] [data-e68-panel="messages"] [role=log][aria-live=polite]'),
+  ).toHaveText(/^1 assembler message\.\s*Line 3: ERROR: Invalid opcode$/);
   await row.dblclick();
   await expect.poll(async () => (await app.status())[0]).toMatch(/^3: /);
 });

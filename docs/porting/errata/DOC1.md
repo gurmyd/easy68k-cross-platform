@@ -163,3 +163,42 @@ errata up to date.
 - **SH5 section 7, items 5 and 6:** a manual check of a loop after SIMHALT and of task 77 on a
   looping slot needs a test program that nobody has written and tried; the manual list says they
   are not in it.
+
+## 7. Round before gate I3 (one engineer for wave three and the desktop app)
+
+- **Review of DOC1:** the coverage table of `docs/MANUAL-TEST-MAC.md` named B8 (the long session)
+  for the browser shortcut table on Windows, which is B10: corrected, and a test was added to the
+  docs check (`tools/check-docs.test.mjs`, "every section the coverage table names is about the
+  topic of its row"; it fails when B8 is put back). A second new test holds the manual list's copy
+  of the first-start steps to DV3's text. The configuration engineer adopted the scripts
+  (`check:docs` in the job `check`; request `docs/requests/DOC1-docs-check.md`).
+- **`docs/DIFFERENCES.md`** rebuilt from the fragments: W1's (case-sensitive Mac disks) and DV4's
+  are in it; the stale U4 row was already gone from U4's fragment. The introduction mentions the
+  case-sensitive disks; a hand-written **part 5, "Known limitations"**, lists what the project
+  knows and has not repaired or proven: nobody has used the port on a real Mac; Firefox, ChromeOS
+  and phones are not tested; a folder with a large `.git` can crowd a program's files out of the
+  2,000-file limit in the web version (ARCHITECTURE-PLUS.md P3.3.10, package N8); Safari's storage
+  notice (R-10) is missing; the `Maximum` speed and the 120 Hz frame figures of 6.9 item 9; no
+  screen reader tried; no real serial adapter. The six accessibility findings are not listed there
+  (their owners repair them in this round; the engineer who closes the round rebuilds the file).
+  The help page `Port/differences.htm` (H1's path) must be renewed with `npm run import:help`.
+- **`docs/MANUAL-TEST-MAC.md`:** part A (twenty minutes) is the core; parts B and C are marked
+  optional. Every "not verified" item of the last round that a person can settle is in it: the
+  Gatekeeper first-start steps themselves (copied from DV3's fragment, B3), the Serial Ports dialog
+  and a real USB serial adapter (D9, N1), a TCP connection that never answers (N4), a halt and
+  `Current Log Stopped.` announced, the keyboard-only walk-through in real Safari with its Tab
+  setting, the Output panel's focus frame (V6-V9), NVDA (X4), the README's build steps on a Mac
+  (B12), and on Windows the host name `255.255.255.255` (C4), the pending TCP connection (C5),
+  whole-program pictures against the original (C6) and Backspace in the SR field (C7, item W2 7
+  above). The coverage table names each source.
+- **README:** Firefox is not tested; the tests run in Playwright's engines, not in Safari itself;
+  the known limitations and `docs/integration/rc.md` are linked. **USER-GUIDE:** no claim about
+  browser versions or ChromeOS; the Mac app's serial and network tasks and Options > Serial
+  Ports...; the default speed is an estimate (P1's note); what `Not available to the program` means.
+- **ARCHITECTURE.md:** 1.5 has the row `Serial Ports...` (`sim.options.serialPorts`; item 3 of
+  `docs/requests/DV4-serial-ports-command.md`, which names 1.3 but means the added commands); 5.9
+  names the flush at task 55 (erratum DV5 2); the note under 4.7.1 says what "changed" includes
+  (erratum SH8 38). 4.8's Close row and 7.4's `e2e-stability` line were already merged.
+- **Open items of entry 6:** P1 9 is taken up by SH8 (errata SH8.md entry 40). W2 7 cannot be
+  measured with the Wine oracle, whose recipes do not drive the simulator's window; it is check C7
+  of the manual list now. The others stand.

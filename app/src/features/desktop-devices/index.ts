@@ -9,10 +9,11 @@
 //   testing/programs.ts    68000 programs for tasks 40-43 and 100-107 (tests and checks)
 //   check-desktop-devices.mjs  the browser check: the web build gives the values of note 37
 //
-// No command opens the dialog yet: the command tables have no id for it
-// (docs/requests/DV4-serial-ports-command.md). Once `sim.options.serialPorts` exists in
-// commands/specs.ts this feature handles it (enabled in the desktop app only); until then
-// openSerialPortsDialog(ctx) is the way in.
+// The command `sim.options.serialPorts` (Options > Serial Ports..., Simulator mode; W3 added it in
+// the round before gate I3, docs/requests/DV4-serial-ports-command.md) opens the dialog; it is
+// enabled in the desktop app only. The handler is registered only while commands/specs.ts has the
+// id (the registry refuses a handler for an unknown id). openSerialPortsDialog(ctx) is the same
+// way in for tests and checks.
 //
 // Owner: W3 > DV4.
 

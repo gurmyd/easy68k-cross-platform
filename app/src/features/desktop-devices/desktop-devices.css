@@ -30,6 +30,17 @@
   gap: var(--sp-2);
 }
 
+/* The Name field keeps its width while it shows a problem: its message wraps inside the field's
+   own width instead of widening it, so the Device labels of all rows stay in one column. */
+.e68-serial-ports__row > :first-child {
+  flex: none;
+}
+
+.e68-serial-ports__row > :first-child .e68-field-message {
+  width: 0;
+  min-width: 100%;
+}
+
 .e68-serial-ports__row > :nth-child(2) {
   flex: 1 1 12em;
   min-width: 0;

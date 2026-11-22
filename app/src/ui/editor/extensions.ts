@@ -37,6 +37,7 @@ import {
   whiteSpaceBeforeEnter,
 } from './editing';
 import { cp1252Marks } from './cp1252-marks';
+import { keepCaretOnFocus } from './focus-caret';
 import { markerExtension } from './markers';
 import { nextTabStop, type TabSettings } from './tab-model';
 
@@ -295,6 +296,7 @@ const baseExtensions: Extension = [
   tabDisplay,
   overwriteTyping,
   noLinewiseClipboard,
+  keepCaretOnFocus,
   cp1252Marks,
   markerExtension,
   // Pasted and dropped text arrives as plain text (CodeMirror reads text/plain only, 20.3) with

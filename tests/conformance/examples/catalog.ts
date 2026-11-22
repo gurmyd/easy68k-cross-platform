@@ -91,7 +91,7 @@ export const OFFICIAL_EXAMPLES: readonly Example[] = [
       { atMs: 3_500, mouse: { kind: 'mouseMove', x: 640, y: 500, shift: 0 } },
     ],
     exceptions: true,
-    note: 'mouse moves and a click, then the window size changed by the keys 2 and 3; never ends: six seconds of virtual time',
+    note: 'mouse moves and a click, then the window size changed by the keys 2 and 3; never ends: stops at the instruction limit (5,010,000 instructions, 4,944 ms of virtual time; the 6 s time limit is not reached)',
   }),
   official('tutorial1', { note: 'adds numbers and prints them' }),
   official('tutorial2', { keys: GUESSES, note: 'number guessing: three wrong guesses, the right one, then 0 to end' }),

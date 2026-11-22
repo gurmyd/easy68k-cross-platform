@@ -40,6 +40,9 @@
 #       breakpoints   app/src/features/breakpoints/check-breakpoints.mjs U3
 #       log           app/src/features/log/check-log.mjs                 U4
 #       wave2         tests/integration/wave2/check-wave2.mjs            I2
+#       examples      tests/conformance/examples/check-examples.mjs      X3
+#       desktop_devices app/src/features/desktop-devices/check-desktop-devices.mjs DV4
+#       a11y          tests/a11y/check-a11y.mjs                          Q1 (group accessibility)
 #     the stage of additions (ARCHITECTURE-PLUS P5; branch plus):
 #       dock          app/src/ui/dock/check-dock.mjs                     N1
 #       history       app/src/fs/check-history.mjs                       N3
@@ -47,23 +50,30 @@
 #       viewer        app/src/features/viewer/check-viewer.mjs           N6
 #       status        app/src/ui/editor/check-status.mjs                 N8
 #   check: packaging unit tests  tests/desktop/packaged/playwright.config.ts (project unit, DV3)
+#   check: documents           tools/check-docs.test.mjs            (npm run check:docs, DOC1)
 #   e2e-stability              as e2e, on a manual run (input e2e_stability) or a push of a v* tag (6.9 item 10, X1)
+#   perf                       tests/perf/check-perf.mjs (npm run check:perf, P1): the functional parts on
+#                              every push; every part, with the thresholds of 6.9 item 9 judged in
+#                              Chromium on ubuntu-latest, on a manual run or a push of a v* tag
+#   readme                     README.md's commands on macOS and Windows (DOC1): weekly, or a manual
+#                              run with the input readme ticked
 #   windows-oracles: GDI       tests/oracle/gdi-capture/run.mjs     (npm run oracle:gdi, T2)
 #   windows-oracles: twins     tests/oracle/native-twin/run.mjs     (npm run oracle:twins, T4)
 #   windows-oracles: asm CLI   tests/oracle/asm-cli/run.mjs         (T1)
 #   windows-oracles: engines   weekly schedule or manual run: Windows engine build vs Linux (7.3)
-#   desktop-dev                tests/desktop/dev/playwright.config.ts (DV2), and desktop/** or app/** changed
+#   desktop-dev                tests/desktop/dev/playwright.config.ts (DV2), and desktop/**, app/** or tests/desktop/dev/** changed
 #   windows-oracles uploads build/gdi-capture/run when the GDI step fails (for other-windows.json),
 #   and its report.txt and differences/ after every GDI step (gdi-capture-report)
 #
 # check and unit run on every push and pull request.
 #
-# The weekly schedule exists only for the Windows engine comparison of 7.3:
-# on a scheduled run, plan sets every guard but engines_weekly to false and
-# check and unit are skipped, so the run is engines + windows-oracles (with
-# only the comparison step). A manual run (workflow_dispatch) runs everything
-# a push would, plus the comparison and, unless its input is unticked, the
-# 20-repetition stability job. The engines come from the reusable workflow
+# The weekly schedule exists for the Windows engine comparison of 7.3 and for
+# the README job: on a scheduled run, plan sets every guard but engines_weekly
+# and readme to false and check and unit are skipped, so the run is engines +
+# windows-oracles (with only the comparison step) + readme. A manual run
+# (workflow_dispatch) runs everything a push would, plus the comparison, the
+# whole performance check and, unless its input is unticked, the 20-repetition
+# stability job; the README job only when its input is ticked. The engines come from the reusable workflow
 # engines.yml as the artifact "engine-dist"; a job downloads it when it exists.
 # A job that has it sets EASY68K_REQUIRE_ENGINES=1 when the artifact holds both
 # engines, so that a test that needs engine/dist fails there instead of
@@ -91,6 +101,10 @@ on:
         description: 'Also run the end-to-end suites 20 times in a row on ubuntu-latest (6.9 item 10; about 1.5 hours)'
         type: boolean
         default: true
+      readme:
+        description: 'Also follow README.md command by command on macos-latest and windows-latest (installs Emscripten and builds the engines; about an hour)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -146,12 +160,18 @@ jobs:
       breakpoints: ${{ steps.guards.outputs.breakpoints }}
       log: ${{ steps.guards.outputs.log }}
       wave2: ${{ steps.guards.outputs.wave2 }}
+      examples: ${{ steps.guards.outputs.examples }}
+      desktop_devices: ${{ steps.guards.outputs.desktop_devices }}
+      a11y: ${{ steps.guards.outputs.a11y }}
       dock: ${{ steps.guards.outputs.dock }}
       history: ${{ steps.guards.outputs.history }}
       history_ui: ${{ steps.guards.outputs.history_ui }}
       viewer: ${{ steps.guards.outputs.viewer }}
       status: ${{ steps.guards.outputs.status }}
       e2e_stability: ${{ steps.guards.outputs.e2e_stability }}
+      perf: ${{ steps.guards.outputs.perf }}
+      perf_full: ${{ steps.guards.outputs.perf_full }}
+      readme: ${{ steps.guards.outputs.readme }}
       browser_checks: ${{ steps.guards.outputs.browser_checks }}
       gdi: ${{ steps.guards.outputs.gdi }}
       twins: ${{ steps.guards.outputs.twins }}
@@ -172,6 +192,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           REF: ${{ github.ref }}
           STABILITY_INPUT: ${{ inputs.e2e_stability }}
+          README_INPUT: ${{ inputs.readme }}
           BEFORE: ${{ github.event.before }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -180,7 +201,7 @@ jobs:
           flag() { if "$@"; then echo true; else echo false; fi; }
 
           conformance=$(flag has tests/conformance -mindepth 2 -maxdepth 2 -name vitest.config.ts)
-          [ -f tests/parity/vitest.config.ts ] && conformance=true
+          for suite in tests/parity tests/perf tests/a11y; do [ -f "$suite/vitest.config.ts" ] && conformance=true; done
           e2e=$(flag has tests/e2e tests/a11y -name '*.spec.ts')
           integration=$(flag has tests/integration -mindepth 2 -maxdepth 2 -name vitest.config.ts)
           # The browser checks: output name and the file whose existence turns its step on.
@@ -213,6 +234,9 @@ jobs:
             breakpoints     app/src/features/breakpoints/check-breakpoints.mjs
             log             app/src/features/log/check-log.mjs
             wave2           tests/integration/wave2/check-wave2.mjs
+            examples        tests/conformance/examples/check-examples.mjs
+            desktop_devices app/src/features/desktop-devices/check-desktop-devices.mjs
+            a11y            tests/a11y/check-a11y.mjs
             dock            app/src/ui/dock/check-dock.mjs
             history         app/src/fs/check-history.mjs
             history_ui      app/src/features/history/check-history-ui.mjs
@@ -236,7 +260,8 @@ jobs:
           windows_oracles=false
           for g in "$gdi" "$twins" "$asm_cli" "$engines_weekly"; do [ "$g" = true ] && windows_oracles=true; done
 
-          # desktop-dev: only when desktop/** or app/** changed (7.4).
+          # desktop-dev: only when desktop/** or app/** changed (7.4), or its own tests
+          # (tests/desktop/dev/**, docs/requests/DV2-desktop-dev-paths.md).
           changed=true
           base=""
           case "$EVENT" in
@@ -244,7 +269,7 @@ jobs:
             push) base="$BEFORE" ;;
           esac
           if [ -n "$base" ] && [ "$base" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
-            if git diff --quiet "$base" HEAD -- desktop app; then changed=false; else changed=true; fi
+            if git diff --quiet "$base" HEAD -- desktop app tests/desktop/dev; then changed=false; else changed=true; fi
           fi
           desktop_dev=false
           if [ -f tests/desktop/dev/playwright.config.ts ] && [ "$changed" = true ]; then desktop_dev=true; fi
@@ -265,9 +290,33 @@ jobs:
             esac
           fi
 
-          # The weekly schedule runs the engine comparison only (7.3, 7.4).
+          # perf (6.9 item 9; docs/requests/P1-perf-scripts.md). The parts a program observes
+          # (calibrate: its own clock; surface: its pixels and the 4096 x 4096 surface) are judged on
+          # every push, in a few minutes. The whole measurement, with the wall-clock thresholds of 6.9
+          # item 9 judged in Chromium on ubuntu-latest (check-perf.mjs --judge auto), is the release
+          # condition: it runs when asked for, like e2e-stability - a manual run and the push of a
+          # v* tag - so that a push is not judged by a figure of a shared runner's speed.
+          perf=$(flag test -f tests/perf/check-perf.mjs)
+          perf_full=false
+          if [ "$perf" = true ]; then
+            case "$EVENT:$REF" in
+              workflow_dispatch:* | push:refs/tags/v*) perf_full=true ;;
+            esac
+          fi
+
+          # readme (docs/requests/DOC1-docs-check.md item 3): README.md's commands, one after the
+          # other, on macOS and Windows, where no other job builds the engines or runs the type
+          # check and lint. Weekly, and on a manual run with its input ticked.
+          readme=false
+          case "$EVENT" in
+            schedule) readme=true ;;
+            workflow_dispatch) [ "$README_INPUT" = true ] && readme=true ;;
+          esac
+
+          # The weekly schedule runs the engine comparison and the README job only (7.3, 7.4).
           if [ "$EVENT" = schedule ]; then
             conformance=false; e2e=false; e2e_stability=false; integration=false; gdi=false; twins=false; asm_cli=false; desktop_dev=false
+            perf=false; perf_full=false
             for name in $check_names; do eval "$name=false"; done
             browser_checks=false
           fi
@@ -276,6 +325,9 @@ jobs:
             echo "conformance=$conformance"
             echo "e2e=$e2e"
             echo "e2e_stability=$e2e_stability"
+            echo "perf=$perf"
+            echo "perf_full=$perf_full"
+            echo "readme=$readme"
             echo "integration=$integration"
             for name in $check_names; do eval "echo \"$name=\$$name\""; done
             echo "browser_checks=$browser_checks"
@@ -290,12 +342,12 @@ jobs:
             echo "### Job guards"
             echo "| guard | runs |"
             echo "|---|---|"
-            for name in conformance e2e e2e_stability integration $check_names browser_checks gdi twins asm_cli engines_weekly windows_oracles desktop_dev; do
+            for name in conformance e2e e2e_stability perf perf_full readme integration $check_names browser_checks gdi twins asm_cli engines_weekly windows_oracles desktop_dev; do
               eval "value=\$$name"
               echo "| $name | $value |"
             done
             echo
-            echo "desktop/** or app/** changed: $changed"
+            echo "desktop/**, app/** or tests/desktop/dev/** changed: $changed"
             echo
             echo "e2e stability: $stability_why"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -327,6 +379,12 @@ jobs:
         run: npm run lint
       - name: Format check
         run: npm run format:check
+      # docs/requests/DOC1-docs-check.md: docs/DIFFERENCES.md is what tools/make-differences.mjs
+      # builds from 1.4, 1.5 and docs/differences/*.md; the README, the manual list, CONTRIBUTING and
+      # the release notes agree with each other and with this workflow. Node's test runner, ~1 s.
+      - name: Documents (DOC1)
+        if: ${{ !cancelled() && hashFiles('tools/check-docs.test.mjs') != '' }}
+        run: npm run check:docs
       # The packaged-app suite's project `unit` (docs/requests/DV3-ci-unit.md): desktop/scripts, the
       # facts release.yml must keep and the harness's parsers. No app, no browser, no Electron;
       # about 5 s. The rest of tests/desktop/packaged runs in release.yml against a built bundle.
@@ -566,6 +624,132 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # 6.9 item 9 (docs/requests/P1-perf-scripts.md): tests/perf/check-perf.mjs in the real application,
+  # one browser per job, on the three systems. On a push only the parts a program observes are run
+  # (calibrate: the program's own clock at the default speed and at Maximum; surface: a 4096 x 4096
+  # surface resized, cleared, filled and presented), each judged everywhere. On a manual run and on
+  # a v* tag every part runs with --judge auto: the wall-clock thresholds of 6.9 item 9 are judged in
+  # Chromium on ubuntu-latest, where 6.9 sets them, and printed with "would pass" or "would MISS"
+  # elsewhere (erratum P1 1 and 2). perf.json, with every figure of the run, is uploaded every time.
+  perf:
+    name: perf (${{ matrix.os }}, ${{ matrix.browser }})
+    needs: [plan, engines]
+    if: needs.plan.outputs.perf == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        browser: [chromium, webkit]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      EASY68K_REQUIRE_ENGINES: ${{ needs.engines.outputs.available == 'asm sim' && '1' || '' }}
+      EASY68K_REQUIRE_BROWSERS: '1'
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Download engine-dist
+        if: needs.engines.outputs.available != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: engine-dist
+          path: engine/dist
+      - name: Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      # The e2e job's cache entries (one browser each), with its path list line for line.
+      - name: Restore Playwright browsers
+        id: browsers
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/Library/Caches/ms-playwright
+            ~/AppData/Local/ms-playwright
+          key: playwright-${{ steps.playwright.outputs.version }}-${{ runner.os }}-${{ runner.arch }}-${{ matrix.browser }}
+      - name: Install ${{ matrix.browser }}
+        if: steps.browsers.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Install the system libraries for ${{ matrix.browser }}
+        if: steps.browsers.outputs.cache-hit == 'true' && runner.os == 'Linux'
+        run: npx playwright install-deps ${{ matrix.browser }}
+      - name: Performance check (P1)
+        env:
+          FULL: ${{ needs.plan.outputs.perf_full }}
+          BROWSER: ${{ matrix.browser }}
+        run: |
+          if [ "$FULL" = true ]; then
+            npm run check:perf -- --browser "$BROWSER" --judge auto
+          else
+            npm run check:perf -- --browser "$BROWSER" --only calibrate --only surface
+          fi
+      - name: Upload the figures and screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: perf-${{ matrix.os }}-${{ matrix.browser }}
+          path: |
+            build/P1/perf-check/
+            !build/P1/perf-check/vite-cache/
+          if-no-files-found: warn
+          retention-days: 90
+
+  # docs/requests/DOC1-docs-check.md item 3: README.md's commands, literally, on the two systems on
+  # which no other job builds the engines or runs the type check and lint (DOC1 ran them on Linux in a
+  # clean node:24 container). The working copy stands for `git clone` and `cd`. Weekly, and on a
+  # manual run with the input readme ticked; Emscripten is installed by the README's own command.
+  readme:
+    name: readme (${{ matrix.os }})
+    needs: [plan]
+    if: needs.plan.outputs.readme == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
+    env:
+      EASY68K_REQUIRE_ENGINES: '1'
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run setup:emsdk
+      - run: npm run build:engines
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test:conformance
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm run build
+      - run: npm run test:e2e
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report-readme-${{ matrix.os }}
+          path: |
+            tests/playwright-report/
+            tests/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
   # The browser checks that exist before the end-to-end suites do: one script
   # per package (check-<name>.mjs, the convention of check-shell.mjs), each
   # against the Vite dev server on a free port or, for check:pwa, against its
@@ -621,9 +805,11 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        group: [interface, simulator, integration]
+        group: [interface, simulator, integration, accessibility]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    # The accessibility audit is one check of about half an hour on the development PC: two steps
+    # of up to 30 minutes, so its group has a longer limit than the others.
+    timeout-minutes: ${{ matrix.group == 'accessibility' && 75 || 45 }}
     env:
       EASY68K_REQUIRE_ENGINES: ${{ needs.engines.outputs.available == 'asm sim' && '1' || '' }}
       EASY68K_REQUIRE_BROWSERS: '1'
@@ -816,6 +1002,31 @@ jobs:
         if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.log == 'true' }}
         timeout-minutes: 15
         run: npm run check:log
+      # Wave three (gate I3 preparation), group `simulator`. Both need both engines and fail without
+      # them when EASY68K_REQUIRE_ENGINES=1. check:examples (X3, 6.5.4): the 34 example programs'
+      # surface hash in Chromium and WebKit equals the committed golden and the screenshot shows
+      # exactly those pixels; about a minute per browser. check:desktop-devices (DV4): the web build
+      # gives every serial and network task the values of note 37.
+      - name: Whole-program pixel check (X3)
+        if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.examples == 'true' && needs.engines.outputs.available == 'asm sim' }}
+        timeout-minutes: 15
+        run: npm run check:examples
+      - name: Serial and network in the web build (DV4)
+        if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.desktop_devices == 'true' && needs.engines.outputs.available == 'asm sim' }}
+        timeout-minutes: 15
+        run: npm run check:desktop-devices
+      # Group `accessibility`: the audit of Q1 (2.9-2.11, 6.9 item 8; docs/requests/Q1-a11y-ci.md), one
+      # browser per step. Known application defects are entered in docs/integration/rc.md and
+      # tests/a11y/lib/findings.mjs and print "known" without failing; I3 gates on that list, not on
+      # this step alone.
+      - name: Accessibility audit in Chromium (Q1)
+        if: ${{ !cancelled() && matrix.group == 'accessibility' && needs.plan.outputs.a11y == 'true' }}
+        timeout-minutes: 30
+        run: npm run check:a11y -- --browser chromium
+      - name: Accessibility audit in WebKit (Q1)
+        if: ${{ !cancelled() && matrix.group == 'accessibility' && needs.plan.outputs.a11y == 'true' }}
+        timeout-minutes: 30
+        run: npm run check:a11y -- --browser webkit
       # Group `integration`: the scenarios of the integration gates (ARCHITECTURE.md 9.3, 9.5).
       - name: Integration scenario in the browser (I1)
         if: ${{ !cancelled() && matrix.group == 'integration' && needs.plan.outputs.wave1 == 'true' && needs.engines.outputs.available == 'asm sim' }}
@@ -874,6 +1085,9 @@ jobs:
             build/I2/wave2-check/
             !build/I2/wave2-check/vite-cache/
             !build/I2/wave2-check/dist/
+            build/X3/check/
+            build/DV4/desktop-devices-check/
+            build/Q1/a11y-check/
           if-no-files-found: ignore
           retention-days: 14
 

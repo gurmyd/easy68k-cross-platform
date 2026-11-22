@@ -6,9 +6,11 @@ you hear, what a real keyboard sends, what Safari itself (not its test engine) d
 list is for a person with a Mac. Nobody has worked through it yet.
 
 You do not need to know anything about how the port is built. You need a Mac, Safari, Chrome, and
-about **twenty minutes for part A**. Parts B and C need more time or other equipment; do whatever of
-them you can. Every check says what to do and what you should see. If you see something else, that
-is exactly what we want to know.
+about **twenty minutes for part A**, the core of this list: a student with a Mac can do it in one
+sitting. **Parts B and C are optional**: they need more time, other equipment (a printer, a serial
+adapter, a second keyboard layout, a Windows PC) or the Mac app, which has not been released yet; do
+whatever of them you can. Every check says what to do and what you should see. If you see something
+else, that is exactly what we want to know.
 
 **How to report.** Copy the report form at the end of this page, fill it in as you go, and post it as
 an issue on <https://github.com/gurmyd/easy68k-cross-platform/issues> with the title
@@ -291,7 +293,9 @@ recorded yet. This step records yours. It does not use the application.
 Do **not** press Cmd+Q, Cmd+W, Cmd+N or Cmd+T: the browser closes or opens windows before the page
 sees them.
 
-## Part B: with more time or other equipment
+## Part B (optional): with more time or other equipment
+
+Every section of part B stands alone; do any of them, in any order.
 
 ### B1. Another keyboard layout (5 minutes)
 
@@ -319,12 +323,64 @@ example French, or U.S. International - PC, or ABC - Extended). Switch to it wit
 ### B3. The Mac app (only once a release exists)
 
 There is no release yet. When there is one, download the `.dmg` for your Mac from
-<https://github.com/gurmyd/easy68k-cross-platform/releases> and follow "Opening the Mac app for the
-first time" in the README.
+<https://github.com/gurmyd/easy68k-cross-platform/releases>. The first start needs the steps below
+(the same text as in the README and in the notes of every release; `docs/differences/DV3.md` holds
+the original). Follow them exactly, and note in D1 where what you see differs from what they say.
+
+<!-- first-start:begin -->
+The Mac app is not notarised by Apple (the project has no paid Apple developer account), so macOS
+blocks it the first time. This happens once; after that EASy68K opens like any other app. If you
+cannot or do not want to do this (for example on a Mac managed by your school, where these settings
+may be locked), use the web version instead: it does the same in Safari or Chrome and needs no
+installation.
+
+The Mac app needs macOS 13 (Ventura) or later.
+
+**Install.** Download the `.dmg` for your Mac (`arm64` for Apple silicon, M1 and later; `x64` for
+Intel; Apple menu > About This Mac tells you which), open it and drag **EASy68K** into
+**Applications**. (Or download the `.zip`, which macOS unpacks into `EASy68K.app`, and move that
+into Applications.)
+
+**What you will see.** When you open EASy68K for the first time, macOS shows a message instead of
+starting it. On macOS 15 (Sequoia) and later it reads "“EASy68K” Not Opened. Apple could not verify
+“EASy68K” is free of malware that may harm your Mac or compromise your privacy.", with the buttons
+**Done** and **Move to Trash**; older versions say "“EASy68K” cannot be opened because the developer
+cannot be verified." Some versions instead say that "“EASy68K” is damaged and can't be opened". The
+app is not damaged: this is how macOS words the same block for an app that is not notarised. Click
+**Done** (or **Cancel**), never **Move to Trash**.
+
+**Way 1: System Settings** (for the "Not Opened" or "developer cannot be verified" message)
+
+1. Open **System Settings** (Apple menu > System Settings) and choose **Privacy & Security** in the
+   sidebar.
+2. Scroll down to the **Security** section. It shows "“EASy68K” was blocked to protect your Mac."
+   (The line appears for about an hour after you tried to open the app; if it is gone, try to open
+   EASy68K once more.)
+3. Click **Open Anyway** and confirm with your password or Touch ID.
+4. Open EASy68K again. macOS asks a last time; click **Open Anyway** (or **Open**).
+
+On macOS 14 (Sonoma) and earlier you can instead Control-click (or right-click) EASy68K in
+Applications, choose **Open** from the menu and then click **Open** in the message.
+
+**Way 2: Terminal** (works for every message, including "is damaged")
+
+1. Open **Terminal** (Applications > Utilities > Terminal).
+2. Paste this line and press Return. It removes the quarantine mark from the app, and asks for
+   nothing:
+
+   ```
+   xattr -dr com.apple.quarantine /Applications/EASy68K.app
+   ```
+
+3. Open EASy68K as usual.
+
+If you put the app somewhere else than Applications, use its path in the command instead (you can
+type `xattr -dr com.apple.quarantine ` and then drag the app onto the Terminal window).
+<!-- first-start:end -->
 
 | # | Do | Expected |
 |---|---|---|
-| D1 | First start after the download | macOS refuses to open it. Write down the exact text of the message and its buttons, and which of the README's two ways worked. Note any message about XProtect or malware |
+| D1 | First start after the download, following the steps above | macOS refuses to open it. Write down the exact text of the message and its buttons, and which of the two ways worked. Note any message about XProtect or malware |
 | D2 | The same on the other kind of Mac (Apple silicon or Intel) and on the two most recent macOS versions, if you have them | As D1 |
 | D3 | In Finder, double-click a `.X68`, a `.L68` and a `.S68` file | `.X68` and `.L68` open in Editor mode; `.S68` opens in Simulator mode with the program loaded and not running. Write down what icon Finder shows on these files, and what Get Info > Open with says (EASy68K is expected) |
 | D4 | Look at the Dock while the app runs | The EASy68K icon is there, with a dot under it |
@@ -332,6 +388,7 @@ first time" in the README.
 | D6 | Repeat A1, S1 and S2 in the app; during S2 switch the sound output to headphones | The same results; the sound moves to the headphones and goes on |
 | D7 | Run **echo** in the app, Cmd+V into the prompt | As P1 |
 | D8 | Run **keys** in the app, full screen with Option+Return, press Esc | The program shows code `1B` and the panel stays full screen (in Safari, Esc leaves full screen instead: see F2) |
+| D9 | Simulator mode: Options > Serial Ports... (with a USB serial adapter plugged in, if you have one). Add Port, type `COM4` twice as a name | The dialog lists the ports set up (none at first) and offers `Detected devices...` with your adapter (`/dev/cu.<something>`); with no adapter it says `No serial devices were found on this computer.` With a name twice, the second Name field says `com4 is in the list twice.` under it, the rows stay aligned and OK is greyed. Cancel changes nothing |
 
 ### B4. Full screen, display and trackpad
 
@@ -353,13 +410,15 @@ first time" in the README.
 
 | # | Do | Expected |
 |---|---|---|
-| N1 | A USB serial adapter and a program using TRAP #15 tasks 40-43 | The program opens the port, sends and receives |
+| N1 | A USB serial adapter, mapped to `COM1` in Options > Serial Ports... (D9), and a program using TRAP #15 tasks 40-43, with the adapter looped back (or connected to another computer's terminal program) | The program opens the port, sends and receives; a change of baud rate, parity or stop bits with task 41 reaches the other side. Rewind and Reload leave the port open; Execute (or a new program) closes it. (The automatic tests use a pseudo-terminal, never a real adapter, and never the downloaded app.) |
 | N2 | Two windows of the app (File > New Window, Cmd+N), one program as server and one as client with the network tasks 100-107 | They exchange data |
 | N3 | The same on two Macs in the same network | They exchange data |
+| N4 | A TCP client (task 100) to an address in your network where no computer answers | The program waits about five seconds in task 100, then goes on with D0 = 0; its later sends report 0 bytes. The window stays usable while it waits |
 
-### B7. VoiceOver
+### B7. VoiceOver and the keyboard alone
 
-Switch VoiceOver on with Cmd+F5 (Fn+Cmd+F5). Write down what it says, and anything you cannot reach.
+For V1 to V7, switch VoiceOver on with Cmd+F5 (Fn+Cmd+F5). Write down what it says, and anything you
+cannot reach. V8 and V9 are done without VoiceOver.
 
 | # | Do | Expected |
 |---|---|---|
@@ -368,6 +427,10 @@ Switch VoiceOver on with Cmd+F5 (Fn+Cmd+F5). Write down what it says, and anythi
 | V3 | The Messages panel under the editor after that | The message line is read |
 | V4 | Run tutorial1; move VoiceOver to the Output panel | The program's text is read (the panel has a text copy for screen readers) |
 | V5 | In Safari, Tab through a dialog (Options > Editor Options...) | Tab reaches every control of the dialog |
+| V6 | Run tutorial1 to its end (F9 until the status bar says `Halted`) | VoiceOver says `Halted` (or the program's end) without you moving to the status bar |
+| V7 | Execute tutorial1; Options > Log Output..., set the execution log to anything but Disabled, OK; Run > Log Start (Shift+F4), accept the log file; then run the program to its end with F9 | When the program halts, the message box `Current Log Stopped.` (title `Information`) appears, and VoiceOver reads it as soon as it appears |
+| V8 | VoiceOver off. Do A1 in Safari with the keyboard only: Tab, the arrow keys, Return, Space, F9 and Ctrl+Option+O, no mouse or trackpad. Once with Safari > Settings > Advanced > "Press Tab to highlight each item on a webpage" off (the default), once on | You can open the example, assemble, Execute, run, set a breakpoint on a listing line (Space) and step (F7), and you always see where the focus is. Write down any place where the focus disappeared or got stuck |
+| V9 | In the light and in the dark theme (the button at the top right): Tab into the Output panel | The frame that shows the panel has the keyboard is clearly visible against the black panel and the window around it |
 
 ### B8. A long session in Safari (30 minutes)
 
@@ -407,13 +470,26 @@ Cmd: only rows K1 to K4, K6, K8, K10, K12, K14 and K15 apply, and in K13 press F
 A layout can be recorded without its keyboard: add it in the system's settings, switch to it and
 press the key at the position named.
 
+| # | Do | Expected |
+|---|---|---|
+| X4 | Only with the NVDA screen reader on Windows: repeat V1 to V7 in Chrome | As V1 to V7; write down what NVDA says |
+
 ### B11. The beep
 
 | # | Do | Expected |
 |---|---|---|
 | S6 | Simulator, a program loaded: click into the D0 field of the register panel and type `G` (not a hexadecimal digit) | A short, quiet tone; the field does not change |
 
-## Part C: on real Windows, once (for the project's maintainers)
+### B12. Build and test from the README on a Mac (for contributors, about an hour)
+
+No automatic job follows the README's build steps literally on macOS: GitHub's Mac machines run the
+tests, but the engines are built on Linux only, and the type check and lint run on Linux only.
+
+| # | Do | Expected |
+|---|---|---|
+| B12 | On a Mac with Git and Node.js 24 (and the Xcode command line tools), run the commands of the README's section "For contributors: build and test" one after the other, exactly as written, then `npm run typecheck`, `npm run lint` and `npm run test:conformance` | Every command ends without an error; `npm test` and `npm run test:conformance` say that every test passed. Write down the first command that failed and its last lines |
+
+## Part C (optional): on real Windows, once (for the project's maintainers)
 
 These need the official EASy68K on a real Windows PC, which the project's rules allow only once and
 only with the owner's permission (decision O-2 in `docs/ARCHITECTURE.md`, section 10.2), in Windows
@@ -423,7 +499,11 @@ Sandbox or a throw-away virtual machine.
 |---|---|---|
 | C1 | Run the programs in `tests/conformance/windows-confirm/` in the official SIM68K.exe | Each writes its findings to a file; they settle the UNVERIFIED items of `docs/porting/trap15-tasks-0-59.md` section 12 and `docs/porting/trap15-tasks-60-up.md` section 15 that Wine cannot (drawing, key handling, sound, the `fwrite`/`fread` edge cases and the C library's file buffer of `docs/ARCHITECTURE.md` 3.8.4) |
 | C2 | The RichEdit spot check of `docs/ARCHITECTURE.md` 6.2.2 | The official assembler gives the same output on Windows as under Wine for the flagged files |
-| C3 | The speed measurement for `DEFAULT_IPS` with `tests/perf/calibrate.X68` (decision O-1) | A measured instruction rate of the original |
+| C3 | The speed measurement for `DEFAULT_IPS` with `tests/perf/calibrate.X68` (decision O-1; the steps are in `docs/porting/speed.md` section 5) | A measured instruction rate of the original |
+| C4 | A program that calls TRAP #15 task 100 with the host name `255.255.255.255` written as text (A2 pointing to it) | D0 = 0 (the name is accepted) or D0 = 8 (not found). Write down which: the port gives 0 (`docs/porting/errata/DV4.md` entry 14) |
+| C5 | TRAP #15 task 100 over TCP to an address where no computer answers, then task 102 a few times | Task 100 returns 0 after about five seconds and the sends report 0 bytes (the port's reading of Net.cpp, item V14 of `docs/porting/trap15-tasks-60-up.md` section 15). Write down what really happens |
+| C6 | Run `graphicSound.X68`, `clockWithSound.X68`, `tutorial2.X68` and `mouseWindowSize.X68` of the examples in the official SIM68K.exe and in the port, and take a screenshot of each output window at the same point | The pictures look the same. (The port's whole-program pictures are checked only against the port itself, `tests/conformance/examples`; nothing has compared them with the original on Windows) |
+| C7 | In SIM68K.exe, with a program loaded: click into the SR field of the main window between two digits and press Backspace | Write down what happens: a `0` typed at the caret (what `docs/porting/sim-ui.md` 4.4 and the port do), or the digit before the caret cleared (erratum W2 7) |
 
 ## Which check covers which item of the plan
 
@@ -434,16 +514,16 @@ Sandbox or a throw-away virtual machine.
 | First launch of the downloaded app: the Gatekeeper dialogs and the way through them, on the two most recent macOS versions, Apple silicon and Intel | D1, D2 |
 | Double-click on `.X68`, `.L68`, `.S68` in Finder; icons; the app in the Dock; Cmd+Q with unsaved work | D3, D4, D5 |
 | Sound: tasks 70-77 audible, in order, loops stop on reset | S1-S5, D6 |
-| Browser shortcut table (Safari, Chrome, Edge on macOS; Chrome, Edge on Windows) | A2 (K1-K15), B8 |
+| Browser shortcut table (Safari, Chrome, Edge on macOS; Chrome, Edge on Windows) | A2 (K1-K15), B10 |
 | Keyboard on a real MacBook: function keys with and without Fn; Shift+F2..F5; the Option chords Ctrl+Option+Z, C, U and O; Option+Return; Touch Bar; a non-US layout (dead keys and Option characters into task 2, the key position for task 19); a held letter repeats with no accent menu; a key released while Cmd is held does not stay down; keypad digits | M1-M11, L1-L4 |
 | Paste into a task 2 prompt with Cmd+V in Safari, Chrome and the app, with Shift+Insert in Chrome on Windows; Paste from the editor's menu, toolbar and context menu | P1-P3, D7, X1, X2 |
 | Full screen on the built-in display and an external monitor; Esc in Chrome, the app and Safari; sharpness on Retina; trackpad tap, right-click and drag | M7, F1-F4, D8 |
 | Printing a source file and task 10 output on a real printer | R1, R2 |
-| A serial adapter with tasks 40-43; two windows, and two machines on a LAN, with the network tasks | N1-N3 |
-| VoiceOver: menu bar, dialogs, message area, the Output text mirror | V1-V5 |
+| A serial adapter with tasks 40-43; two windows, and two machines on a LAN, with the network tasks | N1-N4, D9 |
+| VoiceOver: menu bar, dialogs, message area, the Output text mirror | V1-V7 |
 | Safari itself: the web app, offline reload, Add to Dock, a `.zip` exported from the Safari tab imported into the Dock app; Private Browsing: text in every font the same on every run | A1, W1-W6 |
 | A long session: one hundred Execute cycles and several hundred assemblies in Safari | T1, T2 |
-| On real Windows, once: the UNVERIFIED items, the RichEdit spot check, the speed measurement | C1-C3 |
+| On real Windows, once: the UNVERIFIED items, the RichEdit spot check, the speed measurement | C1-C7 |
 
 And what the parts of the port left for a person:
 
@@ -456,6 +536,12 @@ And what the parts of the port left for a person:
 | `docs/requests/W2-dialog-focus-followups.md` (Safari with a person at the keyboard, a real input method) | V5, L4 |
 | `docs/porting/errata/DV3.md` entries 11 and 21, `docs/differences/DV3.md` (the exact first-start messages, Cmd+Q, XProtect) | D1, D2, D5 |
 | `docs/ENGINE-BINDING.md` section 7 (many cold starts and assemblies in real Safari) | T1, T2 |
+| `docs/porting/errata/DV4.md` (a real USB serial adapter, the packaged app loading the serial module, the Serial Ports dialog on a real Mac; entry 14: a host name of `255.255.255.255` on Windows; entry 8 and V14: a TCP connection still pending after five seconds) | N1, N4, D9, C4, C5 |
+| `docs/porting/errata/DV5.md` and `docs/porting/errata/DV3.md` (the downloaded app on an Intel Mac, whose screenshots in CI nobody has looked at) | D2, D6 |
+| `docs/integration/rc.md`, the accessibility audit (the walk-throughs on a real Mac with Safari's Tab setting, a halt and `Current Log Stopped.` announced, the focus frame of the Output panel, real screen readers) | V6-V9, X4 |
+| `docs/porting/errata/X3.md` entry 6 (a real Safari's canvas keeps colours exact; whole-program pictures against the original) | W5, W6, C6 |
+| `docs/porting/errata/DOC1.md` (the README's build steps followed literally on a Mac) | B12 |
+| `docs/porting/errata/W2.md` entry 7 (Backspace in the SR field of the original) | C7 |
 
 ## Report form
 
@@ -496,6 +582,8 @@ A5 sound: S1:   S2:   S3:   S4:   S5:
 A6 key recording: attached yes/no
 B1 layouts (which layout): L1:   L2:   L3:   L4:
 B2 Safari: W1:   W2:   W3:   W4:   W5 (both sums):   W6 (sum):
+B3 Mac app (exact first-start message, which way worked): D1:   D2:   D3:   D4:   D5:   D6:   D7:   D8:   D9:
+B7 VoiceOver and keyboard only: V1:   V2:   V3:   V4:   V5:   V6:   V7:   V8:   V9:
 Other parts of B (any you did):
 Anything else you noticed:
 ```

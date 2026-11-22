@@ -1037,7 +1037,11 @@ export class SimRunController implements RunController {
     const start = clock.now();
     try {
       while (this.phaseNow === 'running' && this.canRun() && governor.allowance >= 1 && clock.now() - start < budget) {
-        const status = this.runEngine(this.untilNextEdge(governor.next(speed)));
+        // A sub-slice is bounded by the time the frame has left as well (speed.md 4.1; errata SH8.md 40).
+        const callStart = clock.now();
+        const count = Math.min(governor.next(speed), governor.fits(budget - (callStart - start)));
+        const status = this.runEngine(this.untilNextEdge(count));
+        governor.timed(this.executed, clock.now() - callStart);
         governor.spend(this.executed);
         this.handleStatus(status); // leaves the phase 'running' only for RunStatus.Running
         this.deliverQueue();

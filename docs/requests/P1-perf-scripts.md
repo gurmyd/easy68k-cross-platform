@@ -1,6 +1,16 @@
 # Request from P1: run the performance measurements and their unit tests (gate I3)
 
-Status: open (for gate I3).
+Status: applied in the round that prepares gate I3 (config), all three items, item 3 in a form of its
+own. (1) Root script `check:perf`. (2) `perf/vitest.config.ts` is in `PROJECT_GLOBS` of
+`tests/vitest.workspace.ts`, so `npm run test:conformance` (Ubuntu, macOS) runs it. (3) A job `perf` of
+`ci.yml` on ubuntu, macos and windows, one browser each, with engine/dist and the plan output `perf`:
+on every push and pull request `npm run check:perf -- --browser <b> --only calibrate --only surface`;
+on a manual run and on the push of a `v*` tag every part with `--judge auto`, so the thresholds of 6.9
+item 9 are judged in Chromium on ubuntu-latest there (errata W0.md entry 9: a wall-clock figure must not
+decide a push, and item 9, like item 10, is a condition for tagging). `build/P1/perf-check/` with
+`perf.json` is uploaded on every run (90 days). Run here: the whole check 42 of 42 (thresholds not
+judged on Windows; Maximum "would MISS" in both browsers, 145 and 89 million), the push form in WebKit
+8 of 8; the Vitest project 17 passed, 1 skipped (the guard that only runs without engine/dist).
 
 P1 (`docs/ARCHITECTURE.md` 9.6) owns `tests/perf/**`. Two things there are not picked up by any
 runner, because the root `package.json`, `tests/vitest.workspace.ts` and `ci.yml` are frozen:

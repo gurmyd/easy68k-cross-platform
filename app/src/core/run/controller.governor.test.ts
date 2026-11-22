@@ -242,6 +242,54 @@ describe.skipIf(!enginesBuilt)('the governor (needs engine/dist)', { timeout: EN
     expect(kit.controller.governorReading.frameBudget).toBe(8);
   }, 60_000);
 
+  // speed.md 4.1, errata SH8.md entry 40: a call of 2000 dear instructions (TRAP #15 drawing tasks)
+  // took longer than a frame's whole budget, which the budget rule cannot stop once the call runs.
+  it('bounds a sub-slice by the time the frame has left, so dear instructions do not overrun it', async () => {
+    const perInstruction = 0.01; // 2000 instructions would take 20 ms
+    const cost = { spent: 0, runs: 0, longest: 0 };
+    let kitTime: { now(): number; wallTime(): Date } | null = null;
+    const clock: Clock = {
+      now: () => (kitTime?.now() ?? 0) + cost.spent,
+      wallTime: () => kitTime?.wallTime() ?? new Date(0),
+    };
+    const dearEngine = (engine: SimEngine): SimEngine =>
+      new Proxy(engine, {
+        get(target, property) {
+          const value: unknown = Reflect.get(target, property, target);
+          if (typeof value !== 'function') return value;
+          if (property !== 'run') return (value as (...args: unknown[]) => unknown).bind(target);
+          return (max?: number) => {
+            const before = target.stepCount;
+            const status = target.run(max);
+            const ms = ((target.stepCount - before) >>> 0) * perInstruction;
+            cost.spent += ms;
+            cost.runs++;
+            cost.longest = Math.max(cost.longest, ms);
+            return status;
+          };
+        },
+      });
+    await start({ clock, speed: { mode: 'max', instructionsPerSecond: 1 }, wrapEngine: dearEngine });
+    kitTime = kit.time;
+    await kit.open(spin);
+    kit.controller.run(); // the first call knows no cost yet: a whole sub-slice
+    expect(cost.longest).toBeCloseTo(SUBSLICE * perInstruction, 6);
+    cost.longest = 0;
+    const used: number[] = [];
+    for (let frame = 0; frame < 30; frame++) {
+      const before = cost.spent;
+      kit.time.advance(16);
+      used.push(cost.spent - before);
+    }
+    // Every later frame gives the engine its 8 ms and not more than one instruction beyond them;
+    // no call is longer than the budget.
+    for (const ms of used) {
+      expect(ms).toBeGreaterThanOrEqual(8 - perInstruction - 1e-6);
+      expect(ms).toBeLessThanOrEqual(8 + perInstruction + 1e-6);
+    }
+    expect(cost.longest).toBeLessThanOrEqual(8 + 1e-6);
+  }, 60_000);
+
   it('draws ticks between two frames from what the frame has left', async () => {
     const cost = { ms: 1, spent: 0, runs: 0 };
     let kitTime: { now(): number; wallTime(): Date } | null = null;

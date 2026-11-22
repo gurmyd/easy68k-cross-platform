@@ -115,6 +115,14 @@ W1. "Manual checks" lists what only a person with a real folder can prove.
     (handle)` is how a `FileSystemFileHandle` becomes a `VPath` (`/linked/<id>/<name>`, Save writes
     back). Wiring the launch queue to it (manifest `file_handlers`, `features/pwa`) is left to the
     gate that assigns it.
+14. **`linkFileHandle` on the `upload` provider (round before I3; `docs/requests/DV1-launch-files.md`
+    item 2).** The provider "From this computer..." now has `linkFileHandle(handle)`, which FS1's
+    `FileDialogs.linkFileHandle` hands a launched file to: a file handle is linked as a picked file
+    is, with the banner of 3.8.2 (`Open the containing folder...`); anything that is not a file
+    handle, or a link that fails, gives null. DV1's launch queue uses it. `controller.test.ts` links a
+    file through `ctx.fileDialogs.linkFileHandle` and saves back to it. `check-fsaccess.mjs`'s linked
+    pass also asserts now that no visible text contains `/linked/` and that Editor mode's status line
+    reads `Linked files/prog.X68` (E2 erratum 17).
 
 ## Contract
 

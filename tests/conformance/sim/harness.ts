@@ -258,6 +258,9 @@ export async function runScenario(scenario: Scenario): Promise<Outcome> {
   const metrics = scenario.metrics ?? 'wine';
   const wineGlyphs = metrics === 'wine' ? createWineGlyphs() : null;
   const glyphs = wineGlyphs ?? createWindowsGlyphs();
+  // The atlases are read from disk asynchronously: text drawn before they are there would use the
+  // provider's fallback (note of X3, errata X3.md entry 5). Wine's cells resolve at once.
+  await glyphs.ready;
 
   let session: HeadlessSession | null = null;
   const theSession = (): HeadlessSession => {

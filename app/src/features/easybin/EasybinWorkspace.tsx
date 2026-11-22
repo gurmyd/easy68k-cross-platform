@@ -260,7 +260,12 @@ const Controls = memo(function Controls({ fields, split }: { fields: EasybinFiel
             {field('outLength', `${CAPTIONS.length} ${CAPTIONS.dollar}`, 'Length of the binary files', false)}
             <div className="e68-easybin__item">
               <span className="e68-easybin__label">{CAPTIONS.fileSplit}</span>
-              <span className="e68-easybin__digits" aria-label={`File Split: ${split === 0 ? 1 : split} file(s)`}>
+              {/* A drawn group of digits: role img exposes its label (an aria-label without a role is dropped; Q1-6). */}
+              <span
+                className="e68-easybin__digits"
+                role="img"
+                aria-label={`File Split: ${split === 0 ? 1 : split} file(s)`}
+              >
                 {[0, 1, 2, 3].map((k) => (
                   <span
                     key={k}

@@ -272,7 +272,33 @@ export class FsAccess {
       label: FROM_COMPUTER_LABEL,
       available: () => true,
       open: (request) => this.linkFiles(request),
+      linkFileHandle: (handle) => this.linkFileHandle(handle),
     };
+  }
+
+  /**
+   * A file the application was handed outside a dialog (an installed web app's launch queue, 5.7;
+   * FileDialogs.linkFileHandle): linked like a file chosen with "From this computer...", banner
+   * included. null when it is not a file handle or cannot be linked.
+   */
+  async linkFileHandle(handle: unknown): Promise<VPath | null> {
+    const candidate = handle as Partial<FsaFileHandle> | null;
+    if (!candidate || candidate.kind !== 'file' || typeof candidate.getFile !== 'function') return null;
+    try {
+      return await this.linkOne(await this.ensureLinked(), candidate as FsaFileHandle);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Links one file and shows the banner of 3.8.2 for it. */
+  private async linkOne(linked: LinkedBackend, handle: FsaFileHandle): Promise<VPath> {
+    const path = await linked.link(handle);
+    this.ctx.dialogs.toast(FSACCESS_TEXTS.linked(handle.name), {
+      label: OPEN_CONTAINING_FOLDER,
+      run: () => void this.openContainingFolder(path, handle).catch(() => {}),
+    });
+    return path;
   }
 
   /** "From this computer...": the browser's file picker; each chosen file is linked. null = cancelled. */
@@ -294,12 +320,7 @@ export class FsAccess {
     const linked = await this.ensureLinked();
     const paths: VPath[] = [];
     for (const handle of request.multiple ? handles : handles.slice(0, 1)) {
-      const path = await linked.link(handle);
-      paths.push(path);
-      this.ctx.dialogs.toast(FSACCESS_TEXTS.linked(handle.name), {
-        label: OPEN_CONTAINING_FOLDER,
-        run: () => void this.openContainingFolder(path, handle).catch(() => {}),
-      });
+      paths.push(await this.linkOne(linked, handle));
     }
     return paths;
   }

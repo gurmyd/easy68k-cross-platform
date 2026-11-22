@@ -341,6 +341,37 @@ describe('vfs.resolve on a mount that refuses to list above a granted folder (de
     expect(await (await diskWith({ caseInsensitive: false })).vfs.resolve('/disk/Users/me', 'DEMO')).toBeNull();
   });
 
+  // Review of the repair of D1, probe P6 (errata W1.md entry 16.1): only a backend's FsError is a
+  // refusal to list. A programming error in a backend must not be taken for one and walked past.
+  it.each([
+    ['a TypeError', () => new TypeError('boom')],
+    ['a plain Error without a code', () => new Error('boom')],
+    ['a value that is not an Error', () => 'boom'],
+  ])('a list() that throws %s gives null and asks nothing more', async (_what, thrown) => {
+    class Faulty extends GrantedDisk {
+      override async list(rel: string): Promise<DirEntry[]> {
+        if (rel === 'Users/me/demo/Sub') {
+          this.calls.push(`list ${rel}`);
+          throw thrown();
+        }
+        return super.list(rel);
+      }
+    }
+    for (const caseInsensitive of [false, true]) {
+      const disk = new Faulty(['Users/me/demo'], { caseInsensitive });
+      await disk.writeFile('Users/me/demo/Sub/Data.TXT', text('d'));
+      const vfs = createVfs();
+      vfs.mount(disk);
+      disk.calls.length = 0;
+      expect(await vfs.resolve(DEMO, 'Sub\\Data.TXT')).toBeNull();
+      expect(await vfs.resolve(DEMO, 'sub\\data.txt')).toBeNull();
+      expect(disk.calls.filter((call) => call.startsWith('stat'))).toEqual([]);
+      // The folders the backend refuses with an FsError (those above the granted root) are still
+      // walked past, as D1 needs.
+      expect(await vfs.resolve('/disk/Users/me', 'demo\\Sub')).toBe(`${DEMO}/Sub`);
+    }
+  });
+
   it('asks for the listings on the way and, where the last one is refused, a stat of that path; reads nothing', async () => {
     const { vfs, disk } = await diskWith();
     expect(await vfs.resolve(DEMO, 'sub\\data.txt')).toBe(`${DEMO}/Sub/Data.TXT`);
@@ -496,7 +527,7 @@ describe('subscribe', () => {
     await vfs.remove('/memory/demo/a.txt');
     expect(seen).toEqual([
       { path: '/memory/demo/a.txt', kind: 'write', origin: 'local' },
-      { path: '/memory/demo/sub/b.txt', kind: 'write', origin: 'local' },
+      { path: '/memory/demo/sub/b.txt', kind: 'write', origin: 'local', appended: { at: 0, data: text('b') } },
       { path: '/memory/demo/ext.txt', kind: 'write', origin: 'external' },
       { path: '/memory/demo/ext.txt', kind: 'remove', origin: 'external' },
       { path: '/memory/demo/a.txt', kind: 'remove', origin: 'local' },
@@ -542,6 +573,74 @@ describe('subscribe', () => {
     ]);
     expect(folder).toEqual(all);
     expect(other).toEqual([]);
+  });
+
+  // docs/requests/SH6-append-change.md (errata W1.md entry 16.2): a view that holds a copy of a
+  // growing log must not have to read the whole file again at every flush.
+  it('an append says where it appended and what; every other change does not', async () => {
+    const { vfs } = await vfsWith({ 'log.txt': 'one\r\n' });
+    const seen: VfsChange[] = [];
+    vfs.subscribe('/memory', (c) => seen.push(c));
+    const bytes = text('two\r\n');
+    const first = vfs.appendFile('/memory/log.txt', bytes);
+    const second = vfs.appendFile('/memory/log.txt', text('3')); // queued behind the first
+    bytes.fill(0); // the caller reuses its buffer: the change keeps what was appended
+    await Promise.all([first, second]);
+    await vfs.appendFile('/memory/new.txt', text('n')); // a file the append creates
+    await vfs.writeFile('/memory/log.txt', text('x'));
+    await vfs.mkdirp('/memory/dir');
+    await vfs.remove('/memory/new.txt');
+    expect(seen).toEqual([
+      { path: '/memory/log.txt', kind: 'write', origin: 'local', appended: { at: 5, data: text('two\r\n') } },
+      { path: '/memory/log.txt', kind: 'write', origin: 'local', appended: { at: 10, data: text('3') } },
+      { path: '/memory/new.txt', kind: 'write', origin: 'local', appended: { at: 0, data: text('n') } },
+      { path: '/memory/log.txt', kind: 'write', origin: 'local' },
+      { path: '/memory/dir', kind: 'write', origin: 'local' },
+      { path: '/memory/new.txt', kind: 'remove', origin: 'local' },
+    ]);
+    // Applying each `appended` to a copy of the old bytes gives the file as stored.
+    let copy = text('one\r\n');
+    for (const change of seen.slice(0, 2)) {
+      expect(copy.length).toBe(change.appended?.at);
+      copy = Uint8Array.from([...copy, ...(change.appended?.data ?? [])]);
+    }
+    expect(str(copy)).toBe('one\r\ntwo\r\n3');
+    expect(str(await vfs.readFile('/memory/log.txt'))).toBe('x'); // rewritten afterwards
+  });
+
+  it('an append stores the bytes as they were at the call', async () => {
+    const { vfs } = await vfsWith({});
+    const bytes = text('abc');
+    const done = vfs.appendFile('/memory/a.txt', bytes);
+    bytes.fill(0x2d);
+    await done;
+    expect(str(await vfs.readFile('/memory/a.txt'))).toBe('abc');
+  });
+
+  it('an append whose size before cannot be learnt still appends, and is reported as a plain write', async () => {
+    class NoStat extends MemoryBackend {
+      override async stat(): Promise<FileStat | null> {
+        throw fsError('io', 'stat refused');
+      }
+    }
+    const backend = new NoStat();
+    await backend.writeFile('log.txt', text('a'));
+    const vfs = createVfs();
+    vfs.mount(backend);
+    const seen: VfsChange[] = [];
+    vfs.subscribe('/', (c) => seen.push(c));
+    await vfs.appendFile('/memory/log.txt', text('b'));
+    expect(str(await backend.readFile('log.txt'))).toBe('ab');
+    expect(seen).toEqual([{ path: '/memory/log.txt', kind: 'write', origin: 'local' }]);
+  });
+
+  it('a failed append reports nothing', async () => {
+    const { vfs, backend } = await vfsWith({ 'ro.txt': 'x' });
+    backend.setReadOnly('ro.txt');
+    const seen: VfsChange[] = [];
+    vfs.subscribe('/memory', (c) => seen.push(c));
+    await expect(vfs.appendFile('/memory/ro.txt', text('y'))).rejects.toMatchObject({ code: 'read-only' });
+    expect(seen).toEqual([]);
   });
 
   it('a mount that is refused reports nothing', () => {

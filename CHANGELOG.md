@@ -44,9 +44,18 @@ The first version is being prepared. What the repository holds today:
 ### The macOS app
 
 - The same application in Electron, with direct disk access, file associations for `.X68`, `.L68`
-  and `.S68`, several windows and the native menu bar. The serial and network tasks of TRAP #15,
-  which only the Mac app can offer, are being completed.
-- Built for Apple silicon and Intel, signed ad hoc, by `.github/workflows/release.yml`. Not published.
+  and `.S68`, several windows and the native menu bar.
+- The serial port and network tasks of TRAP #15 (tasks 40-43 and 100-107), which only the Mac app
+  can offer, with Options > Serial Ports... to say which device of the Mac each port name opens.
+  Tested on GitHub's Mac machines with a simulated serial line and local network connections.
+- Built for Apple silicon and Intel, signed ad hoc, by `.github/workflows/release.yml`. The built
+  app passes its automatic checks on GitHub's Mac machines of both kinds. Not published.
+
+### Known limitations
+
+- Listed in part 5 of [docs/DIFFERENCES.md](docs/DIFFERENCES.md): among them, nobody has tried the
+  port on a real Mac yet, Firefox is not tested, and a folder holding a large Git repository can
+  crowd a program's own files out of what it may open in the web version.
 
 ### Documentation
 

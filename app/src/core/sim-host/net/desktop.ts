@@ -401,6 +401,11 @@ export class DesktopNet implements DesktopNetApi {
   /** One `connect` round of the original's loops, waiting at most `waitMs` in the main process. */
   private connect(waitMs: number): ConnectReply {
     const socket = this.socket as SocketState;
+    // Winsock's connect() refuses a remote address that is not valid, such as INADDR_ANY
+    // (WSAEADDRNOTAVAIL), at once. Node, Linux and macOS would instead connect 0.0.0.0 to the
+    // local machine, so the page answers it itself, as sendto() does for UDP. Port 0 gets the
+    // same answer (the main process already gave it, through Node's ERR_SOCKET_BAD_PORT).
+    if (this.remoteAddress === 0 || this.remotePort === 0) return { error: 'EADDRNOTAVAIL' };
     const reply = this.request('net.connect', socket.id, inetNtoa(this.remoteAddress), this.remotePort, waitMs);
     if (!isObject(reply)) return { error: 'ENETDOWN' };
     if (typeof reply['error'] === 'string') return { error: reply['error'] };

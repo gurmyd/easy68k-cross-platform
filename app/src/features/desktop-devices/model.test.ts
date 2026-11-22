@@ -2,8 +2,8 @@
 
 import { describe, expect, it } from 'vitest';
 import type { DesktopDeviceBridge } from '../../contracts';
-import { createTestApplication } from '../../state/testing';
-import { feature, SERIAL_PORTS_DIALOG_ID } from './index';
+import { createFakePlatform, createTestApplication } from '../../state/testing';
+import { feature, SERIAL_PORTS_COMMAND, SERIAL_PORTS_DIALOG_ID } from './index';
 import {
   comNumber,
   detectedLabel,
@@ -103,5 +103,18 @@ describe('the feature module', () => {
     expect(Object.keys(feature.dialogs ?? {})).toEqual([SERIAL_PORTS_DIALOG_ID]);
     const app = await createTestApplication({ features: [feature] });
     expect(app).toBeTruthy();
+  }, 60_000);
+
+  it('handles sim.options.serialPorts, enabled in the desktop app only', async () => {
+    // W3 added the command (docs/requests/DV4-serial-ports-command.md); the feature registers its
+    // handler as soon as COMMAND_SPECS has the id.
+    expect(Object.keys(feature.commands ?? {})).toEqual([SERIAL_PORTS_COMMAND]);
+    const web = await createTestApplication({ features: [feature] });
+    expect(web.ctx.commands.isEnabled(SERIAL_PORTS_COMMAND)).toBe(false);
+    const desktop = await createTestApplication({
+      features: [feature],
+      platform: createFakePlatform({ kind: 'desktop' }),
+    });
+    expect(desktop.ctx.commands.isEnabled(SERIAL_PORTS_COMMAND)).toBe(true);
   }, 60_000);
 });

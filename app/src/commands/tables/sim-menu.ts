@@ -106,6 +106,10 @@ export const SIM_MENUS: MenuTable[] = [
       separator,
       command('sim.options.transfer'),
       command('sim.options.speed'),
+      // added (1.5): the desktop app's serial port map (docs/requests/DV4-serial-ports-command.md);
+      // greyed in a browser, where the handler reports it disabled
+      separator,
+      command('sim.options.serialPorts'),
       // added by the stage of additions (ARCHITECTURE-PLUS P3.5)
       separator,
       command('app.additions.options'),

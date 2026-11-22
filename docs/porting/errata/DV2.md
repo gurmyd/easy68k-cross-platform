@@ -255,3 +255,23 @@ compile against; W1 is asked to take them into `app/src/contracts/`.
   see it: the assembler's status dialog says 2 errors, every `resolve` is null, and a rename
   onto a name that is taken goes through (what that did to the files: W1.md 15.3). The page modules it
   imports by path are in the harness's warm-up list.
+- What that test does not call (review of the repair): EASyBIN's `existing()` and the Files panel's
+  New Folder (`features/files/actions.ts` `newFolder`). Both only pass a name to `Vfs.resolve`, so
+  they are covered through `Vfs.resolve` itself, not by a call of their own; the test's header says
+  so.
+
+### D2. The device wiring of DV4 is DV2's (round before gate I3)
+
+- `desktop/src/main.ts` registers DV4's devices (`registerNetDevices`, `registerSerialDevices`) and
+  `desktop/src/sync-ipc.ts` sets `event.returnValue` when a device handler's Promise settles
+  (`docs/porting/errata/DV4.md` entry 3). Both edits were made on DV4's branch and are on the main
+  branch since its merge (commit 7a1c3b4), exactly as `docs/requests/DV4-device-wiring.md`
+  describes them. DV2 takes them over as they are; the request is closed.
+
+### D3. The read-only tests skip under root (round before gate I3)
+
+- DOC1's clean container (Debian, `node:24`, which runs as root) failed `disk-backend.test.ts`
+  "reports a read-only file" and `sync/disk.test.ts` "reports read-only files and cannot write
+  them": root may write a file of mode 0o444, so the file is not read-only for it and the backend
+  rightly says so. Both tests now skip when `process.getuid?.() === 0`; the CI runners and a
+  student's machine run as an ordinary user and run them.

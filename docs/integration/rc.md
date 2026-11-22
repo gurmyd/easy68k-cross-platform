@@ -45,6 +45,10 @@ application has no accessibility defect. Each is listed in
 `tests/a11y/lib/findings.mjs` (`KNOWN_CHECKS`): the check prints it as "known" with its id instead
 of failing, and says so when it passes again, so that the entry can then be removed.
 
+All six were repaired by their owners in the round before gate I3 and closed on 21 November 2026
+(each entry below says how and by which check): `KNOWN_CHECKS` is empty, and `check:a11y` fails if
+any of them returns. The texts of the findings are kept as they were found.
+
 ### Q1-1 - New Folder: Cancel leaves the focus on the Files tree, not on the button (owner FS1)
 
 - Rule: 2.10, "Dialog closes - the element that had the focus before it opened".
@@ -56,6 +60,12 @@ of failing, and says so when it passes again, so that the entry can then be remo
   whether or not a folder was made (the same in `doRename`).
 - Suggested repair: focus the tree only when a folder was made (`if (created)`), so that Cancel
   leaves the dialog service's own focus return in place. Minor.
+- **Repaired** (closed on 21 November 2026, at the close-out of the round before gate I3; found on
+  the working tree after commit `d771d77`): by FS1, `app/src/features/files/FilesPanel.tsx` focuses
+  the tree only when a folder was made or an entry renamed (errata FS1.md entry 26). Proof: the
+  check "dialog files.name: the focus returns to where it was" passes in Chromium and WebKit, both
+  themes and both key maps (`node tests/a11y/check-a11y.mjs --browser all`), and its entry is gone
+  from `KNOWN_CHECKS` in `tests/a11y/lib/findings.mjs`, so the check fails if the defect returns.
 
 ### Q1-2 - After Execute the focus is nowhere (owner E5)
 
@@ -71,6 +81,13 @@ of failing, and says so when it passes again, so that the entry can then be remo
   the `'execute'` answer), move the focus to the Listing panel with `focusPanel(ctx, 'listing')`,
   as a stop in trace mode does (2.10 `host.focusMain()`). (W3 may prefer a general rule in the
   dialog host: when the element to return to is hidden, focus the active mode's first panel.)
+- **Repaired** (closed on 21 November 2026, at the close-out of the round before gate I3; found on
+  the working tree after commit `d771d77`): by E5, `features/assemble/index.ts` calls
+  `focusPanel(ctx, 'listing')` after the program is opened on Execute (errata E5.md entry 14).
+  Proof: the check "walk-run: after Execute the focus is in a panel of Simulator mode" passes in
+  Chromium and WebKit, both themes and both key maps (`node tests/a11y/check-a11y.mjs --browser
+  all`), and its entry is gone from `KNOWN_CHECKS` in `tests/a11y/lib/findings.mjs`, so the check
+  fails if the defect returns.
 
 ### Q1-3 - The assembler's messages are not announced (owner E5)
 
@@ -84,6 +101,13 @@ of failing, and says so when it passes again, so that the entry can then be remo
   `role="log" aria-live="polite"` element in `features/assemble/MessagesPanel.tsx` that receives
   the new messages of an assembly (or "No errors" style summary of the counts) when the list
   changes.
+- **Repaired** (closed on 21 November 2026, at the close-out of the round before gate I3; found on
+  the working tree after commit `d771d77`): by E5, a visually hidden `role=log aria-live=polite`
+  region in `features/assemble/MessagesPanel.tsx`, its text from `features/assemble/announce.ts`
+  (errata E5.md entry 14). Proof: the check "the Messages panel of Editor mode has a polite log
+  region for the assembler's messages" passes in Chromium and WebKit, both themes and both key maps
+  (`node tests/a11y/check-a11y.mjs --browser all`), and its entry is gone from `KNOWN_CHECKS` in
+  `tests/a11y/lib/findings.mjs`, so the check fails if the defect returns.
 
 ### Q1-4 - A breakpoint (and the PC marker) is not told to a screen reader (owner U1)
 
@@ -96,6 +120,13 @@ of failing, and says so when it passes again, so that the entry can then be remo
 - Suggested repair: in `features/sim-main/ListingPanel.tsx` `rowProps`, add an
   `aria-description` (or a visually hidden suffix referenced by `aria-describedby`) "breakpoint"
   on rows with `data-bp="on"` and "current instruction" on the PC row.
+- **Repaired** (closed on 21 November 2026, at the close-out of the round before gate I3; found on
+  the working tree after commit `d771d77`): by U1, rows with a breakpoint, the PC, or both point
+  with `aria-describedby` to hidden notes beside the listbox in `features/sim-main/ListingPanel.tsx`
+  (errata U1.md entry 10). Proof: the check "a row with a breakpoint says so to a screen reader"
+  passes in Chromium and WebKit, both themes and both key maps (`node tests/a11y/check-a11y.mjs
+  --browser all`), and its entry is gone from `KNOWN_CHECKS` in `tests/a11y/lib/findings.mjs`, so
+  the check fails if the defect returns.
 
 ### Q1-5 - A halt is not announced (owner SH8)
 
@@ -108,6 +139,12 @@ of failing, and says so when it passes again, so that the entry can then be remo
   triggered by the audit.)
 - Suggested repair: make the run-state cell of the simulator's status bar `role="status"` (polite),
   so that `Halted` (and `Stopped`, `Running`) are announced when they change.
+- **Repaired** (closed on 21 November 2026, at the close-out of the round before gate I3; found on
+  the working tree after commit `d771d77`): by SH8, the run-state cell of
+  `features/run/StatusBar.tsx` is `role=status` (errata SH8.md entry 42). Proof: the check "a halt
+  is announced by a live region" passes in Chromium and WebKit, both themes and both key maps (`node
+  tests/a11y/check-a11y.mjs --browser all`), and its entry is gone from `KNOWN_CHECKS` in
+  `tests/a11y/lib/findings.mjs`, so the check fails if the defect returns.
 
 ### Q1-6 - EASyBIN's "File Split" count has a label that is not exposed (owner B1)
 
@@ -116,11 +153,20 @@ of failing, and says so when it passes again, so that the entry can then be remo
 - Evidence: EASyBIN mode, both themes, both browsers:
   `span.e68-easybin__digits[aria-label="File Split: 1 file(s)"]`
   (`features/easybin/EasybinWorkspace.tsx`, line 263) has no role, so the label is dropped.
-  Check "axe ... easybin: no aria-label on an element whose role drops it" (every axe scan runs
-  this check over axe's `aria-prohibited-attr` review items; only the scans of EASyBIN mode and of its About dialog, which is scanned over the workspace,
-  find one).
+  Check "axe ... easybin: the File Split digits of EASyBIN have a name that is read" (since the
+  round before gate I3; it was "axe ... easybin: no aria-label on an element whose role drops it",
+  which every axe scan still runs over axe's `aria-prohibited-attr` review items for every other
+  element, now without exception; only the scans of EASyBIN mode and of its About dialog, which is
+  scanned over the workspace, find the digits).
 - Suggested repair: `role="img"` (it is a drawn group of digits) or a visually hidden text with the
   same words. Minor.
+- **Repaired** (closed on 21 November 2026, at the close-out of the round before gate I3; found on
+  the working tree after commit `d771d77`): by B1, `span.e68-easybin__digits` has `role=img` in
+  `features/easybin/EasybinWorkspace.tsx` (errata B1.md entry 21). Proof: the check "axe ...
+  easybin: the File Split digits of EASyBIN have a name that is read" (EASyBIN mode and its About
+  dialog) passes in Chromium and WebKit, both themes and both key maps (`node
+  tests/a11y/check-a11y.mjs --browser all`), and its entry is gone from `KNOWN_CHECKS` in
+  `tests/a11y/lib/findings.mjs`, so the check fails if the defect returns.
 
 ### Not defects, for the record
 
@@ -136,3 +182,18 @@ of failing, and says so when it passes again, so that the entry can then be remo
   defect.
 - The Output panel's keyboard field is visually hidden; its focus is shown by the panel (the check
   sees the pixels change; the ring's contrast is not measured there).
+
+### Changes to the audit in the round before gate I3 (Q1)
+
+- Review of Q1 (wave three): the pattern of Q1-6 matched every dropped label of an EASyBIN scan, so
+  a new such element there would have been reported as "known". The digits now have a check of
+  their own (`KNOWN_DROPPED_LABEL` and `partitionDroppedLabels` in `tests/a11y/lib/findings.mjs`,
+  used by `lib/scan.mjs`); the general check "no aria-label on an element whose role drops it" is
+  never excused. Unit tests in `findings.test.mjs`.
+- The six entries above and their `KNOWN_CHECKS` lines are unchanged: their owners repair them in
+  this round, and the engineer who closes the round removes each entry once the check prints that
+  it seems repaired.
+- Close-out of that round (21 November 2026): the full audit printed that each of Q1-1 to Q1-6
+  seems repaired in both browsers; their six `KNOWN_CHECKS` lines were removed and the entries
+  above marked repaired. The check "the File Split digits of EASyBIN have a name that is read"
+  stays, now without excuse.

@@ -443,3 +443,37 @@ macOS accent menu) still need a person.
   picture and reach no program (the program's keys are those of the field, 2.9.4). An addition
   of the port's panel layout, recorded in docs/differences/SH4.md (nothing a program observes
   changes).
+
+## Round before gate I3
+
+### 26. The scroll check of entry 25 read the scroll position before the browser had scrolled (CI runs 44972001171 and 191e768)
+
+- Found: once, Chromium on GitHub's macOS runner (ratio 1): "200%: the picture's scroll region
+  takes the focus, has a name and scrolls with the keys" with `scrollTop` 0 after ArrowDown and
+  PageDown; it passed on the rerun, and never failed on Ubuntu or Windows.
+- Product or check: the check. The region had the focus before the keys were pressed (the check
+  focuses it and asserts `document.activeElement` in the same step, and nothing in the panel moves
+  the focus: no keydown handler on the region, `attachKeys` focuses the key field only when the
+  program asks for input, which the drawing program of this check does not). But Chromium scrolls a
+  region by the keys smoothly, as an animation on display frames, and the check read `scrollTop`
+  at once. Measured on this PC with a reading a second later added: Chromium 85 at once, 114 after
+  8 ms, 183 a second later (and 93, 93, 183); WebKit 183 at once (it scrolls without animation).
+  GitHub's Mac runner at times delivers no frames for a while (SH8 errata entry 30), so the
+  animation had not begun when the check read 0.
+- Again in the CI run of main's head 191e768 (Chromium, ratio 2 this time; log in
+  build/gate3/ci-191e768-mac-sim-failed.log): focused, named, a region, scrollTop 0. Its ratio 1 in
+  the same job read 32, an animation caught at its very start (ArrowDown plus PageDown end at 183),
+  and WebKit read 115 and 117. There was something to scroll: the Fit check of the same pass reports
+  a room of 699x777 for a picture shown 960 high. So the same cause: no frame had come yet to move
+  the animation.
+- Does: the check records where each key event lands (the target, and whether it was cancelled),
+  then waits up to 10 s for `scrollTop` to become larger than 0, polling every 100 ms by a timer
+  (Playwright's default polls on animation frames, which that runner withholds, so a frame-polled
+  wait could not end either), and prints the content and room heights, the reading at once, after
+  the wait and a second later, the keys and the focus after them. The assertion is the same (focus,
+  name, role, and the region scrolled); only the moment of reading changed. A product that lost the
+  keys, or a picture that fits, still fails, with the reason in the log.
+- Evidence on this PC: `check-output.mjs --browser all`, 567 of 567; Chromium read 99 and 94 at
+  once, 127 after 17 ms and 183 after 62 ms, 183 a second later (the smooth scroll caught midway);
+  WebKit 183 at once; content 960 of 777 high; both keys on the region. Whether the macOS runner's
+  frames come back within 10 s only the next CI run there can show.

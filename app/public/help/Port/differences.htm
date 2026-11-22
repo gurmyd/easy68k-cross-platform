@@ -17,14 +17,14 @@
 <li><strong>Key codes on keyboards that are not US English.</strong> TRAP #15 task 19 reports the key by its position on a US keyboard: on a French keyboard the key labelled A reports <code>$51</code> (Q). Typed characters (tasks 2, 4, 5, 18) are not affected. (Part SH4.)</li>
 <li><strong>Characters.</strong> A character that Windows-1252 does not have (Greek, Cyrillic, emoji) is not delivered at all; the original delivered <code>?</code>. On a Mac, Option+key types the Mac character, and pasting into a running program is Cmd+V instead of Shift+Insert. (Part SH4.)</li>
 <li><strong>One key is taken from programs</strong>: Ctrl+Alt+O (Ctrl+Option+O on a Mac) always moves the keyboard out of the Output panel, so that nobody can be trapped there (note 44).</li>
-<li><strong>Files.</strong> A program reaches only the files in its own folder and the folders it was given, not the whole disk. In a browser those files are kept by the browser (My Programs) or in a folder you opened; the file name task 58 returns looks like <code>/browser/demo/data.txt</code> instead of <code>C:\...</code>. (Note 46, parts SH6, FS2 and DV2.)</li>
+<li><strong>Files.</strong> A program reaches only the files in its own folder and the folders it was given, not the whole disk. In a browser those files are kept by the browser (My Programs) or in a folder you opened; the file name task 58 returns looks like <code>/browser/demo/data.txt</code> instead of <code>C:\...</code>. (Note 46, parts SH6, FS2 and DV2.) In the Mac app, on a disk that tells letter case apart (not the default on a Mac), a name that leaves the program's folders with <code>..</code> and comes back in another letter case is not found (part W1).</li>
 <li><strong>Serial port and network</strong> (TRAP #15 tasks 40-43 and 100-107) work only in the Mac app. In a browser they return the original's &quot;not available&quot; results (note 37).</li>
 <li><strong>The Output window</strong> is at most 4096 x 4096 pixels (part SH1), and Windows' system colours are those of a default Windows 11 desktop (parts SH1 and SH3).</li>
 <li><strong>Text in the outline fonts</strong> (Courier New, Lucida Console, Consolas) has the original's sizes and positions but not quite its pixels (part SH3). The default font, Fixedsys, is exact.</li>
 <li><strong>Execution logs</strong>: a listing line that contains <code>%</code> is written as it is (the original printed garbage there), and the date in the header is always in the US format (part U4, note 42).</li>
 </ul>
 <h2 class="subheading">How this page is organised</h2>
-<p class="text">Part 1 is the list of changes decided when the port was designed (<code>docs/ARCHITECTURE.md</code>, section 1.4), with the features the port added. Part 2 holds the notes of each part of the port, word for word. Part 3 lists the keyboard shortcuts that a browser does not give up. Part 4 lists what has not been checked against the original yet.</p>
+<p class="text">Part 1 is the list of changes decided when the port was designed (<code>docs/ARCHITECTURE.md</code>, section 1.4), with the features the port added. Part 2 holds the notes of each part of the port, word for word. Part 3 lists the keyboard shortcuts that a browser does not give up. Part 4 lists what has not been checked against the original yet. Part 5 lists the limitations the project knows of and has not repaired yet.</p>
 <p class="text">A row or note marked <strong>program</strong> can change what a 68000 program observes; everything else concerns only the interface.</p>
 <h2 class="subheading">1. Changes decided in the design</h2>
 <p class="text">Copied from section 1.4 of <code>docs/ARCHITECTURE.md</code>. The note numbers are the ones the rest of this document and the specifications refer to (&quot;note 12&quot;).</p>
@@ -93,9 +93,17 @@
 <tr><td><code>New Window</code></td><td><code>app.window.new</code></td><td>desktop app: application menu; web: the same address in another tab</td><td>-</td><td>Cmd+N (desktop only)</td></tr>
 <tr><td><code>Files</code> panel show/hide</td><td><code>app.files.toggle</code></td><td>button at the left of the editor toolbar</td><td>-</td><td>-</td></tr>
 <tr><td><code>Log</code> panel show (erratum W3 40)</td><td><code>sim.view.log</code></td><td>end of the simulator's View menu</td><td>-</td><td>-</td></tr>
+<tr><td><code>Serial Ports...</code> (erratum DV4 2, W3 43; enabled in the desktop app only)</td><td><code>sim.options.serialPorts</code></td><td>end of the simulator's Options menu, after <code>Execution Speed...</code>, below a separator</td><td>-</td><td>-</td></tr>
 </table>
 <h2 class="subheading">2. Differences recorded by each part of the port</h2>
 <p class="text">Each part of the port records the differences it introduced in <code>docs/differences/&lt;part&gt;.md</code>. They are copied here word for word, in the order the parts were built. The part names (W2, SH4 and so on) are the work packages of <code>docs/ARCHITECTURE.md</code> section 9.</p>
+<h3 class="subheading">Differences introduced by W1 (contracts and the virtual file system)</h3>
+<p class="text">(<code>docs/differences/W1.md</code>)</p>
+<p class="text">Deliberate differences from the original that W1's code introduces, beyond those section 1.4 of <code>docs/ARCHITECTURE.md</code> already lists. DOC1 (or whoever next merges the differences files) merges this file into <code>docs/DIFFERENCES.md</code>, under 3.8.</p>
+<table border="1" cellpadding="3" cellspacing="0">
+<tr><th>Where</th><th>Original</th><th>Port</th><th>Why</th></tr>
+<tr><td>A file name that leaves the folders the macOS app may use with <code>..</code> and comes back in another letter case (for example <code>..\DEMO\data.txt</code> from inside the folder <code>demo</code>), on a case-sensitive Mac disk</td><td>Found: Windows disks ignore letter case</td><td>Not found (the <code>.L68</code> lookup, <code>INCLUDE</code> and <code>INCBIN</code>, the Files panel, EASyBIN). On a disk that ignores letter case (macOS and Windows disks as they ship) it is found, as on Windows. In the browser and in every folder the app may use it is found as on Windows</td><td>Learning the stored spelling of the folder above would mean listing a folder the person did not grant, which 7.6 forbids. <code>Vfs.resolve</code> keeps the spelling as given for such a segment (docs/porting/errata/W1.md, entry 15.1). The simulator's own file tasks (TRAP #15 tasks 50-59) use another lookup (<code>SyncFiles.resolve</code>, in the main process), which this row does not describe.</td></tr>
+</table>
 <h3 class="subheading">Differences introduced by W2 (component kit)</h3>
 <p class="text">(<code>docs/differences/W2.md</code>)</p>
 <p class="text">Deliberate differences from the original's interface that the component kit introduces. None of them changes what a 68000 program can observe (section 0, rule 1). DOC1 merges this file into <code>docs/DIFFERENCES.md</code>.</p>
@@ -555,6 +563,27 @@
 <li><strong>Copy downwards past the end of memory</strong> stops with <code>Invalid copy range</code> and keeps what it copied, as the original does; the port also shows those bytes at once (the original did not repaint).</li>
 <li><strong>The <code>Open S-Record...</code> and <code>Save Binary...</code> buttons</strong> in the two groups have these names as tool-tips and accessible names; the original's glyph buttons have no hint.</li>
 </ul>
+<h3 class="subheading">Differences of DV4 (desktop serial ports and network)</h3>
+<p class="text">(<code>docs/differences/DV4.md</code>)</p>
+<p class="text">Deliberate differences from EASy68K v5.16.1 on Windows in TRAP #15 tasks 40-43 and 100-107, as the desktop app gives them. A browser has no serial ports and no network: there every task gives the original's own &quot;not available&quot; result (note 37 of 1.4), unchanged.</p>
+<h4 class="subheading">Serial ports (tasks 40-43)</h4>
+<ul>
+<li><strong>Port names.</strong> Windows names serial ports <code>COM1</code>, <code>COM2</code>, ...; a Mac names them <code>/dev/cu.&lt;something&gt;</code>. A program still opens <code>COM4</code> with task 40: the Serial Ports dialog (to be reached from Simulator mode's Options menu, docs/requests/DV4-serial-ports-command.md) says which device each name stands for (<code>AppSettings.serialPortMap</code>). A name with no device gives result 2, as a COM port that does not exist does. Names are compared without regard to letter case.</li>
+<li><strong>Task 42 does not wait.</strong> The original waits up to <code>count + 1</code> ms (plus the inter-character timeout) for bytes that have not arrived yet; the port returns at once with what has arrived (result 4 when that is fewer than asked for). A program that polls, as programs for the original must anyway, sees the same bytes; a program that relies on the short wait may see more short reads.</li>
+<li><strong>Task 43 returns when the system has taken the bytes</strong>, not when they have left the wire.</li>
+<li><strong>Line settings the device cannot do.</strong> A setting of task 41 that the Mac's serial driver refuses gives result 2, where Windows may accept it. Mark parity is one: macOS has no mark parity, and task 41 with parity 3 gives 2 there (seen on GitHub's macOS 15 runner against a pseudo-terminal; the port stays open with its previous settings).</li>
+<li><strong>Changing parity, data bits or stop bits</strong> closes the device and opens it again with the new settings (only the baud rate can be changed on an open port on a Mac); bytes the driver held and had not passed on yet are lost.</li>
+<li><strong>Buffers.</strong> At most 64 KB per port wait to be read; more is dropped.</li>
+</ul>
+<h4 class="subheading">Network (tasks 100-107)</h4>
+<ul>
+<li><strong>TCP server, task 101.</strong> The original binds at task 101 and starts listening at the program's first receive; the port listens from task 101 on. A client that connects before the server's first receive is accepted (and its data kept) where the original would refuse the connection. After the one client is accepted, others are refused, as in the original.</li>
+<li><strong>Task 105</strong> gives the first non-internal IPv4 address of the machine; the original gives the first address its host name resolves to. On most machines they are the same address.</li>
+<li><strong>Task 100 with a host name</strong> looks the name up as macOS does (DNS, <code>/etc/hosts</code>, mDNS), not as Windows does; a name only Windows knows (a NetBIOS name, say) fails with 8.</li>
+<li><strong>Errors</strong> are the Winsock numbers the original would report for the same situation, mapped from the Mac's own error numbers; where the two systems disagree about what a situation is (a send to a broadcast address, to address 0 or port 0, a TCP connection to address 0 or port 0), the Winsock answer is given.</li>
+<li><strong>Buffers.</strong> At most 256 KB of datagrams wait to be read per socket; more are dropped, as a full socket buffer drops them.</li>
+<li>The waits of the original are kept: task 100 over TCP waits for the connection in steps of 500 ms for up to 5 seconds, and a name lookup takes as long as it takes, with the window waiting.</li>
+</ul>
 <h3 class="subheading">Differences recorded by Q1 (accessibility and keyboard audit)</h3>
 <p class="text">(<code>docs/differences/Q1.md</code>)</p>
 <p class="text">Q1 changes no behaviour. This file records where the port follows the original against accessibility guidance, because the original's colours are part of the fidelity promise (ARCHITECTURE.md section 0, 2.8 &quot;Editor syntax colours&quot;, 2.6 Hardware). None of these colours is to be changed; each is a difference from WCAG 2.1 AA, not from the original. DOC1 merges this file into <code>docs/DIFFERENCES.md</code>.</p>
@@ -609,7 +638,20 @@
 <li>the open items of <code>docs/porting/trap15-tasks-60-up.md</code> section 15 (drawing, sound, keyboard and mouse), among them how Windows draws ellipses (R-2), the flood fill's drawing mode (part SH1) and what DirectMusic does with two slots loaded from one file (part SH5);</li>
 <li><code>docs/porting/hardware.md</code> section 12 (the hardware window), <code>docs/porting/sim-core.md</code> section 13 (the simulator core), <code>docs/porting/assembler.md</code> section 12 (the assembler), <code>docs/porting/editor-ui.md</code> section 22 item 12 and the rows of the quirk register in <code>docs/porting/sim-ui.md</code> section 19 that are marked UNVERIFIED;</li>
 <li>the model of the C library's file buffer (512 bytes, written when a file is closed or the simulator ends; <code>docs/ARCHITECTURE.md</code> 3.8.4, risk R-21) for the unusual cases the test programs have not covered;</li>
-<li>the cases the conformance suite records as unconfirmed in <code>tests/conformance/sim/known-differences.json</code>, with the evidence in <code>tests/conformance/sim/MISMATCHES.md</code>.</li>
+<li>the cases the conformance suite records as unconfirmed in <code>tests/conformance/sim/known-differences.json</code>, with the evidence in <code>tests/conformance/sim/MISMATCHES.md</code>;</li>
+<li>the original's own speed on a Windows PC, which has not been measured (decision O-1; <code>docs/porting/speed.md</code> section 5): the default of 1,000,000 instructions per second is an estimate.</li>
+</ul>
+<h2 class="subheading">5. Known limitations</h2>
+<p class="text">These are not decisions: they are things the project knows of and has not repaired or proven yet. They stay here until they are.</p>
+<ul>
+<li><strong>Nobody has used the port on a real Mac yet.</strong> Everything is tested automatically on GitHub's macOS, Linux and Windows machines, but the checks only a person can make (<code>docs/MANUAL-TEST-MAC.md</code>) have not been worked through. There is no Mac app to download until a release exists.</li>
+<li><strong>Firefox is not tested.</strong> The automatic tests run in the engines of Chrome (Chromium) and Safari (WebKit) only, as Playwright ships them, not in Safari itself. Firefox may work; nothing proves it. ChromeOS and phones are not tested either.</li>
+<li><strong>A folder with a very large <code>.git</code></strong> (a Git repository) can crowd a program's own files out of what it may open. When a program runs from a folder of the web version (My Programs, or a folder of the disk opened in Chrome or Edge), the simulator loads that folder and the folders below it into memory, up to 2,000 files (and 32 MB per file, 256 MB in all). The files below <code>.git</code> count too, so in a large repository some of the program's own files may be left out; each one is named in the message area as <code>Not available to the program: &lt;path&gt; (&lt;reason&gt;)</code>. Use a folder that holds only the course's files, or open the program's own sub-folder. The Mac app reads the disk directly and is not affected. (The repair, taking the files of <code>.git</code> last, is described in <code>docs/ARCHITECTURE-PLUS.md</code> P3.3.10, package N8, and is not built yet.)</li>
+<li><strong>Safari's storage rules are not explained in the application.</strong> Safari may delete a website's files after seven days without a visit, and a web app added to the Dock has its own, empty store. The application asks the browser to keep its files, but it does not yet show the notice the design asks for (risk R-10 of <code>docs/ARCHITECTURE.md</code>). The user guide explains both rules; export your programs regularly (Files panel, Export...).</li>
+<li><strong>Speed at <code>Maximum</code>.</strong> The design asks for 200 million instructions in 10 seconds at the <code>Maximum</code> setting; measured in Chromium on a busy Windows PC it was 106 to 140 million (<code>docs/porting/speed.md</code> 4.2). Programs run correctly, only less fast than intended.</li>
+<li><strong>A program that draws without pause on a 120 Hz display.</strong> While such a program runs, the window's frames come about every 17 ms instead of the 12 ms the design asks for at 120 Hz (<code>docs/porting/speed.md</code> 4.1); the program's own results and timing are not affected.</li>
+<li><strong>Screen readers have not been tried.</strong> The accessibility checks look at the page's structure; nobody has used the port with VoiceOver or NVDA yet. Open findings of the automatic audit are listed in <code>docs/integration/rc.md</code>.</li>
+<li><strong>Serial ports</strong> (Mac app) were tested with a simulated serial line, never with a real USB serial adapter.</li>
 </ul>
 </body>
 </html>

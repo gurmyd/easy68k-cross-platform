@@ -253,7 +253,7 @@ const ORIGINAL_CAPTIONS: Record<string, string> = {
     '&Run|---|Run To &Cursor|&Auto Trace|&Step Over|&Trace Into|&Pause|---|R&ewind Program|Re&load Program|---|L&og Start|Lo&g Stop',
   'simulator.view': '&Output Window|&Memory|&Stack|&Hardware|&Break Points|&EASyBIN|---|&Log',
   'simulator.options':
-    'Source Window Font...|Output Window Font...|Printer Font...|---|&Log Output...|---|&Enable Exceptions|---|&Auto Trace Options...|---|&Fullscreen Options...|---|Enable &Bit Field Instructions|---|Output Window &Size >|Output Window Text &Wrap|---|Import/Export Settings...|Execution Speed...',
+    'Source Window Font...|Output Window Font...|Printer Font...|---|&Log Output...|---|&Enable Exceptions|---|&Auto Trace Options...|---|&Fullscreen Options...|---|Enable &Bit Field Instructions|---|Output Window &Size >|Output Window Text &Wrap|---|Import/Export Settings...|Execution Speed...|---|Serial &Ports...',
   'simulator.help': '&Sim68K Help|&About Sim68K|---|Examples...|Differences from EASy68K',
   'easybin.file': '&New|---|&Open S-Record...|Open &Binary...|---|Save S-&Record...|&Save Binary...|---|E&xit',
   'easybin.help': '&EASyBIN Help|&About EASyBIN|---|Examples...|Differences from EASy68K',

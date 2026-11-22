@@ -290,6 +290,7 @@ and why. No entry concerns `app/src/contracts/`, so there is no **Contract** sec
   the runner, not a detection (no malware name is given, and the same app passes Gatekeeper's
   signature checks except notarisation); it could not be examined further there. The manual test
   (6.8) should note whether a real Mac shows any XProtect message.
+
 ### 22. Check 3 now requires the listing itself (DV5's request, defect D1)
 
 - `association.spec.ts` required only that a `.e68-listing__row` be attached, which the rows of

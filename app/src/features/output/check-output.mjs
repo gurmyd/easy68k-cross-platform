@@ -559,17 +559,57 @@ async function presentationPass(browser, name, ratio) {
       const viewport = document.querySelector('.e68-output__viewport');
       viewport.scrollTo(0, 0);
       viewport.focus();
+      // Where the keys land, for the diagnosis of a failure.
+      window.__viewportKeys = [];
+      window.__viewportKeyListener = (event) =>
+        window.__viewportKeys.push(
+          `${event.key}@${event.target === viewport ? 'viewport' : event.target.className || event.target.tagName}` +
+            (event.defaultPrevented ? '(prevented)' : ''),
+        );
+      document.addEventListener('keydown', window.__viewportKeyListener);
       const focused = document.activeElement === viewport;
       const label = viewport.getAttribute('aria-label') ?? '';
       return { focused, label, role: viewport.getAttribute('role') ?? '' };
     });
     await page.keyboard.press('ArrowDown', { delay: 60 });
     await page.keyboard.press('PageDown', { delay: 60 });
-    const top = await page.evaluate(() => document.querySelector('.e68-output__viewport').scrollTop);
+    // The browser scrolls a region by the keys smoothly, an animation that runs on display frames:
+    // read at once, scrollTop can still be 0, and GitHub's Mac runner at times delivers no frames
+    // for a while (CI runs 44972001171 and that of 191e768: scrollTop 0 there, while the same run's
+    // ratio 1 read 32, an animation caught at its start). So wait for the scroll, up to 10 s, and
+    // print every reading; the key events say whether the region received the keys at all. The wait
+    // polls by a timer, not by animation frames (Playwright's default), which that runner may withhold.
+    const atOnce = await page.evaluate(() => document.querySelector('.e68-output__viewport').scrollTop);
+    const room = await page.evaluate(() => {
+      const viewport = document.querySelector('.e68-output__viewport');
+      return `${viewport.scrollHeight} of ${viewport.clientHeight} high`;
+    });
+    const started = Date.now();
+    const top = await page
+      .waitForFunction(() => document.querySelector('.e68-output__viewport').scrollTop > 0, null, {
+        timeout: 10_000,
+        polling: 100,
+      })
+      .then(() => page.evaluate(() => document.querySelector('.e68-output__viewport').scrollTop))
+      .catch(() => 0);
+    const waited = Date.now() - started;
+    // A second later: larger than the first readings when the browser was still animating them.
+    await page.waitForTimeout(1000);
+    const later = await page.evaluate(() => document.querySelector('.e68-output__viewport').scrollTop);
+    const keysSeen = await page.evaluate(() => {
+      document.removeEventListener('keydown', window.__viewportKeyListener);
+      return {
+        keys: window.__viewportKeys,
+        active: document.activeElement?.className || document.activeElement?.tagName,
+      };
+    });
     check(
       `${p} 200%: the picture's scroll region takes the focus, has a name and scrolls with the keys`,
       scrolled.focused && scrolled.label !== '' && scrolled.role === 'region' && top > 0,
-      `${JSON.stringify(scrolled)} scrollTop after ArrowDown, PageDown: ${top}`,
+      `${JSON.stringify(scrolled)} content ${room}; ` +
+        `scrollTop after ArrowDown, PageDown: ${atOnce} at once, ${top} after ${waited} ms, ` +
+        `${later} a second later; ` +
+        `keys ${JSON.stringify(keysSeen.keys)}, focus now on ${keysSeen.active}`,
     );
     await page.evaluate(() => document.querySelector('.e68-output__viewport').scrollTo(0, 0));
   }

@@ -127,7 +127,37 @@ export class Governor {
   used(ms: number): void {
     this.usedThisFrame += Math.max(ms, 0);
   }
+
+  /**
+   * Smoothed engine time per executed instruction, in milliseconds; 0 until a call has been timed,
+   * and 0 under virtual time, where the clock does not move during a call.
+   */
+  msPerInstruction = 0;
+
+  /** One engine call executed `instructions` in `ms` of the clock. */
+  timed(instructions: number, ms: number): void {
+    if (!(instructions > 0) || !(ms >= 0)) return;
+    const sample = ms / instructions;
+    this.msPerInstruction =
+      this.msPerInstruction === 0 ? sample : this.msPerInstruction + (sample - this.msPerInstruction) * COST_SMOOTHING;
+  }
+
+  /**
+   * The most instructions that fit into `remainingMs` at the measured cost, at least 1; unbounded
+   * while no cost is known. A sub-slice is bounded by time as well as by count (docs/porting/speed.md
+   * 4.1; errata SH8.md entry 40): a TRAP #15 drawing task costs far more than an instruction, and a
+   * call of 2000 of them can take longer than a whole frame's budget, which the budget rule cannot
+   * stop once the call is running.
+   */
+  fits(remainingMs: number): number {
+    if (!(this.msPerInstruction > 0)) return Infinity;
+    // The small addition keeps a quotient that is whole in decimal from rounding down by one.
+    return Math.max(1, Math.floor(Math.max(remainingMs, 0) / this.msPerInstruction + 1e-9));
+  }
 }
+
+/** Weight of a new sample in the smoothed engine time per instruction. */
+const COST_SMOOTHING = 0.5;
 
 /** The most allowance a rate can hold: MAX_CATCHUP_MS of execution. */
 export function allowanceCap(ips: number): number {

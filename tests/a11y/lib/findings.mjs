@@ -34,16 +34,34 @@ export const KNOWN = [];
 /**
  * Checks of the audit (not axe findings) that fail at a defect entered in docs/integration/rc.md,
  * matched by the check's name (lib/report.mjs). Remove an entry when its owner has repaired it.
+ *
+ * Empty since the close-out of the round before gate I3 (21 November 2026): Q1-1 to Q1-6 were
+ * repaired by their owners and their checks pass in Chromium and WebKit, so each of those checks
+ * now fails if its defect returns (docs/integration/rc.md).
  * @type {{ id: string, match: RegExp, owner: string }[]}
  */
-export const KNOWN_CHECKS = [
-  { id: 'Q1-1', owner: 'FS1', match: /dialog files\.name: the focus returns to where it was/ },
-  { id: 'Q1-2', owner: 'E5', match: /walk-run: after Execute the focus is in a panel of Simulator mode/ },
-  { id: 'Q1-3', owner: 'E5', match: /the Messages panel of Editor mode has a polite log region/ },
-  { id: 'Q1-4', owner: 'U1', match: /a row with a breakpoint says so to a screen reader/ },
-  { id: 'Q1-5', owner: 'SH8', match: /a halt is announced by a live region/ },
-  { id: 'Q1-6', owner: 'B1', match: /axe .*\beasybin\b.*: no aria-label on an element whose role drops it/ },
-];
+export const KNOWN_CHECKS = [];
+
+/**
+ * The element of the former defect Q1-6 whose `aria-label` a screen reader dropped: the digits of
+ * EASyBIN's File Split (repaired by B1 with role=img). It keeps a check of its own, "the File Split
+ * digits of EASyBIN have a name that is read", so that a return of Q1-6 is named as such, while any
+ * other element with a dropped label fails the general check (review of Q1, wave three: the first
+ * pattern matched every dropped label of an EASyBIN scan).
+ */
+export const KNOWN_DROPPED_LABEL = /\be68-easybin__digits\b/;
+
+/**
+ * Splits the result of droppedLabels into the element of the known defect and everything else.
+ * @param {string[]} dropped
+ * @returns {{ known: string[], other: string[] }}
+ */
+export function partitionDroppedLabels(dropped) {
+  return {
+    known: dropped.filter((item) => KNOWN_DROPPED_LABEL.test(item)),
+    other: dropped.filter((item) => !KNOWN_DROPPED_LABEL.test(item)),
+  };
+}
 
 /**
  * The elements whose `aria-label` (or `aria-labelledby`) a screen reader drops because their role

@@ -16,7 +16,7 @@
 /* global document, window */
 
 import { AxeBuilder } from '@axe-core/playwright';
-import { classify, droppedLabels, findingsOf, isBlocking } from './findings.mjs';
+import { classify, droppedLabels, findingsOf, isBlocking, partitionDroppedLabels } from './findings.mjs';
 import { dialogStack, modeOf, openApp, newContext, shoot, waitFor, waitForApp } from './app.mjs';
 
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
@@ -175,6 +175,18 @@ const ROUTES = {
   'sim.font': { mode: 'simulator', open: (page) => run(page, 'sim.options.sourceFont') },
   'sim.autoTrace': { mode: 'simulator', open: (page) => run(page, 'sim.options.autoTrace') },
   'sim.fullscreen': { mode: 'simulator', open: (page) => run(page, 'sim.options.fullscreen') },
+  // DV4's Serial Ports dialog: its command (Options > Serial Ports...) is enabled in the desktop app
+  // only, so the audit opens it through the dialog service, with one port and no detected device.
+  'desktop-devices.serialPorts': {
+    mode: 'simulator',
+    open: (page) =>
+      page.evaluate(() => {
+        void window.__easy68k.ctx.dialogs.open('desktop-devices.serialPorts', {
+          map: { COM1: '/dev/cu.usbserial-1' },
+          detected: [],
+        });
+      }),
+  },
   'easybin.about': { mode: 'easybin', open: (page) => run(page, 'bin.help.about') },
   // documents.drafts is reached by a reload with an unsaved document (draftsStep below).
 };
@@ -227,12 +239,21 @@ export async function axeScan(page, label, report, all) {
   );
   // A label on an element whose role takes no name is silently dropped by screen readers; axe
   // leaves it for review (aria-prohibited-attr), so the audit makes it a check of its own.
-  const dropped = droppedLabels(result);
+  // The element of the known defect Q1-6 is judged apart, so that a new element with a dropped
+  // label fails here even in a scan of EASyBIN mode.
+  const dropped = partitionDroppedLabels(droppedLabels(result));
   report.check(
     `axe ${label}: no aria-label on an element whose role drops it`,
-    dropped.length === 0,
-    dropped.slice(0, 4).join(' || '),
+    dropped.other.length === 0,
+    dropped.other.slice(0, 4).join(' || '),
   );
+  if (dropped.known.length > 0 || /\beasybin\b/.test(label)) {
+    report.check(
+      `axe ${label}: the File Split digits of EASyBIN have a name that is read`,
+      dropped.known.length === 0,
+      dropped.known.slice(0, 4).join(' || '),
+    );
+  }
   if (known.length) console.log(`        known defects: ${[...new Set(known)].join('; ')}`);
   if (other.length) console.log(`        moderate or minor: ${[...new Set(other)].slice(0, 8).join('; ')}`);
   const review = result.incomplete.map((v) => `${v.id} (${v.nodes.length})`);

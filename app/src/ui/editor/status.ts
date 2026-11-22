@@ -28,6 +28,22 @@ export function positionText(state: EditorState, settings: TabSettings): string 
   return `${line.number}: ${visualColumn(line.text, end - line.from, settings) + 1}`;
 }
 
+/** The label of the store of linked files when the Vfs does not name it (fs/fsaccess-backend.ts LINKED_LABEL). */
+export const LINKED_FALLBACK_LABEL = 'Linked files';
+
+/**
+ * The text of Editor mode's window status bar: the active document's path. A linked file (FS2)
+ * lives in the port's own folder `/linked/<id>/`, which is never shown: it reads as
+ * `Linked files/prog.X68`, as the Files panel's displayPath shows it (gate I2 review).
+ */
+export function windowStatusText(path: string | null, name: string, linkedLabel = LINKED_FALLBACK_LABEL): string {
+  if (path === null) return name;
+  const linked = /^\/linked\/[^/]+\/(.*)$/.exec(path);
+  if (linked) return `${linkedLabel}/${linked[1]}`;
+  if (path === '/linked' || /^\/linked\/[^/]+$/.test(path)) return linkedLabel;
+  return path;
+}
+
 export function statusTexts(
   state: EditorState,
   input: TabSettings & { modified: boolean; insertMode: boolean },

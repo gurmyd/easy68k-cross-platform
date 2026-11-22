@@ -74,6 +74,13 @@ export interface VfsChange {
   path: VPath;
   kind: 'write' | 'remove';
   origin: 'local' | 'external';
+  /** Set when the change was an append through this Vfs (origin 'local'): the file was `at` bytes
+   *  long just before, inside the queue of its path, and `data` (a copy; do not modify) was added at
+   *  its end. Absent for every other change, and for an append whose size before could not be
+   *  learnt. A listener that keeps a copy of the file may apply `data` when its copy is exactly
+   *  `at` bytes long, and reads the file otherwise. Added in the round before gate I3
+   *  (docs/requests/SH6-append-change.md; docs/porting/errata/W1.md, entry 16). */
+  appended?: { at: number; data: Bytes };
 }
 
 /**

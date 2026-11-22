@@ -39,7 +39,8 @@ the original's own "not available" result (note 37 of 1.4), unchanged.
   Windows does; a name only Windows knows (a NetBIOS name, say) fails with 8.
 - **Errors** are the Winsock numbers the original would report for the same situation, mapped from
   the Mac's own error numbers; where the two systems disagree about what a situation is (a send to
-  a broadcast address, to address 0 or port 0), the Winsock answer is given.
+  a broadcast address, to address 0 or port 0, a TCP connection to address 0 or port 0), the Winsock
+  answer is given.
 - **Buffers.** At most 256 KB of datagrams wait to be read per socket; more are dropped, as a full
   socket buffer drops them.
 - The waits of the original are kept: task 100 over TCP waits for the connection in steps of

@@ -708,6 +708,9 @@ const OPTIONAL_ADDITIONS = {
     'openDroppedFolder' | 'linkFileHandle'
   >,
   fileDialogsLink: true satisfies StillValidWithout<FileDialogs, 'linkFileHandle'>,
+  // the round before gate I3 (entry 16)
+  vfsChangeAppended: true satisfies StillValidWithout<VfsChange, 'appended'>,
+  platformDeviceBridge: true satisfies StillValidWithout<Platform, 'deviceBridge'>,
   // the stage of additions (ARCHITECTURE-PLUS P4.4: optional members only)
   appContextPlus: true satisfies StillValidWithout<AppContext, 'history' | 'viewer'>,
   serviceFactoriesPlus: true satisfies StillValidWithout<
@@ -780,6 +783,8 @@ const ADDED_DECLARATIONS: Record<string, string[]> = {
     'dispose?(): void;',
     'openDroppedFolder?(handle: unknown): Promise<boolean>;',
     'linkFileHandle?(handle: FileSystemFileHandle): Promise<VPath | null>;',
+    // the round before gate I3 (entry 16)
+    'appended?: { at: number; data: Bytes };',
   ],
   'platform.ts': [
     'readonly nativeFileDialogs?: NativeFileDialogs | null;',
@@ -789,6 +794,8 @@ const ADDED_DECLARATIONS: Record<string, string[]> = {
     'onFullScreenChange?(listener: (on: boolean) => void): () => void;',
     'confirmBeforeUnload(needed: boolean, who?: string): void;',
     'chooseFolder(title: string, startDir?: VPath | null): Promise<VPath | null>;',
+    // the round before gate I3 (entry 16)
+    'readonly deviceBridge?: DesktopDeviceBridge | null;',
   ],
   'documents.ts': [
     // required since gate I2 (entry 14.5)

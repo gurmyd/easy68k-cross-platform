@@ -138,10 +138,74 @@ async function browserPass(browser, name) {
     const screenshot = join(outDir, `${name}-note37.png`);
     await page.screenshot({ path: screenshot });
     console.log(`        screenshot: ${screenshot}`);
+    await dialogPart(page, name);
     check(`${name}: no console errors`, errors.length === 0, errors.slice(0, 5).join(' | '));
   } finally {
     await context.close();
   }
+}
+
+/**
+ * The Serial Ports dialog (opened through openSerialPortsDialog, since the web build has no command
+ * for it): while a row shows a problem under its Name field, the fields of every row stay in the
+ * same columns (review of DV4, wave three: the message used to widen the Name field by 7 px).
+ * Then Escape cancels and changes nothing.
+ */
+async function dialogPart(page, name) {
+  await page.evaluate(async () => {
+    const { ctx } = window.__easy68k;
+    ctx.settings.update((s) => ({
+      ...s,
+      app: {
+        ...s.app,
+        serialPortMap: { COM4: '/dev/cu.usbserial-A', COM10: '/dev/cu.usbserial-B', modem: '/dev/cu.modem' },
+      },
+    }));
+    const feature = await import(String('/src/features/desktop-devices/index.ts'));
+    window.__dv4Dialog = feature.openSerialPortsDialog(ctx);
+  });
+  const dialog = page.getByRole('dialog', { name: 'Serial Ports' });
+  await dialog.waitFor({ timeout: 30_000 });
+  await dialog.getByRole('button', { name: 'Add Port' }).click();
+  await dialog.getByRole('textbox', { name: 'Name:' }).nth(3).fill('com4');
+  await dialog.getByText('com4 is in the list twice.').waitFor({ timeout: 10_000 });
+  const columns = await dialog.evaluate((box) =>
+    [...box.querySelectorAll('[data-e68-serial-row]')].map((row) => {
+      const [nameField, deviceField] = [...row.querySelectorAll('input')];
+      const left = (element) => Math.round(element.getBoundingClientRect().left * 10) / 10;
+      const deviceLabel = [...row.querySelectorAll('.e68-field-label')].find((label) =>
+        label.textContent?.startsWith('Device:'),
+      );
+      return {
+        nameLeft: left(nameField),
+        nameWidth: Math.round(nameField.getBoundingClientRect().width * 10) / 10,
+        deviceLabelLeft: deviceLabel ? left(deviceLabel) : null,
+        deviceLeft: left(deviceField),
+      };
+    }),
+  );
+  const same = (key) => columns.every((column) => column[key] !== null && column[key] === columns[0][key]);
+  check(
+    `${name}: Serial Ports dialog: with a problem shown under a Name field, the rows keep their columns`,
+    columns.length === 4 && same('nameLeft') && same('nameWidth') && same('deviceLabelLeft') && same('deviceLeft'),
+    JSON.stringify(columns),
+  );
+  const okDisabled = await dialog.getByRole('button', { name: 'OK' }).isDisabled();
+  check(`${name}: Serial Ports dialog: OK is disabled while a name is in the list twice`, okDisabled);
+  const screenshot = join(outDir, `${name}-serial-ports-problem.png`);
+  await page.screenshot({ path: screenshot });
+  console.log(`        screenshot: ${screenshot}`);
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden', timeout: 10_000 });
+  const after = await page.evaluate(async () => ({
+    result: await window.__dv4Dialog,
+    names: Object.keys(window.__easy68k.ctx.settings.get().app.serialPortMap).sort(),
+  }));
+  check(
+    `${name}: Serial Ports dialog: Escape cancels and changes nothing`,
+    after.result === false && after.names.join(',') === 'COM10,COM4,modem',
+    JSON.stringify(after),
+  );
 }
 
 async function main() {

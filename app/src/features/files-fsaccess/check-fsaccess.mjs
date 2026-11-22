@@ -789,6 +789,18 @@ async function linkedPass(browser, name) {
     JSON.stringify(layout),
   );
   await page.screenshot({ path: join(outDir, `${name}-linked-banner.png`) });
+  // Gate I2 review: the port's internal folder of a linked file is never shown, the status lines
+  // included; Editor mode's window status line reads "Linked files/prog.X68".
+  const visible = await page.evaluate(() => ({
+    text: document.body.innerText,
+    status: document.querySelector('[data-e68-editor-status="path"]')?.textContent ?? null,
+  }));
+  check(
+    `${p} no visible text names /linked/; the status line reads "Linked files/prog.X68"`,
+    !visible.text.includes('/linked/') && visible.status === 'Linked files/prog.X68',
+    `status ${JSON.stringify(visible.status)}; ` +
+      (visible.text.match(/.{0,40}\/linked\/.{0,40}/)?.[0] ?? 'no /linked/ in the text'),
+  );
   await typeInEditor(page, 'QQ');
   await saveFromToolbar(page);
   const saved = await until(page, () =>

@@ -54,7 +54,8 @@ owners" name a defect or a question that is not SH6's to change.
     considered and not done: the session waits for `whenCurrent()` at every change report
     (`core/run/compose.ts`), so a deferred read would either be started at once anyway or make
     Rewind wait, and 3.8.4 asks for the change "at once". The cheap answer needs the change itself
-    to say what was appended (requested in `docs/requests/SH6-append-change.md`).
+    to say what was appended (requested in `docs/requests/SH6-append-change.md`). **Done in the
+    round before gate I3:** see entry 13.
 
 5b. **A whole-file read returns the same copy until the file changes (gate I2, SH5's note).** The
     sound device reads the whole file at every try of task 70's wait loop. `read(path, 0, n)` with
@@ -147,6 +148,20 @@ owners" name a defect or a question that is not SH6's to change.
     (item 1 below). The engine test replays stdio-buffer.X68 and compares the whole `result.bin` with
     the Wine result (`program-files.engine.test.ts`); the conformance suite replays a59.
 
+13. **An append by another part is added to the copy, not read whole (round before gate I3; entry
+    5a, request SH6-append-change).** W1 added `VfsChange.appended?: { at; data }` (contracts/fs.ts;
+    errata W1.md entry 16), set by `Vfs.appendFile` on its 'local' change. `CachedSyncFiles` now
+    adds `data` to its copy, with no read, when four things hold: the copy is unchanged by the
+    program (not dirty, no write of its own in flight, no whole rewrite pending), the copy and what
+    the view knows storage holds are both exactly `at` bytes long, and a `stat` taken after the
+    change says the file is exactly `at + data.length` long. Anything else (an append the view missed
+    because two arrived while it was busy, a change by the program, a file now beyond the limits, an
+    append from another window, which arrives as 'external' without `appended`) reads the whole file
+    as before. U4's execution log in the program's folder therefore costs each flush what it added.
+    Tests: `fs/sync/cached.test.ts`, "an append through the Vfs (the log) is added to the copy
+    without reading the file" and "an append the copy cannot follow ... reads the file". Not
+    measured again in Chromium with a 30 MB log (the 122 ms of entry 5a was U4's figure).
+
 ## Contract
 
 C1. **`OpenRequest` cannot carry an initial file name, and `SaveRequest` no start folder.** The
@@ -179,12 +194,11 @@ E1. **Task 53 with a count that wraps the bounds test (trap15-a task 53, §13 Fi
     with `D2 = 0` gives 0); the engine owner reproduces both in `engine/sim/shim/hostfile.cpp`. The
     engine test now asserts the original's values.
 
-E2. **The two defects of the task 58 Save branch (3.8.4: "they are not reproduced"; owner: the
-    simulator engine).** `engine/sim/shim/simio.cpp` reproduces both: with an empty `(A3)` the Save
-    dialog receives the name of the previous Save dialog (the Open dialog's name is cleared instead),
-    and the overflow check measures the Open dialog's name. `ProgramFiles` passes what the engine
-    gives (`initialName`); the decision belongs to the engine owner and the document should say which
-    holds.
+E2. **Withdrawn (stale; round before gate I3, DOC1's review).** It said that
+    `engine/sim/shim/simio.cpp` reproduced the two defects of the task 58 Save branch, which 3.8.4
+    says are not reproduced. W4 removed them at gate I2 (errata W4.md entry 15), and ARCHITECTURE.md
+    3.8.4 says "not reproduced"; the engine and the document agree, and nothing is left for anyone.
+    `ProgramFiles` passes what the engine gives (`initialName`).
 
 E3. **SH8 (`features/run/session.ts`):** `viewFor` creates one `CachedSyncFiles` per mount and never
     disposes of it; `CachedSyncFiles.dispose()` exists (unsubscribes, cancels timers) for the session
@@ -192,7 +206,8 @@ E3. **SH8 (`features/run/session.ts`):** `viewFor` creates one `CachedSyncFiles`
 
 E4. **T3 (`tests/conformance/sim/known-differences.json`):** a59 is equal since gate I2 round 2
     (entry 12); its entry must go, or the suite reports "listed ... but now equal". Filed as
-    `docs/requests/SH6-a59-known-difference.md`.
+    `docs/requests/SH6-a59-known-difference.md`. **Done** (the entry is gone since gate I2 round 2;
+    T3 closed the request in the round before gate I3).
 
 E5. **FS2 (`/folder`, gate I2: "each appendFile copies the whole file in Chromium: batch writes").**
     The program's writes are batched already: `CachedSyncFiles` sends at most one write per file

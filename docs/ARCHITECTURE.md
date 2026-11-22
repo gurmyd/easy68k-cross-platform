@@ -495,6 +495,7 @@ items keep their positions:
 | `New Window` | `app.window.new` | desktop app: application menu; web: the same address in another tab | - | Cmd+N (desktop only) |
 | `Files` panel show/hide | `app.files.toggle` | button at the left of the editor toolbar | - | - |
 | `Log` panel show (erratum W3 40) | `sim.view.log` | end of the simulator's View menu | - | - |
+| `Serial Ports...` (erratum DV4 2, W3 43; enabled in the desktop app only) | `sim.options.serialPorts` | end of the simulator's Options menu, after `Execution Speed...`, below a separator | - | - |
 
 ---
 
@@ -3688,7 +3689,7 @@ loaded, run or changed since the last one (the usual case for a file named on th
 
 > **Corrected (erratum U3 7).** The breakpoints model empties its grids at every `onEngineReplaced`, which also fires when the window's first engine exists, so rows entered while the first engine is still being created are lost; the original has no such moment.
 
-> **Corrected (erratum SH8 9).** Details (SH8): "all timers are cancelled" is `TimerSet.disableAll()` (the seven auto-interrupt timers and the auto-trace timer) plus the delay timer and the pending tick (erratum SH8 11). The Output font is in place before the engine exists: `TextScreen.setOptionsFont` is called in step 2, right after the parts' `resetToStartup()` (erratum SH8 10). `recoverJournal()` is the first step of `controller.start()`, before the first engine (erratum SH8 23). A cold start is skipped only when no engine call has gone through the controller since the last one, the parts the user can change directly are untouched (`RunControllerDeps.partsUntouched()`), and so a skipped cold start leaves exactly the state one would make, independent of frames (errata SH8 9, 38). The session starts its engine in the microtask after bootstrap; until then `session.engine` is a stand-in that reads as a simulator in start-up state (erratum SH8 21); a session or controller disposed before it starts stays inert (erratum SH8 28).
+> **Corrected (erratum SH8 9).** Details (SH8): "all timers are cancelled" is `TimerSet.disableAll()` (the seven auto-interrupt timers and the auto-trace timer) plus the delay timer and the pending tick (erratum SH8 11). The Output font is in place before the engine exists: `TextScreen.setOptionsFont` is called in step 2, right after the parts' `resetToStartup()` (erratum SH8 10). `recoverJournal()` is the first step of `controller.start()`, before the first engine (erratum SH8 23). A cold start is skipped only when no engine call has gone through the controller since the last one, the parts the user can change directly are untouched (`RunControllerDeps.partsUntouched()`), and so a skipped cold start leaves exactly the state one would make, independent of frames (errata SH8 9, 38). "Changed" includes the saved settings a cold start applies (after an import of `sim68K.dat` the next Execute is a cold start) and leaves out the engine calls the cold start itself queued (the log service's read of the log types in step 2): the first Execute of a new window makes no cold start, each later one does (erratum SH8 38). The session starts its engine in the microtask after bootstrap; until then `session.engine` is a stand-in that reads as a simulator in start-up state (erratum SH8 21); a session or controller disposed before it starts stays inert (erratum SH8 28).
 
 ### 4.8 Commands and states
 
@@ -3892,7 +3893,8 @@ there and shows the open dialog in it. Nothing from `reference/examples/site` is
 - `.L68` and `.S68` files are interchangeable in both directions. The memory panel's `Save` writes raw
   bytes with the default extension `.bin`.
 - A file a program writes appears when the original's C library would have written it: at task 56 or
-  task 50, when 512 bytes have accumulated, or when the simulator is restarted (3.8.4). A file edited
+  task 50, when the program sets the file position (task 55; erratum DV5 2), when 512 bytes have
+  accumulated, or when the simulator is restarted (3.8.4). A file edited
   or added while a program is loaded is seen by the program's next open, without a reload.
 
 ---

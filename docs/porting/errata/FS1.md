@@ -227,6 +227,37 @@ fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`.
     Tested in `dialogs.test.ts`; the initial name also in `check-files.mjs` in both browsers.
     `DroppedFolderProvider` stays as it is (the contract's optional `openDroppedFolder` has the
     same signature, so both describe the same providers).
+25. **A case-only rename where the folder above may not be listed (docs/requests/W1-case-only-rename.md;
+    review of the repair of D1).** Since W1's erratum 15.1 `vfs.resolve` keeps the given spelling of
+    a segment whose folder may not be listed, so for a granted root on `/disk` it returns the new
+    spelling (`.../DEMO`), not `from`, and `renameEntry` refused the rename as "already exists". It
+    now compares with `foldCase`. The request expected the rename to succeed then; it cannot on the
+    real `/disk`: a case-only rename goes through a temporary name beside the entry, which for a
+    granted root lies outside the grant, and the main process refuses that (and `stat` there). So
+    `renameEntry` lists the parent first when the rename is case-only and reports the refusal before
+    anything is copied or removed; without that, a store that let the temporary folder be written
+    but not read would have been left with the files only under the temporary name. A case-only
+    rename below a granted root works as before. Tests: `store.test.ts`, "renameEntry: a change of
+    letter case of a granted root on /disk" (a disk that ignores case and refuses everything outside
+    the grant, with and without guarded writes).
+26. **Cancel in New Folder... and Rename leaves the focus where it was (Q1-1, `docs/integration/rc.md`;
+    2.10).** `FilesPanel.tsx` focused the tree after either dialog whatever the answer, so Cancel of
+    New Folder... left the focus on the tree instead of the button. The tree now takes the focus
+    only when a folder was made or an entry renamed; on Cancel the dialog service's own focus
+    return stands. `check-files.mjs` checks both cases and that OK still moves the focus to the
+    tree with the new folder selected.
+27. **Import > Files... and "From this computer..." dropped files that arrived late (round before
+    I3; found going through the import paths as a person would, after the owner's folder import
+    defect of commit 5f16615).** `pickFiles` still had, for files, the fallback that had dropped the
+    folder import: one second after the window got the focus back without a `change`, it took the
+    choice for cancelled. A browser hands the files over only after it has read them, which can be
+    later (a file in iCloud Drive or on a network share is fetched first; a loaded machine). The
+    files were then dropped without a word. Reproduced in Chromium and WebKit with the files
+    handed over 2.5 s after the focus came back (`build/FS1/probe-import-delay.mjs`: "DROPPED" in
+    both; "imported" with the repair). The fallback is gone: a choice ends only with `change` or
+    `cancel`, which every supported browser sends (Chromium 113, Safari 16.4, Firefox 91 or
+    later; the user guide asks for macOS 14, whose Safari is 17). `check-files.mjs` checks the late
+    files and that a cancelled chooser still ends the choice.
 
 ## Contract
 

@@ -19,6 +19,7 @@
 // Owner: W3 > E5.
 
 import type { AppContext, AppState, CommandHandler, FeatureModule, VPath } from '../../contracts';
+import { focusPanel } from '../../state/panels';
 import { assembleDocument, type AssembleDeps, type StatusDialogProps, type StatusDialogResult } from './assemble';
 import { MessagesPanel } from './MessagesPanel';
 import { untitledFolder } from './options';
@@ -61,7 +62,13 @@ export function assembleEnabled(state: AppState): boolean {
 /** Execute (editor-ui §10.6; 1.4 note 20): Simulator mode, a fresh simulator, the S-record loaded, not run. */
 export async function executeProgram(ctx: AppContext, sRecord: VPath): Promise<void> {
   if (ctx.store.getState().mode !== 'simulator') await ctx.commands.run('app.mode.set', 'simulator');
-  await ctx.sim.controller.open(sRecord, 'execute');
+  try {
+    await ctx.sim.controller.open(sRecord, 'execute');
+  } finally {
+    // The status dialog returns the focus to the editor, which Simulator mode hides: the focus would
+    // be nowhere. It goes to the Listing, as after a stop in trace mode (2.10; Q1-2).
+    focusPanel(ctx, 'listing');
+  }
 }
 
 /** Opens the status dialog and does what its answer asks. */

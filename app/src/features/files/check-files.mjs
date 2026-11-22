@@ -1036,6 +1036,67 @@ async function uiPass(browser, name) {
     revealInFilesPanel(window.__easy68k.ctx, '/browser/demo');
   });
   await page.locator('[data-e68-panel="files"] [role=treeitem][aria-selected=true]', { hasText: 'demo' }).waitFor();
+
+  // Q1-1 (2.10): Cancel in New Folder... and in Rename (F2) leaves the focus where it was before the
+  // dialog opened: on the button, and on the tree. Only a folder that was made moves it to the tree.
+  const focusAfterCancel = async (open) => {
+    await open();
+    const nameDialog = page.getByRole('dialog');
+    await nameDialog.waitFor({ timeout: 5000 });
+    await page.keyboard.press('Escape');
+    await nameDialog.waitFor({ state: 'hidden', timeout: 5000 });
+    await page.waitForTimeout(300); // the panel's own follow-up, if any, runs after the dialog closed
+    return page.evaluate(() => {
+      const a = document.activeElement;
+      return a
+        ? `${a.tagName.toLowerCase()}[${a.getAttribute('role') ?? ''}] ${a.getAttribute('aria-label') ?? ''}`
+        : 'none';
+    });
+  };
+  const newFolderButton = page.locator('[data-e68-panel="files"] button[aria-label="New Folder..."]');
+  const afterNewFolder = await focusAfterCancel(async () => {
+    await newFolderButton.focus();
+    await page.keyboard.press('Enter');
+  });
+  check(
+    `${p} New Folder...: Cancel leaves the focus on the button (Q1-1)`,
+    afterNewFolder === 'button[] New Folder...',
+    afterNewFolder,
+  );
+  const afterRename = await focusAfterCancel(async () => {
+    await page.locator('[data-e68-panel="files"] [role=tree]').focus();
+    await page.keyboard.press('F2');
+  });
+  check(`${p} Rename (F2): Cancel leaves the focus on the tree`, afterRename.startsWith('div[tree]'), afterRename);
+  const afterMade = await (async () => {
+    await newFolderButton.focus();
+    await page.keyboard.press('Enter');
+    const nameDialog = page.getByRole('dialog');
+    await nameDialog.waitFor({ timeout: 5000 });
+    await nameDialog.getByRole('textbox').fill('made by check');
+    await page.keyboard.press('Enter');
+    await nameDialog.waitFor({ state: 'hidden', timeout: 5000 });
+    await page
+      .locator('[data-e68-panel="files"] [role=treeitem][aria-selected=true]', { hasText: 'made by check' })
+      .waitFor({ timeout: 5000 })
+      .catch(() => {});
+    const focus = await page.evaluate(() => document.activeElement?.getAttribute('role') ?? 'none');
+    const made = await page.evaluate(
+      async () => (await window.__easy68k.ctx.vfs.stat('/browser/demo/made by check'))?.kind,
+    );
+    await page.evaluate(() => window.__easy68k.ctx.vfs.remove('/browser/demo/made by check'));
+    return { focus, made };
+  })();
+  check(
+    `${p} New Folder...: OK makes the folder and moves the focus to the tree`,
+    afterMade.made === 'dir' && afterMade.focus === 'tree',
+    JSON.stringify(afterMade),
+  );
+  await page.evaluate(async () => {
+    const { revealInFilesPanel } = await import('/src/features/files/FilesPanel.tsx');
+    revealInFilesPanel(window.__easy68k.ctx, '/browser/demo');
+  });
+  await page.locator('[data-e68-panel="files"] [role=treeitem][aria-selected=true]', { hasText: 'demo' }).waitFor();
   await page.screenshot({ path: join(outDir, `${name}-files-panel-light.png`) });
   await scan(page, `${name} light editor with Files panel`);
   const [download] = await Promise.all([
@@ -1213,6 +1274,41 @@ async function uiPass(browser, name) {
         .filter((key) => key.includes(folderName))
         .join(', ') ||
       'nothing of the folder was imported',
+  );
+
+  // Import > Files or .zip... the same way: the window has the focus back seconds before the browser
+  // hands the files over (a file fetched from iCloud Drive or a network share first). The import
+  // gave up one second after the focus came back and dropped them (errata FS1.md entry 27).
+  await second.page.locator('[data-e68-panel="files"] [role=treeitem]', { hasText: 'My Programs' }).click();
+  await second.page.locator('[data-e68-panel="files"] button[aria-label="Import..."]').click();
+  const [lateChooser] = await Promise.all([
+    second.page.waitForEvent('filechooser'),
+    second.page.getByRole('menuitem', { name: /Files or \.zip/ }).click(),
+  ]);
+  await second.page.evaluate(() => window.dispatchEvent(new window.Event('focus')));
+  await second.page.waitForTimeout(2500);
+  await lateChooser.setFiles({ name: 'late.X68', mimeType: 'text/plain', buffer: Buffer.from('* late\r\n') });
+  let lateImported = false;
+  for (let i = 0; i < 40 && !lateImported; i++) {
+    lateImported = '/browser/late.X68' in (await storeContents(second.page));
+    if (!lateImported) await second.page.waitForTimeout(250);
+  }
+  check(`${p} Import > Files... keeps a file that arrives seconds after the chooser closed`, lateImported);
+
+  // A chooser the person cancels ends the choice ('cancel'): a headless browser cancels a chooser that
+  // nothing intercepts. The hidden input goes, and the next Import works.
+  await second.page.locator('[data-e68-panel="files"] button[aria-label="Import..."]').click();
+  await second.page.getByRole('menuitem', { name: /Files or \.zip/ }).click();
+  let inputs = -1;
+  for (let i = 0; i < 40; i++) {
+    inputs = await second.page.locator('input[type=file]').count();
+    if (inputs === 0) break;
+    await second.page.waitForTimeout(250);
+  }
+  check(
+    `${p} a cancelled file chooser ends the choice (its input is removed)`,
+    inputs === 0,
+    `${inputs} file inputs left`,
   );
   check(`${p} import pass: no console errors`, second.errors.length === 0, second.errors.slice(0, 3).join(' | '));
   await fresh.close();

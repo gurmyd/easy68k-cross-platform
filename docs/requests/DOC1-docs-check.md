@@ -1,6 +1,24 @@
 # Request from DOC1: keep the documents true (a check), and prove the README on macOS and Windows
 
-Status: open (for the gate after wave three, I3, and the configuration engineer).
+Status: applied in the round that prepares gate I3 (config), all three items. (1)
+`tools/make-differences.mjs` and `tools/check-docs.test.mjs` as below, word for word, then formatted
+with Prettier. (2) Root script `check:docs` and the step "Documents (DOC1)" in the job `check`. (3) A
+job `readme` on macos-latest and windows-latest that runs the README's commands one step each, on the
+weekly schedule and on a manual run with the input `readme` ticked (errata W0.md entry 9). DOC1's
+addition below (two more tests) is adopted too: `npm run check:docs` gives 14 of 14 on this round's
+tree, and `node tools/make-differences.mjs --check` says "up to date". The help page
+`Port/differences.htm` is not covered by the check and still has to be renewed by H1 or the
+orchestrator.
+
+**Addition by DOC1 in the same round (for the configuration engineer):** `tools/check-docs.test.mjs`
+below now has two more tests, "the manual list carries the same first-start steps as the README and
+DV3" and "every section the coverage table names is about the topic of its row" (the review of DOC1
+found a stale section number, B8 for B10, that the old tests let through). Please copy the file
+below over `tools/check-docs.test.mjs` once more; `tools/make-differences.mjs` is unchanged. Both
+tests pass on this round's documents (14 of 14 with the copy in `build/DOC1`), and the second fails
+when the stale number is put back. `docs/DIFFERENCES.md` is rebuilt (W1's and DV4's fragments are
+in it, and a hand-written part 5, "Known limitations", which the script keeps like parts 3 and 4).
+The help page `Port/differences.htm` still has to be renewed by H1 or the orchestrator.
 
 DOC1 owns no code path (section 8 gives it only documents), so its tools and their test live in
 `build/DOC1/` on the machine where DOC1 ran, which is not in Git. This request asks the gate to
@@ -251,6 +269,45 @@ test('the README carries the first-start steps of section 11, the same text as t
   const notes = releaseNotes('0.0.0', firstStartSection(read('docs/differences/DV3.md')), '13.0');
   assert.ok(notes.includes('## Opening the Mac app for the first time'));
   for (const phrase of ['Open Anyway', 'xattr -dr com.apple.quarantine /Applications/EASy68K.app']) assert.ok(notes.includes(phrase), phrase);
+});
+
+test('the manual list carries the same first-start steps as the README and DV3', () => {
+  assert.equal(firstStart(read('docs/MANUAL-TEST-MAC.md')), firstStart(read('docs/differences/DV3.md')));
+});
+
+/**
+ * The sections (### headings) of the manual list that the coverage table may name, and the topic
+ * each row that names one is about: a section a row names must have that topic in its title. This
+ * catches a stale number after the sections were renumbered (review of DOC1, wave three: the
+ * shortcut row named B8, "A long session in Safari", instead of B10).
+ */
+const COVERAGE_TOPICS = [
+  { row: /^Browser shortcut table/, title: /shortcut/i },
+  { row: /^Keyboard on a real MacBook/, title: /keyboard|layout/i },
+  { row: /^Safari itself/, title: /Safari|first program/i },
+  { row: /^Full screen/, title: /full screen/i },
+  { row: /^Printing/, title: /print/i },
+  { row: /^A serial adapter/, title: /serial|network|Mac app/i },
+  { row: /^VoiceOver/, title: /VoiceOver/i },
+  { row: /^A long session/, title: /long session/i },
+  { row: /W3-key-recording/, title: /record|keyboard/i },
+  { row: /FS2\.md/, title: /folder/i },
+  { row: /DOC1\.md/, title: /README/i },
+];
+
+test('every section the coverage table names is about the topic of its row', () => {
+  const manual = read('docs/MANUAL-TEST-MAC.md');
+  const titles = Object.fromEntries([...manual.matchAll(/^### ([A-Z]\d+)\. (.*)$/gm)].map((m) => [m[1], m[2]]));
+  const coverage = manual.slice(manual.indexOf('## Which check covers which item of the plan'));
+  const rows = coverage.split('\n').filter((line) => /^\| (?!Item|---|From)/.test(line));
+  for (const row of rows) {
+    const [first, checks] = row.split('|').slice(1, 3).map((cell) => cell.trim());
+    const sections = [...checks.matchAll(/\b([A-Z]\d+)\b(?!-)/g)].map((m) => m[1]).filter((id) => id in titles);
+    if (sections.length === 0) continue;
+    const topic = COVERAGE_TOPICS.find((entry) => entry.row.test(first));
+    assert.ok(topic, `coverage row "${first.slice(0, 60)}" names ${sections.join(', ')}: add its topic to COVERAGE_TOPICS`);
+    for (const id of sections) assert.match(titles[id], topic.title, `row "${first.slice(0, 40)}" names ${id}, "${titles[id]}"`);
+  }
 });
 
 test('the README says nothing that is not true today', () => {

@@ -87,7 +87,10 @@ export function FilesPanel() {
     void (async () => {
       const parent = await folderFor(ctx, target(), fallbackDir);
       const created = await newFolder(ctx, parent);
-      if (created && model) await model.reveal(created);
+      // Only a new folder moves the focus to the tree (where it is selected). On Cancel the dialog
+      // service has already put the focus back where it was before the dialog opened (2.10; Q1-1).
+      if (!created) return;
+      if (model) await model.reveal(created);
       treeRef.current?.focus();
     })();
   };
@@ -96,7 +99,8 @@ export function FilesPanel() {
     if (!path) return;
     void (async () => {
       const renamed = await renamePath(ctx, path);
-      if (renamed && model) await model.reveal(renamed);
+      if (!renamed) return; // Cancel: the dialog service returns the focus (2.10; Q1-1)
+      if (model) await model.reveal(renamed);
       treeRef.current?.focus();
     })();
   };

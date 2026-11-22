@@ -5,7 +5,7 @@ import { useSyncExternalStore } from 'react';
 import type { DocumentState } from '../../contracts';
 import { useAppContext, useAppState } from '../../state/context';
 import { editorSession } from './session';
-import { statusTexts } from './status';
+import { statusTexts, windowStatusText } from './status';
 
 export function EditorStatusBar({ doc }: { doc: DocumentState }) {
   const ctx = useAppContext();
@@ -46,9 +46,15 @@ export function EditorStatusBar({ doc }: { doc: DocumentState }) {
 
 /** Editor mode's window status bar: the active document's full path (the tab shows the name). */
 export function EditorWindowStatus() {
+  const ctx = useAppContext();
+  const linkedLabel = ctx.vfs.backends().find((backend) => backend.mount === 'linked')?.label;
   const active = useAppState((state) => {
     const doc = state.documents.items.find((item) => item.id === state.documents.activeId);
-    return doc ? (doc.path ?? doc.name) : '';
+    return doc ? windowStatusText(doc.path, doc.name, linkedLabel) : '';
   });
-  return <span className="e68-statusbar__cell e68-statusbar__cell--grow">{active}</span>;
+  return (
+    <span className="e68-statusbar__cell e68-statusbar__cell--grow" data-e68-editor-status="path">
+      {active}
+    </span>
+  );
 }

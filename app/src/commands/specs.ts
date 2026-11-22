@@ -108,6 +108,9 @@ const ROWS: Record<KnownCommandId, Row> = {
   'sim.options.textWrap': { caption: 'Output Window Text &Wrap', kind: 'check' },
   'sim.options.transfer': { caption: 'Import/Export Settings...' },
   'sim.options.speed': { caption: 'Execution Speed...' },
+  // added (1.5; docs/requests/DV4-serial-ports-command.md): the COMn to device map of the desktop
+  // app (3.3.4). Its handler (features/desktop-devices) is enabled in the desktop app only.
+  'sim.options.serialPorts': { caption: 'Serial &Ports...' },
   // ---- Simulator: Help, context menu, keys, panels
   'sim.help.help': { caption: '&Sim68K Help' },
   'sim.help.about': { caption: '&About Sim68K' },

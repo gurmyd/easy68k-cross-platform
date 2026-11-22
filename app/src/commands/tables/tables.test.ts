@@ -214,6 +214,8 @@ const SIM_MENUS = trim(`
   Import/Export Settings...
   Execution Speed...
   ---
+  Serial &Ports...
+  ---
   Port Ad&ditions...
 &Help
   &Sim68K Help
@@ -338,7 +340,7 @@ const ORIGINAL_NODES: Record<string, number> = {
   'simulator.search': 3,
   'simulator.run': 13,
   'simulator.view': 8,
-  'simulator.options': 19,
+  'simulator.options': 21, // with main's Serial Ports... (1.5) and its separator
   'simulator.help': 5,
   'easybin.file': 9,
   'easybin.help': 5,

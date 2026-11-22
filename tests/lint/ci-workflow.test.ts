@@ -9,11 +9,17 @@
 // 2. The e2e-stability guard of the plan job (ARCHITECTURE.md 6.9 item 10): the 20 repetitions run
 //    on a manual run (unless its input is unticked) and on the push of a v* tag, not on every push,
 //    pull request or the weekly schedule. The plan step's script is run with bash, as on GitHub.
+// 3. The other guards of the plan job that depend on the event or on the push's changes (gate I3
+//    preparation): perf and perf_full (6.9 item 9), readme (DOC1 item 3) and desktop-dev, which
+//    also runs when only tests/desktop/dev changed (DV2-desktop-dev-paths.md).
+//
+// Where no bash is found the guard cases are skipped with a printed note; where CI is set that is a
+// failure instead (Git for Windows' bash is found even when it is not on PATH).
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
@@ -23,6 +29,7 @@ const workflow = readFileSync(
   'utf8',
 );
 const lines = workflow.split(/\r?\n/);
+const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 
 interface Step {
   name: string;
@@ -108,10 +115,180 @@ function guardScript(): string {
   return body.join('\n');
 }
 
-const bash = spawnSync('bash', ['-c', 'echo ok'], { encoding: 'utf8' });
-const haveBash = bash.status === 0 && bash.stdout.trim() === 'ok';
+/** The table `checks` of the guard script: output name -> the file that turns its step on. */
+function checkTable(): Map<string, string> {
+  const script = guardScript();
+  const start = script.indexOf("checks='");
+  const end = script.indexOf("'", start + "checks='".length);
+  expect(start).toBeGreaterThan(0);
+  const table = new Map<string, string>();
+  for (const row of script.slice(start + "checks='".length, end).split('\n')) {
+    const [name, file] = row.trim().split(/\s+/);
+    if (name && file) table.set(name, file);
+  }
+  return table;
+}
 
-describe.skipIf(!haveBash)('ci.yml: the e2e-stability guard (6.9 item 10)', () => {
+/** Every browser check script (check-<name>.mjs) of the application and of tests/. */
+function checkScripts(): string[] {
+  const found: string[] = [];
+  const walk = (relativeDir: string): void => {
+    for (const entry of readdirSync(join(repoRoot, relativeDir), { withFileTypes: true })) {
+      const path = `${relativeDir}/${entry.name}`;
+      if (entry.isDirectory()) {
+        if (!['node_modules', 'dist', 'test-results', 'playwright-report'].includes(entry.name)) walk(path);
+      } else if (/^check-[\w-]+\.mjs$/.test(entry.name)) found.push(path);
+    }
+  };
+  walk('app/src');
+  walk('tests');
+  return found.sort();
+}
+
+describe('ci.yml and package.json: every browser check runs in CI', () => {
+  // A check script nobody runs proves nothing (X3, DV4, P1 and Q1 each waited a gate for this).
+  const table = checkTable();
+  const files = new Set(table.values());
+  const scripts = (
+    JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')) as { scripts: Record<string, string> }
+  ).scripts;
+
+  it('finds the table of the plan step', () => {
+    expect(table.size).toBeGreaterThanOrEqual(28);
+  });
+
+  // Checks with a job of their own instead of a step of browser-checks: file -> root script.
+  const OWN_JOBS: Record<string, string> = { 'tests/perf/check-perf.mjs': 'check:perf' };
+
+  it.each(checkScripts().filter((file) => !(file in OWN_JOBS)))("%s is in the plan step's table", (file) => {
+    expect([...files]).toContain(file);
+  });
+
+  it.each(Object.entries(OWN_JOBS).map(([file, script]) => ({ file, script })))(
+    '$file: the root script $script runs it and a job of ci.yml runs that script',
+    ({ file, script }) => {
+      expect(scripts[script]).toBe(`node ${file}`);
+      expect(workflow).toMatch(new RegExp(`npm run ${script} -- `));
+    },
+  );
+
+  it.each([...table.entries()].map(([name, file]) => ({ name, file })))(
+    '$name: a root script runs $file and a step of ci.yml runs that script under its guard',
+    ({ name, file }) => {
+      // check:engine-browsers runs the binding's browser suite through tools/check-engine-browsers.mjs.
+      const runs = name === 'engine_browsers' ? 'tools/check-engine-browsers.mjs' : file;
+      const script = Object.entries(scripts).find(([, command]) => command === `node ${runs}`)?.[0];
+      expect(script, `no root script "node ${runs}"`).toBeDefined();
+      const guarded = new RegExp(`needs\\.plan\\.outputs\\.${name} == 'true'`);
+      const step = steps().find(
+        (candidate) =>
+          candidate.text.some((line) => guarded.test(line)) &&
+          candidate.text.some((line) => new RegExp(`run: npm run ${script}( |$)`).test(line.trim())),
+      );
+      expect(step, `no step runs "npm run ${script}" under needs.plan.outputs.${name}`).toBeDefined();
+    },
+  );
+});
+
+/**
+ * A bash that runs the guard script as GitHub does. On Windows, `bash` on PATH may be missing or be
+ * WSL's launcher, so Git for Windows' own bash (next to the git that is on PATH) is tried first.
+ */
+function findBash(): string | null {
+  const candidates: string[] = [];
+  if (process.platform === 'win32') {
+    const exec = spawnSync('git', ['--exec-path'], { encoding: 'utf8' });
+    if (exec.status === 0 && exec.stdout.trim() !== '') {
+      // <Git>/mingw64/libexec/git-core -> <Git>
+      const gitRoot = resolve(exec.stdout.trim(), '..', '..', '..');
+      candidates.push(join(gitRoot, 'bin', 'bash.exe'), join(gitRoot, 'usr', 'bin', 'bash.exe'));
+    }
+  }
+  candidates.push('bash');
+  for (const candidate of candidates) {
+    if (candidate !== 'bash' && !existsSync(candidate)) continue;
+    const probe = spawnSync(candidate, ['-c', 'echo ok'], { encoding: 'utf8' });
+    if (probe.status === 0 && probe.stdout.trim() === 'ok') return candidate;
+  }
+  return null;
+}
+
+const bash = findBash();
+const NO_BASH =
+  'tests/lint/ci-workflow.test.ts: no bash found (not on PATH, and no Git for Windows next to git), so the ' +
+  "cases that run the plan job's guard script are SKIPPED here. Install Git for Windows or put bash on PATH " +
+  'to run them; CI has bash and runs them.';
+if (bash === null) console.warn(NO_BASH);
+
+describe('ci.yml: a bash for the guard cases', () => {
+  // Where CI is set a missing bash is a failure, so that the guard cases cannot vanish silently.
+  it.runIf(bash === null && process.env.CI !== undefined && process.env.CI !== '')('is found (required in CI)', () => {
+    expect.fail(NO_BASH);
+  });
+  it.runIf(bash !== null)(`is found: ${bash ?? ''}`, () => {
+    expect(bash).not.toBeNull();
+  });
+});
+
+/** Environment that isolates a scratch Git repository from the user's and the system's Git settings. */
+function isolatedGitEnv(dir: string): NodeJS.ProcessEnv {
+  const config = join(dir, 'gitconfig');
+  writeFileSync(config, '');
+  return {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: config,
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_AUTHOR_NAME: 'ci-guard-test',
+    GIT_AUTHOR_EMAIL: 'ci-guard-test@example.invalid',
+    GIT_COMMITTER_NAME: 'ci-guard-test',
+    GIT_COMMITTER_EMAIL: 'ci-guard-test@example.invalid',
+  };
+}
+
+/**
+ * Runs the plan job's guard script with bash -eo pipefail (GitHub's `shell: bash`) in `cwd` and
+ * returns its outputs and step summary.
+ */
+function runGuards(cwd: string, vars: Record<string, string>): { outputs: string; summary: string } {
+  const dir = mkdtempSync(join(tmpdir(), 'ci-guards-'));
+  try {
+    const script = join(dir, 'guards.sh');
+    writeFileSync(script, guardScript());
+    const output = join(dir, 'output.txt');
+    const summary = join(dir, 'summary.txt');
+    writeFileSync(output, '');
+    writeFileSync(summary, '');
+    const result = spawnSync(
+      bash as string,
+      ['--noprofile', '--norc', '-eo', 'pipefail', script.replaceAll('\\', '/')],
+      {
+        cwd,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          EVENT: 'push',
+          REF: 'refs/heads/main',
+          STABILITY_INPUT: '',
+          README_INPUT: '',
+          BEFORE: '',
+          PR_BASE: '',
+          ...vars,
+          GITHUB_OUTPUT: output,
+          GITHUB_STEP_SUMMARY: summary,
+        },
+      },
+    );
+    expect(result.status, result.stderr).toBe(0);
+    return { outputs: readFileSync(output, 'utf8'), summary: readFileSync(summary, 'utf8') };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const valueOf = (outputs: string, name: string): string | undefined =>
+  new RegExp(`^${name}=(true|false)$`, 'm').exec(outputs)?.[1];
+
+describe.skipIf(bash === null)('ci.yml: the e2e-stability guard (6.9 item 10)', () => {
   const cases: { event: string; ref: string; input: string; stability: boolean }[] = [
     { event: 'push', ref: 'refs/heads/main', input: '', stability: false },
     { event: 'push', ref: 'refs/heads/gate3/x', input: '', stability: false },
@@ -125,40 +302,95 @@ describe.skipIf(!haveBash)('ci.yml: the e2e-stability guard (6.9 item 10)', () =
   it.each(cases)(
     '$event on $ref (input "$input"): e2e_stability=$stability',
     ({ event, ref, input, stability }) => {
-      const dir = mkdtempSync(join(tmpdir(), 'ci-guards-'));
+      const { outputs, summary } = runGuards(repoRoot, { EVENT: event, REF: ref, STABILITY_INPUT: input });
+      // The job needs the e2e suites; with none the guard is false whatever the event.
+      const expected = stability && valueOf(outputs, 'e2e') === 'true';
+      expect(outputs).toMatch(new RegExp(`^e2e_stability=${expected}$`, 'm'));
+      expect(summary).toMatch(/^e2e stability: /m);
+    },
+    30_000,
+  );
+});
+
+describe.skipIf(bash === null)('ci.yml: the perf and readme guards (6.9 item 9, DOC1 item 3)', () => {
+  // perf: the functional parts on every push and pull request; the whole check (perf_full, the
+  // thresholds of 6.9 item 9 judged) on a manual run and a v* tag; nothing on the weekly schedule.
+  // readme: weekly, and on a manual run with its input ticked.
+  const cases: { event: string; ref: string; input: string; perf: boolean; full: boolean; readme: boolean }[] = [
+    { event: 'push', ref: 'refs/heads/main', input: '', perf: true, full: false, readme: false },
+    { event: 'pull_request', ref: 'refs/pull/7/merge', input: '', perf: true, full: false, readme: false },
+    { event: 'push', ref: 'refs/tags/v1.0.0', input: '', perf: true, full: true, readme: false },
+    { event: 'workflow_dispatch', ref: 'refs/heads/main', input: 'false', perf: true, full: true, readme: false },
+    { event: 'workflow_dispatch', ref: 'refs/heads/main', input: 'true', perf: true, full: true, readme: true },
+    { event: 'schedule', ref: 'refs/heads/main', input: '', perf: false, full: false, readme: true },
+  ];
+
+  it.each(cases)(
+    '$event on $ref (readme input "$input"): perf=$perf, perf_full=$full, readme=$readme',
+    ({ event, ref, input, perf, full, readme }) => {
+      const { outputs } = runGuards(repoRoot, { EVENT: event, REF: ref, README_INPUT: input });
+      const havePerf = existsSync(join(repoRoot, 'tests', 'perf', 'check-perf.mjs'));
+      expect(valueOf(outputs, 'perf')).toBe(String(perf && havePerf));
+      expect(valueOf(outputs, 'perf_full')).toBe(String(full && havePerf));
+      expect(valueOf(outputs, 'readme')).toBe(String(readme));
+    },
+    30_000,
+  );
+});
+
+describe.skipIf(bash === null)('ci.yml: the desktop-dev guard (7.4; docs/requests/DV2-desktop-dev-paths.md)', () => {
+  // A scratch repository with the desktop suite's configuration; each case commits one changed file
+  // on top of the base commit and runs the guard script as for a push from the base.
+  const cases: { changed: string; desktopDev: boolean }[] = [
+    { changed: 'docs/notes.md', desktopDev: false },
+    { changed: 'tests/e2e/x.spec.ts', desktopDev: false },
+    { changed: 'tests/desktop/dev/programs.spec.ts', desktopDev: true },
+    { changed: 'app/src/x.ts', desktopDev: true },
+    { changed: 'desktop/src/x.ts', desktopDev: true },
+  ];
+
+  it.each(cases)(
+    'a push that changes only $changed: desktop_dev=$desktopDev',
+    ({ changed, desktopDev }) => {
+      const dir = mkdtempSync(join(tmpdir(), 'ci-desktop-dev-'));
       try {
-        const script = join(dir, 'guards.sh');
-        writeFileSync(script, guardScript());
-        const output = join(dir, 'output.txt');
-        const summary = join(dir, 'summary.txt');
-        writeFileSync(output, '');
-        writeFileSync(summary, '');
-        const repo = fileURLToPath(new URL('../..', import.meta.url));
-        const result = spawnSync('bash', [script.replaceAll('\\', '/')], {
-          cwd: repo,
-          encoding: 'utf8',
-          env: {
-            ...process.env,
-            EVENT: event,
-            REF: ref,
-            STABILITY_INPUT: input,
-            BEFORE: '',
-            PR_BASE: '',
-            GITHUB_OUTPUT: output,
-            GITHUB_STEP_SUMMARY: summary,
-          },
-        });
-        expect(result.status, result.stderr).toBe(0);
-        const outputs = readFileSync(output, 'utf8');
-        const e2e = /^e2e=(true|false)$/m.exec(outputs)?.[1];
-        // The job needs the e2e suites; with none (never on main) the guard is false whatever the event.
-        const expected = stability && e2e === 'true';
-        expect(outputs).toMatch(new RegExp(`^e2e_stability=${expected}$`, 'm'));
-        expect(readFileSync(summary, 'utf8')).toMatch(/^e2e stability: /m);
+        const env = isolatedGitEnv(dir);
+        const repo = join(dir, 'repo');
+        const git = (...args: string[]): string => {
+          const result = spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8', env });
+          expect(result.status, `git ${args.join(' ')}: ${result.stderr}`).toBe(0);
+          return result.stdout.trim();
+        };
+        const put = (path: string, text: string): void => {
+          mkdirSync(dirname(join(repo, path)), { recursive: true });
+          writeFileSync(join(repo, path), text);
+        };
+        mkdirSync(repo);
+        git('init', '-q');
+        put('tests/desktop/dev/playwright.config.ts', 'export default {};\n');
+        put('README.md', 'base\n');
+        git('add', '-A');
+        git('commit', '-q', '-m', 'base');
+        const base = git('rev-parse', 'HEAD');
+        put(changed, 'changed\n');
+        git('add', '-A');
+        git('commit', '-q', '-m', 'change');
+        const { outputs, summary } = runGuards(repo, { EVENT: 'push', BEFORE: base });
+        expect(valueOf(outputs, 'desktop_dev')).toBe(String(desktopDev));
+        expect(summary).toContain(`tests/desktop/dev/** changed: ${desktopDev}`);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
     },
     30_000,
   );
+
+  it('a push without a usable base (a new branch) runs it', () => {
+    const { outputs } = runGuards(repoRoot, {
+      EVENT: 'push',
+      BEFORE: '0000000000000000000000000000000000000000',
+    });
+    const haveSuite = existsSync(join(repoRoot, 'tests', 'desktop', 'dev', 'playwright.config.ts'));
+    expect(valueOf(outputs, 'desktop_dev')).toBe(String(haveSuite));
+  }, 30_000);
 });

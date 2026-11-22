@@ -3,7 +3,10 @@
 // Picks up every tests/conformance/<suite>/vitest.config.ts by glob; each
 // suite's configuration belongs to the package that owns the folder, so a new
 // suite needs no change here. tests/parity/vitest.config.ts (X2, the unit test
-// on matrix.json) is picked up the same way.
+// on matrix.json), tests/perf/vitest.config.ts (P1, the verdicts of check-perf
+// and the fixed programs on the real engines; docs/requests/P1-perf-scripts.md)
+// and tests/a11y/vitest.config.ts (Q1, the audit's own logic;
+// docs/requests/Q1-a11y-ci.md) are picked up the same way.
 //
 // Vitest 4 and later have no separate "workspace" file; this file keeps the
 // path the architecture names and declares the suites as `test.projects`.
@@ -15,7 +18,12 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
-const PROJECT_GLOBS = ['conformance/*/vitest.config.ts', 'parity/vitest.config.ts'];
+const PROJECT_GLOBS = [
+  'conformance/*/vitest.config.ts',
+  'parity/vitest.config.ts',
+  'perf/vitest.config.ts',
+  'a11y/vitest.config.ts',
+];
 const found = PROJECT_GLOBS.flatMap((pattern) => globSync(pattern, { cwd: root }));
 
 if (found.length === 0) {

@@ -62,6 +62,7 @@ export const NOT_MODELLED_BY_DOUBLES: Readonly<Record<string, string>> = {
   'trap15-a/a56-files-same-file-twice':
     "the first stream's read after a task 52 truncated the file returns the bytes it had buffered",
   'trap15-a/a59-files-buffer-edges': 'what a second stream sees of the 512-byte write buffer',
+  'trap15-a/a60-files-large-read': "the first stream's next read returns the bytes of the block it had buffered",
 };
 
 interface OpenStream {

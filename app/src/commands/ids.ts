@@ -89,6 +89,7 @@ export const COMMAND_IDS = [
   'sim.options.textWrap',
   'sim.options.transfer',
   'sim.options.speed',
+  'sim.options.serialPorts',
   'sim.help.help',
   'sim.help.about',
   // Simulator - context menu, keys, panels (1.3.5, 1.3.6)

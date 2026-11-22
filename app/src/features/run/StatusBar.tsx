@@ -18,7 +18,9 @@ export function SimStatusBar() {
   }, shallowEqual);
   return (
     <>
-      <span className="e68-statusbar__cell" data-e68-status="run">
+      {/* A polite live region (2.11: "a halt ... announced"; finding Q1-5 of docs/integration/rc.md):
+          Halted, Stopped, Running and the other run states are told when they change. */}
+      <span className="e68-statusbar__cell" data-e68-status="run" role="status">
         {cells.run}
       </span>
       <span className="e68-statusbar__cell e68-statusbar__cell--mono" data-e68-status="pc">

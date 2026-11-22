@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { Bytes, Vfs } from '../../contracts';
 import { BrowserBackend } from '../../fs/browser-backend';
 import { MemoryBackend } from '../../fs/memory-backend';
-import { createVfs } from '../../fs/vfs';
+import { createVfs, fsError } from '../../fs/vfs';
 import { readZip } from '../../fs/zip';
 import {
   buildExport,
@@ -208,6 +208,114 @@ describe('renameEntry', { timeout: 60_000 }, () => {
     expect(await renameEntry(vfs, '/browser/work', 'Work')).toBe('/browser/Work');
     expect(await contents(vfs, '/browser/Work')).toEqual(await contents(vfs, '/browser/Work'));
     await expect(renameEntry(vfs, '/browser/Work/PROG.X68', 'old.L68')).rejects.toThrow('already exists');
+  });
+});
+
+/**
+ * The desktop app's /disk on a disk that ignores letter case (macOS, Windows), with one granted root:
+ * every path names the stored entry in any spelling, and stat, list and readFile refuse whatever lies
+ * outside the granted root, as desktop/src/fs-ipc.ts does. With `guardWrites` the writes are refused
+ * there too, as the real main process refuses them.
+ */
+class CaseInsensitiveGrantedDisk extends MemoryBackend {
+  constructor(
+    private readonly root: string,
+    private readonly guardWrites = false,
+  ) {
+    super({ mount: 'disk', kind: 'disk', label: 'This Mac' });
+  }
+  private async real(rel: string): Promise<string> {
+    const out: string[] = [];
+    let found = true;
+    for (const segment of rel === '' ? [] : rel.split('/')) {
+      let chosen = segment;
+      if (found) {
+        const entries = await super.list(out.join('/')).catch(() => null);
+        const hit = entries?.find((e) => e.name.toLowerCase() === segment.toLowerCase());
+        if (hit) chosen = hit.name;
+        else found = false;
+      }
+      out.push(chosen);
+    }
+    return out.join('/');
+  }
+  private async allowed(rel: string, guard = true): Promise<string> {
+    const real = await this.real(rel);
+    const inside =
+      real.toLowerCase() === this.root.toLowerCase() || real.toLowerCase().startsWith(`${this.root.toLowerCase()}/`);
+    if (guard && !inside) throw fsError('io', `refused: outside the folders this app may use: /disk/${rel}`);
+    return real;
+  }
+  override async list(rel: string) {
+    return super.list(await this.allowed(rel));
+  }
+  override async stat(rel: string) {
+    return super.stat(await this.allowed(rel));
+  }
+  override async readFile(rel: string) {
+    return super.readFile(await this.allowed(rel));
+  }
+  override async writeFile(rel: string, data: Bytes) {
+    return super.writeFile(await this.allowed(rel, this.guardWrites), data);
+  }
+  override async mkdirp(rel: string) {
+    return super.mkdirp(await this.allowed(rel, this.guardWrites));
+  }
+  override async remove(rel: string) {
+    return super.remove(await this.allowed(rel, this.guardWrites));
+  }
+  /** The tree as stored, outside the grant included. */
+  async storedNames(rel: string): Promise<string[]> {
+    return (await super.list(rel)).map((e) => e.name).sort();
+  }
+}
+
+// docs/requests/W1-case-only-rename.md: resolve keeps the given spelling of a segment whose folder
+// may not be listed, so renameEntry must compare without regard to case.
+describe('renameEntry: a change of letter case of a granted root on /disk', { timeout: 60_000 }, () => {
+  async function disk(guardWrites: boolean) {
+    const backend = new CaseInsensitiveGrantedDisk('Users/me/demo', guardWrites);
+    await backend.writeFile('Users/me/demo/prog.X68', ascii('prog'));
+    await backend.writeFile('Users/me/demo/Sub/data.txt', ascii('data'));
+    const vfs = createVfs();
+    vfs.mount(backend);
+    return { vfs, backend };
+  }
+
+  it('resolve gives the new spelling for the root itself, which is the entry being renamed', async () => {
+    const { vfs } = await disk(false);
+    expect(await vfs.resolve('/disk/Users/me', 'DEMO')).toBe('/disk/Users/me/DEMO');
+  });
+
+  it('is no longer refused as "already exists"', async () => {
+    // The staging folder of a case-only rename lies beside the root, outside the grant, and the main
+    // process refuses it: the rename fails with that refusal and nothing is lost (errata FS1.md 25).
+    for (const guardWrites of [false, true]) {
+      const { vfs, backend } = await disk(guardWrites);
+      const failure = await renameEntry(vfs, '/disk/Users/me/demo', 'DEMO').then(
+        () => 'renamed',
+        (error: Error) => error.message,
+      );
+      expect(failure).not.toContain('already exists');
+      expect(failure).toContain('refused: outside the folders this app may use');
+      expect(await backend.storedNames('Users/me')).toEqual(['demo']);
+      expect(text(await vfs.readFile('/disk/Users/me/demo/prog.X68'))).toBe('prog');
+      expect(text(await vfs.readFile('/disk/Users/me/demo/Sub/data.txt'))).toBe('data');
+    }
+  });
+
+  it('a change of letter case below the granted root works and keeps the files', async () => {
+    const { vfs, backend } = await disk(true);
+    expect(await renameEntry(vfs, '/disk/Users/me/demo/Sub', 'SUB')).toBe('/disk/Users/me/demo/SUB');
+    expect(await backend.storedNames('Users/me/demo')).toEqual(['SUB', 'prog.X68']);
+    expect(text(await vfs.readFile('/disk/Users/me/demo/SUB/data.txt'))).toBe('data');
+    expect(await renameEntry(vfs, '/disk/Users/me/demo/prog.X68', 'PROG.x68')).toBe('/disk/Users/me/demo/PROG.x68');
+    expect(await backend.storedNames('Users/me/demo')).toEqual(['PROG.x68', 'SUB']);
+  });
+
+  it('a different name that exists in another spelling is still refused', async () => {
+    const { vfs } = await disk(false);
+    await expect(renameEntry(vfs, '/disk/Users/me/demo/prog.X68', 'SUB')).rejects.toThrow('"SUB" already exists.');
   });
 });
 

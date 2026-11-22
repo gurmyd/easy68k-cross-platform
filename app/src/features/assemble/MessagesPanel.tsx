@@ -13,8 +13,9 @@
 //
 // Owner: E5.
 
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import type { EditorMessage } from '../../contracts';
+import { messagesAnnouncement } from './announce';
 import { foldCase } from '../../core/paths/winpath';
 import { useAppContext, useAppState } from '../../state/context';
 import { shallowEqual } from '../../state/store';
@@ -59,6 +60,21 @@ export function MessagesPanel() {
   const selectedRow = selection.list === messages ? selection.row : -1;
   const menu = useContextMenu();
 
+  // A new assembly's messages are announced politely by the hidden log region (2.11; Q1-3). Each
+  // announcement is a new child, so that the same messages after a second F9 are read again.
+  const announce = useRef<HTMLDivElement>(null);
+  const shown = useRef<{ id: string | null; list: readonly EditorMessage[] }>({ id, list: messages });
+  useLayoutEffect(() => {
+    const before = shown.current;
+    shown.current = { id, list: messages };
+    const text = messagesAnnouncement(before.list, messages, before.id === id, path);
+    const target = announce.current;
+    if (text === null || !target) return;
+    const line = document.createElement('div');
+    line.textContent = text;
+    target.replaceChildren(line);
+  }, [id, messages, path]);
+
   const columns: DataGridColumn<EditorMessage>[] = [
     { id: 'line', header: LINE_HEADER, width: '50px', mono: true, render: (row) => String(row.line) },
     { id: 'text', header: MESSAGE_HEADER, width: 'minmax(0, 1fr)' },
@@ -97,6 +113,7 @@ export function MessagesPanel() {
         ]}
         {...menu.menuProps}
       />
+      <div ref={announce} className="e68-sr" role="log" aria-live="polite" aria-label={MESSAGES_LABEL} />
     </div>
   );
 }

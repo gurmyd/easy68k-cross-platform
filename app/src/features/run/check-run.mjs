@@ -50,7 +50,14 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
-import { STEADY_GAP_MS, judgeDelays, judgeRate } from './run-verdicts.mjs';
+import {
+  SLICE_BUDGET_MS,
+  SLICE_FRAME_SHARE,
+  STEADY_GAP_MS,
+  judgeDelays,
+  judgeMaximum,
+  judgeRate,
+} from './run-verdicts.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -433,25 +440,81 @@ async function runPass(browser, name, programs) {
   );
   await pressInMainWindow(page, 'F9');
   await waitForPhase(page, 'running');
-  // Three measurements of half a second, the best counts. What is asked is "far more than the
-  // default speed"; how much more depends on the machine.
-  const fastRuns = [];
-  for (let i = 0; i < 3; i++) {
-    fastRuns.push(
-      await page.evaluate(async () => {
-        const { engine } = window.__easy68k.ctx.sim;
-        const t0 = performance.now();
-        const s0 = engine.stepCount;
-        await new Promise((r) => setTimeout(r, 500));
-        return ((engine.stepCount - s0) >>> 0) / ((performance.now() - t0) / 1000);
-      }),
+  // What Maximum promises (4.2, 4.5.6) is that no instruction count throttles it, only the
+  // engine's time budget per frame; how fast that is depends on the machine and its frames (GitHub's
+  // macOS runner: Chromium frames 55 to 120 ms apart, 1.1 to 2.2 million per second; errata SH8.md
+  // entry 41). So three pairs of half-second windows, back to back in this run: the default speed,
+  // then Maximum. Each window counts the instructions, the display frames, the engine time of the
+  // controller's engine.run calls and the time budget the governor allows for those frames.
+  // judgeMaximum: in one pair, Maximum ran the engine for most of its budget and executed at least
+  // twice the default's rate. The absolute figure of 6.9 item 9 is tests/perf's, on ubuntu-latest.
+  const measureSpeed = (mode) =>
+    page.evaluate(
+      ({ mode, budgetMs, frameShare }) =>
+        new Promise((done) => {
+          const { ctx } = window.__easy68k;
+          ctx.settings.update((s) => ({
+            ...s,
+            sim: { ...s.sim, speed: { mode, instructionsPerSecond: s.sim.speed.instructionsPerSecond } },
+          }));
+          // Let the controller take the new speed (it reads it at every slice) before counting.
+          setTimeout(() => {
+            const { engine } = ctx.sim;
+            const ownRun = Object.prototype.hasOwnProperty.call(engine, 'run');
+            const original = engine.run;
+            let busy = 0;
+            const timed = function (max) {
+              const t = performance.now();
+              try {
+                return original.call(this, max);
+              } finally {
+                busy += performance.now() - t;
+              }
+            };
+            engine.run = timed;
+            const wrapped = engine.run === timed;
+            const t0 = performance.now();
+            const s0 = engine.stepCount;
+            const budgetOf = (gap) => Math.min(budgetMs, frameShare * Math.max(gap, 0));
+            let last = t0;
+            let budget = 0;
+            let longest = 0;
+            let frames = 0;
+            let ended = false;
+            const frame = (now) => {
+              if (ended) return;
+              budget += budgetOf(now - last);
+              longest = Math.max(longest, now - last);
+              frames++;
+              last = now;
+              window.requestAnimationFrame(frame);
+            };
+            window.requestAnimationFrame(frame);
+            // The window ends by a timer, so that a page without frames ends it too.
+            setTimeout(() => {
+              ended = true;
+              const now = performance.now();
+              budget += budgetOf(now - last);
+              longest = Math.max(longest, now - last);
+              const executed = (engine.stepCount - s0) >>> 0;
+              if (ownRun) engine.run = original;
+              else delete engine.run;
+              done({ executed, ms: now - t0, frames, longest, busy, budget, wrapped });
+            }, 500);
+          }, 200);
+        }),
+      { mode, budgetMs: SLICE_BUDGET_MS, frameShare: SLICE_FRAME_SHARE },
     );
-  }
+  const pairs = [];
+  for (let i = 0; i < 3; i++) pairs.push({ normal: await measureSpeed('original'), max: await measureSpeed('max') });
+  const maximum = judgeMaximum(pairs);
+  const wrapped = pairs.every((pair) => pair.normal.wrapped && pair.max.wrapped);
   check(
-    `${p} F9 runs; at Maximum the program executes far more than a million instructions per second (best of three)`,
-    Math.max(...fastRuns) > 2.5e6,
-    fastRuns.map((rate) => Math.round(rate).toLocaleString('en-US')).join(', '),
+    `${p} F9 runs; at Maximum the program executes far more than at the default speed, held back only by the engine's time per frame (best of three pairs)`,
+    wrapped && maximum.ok,
+    `${wrapped ? '' : 'engine.run could not be timed; '}${maximum.detail}`,
   );
+  for (const note of maximum.notes) console.log(`  --   ${p} ${note}`);
   check(
     `${p} the status bar shows the speed setting`,
     (await statusText(page)).includes('speed: Maximum'),

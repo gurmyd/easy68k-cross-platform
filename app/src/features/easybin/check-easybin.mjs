@@ -376,6 +376,13 @@ async function functionalSteps(name, theme) {
     parts[1] && parts[1].join(',') === mem.filter((_, i) => i % 4 === 1).join(','),
   );
   await page.screenshot({ path: join(outDir, `${name}-${theme}-split4.png`), timeout: LOAD_TIMEOUT });
+  // Q1-6: the drawn digits of File Split are exposed with their label (role img), not a dropped aria-label.
+  const splitImage = await page.getByRole('img', { name: 'File Split: 4 file(s)', exact: true }).count();
+  check(
+    `${p} the File Split count is exposed as an image named "File Split: 4 file(s)"`,
+    splitImage === 1,
+    `${splitImage} found`,
+  );
 
   // Fill and Copy.
   await setField(page, 'From', '002000');

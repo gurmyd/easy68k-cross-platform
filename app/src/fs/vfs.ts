@@ -18,10 +18,12 @@
 //   the folder it was asked for (not of the parents it created on the way), also when the folder
 //   existed already. mount() and unmount() are reported, synchronously, as a 'write' and a
 //   'remove' of "/<mount>" (gate I2, errata FS2.md C1, errata W1.md entry 14); an unmount of a
-//   name that is not mounted reports nothing.
+//   name that is not mounted reports nothing. An appendFile is reported with `appended` (the size
+//   before and the bytes added), learnt by a stat inside the path's queue just before the append.
 // - resolve() finds each segment's stored spelling in the listing of its folder. A folder that may
 //   not be listed (the desktop app's folders above the granted roots, 7.6) keeps the segment as
-//   given; it does not make the name "not found" (defect D1, errata W1.md entry 15).
+//   given; it does not make the name "not found" (defect D1, errata W1.md entry 15). Only an
+//   FsError counts as such a refusal: any other exception of list() gives null (entry 16.1).
 // - Failures reject with an FsError (fsError(), isFsError()).
 //
 // Owner: W1.
@@ -127,7 +129,26 @@ class VirtualFileSystem implements Vfs {
   }
 
   appendFile(path: VPath, data: Bytes): Promise<void> {
-    return this.mutate(path, 'write', (backend, rel) => backend.appendFile(rel, data));
+    // The change says what was appended (VfsChange.appended, request SH6-append-change), so that a
+    // view holding a copy of the file need not read it whole again. The size before is taken inside
+    // the path's queue, just before the append; if it cannot be learnt, the change says nothing more
+    // than 'write', and the append itself goes ahead unchanged. The bytes are copied at the call, so
+    // that the file and the change both hold what the caller passed, even if it reuses its buffer.
+    const copy = data.slice();
+    let appended: VfsChange['appended'];
+    return this.mutate(
+      path,
+      'write',
+      async (backend, rel) => {
+        const before = await backend.stat(rel).then(
+          (stat) => (stat === null ? 0 : stat.kind === 'file' ? stat.size : null),
+          () => null,
+        );
+        await backend.appendFile(rel, copy);
+        if (before !== null) appended = { at: before, data: copy };
+      },
+      () => (appended === undefined ? {} : { appended }),
+    );
   }
 
   remove(path: VPath): Promise<void> {
@@ -167,7 +188,11 @@ class VirtualFileSystem implements Vfs {
       try {
         entries = await mounted.backend.list(stored.join('/'));
       } catch (error) {
-        if (isFsError(error, 'not-found') || isFsError(error, 'not-directory')) return null;
+        // Only a backend's own refusal (an FsError other than not-found / not-directory) means "may
+        // not be listed". Anything else (a TypeError, a plain Error without a code) is a fault of
+        // the backend, not an answer about the folder: the name is not found, as before the repair
+        // of D1, and the walk does not go on past it (errata W1.md entry 16.1).
+        if (!isFsError(error) || error.code === 'not-found' || error.code === 'not-directory') return null;
         stored.push(segment);
         lastUnlisted = isLast;
         continue;
@@ -269,6 +294,7 @@ class VirtualFileSystem implements Vfs {
     path: VPath,
     kind: VfsChange['kind'],
     op: (backend: FileSystemBackend, rel: string) => Promise<void>,
+    extra: () => Partial<VfsChange> = () => ({}),
   ): Promise<void> {
     let located: { backend: FileSystemBackend; rel: string };
     try {
@@ -287,7 +313,7 @@ class VirtualFileSystem implements Vfs {
     void tail.then(() => {
       if (this.tails.get(key) === tail) this.tails.delete(key);
     });
-    return result.then(() => this.emit({ path, kind, origin: 'local' }));
+    return result.then(() => this.emit({ ...extra(), path, kind, origin: 'local' }));
   }
 
   private emit(change: VfsChange): void {

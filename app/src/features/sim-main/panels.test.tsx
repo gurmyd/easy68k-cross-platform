@@ -14,7 +14,7 @@ import { applyMaskedEdit, REGISTER_FIELD, SR_FIELD, type MaskedEdit, type Masked
 import { beepWave } from './beep';
 import { FindDialog } from './FindDialog';
 import { feature } from './index';
-import { LISTING_HEADING, ListingPanel } from './ListingPanel';
+import { LISTING_HEADING, ListingPanel, ROW_NOTES, rowNote } from './ListingPanel';
 import { MessagesPanel } from './MessagesPanel';
 import { simMainOf } from './model';
 import { RegistersPanel, SR_FLAGS_CAPTION } from './RegistersPanel';
@@ -87,6 +87,19 @@ describe('markup', () => {
     expect(html).toContain('role="listbox"');
     expect(html).toContain('aria-label="Listing"');
     expect(html).toContain('data-e68-panel-focus');
+    // The hidden notes a breakpoint row and the PC row are described by (Q1-4, 2.11).
+    for (const note of ['bp', 'pc', 'both'] as const)
+      expect(html).toContain(`<span id="e68-listing-note-${note}" hidden="">${ROW_NOTES[note]}</span>`);
+  });
+
+  it('Listing: a breakpoint and the current instruction are told to a screen reader, not only drawn', () => {
+    expect(rowNote(false, false)).toBeNull();
+    expect(rowNote(true, false)).toBe('bp');
+    expect(rowNote(false, true)).toBe('pc');
+    expect(rowNote(true, true)).toBe('both');
+    expect(ROW_NOTES.bp).toMatch(/break\s*point/i);
+    expect(ROW_NOTES.both).toMatch(/break\s*point/i);
+    expect(ROW_NOTES.pc).toBe('current instruction');
   });
 
   it('Messages: a list of the message lines and a polite log region', () => {

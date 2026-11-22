@@ -12,7 +12,9 @@
 //     texts of both included files;
 //   - the other callers of Vfs.resolve on /disk: a name in another case, the assembler's INCLUDE
 //     collection, and the Files panel's rename (a change of letter case only keeps the file; a name
-//     that is taken is refused).
+//     that is taken is refused). EASyBIN's `existing()` and the Files panel's New Folder are not
+//     called here: they are thin wrappers that pass their name to Vfs.resolve, so they are covered
+//     only through Vfs.resolve itself (review of the repair of D1).
 //
 // The steps use the toolbar and the dialogs through the functions DV5's packaged checks use
 // (../packaged/programs/scenario.ts), so the development suite, which the CI job desktop-dev runs on
