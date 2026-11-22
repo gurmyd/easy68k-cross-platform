@@ -115,7 +115,8 @@ These keep further lines of the originals unchanged.
   D2 unchanged; T3: `tests/conformance/sim`, trap15-a `a31` and `a32`; errata T3.md F3, F4). Other
   wrapping counts now fail as the original's do (D0.W = 2) instead of returning the count. Tests:
   io.test.mjs ("file tasks 50-59 ..."), `app/src/engine/trap15.test.ts`, and the conformance
-  programs trap15-a `a30`-`a37`, `a51`-`a60` and the stream programs added with the model.
+  programs trap15-a `a30`-`a37` and `a51`-`a60`; `test/stdio.test.mjs` for the rules that no official
+  run measures yet (STDIO-MODEL.md section 9).
   `shim/simio.cpp` (`fileDialogReply`) tells `shim/hostfile.cpp` when a task 58 dialog was
   accepted (`easy68k_files_folder_changed`), and `shim/api.cpp` takes the size of the memory
   padding from `shim/easy68k.h` (`EASY68K_MEMORY_PADDING`), which the streams use to tell where

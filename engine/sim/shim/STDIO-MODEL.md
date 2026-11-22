@@ -12,13 +12,14 @@ implement it; `shim/hostfile.cpp` is the implementation.
 
 **Sources.** Every rule was read in the machine code of the official `SIM68K.exe` (SHA-256 of
 `docs/porting/ground-truth.md` section 2; disassembled with `llvm-objdump` of the pinned Emscripten
-SDK; addresses below) and then tested against the official program running under Wine with the
-probe programs of section 9. Each rule is marked:
+SDK; addresses below) and checked against what the official program produced under Wine for the
+conformance programs of `tests/conformance/sim` (section 9). The probe programs written for the
+rest could not be run in the official program during this work (section 9). Each rule is marked:
 
-- **measured**: a probe run in the official program shows it;
-- **read**: it is what the machine code does, and no probe shows it (because no 68000 program can
-  reach the state, or the oracle cannot set it up); stated so that an implementation does not have
-  to guess.
+- **measured**: a program run in the official program shows it (the goldens of the conformance
+  suite named with the rule);
+- **read**: it is what the machine code does, and no official run shows it yet; stated so that an
+  implementation does not have to guess.
 
 | Function | Address in SIM68K.exe | Called from |
 |---|---|---|
@@ -115,25 +116,28 @@ else `D0.W = 1` if `EOF` is set, 2 if not (D2 unchanged). `n == 0`: `fread` retu
 
 Consequences a program sees:
 
-- **R1** (measured: p06, a30, a59, a60) Reads of a file go through the buffer: a read of fewer than
+- **R1** (measured: a30, a59, a60; probe p06) Reads of a file go through the buffer: a read of fewer than
   512 bytes fills the buffer with up to 512 bytes from the handle's position and hands out from it;
   512 or more go straight to the program's memory in multiples of 512, the rest through the buffer.
-- **R2** (measured: p04, a30) A read that runs into the end of the file returns what there was
+- **R2** (measured: a30; probes p04, p05) A read that runs into the end of the file returns what there was
   (`D0 = 0`, `D2` = count) and sets `EOF`; the next read gives `D0 = 1`. `EOF` does not stop a read:
   a later read asks the handle again (and gets bytes another stream has written since, p05 A).
-- **R3** (measured: a51, p01, p02) **A read in the write state** (`level < 0`, after a task 54 with
+- **R3** (measured: a51, a53; probes p01, p02) **A read in the write state** (`level < 0`, after a task 54 with
   no seek since) takes `n` bytes from the buffer at `curp`, whatever is there - nothing comes from
   the file - and makes `level` more negative by `n`. The read succeeds with `D2 = n` (for any `n`
   below 4 GB minus 512). The bytes are those of the buffer after the written ones: what the buffer
   held before (section 7). Because `level` moved, the next flush writes `n` bytes fewer than were
   written (R6).
-- **R4** (read) A read of 512 bytes or more in the read state with data in the buffer takes the
+- **R4** (read; probe p06) A read of 512 bytes or more in the read state with data in the buffer takes the
   buffer's bytes first, then reads straight from the handle's position - which is the end of what
   the buffer was filled with, not the stream's position, when a write in the read state (R8) moved
   `curp`.
-- **R5** (measured: p02 G) Once `ERR` is set, a read of fewer than 512 bytes from an empty buffer
-  fails (`D0 = 2`) even after a seek (`fseek` does not clear `ERR`); a read of 512 or more still
-  reads the multiples of 512 straight from the handle.
+- **R5** (read; probes p02 G, p08 A) Once `ERR` is set, a read of fewer than 512 bytes from an
+  empty buffer gets nothing even after a seek (`fseek` does not clear `ERR`): `_fgetc` refuses,
+  and `_fread` then sets `EOF`, so the task gives `D0 = 1` (end of file), not 2. A read of 512 or
+  more still reads the multiples of 512 straight from the handle. `ERR` is set by a flush that
+  failed (R6) and by a `ReadFile` that failed (a count that wrapped the bounds test of task 53,
+  other than `$FFFFFFFF`, which gives `D0 = 2`).
 
 ## 5. Writing: `fwrite(buf, n, 1, fp)` (task 54)
 
@@ -156,26 +160,26 @@ returns `_fwrite(buf, n, fp) / n` and `writeFile` gives `D0.W = 0` for 1, 2 for 
 
 Consequences:
 
-- **R6** (measured: a51, a53, p02) A flush writes `bsize + level + 1` bytes from the **start** of
+- **R6** (measured: a51, a53; probe p02) A flush writes `bsize + level + 1` bytes from the **start** of
   the buffer, at the handle's position. After writes only that is what was written. After a read in
   the write state (R3) it is fewer: write 10 and read 3 leave 7 to write; write 5 and read 5 leave
   0 (the flush writes nothing and succeeds); write 5 and read 6 or more leave a negative count,
   whose `__write` fails (-1 is answered with 0 without a system call; -2 and below go to
   `WriteFile` with a count above 4 GB and fail): the flush fails and sets `ERR`.
-- **R7** (measured: a59, p06) The write buffer holds up to 512 bytes: a write that fits (also one
+- **R7** (measured: a59; probe p06) The write buffer holds up to 512 bytes: a write that fits (also one
   that fills it exactly, and one of exactly 512 bytes into an empty buffer) is only copied; one
   that does not fit flushes the buffer first; one of more than 512 bytes is written at once.
-- **R8** (measured: a52, p03) **A write in the read state** (`level > 0`, after a task 53 with
+- **R8** (measured: a52; probe p03) **A write in the read state** (`level > 0`, after a task 53 with
   data left in the buffer, no seek since) of up to 512 bytes is copied into the buffer at `curp`
   over the bytes read ahead, `level` grows by `n`, and nothing reaches the file - then or later:
   `fflush` does nothing while `level > 0`, a seek and a close discard the buffer. The task reports
   success. A later read in the same state returns the bytes after the written ones from the buffer
   (and, when the written bytes ran past the data that was read, bytes of the buffer that never came
   from the file: section 7).
-- **R9** (measured: p03 B) A write of more than 512 bytes in the read state goes to the file at
+- **R9** (read; probe p03 B) A write of more than 512 bytes in the read state goes to the file at
   once, at the handle's position: after the block that was read ahead (for a file shorter than 512
   bytes: at its end), not at the stream's position. The buffer and `level` stay as they were.
-- **R10** (measured: p03 D, E) A write after a read that emptied the buffer exactly (`level == 0`;
+- **R10** (read; probe p03 D, E) A write after a read that emptied the buffer exactly (`level == 0`;
   also after a read that hit the end of the file) starts writing with `curp` where the read left
   it, but the flush writes from the start of the buffer: write 2 bytes after reading all 300 bytes
   of a file, and the file gets 2 more bytes - the first two of the buffer, which are the file's
@@ -198,9 +202,9 @@ it is**: its entry of the stream table, its buffer and its open handle stay unti
 
 Consequences:
 
-- **R11** (measured: p02 G, a53) A seek after a failed flush fails once (`D0 = 2`; the flush already
+- **R11** (read; probe p02 G) A seek after a failed flush fails once (`D0 = 2`; the flush already
   emptied the buffer), the next one succeeds.
-- **R12** (measured: a53, p05 B) A stream whose close failed keeps its handle: the file cannot be
+- **R12** (measured: a53; probe p05 B) A stream whose close failed keeps its handle: the file cannot be
   deleted; it can be opened again; the slot of the 68000 program is free.
 - **R13** (read) At the end of the process the run-time flushes every stream with `READ` or `WRIT`
   and `level != 0` - including streams that `initSim` forgot (a reset, a new program with files
@@ -211,11 +215,33 @@ Consequences:
 The buffer comes from the heap. What a read in the write state (R3) or a read past the data in the
 read state (R8) returns is whatever those bytes hold.
 
-> MEASUREMENT PENDING (p01): fresh blocks, reused blocks, the bytes past the end of the 512.
+The buffer is `malloc(512)` through the run-time's memory manager (`fopen` -> `setvbuf`
+`4de2bc` -> `4db2c8`, a call through the pointer at `528214`) and `free` at `fclose`. What the
+heap gives back is not in the stream's code, and **no probe has measured it** (section 9: the
+oracle was not reachable). The port assumes:
+
+- a block that was never used holds zero bytes (fresh pages of a Windows heap are zero);
+- a block freed by `fclose` is the next one `fopen` gets (last freed, first reused), with its old
+  bytes, so a read in the write state on a new stream can return bytes of a file that an earlier
+  stream wrote or read;
+- bytes past the end of the 512 read as zero; bytes written there (R8, writes in the read state
+  that run past the buffer) belong to the block (in the original they overwrite the next heap
+  block, which may be another stream's buffer).
+
+These are the places where the port can still differ from the original
+(docs/differences/SH6.md). A program that reads only after a seek, as C requires, never sees them.
+The probe `p01-garbage.X68` (section 9) measures all three once the oracle can run it.
 
 ## 8. The stream table
 
-> MEASUREMENT PENDING (p07): how many streams can be open (or leaked) at once.
+`_streams[]` has 50 entries (`nfiles` at `52a030` is 50; `fopen` searches the table for an entry
+whose `fd` is negative, `4de954`), three of them stdin, stdout and stderr; the handle table has 50
+entries too, three taken. So 47 streams can be open at once, counting those whose close failed
+(R12) and those a reset forgot (R13), until the program ends. When none is free, `fopen` returns
+`NULL` before it opens anything (**read**; probe `p07-limit.X68` expects the 47th open to fail
+while `result.bin` is open, not measured). The original's execution log and output log, while
+they are open, are streams of the same table; the port's logs are not engine streams and do not
+count (a difference only after more than 44 leaked streams with a log open).
 
 ## 9. The probes
 
@@ -225,7 +251,25 @@ in the official `SIM68K.exe` under Wine (`tests/oracle/wine/sim/regenerate.mjs -
 port. The ones that cover every rule are conformance programs with goldens (`tests/conformance/sim/
 trap15-a/a61`... below); the others, with their official results, are kept outside the repository.
 
-> TABLE PENDING.
+The oracle (Docker with the Wine image, `tests/oracle/wine/sim/regenerate.mjs --file`) did not
+respond during this work (every `docker` command hung for more than an hour; containers of other
+users were not touched), so **the probes below have no official results yet**. They were run in the
+port, which gives what this model predicts. What is measured is what the existing conformance
+programs measured (their goldens come from the official program): trap15-a `a30`-`a37` (ordinary
+use, bounds, zero lengths, wrapped counts), `a51`, `a52`, `a53` (the undefined sequences), `a56`
+(one file in two streams), `a59` (the 512-byte write buffer, seen from a second stream), `a60`
+(large reads). The port produces every one of those goldens.
+
+| Probe (scratch, outside the repository) | Rules | What it does |
+|---|---|---|
+| `p01-garbage` | R3, section 7 | bytes a read in the write state returns: fresh buffer, past 512, buffer of a closed stream, two closed streams, after task 59 |
+| `p02-write-state-reads` | R3, R5, R6, R11 | write n, read k for k < n, k = n, k > n; write after it; seek after it; the error flag |
+| `p03-read-state-writes` | R8, R9, R10 | writes after reads: small, over 512, after the end of the file, after a read that emptied the buffer, followed by a seek |
+| `p04-defined` | R1, R2 | the sequences C defines (seek between write and read), reads of 0 bytes |
+| `p05-handles` | R2, R12 | two streams on one file, tasks 57 and 59 on an open and on a leaked stream, a stale read buffer |
+| `p06-crossing` | R1, R4, R7, R9 | reads and writes of 511-1025 bytes across the buffer |
+| `p07-limit` | section 8 | streams leaked until `fopen` fails |
+| `p08-edges` | R5, section 3 | counts that wrap the bounds test (`$FFFFF000`, `$FFFFFFFF`), reads of 0 bytes, the end-of-file flag |
 
 ## 10. In the port
 

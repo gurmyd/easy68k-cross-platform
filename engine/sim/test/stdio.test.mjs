@@ -3,8 +3,9 @@
 //
 // The fixture stdio.X68 stores D0.W and D2.L after every task. The headless host is an
 // operating system without buffers, so what the engine hands it shows directly in host.file().
-// The official results of the same sequences are the conformance programs trap15-a a51-a53 and
-// the stream programs (tests/conformance/sim); these tests pin the engine's side.
+// The official results of the first three are the conformance programs trap15-a a51-a53
+// (tests/conformance/sim); the others are the rules read in SIM68K.exe's machine code
+// (STDIO-MODEL.md marks which); these tests pin the engine's side.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

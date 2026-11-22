@@ -60,7 +60,8 @@ These entries name the places where the documents say something else.
    `docs/porting/windows-confirmation.md` part A for these three programs remain a useful
    confirmation but no longer decide anything.
 
-5. **New facts a document does not state yet** (STDIO-MODEL.md has each with its probe):
+5. **New facts a document does not state yet**, read in the machine code and not yet measured in
+   the official program (STDIO-MODEL.md has each with the probe that would measure it):
    - The run-time has 47 free stream entries (`_streams[50]`, three taken by the standard
      streams). A stream whose close failed, and a stream that a simulator reset forgot (`initSim`
      drops the eight slots without closing them), keeps its entry until the program ends. When no

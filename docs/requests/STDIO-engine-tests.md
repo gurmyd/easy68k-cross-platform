@@ -7,7 +7,7 @@ into SIM68K.exe (`engine/sim/shim/STDIO-MODEL.md`, `engine/sim/shim/hostfile.cpp
 fewer than 512 bytes therefore reaches the host as `fileRead(handle, 512)`: the run-time fills its
 512-byte buffer from the file and hands the program the bytes it asked for out of it, as
 `ReadFile(512)` does in the original (STDIO-MODEL.md rule R1; measured under Wine by the conformance
-programs trap15-a `a30`, `a59`, `a60` and the stream programs). The host interface did not change.
+programs trap15-a `a30`, `a59`, `a60`). The host interface did not change.
 
 Two expectations of W4's tests encode the engine before this change, when it passed every request
 to the host with the program's own count:
