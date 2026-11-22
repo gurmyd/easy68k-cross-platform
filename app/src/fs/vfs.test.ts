@@ -330,6 +330,17 @@ describe('vfs.resolve on a mount that refuses to list above a granted folder (de
     expect(await (await diskWith({ caseInsensitive: false })).vfs.resolve(DEMO, '..\\DEMO\\tutorial1.l68')).toBeNull();
   });
 
+  it('a segment named from a folder that may not be listed keeps the spelling as given (W1.md 15.1)', async () => {
+    // The granted folder named from the folder above it, in another letter case: /Users/me may not
+    // be listed, so the stored spelling "demo" cannot be learnt. Where the disk ignores case the
+    // path is found and comes back as given; a caller that compares it with a stored spelling must
+    // fold case (features/files/store.ts renameEntry, W1.md 15.1, request W1-case-only-rename).
+    expect(await (await diskWith({ caseInsensitive: true })).vfs.resolve('/disk/Users/me', 'DEMO')).toBe(
+      '/disk/Users/me/DEMO',
+    );
+    expect(await (await diskWith({ caseInsensitive: false })).vfs.resolve('/disk/Users/me', 'DEMO')).toBeNull();
+  });
+
   it('asks for the listings on the way and, where the last one is refused, a stat of that path; reads nothing', async () => {
     const { vfs, disk } = await diskWith();
     expect(await vfs.resolve(DEMO, 'sub\\data.txt')).toBe(`${DEMO}/Sub/Data.TXT`);

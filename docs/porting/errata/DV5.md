@@ -171,3 +171,21 @@ is no **Contract** section.
   wave-2 scenario's settings import ("the first Execute after the import ... exceptions"), and
   browser-checks (integration) in check:wave2's graphicSound.X68 sequence (0.wav starts about 280 ms
   after 1.wav, which lasts 302 ms), which fails the same way here on the code before the repair.
+
+### 11. Review of the D1 repair (four minor findings)
+
+- Merge commit 6b891d1 (git's default message, `origin/main` into `gate3/dv5`) has no
+  Co-Authored-By line. It is pushed and is not rewritten (no force-push); every other commit of the
+  repair has the line. Left as git's default message.
+- The Mac proof of entry 10 ran on e4f0106; the head then, 798d958, changed only errata. CI run
+  44970150937 (push of 798d958) skipped desktop-dev, as its plan job does for a push that changes
+  documents only. The proof was repeated on the commit of this entry's round (below, entry 12).
+- Above a granted root `resolve` keeps the spelling as given, on every disk, not only on a
+  case-sensitive one: `W1.md` entry 15.1 now says so in the proposed 3.8.1 text and in a new row,
+  and a unit test pins it. Its consequence for FS1's `renameEntry` (a case-only rename of a granted
+  root folder is refused) is routed to FS1 in `docs/requests/W1-case-only-rename.md`.
+- Failures in the CI runs of the branch that are not caused by D1 and fail the same way before the
+  repair: unit (all three systems), the I2 wave-2 scenario's settings import; browser-checks
+  (ubuntu, integration), check:wave2's graphicSound.X68 timing; e2e (macos-latest, chromium),
+  `tests/e2e/editor/editing.spec.ts:212` "Undo reverses typing, a paste and a comment" (an editor
+  test that does not reach `vfs.resolve`). Routed to I2, the wave-2 audio owner and the e2e owner.
