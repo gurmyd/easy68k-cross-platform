@@ -3413,6 +3413,22 @@
         }
       }
     },
+    "trap15-a/a71-files-trailing-separator": {
+      "sourceSha256": "106c776be977f92bd706d0693cb99822b88ae564a2d7d027ecf8d690e24b6420",
+      "s68Sha256": "b0c490d74663dc66360956c779778d331b6aae40e39c1120292c753a0d6f6de1",
+      "l68Sha256": "a8b0df8da58f0c3ebcbef099449a5ed425c8c7c8d6786d9e13bb15d84d4f5e59",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "artifacts": {
+            "result": {
+              "sha256": "53a8e139e2fa88a1b71d191e9abde3aabba9a191c6393371fbb482132726eaf3",
+              "bytes": 9079
+            }
+          }
+        }
+      }
+    },
     "trap15-b/b01-text-background-fill": {
       "sourceSha256": "5ba26815aa6a9eb93a7f407bb33edd65bcf3185e77de9ba67edceb521c201538",
       "s68Sha256": "e2d14b1ff4a1d1b5f5956b5a170026036932b3ded8a6bdd964784ab5df352c39",

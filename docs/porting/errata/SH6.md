@@ -243,6 +243,34 @@ owners" name a defect or a question that is not SH6's to change.
     port answers differently from both (`nofolder\NUL`, `Q:NUL`, `NUL\`) are reported to the
     owner of `app/src/core/sim-host/files`.
 
+18. **A name that ends in a separator (round after entry 17; the defect a70's probe found for `NUL\`).**
+    `NUL\` opened an ordinary file named `NUL` in the port, because `parseName()` dropped the empty
+    last segment. Measured first, with the same probe in the official SIM68K.exe under Wine
+    (`build/SH6-devices/p3/probe2.X68`: tasks 52, 54, 55, 53, 56, 59, 51, 53, 55, 56, 57 and 59, then
+    task 59 on `data` and on `data.txt`), on Windows 11 10.0.26300 (`devnames2.ps1`: `CreateFileA`
+    create and open-existing, `DeleteFileA`, then whether `data` and `data.txt` exist) and in the port,
+    for 36 names, once with neither file there and once with both files made before every name
+    (72 cases; the table is `build/SH6-devices/table2.md`, scratch). Windows 11 and Wine agree in all 72.
+    Every name that ends in `\` or `/` fails: `data\`, `data/`, `data\\`, `sub\`, `.\`, `..\`, `\`,
+    `/`, `C:\`, `C:\data\`, `NUL\`, `NUL/`, `NUL\\`, `NUL \`, `NUL.\`, `data.txt\`, `data.txt/`,
+    `nul.txt\`, `.\data\`, `data \`, `data.\`, `CON\`, `COM1\` (Windows: error 267, 3, 5 or 2 by case;
+    `D0.W = 2` in tasks 52 and 51, task 59 gives 2, task 57 fails), and creates, truncates or deletes
+    nothing: `data` and `data.txt` are still there afterwards. The one exception, the same under
+    Wine: after a device path the separators are ignored, `\\.\NUL\`, `\\?\NUL\`, `\\.\NUL/`,
+    `\\.\NUL\\` are the null device (open ok, task 57 fails); `\\.\NUL \` and `\\.\data\` fail.
+    Names without the separator did not change (`data`, `.\data`, `data\.`, `data.txt`).
+
+    The port before the repair differed on 42 of the 72 cases: it opened, created or deleted the file
+    the name had before its separator (`data\` and `data.txt\` deleted the file in task 57; `NUL\`,
+    `CON\`, `COM1\` made ordinary files), and it failed `\\.\NUL\`. **Repaired:** `parseName()`
+    answers null for a name that ends in a separator, and `NUL_DEVICE_PATH` allows separators after
+    the device path. Tests: `program-files.test.ts`, "a name that ends in a separator opens, creates,
+    reads and removes nothing" (fails before the repair: `data\ mode 2: expected 1 to be 0`), and the
+    existing device tests. **Added to the suite:** a71-files-trailing-separator (all 36 names, both
+    passes; golden from Wine, identical in two runs; the port produces it). The row about `NUL\` in
+    differences SH6.md is removed. No name on which Windows 11 and Wine disagree turned up. Still
+    recorded and not touched: `nofolder\NUL`, `C:\nofolder\NUL`, `Q:NUL` (entry 17).
+
 ## Contract
 
 C1. **`OpenRequest` cannot carry an initial file name, and `SaveRequest` no start folder.** The

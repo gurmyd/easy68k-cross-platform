@@ -75,8 +75,8 @@ const INVALID_NAME_CHARS = /[<>:"|?*\u0000-\u001f]/;
 
 /** NUL as the last part of a name: Windows ignores trailing spaces, periods and colons there. */
 const NUL_NAME = /^nul[ .:]*$/i;
-/** The device paths `\\.\NUL` and `\\?\NUL`. */
-const NUL_DEVICE_PATH = /^\\\\[.?]\\nul$/i;
+/** The device paths `\\.\NUL` and `\\?\NUL`, also with separators after them (the same on Windows 11 and under Wine). */
+const NUL_DEVICE_PATH = /^\\\\[.?]\\nul[\\/]*$/i;
 /** The other DOS devices, which Windows 11 recognises only as the whole name (¹²³ count as digits). */
 const OTHER_DEVICE_NAME = /^(?:con|prn|aux|(?:com|lpt)[1-9\u00b9\u00b2\u00b3])[ .:]*$|^con(?:in|out)\$$/i;
 /** A drive letter at the start of a name. */
@@ -471,6 +471,9 @@ export class ProgramFiles implements ProgramFilesApi {
   private parseName(text: string): { dir: VPath; rel: string } | null {
     // A drive letter names no folder of the port; the other characters Windows refuses fail fopen().
     if (text === '' || hasDriveLetter(text) || INVALID_NAME_CHARS.test(text)) return null;
+    // A name that ends in a separator names a folder, never a file: fopen fails (error 267 on Windows 11 and under
+    // Wine) for `data\`, `data/` and `NUL\`, whether or not a file of that name exists, and nothing is created.
+    if (/[\\/]$/.test(text)) return null;
     // Windows drops trailing periods and spaces of every name segment.
     const segments = splitWindowsName(text)
       .map((segment) => (segment === '.' || segment === '..' ? segment : segment.replace(/[. ]+$/, '')))
