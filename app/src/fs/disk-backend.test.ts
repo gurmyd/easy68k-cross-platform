@@ -4,13 +4,13 @@
 
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createDiskFsHandlers, type DiskChange } from '../../../desktop/src/fs-ipc';
-import { GrantedRoots, relOfRealPath } from '../../../desktop/src/security';
+import { GrantedRoots, relOfRealPath, vpathOfRealPath } from '../../../desktop/src/security';
 import { BACKEND_CONTRACT_CASES } from './backend-contract';
 import { DiskBackend, type DiskFsBridge } from './disk-backend';
-import { isFsError } from './vfs';
+import { createVfs, isFsError } from './vfs';
 
 const scratch = mkdtempSync(join(tmpdir(), 'easy68k-disk-'));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
@@ -178,5 +178,46 @@ describe('DiskBackend', () => {
     expect(seen).toEqual([{ rel: 'sub/b.X68', kind: 'write' }]);
     stop();
     expect(push).toBeNull();
+  });
+});
+
+// Defect D1 (docs/porting/errata/W1.md entry 15): the handlers refuse to list the folders above a
+// granted root, and vfs.resolve must still find what lies inside it, in any letter case.
+describe('vfs.resolve on /disk through the real handlers', () => {
+  function diskVfs() {
+    const grants = new GrantedRoots();
+    const dir = emptyFolder(grants);
+    mkdirSync(join(dir, 'Sub'));
+    writeFileSync(join(dir, 'tutorial1.L68'), 'listing');
+    writeFileSync(join(dir, 'Sub', 'Data.TXT'), 'data');
+    const outside = join(scratch, `outside-${++counter}`);
+    mkdirSync(outside);
+    writeFileSync(join(outside, 'secret.txt'), 'x');
+    const vfs = createVfs();
+    vfs.mount(new DiskBackend({ bridge: bridgeFor(grants) }));
+    return { vfs, dir: vpathOfRealPath(dir) as string, outside };
+  }
+
+  it('the root of /disk may not be listed, the granted folder may', async () => {
+    const { vfs, dir } = diskVfs();
+    await expect(vfs.list('/disk')).rejects.toMatchObject({ code: 'io' });
+    expect((await vfs.list(dir)).map((e) => e.name).sort()).toEqual(['Sub', 'tutorial1.L68']);
+  });
+
+  it('finds a file of the granted folder as given and in another letter case', async () => {
+    const { vfs, dir } = diskVfs();
+    expect(await vfs.resolve(dir, 'tutorial1.L68')).toBe(`${dir}/tutorial1.L68`);
+    expect(await vfs.resolve(dir, 'TUTORIAL1.l68')).toBe(`${dir}/tutorial1.L68`);
+    expect(await vfs.resolve(dir, 'sub\\DATA.txt')).toBe(`${dir}/Sub/Data.TXT`);
+    expect(await vfs.resolve(dir, 'Sub')).toBe(`${dir}/Sub`);
+    expect(await vfs.resolve(dir, 'missing.L68')).toBeNull();
+    expect(await vfs.resolve(dir, 'missing\\x.txt')).toBeNull();
+  });
+
+  it('does not find what lies outside the granted roots', async () => {
+    const { vfs, dir, outside } = diskVfs();
+    const name = `..\\${outside.slice(outside.lastIndexOf(sep) + 1)}\\secret.txt`;
+    expect(await vfs.resolve(dir, name)).toBeNull();
+    expect(await vfs.resolve(dir, '..')).toBeNull();
   });
 });

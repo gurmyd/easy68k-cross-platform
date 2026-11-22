@@ -231,3 +231,27 @@ compile against; W1 is asked to take them into `app/src/contracts/`.
   `desktop/src/fs-ipc.ts`, `sync-ipc.ts` and `security.ts` (which import Electron's types only),
   so that `npm test` runs the backend and `SyncFiles` contract suites against real folders on all
   three CI systems. The same suites run inside Electron in `tests/desktop/dev/disk.spec.ts`.
+
+### D1. The bridge refuses to list above the granted roots, and that stays (repair of defect D1)
+
+- DV5's check 7 found that `vfs.resolve` on `/disk` returned null for every name (`docs/porting/errata/W1.md`
+  entry 15, `docs/porting/errata/DV5.md` entry D1): it listed every folder from the root of `/disk`
+  down, and `list` in `desktop/src/fs-ipc.ts` refuses everything outside the granted roots. The
+  refusal is right (7.6: the page may not list or read anything the person did not grant) and is
+  unchanged; option 3 of `docs/requests/DV5-l68-resolve.md` (answering a listing of an ancestor
+  with the entries on the way to the granted roots) was not taken: it would tell the page the
+  names of the person's folders above what they granted, and the repair in `vfs.resolve` makes it
+  unnecessary. A refusal still arrives as `io` with the message "refused: ...", which
+  `vfs.resolve` now reads as "this folder cannot tell spellings" rather than "not found".
+- New tests: `app/src/fs/disk-backend.test.ts` "vfs.resolve on /disk through the real handlers"
+  (the handlers and `GrantedRoots` on real temporary folders under Node: the root of `/disk` may
+  not be listed, the granted folder may; names in another letter case are found; a file outside
+  the granted roots is not) and `tests/desktop/dev/programs.spec.ts` (the running app, CI job
+  desktop-dev on macos-15): a program opened on the command line from a granted folder is
+  assembled with two INCLUDEs in another letter case (one through `..` in a granted parent),
+  executed with its listing shown and the PC row marked, and run, reading a data file named in
+  another letter case; `vfs.resolve`, the INCLUDE collection and the Files panel's rename are
+  called on `/disk`. Run here against the code before the repair, it fails as a student would
+  see it: the assembler's status dialog says 2 errors, every `resolve` is null, and a rename
+  onto a name that is taken goes through (what that did to the files: W1.md 15.3). The page modules it
+  imports by path are in the harness's warm-up list.
