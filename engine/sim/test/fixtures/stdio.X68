@@ -193,6 +193,8 @@ SECOND: MOVE.L  D1,D6
         T15     54              into the buffer at 10: 10 bytes past its end
         MOVE.L  D6,D1
         T15     56              the release of the buffer: access violation
+        LEA     NAME,A1
+        T15     52              (after Run again) the next allocation fails too
         SIMHALT
 
 NAME    DC.B    'xA.bin',0

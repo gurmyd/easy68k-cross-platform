@@ -10,7 +10,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { run } from './helpers.mjs';
-import { Reg } from '../sim68k.mjs';
+import { Option, Reg } from '../sim68k.mjs';
 import { drive } from './headless-host.mjs';
 
 const RESULTS = 0x8000;
@@ -106,4 +106,25 @@ test('a write more than 4 bytes past the buffer damages the heap: the next relea
   assert.deepEqual(list.map(([d0]) => d0), [0, 0, 0], 'open, read and write report success');
   assert.equal(sim.readWord(RESULTS + 18), 0xffff, 'the close never returned');
   assert.ok(host.alerts.some((a) => a.text.includes("exception occurred in routine 'exec_inst'")), JSON.stringify(host.alerts));
+  // The student presses OK and Run: the heap stays damaged, the next open fails the same way
+  // (measured, probe e4: every later open, close and task 59 showed the box again).
+  assert.equal(host.alerts.length, 1);
+  sim.cmdRun();
+  drive(sim, host);
+  assert.equal(host.alerts.length, 2);
+  assert.equal(sim.readWord(RESULTS + 18), 2, 'after Run the D0.W = 2 of the close is stored, as in e4');
+  assert.equal(sim.getRegister(Reg.D1), 0xffffffff, 'D1 = -1 (openFile set it before fopen)');
+});
+
+test('the logs take entries of the stream table while they run (section 8; a69, probe e5)', async () => {
+  const { start } = await import('./helpers.mjs');
+  for (const [exec, out, expected] of [[1, 0, 46], [0, 1, 46], [1, 1, 45]]) {
+    const { sim, host } = await start('stdio', { caseNumber: 5 });
+    sim.setOption(Option.EXEC_LOG_TYPE, exec);
+    sim.setOption(Option.OUTPUT_LOG_TYPE, out);
+    sim.startLog('T');
+    sim.cmdRun();
+    drive(sim, host);
+    assert.equal(60 - sim.readWord(RESULTS), expected, `exec ${exec}, output ${out}`);
+  }
 });

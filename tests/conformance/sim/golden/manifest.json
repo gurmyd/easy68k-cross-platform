@@ -3597,6 +3597,23 @@
         }
       }
     },
+    "trap15-a/a69-files-stream-limit-log": {
+      "sourceSha256": "414b2741b11f5ee4ccb4af1ba43f7979a3c25d9aed8b6a6485b269b9e9a4b073",
+      "s68Sha256": "0ca8f3e6796290c2eb1e5b038a17f3b9b2eeea728de18f174f6047c7aff1bbf4",
+      "l68Sha256": "cc23274dc301e847af1ecb117cc74a242960ed72502ba426931c0bc0b6b01544",
+      "recipes": {
+        "outlog": {
+          "status": "ok",
+          "seconds": 28.35,
+          "artifacts": {
+            "outlog": {
+              "sha256": "6625d30ab3a5773e5515804c7869bacda2cbeb14d57b3bec6da16c6fbbb64a7b",
+              "bytes": 75
+            }
+          }
+        }
+      }
+    },
     "trap15-b/b01-text-background-fill": {
       "sourceSha256": "5ba26815aa6a9eb93a7f407bb33edd65bcf3185e77de9ba67edceb521c201538",
       "s68Sha256": "e2d14b1ff4a1d1b5f5956b5a170026036932b3ded8a6bdd964784ab5df352c39",

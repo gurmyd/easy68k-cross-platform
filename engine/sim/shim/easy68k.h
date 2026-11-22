@@ -67,4 +67,8 @@ enum { EASY68K_MEMORY_PADDING = 0x10000 };
 // may have moved (shim/hostfile.cpp).
 void easy68k_files_folder_changed();
 
+// Log Start / Log Stop: the number of log files the original would hold open
+// as streams of its run-time (shim/hostfile.cpp, STDIO-MODEL.md section 8).
+void easy68k_files_log_streams(int count);
+
 #endif

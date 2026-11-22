@@ -24,6 +24,9 @@ Licence: GPL-2.0-or-later, like the original. No npm dependencies.
 
 ```
 node engine/sim/build.mjs          # needs Emscripten: EMSDK set, or .toolchain/emsdk
+                                   # (a separate git worktree has no .toolchain of its own:
+                                   #  set EMSDK to the main checkout's .toolchain/emsdk, also for
+                                   #  npm run build:engines)
 cd engine/sim && node --test       # 170+ tests, a few seconds
 node engine/sim/check-patches.mjs  # needs the original sources (reference/)
 ```

@@ -59,17 +59,21 @@ const int BUFFER_SIZE = 512; // setvbuf(fp, NULL, _IOFBF, 512) in fopen
 const int STREAM_SLOTS = 47;
 
 // The 512-byte heap block that holds a stream buffer (STDIO-MODEL.md section 7,
-// measured with the probes p01, p09, p10, p11, p12):
+// measured with the probes p01, p09-p12, x1-x5, e4 and the reviewer's q02, q05):
 // - fclose frees it with its bytes, except that the heap's bookkeeping takes
 //   its first 8 bytes; fopen takes the free block that was allocated first
 //   (the lowest one), else a new one.
-// - What the heap held before (bytes of strings the program freed long ago,
-//   heap pointers past the end) cannot be known here: those bytes read as 0.
-// - A write that runs more than HEAP_SLACK bytes past the end of the block
-//   damages the next heap block; the next allocation or release of a stream
-//   buffer then fails with an access violation (and so does every later one:
-//   the heap stays damaged).  Bytes written past the end are kept with the
-//   block, so that the stream reads them back as the original does.
+// - What the heap held before (strings the program loaded long ago, heap
+//   bookkeeping, pointers past the end) depends on more than the 68000
+//   program: those bytes read as 0 (a recorded difference).
+// - A write past the end of the block overwrites the next heap block.  What
+//   the original does then depends on the bytes and on the heap's layout
+//   (which even the program file's name changes); the port's choice: up to
+//   HEAP_SLACK bytes are harmless, more damage the heap, and the next and
+//   every later allocation or release of a stream buffer fails with an
+//   access violation (as measured after the first error box, probe e4).
+//   Bytes written past the end are kept with the block, so that the stream
+//   reads them back as the original does.
 const unsigned char FRESH_BYTE = 0x00;
 const unsigned char BEYOND_BYTE = 0x00;
 const int HEAP_HEADER = 8;
@@ -399,13 +403,33 @@ unsigned bWriteBytes(Stream *s, const char *source, unsigned n) {
   return n;
 }
 
+// The original's execution log and output log, while a log runs, are streams
+// of the same table (logU.cpp prepareLogFile: fopen of each selected log).
+// They are host files here, so they only count (STDIO-MODEL.md section 8).
+int logStreams = 0;
+
 Stream *newStream() {
+  int used = logStreams;
+  for (int i = 0; i < STREAM_SLOTS; i++)
+    if (streams[i].open) used++;
+  if (used >= STREAM_SLOTS) return NULL;
   for (int i = 0; i < STREAM_SLOTS; i++)
     if (!streams[i].open) return &streams[i];
   return NULL;
 }
 
 } // namespace
+
+// A log starts (with this many log files: 0, 1 or 2) or stops (0).  A log
+// file the table has no entry for is not opened in the original; here it is
+// counted as far as entries are free.
+void easy68k_files_log_streams(int count) {
+  int used = 0;
+  for (int i = 0; i < STREAM_SLOTS; i++)
+    if (streams[i].open) used++;
+  int left = STREAM_SLOTS - used;
+  logStreams = count < left ? count : left;
+}
 
 // The current folder of the program moved (task 58 dialog): names of open
 // files may now mean other files (see mirrorRepair).
@@ -549,7 +573,11 @@ extern "C" int easy68k_fclose(FILE *stream) {
     mirrorSync(s);
     return EOF;
   }
-  freeBlock(s->buffer); // throws on a damaged heap: the stream and its handle stay open
+  // On a damaged heap the release throws, after the flush: the stream and its
+  // handle stay open, but what the flush wrote is in the file (the host is
+  // made to write it now, since no further call on the handle follows).
+  if (heapDamaged) host_file_seek(s->handle, 0, SEEK_CUR);
+  freeBlock(s->buffer);
   s->buffer = NULL;
   int r = host_file_close(s->handle) == 0 ? 0 : -1;
   s->open = false;

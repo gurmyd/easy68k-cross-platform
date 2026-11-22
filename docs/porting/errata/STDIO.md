@@ -86,6 +86,11 @@ These entries name the places where the documents say something else.
      (docs/differences/SH6.md).
    - At the end of the process the run-time writes the bytes of every stream not closed, also of
      streams a Rewind forgot (probes e1, e2).
+   - While a log runs, the execution log and the output log are streams of the same table, so
+     the program has one or two entries fewer (`a69`, probe e5).
+   - A write past the end of a buffer: what the original does depends on the bytes and on the
+     heap's layout (even the program file's name changes it), so the port makes a stated choice
+     (STDIO-MODEL.md section 7; docs/differences/SH6.md).
 
 ## For other owners
 

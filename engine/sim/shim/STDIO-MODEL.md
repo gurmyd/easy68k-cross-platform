@@ -15,9 +15,10 @@ implement it; `shim/hostfile.cpp` is the implementation.
 SDK; addresses below) and then measured in the official program under Wine with the probe
 programs of section 9. Each rule names the programs that show it: the conformance programs of
 `tests/conformance/sim/trap15-a` (`aNN`, with goldens from the official program, which the port
-reproduces) and the probes kept outside the repository (`pNN`, `eN`; section 9). Every rule that a
-68000 program can observe is **measured**. What is only **read** (in the machine code) is marked
-so, with the reason no program can show it.
+reproduces) and the probes kept outside the repository (`pNN`, `xN`, `eN`, and the reviewer's
+`qNN`; section 9). Every rule of sections 1-6 and 8 is measured. Section 7 (the heap behind the
+buffer) is measured as far as it goes and says where the original's answer depends on more than the
+68000 program did; there the port makes a stated choice, recorded as a difference.
 
 | Function | Address in SIM68K.exe | Called from |
 |---|---|---|
@@ -220,58 +221,88 @@ Consequences:
 The buffer is `malloc(512)` through the run-time's memory manager (`fopen` -> `setvbuf`
 `4de2bc` -> `4db2c8`, a call through the pointer at `528214`) and `free` at `fclose`. A read in the
 write state (R3) and a read in the read state past the bytes that came from the file (R8) return
-what the block holds. Measured (probes p01, p09, p10, p11, p12; p01 and p09 run twice with the same
-result; `a68`):
+what the block holds; a flush after a read in the write state can write such bytes into the file
+(R6: p02 case E wrote `41 42 43 44 45 27 00`, the last two never written by the program). Measured
+(probes p01, p02, p09, p11, the reviewer's q05; p01 and p09 run twice with the same result; `a68`):
 
 - **Which block.** A new stream gets the freed block that was allocated first (p11, `a68`: of two
   freed blocks the earlier one, although it was freed last); with none free, a block of the heap.
-- **A freed block keeps its bytes from the ninth on** (p01 T3, T4, `a68`); bytes 0-7 hold the
-  heap's bookkeeping after `free`: a small number in byte 5 (`$03` to `$2A` in the probes), zeros
-  in bytes 6 and 7.
+  The port does the same.
+- **A freed block keeps its bytes from the ninth on** (p01 T3, T4, `a68`); bytes 0-7 are the heap's
+  bookkeeping after `free` (pointers and sizes: `3A 02` in bytes 2-3 in q05, a small number in
+  byte 5 and zeros in bytes 6-7 in p01 and p02). The port keeps the bytes from the ninth on and
+  gives zeros for bytes 0-7.
 - **A block of the heap** (never a stream buffer before) holds what earlier users of the memory
   left: in p01 the text `Primary screen = 1  Secondary screens = 2 and up.` (Windows help
   strings), in p01 T5 `00001000 Starting Address` (a line of the listing), zeros elsewhere. Past
   the end of the 512 bytes come the next block's bookkeeping (heap pointers such as
   `60 D8 39 02`). The same bytes appear in every run of one program; another program (another
   listing, other strings loaded before) gets other bytes. **`a51`'s read returns `0A 00 00 44`**
-  (p09, two runs).
-- **A write that runs past the end** (R8: a write in the read state copied at `curp` near the end)
-  is harmless up to 4 bytes past (p10b, p12: 1, 2 and 4 bytes), and from 5 bytes on damages the
-  next heap block: the next `malloc` or `free` of a stream buffer fails with an access violation,
-  which SIM68K reports as `ERROR: An exception occurred in routine 'exec_inst'.` (p12: 5 and 8
-  bytes crash at the next close; p10a: at the close after a read and a seek; p10c: at the next open
-  of another file). The bytes written past the end are read back by the same stream (p10a).
+  (p09, two runs). The port gives zeros for all of these (`00 00 00 00` in `a51`).
 
-The port reproduces the first and the last point (`shim/hostfile.cpp`: the lowest freed block;
-bytes 0-7 of a freed block become zero; a write more than 4 bytes past the end makes every later
-allocation and release of a buffer throw the access violation - whether the original fails again
-after the first error box is not measured, since the oracle stops there), and gives zero for what
-the heap held before: in `a51` `00 00 00 00`. Those bytes are a difference that a program sees only
-by reading what it did not write without the seek C requires (docs/differences/SH6.md); the
-conformance programs leave them out of their results.
+  What a student can see of this: only by reading, without the seek C requires, what the program
+  did not write. Then the original shows a few bytes of that residue - in the 68000 memory after
+  a read, and, after a flush, in the file (a file that holds a few bytes the program never wrote,
+  such as `27 00` in p02 E). The port shows zero bytes in the same places (the file has the same
+  length, with zeros where the original has residue). Recorded in docs/differences/SH6.md.
+
+- **A write that runs past the end of the buffer** (R8: a write in the read state copied at
+  `curp` near the end of the buffer) overwrites the heap block behind the buffer. What follows was
+  measured in eighteen runs and does **not** follow from what the 68000 program did alone:
+  - 1 to 3 bytes past the end: harmless in every run (p10b, p12-overrun2, the reviewer's
+    q02w1-q02w3).
+  - 4 bytes past the end: harmless in p12-overrun4, x1, x2, the reviewer's q02a, and three runs
+    of the reviewer's program q02 under the file name `q02-review*.X68`; **fatal** (the simulator
+    process ends at once, no box, nothing written) in the same program under the file name
+    `q02-end-of-buffer.X68` (the reviewer's two runs and one of mine). The program, its bytes and
+    the bytes written past the end were the same; the name of the program file (which the
+    simulator keeps in strings on the same heap, so the layout behind the buffer changes) decided.
+  - 5 or more bytes past the end: in most layouts the next allocation or release of a stream
+    buffer fails with an access violation, which SIM68K reports as `ERROR: An exception occurred in
+    routine 'exec_inst'.` (p10a, p10c, p12-overrun5, p12-overrun8 under two file names, x4, x5:
+    the next close, open or task 59); but 8 zero bytes in the layout of p12 were harmless under
+    two file names (x3, x3b).
+  - After the first error box the student can press OK and Run again. Every later allocation or
+    release of a stream buffer fails the same way: in e4 the next task 52, task 59 and task 52
+    each showed the box again (D0.W = 2, D1 = -1); tasks that need no buffer (a write or a close
+    on the failed FID) gave 2 without a box.
+
+  The port's choice, since no rule decided by the program exists: up to 4 bytes past the end are
+  harmless (every measured run with 1-3 bytes, and all but one layout with 4); from 5 bytes on the
+  next allocation or release of a buffer throws the access violation, and so does every later one
+  (the outcome of most measured runs, and of e4 after the first box). Bytes written past the end
+  stay with the block and are read back by the same stream, as in p10a. The differences that
+  remain - the 4-byte case of q02, the harmless zeros of x3 - are recorded in
+  docs/differences/SH6.md. A program meets them only by writing right after a read, without the
+  seek C requires, when the read had left the buffer nearly empty.
 
 ## 8. The stream table
 
 `_streams[]` has 50 entries (`nfiles` at `52a030` is 50; `fopen` searches the table for an entry
 whose `fd` is negative, `4de954`), three of them stdin, stdout and stderr; the handle table has 50
 entries too, three taken. So 47 streams can be open at once, counting those whose close failed
-(R12) and those a reset forgot (R13), until the program ends. When none is free, `fopen` returns
-`NULL` before it opens anything. Measured: `a66` (with `result.bin` open, 46 streams whose close
-failed, then every open fails). The original's execution log and output log, while they are open,
-are streams of the same table; the port's logs are not engine streams and do not count (read in
-the code, not measured: the oracle starts no log in a self-reporting run; a difference only after
-more than 44 streams whose close failed with a log open).
+(R12), those a reset forgot (R13), and **the log files**: while a log runs, the execution log and
+the output log (each when it is selected) are streams of the same table (`logU.cpp`
+`prepareLogFile`). When none is free, `fopen` returns `NULL` before it opens anything. Measured:
+`a66` (with `result.bin` open, 46 streams whose close failed, then every open fails); `a69` (with
+the output log running and no `result.bin`, 46); probe e5 (a66 with the output log: 45, with the
+execution log: 45, with both: 44). The port counts the log files while a log runs
+(`easy68k_files_log_streams`, called by Log Start and Log Stop in `shim/log.cpp`).
 
 ## 9. The probes
 
 The probes are 68000 programs that drive tasks 50 to 59 and write, after every task, a line with
 `D0`, `D1`, `D2` and the bytes read (routines of `tests/conformance/sim/dumplib.X68`). They were run
 in the official `SIM68K.exe` under Wine 8.0 (`tests/oracle/wine/sim/regenerate.mjs --file ...
---recipe report`; e1-e3 with a script of their own in a container of the same image, which pressed
+--recipe report`; e1-e5 with a script of their own in a container of the same image, which pressed
 Rewind and File > Exit and mounted a read-only folder) and in the port. Every line of every
-official result equals the port's except the bytes section 7 names. The conformance programs
-`trap15-a/a61`-`a68` are probes with those bytes left out; the probes and their official results
-are kept outside the repository (the engineer's scratch folder).
+official result equals the port's except as said below. The conformance programs
+`trap15-a/a61`-`a68` are probes with those bytes left out, and `a69` counts the streams with the
+output log running; the probes and their official results are kept outside the repository (the
+engineer's scratch folder). Every official result equals the port's except the residue bytes of
+section 7 and the overruns section 7 lists as differences (q02-end-of-buffer: the original ends,
+the port completes; x3, x3b: the original completes, the port shows the error box at the next
+close).
 
 | Probe | Conformance program | Rules | What it does |
 |---|---|---|---|
@@ -284,8 +315,13 @@ are kept outside the repository (the engineer's scratch folder).
 | `p07-limit` | `a66` | section 8 | streams leaked until `fopen` fails |
 | `p08-edges` | `a67` | R5, R9, section 3 | counts that wrap the bounds test (`$FFFFF000`, `$FFFFFFFF`), reads of 0 bytes, the end-of-file flag |
 | `p09-a51-bytes` | - | section 7 | a51 with the 4 bytes of its read dumped: `0A 00 00 44` |
-| `p10a`-`p10c`, `p12-overrun2`-`8` | - | section 7 | writes 1 to 10 bytes past the end of the buffer; where it crashes |
-| `p11-reuse-order` | `a68` | section 7, R4 | which freed block a new stream gets, and its old bytes; a read of 1050 that starts in the buffer |
+| `p10a`-`p10c`, `p12-overrun2`-`8`, `p12b` | - | section 7 | writes 1 to 10 bytes past the end of the buffer; where it crashes; p12b is p12-overrun8 under another file name |
+| `x1`-`x5`, `x3b` | - | section 7 | the 4- and 5-byte overruns with other bytes (`1111`, `XYZW`, zeros, `ABCDE`) in the layouts of q02 and p12; x3b is x3 under another file name |
+| `q02-end-of-buffer`, `q02-review`(-b, -c) (the reviewer's q02) | - | section 7 | the same program, 4 bytes past the end: the process ends under the first name, completes under the second |
+| `e4` | - | section 7 | 8 bytes past the end, then OK and Run after each error box: every later open, close and task 59 that needs a buffer fails again |
+| `e5` (a66 with Log Start) | `a69` | section 8 | the output log, the execution log, both: 45, 45, 44 streams |
+| `p13-wrapped-write-state` | - | section 10 | a read in the write state whose count wraps the bounds test: the `exec_inst` box in both |
+| `p11-reuse-order` | `a68` | section 7, R4 | which freed block a new stream gets, and its old bytes; a read of 1050 that starts in the buffer (run again after its last change; equal to the port) |
 | `e1`, `e2` | - | R13 | a stream never closed, then File > Exit; a stream a Rewind forgot, then a second run and File > Exit |
 | `e3` | - | section 3, R7 | a read-only file (on a read-only mount): open 3, write 2 bytes 0, close 2; a write of 600 bytes 2 |
 
@@ -320,5 +356,6 @@ are kept outside the repository (the engineer's scratch folder).
   with the block (up to 1 MB) instead of overwriting other heap memory, and bytes read past what was
   ever written come out as described in section 7. A copy into the 68000 memory that would run past
   its end (a read in the write state whose count wrapped the bounds test of task 53) throws, which
-  ends in the original's handler `ERROR: An exception occurred in routine 'exec_inst'.` as the
-  original's access violation would.
+  ends in the original's handler `ERROR: An exception occurred in routine 'exec_inst'.`, as the
+  original's access violation does (probe p13); the original first copies heap memory into the
+  68000 memory, the port copies nothing (docs/differences/SH6.md).

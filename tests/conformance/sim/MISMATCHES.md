@@ -8,9 +8,9 @@ Host parts: the classes at their final paths. Text metrics: Wine's cells (harnes
 
 |                              | Count |
 | ---------------------------- | ----- |
-| Programs compared            | 217   |
-| Artifacts compared           | 241   |
-| Equal to the official result | 236   |
+| Programs compared            | 218   |
+| Artifacts compared           | 242   |
+| Equal to the official result | 237   |
 | Different, with an owner     | 5     |
 | Different, not yet assigned  | 0     |
 

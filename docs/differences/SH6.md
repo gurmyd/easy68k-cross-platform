@@ -24,23 +24,44 @@ measurements of docs/porting/errata/T3.md F2.
 
 Since gate I3 the engine has the file streams of the Borland run-time linked into SIM68K.exe, so
 the sequences C leaves undefined - a read right after a write, a write right after a read, without
-a seek between them - give the official results (trap15-a `a51`, `a52`, `a53`, and `a61`-`a68`).
-What remains different is memory of the original's heap that the program never wrote, which a
-read can return in two cases: a read right after a write takes its bytes from the stream's
-512-byte buffer behind the written ones (in `a51` the 4 bytes after `ABCDE`), and a read in the read
-state after a write there can run past the bytes that came from the file. Measured in the official
-program under Wine (STDIO-MODEL.md section 7, probes p01, p09, p11): the same bytes in every run of
-one program, but different from program to program, because they are remains of what the program
-loaded before - text of the listing (`00001000 Starting Address`), of the Windows help texts
-(`Primary screen = 1  Secondary screens = 2 and up.`), heap pointers past the end of the buffer,
-and in a buffer that an earlier stream used, that stream's bytes after the first eight, which the
-heap overwrites with its bookkeeping (a small number at byte 5, zeros at 6 and 7). In `a51` the 4
-bytes are `0A 00 00 44`. The port does what is measured about which block a stream gets (the lowest
-freed one, with its old bytes from the ninth on) and gives zeros for everything that depends on
-the heap's history: `00 00 00 00` in `a51` (not part of its golden). A program that seeks between a
-write and a read, as C requires, never sees any of this. Two smaller differences: if a stream that
-has been read in the write state is left open while a task 58 dialog moves the current folder, the
-bytes the host writes for it at the end of the program can be more than the original's flush would
-write (STDIO-MODEL.md section 10); and a copy of a read in the write state whose count wrapped the
-bounds test of task 53 ends in the `exec_inst` error box without copying anything, where the
-original copied heap memory until its access violation.
+a seek between them - give the official results (trap15-a `a51`, `a52`, `a53`, and `a61`-`a69`).
+Two things remain different, both reached only through those undefined sequences. All of it was
+measured in the official program under Wine (STDIO-MODEL.md sections 7 and 9).
+
+**Heap residue.** A stream's 512-byte buffer comes from the original's heap. A read right after a
+write takes its bytes from the buffer behind the written ones (in `a51` the 4 bytes after
+`ABCDE`), a read in the read state after a write there can run past the bytes that came from the
+file, and a flush after a read in the write state writes such bytes into the file. Those bytes are
+whatever the heap held: remains of what the simulator loaded before (text of the listing such as
+`00001000 Starting Address`, Windows help strings such as `Primary screen = 1`), the heap's own
+bookkeeping (pointers and sizes in bytes 0-7 of a buffer that an earlier stream freed, e.g. `3A 02`
+in bytes 2-3, a small number in byte 5), and heap pointers past the end of the buffer. They are the
+same in every run of one program but differ between programs, and depend on more than the program
+did. In `a51` they are `0A 00 00 44`. The port does what is measured about which block a stream gets
+(the lowest freed one, with its old bytes from the ninth on) and gives zeros for everything that
+depends on the heap's history: `00 00 00 00` in `a51`. What a student sees: in the original, a few
+bytes the program never wrote - in its memory after such a read, and in the file after such a flush
+(a file that ends in, say, `27 00` after a program wrote `ABCDE`, read 2 and wrote 4 without a
+seek); in the port, zero bytes in the same places, the file of the same length.
+
+**A write past the end of the buffer.** A write right after a read that had left the buffer nearly
+empty (fewer free bytes than the write's length) is copied past the end of the buffer over the
+next heap block. In the original, 1 to 3 bytes past the end were harmless in every run; 4 bytes
+were harmless in most layouts, but in the reviewer's program q02 under the file name
+`q02-end-of-buffer.X68` the simulator process ended at once (the same program under another name
+completed); 5 or more bytes made the next open, close or task 59 end in the box `ERROR: An exception
+occurred in routine 'exec_inst'.` in most layouts, but 8 zero bytes in one layout were harmless.
+So the outcome depends on the bytes and on the heap's layout, which even the program file's name
+changes. The port's choice: up to 4 bytes are harmless; from 5 bytes on the next and every later
+open or close of a file (and task 59) shows that box, which is what the original did after the
+first box in every probe (e4: OK and Run, then each later open showed the box again, D0.W = 2,
+D1 = -1). A student who writes past a stream's buffer therefore sees the box in the port where
+the original showed it in most measured cases, sees nothing where the original ended (q02's 4
+bytes), and sees the box where the original's heap happened to accept the bytes (x3's zeros).
+
+Two smaller differences: if a stream that has been read in the write state is left open while a
+task 58 dialog moves the current folder, the bytes the host writes for it at the end of the program
+can be more than the original's flush would write (STDIO-MODEL.md section 10); and a copy of a read
+in the write state whose count wrapped the bounds test of task 53 ends in the `exec_inst` error box
+in both (probe p13), but the port copies nothing first, while the original copies heap memory into
+the 68000 memory until its access violation (how far is not measured).
