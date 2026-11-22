@@ -337,6 +337,28 @@ describe('Save and Save As (editor-ui §6.4, 3.9.3)', () => {
     );
   });
 
+  it("an 'io' sentence that does not name the file keeps the prefix with the file's name (gate I2 review)", async () => {
+    // STORE_MESSAGES.closed of fs/browser-backend.ts: a whole sentence, but it names no file.
+    const closed = 'The browser closed the file store (site data may have been cleared). Reload the page to continue.';
+    const t = setup();
+    const doc = t.manager.newSource();
+    t.type(doc.id, 'x');
+    t.vfs.writeFile = async () => {
+      throw fsError('io', closed);
+    };
+    t.saveTargets.push('/browser/lab1/prog.X68');
+    t.answers.push('OK');
+    expect(await t.manager.save(doc.id)).toBe(false);
+    expect(t.asked[0]?.text).toBe(`Cannot create file "/browser/lab1/prog.X68". ${closed}`);
+    // A linked file is named without the store's internal folder, also with the prefix.
+    expect(writeError('/linked/21d878e9/prog.X68', closed, 'io').text).toBe(`Cannot create file "prog.X68". ${closed}`);
+    expect(writeError('/linked/21d878e9/prog.X68', 'quota', 'io').text).not.toContain('/linked/');
+    // A sentence that names the file, in another letter case, is still shown on its own.
+    expect(writeError('/linked/21d878e9/PROG.x68', '"prog.X68" no longer exists on this computer.', 'io').text).toBe(
+      '"prog.X68" no longer exists on this computer.',
+    );
+  });
+
   it('a failed write reports it and leaves the document modified', async () => {
     const t = setup();
     const doc = t.manager.newSource();

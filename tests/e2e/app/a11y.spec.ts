@@ -26,15 +26,9 @@ const ALLOWED: { rule: string; html: RegExp; owner: string; reason: string }[] =
     owner: 'E3, E4, E5 (by design, 2.8)',
     reason: 'text drawn in a syntax colour of the original',
   },
-  {
-    // A known defect of SH4's Output panel, not of the suites: the scrolling viewport of the
-    // Simulator's text window cannot take the keyboard focus. Reported to SH4 (X1 result of verify
-    // round 1); remove this entry when SH4 has repaired it (the test then still passes).
-    rule: 'scrollable-region-focusable',
-    html: /class="[^"]*\be68-output__viewport\b/,
-    owner: 'SH4',
-    reason: 'the Output panel viewport is not focusable (known defect, reported to SH4)',
-  },
+  // The entry for SH4's Output panel viewport (scrollable-region-focusable) was removed in gate I2
+  // round 2: SH4 made the viewport a focusable region (OutputPanel.tsx), so a regression fails the
+  // Simulator-mode scan again (errata X1 entry 8).
 ];
 
 /** Whether a finding's node is one of ALLOWED, and which. */
@@ -75,7 +69,7 @@ async function serious(app: App, include?: string): Promise<string[]> {
   return found;
 }
 
-test('the allowed findings are exactly the syntax colours and the known Output panel defect', () => {
+test('the allowed findings are exactly the syntax colours', () => {
   expect(allowedFor('color-contrast', '<span class="e68-syntax__unknown">X</span>')).toBeDefined();
   expect(
     allowedFor('color-contrast', '<span class="e68-squiggle e68-squiggle--error" title="ERROR">B</span>'),
@@ -83,7 +77,8 @@ test('the allowed findings are exactly the syntax colours and the known Output p
   expect(allowedFor('color-contrast', '<span data-element="error" style="color: red">x</span>')).toBeDefined();
   expect(allowedFor('color-contrast', '<button class="e68-button">OK</button>')).toBeUndefined();
   expect(allowedFor('link-name', '<span class="e68-syntax__unknown">X</span>')).toBeUndefined();
-  expect(allowedFor('scrollable-region-focusable', '<div class="e68-output__viewport">')).toBeDefined();
+  // SH4's Output panel viewport is focusable now: a finding on it fails the Simulator-mode scan.
+  expect(allowedFor('scrollable-region-focusable', '<div class="e68-output__viewport">')).toBeUndefined();
   expect(allowedFor('scrollable-region-focusable', '<div class="e68-grid__body">')).toBeUndefined();
 });
 

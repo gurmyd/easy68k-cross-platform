@@ -49,6 +49,9 @@ export type { CachedSyncFilesDeps } from '../../contracts';
 /** The write-behind interval of 3.8.4: a file that keeps changing is written at most this often. */
 export const WRITE_BEHIND_MS = 500;
 
+/** resolve() keeps at most this many answers (it forgets them all when it has more). */
+const RESOLVED_LIMIT = 1024;
+
 /** Why a file of a prepared folder is not in memory (DirSnapshot's reasons). */
 export type UnavailableReason = 'too-large' | 'too-many' | 'too-deep' | 'unreadable';
 
@@ -145,6 +148,13 @@ export class CachedSyncFiles implements SyncFiles {
   private readonly refreshing = new Map<VPath, { again: VfsChange | null }>();
   private readonly refreshes = new Set<Promise<void>>();
   private readonly behind: WriteBehind;
+  /**
+   * resolve() answers, by `dir \0 name`, until a name is added to or removed from a folder or the
+   * prepared roots change. A program that waits for the sound player asks task 70 for the same
+   * file thousands of times a second, and the name lookup was most of what each try cost.
+   */
+  private readonly resolved = new Map<string, VPath | null>();
+  private lookups = 0;
 
   constructor(deps: CachedSyncFilesDeps) {
     this.deps = deps;
@@ -176,6 +186,7 @@ export class CachedSyncFiles implements SyncFiles {
     // Subscribe first, so that nothing changed while the tree loads is missed.
     const root: Root = { path: dir, unsubscribe: this.deps.vfs.subscribe(dir, (change) => this.changed(change)) };
     this.roots.push(root);
+    this.namesChanged();
     await this.loadTree(dir, 0);
     // Prepared folders below the new one are part of it now.
     for (let i = this.roots.length - 1; i >= 0; i--) {
@@ -183,6 +194,7 @@ export class CachedSyncFiles implements SyncFiles {
       if (other !== root && isBelowFold(other.path, dir)) {
         other.unsubscribe();
         this.roots.splice(i, 1);
+        this.namesChanged();
       }
     }
   }
@@ -218,7 +230,19 @@ export class CachedSyncFiles implements SyncFiles {
   }
 
   resolve(dir: VPath, name: string): VPath | null {
-    if (typeof dir !== 'string' || typeof name !== 'string' || !isVPath(dir)) return null;
+    if (typeof dir !== 'string' || typeof name !== 'string') return null;
+    const key = `${dir}\u0000${name}`;
+    const known = this.resolved.get(key);
+    if (known !== undefined) return known;
+    const path = this.resolveNow(dir, name);
+    this.lookups++;
+    if (this.resolved.size >= RESOLVED_LIMIT) this.resolved.clear();
+    this.resolved.set(key, path);
+    return path;
+  }
+
+  private resolveNow(dir: VPath, name: string): VPath | null {
+    if (!isVPath(dir)) return null;
     const lexical = resolveLexically(dir, name);
     if (lexical === null) return null;
     const root = this.rootOf(lexical);
@@ -332,6 +356,11 @@ export class CachedSyncFiles implements SyncFiles {
     return this.roots.map((root) => root.path);
   }
 
+  /** How many resolve() calls had to look the name up rather than answer from memory (tests). */
+  get nameLookups(): number {
+    return this.lookups;
+  }
+
   /** Resolves when every change reported by others so far has been read into memory (tests). */
   async whenCurrent(): Promise<void> {
     while (this.refreshes.size > 0) await Promise.all([...this.refreshes]);
@@ -340,6 +369,7 @@ export class CachedSyncFiles implements SyncFiles {
   /** Stops listening to the Vfs and the timers; pending changes are not written. */
   dispose(): void {
     for (const root of this.roots.splice(0)) root.unsubscribe();
+    this.namesChanged();
     for (const cancel of this.timers.values()) cancel();
     this.timers.clear();
   }
@@ -649,6 +679,11 @@ export class CachedSyncFiles implements SyncFiles {
 
   // ==================================================================== the index
 
+  /** The names of a folder or the prepared roots changed: resolve() must look again. */
+  private namesChanged(): void {
+    this.resolved.clear();
+  }
+
   private rootOf(path: VPath): Root | undefined {
     return this.roots.find((root) => isBelowFold(path, root.path));
   }
@@ -678,15 +713,18 @@ export class CachedSyncFiles implements SyncFiles {
     this.files.set(path, file);
     this.fileByFold.set(foldCase(path), path);
     this.childrenOf(dirname(path)).add(basename(path));
+    this.namesChanged();
   }
 
   private dropFile(path: VPath): void {
     this.files.delete(path);
     this.fileByFold.delete(foldCase(path));
     this.children.get(dirname(path))?.delete(basename(path));
+    this.namesChanged();
   }
 
   private addDir(dir: VPath): void {
+    this.namesChanged();
     const root = this.rootOf(dir);
     for (let d = dir; ; d = dirname(d)) {
       const key = foldCase(d);
@@ -699,6 +737,7 @@ export class CachedSyncFiles implements SyncFiles {
   }
 
   private dropDir(key: string, dir: VPath): void {
+    this.namesChanged();
     this.dirByFold.delete(key);
     this.children.delete(dir);
     this.children.get(dirname(dir))?.delete(basename(dir));

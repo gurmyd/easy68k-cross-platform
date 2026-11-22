@@ -142,6 +142,8 @@ have, so both line-ending styles need test coverage.
 
 ## 4. Automating the official binaries (from source only)
 
+> **Corrected (erratum T1 1).** The tools named here moved: the oracle is `tests/oracle/wine/` (`npm run oracle:wine:build`, `npm run oracle:wine:asm`), its results are `tests/conformance/asm/golden/` and `tests/corpus/manifest.json` (non-redistributable inputs in `build/golden-local/`); the full table of old and new names is in official-oracle.md section 1. The `site` set has 77 usable archives; `dragonballz.zip` is cut off on the server and three archives are fetched from their Internet Archive copies, decided by each archive's SHA-256 (erratum T1 7).
+
 ### EDIT68K.exe
 
 - Command line: one argument, a file to open. `mainS.cpp:731-742`: if `ParamStr(1)` exists it is opened, otherwise

@@ -108,6 +108,7 @@ describe('task 58: the request', () => {
         asked.push(request);
         return null;
       },
+      chooseFolder: async () => null, // not used by task 58; present so the member can become required
       registerProvider: () => () => {},
     };
     const ctx = { fileDialogs, sim: { files: { currentDir: '/browser/demo' } } };

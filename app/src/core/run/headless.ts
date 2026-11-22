@@ -113,7 +113,6 @@ export async function createHeadlessSession(options: HeadlessOptions): Promise<H
   const settings: SimSettings = { ...structuredClone(DEFAULT_SIM_SETTINGS), ...options.settings };
   const answers = options.answers ?? {};
   const uiLog: string[] = [];
-  const printJobs: PrintJob[] = [];
   const reports: { what: string; error: unknown }[] = [];
   let journal: string | null = null;
 
@@ -147,7 +146,7 @@ export async function createHeadlessSession(options: HeadlessOptions): Promise<H
       showFileDialog: async (mode, title, filter, initialName) =>
         answers.fileDialog?.(mode, title, filter, initialName) ?? null,
       askLogFileExists: async (kind) => answers.logFileExists?.(kind) ?? 'Replace',
-      submitPrintJob: (job) => void printJobs.push(job),
+      submitPrintJob: () => {}, // the composed session keeps them (session.printJobs)
       journal: {
         write(text) {
           journal = text;
@@ -173,7 +172,6 @@ export async function createHeadlessSession(options: HeadlessOptions): Promise<H
     time,
     settings,
     uiLog,
-    printJobs,
     reports,
     messages: () => session.bridge.state.messageLines,
     runUntilIdle(limitMs = 60_000): boolean {

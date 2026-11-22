@@ -113,6 +113,59 @@ describe.skipIf(!enginesBuilt)('headless session (needs engine/dist)', { timeout
     });
   });
 
+  describe('the cold start of Execute and the saved settings (4.7.1; gate I2)', () => {
+    /** onEngineReplaced calls while `fn` runs: 0 = the cold start was skipped. */
+    const coldStartsDuring = async (s: HeadlessSession, fn: () => Promise<void>) => {
+      let count = 0;
+      const stop = s.onEngineReplaced(() => count++);
+      await fn();
+      stop();
+      return count;
+    };
+    const options = (s: HeadlessSession) => ({
+      exceptions: s.engine.getOption(SimOption.Exceptions),
+      execLogType: s.engine.getOption(SimOption.ExecLogType),
+      outputLogType: s.engine.getOption(SimOption.OutputLogType),
+      logTypes: [s.log.state.execType, s.log.state.outputType],
+    });
+
+    it('nothing changed since the start: the first Execute keeps the start-up simulator, frame or no frame', async () => {
+      for (const frames of [0, 1, 3]) {
+        const s = await create();
+        s.time.advance(16 * frames); // the log service's queued read of the new engine, delivered or not
+        expect(await coldStartsDuring(s, () => s.controller.open(PATH, 'execute')), `${frames} frame(s)`).toBe(0);
+        s.dispose();
+      }
+    });
+
+    it('settings changed without an engine call (an import of sim68K.dat): Execute applies them', async () => {
+      for (const frames of [0, 1]) {
+        const s = await create();
+        s.time.advance(16 * frames);
+        expect(options(s)).toEqual({ exceptions: 0, execLogType: 0, outputLogType: 0, logTypes: [0, 0] });
+        Object.assign(s.settings, { exceptions: true, execLogType: 2, outputLogType: 1 });
+        expect(await coldStartsDuring(s, () => s.controller.open(PATH, 'execute')), `${frames} frame(s)`).toBe(1);
+        s.time.advance(16);
+        expect(options(s), `${frames} frame(s)`).toEqual({
+          exceptions: 1,
+          execLogType: 2,
+          outputLogType: 1,
+          logTypes: [2, 1],
+        });
+        // The settings did not change again: the next Execute is a cold start because of the load.
+        expect(await coldStartsDuring(s, () => s.controller.open(PATH, 'execute'))).toBe(1);
+        s.dispose();
+      }
+    });
+
+    it('a setting changed and changed back leaves nothing to apply: skipped', async () => {
+      const s = await create();
+      s.settings.exceptions = true;
+      s.settings.exceptions = false;
+      expect(await coldStartsDuring(s, () => s.controller.open(PATH, 'execute'))).toBe(0);
+    });
+  });
+
   describe('with doubles for the devices', () => {
     it('a program runs to SIMHALT, and its output reaches the output device', async () => {
       const { parts, printed } = createDeviceDoubles();

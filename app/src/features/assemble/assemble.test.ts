@@ -78,6 +78,8 @@ function openWindow(options: { asm?: AsmEngine; features?: FeatureModule[] } = {
   const fileDialogs: FileDialogs = {
     open: async () => null,
     save: async () => saves.shift() ?? null,
+    chooseFolder: async () => null,
+    linkFileHandle: async () => null,
     registerProvider: () => () => {},
   };
   const app = createTestApplication({

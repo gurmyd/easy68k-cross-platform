@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
 import type { DialogProps, LogDialogValues } from '../../contracts';
 import { ENTRY_PAGES } from '../../core/help/context';
 import { useAppContext } from '../../state/context';
-import { Button, Dialog, IconButton, MaskedField, RadioGroup, TextField } from '../../ui/components';
+import { Button, Dialog, GroupBox, IconButton, MaskedField, RadioGroup, TextField } from '../../ui/components';
 import {
   EXEC_NAME_LABEL,
   EXEC_SAVE_NAME,
@@ -132,8 +132,7 @@ export function LogOutputDialog({ props, close }: DialogProps<LogOutputProps, Lo
             name="e68-log-exec-type"
           />
           {memRangeVisible(draft.execType) && (
-            <fieldset className="e68-logdlg__mem" data-testid="log-mem-range">
-              <legend>{MEM_RANGE_TITLE}</legend>
+            <GroupBox caption={MEM_RANGE_TITLE} className="e68-logdlg__mem" data-testid="log-mem-range">
               <MaskedField
                 {...MEM_FROM_FIELD}
                 label={MEM_FROM_LABEL}
@@ -149,7 +148,7 @@ export function LogOutputDialog({ props, close }: DialogProps<LogOutputProps, Lo
                 onChange={(memBytesText) => change({ memBytesText })}
                 data-testid="log-mem-bytes"
               />
-            </fieldset>
+            </GroupBox>
           )}
         </div>
         <div className="e68-logdlg__file">

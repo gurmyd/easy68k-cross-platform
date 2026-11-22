@@ -138,6 +138,13 @@ export interface RunControllerDeps {
    */
   partsUntouched?: () => boolean;
   /**
+   * True while the saved settings a cold start puts in place (4.7.1 steps 2 and 4) are still the
+   * ones the last cold start applied. A change made since (an import of sim68K.dat, the settings of
+   * another window) reaches neither the engine nor the parts without a cold start, so the next one
+   * is not skipped: the simulator a program is started in has the settings the user sees (gate I2).
+   */
+  settingsUnchanged?: () => boolean;
+  /**
    * A change of a program file made outside the simulator (a save in the editor, an import, another
    * window) that a cached view of the program files has not read in yet: the promise resolves when
    * it has (3.8.4). null = nothing outstanding. A run command and a load wait for it, so that the
@@ -262,8 +269,23 @@ export class SimRunController implements RunController {
 
   /** The Caution question is open: a second load request is ignored like one made during a load. */
   private asking = false;
-  /** Nothing has reached the engine since the last cold start (4.7.1). */
+  /**
+   * Nothing has reached the engine since the last cold start (4.7.1), apart from what the cold
+   * start itself caused (`fromColdStart`).
+   */
   private pristine = false;
+  /**
+   * The cold start is in one of its synchronous steps (2, 4 and 5): what the parts and the
+   * `onEngineReplaced` listeners queue now is part of it, as the original's own start-up is.
+   */
+  private inColdStartStep = false;
+  /**
+   * Entries queued by a cold start itself, for example the log service's read of the log types the
+   * new engine received (3.3.5). Delivering one does not count as a change since that cold start:
+   * whether it has been delivered when the next load comes depends on display frames, and the
+   * decision to skip must not (gate I2).
+   */
+  private readonly fromColdStart = new WeakSet<QueueEntry>();
   /** The window had the focus elsewhere: program files may have changed (3.8.4). */
   private filesStale = false;
   /** The instruction word at the PC of the last snapshot, for the internal-fault box. */
@@ -563,7 +585,7 @@ export class SimRunController implements RunController {
    */
   private async coldStartSteps(): Promise<boolean> {
     const { bridge, lifecycle, engines } = this.deps;
-    if (this.live && this.pristine && (this.deps.partsUntouched?.() ?? true)) return true;
+    if (this.coldStartSkippable()) return true;
 
     // 1. The old simulator exits.
     await this.attempt('shut the simulator down', () => lifecycle.exit());
@@ -581,10 +603,13 @@ export class SimRunController implements RunController {
     this.updateAlertsView();
 
     // 2. Every part goes back to its start-up state.
+    this.inColdStartStep = true;
     try {
       lifecycle.resetToStartup();
     } catch (error) {
       this.deps.ui.report('A simulator part could not be reset', error);
+    } finally {
+      this.inColdStartStep = false;
     }
     bridge.resetToStartup();
     this.setProgram(null);
@@ -608,9 +633,11 @@ export class SimRunController implements RunController {
 
     // 4. and 5. Saved settings, then what the start-up reset reported.
     const inRecovery = this.recovering;
+    this.inColdStartStep = true;
     try {
       this.call((engine) => lifecycle.applySettings(engine));
     } catch (error) {
+      this.inColdStartStep = false;
       if (error !== ENGINE_FAILED) throw error;
       // The new engine failed at once. If this cold start was itself the recovery from a failure,
       // there is nothing left to try: the stand-in stays. Otherwise fail() has begun a recovery.
@@ -620,10 +647,26 @@ export class SimRunController implements RunController {
       }
       return false;
     }
-    this.deps.listing.refresh();
-    this.pristine = true;
-    this.notifyReplaced();
+    try {
+      this.deps.listing.refresh();
+      this.pristine = true;
+      this.notifyReplaced();
+    } finally {
+      this.inColdStartStep = false;
+    }
     return true;
+  }
+
+  /**
+   * 4.7.1, last paragraph: "skipped when the simulator is still exactly in that state: nothing has
+   * been loaded, run or changed since the last one". Changed covers the engine (every call made
+   * since, except those the cold start queued itself), the parts the user can change directly, and
+   * the saved settings the cold start applies: a skipped cold start leaves nothing out.
+   */
+  private coldStartSkippable(): boolean {
+    return (
+      this.live && this.pristine && (this.deps.partsUntouched?.() ?? true) && (this.deps.settingsUnchanged?.() ?? true)
+    );
   }
 
   /** No engine could be had: the stand-in is in place, in start-up state, and the message area says why. */
@@ -877,6 +920,7 @@ export class SimRunController implements RunController {
     } else {
       this.queue.push(entry);
     }
+    if (this.inColdStartStep) this.fromColdStart.add(entry);
     this.requestTick();
   }
 
@@ -1185,6 +1229,14 @@ export class SimRunController implements RunController {
   }
 
   private apply(entry: QueueEntry): void {
+    // What the last cold start queued itself belongs to it: delivered now or after the next load,
+    // it leaves the simulator as that cold start left it (4.7.1; coldStartSkippable).
+    const partOfColdStart = this.pristine && this.fromColdStart.has(entry);
+    this.deliver(entry);
+    if (partOfColdStart) this.pristine = true;
+  }
+
+  private deliver(entry: QueueEntry): void {
     switch (entry.kind) {
       case 'keyDown': {
         // One key press as Windows delivers it, with no instruction in between: the key, its

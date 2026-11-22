@@ -32,7 +32,7 @@
 // Screenshots go to build/FS1/files-check (git-ignored). Exit code 0 = everything passed.
 // The page object `window.__easy68k` exists in development builds only (main.tsx).
 
-/* global console, process, window, document, indexedDB, IDBFactory, IDBObjectStore, setTimeout, DataTransfer, DragEvent, File, performance, Navigator, DOMException, URL, TextEncoder, TextDecoder, Buffer, MutationObserver */
+/* global console, process, window, document, indexedDB, IDBFactory, IDBObjectStore, setTimeout, DataTransfer, DragEvent, File, performance, Navigator, DOMException, URL, TextEncoder, TextDecoder, Buffer, MutationObserver, clearTimeout */
 
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -62,6 +62,38 @@ const browsers = browserChoice === 'all' ? ['chromium', 'webkit'] : [browserChoi
 let baseUrl = '';
 let failures = 0;
 const results = [];
+
+/**
+ * Every pass has a time limit of its own. page.evaluate has no time limit in Playwright, so a page
+ * whose IndexedDB never answers would otherwise hold the check until CI cancels the job, with
+ * nothing in the log to say where (config's note on CI run 44937920498: 39 minutes in WebKit after
+ * "a page killed in the middle of a write"). A pass that runs out of time fails with the last step
+ * it reached (`progress`), and the browser's remaining passes are skipped.
+ */
+const PASS_LIMIT_MS = 6 * 60_000;
+let lastStep = '';
+const progress = (step) => {
+  lastStep = step;
+};
+async function timedPass(label, run) {
+  lastStep = 'start';
+  const began = Date.now();
+  let timer;
+  const limit = new Promise((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label}: did not finish within ${PASS_LIMIT_MS / 1000} s; last step: ${lastStep}`)),
+      PASS_LIMIT_MS,
+    );
+  });
+  const pass = run();
+  pass.catch(() => {}); // a pass that ran out of time is abandoned; its later failure is not reported twice
+  try {
+    await Promise.race([pass, limit]);
+  } finally {
+    clearTimeout(timer);
+  }
+  console.log(`  (${label}: ${((Date.now() - began) / 1000).toFixed(1)} s)`);
+}
 function check(name, ok, detail = '') {
   detail = String(detail).slice(0, 300);
   results.push({ name, ok, detail });
@@ -486,8 +518,10 @@ async function killPass(browser, name) {
   const context = await newContext(browser);
   const results = [];
   for (const delay of [0, 2, 10, 30, 80]) {
+    progress(`delay ${delay} ms: opening the page to kill`);
     const victim = await openApp(context);
     const path = `/browser/kill/f${delay}.bin`;
+    progress(`delay ${delay} ms: writing "old"`);
     await victim.page.evaluate(
       async (target) => window.__easy68k.ctx.vfs.writeFile(target, new TextEncoder().encode('old')),
       path,
@@ -500,6 +534,7 @@ async function killPass(browser, name) {
       },
       { target: path, ms: delay },
     );
+    progress(`delay ${delay} ms: killing the page in the middle of an 8 MB write`);
     if (name === 'chromium') {
       // Page.crash never answers (the target dies), so it is not awaited: the page's 'crash' event is.
       const crashed = victim.page.waitForEvent('crash', { timeout: 15_000 }).catch(() => null);
@@ -510,7 +545,9 @@ async function killPass(browser, name) {
     } else {
       await victim.page.close({ runBeforeUnload: false });
     }
+    progress(`delay ${delay} ms: opening a new page of the same store`);
     const survivor = await openApp(context);
+    progress(`delay ${delay} ms: reading the files in the new page`);
     const found = await survivor.page.evaluate(async (target) => {
       const { vfs } = window.__easy68k.ctx;
       const out = {};
@@ -763,6 +800,30 @@ async function uiPass(browser, name) {
     `${p} Open dialog: a typed name opens the stored file`,
     same(await page.evaluate(() => window.__result), ['/browser/demo/prog.X68']),
   );
+
+  // OpenRequest.initialName (TRAP #15 task 58, gate I2): the File name field starts with it.
+  await page.evaluate(() => {
+    window.__result = undefined;
+    void window.__easy68k.ctx.fileDialogs
+      .open({
+        title: 'Open File',
+        filters: [...window.__filters.EDITOR_OPEN_FILTERS],
+        multiple: false,
+        initialName: 'data.txt',
+      })
+      .then((r) => {
+        window.__result = r;
+      });
+  });
+  await dialog.waitFor();
+  const startName = await dialog.getByLabel('File name:').inputValue();
+  check(
+    `${p} Open dialog: the File name field starts with the request's initialName`,
+    startName === 'data.txt',
+    startName,
+  );
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.waitForFunction(() => window.__result !== undefined);
 
   // "From this computer...": imports into /browser/Imported.
   await page.evaluate(() => {
@@ -1210,21 +1271,19 @@ async function main() {
     for (const name of browsers) {
       const browser = await BROWSERS[name].launch();
       try {
-        console.log(`\n[${name}, backend]`);
-        await backendPass(browser, name);
-        console.log(`\n[${name}, store]`);
-        await storePass(browser, name);
-        console.log(`\n[${name}, blocked storage]`);
-        await blockedPass(browser, name);
-        console.log(`\n[${name}, storage that does not answer]`);
-        await hangingPass(browser, name);
-        console.log(`\n[${name}, full storage]`);
-        if (name === 'chromium') await quotaPass(browser, name);
-        else await injectedQuotaPass(browser, name);
-        console.log(`\n[${name}, a page killed in the middle of a write]`);
-        await killPass(browser, name);
-        console.log(`\n[${name}, dialogs, panel, drop, export, import]`);
-        await uiPass(browser, name);
+        const passes = [
+          ['backend', backendPass],
+          ['store', storePass],
+          ['blocked storage', blockedPass],
+          ['storage that does not answer', hangingPass],
+          ['full storage', name === 'chromium' ? quotaPass : injectedQuotaPass],
+          ['a page killed in the middle of a write', killPass],
+          ['dialogs, panel, drop, export, import', uiPass],
+        ];
+        for (const [label, pass] of passes) {
+          console.log(`\n[${name}, ${label}]`);
+          await timedPass(`${name}, ${label}`, () => pass(browser, name));
+        }
       } catch (error) {
         check(`${name}: the pass ran to the end`, false, String(error?.stack ?? error).slice(0, 400));
       } finally {

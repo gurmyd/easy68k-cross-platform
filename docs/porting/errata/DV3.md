@@ -1,5 +1,7 @@
 # Errata of DV3 (macOS packaging and release)
 
+> **Merge status (DOC1, 2026-11-21; completed in its repair round 1).** Every entry of this file has been read. Merged into the documents, each place marked "erratum DV3 <n>" or naming this file: 1, 2, 20 (ARCHITECTURE.md 7.2, 7.4 (first round)); 3, 10, 11, 12, 14, 21 (ARCHITECTURE.md 6.7 (21 also in the README and the manual list, B3)); 4, 5, 6, 7, 8, 16, 17, 19 (ARCHITECTURE.md 7.6); 9, 13, 20 (ARCHITECTURE.md 7.5). Nothing to merge, because no statement of a document is wrong or missing: 15 (how electron-builder runs inside the npm workspace (a record of DV3's scripts)); 18 (a lint record, with `docs/requests/DV3-eslint-node-globals.md`).
+
 What DV3 found while packaging the desktop app from `docs/ARCHITECTURE.md` 6.7, 7.2, 7.4-7.6 and
 section 11: where the document is silent, wrong or contradicts the code, what the repository does,
 and why. No entry concerns `app/src/contracts/`, so there is no **Contract** section.

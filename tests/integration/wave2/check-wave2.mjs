@@ -758,7 +758,12 @@ async function loggingPart(browser, name, os, fx) {
         .catch(() => {});
       continue;
     }
-    await toolbarButton(page, 'sim.run.traceInto').click();
+    // The halt's box can open between the look above and this click; the button is then disabled
+    // and the click would wait its whole time. A short limit, and back to the top of the loop,
+    // where the box is collected.
+    await toolbarButton(page, 'sim.run.traceInto')
+      .click({ timeout: 1500 })
+      .catch(() => {});
     await page.waitForTimeout(60);
   }
   await page.waitForTimeout(1500);

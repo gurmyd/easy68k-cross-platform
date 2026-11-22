@@ -1,5 +1,7 @@
 # Errata of SH3 (Text screen, fonts, output device)
 
+> **Merge status (DOC1, 2026-11-21; completed in its repair round 1).** Every entry of this file has been read. Merged into the documents, each place marked "erratum SH3 <n>" or naming this file: 2, 6 (ARCHITECTURE.md 4.5.3, 6.5.3 (first round; the bit order too, in 6.5.3)); 3, 15, 16, 17, 18, 20, 24 (ARCHITECTURE.md 3.5.2); 7 (ARCHITECTURE.md 6.5.3 (with T2 4)); 8, 9, 10, 11, 12, 13, 26 (ARCHITECTURE.md 3.5.1); 14, 25, 28 (ARCHITECTURE.md 3.5.1 (the task 95 sentence, in the text) and trap15-tasks-60-up.md 6.7 (with T2 section 2)); 19 (trap15-tasks-0-59.md task 25); 21 (trap15-tasks-0-59.md 12 (with T2 3)). Nothing to merge, because no statement of a document is wrong or missing: 1, 4, 5, 30 (contract entries; `app/src/contracts/` is the authority); 22, 23, 27, 29 (records of the tests and the browser check).
+
 What SH3 found while writing `app/src/core/sim-host/text/`, `fonts/` and `io.ts`: where
 `docs/ARCHITECTURE.md` or a spec is silent, ambiguous or cannot be met as written, what the
 repository does, and why. Entries under **Contract** concern declarations other packages compile

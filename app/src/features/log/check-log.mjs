@@ -25,12 +25,17 @@
 // times, so that a slow runner passes as this PC does; the one fixed pause is the three seconds the
 // user takes to answer the question while a program runs.
 //
+// Every wait has a time limit and a message that names what it waited for: Playwright's actions
+// their 30 s default, each call into the page (withLimit/evaluate), each step inside the flush
+// measurement, each part (PART_TIMEOUT) and the whole run (RUN_TIMEOUT, before CI's 15-minute step
+// limit). A wait that runs out fails its part with that message, and the next part runs.
+//
 // Screenshots go to build/U4/log-check (git-ignored). Prints "N of M checks passed"; the exit code
 // is 0 only if every check passed and no page logged an error. Needs engine/dist (the programs are
 // assembled by the real assembler); without it the script says so, and with
 // EASY68K_REQUIRE_ENGINES=1 (CI) that is a failure.
 
-/* global console, process, document, window, performance, setTimeout -- the browser globals are used inside page.evaluate() callbacks */
+/* global console, process, document, window, performance, setTimeout, clearTimeout -- the browser globals are used inside page.evaluate() callbacks */
 
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -56,6 +61,44 @@ const browsers = browserChoice === 'all' ? ['chromium', 'webkit'] : [browserChoi
 
 const LOAD_TIMEOUT = 240_000;
 const UI_TIMEOUT = 20_000;
+/** A call into the page that reads or writes the browser store (a few files, one flush). */
+const STORE_TIMEOUT = 60_000;
+/** Writing a 30 MB file into the store and seeing the question it causes (slow WebKit, loaded PC). */
+const BIG_FILE_TIMEOUT = 120_000;
+/** One whole part (logging, flush, options): a part that is not done by then fails alone. */
+const PART_TIMEOUT = 6 * 60_000;
+/**
+ * The whole check: it ends with a message before CI's step limit (15 minutes) would end it with
+ * none, and names the part and the wait it was in.
+ */
+const RUN_TIMEOUT = 13 * 60_000;
+
+/** What the check is waiting for now, and in which part, for the messages of the time limits. */
+let waitingFor = 'the start';
+let currentPart = 'set-up';
+
+/**
+ * Every wait of this check has a time limit (gate I2 review: the flush step once waited for more
+ * than 12 minutes with nothing in the log). Playwright's actions and waitFor have their own 30 s
+ * default; page.evaluate and the axe scan have none, so they go through here. On a timeout the
+ * error names what was awaited and for how long; the promise left behind is silenced, so that its
+ * later rejection (when the context is closed) cannot end the process.
+ */
+function withLimit(promise, ms, what) {
+  waitingFor = what;
+  promise.catch(() => {});
+  let timer;
+  const limit = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`timed out after ${Math.round(ms / 1000)} s waiting for ${what}`)), ms);
+  });
+  return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
+}
+
+/** page.evaluate with a time limit and a description of what it waits for. */
+const evaluate = (page, what, fn, arg, ms = STORE_TIMEOUT) => withLimit(page.evaluate(fn, arg), ms, what);
+
+/** The contexts not closed yet: a part that fails on a time limit leaves its own behind. */
+const openContexts = new Set();
 
 let baseUrl = '';
 let failures = 0;
@@ -146,8 +189,26 @@ async function assemblePrograms() {
 
 // --- the page ------------------------------------------------------------------------------------
 
-const newContext = (browser, colorScheme = 'light') =>
-  browser.newContext({ viewport: { width: 1400, height: 900 }, reducedMotion: 'reduce', colorScheme });
+async function newContext(browser, colorScheme = 'light') {
+  const context = await browser.newContext({
+    viewport: { width: 1400, height: 900 },
+    reducedMotion: 'reduce',
+    colorScheme,
+  });
+  openContexts.add(context);
+  context.on('close', () => openContexts.delete(context));
+  return context;
+}
+
+/** Closes what a failed part left open, each within a time limit. */
+async function closeLeftContexts() {
+  for (const context of [...openContexts]) {
+    await withLimit(context.close(), UI_TIMEOUT, 'a browser context of the failed part to close').catch((error) =>
+      note(String(error.message ?? error)),
+    );
+    openContexts.delete(context);
+  }
+}
 
 async function openPage(context) {
   const page = await context.newPage();
@@ -195,41 +256,69 @@ async function menuChecked(page, title, item) {
 
 const setMode = (page, mode) => page.locator(`.e68-modeswitch [data-mode="${mode}"]`).click();
 
-const waitFor = (page, predicate, arg, timeout = UI_TIMEOUT) =>
-  page.waitForFunction(predicate, arg, { timeout }).then(
+/**
+ * Waits until `predicate` holds in the page; false after `timeout`, with a note that names what was
+ * awaited, so that a slow step is visible in the log even where the caller goes on.
+ */
+const waitFor = (page, what, predicate, arg, timeout = UI_TIMEOUT) => {
+  waitingFor = what;
+  return page.waitForFunction(predicate, arg, { timeout }).then(
     () => true,
-    () => false,
+    () => {
+      note(`waited ${Math.round(timeout / 1000)} s for ${what}: not seen`);
+      return false;
+    },
   );
+};
 
 /** Puts the programs into the browser store and opens one in the simulator (setup, not checked). */
 async function putPrograms(page, programs) {
-  await page.evaluate(async (all) => {
-    const { ctx } = window.__easy68k;
-    for (const [name, program] of Object.entries(all)) {
-      await ctx.vfs.writeFile(`/browser/logcheck/${name}.S68`, Uint8Array.from(program.s68));
-      await ctx.vfs.writeFile(`/browser/logcheck/${name}.L68`, Uint8Array.from(program.l68));
-    }
-  }, programs);
+  await evaluate(
+    page,
+    'the test programs to be written into the browser store',
+    async (all) => {
+      const { ctx } = window.__easy68k;
+      for (const [name, program] of Object.entries(all)) {
+        await ctx.vfs.writeFile(`/browser/logcheck/${name}.S68`, Uint8Array.from(program.s68));
+        await ctx.vfs.writeFile(`/browser/logcheck/${name}.L68`, Uint8Array.from(program.l68));
+      }
+    },
+    programs,
+  );
 }
 async function openProgram(page, name) {
-  await page.evaluate(
+  await evaluate(
+    page,
+    `the simulator to open ${name}.S68`,
     (file) => window.__easy68k.ctx.sim.controller.open(`/browser/logcheck/${file}.S68`, 'open'),
     name,
   );
-  await waitFor(page, () => window.__easy68k.ctx.store.getState().sim.phase !== 'loading', undefined);
+  await waitFor(
+    page,
+    `the load of ${name}.S68 to finish`,
+    () => window.__easy68k.ctx.store.getState().sim.phase !== 'loading',
+    undefined,
+  );
 }
 
 const readText = (page, path) =>
-  page.evaluate(async (p) => {
-    const { ctx } = window.__easy68k;
-    if ((await ctx.vfs.stat(p)) === null) return null;
-    const bytes = await ctx.vfs.readFile(p);
-    let text = '';
-    for (const byte of bytes) text += String.fromCharCode(byte);
-    return text;
-  }, path);
+  evaluate(
+    page,
+    `${path} to be read from the browser store`,
+    async (p) => {
+      const { ctx } = window.__easy68k;
+      if ((await ctx.vfs.stat(p)) === null) return null;
+      const bytes = await ctx.vfs.readFile(p);
+      let text = '';
+      for (const byte of bytes) text += String.fromCharCode(byte);
+      return text;
+    },
+    path,
+  );
 const writeText = (page, path, text) =>
-  page.evaluate(
+  evaluate(
+    page,
+    `${path} to be written into the browser store`,
     ([p, t]) =>
       window.__easy68k.ctx.vfs.writeFile(
         p,
@@ -238,25 +327,54 @@ const writeText = (page, path, text) =>
     [path, text],
   );
 const removeFile = (page, path) =>
-  page.evaluate(async (p) => {
-    const { ctx } = window.__easy68k;
-    if ((await ctx.vfs.stat(p)) !== null) await ctx.vfs.remove(p);
-  }, path);
-const logState = (page) => page.evaluate(() => ({ ...window.__easy68k.ctx.sim.log.state }));
+  evaluate(
+    page,
+    `${path} to be removed from the browser store`,
+    async (p) => {
+      const { ctx } = window.__easy68k;
+      if ((await ctx.vfs.stat(p)) !== null) await ctx.vfs.remove(p);
+    },
+    path,
+  );
+const logState = (page) =>
+  evaluate(page, 'the log service state', () => ({ ...window.__easy68k.ctx.sim.log.state }), undefined, UI_TIMEOUT);
+/** Flushes until nothing is left unsaved; each flush within the page has its own limit. */
 const settled = (page) =>
-  page.evaluate(async () => {
-    const { log } = window.__easy68k.ctx.sim;
-    for (let i = 0; i < 20 && log.unsaved; i++) await log.flush();
-    return !log.unsaved;
+  evaluate(
+    page,
+    'the log to be flushed into the browser store',
+    async (limitMs) => {
+      const { log } = window.__easy68k.ctx.sim;
+      for (let i = 0; i < 20 && log.unsaved; i++) {
+        const done = await Promise.race([
+          log.flush().then(
+            () => true,
+            () => true,
+          ),
+          new Promise((resolve) => setTimeout(() => resolve(false), limitMs)),
+        ]);
+        if (!done) return false;
+      }
+      return !log.unsaved;
+    },
+    STORE_TIMEOUT / 2,
+  ).then((ok) => {
+    if (!ok) note(`the log still had unsaved bytes after flushing (a flush took more than ${STORE_TIMEOUT / 2000} s)`);
+    return ok;
   });
 const enabled = async (page, id) => !(await toolbarButton(page, id).isDisabled());
 
 /** Presses one of the command's chords on the page's key map, preferring one with `prefer` in it. */
 async function pressCommandKey(page, id, prefer) {
-  const chords = await page.evaluate(async (command) => {
-    const { chordsOn } = await import('/src/commands/specs.ts');
-    return chordsOn(command, window.__easy68k.ctx.platform.os, false);
-  }, id);
+  const chords = await evaluate(
+    page,
+    `the chords of ${id} (commands/specs.ts)`,
+    async (command) => {
+      const { chordsOn } = await import('/src/commands/specs.ts');
+      return chordsOn(command, window.__easy68k.ctx.platform.os, false);
+    },
+    id,
+  );
   const chord = chords.find((c) => c.includes(prefer)) ?? chords[0];
   const parts = chord.split('+');
   const key = parts.pop();
@@ -266,10 +384,14 @@ async function pressCommandKey(page, id, prefer) {
 }
 
 async function axe(page, label, p) {
-  const scan = await new AxeBuilder({ page })
-    .include('[role=dialog], [role=alertdialog]')
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-    .analyze();
+  const scan = await withLimit(
+    new AxeBuilder({ page })
+      .include('[role=dialog], [role=alertdialog]')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .analyze(),
+    STORE_TIMEOUT,
+    `the accessibility scan of ${label}`,
+  );
   check(
     `${p} ${label} passes the accessibility scan`,
     scan.violations.length === 0,
@@ -294,7 +416,16 @@ async function answerLogStopped(page, p) {
   await box.waitFor({ state: 'detached', timeout: UI_TIMEOUT }).catch(() => {});
 }
 
-const regsRevision = (page) => page.evaluate(() => window.__easy68k.ctx.store.getState().sim.regsRevision);
+const regsRevision = (page) =>
+  evaluate(
+    page,
+    'the register fields revision',
+    () => window.__easy68k.ctx.store.getState().sim.regsRevision,
+    undefined,
+    UI_TIMEOUT,
+  );
+/** A small read of page state, with the short limit. */
+const read = (page, what, fn, arg) => evaluate(page, what, fn, arg, UI_TIMEOUT);
 
 /**
  * One Trace Into with the toolbar, waiting until the step is shown (the register fields are re-read,
@@ -305,6 +436,7 @@ async function traceOnce(page) {
   await toolbarButton(page, 'sim.run.traceInto').click(); // waits until the button is enabled
   const shown = await waitFor(
     page,
+    'Trace Into to show its step (the register fields re-read, or a box)',
     (revision) =>
       window.__easy68k.ctx.store.getState().sim.regsRevision !== revision ||
       document.querySelector('[role=alertdialog]') !== null,
@@ -327,13 +459,14 @@ async function resetWith(page, id) {
   await toolbarButton(page, id).click();
   const done = await waitFor(
     page,
+    `${id} to reset the simulator (fields re-read, phase idle)`,
     (revision) => {
       const { sim } = window.__easy68k.ctx.store.getState();
       return sim.regsRevision !== revision && sim.phase === 'idle';
     },
     before,
   );
-  if (!done) note(`${id}: no reset seen within ${UI_TIMEOUT} ms`);
+  return done;
 }
 
 // --- the parts -----------------------------------------------------------------------------------
@@ -398,7 +531,7 @@ async function loggingPart(browser, name, programs) {
   await dialog.getByRole('radio', { name: 'Text Only' }).check();
   await dialog.getByRole('button', { name: 'OK' }).click();
   await dialog.waitFor({ state: 'detached', timeout: UI_TIMEOUT });
-  const saved = await page.evaluate(() => window.__easy68k.ctx.settings.get().sim);
+  const saved = await read(page, 'the saved settings', () => window.__easy68k.ctx.settings.get().sim);
   check(
     `${p} OK enables Log Start and saves the two types`,
     (await enabled(page, 'sim.run.logStart')) && saved.execLogType === 1 && saved.outputLogType === 1,
@@ -447,11 +580,14 @@ async function loggingPart(browser, name, programs) {
     .waitFor({ state: 'visible', timeout: UI_TIMEOUT })
     .then(() => true)
     .catch(() => false);
-  const panelFocused = await page.evaluate(() => Boolean(document.activeElement?.closest('[data-e68-panel="log"]')));
+  const panelFocused = await read(page, 'the focus of the Log panel', () =>
+    Boolean(document.activeElement?.closest('[data-e68-panel="log"]')),
+  );
   check(`${p} View > Log shows the Log panel and gives it the focus`, panelShown && panelFocused);
   const panelWanted = ['Stopped', 'hello_RunLog.txt', 'hello_OutLog.txt', 'Line=   12      SIMHALT', 'Hello'];
   await waitFor(
     page,
+    'the Log panel to show the state, both names and the last lines',
     (wanted) => {
       const element = document.querySelector('[data-e68-panel="log"]');
       return element !== null && wanted.every((text) => element.innerText.includes(text));
@@ -465,7 +601,7 @@ async function loggingPart(browser, name, programs) {
     panelText.replace(/\s+/g, ' ').slice(0, 200),
   );
   // An execution-log line is seen whole, up to its source text (the pane is the panel's width).
-  const lineWhole = await page.evaluate(() => {
+  const lineWhole = await read(page, 'the place of SIMHALT in the Log panel', () => {
     const pre = document.querySelector('[data-e68-panel="log"] .e68-logpanel__text');
     if (!pre) return { ok: false, detail: 'no text' };
     const range = document.createRange();
@@ -504,12 +640,17 @@ async function loggingPart(browser, name, programs) {
   await question.getByRole('button', { name: 'Cancel' }).click();
   await question.waitFor({ state: 'detached', timeout: UI_TIMEOUT });
   // Cancel gives Log Start back once start() has finished.
-  await waitFor(page, () => window.__easy68k.ctx.sim.log.state.startEnabled, undefined);
+  await waitFor(
+    page,
+    'Log Start to be enabled again after Cancel',
+    () => window.__easy68k.ctx.sim.log.state.startEnabled,
+    undefined,
+  );
   const afterCancel = await logState(page);
   check(
     `${p} Cancel: logging stays off, the engine is not logging, the file is unchanged`,
     !afterCancel.logging &&
-      !(await page.evaluate(() => window.__easy68k.ctx.sim.engine.state().logging)) &&
+      !(await read(page, 'the engine logging flag', () => window.__easy68k.ctx.sim.engine.state().logging)) &&
       (await loggingLabel(page).count()) === 0 &&
       (await readText(page, '/browser/logcheck/hello_RunLog.txt')) === before &&
       (await enabled(page, 'sim.run.logStart')),
@@ -524,7 +665,12 @@ async function loggingPart(browser, name, programs) {
   await question.waitFor({ timeout: UI_TIMEOUT });
   await question.getByRole('button', { name: 'Append' }).click();
   const second = dialogNamed(page, 'Log File Options');
-  await waitFor(page, () => document.body.innerText.includes('Output Log File exists!'), undefined);
+  await waitFor(
+    page,
+    "the output log's question",
+    () => document.body.innerText.includes('Output Log File exists!'),
+    undefined,
+  );
   check(`${p} then the output log's question`, (await second.innerText()).includes('Output Log File exists!'));
   await second.getByRole('button', { name: 'Replace' }).click();
   await loggingLabel(page).waitFor({ timeout: UI_TIMEOUT });
@@ -534,7 +680,7 @@ async function loggingPart(browser, name, programs) {
   // Log Stop with the keyboard, from the Listing panel.
   await page.locator(`${SIM} [data-e68-panel="listing"] [data-e68-panel-focus]`).focus();
   const chord = await pressCommandKey(page, 'sim.run.logStop', 'Shift');
-  await waitFor(page, () => !window.__easy68k.ctx.sim.log.state.logging, undefined);
+  await waitFor(page, 'Log Stop to stop the log', () => !window.__easy68k.ctx.sim.log.state.logging, undefined);
   check(`${p} Log Stop with ${chord} stops the log`, !(await logState(page)).logging);
   await settled(page);
   const appended = await readText(page, '/browser/logcheck/hello_RunLog.txt');
@@ -560,22 +706,33 @@ async function loggingPart(browser, name, programs) {
   // --- Log Start during a run, the file exists, the question stays open
   await openProgram(page, 'count');
   await writeText(page, '/browser/logcheck/count_OutLog.txt', 'an older log\r\n');
-  await page.evaluate(() => {
+  await read(page, 'the log types to be set (output log only)', () => {
     const { log } = window.__easy68k.ctx.sim;
     log.applyDialog({ ...log.state, execType: 0, outputType: 1 });
   });
   await toolbarButton(page, 'sim.run.run').click();
-  await waitFor(page, () => window.__easy68k.ctx.sim.engine.getRegister(2) > 500, undefined);
+  await waitFor(
+    page,
+    'the counter program to pass D2 = 500',
+    () => window.__easy68k.ctx.sim.engine.getRegister(2) > 500,
+    undefined,
+  );
   await toolbarButton(page, 'sim.run.logStart').click();
   await question.waitFor({ timeout: UI_TIMEOUT });
-  const d2Asked = await page.evaluate(() => window.__easy68k.ctx.sim.engine.getRegister(2));
+  const d2Asked = await read(page, 'D2 while the question is open', () =>
+    window.__easy68k.ctx.sim.engine.getRegister(2),
+  );
   await page.waitForTimeout(3000); // the user takes their time
-  const d2Later = await page.evaluate(() => window.__easy68k.ctx.sim.engine.getRegister(2));
+  const d2Later = await read(page, 'D2 three seconds later', () => window.__easy68k.ctx.sim.engine.getRegister(2));
   check(`${p} the program stands still while the question is open`, d2Asked === d2Later, `D2 ${d2Asked} -> ${d2Later}`);
   await question.getByRole('button', { name: 'Append' }).click();
   // Until the program has written some lines into the log (by the log's own count, not a pause).
-  const wrote = await waitFor(page, () => window.__easy68k.ctx.sim.log.tail('output', 40).length >= 30, undefined);
-  if (!wrote) note(`${p} the program wrote fewer than 30 lines into the log within ${UI_TIMEOUT} ms`);
+  await waitFor(
+    page,
+    'the program to write 30 lines into the log',
+    () => window.__easy68k.ctx.sim.log.tail('output', 40).length >= 30,
+    undefined,
+  );
   await toolbarButton(page, 'sim.run.logStop').click();
   await toolbarButton(page, 'sim.run.pause').click();
   await settled(page);
@@ -611,67 +768,126 @@ async function flushPart(browser, name, programs) {
   await openProgram(page, 'hello');
   // `dir`: a folder of its own, or the loaded program's folder, whose cached copy for the program
   // (3.8.4, CachedSyncFiles) follows every change of the file.
-  const measure = (size, dir = '/browser/logcheck-big') =>
-    page.evaluate(
-      async ([bytes, folder]) => {
+  // Every step inside the page has a limit of its own and returns what it was waiting for, so
+  // that a slow store fails this part with a reason instead of waiting for ever (gate I2 review:
+  // WebKit once waited here more than 12 minutes, in the 30 MB case of the program's folder, where
+  // the question can take longer than the 20 s the loop once allowed, and nobody answered it).
+  const measure = async (size, dir = '/browser/logcheck-big') => {
+    const label = `${size >= 1024 * 1024 ? `${size / 1024 / 1024} MB` : `${size} bytes`} in ${dir}`;
+    const result = await evaluate(
+      page,
+      `the flush measurement (${label})`,
+      async ([bytes, folder, bigMs, storeMs]) => {
         const { ctx } = window.__easy68k;
         const { log } = ctx.sim;
         const path = `${folder}/hello_OutLog.txt`;
-        await ctx.vfs.writeFile(path, new Uint8Array(bytes).fill(0x41));
+        const within = (promise, ms) =>
+          Promise.race([
+            promise.then(
+              (value) => ({ done: true, value }),
+              (error) => ({ done: true, error: String(error?.message ?? error) }),
+            ),
+            new Promise((resolve) => setTimeout(() => resolve({ done: false }), ms)),
+          ]);
+        const phases = {};
+        let t = performance.now();
+        const written = await within(ctx.vfs.writeFile(path, new Uint8Array(bytes).fill(0x41)), bigMs);
+        phases.writeMs = Math.round(performance.now() - t);
+        if (!written.done) return { reason: `the ${bytes}-byte file was not written within ${bigMs} ms`, phases };
+        if (written.error) return { reason: `writing the file failed: ${written.error}`, phases };
         log.applyDialog({ ...log.state, execType: 0, outputType: 1, outputFileName: path });
-        // The question is answered by the dialog; Append is pressed below by the check.
+        // The file exists: start() asks Log File Options; Append is pressed here.
+        t = performance.now();
+        let startSettled = false;
         const started = log.start();
-        const deadline = performance.now() + 20000;
-        while (performance.now() < deadline) {
+        started.then(
+          () => (startSettled = true),
+          () => (startSettled = true),
+        );
+        let answered = false;
+        const deadline = performance.now() + bigMs;
+        while (!startSettled && performance.now() < deadline) {
           const button = [...document.querySelectorAll('[role=dialog] button')].find((b) => b.textContent === 'Append');
           if (button) {
             button.click();
+            answered = true;
             break;
           }
           await new Promise((resolve) => setTimeout(resolve, 20));
         }
-        if (!(await started)) return null;
+        phases.questionMs = Math.round(performance.now() - t);
+        if (!answered && !startSettled) {
+          return { reason: `the Log File Options question was not shown within ${bigMs} ms after Log Start`, phases };
+        }
+        const outcome = await within(started, storeMs);
+        phases.startMs = Math.round(performance.now() - t);
+        if (!outcome.done) return { reason: `log.start() did not resolve within ${storeMs} ms after Append`, phases };
+        if (outcome.value !== true) {
+          return {
+            reason: answered
+              ? `log.start() resolved ${outcome.error ?? outcome.value} after Append`
+              : `log.start() resolved ${outcome.error ?? outcome.value} before any question was shown`,
+            phases,
+          };
+        }
         const chunk = new Uint8Array(8192).fill(0x42);
         const times = [];
         for (let i = 0; i < 30; i++) {
           log.outputWrite(chunk);
           const t0 = performance.now();
-          await log.flush();
+          const flushed = await within(log.flush(), storeMs);
+          if (!flushed.done) {
+            log.stop();
+            return { reason: `flush ${i + 1} of 30 did not finish within ${storeMs} ms`, phases };
+          }
           times.push(performance.now() - t0);
         }
         log.stop();
-        await log.flush();
-        const size = (await ctx.vfs.stat(path))?.size ?? -1;
+        const last = await within(log.flush(), storeMs);
+        if (!last.done) return { reason: `the flush after Log Stop did not finish within ${storeMs} ms`, phases };
+        const stat = await within(ctx.vfs.stat(path), storeMs);
+        const size = stat.done ? (stat.value?.size ?? -1) : -1;
         times.sort((a, b) => a - b);
-        return { median: times[15], size };
+        return { median: times[15], size, phases };
       },
-      [size, dir],
+      [size, dir, BIG_FILE_TIMEOUT, STORE_TIMEOUT],
+      // the page's own limits, one after the other at most, and a margin
+      2 * BIG_FILE_TIMEOUT + 3 * STORE_TIMEOUT,
     );
+    if (result.reason) return { ...result, reason: `${label}: ${result.reason} (${JSON.stringify(result.phases)})` };
+    return result;
+  };
 
   let best = Infinity;
   let detail = '';
   for (let attempt = 0; attempt < 3 && best >= 2; attempt++) {
     const small = await measure(1024);
-    const big = await measure(30 * 1024 * 1024);
-    if (!small || !big) {
-      detail = 'Log Start failed';
+    const big = small.reason ? small : await measure(30 * 1024 * 1024);
+    if (small.reason || big.reason) {
+      detail = small.reason ?? big.reason;
       break;
     }
     const ratio = big.median / Math.max(small.median, 0.1);
     best = Math.min(best, ratio);
-    detail = `small ${small.median.toFixed(2)} ms, 30 MB ${big.median.toFixed(2)} ms per flush (ratio ${ratio.toFixed(2)}); sizes ${small.size}, ${big.size}`;
+    detail = `small ${small.median.toFixed(2)} ms, 30 MB ${big.median.toFixed(2)} ms per flush (ratio ${ratio.toFixed(2)}); sizes ${small.size}, ${big.size}; 30 MB file written in ${big.phases.writeMs} ms, question after ${big.phases.questionMs} ms`;
     note(`${p} ${detail}`);
     if (big.size < 30 * 1024 * 1024 + 30 * 8192) detail += ' (the file is shorter than what was written)';
   }
   check(`${p} a 30 MB log costs the same per flush as a small one (IndexedDB)`, best < 3, detail);
   // The same in the program's folder, where the log goes by default: reported, not judged here.
+  // That it ends, with a result or a reason, is judged.
   const smallThere = await measure(1024, '/browser/logcheck');
-  const bigThere = await measure(30 * 1024 * 1024, '/browser/logcheck');
-  if (smallThere && bigThere) {
+  const bigThere = smallThere.reason ? smallThere : await measure(30 * 1024 * 1024, '/browser/logcheck');
+  if (!smallThere.reason && !bigThere.reason) {
     note(
-      `${p} in the loaded program's folder: small ${smallThere.median.toFixed(2)} ms, 30 MB ${bigThere.median.toFixed(2)} ms per flush (the program's cached copy of the folder reads the whole file again after each append)`,
+      `${p} in the loaded program's folder: small ${smallThere.median.toFixed(2)} ms, 30 MB ${bigThere.median.toFixed(2)} ms per flush (the program's cached copy of the folder reads the whole file again after each append); 30 MB file written in ${bigThere.phases.writeMs} ms, question after ${bigThere.phases.questionMs} ms`,
     );
   }
+  check(
+    `${p} the measurement in the loaded program's folder ends within its time limits`,
+    !smallThere.reason && !bigThere.reason,
+    smallThere.reason ?? bigThere.reason ?? '',
+  );
   check(`${p} no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   await context.close();
 }
@@ -705,7 +921,7 @@ async function optionsPart(browser, name, colorScheme) {
   await auto.getByRole('checkbox').check();
   await auto.getByRole('button', { name: 'Cancel' }).click();
   await auto.waitFor({ state: 'detached' });
-  let sim = await page.evaluate(() => window.__easy68k.ctx.settings.get().sim);
+  let sim = await read(page, 'the saved settings', () => window.__easy68k.ctx.settings.get().sim);
   check(`${p} Cancel changes nothing`, sim.autoTraceIntervalMs === 200 && sim.disableDisplay === false);
   await menu(page, 'Options', /^Auto Trace Options/);
   await auto.waitFor({ timeout: UI_TIMEOUT });
@@ -714,7 +930,7 @@ async function optionsPart(browser, name, colorScheme) {
   await auto.getByRole('checkbox').check();
   await auto.getByRole('button', { name: 'OK' }).click();
   await auto.waitFor({ state: 'detached' });
-  sim = await page.evaluate(() => window.__easy68k.ctx.settings.get().sim);
+  sim = await read(page, 'the saved settings', () => window.__easy68k.ctx.settings.get().sim);
   check(
     `${p} OK saves the interval (step 10) and the check box`,
     sim.autoTraceIntervalMs === 210 && sim.disableDisplay === true,
@@ -725,7 +941,7 @@ async function optionsPart(browser, name, colorScheme) {
   await menu(page, 'Options', /^Enable Exceptions/);
   await menu(page, 'Options', /^Enable Bit Field Instructions/);
   const engineOptions = () =>
-    page.evaluate(() => {
+    read(page, 'the engine options Exceptions and Bit Field', () => {
       const { engine } = window.__easy68k.ctx.sim;
       return [engine.getOption(0), engine.getOption(1)];
     });
@@ -741,7 +957,7 @@ async function optionsPart(browser, name, colorScheme) {
   await page.reload({ timeout: LOAD_TIMEOUT });
   await waitForApp(page);
   await setMode(page, 'simulator');
-  sim = await page.evaluate(() => window.__easy68k.ctx.settings.get().sim);
+  sim = await read(page, 'the saved settings', () => window.__easy68k.ctx.settings.get().sim);
   const [exc2, bit2] = await engineOptions();
   check(
     `${p} both are still set after a reload of the page (saved at once)`,
@@ -769,7 +985,7 @@ async function optionsPart(browser, name, colorScheme) {
   await axe(page, 'the Output Window Font dialog', p);
   await font.getByRole('button', { name: 'OK' }).click();
   await font.waitFor({ state: 'detached' });
-  const after = await page.evaluate(() => ({
+  const after = await read(page, 'the saved output font and the text screen font', () => ({
     saved: window.__easy68k.ctx.settings.get().sim.outputFont,
     screen: window.__easy68k.ctx.sim.text.state.optionsFont,
   }));
@@ -796,7 +1012,7 @@ async function optionsPart(browser, name, colorScheme) {
   await printer.getByRole('textbox', { name: 'Font:' }).fill('Arial');
   await printer.getByRole('button', { name: 'OK' }).click();
   await printer.waitFor({ state: 'detached' });
-  sim = await page.evaluate(() => window.__easy68k.ctx.settings.get().sim);
+  sim = await read(page, 'the saved settings', () => window.__easy68k.ctx.settings.get().sim);
   check(
     `${p} Source Window Font and Printer Font are saved`,
     sim.listingFont.name === 'Lucida Console' && sim.printerFont.name === 'Arial',
@@ -839,6 +1055,17 @@ async function main() {
     );
     process.exit(required ? 1 : 0);
   }
+  // The run's own limit: ends the process with what it was waiting for, before CI's step limit
+  // would end it with nothing in the log.
+  const watchdog = setTimeout(() => {
+    console.log(
+      `\nFAIL the check did not finish within ${RUN_TIMEOUT / 60_000} minutes: in the part [${currentPart}], waiting for ${waitingFor}.`,
+    );
+    const passed = results.filter((r) => r.ok).length;
+    console.log(`\n${passed} of ${results.length + 1} checks passed, ${failures + 1} failed.`);
+    process.exit(1);
+  }, RUN_TIMEOUT);
+  watchdog.unref();
   const programs = await assemblePrograms();
   const server = await createServer({
     configFile: join(appRoot, 'vite.config.ts'),
@@ -854,7 +1081,8 @@ async function main() {
   console.log(`Application: ${baseUrl}\nScreenshots: ${outDir}`);
   try {
     for (const name of browsers) {
-      const browser = await BROWSERS[name].launch();
+      currentPart = `${name}, launch`;
+      const browser = await withLimit(BROWSERS[name].launch(), LOAD_TIMEOUT, `${name} to start`);
       try {
         for (const [part, run] of [
           ['logging', () => loggingPart(browser, name, programs)],
@@ -863,25 +1091,27 @@ async function main() {
           ['options dark', () => optionsPart(browser, name, 'dark')],
         ]) {
           console.log(`\n[${name}, ${part}]`);
+          currentPart = `${name}, ${part}`;
           try {
-            await run();
+            await withLimit(run(), PART_TIMEOUT, `the part [${name}, ${part}] to finish`);
           } catch (error) {
             check(
               `${name}/${part}: ran to the end`,
               false,
-              String(error?.stack ?? error)
+              `${String(error?.stack ?? error)
                 .split('\n')
                 .slice(0, 4)
-                .join(' | '),
+                .join(' | ')} (last wait: ${waitingFor})`,
             );
+            await closeLeftContexts();
           }
         }
       } finally {
-        await browser.close();
+        await withLimit(browser.close(), UI_TIMEOUT * 3, `${name} to close`).catch((error) => note(error.message));
       }
     }
   } finally {
-    await server.close();
+    await withLimit(server.close(), UI_TIMEOUT, 'the dev server to close').catch((error) => note(error.message));
   }
   if (notes.length > 0) console.log(`\nNotes (not failures):\n${notes.map((text) => `  - ${text}`).join('\n')}`);
   const passed = results.filter((r) => r.ok).length;

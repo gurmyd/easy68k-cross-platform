@@ -1,5 +1,7 @@
 # Errata of DV2 (Electron shell)
 
+> **Merge status (DOC1, 2026-11-21; completed in its repair round 1).** Every entry of this file has been read. Merged into the documents, each place marked "erratum DV2 <n>" or naming this file: 4 (ARCHITECTURE.md 5.7); 6, 7, 10, 11, 13a, 14, 15 (ARCHITECTURE.md 7.6); 8 (ARCHITECTURE.md 3.3.4); 9 (ARCHITECTURE.md 3.8.1); 9a (ARCHITECTURE.md 3.8.4); 12, 13 (ARCHITECTURE.md 3.13). Nothing to merge, because no statement of a document is wrong or missing: 1, 2, 3, 4a (contract entries, taken into `contracts/platform.ts` by W1 at gate I1 (`nativeFileDialogs`, `userDataDir`, device sources, `grantDroppedFile`); `app/src/contracts/` is the authority, and the desktop behaviour is in ARCHITECTURE.md 3.8.5 (erratum FS1 15)); 5, 16 (records of tests).
+
 What DV2 found while building the desktop shell from `docs/ARCHITECTURE.md` 2.1, 3.3.4, 3.8.1,
 3.8.4, 3.8.6, 3.13, 5.7, 6.7 and 7.6: where the document is silent or contradicts itself, what the
 repository does, and why. Entries under **Contract** concern declarations that other packages

@@ -72,6 +72,8 @@ const browsers = browserChoice === 'all' ? ['chromium', 'webkit'] : [browserChoi
 const SOUNDS = ['0.wav', '1.wav', 'chime.wav', 'roger.wav', 'tick.wav', 'tock.wav'];
 /** How late a sound may free the player in the best of RUNS runs (timer polling on a loaded machine). */
 const LATE_MS = 120;
+/** A sound heard this much before the one before it has ended still counts as after it (a render quantum is 2.9 ms at 44.1 kHz). */
+const HEARD_SLACK_MS = 3;
 const RUNS = 3;
 const LOAD_TIMEOUT = 240_000;
 const IS_LINUX = process.platform === 'linux';
@@ -534,7 +536,8 @@ async function checkGraphicSound(browserName, page) {
   if (prepared !== null) return;
 
   await page.locator('.e68-modeswitch [data-mode="simulator"]').click();
-  const durations = { one: 302.132, zero: 355.964 }; // parseWav of 1.wav and 0.wav (types.test.ts)
+  // parseWav of 1.wav, 0.wav and roger.wav (types.test.ts)
+  const durations = { one: 302.132, zero: 355.964, roger: (11045 / 11025) * 1000 };
   const runs = [];
   for (let run = 0; run < RUNS; run++) {
     await page.evaluate(async (path) => {
@@ -548,6 +551,7 @@ async function checkGraphicSound(browserName, page) {
     await page.evaluate(() => {
       Object.assign(window.__sh5Check.frames, { last: 0, longest: 0, count: 0 });
       Object.assign(window.__sh5Check.reads, { count: 0, ms: 0 });
+      if (window.__heard) window.__heard.length = 0;
     });
     await page.locator('.e68-shell__toolbar [data-command="sim.run.run"]').click();
     const halted = await waitUntil(
@@ -564,6 +568,7 @@ async function checkGraphicSound(browserName, page) {
       const { plays, frames, reads } = window.__sh5Check;
       return {
         plays: plays.map((p) => ({ ...p })),
+        heard: window.__heard ? window.__heard.map((h) => ({ ...h })) : null,
         frames: { longest: frames.longest, count: frames.count },
         reads: { ...reads },
         messages: [...(s.messageLines ?? [])],
@@ -572,11 +577,27 @@ async function checkGraphicSound(browserName, page) {
       };
     });
     const at = Object.fromEntries(outcome.plays.map((p) => [p.name, p.at]));
+    // The same by what is heard (the source nodes' starts), named by their lengths.
+    const heardName = (ms) =>
+      Math.abs(ms - durations.one) < 2
+        ? '1.wav'
+        : Math.abs(ms - durations.zero) < 2
+          ? '0.wav'
+          : Math.abs(ms - durations.roger) < 2
+            ? 'roger.wav'
+            : `${ms.toFixed(0)} ms`;
+    const heard = outcome.heard
+      ? outcome.heard.filter((h) => h.running).map((h) => ({ name: heardName(h.ms), at: h.at }))
+      : [];
+    const heardAt = Object.fromEntries(heard.map((h) => [h.name, h.at]));
     runs.push({
       halted,
       names: outcome.plays.map((p) => p.name),
       zeroAfter: (at['0.wav'] ?? NaN) - (at['1.wav'] ?? NaN),
       rogerAfter: (at['roger.wav'] ?? NaN) - (at['0.wav'] ?? NaN),
+      heard: heard.map((h) => h.name),
+      heardZeroAfter: (heardAt['0.wav'] ?? NaN) - (heardAt['1.wav'] ?? NaN),
+      heardRogerAfter: (heardAt['roger.wav'] ?? NaN) - (heardAt['0.wav'] ?? NaN),
       frames: outcome.frames,
       reads: outcome.reads,
       messages: outcome.messages,
@@ -600,6 +621,26 @@ async function checkGraphicSound(browserName, page) {
     overshoot(best) < LATE_MS,
     `best run late by ${overshoot(best).toFixed(1)} ms`,
   );
+  // What is heard: the one voice of the standard player never sounds twice at once. Before gate I2
+  // 1.wav waited 50 to 100 ms for its decoder and 0.wav, decoded ahead, began on time, so the
+  // two overlapped while the device's own timing (above) was right.
+  const heardTimes = runs
+    .map((r) => `[${r.heard.join(', ')}] ${r.heardZeroAfter.toFixed(1)}/${r.heardRogerAfter.toFixed(1)}`)
+    .join('; ');
+  if (runs.every((r) => r.heard.length === 0)) {
+    note(`${label}: no sound was started on a running audio context, so what is heard cannot be timed - ${heardTimes}`);
+  } else {
+    check(
+      `${label}: heard one after the other: no sound is heard before the one before it has been heard to its end`,
+      runs.every(
+        (r) =>
+          r.heard.join(',') === '1.wav,0.wav,roger.wav' &&
+          r.heardZeroAfter >= durations.one - HEARD_SLACK_MS &&
+          r.heardRogerAfter >= durations.zero - HEARD_SLACK_MS,
+      ),
+      `heard, ms after the one before (0.wav/roger.wav): ${heardTimes}`,
+    );
+  }
   // The picture the program drew, to look at (the panel shows only part of it at this window size).
   const picture = await page.evaluate(() => {
     const canvas = document.querySelector('[data-e68-workspace="simulator"] [data-e68-panel="output"] canvas');
@@ -631,6 +672,23 @@ function countContexts() {
       super(...rest);
       window.__audioContexts.push(this);
     }
+  };
+  // When each sound is heard, by the page's clock: start(when, offset) may schedule it ahead of the
+  // context's clock, or start a late sound part-way in, as if it had begun `offset` earlier. The
+  // backend's play() calls alone cannot show a sound that waited for its decoder (gate I2).
+  window.__heard = [];
+  const Source = window.AudioBufferSourceNode;
+  if (!Source) return;
+  const start = Source.prototype.start;
+  Source.prototype.start = function (...rest) {
+    const ahead = typeof rest[0] === 'number' ? Math.max(0, rest[0] - this.context.currentTime) * 1000 : 0;
+    const offset = typeof rest[1] === 'number' ? rest[1] * 1000 : 0;
+    window.__heard.push({
+      at: performance.now() + ahead - offset,
+      ms: this.buffer ? this.buffer.duration * 1000 : -1,
+      running: this.context.state === 'running',
+    });
+    return start.apply(this, rest);
   };
 }
 

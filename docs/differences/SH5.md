@@ -29,8 +29,11 @@ heard, or in cases the original leaves undefined.
   ended by then; a reset (Rewind, opening a program) does not stop them, as in the original.
 - **A sound that had to wait is heard in step with the program.** A sound asked for while audio is
   locked or suspended starts, once audio runs, where it would be by then; a sound whose time is over
-  by then is not played at all, and a loop joins at the right place. A wait of less than 0.2 s
-  (decoding, for instance) starts the sound from its beginning.
+  by then is not played at all, and a loop joins at the right place. Uncompressed WAVE files (every
+  official sound) never wait for a decoder; a compressed one (ADPCM, mu-law ...) may wait for the
+  browser's decoder, and a wait of less than 0.2 s starts it from its beginning. If the standard
+  player's next sound starts while such a late sound still plays, the late one is cut off at that
+  moment: the original's one voice never sounds two sounds at once.
 - **At most 64 sounds at once.** A program that starts more overlapping sounds than that (task 75 in a
   tight loop) is not heard beyond the 64th; the results in D0 are unchanged.
 - **Unlocking.** Browsers start audio only after the person has clicked or pressed a key: every run

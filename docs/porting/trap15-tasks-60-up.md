@@ -359,6 +359,8 @@ Mode values 16 and 17 are the double-buffer switches (5.6). **Values 18-255** ar
 
 All other values from 18 to 255 (171 of them, including 18-21) behave as mode 1. This is an accident of the binary's layout, derived without running it (section 15, V8). PORT: reproduce the table; a program that passes such a value by mistake then draws in white, as it does on the original.
 
+> **Corrected (erratum T3 F6).** Under Wine every mode 18-23 draws the pen unchanged (Wine's `SetROP2` refuses values outside 1-16 and keeps the previous mode), where the table above expects white for mode 20 and the inverted pen for 22 (`trap15-b/b06-modes-above-15`). Whether Windows does the same is open (V8); the port keeps the table until `b06` has run on Windows (`tests/conformance/windows-confirm`), and the difference is listed as unconfirmed with owner SH1.
+
 ### 5.5 Current position (pen position)
 
 GDI keeps one current position per device context. The VCL preserves it when it recycles a device context: `TCanvas.SetHandle` stores the current position in the canvas object before it gives a handle up and moves the next handle to it [BIN `$0046C000`-`$0046C053`]. There are two positions: the back buffer's and the window's.
@@ -483,7 +485,9 @@ Dots drawn by a zero-length line (also by a one-point rectangle or ellipse with 
 
 Dot diameters: width 2 = 1 pixel, 3 and 4 = 3, 5 and 6 = 5, 7 and 8 = 7, 9 and 10 = 9, 11 and 12 = 11, 13 and 14 = 13. Pixel counts for widths 2-14: 1, 5, 9, 21, 21, 37, 45, 61, 69, 89, 101, 129, 145.
 
-The exact cap pixels of diagonal wide lines follow GDI's internal geometric-pen algorithm and are UNVERIFIED beyond these samples. PORT: stroke = the band of half-widths `a`/`b` around the width-1 line plus a disc of the dot shape at each end; validate against captured GDI output.
+Corrected (erratum SH2 2, measured against GDI): GDI widens each line into a polygon: the two long sides are the line moved by the pen's offsets (multiples of half a pixel), the round ends are vertices of a measured per-width pen polygon; the polygon is filled with the fill rule of 6.4's interior. (The first version of this paragraph said: a band of half-widths around the width-1 line plus a disc of the dot shape at each end, UNVERIFIED.)
+
+Corrected (erratum SH1 14, every width 2-255 measured on GDI): the dot of a pen of width `w >= 2` has `2 * floor((w - 1) / 2) + 1` rows and columns. Its shape is a polygon's, not a circle's, and was captured for every width 2-255 (`app/src/core/sim-host/surface/tables/dots.ts`). A zero-length line and a one-point ellipse draw it; a one-point rectangle draws it less one or two pixels at 15 widths.
 
 ### 6.3 Rectangles (tasks 87 and 90)
 
@@ -492,7 +496,7 @@ EASy68K sorts the corners so that `x1 <= x2`, `y1 <= y2`, then calls `Rectangle(
 Verified against GDI on 6000 random rectangles with pen widths 0-12, zero mismatches for case A, and 4000 for case B:
 
 - **Case A, `x1 < x2` and `y1 < y2`.** The outline covers the frame between the outer rectangle `[x1 - a, x2 + b] x [y1 - a, y2 + b]` and the inner rectangle `[x1 + b + 1, x2 - a - 1] x [y1 + b + 1, y2 - a - 1]`, all bounds inclusive. Corners are square, not rounded. The inner rectangle is filled with the fill colour by task 87 and left untouched by task 90. If the inner rectangle is empty everything is outline. With width 1 this is: outline on `x = x1`, `x = x2`, `y = y1`, `y = y2`; interior `x1+1..x2-1` x `y1+1..y2-1`.
-- **Case B, exactly one of `x1 == x2`, `y1 == y2`.** Width 1: a straight run of pen pixels `x1..x2` (or `y1..y2`), both ends included. Width 2 or more: a flat-ended bar that **omits the far end**: for `y1 == y2`, pixels `x1 .. x2-1` by `y1 - a .. y1 + b`; for `x1 == x2`, pixels `x1 - a .. x1 + b` by `y1 .. y2-1`. No fill.
+- **Case B, exactly one of `x1 == x2`, `y1 == y2`.** Width 1: a straight run of pen pixels `x1..x2` (or `y1..y2`), both ends included; the end pixels are combined once, the pixels between them twice (visible only in a mode other than Copy; erratum SH1 1). Width 2 or more: a flat-ended bar that **omits the far end** (with a pen exactly 206 wide the left half of a vertical bar lies one row lower than the right half; erratum SH1 14): for `y1 == y2`, pixels `x1 .. x2-1` by `y1 - a .. y1 + b`; for `x1 == x2`, pixels `x1 - a .. x1 + b` by `y1 .. y2-1`. No fill.
 - **Case C, `x1 == x2` and `y1 == y2`.** Width 1: **nothing is drawn.** Width 2 or more: the round dot of section 6.2.
 
 The outline uses the pen colour through the drawing mode; the interior uses the fill colour through the drawing mode. Each pixel is combined once (outline and interior do not overlap, and the four sides of a wide outline are one shape), which matters in XOR-type modes. Measured.
@@ -519,7 +523,7 @@ EASy68K sorts the corners, then draws only if `(x1 + y1 + x2 + y2) < 32768` (a W
 What GDI draws [GDI]:
 
 - The shape touches all four sides of the inclusive box `x1..x2` by `y1..y2`. It is `x2 - x1 + 1` pixels wide and `y2 - y1 + 1` high. The result depends only on the box size, not on its position (checked on 1680 size/position pairs).
-- Pen width 1: a one-pixel outline in the pen colour; task 88 fills the inside with the fill colour; task 91 leaves the inside untouched. Outline and interior are each combined once through the drawing mode.
+- Pen width 1: a one-pixel outline in the pen colour; task 88 fills the inside with the fill colour; task 91 leaves the inside untouched. The interior is filled first, then the outline is drawn over it; the two overlap, and outline pixels touched by two segments are drawn twice (visible in non-Copy modes; corrected, erratum SH2 1).
 - **The outline is not a mathematically ideal ellipse.** GDI converts each quarter of the ellipse to a cubic Bezier curve, flattens it to `n` straight segments and draws those with its line algorithm. Small circles are visibly polygons: a 12 x 12 circle is a regular octagon. A model with Bezier control constant 0.5523, vertices rounded to 1/16 pixel, centre `((x1+x2)/2, (y1+y2)/2)`, radii `(x2-x1)/2`, `(y2-y1)/2`, and `n` = 2 segments per quarter for boxes of 3-13 pixels, 4 for 14-48, 8 from about 49 up to at least 140, 16 by 250-500, reproduces 70 of the 138 circle sizes from 3 to 140 pixel-for-pixel and is a few pixels off on the rest. The exact GDI flattening and end-point rules are UNVERIFIED, so this model is a starting point, not a specification. A standard midpoint ("Bresenham") ellipse matches GDI on almost no size.
 - Because of the flattening, about one eighth of the sizes from 1x1 to 64x64 are not mirror-symmetric (523 of 4096 not left-right symmetric, 491 not top-bottom symmetric).
 - Degenerate boxes: one point (`x1 == x2`, `y1 == y2`) draws nothing with width 1 and the round dot with wider pens. A box one pixel wide or high draws a straight run of pen pixels. A 2 x 2 box draws only the two pixels of its left column.
@@ -574,7 +578,11 @@ N=9: 3 1 1 0 0      N=16: 5 4 2 2 1 0 0 0    N=23: 9 6 5 3 3 2 1 1 1 0 0 0
 
 Ellipses do not move the pen position.
 
+Corrected (erratum SH2 1): the flattening model above is replaced by the exact model of `docs/porting/gdi-deviations.md` section 3 (six steps, each checkable), which reproduces GDI's ellipses; the paragraphs above are kept as the record of how it was found.
+
 PORT: canvas `ellipse()` anti-aliases and cannot be used. Rasterise into the pixel buffer. Pixel-exact agreement with GDI needs either the flattening model above refined against captured GDI output, or a captured lookup table for small sizes with an algorithmic fallback. This is hazard H3.
+
+> **Corrected (erratum SH2 3).** Wide-pen ellipses: the two different outlines are measured in `docs/porting/gdi-deviations.md` step 6; 496 of 500 random wide-pen ellipses are reproduced pixel for pixel (the four that are not are very flat). The families that still differ (tiny boxes, pens much wider than a narrow box) are listed with their measured scope in gdi-deviations.md section 2 (errata SH2 8, 9).
 
 ### 6.5 Pixels (tasks 82, 83)
 
@@ -603,6 +611,8 @@ PORT: canvas `ellipse()` anti-aliases and cannot be used. Rasterise into the pix
 - EASy68K does not interpret the characters: every byte up to the terminating NUL goes to GDI, and nothing moves the text cursor. What GDI draws for bytes below `$20`, measured with Fixedsys on Windows 11 [GDI]: in a string of two or more bytes, `$09` (tab), `$0A`, `$0D` and `$1C`-`$1F` draw **nothing and take no width** - the characters after them close up, so `'A',9,'B',13,10,'C'` draws `ABC` in three cells; `$0C` draws the font's solid block in a full cell; the other control codes take 4 pixels each (5 for `$02`) and show a narrow hollow box, anti-aliased and not a Fixedsys glyph (`$02` is blank). The text extent, however, still counts one full cell (8 pixels) for every byte, control codes included, so the pen position after the call is `x + 8 * (number of bytes)` even when fewer pixels were painted. A string made only of zero-width control bytes paints one cell of background. So the help's "Control characters are ignored" (graphics.htm:171) holds for the usual case, a string that ends in CR, LF. These results depend on the Windows version (section 15, V13). PORT: paint nothing and advance nothing for bytes below `$20`, but count them at one character width each when moving the pen. Bytes `$80-$FF` are Windows-1252 characters; Fixedsys has no glyph for some of them (`$80` draws the solid block).
 - Nothing is recorded in the text array, so task 22 cannot read it back [SRC simIOu.cpp:902-905].
 - The pen position moves to `(x + TextWidth(string), y)` (section 5.5). An empty string draws nothing and still moves the pen to (x,y).
+
+> **Corrected (erratum T2 2.1).** Rules beyond this section, measured by T2 (`tests/conformance/gdi/text-model.ts` reproduces all 1,881 `text` cases): TextWidth counts a zero-width byte (`$09 $0A $0D $1C-$1F`) in a string of two or more bytes as 0 when the string contains a byte of `$80` or above, and its full advance otherwise, in every style. In the outline faces `$7F` in a string with a byte of `$80` or above takes the fallback glyph's width (`delInHighString` of `scalable/index.json`), Consolas `$0D` advances 0, and the opaque cell is the sum of the drawn widths (a zero-width byte takes none, `$7F` always `delInHighString`). In the raster faces the opaque cell includes the style overhang (+1 bold, +`floor((h-1)/2)` italic), which italic leaves out when two or more bytes are drawn and the string contains a zero-width byte or `$7F` with another drawn byte; `$02` paints nothing but takes 5 pixels in Fixedsys. Not modelled, and kept in the machine-dependent suite `text-control`: the fallback-font control bytes, the five undefined bytes, `$0C`, `@` and `$80` next to `$7F $86 $87 $88 $98`, and the sizes where Windows 11 draws a thin bar for a lone zero-width byte (`ZERO_WIDTH_BAR_SIZES`).
 
 ### 6.8 Text and graphics share one surface
 
@@ -945,6 +955,8 @@ play0 move  #0,d1
 
 - "Stop this slot" compares against `currentWave`, which is only the last slot handed to tasks 72/76, not necessarily the one sounding (see task 72), and is never cleared when a sound ends. A sound started by task 70 can be stopped by command 2 only by accident, and always by command 3.
 
+> **Corrected (erratum SH5 3).** Port decisions (SH5): task 70 with a file that is not a WAVE file gives `D0.W = 1` and duration 0; task 70 while busy reads the file first, so a missing file gives its message and leaves D0 even while busy, and a refused task 70 hands nothing to the backend. A standard slot's sound is released when the slot is emptied, unless the standard voice plays it (then when that voice ends).
+
 ### 11.4 DirectX player tasks
 
 All four set `D0.W = 0` first and return at once if `dsoundExist` is false.
@@ -979,6 +991,8 @@ All four set `D0.W = 0` first and return at once if `dsoundExist` is false.
 - Command 3 calls the stop routine for all 256 slots and then forces `D0.W = 1`; command 2 returns 1 whether or not the slot was sounding.
 - Quirk: command 1 sets the repeat count on the segment object and nothing ever sets it back [SRC simIOu.cpp:1544-1559; the only `SetRepeats` call in the source]. After a slot has been looped once, later "play once" requests for it (task 75 or command 0) also loop forever. Derived from the DirectMusic API contract; confirm on real EASy68K (section 15, V6).
 - Loader cache. The source never disables the DirectMusic loader's object cache, which the API documents as enabled by default; with it, loading the same file again returns the same segment object. If that is what happens in SIM68K, then: two slots loaded from one file are one sound (stopping or looping either affects both); task 73 playing a file that is also in a slot can be stopped through that slot and inherits its looping; and the sticky looping above survives a task 74 reload of the same file and a reset, for as long as the simulator runs. None of this can be read from the source. UNVERIFIED (V6). PORT: keep one decoded sound per slot, make looping sticky per slot until the slot is reloaded or the simulator is reset, and record the choice as a possible deviation.
+
+> **Corrected (erratum SH5 3).** Port decisions (SH5): "the loader rejects" means `parseWav` says the file is no valid RIFF WAVE file (so MIDI and segment files are rejected); a WAVE file the browser cannot decode is accepted and silent. Task 74 over a loaded slot releases the old sound without stopping it (`simIOu.cpp:1752`), and its playbacks play on until a reset; any reload clears looping. Task 77 command 3 stops the voices of every loaded slot, not those orphans. A task 73 sound is released once its duration has passed. `currentWave` survives a reset and is -1 again after `resetToStartup()`.
 
 ### 11.5 Reset: `ResetSounds()` [SRC simIOu.cpp:1593-1614]
 

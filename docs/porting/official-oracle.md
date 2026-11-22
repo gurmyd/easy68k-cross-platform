@@ -21,6 +21,8 @@ Everything below was run and observed unless marked otherwise.
 | Can exceptions / bit field be set without the UI? | Yes, both by command line (`/e`, `/b`) and by `sim68K.dat` (`1$exceptions`, `1$bit field enabled`), proven by programs (section 5.3). |
 | Graphics screenshots | Work, and match the simulator's own back buffer at 7 probe points, but Wine's GDI is not Windows' GDI: not a pixel-exact reference (section 5.4). |
 
+> **Corrected (erratum T1 1).** The paths of this document are those of the hand-off. The oracle now lives in `tests/oracle/wine/` (section 8 of ARCHITECTURE.md); the measurements stand, only the names changed: `tools/oracle-official/Dockerfile` is `tests/oracle/wine/Dockerfile`; `scripts/entry.sh`, `stage.sh`, `xwin.py` are in `tests/oracle/wine/common/`; `asm_batch.py`, `asm_corpus.sh`, `richedit_check.py`, `gen_richedit_stress.py`, `merge_manifests.py` in `tests/oracle/wine/asm/`; the simulator scripts in `tests/oracle/wine/sim/` (T3); `run-asm-corpus.sh` is `tests/oracle/wine/asm/regenerate.mjs` (`npm run oracle:wine:asm`, `asm/run.sh` for one file); `compare_cli.py` was not carried over (erratum T1 8); the image `easy68k-oracle-official:dev` is `easy68k-oracle-wine` (`npm run oracle:wine:build`); outputs under `build/ground-truth/asm/...` are the tracked `tests/conformance/asm/golden/<program id>/<label>.L68` / `.S68` (the `site` set in `build/golden-local/asm/<program id>/`), and the manifest is `tests/corpus/manifest.json`. `tests/oracle/wine/common/fetch-official.mjs` downloads and checks the official distribution; the image is pinned (`debian:bookworm-slim` by digest, Wine `8.0~repack-4`; erratum T1 18). An unexpected window fails the run; the help viewer's boxes are the one exception (erratum T1 16).
+
 ## 2. The container
 
 - 32-bit Wine prefix (`WINEARCH=win32`) created at image build time; `WINEDLLOVERRIDES="mscoree,mshtml="`
@@ -235,6 +237,8 @@ same classes with more lines):
 
 No unexplained class remains. The S-record differences (61 files) all come from these classes:
 undefined-symbol values, the CLI include regression, and the 5.16.1 operand changes.
+
+> **Corrected (erratum T1 4).** "Mask object code on lines that carry an `Undefined symbol` error" takes three rules (`tests/conformance/asm/compare.ts`): (1) the object-code field (columns 11-32) of the statement, whose message stands above its last listing line (with Constants Expanded the last continuation line); (2) in the symbol table, the value of an entry whose name cannot be a label (`,D0`), which the original leaves uninitialised; (3) in the S-records, the data bytes of exactly those statements (from the address of its listing line to the next listing line's) and the checksum of a record holding one. With them every run of the permitted corpus is equal. The date line is compared, not masked, wherever the official listing is in the repository: the assembler is given the time the listing printed (erratum T1 3).
 
 ### 3.6 assembler.md 8.3 settled
 

@@ -11,21 +11,139 @@ An unofficial port of [EASy68K](http://www.easy68k.com/), the Motorola 68000 edi
 
 EASy68K is widely used to teach 68000 assembly language. This project takes the original assembler and simulator code, compiles it to WebAssembly, and puts a new interface on top. Because the engine is the original's own code, programs are meant to assemble and run the same way they do in EASy68K v5.16.1 on Windows, quirks included.
 
-Planned:
+There are two ways to use it:
 
-- a web version that needs no installation and works offline after the first visit, on Windows, macOS, Linux and ChromeOS (tested with the engines of Chrome and Safari; Firefox is not tested yet)
-- a macOS app for Apple Silicon and Intel Macs
-- the original's features: editor, assembler, simulator, text and graphics output, sound, hardware window, memory and stack views, breakpoints, logging
+- **The web version**: open <https://gurmyd.github.io/easy68k-cross-platform/> in Chrome, Edge or Safari. Nothing is installed. Your programs are kept in the browser on your own computer; nothing is sent anywhere.
+- **The macOS app**: the same program as a Mac application, for Apple Silicon and Intel Macs, with direct access to the files on your disk. It is built and tested automatically, but it has **not been released yet**, so there is nothing to download today.
 
 ## What works today
 
-- The assembler and the simulator core are the original's code compiled to WebAssembly. Their test suites pass on macOS, Linux and Windows on every push.
-- Checked against the official EASy68K v5.16.1 for Windows, run under Wine: all 420 error-free test programs assemble to byte-identical listing and S-record files, and 9 of 9 execution logs match. The comparison is in `tests/oracle/wine` and `tests/conformance`.
-- In the preview: the editor, Assemble, and the simulator with text and graphics output, keyboard input, the hardware window, memory and stack views, breakpoints, logging, sound and file access, plus the original's help pages and examples.
-- These parts have automated tests that run in Chrome's and Safari's engines on GitHub's macOS, Linux and Windows machines. They have not been through the last rounds of checking yet. Known defects are listed in `docs/integration/wave1.md`.
-- The macOS app exists as a development build that is tested on GitHub's macOS machines. The installer is not built yet.
+Everything below has automated tests. No person has tried it on a Mac yet: the list of things only a person can check is [docs/MANUAL-TEST-MAC.md](docs/MANUAL-TEST-MAC.md), and it has not been worked through.
 
-No person has tried it on a Mac yet.
+- **The engines.** The assembler and the simulator core are the original's C++ code compiled to WebAssembly. Checked against the official EASy68K v5.16.1 for Windows, run under Wine: all 420 error-free test programs assemble to byte-identical listing (`.L68`) and S-record (`.S68`) files, and 9 of 9 execution logs match. The comparison is in `tests/oracle/wine` and `tests/conformance`.
+- **The three programs of the original**, as three modes of one window: the Editor/Assembler, the Simulator and EASyBIN, each with the original's menus.
+- **Editor**: several files in tabs, syntax highlighting, Find and Replace, printing, the assembler's error messages next to the line, and the original's option dialogs.
+- **Simulator**: run, step, trace, breakpoints (simple and advanced), the memory and stack views, the hardware window, logging, text and graphics output, keyboard and mouse input, sound, and files that a 68000 program reads and writes.
+- **The original's help pages and its example programs** (Help > Examples...).
+- **The web version** can be installed as an app from the browser and then works offline.
+- **Test runs**: every change is tested automatically on GitHub's Windows, macOS and Linux machines, in the engines of Chrome (Chromium) and Safari (WebKit). Every official example is opened, assembled, executed and run in the real application in both engines.
+- **The macOS app** is built and signed (ad hoc, without an Apple developer account) by the release workflow (`.github/workflows/release.yml`) for Apple Silicon and Intel, and the built app passes its automatic checks on GitHub's Mac machines of both kinds. No release has been published from it.
+
+Known defects and open items are listed in [docs/integration/wave2.md](docs/integration/wave2.md). Everything the port does differently from the original, and why, is in [docs/DIFFERENCES.md](docs/DIFFERENCES.md).
+
+## Using it
+
+[docs/USER-GUIDE.md](docs/USER-GUIDE.md) explains how to write, assemble and run a program, where your files are kept, the keyboard on a Mac, and what to do when something does not work.
+
+## Opening the Mac app for the first time
+
+There is no Mac app to download yet. When a release is published, this is what you will need to know, because macOS will not open the app straight away the first time. The warning macOS shows does not mean that something is wrong with your Mac or with the app: Apple shows it for every app whose maker has not paid for an Apple developer account and sent the app to Apple for checking ("notarisation"). This project has no such account. The same steps are in the notes of every release.
+
+<!-- first-start:begin -->
+The Mac app is not notarised by Apple (the project has no paid Apple developer account), so macOS
+blocks it the first time. This happens once; after that EASy68K opens like any other app. If you
+cannot or do not want to do this (for example on a Mac managed by your school, where these settings
+may be locked), use the web version instead: it does the same in Safari or Chrome and needs no
+installation.
+
+The Mac app needs macOS 13 (Ventura) or later.
+
+**Install.** Download the `.dmg` for your Mac (`arm64` for Apple silicon, M1 and later; `x64` for
+Intel; Apple menu > About This Mac tells you which), open it and drag **EASy68K** into
+**Applications**. (Or download the `.zip`, which macOS unpacks into `EASy68K.app`, and move that
+into Applications.)
+
+**What you will see.** When you open EASy68K for the first time, macOS shows a message instead of
+starting it. On macOS 15 (Sequoia) and later it reads "“EASy68K” Not Opened. Apple could not verify
+“EASy68K” is free of malware that may harm your Mac or compromise your privacy.", with the buttons
+**Done** and **Move to Trash**; older versions say "“EASy68K” cannot be opened because the developer
+cannot be verified." Some versions instead say that "“EASy68K” is damaged and can't be opened". The
+app is not damaged: this is how macOS words the same block for an app that is not notarised. Click
+**Done** (or **Cancel**), never **Move to Trash**.
+
+**Way 1: System Settings** (for the "Not Opened" or "developer cannot be verified" message)
+
+1. Open **System Settings** (Apple menu > System Settings) and choose **Privacy & Security** in the
+   sidebar.
+2. Scroll down to the **Security** section. It shows "“EASy68K” was blocked to protect your Mac."
+   (The line appears for about an hour after you tried to open the app; if it is gone, try to open
+   EASy68K once more.)
+3. Click **Open Anyway** and confirm with your password or Touch ID.
+4. Open EASy68K again. macOS asks a last time; click **Open Anyway** (or **Open**).
+
+On macOS 14 (Sonoma) and earlier you can instead Control-click (or right-click) EASy68K in
+Applications, choose **Open** from the menu and then click **Open** in the message.
+
+**Way 2: Terminal** (works for every message, including "is damaged")
+
+1. Open **Terminal** (Applications > Utilities > Terminal).
+2. Paste this line and press Return. It removes the quarantine mark from the app, and asks for
+   nothing:
+
+   ```
+   xattr -dr com.apple.quarantine /Applications/EASy68K.app
+   ```
+
+3. Open EASy68K as usual.
+
+If you put the app somewhere else than Applications, use its path in the command instead (you can
+type `xattr -dr com.apple.quarantine ` and then drag the app onto the Terminal window).
+<!-- first-start:end -->
+
+What has been checked so far: on GitHub's Mac machines, a downloaded copy of the app is refused by macOS for exactly this reason (it is not notarised; its signature is intact). Nobody has yet seen the message on a real Mac, so its exact wording above comes from Apple's documentation and may differ slightly on your Mac. If it does, please tell us (see [docs/MANUAL-TEST-MAC.md](docs/MANUAL-TEST-MAC.md)).
+
+## For contributors: build and test
+
+You need:
+
+- **Git**.
+- **Node.js 24** (it comes with npm 11). Check with `node --version`.
+- **Python 3** on macOS and Linux (Emscripten's installer needs it; on a Mac it comes with the Xcode command line tools, which `git` asks you to install the first time). Windows needs nothing extra.
+- About 4 GB of free disk space and a network connection. On a fast computer everything below takes
+  about twenty minutes, most of it the browser tests.
+
+The commands are the same on Windows (in PowerShell or Git Bash), macOS and Linux. Run them one after the other in a terminal:
+
+```sh
+git clone https://github.com/gurmyd/easy68k-cross-platform.git
+cd easy68k-cross-platform
+npm ci
+npm run setup:emsdk
+npm run build:engines
+npm test
+```
+
+What each one does:
+
+1. `git clone` and `cd` fetch the source and go into its folder.
+2. `npm ci` installs the exact versions of every tool the project uses, as listed in `package-lock.json`. It also downloads Electron, which the desktop app needs.
+3. `npm run setup:emsdk` installs Emscripten 7.0.0, the C++ compiler that turns the original's code into WebAssembly, into the folder `.toolchain/emsdk` inside the project. Nothing outside the project is changed. This takes a few minutes the first time.
+4. `npm run build:engines` compiles the two engines (assembler and simulator) into `engine/dist/`. Every other step needs them.
+5. `npm test` runs the unit tests of the application. The last lines say how many passed.
+
+More checks, the same that run on every change:
+
+```sh
+npm run typecheck
+npm run lint
+npm run test:conformance
+```
+
+`npm run test:conformance` compares the engines with the results of the official EASy68K that are stored in the repository.
+
+To try the application itself, run `npm run dev` and open the address it prints (for example `http://localhost:5173/`) in your browser. Stop it with Ctrl+C.
+
+The tests that drive a real browser need Playwright's Chromium and WebKit once:
+
+```sh
+npx playwright install --with-deps chromium webkit
+npm run build
+npm run test:e2e
+```
+
+On Linux, `--with-deps` installs the libraries the browsers need, and asks for your password (it uses `sudo`). There are also about thirty single checks, one per part of the application, such as `npm run check:shell`; `package.json` lists them.
+
+[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) explains how the project is organised, how to change it, and the rules a change must follow. The design is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## The name
 

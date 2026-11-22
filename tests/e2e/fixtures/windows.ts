@@ -64,7 +64,68 @@ export async function draftsCheckDone(app: App): Promise<void> {
     .toBe(true);
 }
 
-/** Closes a window the way a crash would: no unload handlers run. */
+/**
+ * Closes a window the way a crash would: no unload handlers run. The browser may still list the
+ * closed window's lock for a moment afterwards (10 to 360 ms measured in Chromium on Windows); the
+ * application allows for that (E1 errata entry 19), so the test need not wait for it.
+ */
 export async function crash(app: App): Promise<void> {
   await app.page.close({ runBeforeUnload: false });
+}
+
+/**
+ * What each window sees of the drafts, for the message of a failed expectation: the window locks
+ * held, whether the offer lock is free, the drafts by window, and whether the offer is shown.
+ */
+export async function draftsDiagnosis(windows: readonly App[]): Promise<string> {
+  const lines = await Promise.all(
+    windows.map(async (app, index) => {
+      if (app.page.isClosed()) return `window ${index}: closed`;
+      const seen = await app.page
+        .evaluate(async () => {
+          const held = ((await navigator.locks.query()).held ?? [])
+            .map((lock) => lock.name ?? '')
+            .filter((name) => name.startsWith('easy68k.window.'))
+            .map((name) => name.slice('easy68k.window.'.length, 'easy68k.window.'.length + 6));
+          const offerFree = await navigator.locks.request('easy68k.drafts.offer', { ifAvailable: true }, (l) => !!l);
+          const drafts = await new Promise<string[]>((resolve) => {
+            const open = indexedDB.open('easy68k.drafts');
+            open.onerror = () => resolve(['(cannot open)']);
+            open.onsuccess = () => {
+              const db = open.result;
+              if (!db.objectStoreNames.contains('drafts')) {
+                db.close();
+                return resolve(['(no store)']);
+              }
+              const all = db.transaction('drafts', 'readonly').objectStore('drafts').getAll();
+              all.onsuccess = () => {
+                db.close();
+                resolve(
+                  (all.result as { windowId: string; state: { name: string } }[]).map(
+                    (r) => `${r.windowId.slice(0, 6)}:${r.state.name}`,
+                  ),
+                );
+              };
+              all.onerror = () => resolve(['(cannot read)']);
+            };
+          });
+          return { held, offerFree, drafts };
+        })
+        .catch((error: unknown) => ({ error: String(error) }));
+      const offers = await app.page.getByText(DRAFTS_OFFER).count();
+      return `window ${index}: offer shown ${offers}; ${JSON.stringify(seen)}`;
+    }),
+  );
+  return lines.join('\n');
+}
+
+/** Runs an expectation; when it fails, the failure says what each window saw of the drafts. */
+export async function withDraftsDiagnosis(windows: readonly App[], expectation: () => Promise<void>): Promise<void> {
+  try {
+    await expectation();
+  } catch (error) {
+    const diagnosis = await draftsDiagnosis(windows).catch((e: unknown) => `(no diagnosis: ${String(e)})`);
+    if (error instanceof Error) error.message += `\n\nWhat the windows saw of the drafts:\n${diagnosis}`;
+    throw error;
+  }
 }

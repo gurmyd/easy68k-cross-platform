@@ -11,7 +11,9 @@
 //
 // The offer runs inside the Web Lock `easy68k.drafts.offer`, so two windows that start at the same
 // moment after a crash do not both offer the same drafts: the second one looks only after the first
-// has restored or discarded them.
+// has restored or discarded them. A window that owns drafts and still looks alive is given up to
+// three seconds to turn out gone, because a window that has just ended can still be listed as
+// holding its lock for a moment (errata E1.md entry 19).
 //
 // Owner: E1.
 
@@ -47,6 +49,12 @@ export const DRAFTS_STORE = 'drafts';
 export const DRAFTS_OFFER_LOCK = 'easy68k.drafts.offer';
 /** Delay after the last change (3.9.4). */
 export const DRAFT_DELAY_MS = 2000;
+/**
+ * How long a starting window waits for the lock of a window that owns drafts and still looks alive
+ * to be given back (it may have just ended), and how often it looks (errata E1.md entry 19).
+ */
+export const DRAFTS_GONE_GRACE_MS = 3000;
+export const DRAFTS_GONE_POLL_MS = 100;
 /** The dialog that offers drafts; resolves to 'Restore' or 'Discard'. */
 export const DRAFTS_DIALOG_ID = 'documents.drafts';
 
@@ -214,11 +222,37 @@ export function startDraftKeeper(deps: DraftKeeperDeps): DraftKeeper {
   const unsubscribe = ctx.store.subscribe(onStore);
   const stopHidden = deps.onHidden?.(() => void flush()) ?? (() => {});
 
+  const sleep = (ms: number) => new Promise<void>((resolve) => ctx.scheduler.setTimer(ms, resolve));
+
+  /**
+   * The windows among `owners` that are still alive. A window that has just ended can still be
+   * listed as holding its lock for a moment (measured: 10 to 40 ms after Playwright's page.close in
+   * Chromium on an idle machine, up to 360 ms on a loaded one), and a window that starts in that
+   * moment would take the dead window for a live one and offer nothing (errata E1.md entry 19). So
+   * while an owner of drafts looks alive, the list is asked again every DRAFTS_GONE_POLL_MS, for at
+   * most DRAFTS_GONE_GRACE_MS. null when the browser cannot tell.
+   */
+  const stillAlive = async (owners: ReadonlySet<string>): Promise<Set<string> | null> => {
+    let live = await liveWindowIds(deps.locks);
+    if (live === null) return null;
+    let alive = new Set([...owners].filter((id) => live!.has(id)));
+    for (let waited = 0; alive.size > 0 && waited < DRAFTS_GONE_GRACE_MS && !disposed;) {
+      await sleep(DRAFTS_GONE_POLL_MS);
+      waited += DRAFTS_GONE_POLL_MS;
+      live = await liveWindowIds(deps.locks);
+      if (live === null) return null;
+      alive = new Set([...alive].filter((id) => live!.has(id)));
+    }
+    return alive;
+  };
+
   const offer = async () => {
-    const live = await liveWindowIds(deps.locks);
-    if (live === null) return; // cannot tell which windows are gone: offer nothing
+    const owners = new Set((await drafts.all()).map((record) => record.windowId).filter((id) => id !== windowId));
+    const alive = await stillAlive(owners);
+    if (alive === null) return; // cannot tell which windows are gone: offer nothing
+    // Read again: a window that ended while we waited may have written its drafts just before.
     const orphans = (await drafts.all())
-      .filter((record) => record.windowId !== windowId && !live.has(record.windowId))
+      .filter((record) => record.windowId !== windowId && owners.has(record.windowId) && !alive.has(record.windowId))
       .sort((a, b) => (a.windowId === b.windowId ? a.order - b.order : a.windowId < b.windowId ? -1 : 1));
     if (orphans.length === 0 || disposed) return;
     const names = [...new Set(orphans.map((record) => record.state.name))];
@@ -226,12 +260,19 @@ export function startDraftKeeper(deps: DraftKeeperDeps): DraftKeeper {
       title: DRAFTS_TITLE,
       text: draftsText(names),
     });
-    if (answer === 'Restore' && !disposed) {
-      for (const record of orphans) documents.restore({ state: record.state, text: record.text, mtime: record.mtime });
+    if (answer === 'Restore') {
+      if (disposed) return; // the window is going away: the drafts stay for the next one
+      const restored = orphans.map(
+        (record) => documents.restore({ state: record.state, text: record.text, mtime: record.mtime }).id,
+      );
+      // The restored documents are drafts of this window from now on. They are written before the
+      // old drafts are removed, and the old ones are kept if that write failed: a window that ends
+      // between the two steps leaves the work in the store twice (offered again), never not at all.
+      await flush();
+      const modified = new Set(modifiedDocs().map((doc) => doc.id));
+      if (!restored.every((id) => written.has(id) || !modified.has(id))) return;
     }
     await drafts.remove(orphans.map((record) => record.key));
-    // The restored documents are drafts of this window from now on.
-    if (answer === 'Restore') await flush();
   };
 
   const offered = (async () => {

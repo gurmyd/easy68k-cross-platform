@@ -29,7 +29,7 @@ export function FileDialog({ props, close }: DialogProps<FileDialogProps, Result
   const [entries, setEntries] = useState<DirEntry[]>([]);
   const [listError, setListError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const [typed, setTyped] = useState(props.kind === 'save' ? props.initialName : '');
+  const [typed, setTyped] = useState(props.initialName ?? '');
   const [filterIndex, setFilterIndex] = useState(0);
   const [customFilter, setCustomFilter] = useState<{ label: string; patterns: string[] } | null>(null);
   const [busy, setBusy] = useState(false);

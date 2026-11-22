@@ -149,6 +149,10 @@ export interface ComposedSession extends SimSession {
   readonly controller: SimRunController;
   readonly bridge: SimUiBridge;
   readonly timers: TimerSet;
+  /** The print jobs task 10 has finished, oldest first (3.8.4; `SimSession.printJobs`). */
+  readonly printJobs: PrintJob[];
+  /** Called with each print job when it is finished, after `SessionUi.submitPrintJob`. */
+  onPrintJob(listener: (job: PrintJob) => void): () => void;
   /** The application's own start: process-start state (4.7.1). Resolves when the engine is there. */
   start(): Promise<void>;
   /** Ends the session: frames, timers and the engine. */
@@ -181,12 +185,32 @@ export function applySimSettings(engine: SimEngine, settings: SimSettings, hardw
   if (hardwareVisible) engine.setHardwareVisible(true);
 }
 
-/** What a cached view offers beyond `SyncFiles` (SH6's CachedSyncFiles, fs/sync/cached.ts). */
-interface CatchingUpView {
-  /** Resolves when every change reported by others so far has been read into memory. */
-  whenCurrent?: () => Promise<void>;
-  /** Stops listening to the Vfs and cancels its timers. */
-  dispose?: () => void;
+/**
+ * The saved settings a cold start puts in place, in a fixed order (4.7.1 steps 2 and 4): the engine
+ * options and device addresses of `applySimSettings`, the fonts, the Stack and Memory panel choices,
+ * and whether the Hardware panel is visible. Not in it: what acts on a running simulator as soon as
+ * it changes (the speed, read at every slice; the auto-trace interval, passed on by the session;
+ * the highlighting of changed registers, a choice of the register display).
+ */
+export function coldStartSettingsKey(settings: SimSettings, hardwareVisible: boolean): string {
+  const font = (f: { name: string; size: number }): string => `${f.name}/${f.size}`;
+  return JSON.stringify([
+    settings.exceptions,
+    settings.bitField,
+    settings.execLogType,
+    settings.outputLogType,
+    settings.disableDisplay,
+    settings.seg7Address,
+    settings.ledAddress,
+    settings.switchAddress,
+    settings.buttonAddress,
+    font(settings.outputFont),
+    font(settings.listingFont),
+    font(settings.printerFont),
+    settings.whichStack,
+    settings.memoryAddress,
+    hardwareVisible,
+  ]);
 }
 
 /**
@@ -210,7 +234,7 @@ function trackFileChanges(
     // The views' own listeners run in the same notification, some after this one (they subscribe
     // when they prepare a folder): ask them once all have heard of the change.
     const waiting = Promise.resolve()
-      .then(() => Promise.all([...views()].map((view) => (view as CatchingUpView).whenCurrent?.())))
+      .then(() => Promise.all([...views()].map((view) => view.whenCurrent?.())))
       .then(
         () => {},
         () => {},
@@ -258,6 +282,21 @@ export function composeSession(env: SessionEnv): ComposedSession {
     printerFontChanged: () => printer.fontChanged(),
   });
   const message = (line: string): void => bridge.addMessage(line);
+
+  // Finished print jobs are kept for the session's life (errata SH8.md C2).
+  const printJobs: PrintJob[] = [];
+  const printListeners = new Set<(job: PrintJob) => void>();
+  const submitPrintJob = (job: PrintJob): void => {
+    printJobs.push(job);
+    ui.submitPrintJob(job);
+    for (const listener of [...printListeners]) listener(job);
+  };
+
+  // The saved settings the last cold start put in place: read at its step 2 (the Output font) and
+  // at its step 4 (the engine). A cold start is skipped only while they are still the same (4.7.1).
+  let settingsAtReset: string | null = null;
+  let settingsApplied: string | null = null;
+  const settingsKey = (): string => coldStartSettingsKey(env.settings(), ui.hardwarePanelVisible());
 
   const log: LogServiceApi =
     parts.log ??
@@ -311,7 +350,7 @@ export function composeSession(env: SessionEnv): ComposedSession {
     });
   const printer: PrinterDeviceApi =
     parts.printer ??
-    new PrinterDevice({ font: () => env.settings().printerFont, submit: (job) => ui.submitPrintJob(job) });
+    new PrinterDevice({ font: () => env.settings().printerFont, submit: (job) => submitPrintJob(job) });
   const serial: HostSerial = env.serial ?? new NullSerial();
   const net: HostNet = env.net ?? new NullNet();
   const listing: ListingViewApi = parts.listing ?? new ListingView(() => theController().engine);
@@ -374,9 +413,11 @@ export function composeSession(env: SessionEnv): ComposedSession {
         // The original loads its settings before the simulator's first reset: the Output Window
         // Font must be in place when the engine's start-up reset assigns it.
         text.setOptionsFont(plainFont(env.settings().outputFont), text.state.optionsFontColor);
+        settingsAtReset = settingsKey();
       },
       applySettings(engine) {
         applySimSettings(engine, env.settings(), ui.hardwarePanelVisible());
+        settingsApplied = settingsKey();
       },
       stopped() {
         env.settleFiles();
@@ -394,6 +435,8 @@ export function composeSession(env: SessionEnv): ComposedSession {
     // The two things a user can change without the controller hearing of it (4.7.1, last paragraph).
     partsUntouched: () =>
       surface.back.width === STARTUP_WIDTH && surface.back.height === STARTUP_HEIGHT && !text.state.textWrap,
+    settingsUnchanged: () =>
+      settingsApplied !== null && settingsAtReset === settingsApplied && settingsKey() === settingsApplied,
     filesCatchingUp: fileChanges.pending,
   });
   const built = controller;
@@ -417,6 +460,13 @@ export function composeSession(env: SessionEnv): ComposedSession {
     onEngineReplaced: (listener) => built.onEngineReplaced(listener),
     bridge,
     timers,
+    printJobs,
+    onPrintJob(listener) {
+      printListeners.add(listener);
+      return () => {
+        printListeners.delete(listener);
+      };
+    },
     start: () => built.start(),
     dispose: () => {
       fileChanges.dispose();

@@ -456,6 +456,8 @@ Because these handlers write the CPU variables directly, typing in an address-re
 
 Tab order: D0-D7, A0-A7, SR, PC, SS, Clear Cycles, US (`TabOrder` values in `SIM68Ku.dfm`).
 
+> **Corrected (erratum W2 12).** The kit's masked field (`app/src/ui/components/masked.ts`), where hardware §12 V1 leaves the keystrokes open: Delete clears the position at the caret and keeps the caret, Backspace clears the one before and moves onto it, with a selection both clear it; a key at the end of a full field is refused; Home and End (and with Shift) move to the ends on every system, as a Windows text box does (erratum W2 12); the register fields select their text on keyboard focus (not on a mouse click, erratum W2 15), SR and the Hardware fields do not (`AutoSelect = False`). SR Backspace follows this section (types a `0` at the caret); the VCL may instead clear the position before the caret: open, to be confirmed under Wine (erratum W2 7).
+
 ---
 
 ## 5. Cycle counter
@@ -532,6 +534,8 @@ return false;
 
 So a row is an instruction row when its address starts with `00` (addresses below `$01000000`), it has object code, and it is not a `=`-marked directive line. Comment lines, label-only lines, blank lines, DC/DS lines, EQU/SET lines and the trailer text are not instruction rows. Callers additionally require row index > 2 (the header line `0000xxxx Starting Address` would otherwise pass the test).
 
+> **Corrected (erratum U1 4).** A row that starts with `00` and is shorter than 11 characters would raise an exception in `isInstruction` (positions 9 and 11); the port treats it as no instruction row. No listing line the assembler writes is like that.
+
 ### 6.3 Horizontal scrolling
 
 `ScrollBar1` (`Min = 1`, `Max = 200`, initial `Position = 1`, `SIM68Ku.dfm:971-983`) scrolls the listing text by whole characters. With position `p`, each row is drawn as `str.SubString(p, str.Length() - p + 1)` when `p < str.Length()`, otherwise as an empty string (`SIM68Ku.cpp:680-687`). The heading label scrolls with it while `p < 41` (`HEADING_LIMIT`, `SIM68Ku.cpp:34, 912-919`); from position 41 on the heading keeps its last text. Vertical scrolling is the list box's own scroll bar.
@@ -570,6 +574,8 @@ Exact rules:
 
 **Scrolling behaviour while running or tracing.** During a full-speed Run nothing is redrawn or scrolled (4.2). While tracing or stepping each stop calls `scrshow()` and thus `highlight()`, so the listing follows the PC with the rule above. During Auto Trace with "Disable display update" checked the listing does not follow.
 
+> **Corrected (erratum W4 9).** After a load the listing has no selected row unless the new start PC differs from the PC shown before the load: `OpenFile` calls `ListBox1->Items->Clear()` (`LB_RESETCONTENT`, so `ItemIndex` = -1), and only the assignment of a different PC text runs `regPCChange` -> `highlight()`. Measured on the official program for the ten official examples in both orders (erratum W4 12); the port gives the same answers (the shim's `listingItemsCleared` hook).
+
 ### 6.5 Simple (PC) breakpoints in the gutter
 
 The gutter `breakP` to the left of the listing draws one 16 px dot per visible instruction row (`breakPPaint`, `SIM68Ku.cpp:692-733`):
@@ -607,6 +613,8 @@ Search > Find... (Ctrl+F) shows `findDialogFrm` (`findDialogS.dfm`): a stay-on-t
 - If nothing is found, nothing happens: no message, no wrap-around, the selection is unchanged, and further "next" searches return immediately because `i` is at the end.
 
 The button passes `next = false` the first time and `true` afterwards; changing the text or re-showing the dialog resets it to `false` (`findDialogS.cpp:18-55`). Pressing **F3 while the Find dialog has focus** always searches with `next = true` (`findDialogS.cpp:58-65`). F3 does nothing in the main window.
+
+> **Corrected (erratum U1 3).** A Find that finds nothing still scrolls the selected row into view: `TForm1::find` (`SIM68Ku.cpp:833-850`) runs the "make sure highlighted line is on screen" block after the loop whether or not a row matched. Find upper-cases ASCII letters only (`toupper` on a signed `char`; `é` does not match `É`; erratum U1 5).
 
 ---
 
@@ -784,6 +792,8 @@ The dialog filter is `EASy68K S-Record (*.S68)|*.S68|All Files (*.*)|*.*` (`SIM6
 - `loadSrec` sets the global `PC` from the data file's termination record, but the display is not refreshed and the next run command reloads PC from the PC field, so the change is normally lost.
 - Because the same dialog object is used, `OpenDialog1->FileName` now names the data file, and **Reload Program reloads that data file as if it were the program** (9.11).
 - Open Data is always enabled, even while the program runs.
+
+> **Corrected (erratum SH8 12).** While a program is running there is no next run command: execution continues at the data file's start address after Open Data (seen with the engine; it follows from the same source lines). The sentence above holds for a stopped simulator.
 
 ### 8.4 Drag and drop
 
@@ -1248,6 +1258,8 @@ So `Bytes = 12345678` writes `12 34 56 78 12 34 ...` starting at `From`. To fill
 
 There is no command to load a binary file into memory; File > Open Data (S-records) is the only loader.
 
+> **Corrected (erratum U2 S1).** In the port the Memory panel passes the question in `SaveRequest.overwritePrompt` (`{ title: 'Alert', text: 'File exists! OK to replace?' }`, Yes / No), and the file dialog asks it in place of its own. The panels do not beep (there is no beep service outside the Output panel; erratum U2 S2). The Address field is the first control of the panel's top strip, as the sketch of ARCHITECTURE.md 2.3 shows (erratum U2 S3).
+
 ---
 
 ## 11. Stack window (`StackFrm`, `Stack1.*`)
@@ -1308,6 +1320,14 @@ View > Break Points shows a fixed-size dialog captioned `EASy68K Advanced Break 
 **The model has two levels.** Conditions are defined in the `Registers` and `Memory` grids, but **a condition by itself never stops the program**. Only rows of the `Expression Builder` grid are evaluated by the run loop (`RUN.CPP:676-685` loops over `exprCount` expressions only). To break on a single condition the user must still create an expression consisting of just that condition. The help states this explicitly.
 
 Limits (`def.h:180-198`): 50 slots for register conditions (`breakPoints[0..49]`), 50 for memory conditions (`breakPoints[50..99]`), 50 expressions (`bpExpressions[]`), at most 10 tokens per expression (`MAX_LB_NODES`). Each grid has 50 rows including its header row, so 49 data rows are visible. Nothing is saved to disk and nothing is cleared by Open/Reload/Rewind.
+
+> **Corrected (erratum U3 2).** In the port no user action leaves a field empty (note 40 removes the editable lists, and a masked field always holds its characters), so `Entry not stored.  Fields missing.` is reached only through the model's API. `Set` stays disabled for an empty or incomplete expression, as `setExprButtons` makes it, and Enter there does nothing.
+
+> **Corrected (erratum U3 4).** In the source a click on a row beyond the defined ones makes `Clear` act on the last defined row (`reg_edit_row = regCount`), so `Select a Valid Row.` appears only in rarer states. The port does what this section says (the selected row if defined, the message otherwise); `docs/differences/U3.md` entry 10.
+
+> **Corrected (erratum U3 5).** In the port selecting another row of the same grid (click or arrow keys) or Escape hides the editors without storing; a click inside the editors, on the edited row's number, and scrolling do not (the editors are part of the row and scroll with it). Dragging does not exist (note 40).
+
+> **Corrected (erratum U3 6).** The confirmation note 40 asks for: title `Break Points`, a confirmation icon, OK / Cancel, `Expression 2 uses this condition and is removed with it.` or `Expressions 1, 3 use these conditions and are removed with them.` (Clear All).
 
 #### Group `Registers` (grid `RegStringGrid`)
 
@@ -1395,7 +1415,7 @@ A condition (`BPoint::isBreak`, `BPoint.cpp:112-205`):
 | Quirk | Source |
 |---|---|
 | `Count` is parsed as **hexadecimal** although only decimal digits can be typed: `10` means 16. | `BREAKPOINTSu.cpp:467-468` |
-| `Count = 00` breaks after **every** instruction, even when the expression is false (`0 == 0`). | `BPointExpr.cpp:147-148` |
+| `Count = 00` breaks on every step until the expression is first true, and never afterwards until Run resets the counter (`0 == 0` while the counter stays 0; corrected, erratum U3 1, as sim-core §7.3 says). | `BPointExpr.cpp:147-149` |
 | The register choice `A7` always tests the **user** stack pointer `A[7]`, never the supervisor stack pointer. | `BPoint.cpp:126` |
 | Evaluating a memory condition reads the address through the core's `mem_req`. Consequences: a W or L condition on an odd address raises an address error (halting the program when exceptions are off); the Hardware memory map applies; and the read itself is recorded as "the last read", which can satisfy a `Read` or `R/W` test of a condition evaluated later in the same step. | `BPoint.cpp:178`, `UTILS.CPP:420-499` |
 | After a parenthesised group the converter leaves the `(` on its stack, which shields earlier operators: `R1 AND ( R2 OR R3 ) OR R4` is evaluated as `R1 AND ((R2 OR R3) OR R4)`. Expressions without parentheses, and expressions where the group comes last, evaluate normally. | `BREAKPOINTSu.cpp:492-497` |
@@ -1491,6 +1511,8 @@ What can be logged, in summary: traced instructions; traced instructions with al
 8. `Form1->SaveSettings()` is called and the Log Output dialog is closed.
 
 **Quirk:** because `startLog()` sets `logging = true` regardless, pressing `Cancel` in the "file exists" dialog (or a failed open) leaves the simulator in the "logging" state with no valid file; the original then writes through a closed or null `FILE*` (undefined behaviour). A port should treat Cancel/failure as "logging not started".
+
+> **Corrected (erratum U4 4).** In the port both questions are asked before anything is written: Cancel at either leaves both files untouched and logging off, and `engine.startLog` is not called; a file that cannot be written is found by the first write. Log Start with both types Disabled calls `engine.startLog` and makes no file (erratum U4 5). Log Start closes the Log Output dialog as Cancel does (erratum U4 7). The `Log File Options` question also shows the file's path below the bold message (erratum U4 13).
 
 ### 13.4 Execution log format
 
@@ -1662,6 +1684,8 @@ if (logging && oLogType)
 | Log Stop | enabled only while logging |
 | `LOGGING` label | visible from the moment a log file has been opened and its header written until the log is stopped |
 
+> **Corrected (erratum U4 6).** OK of the Log Output dialog enables Log Start only while not logging.
+
 ---
 
 ## 14. Options and persistence
@@ -1680,6 +1704,8 @@ if (logging && oLogType)
 | `Enable &Bit Field Instructions` (checkable) | `bitfield` (`var.h:60`) | off (`SIM68Ku.cpp:1496`) | Toggles support for the 68020 bit-field instructions in the core; saved immediately (`SIM68Ku.cpp:2037-2047`). Also turned on by `/b` and by a `*[sim68k]bitfield` line in the listing (8.2). | yes (line 35) |
 | `Output Window &Size` > nine sizes | `canWidth`, `canHeight` (`simIOu.cpp:44-45`) | 640x480 | `simIO->setWindowSize(w, h)` (`SIM68Ku.cpp:2051-2087`, `simIOu.cpp:187-233`): sets the I/O window's client area, resizes the back buffer and **fills the window with black** (previous output is erased; the text cursor position is not reset). Minimum 640x480. The radio check marks always mirror the actual size (`WindowSizeChecked`, `SIM68Ku.cpp:2090-2121`), including a size set by the program with TRAP #15 task 33; if the size is not one of the nine, no item is checked. | no |
 | `Output Window Text &Wrap` (checkable) | `textWrap` (`simIOu.cpp:38`) | off | Toggles wrapping in the I/O window: with wrap on, moving the text cursor past the right edge performs a new line (`simIOu.cpp:1050-1054`); with wrap off, text continues off-screen. Not reset by Rewind/Reload. | no |
+
+> **Corrected (erratum U4 14).** The port's option dialogs (U4): one font dialog `sim.font` for the three targets. Output Window Font: the five measured fonts, sizes 8-18, the styles Regular, Italic, Bold, Bold Italic, Strikeout, Underline and the sixteen colours; OK saves name and size and calls `TextScreen.setOptionsFont(font, color)`, style and colour last for the session; with several styles the text screen draws one (erratum SH3 13). Source Window Font: the same fonts and sizes, no style or colour. Printer Font: any name, sizes 1-255. Titles are the menu captions without the dots. Auto Trace Options: a read-only interval with up/down (10-1000, step 10); Fullscreen Options while full screen is on shows the original's `Error` box `Please deactivate fullscreen mode before attempting to change the fullscreen settings.`, and its value is never saved (erratum U4 15). Enable Exceptions and Enable Bit Field follow and set `SimSettings.exceptions` / `.bitField` and the engine option (erratum U4 16).
 
 ### 14.2 What is and is not remembered between sessions
 
@@ -1858,7 +1884,7 @@ The source is authoritative. Help quotations are from the SIMHELP pages.
 | 8 | Memory window Fill: "Enter the From and To address and the Bytes to fill with." | The `Bytes` field is a 32-bit value used as a repeating 4-byte pattern. | `Memory1.cpp:588-614` |
 | 9 | Memory window: "The contents of memory may be changed by clicking on the desired location and entering a new value." | Correct; not mentioned: edits bypass the Hardware memory map (ROM/read-only areas can be modified). | `Memory1.cpp:444, 456` |
 | 10 | Stack window: "The location of the selected register is highlighted in blue and the location of the current system stack is highlighted in yellow." | Colours are aqua and yellow, one byte each; the aqua mark is absent when the register value is `>= $01000000` (as SS is at reset). | `Stack1.cpp:104-109` |
-| 11 | Advanced breakpoints: "The Count column specifies how many times the expression must be true before breaking." | The count is parsed as hexadecimal; a count of 0 breaks on every instruction. | `BREAKPOINTSu.cpp:467-468`, `BPointExpr.cpp:147-148` |
+| 11 | Advanced breakpoints: "The Count column specifies how many times the expression must be true before breaking." | The count is parsed as hexadecimal; a count of 0 breaks on every instruction until the expression is first true (erratum U3 1). | `BREAKPOINTSu.cpp:467-468`, `BPointExpr.cpp:147-149` |
 | 12 | Options: "Auto Trace Options - Set the Auto Trace interval." | The interval takes effect only when the dialog's OK is pressed in the current session; the saved value is not applied at start-up. | `Optionsu.cpp:27`, `SIM68Ku.cpp:2009-2011` |
 | 13 | Options: "Full Screen Options - Set the screen to use for full screen output." | The setting is reset to the primary screen by every load/rewind and is not restored from the settings file. | `STARTSIM.CPP:85`, `SIM68Ku.cpp:1980-1991` |
 | 14 | Output log: "Text only - The text output from the traced program is logged." | Also logs echoed keyboard input, and logs at full speed as well (the help's file-name paragraph does say this). | `simIOu.cpp:1398-1401` |

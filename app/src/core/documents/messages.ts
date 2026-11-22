@@ -80,19 +80,35 @@ export function unmappableQuestion(count: number): MessageBoxRequest {
  * message (EFCreateError, `Cannot create file "<name>"`) and keeps the document modified
  * (editor-ui §6.4). The port names the file the same way and adds the reason it was given.
  *
- * An `io` failure whose reason is already a whole message written for the user (the browser store
- * is full, FS1; a linked file was changed by another program or no longer exists, FS2) is shown on
- * its own: those messages name the file themselves, and the prefix would show the store's internal
- * path, such as `/linked/<id>/prog.X68` (gate I2, FS2 review).
+ * An `io` failure whose reason is already a whole message written for the user AND names the file
+ * (a linked file was changed by another program or no longer exists, FS2) is shown on its own.
+ * Every other failure keeps the prefix, so that the message always names the file, as the
+ * original's does: also a whole sentence that does not name it, such as the browser store's
+ * "The browser closed the file store ..." (errata E1.md entries 18 and 20). The prefix never shows
+ * the store's internal folder of a linked file (`/linked/<id>/prog.X68`): such a file is named
+ * by its name.
  */
 export function writeError(path: string, reason: string, code?: string): MessageBoxRequest {
+  const shown = shownPath(path);
   const text =
-    code === 'io' && isUserSentence(reason)
+    code === 'io' && isUserSentence(reason) && namesFile(reason, path)
       ? reason
       : reason
-        ? `Cannot create file "${path}". ${reason}`
-        : `Cannot create file "${path}".`;
+        ? `Cannot create file "${shown}". ${reason}`
+        : `Cannot create file "${shown}".`;
   return { title: 'Error', text, icon: 'error', buttons: ['OK'] };
+}
+
+/** The path as a message shows it: a linked file (`/linked/<id>/...`) by what follows its id. */
+function shownPath(path: string): string {
+  const linked = /^\/linked\/[^/]+\/(.+)$/i.exec(path);
+  return linked ? linked[1]! : path;
+}
+
+/** True when the reason names the file (its name, letter case ignored as Windows does). */
+function namesFile(reason: string, path: string): boolean {
+  const name = path.slice(path.lastIndexOf('/') + 1);
+  return name !== '' && reason.toLowerCase().includes(name.toLowerCase());
 }
 
 /** A reason that reads as a message of its own: it starts with a capital or a quote and ends a sentence. */
