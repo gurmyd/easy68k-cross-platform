@@ -2307,7 +2307,7 @@
     "default": {
      "options": {},
      "status": "failed",
-     "reason": "EDIT68K exited unexpectedly (crash?) exit code 1; wine: 01e0:err:virtual:virtual_setup_exception stack overflow 836 bytes addr 0x2c312c31 stack 0x120cbc (0x120000-0x121000-0x220000)",
+     "reason": "EDIT68K exited unexpectedly (crash?) exit code 1; wine: err:virtual:virtual_setup_exception stack overflow 836 bytes addr 0x2c312c31 stack 0x120cbc (0x120000-0x121000-0x220000)",
      "errors": null,
      "warnings": null,
      "l68": null,
@@ -2503,7 +2503,7 @@
     "default": {
      "options": {},
      "status": "failed",
-     "reason": "EDIT68K exited unexpectedly (crash?) exit code 1; wine: 0210:err:virtual:virtual_setup_exception stack overflow 1348 bytes addr 0x4e6659 stack 0x120abc (0x120000-0x121000-0x220000)",
+     "reason": "EDIT68K exited unexpectedly (crash?) exit code 1; wine: err:virtual:virtual_setup_exception stack overflow 1348 bytes addr 0x4e6659 stack 0x120abc (0x120000-0x121000-0x220000)",
      "errors": null,
      "warnings": null,
      "l68": null,
@@ -8527,15 +8527,16 @@
    "runs": {
     "default": {
      "options": {},
-     "status": "failed",
-     "reason": "unexpected window \"EASy68K\" above the Assembler Status dialog",
-     "outputsKept": true,
+     "status": "ok",
      "received": "2d81b3976086c8b97a22192a348799eac73435d0b27053f084d0359b04c8be0a",
      "errors": 14,
      "warnings": 1,
      "l68": "59b244d4e91694d58af1a46ad470e0086c28500ee1f995ba69a0a6c753e1ba88",
      "s68": "9ec01985a7768cb42839278e8e5aa13da1b793ac091fe1d9080830706af108f9",
-     "golden": true
+     "golden": true,
+     "notes": [
+      "host-dependent end of the run: after writing its outputs the official editor reads through a pointer made of the 4000-character line's text (official-oracle §3.4); depending on the host it then shows nothing (GitHub's ubuntu-24.04 runner), \"Access violation at address 00479971 ... Read of address 58585B44\" above the status dialog, or \"File Access Error\" (Docker Desktop on Windows 11); the outputs are the same in all three (erratum T1 27)"
+     ]
     }
    }
   },

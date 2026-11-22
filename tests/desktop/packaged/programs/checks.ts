@@ -14,6 +14,7 @@ import type { Expected, Example } from './expected';
 import { firstByteDifference, firstDifference, latin1, surfaceHash } from './model';
 import {
   assembleActive,
+  cyclesShown,
   executeFromStatus,
   messageLines,
   outputCanvas,
@@ -128,8 +129,10 @@ export async function check7(
   await executeFromStatus(page, 0x1000);
   result.facts.loaded = `PC ${await pcField(page).inputValue()}`;
   const ranAt = Date.now();
+  // Halted with the Cycles count above zero: the program has run to its end (scenario.ts).
   const state = await runToHalt(page);
-  result.facts.run = `${state} ${Date.now() - ranAt} ms after Run`;
+  const haltedAt = Date.now();
+  result.facts.run = `${state} ${haltedAt - ranAt} ms after Run, ${await cyclesShown(page).catch(() => '?')} cycles`;
   if (state !== 'Halted') result.failures.push(`after Run the status bar says "${state}", not "Halted"`);
 
   // The message area.
@@ -176,8 +179,21 @@ export async function check7(
       `the output surface's hash ${(last as { hash: string } | null)?.hash ?? '(none)'} is not the headless run's ${want.surfaceHash}`,
     );
   }
-  const rows = await outputRows(page);
+  // The text mirror follows the screen at most twice per second, in a display frame (2.11,
+  // features/output/mirror.ts MIRROR_INTERVAL_MS), so it can lag the canvas by half a second and
+  // more: wait for it too (errata DV5.md entry 14: read once, it was still empty on the faster
+  // Apple Silicon runner although the canvas already showed every line).
+  let rows: string[] = [];
+  const mirrored = await poll(
+    20_000,
+    async () => {
+      rows = await outputRows(page);
+      return firstDifference(want.textRows, rows) === null ? rows : null;
+    },
+    100,
+  );
   result.facts.outputRows = rows;
+  result.facts.outputRowsShown = mirrored ? `${Date.now() - haltedAt} ms after the halt was seen` : 'not within 20 s';
   const rowsDiffer = firstDifference(want.textRows, rows);
   if (rowsDiffer !== null) result.failures.push(`the Output panel's text differs from the headless run: ${rowsDiffer}`);
   result.facts.screenshot = await screenshot('tutorial1-halted');

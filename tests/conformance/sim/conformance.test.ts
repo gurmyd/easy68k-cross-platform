@@ -34,8 +34,10 @@ import {
 import { NOT_MODELLED_BY_DOUBLES } from './doubles';
 import { assembleConformance, partsMode, runScenario, type AssembledConformance } from './harness';
 import {
+  ARTIFACT_MASKS,
   GOLDEN_DIR,
   SIM_CONFORMANCE_DIR,
+  artifactKey,
   artifactsOf,
   listPrograms,
   loadGoldenManifest,
@@ -74,6 +76,8 @@ function golden(name: string): Uint8Array | null {
 const mismatches: Mismatch[] = [];
 const seen = new Set<string>();
 const skipped: string[] = [];
+/** Listed differences that are equal once the bytes of ARTIFACT_MASKS are masked. */
+const maskedEqual: { key: string; known: KnownDifferences[string] | null; masked: string }[] = [];
 let compared = 0;
 let equal = 0;
 
@@ -92,6 +96,10 @@ describe('known-differences.json', () => {
       expect(Object.keys(OWNERS), key).toContain(entry.owner);
       expect(entry.summary.length, key).toBeGreaterThan(10);
     }
+  });
+
+  it('lists every artifact whose bytes the comparison masks (programs.ts ARTIFACT_MASKS)', () => {
+    expect(Object.keys(ARTIFACT_MASKS).filter((key) => !known[key])).toEqual([]);
   });
 });
 
@@ -146,17 +154,26 @@ describe.skipIf(!enginesBuilt || manifest === null)(
                   : artifact.kind === 'runlog'
                     ? outcome.execLog
                     : outcome.outputLog;
-              const key = `${program.id}|${artifact.recipe}|${artifact.kind}`;
+              const key = artifactKey(program.id, artifact.recipe, artifact.kind);
               seen.add(key);
               compared += 1;
-              const difference = firstDifference(
-                maskArtifact(artifact.kind, official as Uint8Array),
-                port ? maskArtifact(artifact.kind, port) : `<no ${artifact.kind}: the run ended ${outcome.end}>`,
-              );
+              const officialText = maskArtifact(artifact.kind, official as Uint8Array, key);
+              const portText = port
+                ? maskArtifact(artifact.kind, port, key)
+                : `<no ${artifact.kind}: the run ended ${outcome.end}>`;
+              const difference = firstDifference(officialText, portText);
               if (difference === null) {
                 equal += 1;
-                if (known[key])
+                const mask = ARTIFACT_MASKS[key];
+                if (mask) {
+                  maskedEqual.push({
+                    key,
+                    known: known[key] ?? null,
+                    masked: `lines ${mask.lines.join(', ')} from column ${mask.fromColumn}: ${mask.reason}`,
+                  });
+                } else if (known[key]) {
                   unknown.push(`${key}: listed in known-differences.json but now equal; remove the entry`);
+                }
                 continue;
               }
               mismatches.push({
@@ -166,10 +183,7 @@ describe.skipIf(!enginesBuilt || manifest === null)(
                 kind: artifact.kind,
                 difference,
                 known: known[key] ?? null,
-                lines: differingLines(
-                  maskArtifact(artifact.kind, official as Uint8Array),
-                  port ? maskArtifact(artifact.kind, port) : `<no ${artifact.kind}: the run ended ${outcome.end}>`,
-                ),
+                lines: differingLines(officialText, portText),
               });
               if (!known[key]) {
                 unknown.push(
@@ -208,6 +222,7 @@ describe.skipIf(!enginesBuilt || manifest === null)(
           parts: partsText(),
           metrics: "Wine's cells (harness.ts WINE_CELLS)",
           pending: pendingEntries(),
+          masked: [...maskedEqual].sort((a, b) => (a.key < b.key ? -1 : 1)),
         }),
         { ...((await resolveConfig(REPORT_PATH)) ?? {}), filepath: REPORT_PATH },
       );

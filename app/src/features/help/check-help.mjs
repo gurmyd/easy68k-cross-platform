@@ -32,6 +32,7 @@ import { fileURLToPath } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../tests/browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -256,7 +257,7 @@ async function drawerPass(browser, name) {
   });
 
   check(`${p} the drawer: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 async function navigationPass(browser, name) {
@@ -386,7 +387,7 @@ async function navigationPass(browser, name) {
     (text) => !/Blocked script execution in .* frame is sandboxed|ac-archive\.css/.test(text),
   );
   check(`${p} navigation: no console or page errors`, unexpected.length === 0, unexpected.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 async function contextPass(browser, name) {
@@ -560,7 +561,7 @@ async function contextPass(browser, name) {
     }
   }
   check(`${p} context: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 const EDITOR_ABOUT_TEXTS = [
@@ -686,7 +687,7 @@ async function aboutPass(browser, name) {
   // The aborted request of the update check is logged by the browser; that is the check's own doing.
   const unexpected = errors.filter((text) => !/ERR_FAILED|api.github.com/.test(text));
   check(`${p} About: no console or page errors`, unexpected.length === 0, unexpected.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 async function examplesPass(browser, name) {
@@ -789,7 +790,7 @@ async function examplesPass(browser, name) {
   );
 
   check(`${p} examples: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 async function themePass(browser, name) {
@@ -814,7 +815,7 @@ async function themePass(browser, name) {
     );
     await scan(page, `${name} ${theme} Help drawer`);
     check(`${p} ${theme}: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-    await context.close();
+    await closeWithin(context);
   }
 }
 
@@ -852,16 +853,16 @@ async function main() {
         console.log(`\n[${name}, themes]`);
         await themePass(browser, name);
       } finally {
-        await browser.close();
+        await doneWith(browser, { last: name === browsers.at(-1) });
       }
     }
   } finally {
-    await server.close();
+    closeAtEnd(server);
   }
 
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
-  process.exit(failures ? 1 : 0);
+  await endChecks(failures ? 1 : 0);
 }
 
 await main();

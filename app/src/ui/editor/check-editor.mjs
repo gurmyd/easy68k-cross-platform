@@ -37,6 +37,7 @@ import { fileURLToPath } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../tests/browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -697,7 +698,7 @@ async function editingPass(browser, name) {
   await page.keyboard.press('Escape');
 
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 async function panesPass(browser, name) {
@@ -767,7 +768,7 @@ async function panesPass(browser, name) {
   ]);
   check(`${p} Arrange and Minimize All are disabled`, JSON.stringify(windowMenuDisabled) === '[false,false]');
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 async function pastePass(browser, name) {
@@ -821,7 +822,7 @@ async function pastePass(browser, name) {
     const copied = await page.evaluate(() => navigator.clipboard.readText());
     check(`${p} toolbar Copy copies the selection`, copied === 'copy', JSON.stringify(copied));
     check(`${p} no console or page errors (granted)`, errors.length === 0, errors.slice(0, 3).join(' | '));
-    await context.close();
+    await closeWithin(context);
   }
   // Refused (no permission in Chromium; WebKit without a person to press its Paste callout).
   {
@@ -849,7 +850,7 @@ async function pastePass(browser, name) {
       errors.filter((e) => !/clipboard|NotAllowed|permission/i.test(e)).length === 0,
       errors.slice(0, 3).join(' | '),
     );
-    await context.close();
+    await closeWithin(context);
   }
 }
 
@@ -862,7 +863,7 @@ async function themePass(browser, name) {
     await scan(page, `${name} ${themeName} editor area`);
     await shot(page, `${name}-${themeName}`);
     check(`${name}: ${themeName}: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-    await context.close();
+    await closeWithin(context);
   }
 }
 
@@ -911,16 +912,16 @@ async function main() {
           }
         }
       } finally {
-        await browser.close();
+        await doneWith(browser, { last: name === browsers.at(-1) });
       }
     }
   } finally {
-    await server.close();
+    closeAtEnd(server);
   }
 
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
-  process.exit(failures ? 1 : 0);
+  await endChecks(failures ? 1 : 0);
 }
 
 await main();

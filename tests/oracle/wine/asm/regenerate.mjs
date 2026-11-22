@@ -43,7 +43,8 @@
 //
 // A run in which the official editor shows a window it must not show (anything but its
 // help-viewer message boxes, see asm_batch.py) is a failed run, like a crash. When the editor had
-// finished assembling by then, the files it wrote are kept as `<label>.failed.L68` / `.S68`.
+// finished assembling by then, the files it wrote are kept as `<label>.failed.L68` / `.S68`. The one
+// exception are the runs of HOST_DEPENDENT_RUNS, whose end after the outputs depends on the host.
 // The exit status is 1 when a run that had a result in the manifest has none now.
 //
 // The official programs run only inside the container. Nothing of them is copied to the host.
@@ -370,11 +371,42 @@ function findOutput(directory, extension) {
  */
 export function failureOf(record) {
   if (!record) return 'the container wrote no result for this run';
-  if (record.status !== 'ok') return record.error ?? 'unknown';
+  if (record.status !== 'ok') return withoutWineThreadIds(record.error ?? 'unknown');
   const stray = record.stray_windows ?? [];
   if (stray.length > 0) return `unexpected window "${stray[0].title}" was dismissed by the driver`;
   return null;
 }
+
+/**
+ * Wine's debug lines start with the id of the thread (`01e0:err:virtual:...`), which differs from run
+ * to run; the manifest keeps the text without it, so that a crash is recorded the same way every time
+ * (run 45034017858: the two stack overflows of the checklist changed only in that id).
+ */
+export function withoutWineThreadIds(text) {
+  return text.replace(/\b[0-9a-f]{4}:(err|fixme|warn|trace):/g, '$1:');
+}
+
+/**
+ * Runs in which what the official editor does AFTER it has written its outputs depends on the host
+ * (erratum T1 27). For these a run that the driver ends because of one of the windows named in
+ * `failures` counts like a clean one when it left both outputs, and either way the manifest records
+ * the same entry: `status: "ok"` and `note`. The outputs are still compared by their hashes, so an
+ * incomplete listing still shows as a difference.
+ */
+export const HOST_DEPENDENT_RUNS = {
+  'richedit/s03_long_line_4000.X68#default': {
+    failures: [
+      /^unexpected window "Error" while the editor assembled$/,
+      /^unexpected window "EASy68K" above the Assembler Status dialog$/,
+      /^unexpected window "EASy68K" after Alt\+F4$/,
+    ],
+    note:
+      'host-dependent end of the run: after writing its outputs the official editor reads through a pointer made of ' +
+      "the 4000-character line's text (official-oracle §3.4); depending on the host it then shows nothing (GitHub's " +
+      'ubuntu-24.04 runner), "Access violation at address 00479971 ... Read of address 58585B44" above the status ' +
+      'dialog, or "File Access Error" (Docker Desktop on Windows 11); the outputs are the same in all three (erratum T1 27)',
+  },
+};
 
 /**
  * What the manifest records for one run, from the record of asm_batch.py and the files it left.
@@ -387,9 +419,16 @@ export function failureOf(record) {
  * up, so the record has `status_title` - and a file is there with something in it (a crash during
  * assembly leaves two empty files). Such an entry has `outputsKept` and the hashes of those files.
  */
-export function ingestRun({ options, record, source, maskingListing = null }) {
-  const reason = failureOf(record);
+export function ingestRun({ options, record, source, maskingListing = null, hostDependent = null }) {
+  const failure = failureOf(record);
   const nonEmpty = (bytes) => (bytes && bytes.length > 0 ? bytes : null);
+  const tolerated =
+    hostDependent !== null &&
+    failure !== null &&
+    hostDependent.failures.some((pattern) => pattern.test(failure)) &&
+    nonEmpty(findOutput(record.outDirectory, '.l68')) !== null &&
+    nonEmpty(findOutput(record.outDirectory, '.s68')) !== null;
+  const reason = tolerated ? null : failure;
   const assembled = reason === null || typeof record?.status_title === 'string';
   const found = (extension) => (assembled ? findOutput(record.outDirectory, extension) : null);
   const listing = reason === null ? found('.l68') : nonEmpty(found('.l68'));
@@ -410,7 +449,8 @@ export function ingestRun({ options, record, source, maskingListing = null }) {
   for (const box of record.help_boxes ?? []) {
     notes.push(`help-viewer message box dismissed ${box.when === 'exit' ? 'at exit' : 'at start-up'}`);
   }
-  if (record.exit && record.exit !== 'clean') notes.push(`the editor was ${record.exit}`);
+  if (record.exit && record.exit !== 'clean' && hostDependent === null) notes.push(`the editor was ${record.exit}`);
+  if (hostDependent !== null && reason === null) notes.push(hostDependent.note);
   const run = {
     options,
     ...(reason === null ? { status: 'ok' } : { status: 'failed', reason, outputsKept: true }),
@@ -930,6 +970,7 @@ async function main() {
             record: records.get(id),
             source,
             maskingListing: officialListing(program, before, listingOnLabel(runOptions), records),
+            hostDependent: HOST_DEPENDENT_RUNS[id] ?? null,
           });
       if (run.status === 'ok') ok++;
       else failed++;

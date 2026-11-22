@@ -13,7 +13,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 25.3,
           "artifacts": {
             "result": {
               "sha256": "422e438d360e058b2a4c0c576c8131022f91333758494095dc4cf05048ec7035",
@@ -30,7 +29,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 26.04,
           "artifacts": {
             "result": {
               "sha256": "167e8e3513520233b97c90e4fffe24912bdccf915c7ad8c6b06a0cca1473a3f3",
@@ -47,7 +45,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 24.03,
           "artifacts": {
             "result": {
               "sha256": "d08d64338060f1137b41017392c526cad60d9ea1016591916de737e459987463",
@@ -64,7 +61,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 27.11,
           "artifacts": {
             "result": {
               "sha256": "07dc6d708dd34425d7547d6868ef96ad431e2ebaed51f59d8672aada62fb1322",
@@ -81,7 +77,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 26.18,
           "artifacts": {
             "result": {
               "sha256": "185ea4a00a07471a0f94969cbe9ff81a669b2ecd15916c0aaa5d611a881274d9",
@@ -98,7 +93,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 27.75,
           "artifacts": {
             "result": {
               "sha256": "86b9a52eba1affbb23f626573f79c110f195d3a2fd83074124552feba060dd1d",
@@ -115,7 +109,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 32.83,
           "artifacts": {
             "result": {
               "sha256": "293c7f1010306638981217420ed4fb0684088ff877556c61074266ba6a6bcfdd",
@@ -132,7 +125,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 28.18,
           "artifacts": {
             "result": {
               "sha256": "2734014019c823c77af1f0f8792f73bbff049216349e213843c6b64ed213fac5",
@@ -149,7 +141,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 26.78,
           "artifacts": {
             "result": {
               "sha256": "ac3fe8c33855234b407a86186b0ff2eab38197a4d3eb8d3a3f139edbe6f4e945",
@@ -166,7 +157,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 26.23,
           "artifacts": {
             "result": {
               "sha256": "947bacadbe8387789bef9d6e985ff0e6e23fa3b11d6e33c07028095e52f35e30",
@@ -183,7 +173,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 29.27,
           "artifacts": {
             "result": {
               "sha256": "42c90d6c552cf66f52fb4e99bc5ba74ff1a6ed15564ada59e7fd7f4fbbedf797",
@@ -200,7 +189,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 24.46,
           "artifacts": {
             "result": {
               "sha256": "3841964bf169cb768025ae5d1cae9d947da48477dc41b45f53038bf3361e244f",
@@ -217,7 +205,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 25.23,
           "artifacts": {
             "result": {
               "sha256": "f026a843455300106f764c3e6757b06d82e58e8edf454c4ded2ee2502b8de3ed",
@@ -234,7 +221,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 26.18,
           "artifacts": {
             "result": {
               "sha256": "a765b5ce244512fd4b65bdd488e422088db353e26dc1bc272cf4f1f32fe039fc",
@@ -251,7 +237,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 25.49,
           "artifacts": {
             "result": {
               "sha256": "93fdb68791b7ba11579556948243d4c4d3778b4e0c858cb1cfbe8861002779e7",
@@ -268,7 +253,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 28.19,
           "artifacts": {
             "result": {
               "sha256": "1eeb8d6b3d7b4de7dcb5c8e21b41fed34a90de6ec4e43230f5942d9f13d7b985",
@@ -285,7 +269,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 24.51,
           "artifacts": {
             "result": {
               "sha256": "ed748abd10fcd36622cfc2a9cb89bc10d24384228235e3db53b24a276df47df8",
@@ -302,7 +285,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 24.39,
           "artifacts": {
             "result": {
               "sha256": "107364493c6d9db95e048dbd507b41e689ccb7305deef6597ae0369389948ad3",
@@ -319,7 +301,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 24.54,
           "artifacts": {
             "result": {
               "sha256": "b0b976495bba8001c213524f40a37bce1c338407fb241b0137a1310d45753ac7",
@@ -336,7 +317,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 26.41,
           "artifacts": {
             "result": {
               "sha256": "32e8962ea93b01ac6b9be47267bcdaaa1f70011a00a29e0d8a4e4dda6169f7d9",
@@ -353,7 +333,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 23.46,
           "artifacts": {
             "result": {
               "sha256": "67c00275c8184d5128c013677e760848922fb8fe8cc4cf01e37c4235b5483f60",
@@ -370,7 +349,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 23.1,
           "artifacts": {
             "result": {
               "sha256": "30c52691677a0f5465dffd933e4bbca68a9d221fccfc44107bb3f30091f986fa",
@@ -387,7 +365,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 23.92,
           "artifacts": {
             "result": {
               "sha256": "fb9dfdcf98eeb73b5fc60aafee3cc0b190eddc5564c816c01b2b9b3cade4499b",
@@ -404,7 +381,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 24.29,
           "artifacts": {
             "result": {
               "sha256": "29c0b17db398496c7bb49801e2785977161e85c265846641481a4d00035d33a6",
@@ -421,7 +397,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 20.58,
           "artifacts": {
             "result": {
               "sha256": "2dcb7a0404d1876eb0e3c1d5ed5262dc62c18ad8d9e874db4fc20c3c525dfe2c",
@@ -438,7 +413,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 24.21,
           "artifacts": {
             "result": {
               "sha256": "3943d08351474664551ed25052ba904d661211517b8266024c004605a8919761",
@@ -455,7 +429,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 49.96,
           "artifacts": {
             "result": {
               "sha256": "712ed0669803f97c89264fe9cd96fa112230c50106e870696381aaf8af77d5f3",
@@ -472,7 +445,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 48.83,
           "artifacts": {
             "result": {
               "sha256": "383a175509d4d3f07ed9e9bcf09db72c5356e65df9f18022ea543dd156b4c448",
@@ -489,7 +461,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 44.76,
           "artifacts": {
             "result": {
               "sha256": "7d0c0d2fd716d7e934eae28a982e696bddf9aff16ca0b994eb15c7721efd6265",
@@ -506,7 +477,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 45.82,
           "artifacts": {
             "result": {
               "sha256": "eeb3a5506344921f74a69217672cab5a85fd1132317af5cc9a08797953e33209",
@@ -523,7 +493,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 48.6,
           "artifacts": {
             "result": {
               "sha256": "4b1df44c58353ff229086bcb5ca1cd2aa3fc41dffb390a3ca23e75d7e2f02ebe",
@@ -540,7 +509,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 50.23,
           "artifacts": {
             "result": {
               "sha256": "b6ba60515928b3a47c4fc17ad2f781958c4bb420058569c4f31edd18d91ac951",
@@ -557,7 +525,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 47.15,
           "artifacts": {
             "result": {
               "sha256": "18396cee40accac1b4b7f7d50e725998b7f3242d6ced73f30a34d66ed68aea7d",
@@ -574,7 +541,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 44.76,
           "artifacts": {
             "result": {
               "sha256": "71b589d237103fdde3bcb1fabea4daa3f1ae493eaa4bedf311f19dd64cd69596",
@@ -591,7 +557,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 44.04,
           "artifacts": {
             "result": {
               "sha256": "fc36786af7ef15bb6a3ce9d1ae5058694dacaf799f535bde7c1839ea3175120c",
@@ -608,7 +573,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 46.16,
           "artifacts": {
             "result": {
               "sha256": "630f80f6d2979a4b7974d4544ab973aea5da1fb67b4c5800314ac89105cb0820",
@@ -625,7 +589,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 50.9,
           "artifacts": {
             "result": {
               "sha256": "cdeafc01d6ffac02f49b9711d7e566b503f86ef9282419cb84e6dccb83f09f83",
@@ -642,7 +605,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 44.91,
           "artifacts": {
             "result": {
               "sha256": "e81aaf287950775fb4d725e4f2664ba3378e9432faa45608f42d94c60b043fc1",
@@ -659,7 +621,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 46.81,
           "artifacts": {
             "result": {
               "sha256": "6225313cd56989662d7b44f6f2b4cb53ecf44bc4691d35e5bdc99dbbace48c7d",
@@ -676,7 +637,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 63.49,
           "artifacts": {
             "result": {
               "sha256": "dea26df362b4d6c7699c2e272f863528c4d46a4bc934f5331fcd090ede4981e8",
@@ -693,7 +653,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 52.9,
           "artifacts": {
             "result": {
               "sha256": "651156362695706985298ec8e836cf9c4452cb5c722655666126e7df5a49d323",
@@ -710,7 +669,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 46.54,
           "artifacts": {
             "result": {
               "sha256": "c65435239358c57ddfae40482ade7ba2dc05a85ead1fdb1d64828dd59d9f7fcc",
@@ -727,7 +685,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 46.9,
           "artifacts": {
             "result": {
               "sha256": "0c64e593e02975f35f9a76e408808d911cf58288fb57be1482227efe88fc919f",
@@ -744,7 +701,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 46.18,
           "artifacts": {
             "result": {
               "sha256": "36d751e282963f18410d86308bb31300d64e838543d309c264a3ee86fa9dc1c7",
@@ -761,7 +717,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 39.96,
           "artifacts": {
             "result": {
               "sha256": "d2e356ce0157c99b1903233b8a140253a19fe089c3e115f40bbd100ae492a098",
@@ -778,7 +733,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 46.13,
           "artifacts": {
             "result": {
               "sha256": "fbb19cde3b73864811a16c2a3b2305fe79097b48726fdf66d4d57e2cf00ef638",
@@ -795,7 +749,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 44.34,
           "artifacts": {
             "result": {
               "sha256": "a1addf1d153ce44b751fa5b0dd91ff6096ff5cea8988950a068d85a26fe8501b",
@@ -812,7 +765,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 43.3,
           "artifacts": {
             "result": {
               "sha256": "35841d96b5e1b4cbcce5923d2350537f924cc796210ffd3986869f11b0702dae",
@@ -829,7 +781,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 50.76,
           "artifacts": {
             "result": {
               "sha256": "e9d6918cb6627bdc616857896d189727183df4750bf245789c5a53840ee1cead",
@@ -846,7 +797,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 46.68,
           "artifacts": {
             "result": {
               "sha256": "8a9ca3639206a33a6cc78078aeb92c30201376519397f4b0ee781f0c10d21837",
@@ -863,7 +813,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 44.99,
           "artifacts": {
             "result": {
               "sha256": "8438eb7092b72906e46cc43e6b94da431fab17d7c79c15bdfbeba772024a4963",
@@ -880,7 +829,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 38.85,
           "artifacts": {
             "result": {
               "sha256": "46f33201ba1f40b87936846c38ad690fbfe60b87d4fe0b6bc86cae5963befc01",
@@ -897,7 +845,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 26.57,
           "artifacts": {
             "result": {
               "sha256": "cd7f2560b640b20df14719addda45e91d84fe0badf31d605a31849a03029802a",
@@ -914,7 +861,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 42.4,
           "artifacts": {
             "result": {
               "sha256": "34d6196838937b3bd984ef44a2f4efc82a868aba3bbc589b997c3afb1b53b020",
@@ -931,7 +877,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 45.44,
           "artifacts": {
             "result": {
               "sha256": "ed21aaa8f6be93c5232c4efe801b8117b253330bf1f79a5a49d75fd4046dc02a",
@@ -948,7 +893,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 28.02,
           "artifacts": {
             "result": {
               "sha256": "8b9539741c8639ba951feea3091552ef0bda431066f87375b3a193a78e6f499a",
@@ -965,7 +909,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 29.18,
           "artifacts": {
             "result": {
               "sha256": "383d25e16cc64389e82f7403745e7de957d101b3e29c07bcc376892cde241846",
@@ -982,7 +925,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 24.75,
           "artifacts": {
             "result": {
               "sha256": "676755c576fbbc303981a10c016bd041b4db2d6d2ce944fa450c25c0a0af0d5d",
@@ -999,7 +941,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 38.82,
           "artifacts": {
             "result": {
               "sha256": "bbfe9a94405ca1e509497494ad61aa4ab2025ebda7eab7e0fa03186dc04ca511",
@@ -1016,7 +957,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 43.6,
           "artifacts": {
             "result": {
               "sha256": "a6500a424adad47bc9a4a3e709f037787bb64be283d0f692724c8734b17fcd69",
@@ -1033,7 +973,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 59.61,
           "artifacts": {
             "result": {
               "sha256": "6879b8fa3919a6e8cf115594dc4f9d96fb0a7de35b7f676eb3f6b6aae0822786",
@@ -1050,7 +989,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 58.71,
           "artifacts": {
             "result": {
               "sha256": "b28ddfac7eb68209f2b046ebd35fe149745f2b98f16b4b41ca8d6de577ceab91",
@@ -1067,7 +1005,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 94.67,
           "artifacts": {
             "result": {
               "sha256": "2cff591033e9aaee6e07151ae566880ade54691d6ceba64d01dbb7ebd2e1a6a1",
@@ -1084,7 +1021,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 42.74,
           "artifacts": {
             "result": {
               "sha256": "52db0ffa2476dd7c55fb95cc98c83d74ff199f59dff749b8a2c0d7edd4c2badd",
@@ -1101,7 +1037,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 30.12,
           "artifacts": {
             "result": {
               "sha256": "8f369bc868bdba22c891ce2fd7fa364f2463e0b092d94d0b10b58642f58c5a3a",
@@ -1118,7 +1053,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 37.1,
           "artifacts": {
             "result": {
               "sha256": "8cc9ef49e199eafef2acdbe04da0fca99d91b45b11731c7027a4934f32a7e4a8",
@@ -1135,7 +1069,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 35.67,
           "artifacts": {
             "result": {
               "sha256": "01e397dbf19061ec2ae849370033e7c0ee895e16d7c5cb24c1c4f02f538adb6a",
@@ -1152,7 +1085,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 46.45,
           "artifacts": {
             "result": {
               "sha256": "7010391e33f7a4b8143beaf09ddcd5e1ec1055e58a8fcd57fdb40a45c08087e5",
@@ -1169,7 +1101,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 44.53,
           "artifacts": {
             "result": {
               "sha256": "09e8cd4dfd4dde254b03ce924ab6632b644900307fc7b854f7d52ae74c1ac036",
@@ -1186,7 +1117,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 41.64,
           "artifacts": {
             "result": {
               "sha256": "8f4ea5cfb53edf4b5c31fa4d5c03084177f516d7db31a328067ff0cb58d212c6",
@@ -1203,7 +1133,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 47.34,
           "artifacts": {
             "result": {
               "sha256": "82adc23bb99b81899ecb3565ba483ed60fbc9023fdf7fd1007bcab04dffc7fa6",
@@ -1220,7 +1149,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 44.54,
           "artifacts": {
             "result": {
               "sha256": "6d722440afce742c1f85862547447758722d5da702983b3ad4bb8398feef8c54",
@@ -1237,7 +1165,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 44.61,
           "artifacts": {
             "result": {
               "sha256": "ca56921135b098fd371cc794e015a3baa7d730c215b8f7b80bacc91196b74f65",
@@ -1254,7 +1181,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 43.09,
           "artifacts": {
             "result": {
               "sha256": "618e0fde21dd6e5126300c7162a1e2a91df16b12ae6c99995b0f6381fd9d9e88",
@@ -1271,7 +1197,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 47.95,
           "artifacts": {
             "result": {
               "sha256": "c6a978bbce2af83315890141a3fef0e2cdbeb9d107825ffa6449f48912336d61",
@@ -1288,7 +1213,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 43.73,
           "artifacts": {
             "result": {
               "sha256": "cab5a9dc5e95d9ec93acca07d3b05c71e1acd537d16b04f8d4d195f7583f5fcc",
@@ -1305,7 +1229,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 41.07,
           "artifacts": {
             "result": {
               "sha256": "44e4dc6fae967d5b00869546dde880c77fc995f568abbf9bcabc689ac9c115a3",
@@ -1322,7 +1245,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 42.65,
           "artifacts": {
             "result": {
               "sha256": "0f95357e9d8466335b33b2d17eedc9f447069e3964f50ed3db01970331dd71d5",
@@ -1339,7 +1261,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 48.08,
           "artifacts": {
             "result": {
               "sha256": "e33c058602eb9e9e270d3ac76116eceb3a487fd2ced75da3bcbf51f089775a65",
@@ -1356,7 +1277,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 52.89,
           "artifacts": {
             "result": {
               "sha256": "0e45a0c2f96c7c3040f286e84293eed57b78f774a73cb87a2280c77086c841fa",
@@ -1373,7 +1293,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 52.09,
           "artifacts": {
             "result": {
               "sha256": "d8a97380f523c5a392ddb7148b91f3fd73a3d45b3d52ad0f1821ea4facd5debd",
@@ -1390,7 +1309,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 49.13,
           "artifacts": {
             "result": {
               "sha256": "acf0c285417796fd8c593a94712cb2766c8aced457295e150eac98b73c3d57d5",
@@ -1407,7 +1325,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 43.54,
           "artifacts": {
             "result": {
               "sha256": "7a593453977a6b075059c436014995c7e784a0d41faaff92efbd15d5b840135b",
@@ -1424,7 +1341,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 41.69,
           "artifacts": {
             "result": {
               "sha256": "32e412812626e0b972af1acb7fff575a84b5bc2341e8b5efcf48d4c4fdb850f9",
@@ -1441,7 +1357,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 28.25,
           "artifacts": {
             "result": {
               "sha256": "8e1b0c50ab494f1c67e9b3f86e237cb2b32096d87bb69f7756bbda2576983255",
@@ -1458,7 +1373,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 26.22,
           "artifacts": {
             "result": {
               "sha256": "25d63416553fdcf6b8fe59b043b9e858c2f534adc36dca14fc47314356113b2d",
@@ -1475,7 +1389,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 26.23,
           "artifacts": {
             "result": {
               "sha256": "710540863d4d73fa4b4dc6b78425105ce77612fb94bf5927e1138a14ca82e14c",
@@ -1492,7 +1405,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 30.55,
           "artifacts": {
             "result": {
               "sha256": "f39f7a647070494bce03caf6842af093a203a283356edb5281a257af737efbe4",
@@ -1509,7 +1421,6 @@
       "recipes": {
         "log:2": {
           "status": "ok",
-          "seconds": 33.37,
           "artifacts": {
             "runlog": {
               "sha256": "da91058d9c3da962040cdf0bfe62e61e53e28aae58ed7773c5ac2ab1f2071ca8",
@@ -1520,7 +1431,6 @@
         },
         "log:1": {
           "status": "ok",
-          "seconds": 20.54,
           "artifacts": {
             "runlog": {
               "sha256": "a611d18a0c235978234c97b0521deb82dcf7dd77de224928a5cffe6a21c3245e",
@@ -1531,7 +1441,6 @@
         },
         "log:3": {
           "status": "ok",
-          "seconds": 23.94,
           "artifacts": {
             "runlog": {
               "sha256": "5a32506e9c39ae154b6ec5091e0a90e53ce3b4806203ef87c1f19f05aa1e84a6",
@@ -1549,7 +1458,6 @@
       "recipes": {
         "log:3": {
           "status": "ok",
-          "seconds": 35.67,
           "artifacts": {
             "runlog": {
               "sha256": "3a7f8c042acd5fcfe3d082d89c451d84650178536e907b67e22b3991c7548963",
@@ -1567,7 +1475,6 @@
       "recipes": {
         "log:3": {
           "status": "ok",
-          "seconds": 33.91,
           "artifacts": {
             "runlog": {
               "sha256": "51c13a28a115eaee8311880eb054e98a3c60dcfff20a712c1991bda34c5b8642",
@@ -1585,7 +1492,6 @@
       "recipes": {
         "log:2+out": {
           "status": "ok",
-          "seconds": 38.95,
           "artifacts": {
             "runlog": {
               "sha256": "f4511948af29016f2bd090c4bfceb51aa6b2a46f51274ebfd36a9ec529a1d3a6",
@@ -1607,7 +1513,6 @@
       "recipes": {
         "log:3": {
           "status": "ok",
-          "seconds": 37.15,
           "artifacts": {
             "runlog": {
               "sha256": "32bab4b3493cc0261ba246f31814af489520517c601a1c9ae2a504e06fbe2032",
@@ -1625,7 +1530,6 @@
       "recipes": {
         "log:2": {
           "status": "ok",
-          "seconds": 402.13,
           "artifacts": {
             "runlog": {
               "sha256": "532e425c9dfbd64b25194b3bab433e52a8866ba725368ad92be02f62f98e7f55",
@@ -1643,7 +1547,6 @@
       "recipes": {
         "log:1": {
           "status": "ok",
-          "seconds": 161.78,
           "artifacts": {
             "runlog": {
               "sha256": "797f97258ba4d30408bb96fddad07c65c612a690d2a4cdc74dd4da86659c1970",
@@ -1661,7 +1564,6 @@
       "recipes": {
         "log:2": {
           "status": "ok",
-          "seconds": 244.17,
           "artifacts": {
             "runlog": {
               "sha256": "8d6ed68994bd3ab8303e2a28f04bc69caf916f44dd30ecbe60e07851661b9919",
@@ -1679,7 +1581,6 @@
       "recipes": {
         "log:2+out": {
           "status": "ok",
-          "seconds": 47.44,
           "artifacts": {
             "runlog": {
               "sha256": "ab0e80f19caf1b5945a30469cdd68a270a1be5789629566061acd59cb11de58d",
@@ -1701,7 +1602,6 @@
       "recipes": {
         "log:2": {
           "status": "ok",
-          "seconds": 29.57,
           "artifacts": {
             "runlog": {
               "sha256": "ac3bb2fba6c5fb802538c675ed5b06d6a564eb455f7d0df842389746a06f99d2",
@@ -1719,7 +1619,6 @@
       "recipes": {
         "log:3": {
           "status": "ok",
-          "seconds": 190.68,
           "artifacts": {
             "runlog": {
               "sha256": "0861ac3e2b603700f8e7cde76c402249c3c79a81b22a163b9dffc3331327ee4c",
@@ -1737,7 +1636,6 @@
       "recipes": {
         "log:1": {
           "status": "ok",
-          "seconds": 274.15,
           "artifacts": {
             "runlog": {
               "sha256": "0c991c28ccd7d8ea205663731eb8cb890571364e858effdd986cec8c992f7f16",
@@ -1755,7 +1653,6 @@
       "recipes": {
         "log:2": {
           "status": "ok",
-          "seconds": 163.54,
           "artifacts": {
             "runlog": {
               "sha256": "b34f62a95dae0e7c48cdbe2e2d1aed58c1c6f925b2a5c56730399296fea60311",
@@ -1773,7 +1670,6 @@
       "recipes": {
         "log:2": {
           "status": "ok",
-          "seconds": 27.18,
           "artifacts": {
             "runlog": {
               "sha256": "5d5d142581ca164480e416d2cce73b569b6f281c125864f74092b37f2d945314",
@@ -1791,7 +1687,6 @@
       "recipes": {
         "log:2": {
           "status": "ok",
-          "seconds": 27.86,
           "artifacts": {
             "runlog": {
               "sha256": "1da61047baf729a93c36cba1c723432dabab7652c550780409e28d738cd4a505",
@@ -1809,7 +1704,6 @@
       "recipes": {
         "log:2": {
           "status": "ok",
-          "seconds": 41.32,
           "artifacts": {
             "runlog": {
               "sha256": "9b900eac82b676f142a51dfdb8a3a367d9c9964a932f5921d03eee6edd691af3",
@@ -1827,7 +1721,6 @@
       "recipes": {
         "log:1": {
           "status": "ok",
-          "seconds": 200.19,
           "artifacts": {
             "runlog": {
               "sha256": "45f54f22100c19c3694188b22b233740c8327e7c7c9ce41dce1b05261e5b15cf",
@@ -1845,7 +1738,6 @@
       "recipes": {
         "log:1+out": {
           "status": "ok",
-          "seconds": 94.51,
           "artifacts": {
             "runlog": {
               "sha256": "328830523b3e14506237974aefc728a9e4b98331a9c46b3bc60ea6b2edf37ca3",
@@ -1867,7 +1759,6 @@
       "recipes": {
         "log:3": {
           "status": "ok",
-          "seconds": 61.46,
           "artifacts": {
             "runlog": {
               "sha256": "b186d751f6975de2cdcd602e1ead4a38570705dec84b099bc0c1892f962f0df0",
@@ -1885,7 +1776,6 @@
       "recipes": {
         "log:2": {
           "status": "ok",
-          "seconds": 95.25,
           "artifacts": {
             "runlog": {
               "sha256": "3b4ebe67b75f50de2a164fc0aac04237cc77c3f00fae1d409a50cd5e5e9da893",
@@ -1903,7 +1793,6 @@
       "recipes": {
         "log:2": {
           "status": "ok",
-          "seconds": 61.3,
           "artifacts": {
             "runlog": {
               "sha256": "3a52ba6acf4eb5d441c0a7162c297ce9e5ef6a1d490b57e2500e0ed123b2257e",
@@ -1921,7 +1810,6 @@
       "recipes": {
         "log:2+out": {
           "status": "ok",
-          "seconds": 28.91,
           "artifacts": {
             "runlog": {
               "sha256": "a8745cb9b46081fe5f2358d6d70b856b2f4bc614769cd623cf5e16cf03bea2d0",
@@ -1943,7 +1831,6 @@
       "recipes": {
         "log:2": {
           "status": "ok",
-          "seconds": 51.43,
           "artifacts": {
             "runlog": {
               "sha256": "d1fbfa42108d669d68212d4c2cbf1f81bdb7a1e7cfdec9eb5c948c612a9cce42",
@@ -1961,7 +1848,6 @@
       "recipes": {
         "log:1": {
           "status": "ok",
-          "seconds": 1807.03,
           "artifacts": {
             "runlog": {
               "sha256": "da8df9dc29d91df585c0a1df23c5176dfcc2456c57cced657360c8f8902af81b",
@@ -1979,7 +1865,6 @@
       "recipes": {
         "log:1": {
           "status": "ok",
-          "seconds": 1060.88,
           "artifacts": {
             "runlog": {
               "sha256": "218231f041ccf8d1ee6dccfd053973b7e3b7194c1a298f7387d5dbcba00511ad",
@@ -1997,7 +1882,6 @@
       "recipes": {
         "log:2": {
           "status": "ok",
-          "seconds": 2511.61,
           "artifacts": {
             "runlog": {
               "sha256": "17974edeba1dc1b7a47778434b0d02120918c4802414ce307e653e0502583692",
@@ -2015,7 +1899,6 @@
       "recipes": {
         "log:2": {
           "status": "ok",
-          "seconds": 2374.28,
           "artifacts": {
             "runlog": {
               "sha256": "ca6768ad3f96c728ee4e8aba51078a4f1853bf7df345609f61d00b49080e9a56",
@@ -2033,7 +1916,6 @@
       "recipes": {
         "log:2": {
           "status": "ok",
-          "seconds": 908.27,
           "artifacts": {
             "runlog": {
               "sha256": "b1630b5d70fa108fb84658891ff563d6e045a9de5dc9417f729c54f8a4c75b3c",
@@ -2051,7 +1933,6 @@
       "recipes": {
         "log:2": {
           "status": "ok",
-          "seconds": 1864.09,
           "artifacts": {
             "runlog": {
               "sha256": "d8a7921b74a4953143307a84a99688e784b9a148380a45fa0a4d948f1924734e",
@@ -2069,7 +1950,6 @@
       "recipes": {
         "log:2+out": {
           "status": "ok",
-          "seconds": 1536.53,
           "artifacts": {
             "runlog": {
               "sha256": "ef1719798b0ae055e8cf51a346fd5f2dab8e069531d8c6b338087f84ee6bdcc0",
@@ -2091,7 +1971,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 19.16,
           "artifacts": {
             "result": {
               "sha256": "f8a1a1866283f2e8ab5cdd1c3f6f955e27358d189d3daa575ffc9f4468a24461",
@@ -2108,7 +1987,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 19.79,
           "artifacts": {
             "result": {
               "sha256": "b5906efe0d7c12ce42cdcd28b357e27a626eeec8912b63c40283b4da8286c95f",
@@ -2125,7 +2003,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 19.65,
           "artifacts": {
             "result": {
               "sha256": "cd32ca0cb7857783e93c563c25dd071d7bab7c810461baa50e5e626bf648b9db",
@@ -2142,7 +2019,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 20.18,
           "artifacts": {
             "result": {
               "sha256": "253c3971ff90de7eb314bbf0e1f81152e32b8bf1c4b899acdb99c874f8fe1b95",
@@ -2159,7 +2035,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 21.01,
           "artifacts": {
             "result": {
               "sha256": "1b061e82ef6621c22e9551ce5220731faf96673c49935023f519a7e38c6893b9",
@@ -2176,7 +2051,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 18.44,
           "artifacts": {
             "result": {
               "sha256": "d4d494c7b20978b59a4a380bc2ee636977052e9bff3e63f3e5474fcaa1701542",
@@ -2193,7 +2067,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 25.27,
           "artifacts": {
             "result": {
               "sha256": "22e65c2b90b4be93d9433c77261de484ef37a70b09b59fc98cf5750553bc3c6a",
@@ -2210,7 +2083,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 23.4,
           "artifacts": {
             "result": {
               "sha256": "3be072bb055a3c6cc0dbf7c2590f0cd17a8db77d77afa5c68c9e33815cb0b441",
@@ -2227,7 +2099,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 23.43,
           "artifacts": {
             "result": {
               "sha256": "082bdd2957fd99b8f714b893aeed3d07cad490d0838e9d6051dc88b01af30f24",
@@ -2244,7 +2115,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 23.12,
           "artifacts": {
             "result": {
               "sha256": "acb0fae25bc69db6cbe8404576d5a9e7283ce62f3acc06edd627e585b20fdc1b",
@@ -2261,7 +2131,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 23.85,
           "artifacts": {
             "result": {
               "sha256": "2f3e7a5bd4a8cdbc6b30bda15e8d30f5c97151d216d7b2c2adcb89926a075164",
@@ -2278,7 +2147,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 21.66,
           "artifacts": {
             "result": {
               "sha256": "7b8b771dac5c1eea13ff35ba16b2e866ce2e5d60d9d343873f38b51539b58bca",
@@ -2295,7 +2163,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 24.19,
           "artifacts": {
             "result": {
               "sha256": "eeea7595e6de250d76034d44383248ed1a07a949024fd7506e304438ede4ba68",
@@ -2312,7 +2179,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 25.03,
           "artifacts": {
             "result": {
               "sha256": "978b9b0ca7c85f26f2d371be7e3dc01ece3074626407645b35e6274e4a02017c",
@@ -2322,7 +2188,6 @@
         },
         "outlog": {
           "status": "ok",
-          "seconds": 29.69,
           "artifacts": {
             "outlog": {
               "sha256": "875007152708ca47c1867d43f505bcc783b78e3aab03579ef2d3eb856b5768df",
@@ -2339,7 +2204,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 24.91,
           "artifacts": {
             "result": {
               "sha256": "aba0141c875b47164610c5937d7bf8be16c027d26dc1dd9f4cc5428a85e4cc9f",
@@ -2349,7 +2213,6 @@
         },
         "outlog": {
           "status": "ok",
-          "seconds": 27.91,
           "artifacts": {
             "outlog": {
               "sha256": "a0e2daa112b0db8e3b838791b68ce59a1758f8ad2d5901b1287213dfefce35f1",
@@ -2366,7 +2229,6 @@
       "recipes": {
         "outlog": {
           "status": "ok",
-          "seconds": 39.2,
           "artifacts": {
             "outlog": {
               "sha256": "e28f99d1c87b9757fa819e9fd94188efad7b1317ce68204540d59be8a6ab68eb",
@@ -2376,7 +2238,6 @@
         },
         "report": {
           "status": "ok",
-          "seconds": 15.71,
           "artifacts": {
             "result": {
               "sha256": "6f00164a1d8a8684f53de02b7b3726b35c71ffcbdf744c3e4ae332781429d63f",
@@ -2393,7 +2254,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 22,
           "artifacts": {
             "result": {
               "sha256": "f3408859ca530f60f308a441560c7599938129a3e565c168c791d3722a47f1f9",
@@ -2403,7 +2263,6 @@
         },
         "outlog": {
           "status": "ok",
-          "seconds": 25.63,
           "artifacts": {
             "outlog": {
               "sha256": "8c46221333341d58fc3343c3670d47419cabee3bd1ea80e3e41f82cf6a729732",
@@ -2420,7 +2279,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 21.54,
           "artifacts": {
             "result": {
               "sha256": "3f8142b8745d36be238f98928a0bf5989cc4c77c4b2d023256b0afc73345419e",
@@ -2430,7 +2288,6 @@
         },
         "outlog": {
           "status": "ok",
-          "seconds": 26.81,
           "artifacts": {
             "outlog": {
               "sha256": "f3f3eed966a4a73867fd9986826deabef4a69297729116df17e63d1db126b307",
@@ -2447,7 +2304,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 25.01,
           "artifacts": {
             "result": {
               "sha256": "9e10fb58ba8c6562085f4cfe199d2ec102f614c913e95c4e112d21cf14c7d2ba",
@@ -2457,7 +2313,6 @@
         },
         "outlog": {
           "status": "ok",
-          "seconds": 28.03,
           "artifacts": {
             "outlog": {
               "sha256": "79c79875503fb8dfd80a837238a90a0ff4bc1ed0b136ad6f1f3cfeb6352b6f4f",
@@ -2474,7 +2329,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 26.51,
           "artifacts": {
             "result": {
               "sha256": "02956c8399574717cbc7740191e6ff1ff0c2cd3915af84535983b7131981c7a3",
@@ -2484,7 +2338,6 @@
         },
         "outlog": {
           "status": "ok",
-          "seconds": 27.89,
           "artifacts": {
             "outlog": {
               "sha256": "249ab3c7c9f1e842c97de317dd3df911e61e26f133fa856e7b19746ba0548044",
@@ -2501,7 +2354,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 24.09,
           "artifacts": {
             "result": {
               "sha256": "dfd83cf1878ea93e2d644a633f786d049a8305fadee39ab3b0cc26d84b2ce0dc",
@@ -2511,7 +2363,6 @@
         },
         "outlog": {
           "status": "ok",
-          "seconds": 26.72,
           "artifacts": {
             "outlog": {
               "sha256": "94ca6bb442fbb810445254295dbc6fcdc8fdd48e1174824eb0ef797cebb532d2",
@@ -2528,7 +2379,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 26.56,
           "artifacts": {
             "result": {
               "sha256": "f2541d57fc65dd18d2091a28f4816fcfa51c303ae1acee3e64206d11bd4d6859",
@@ -2545,7 +2395,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 22.77,
           "artifacts": {
             "result": {
               "sha256": "e3bb7f050953ecbcf1f7577a51e4554b61239a1205c2674955537c65785671ab",
@@ -2555,7 +2404,6 @@
         },
         "outlog": {
           "status": "ok",
-          "seconds": 26.58,
           "artifacts": {
             "outlog": {
               "sha256": "c05c9127c33bac0e20c79af1a4a105adcca0257aae1e83ab11ae365b75c184fe",
@@ -2572,7 +2420,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 26,
           "artifacts": {
             "result": {
               "sha256": "872c2f00308ac7392fdfbb40cb95fdf3b2b318b622013eaecd64abb711de4276",
@@ -2582,7 +2429,6 @@
         },
         "outlog": {
           "status": "ok",
-          "seconds": 28.34,
           "artifacts": {
             "outlog": {
               "sha256": "4e07cd3a6dfd73cfb693206b1e10826d6a7fa3ad88a194956c55d7ae9fb9cd21",
@@ -2599,7 +2445,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 25.32,
           "artifacts": {
             "result": {
               "sha256": "54f5b16b4734090ae18d7de43a96ac0de08a71489cdc22aa903783222bda94fb",
@@ -2609,7 +2454,6 @@
         },
         "outlog": {
           "status": "ok",
-          "seconds": 29.18,
           "artifacts": {
             "outlog": {
               "sha256": "9a670863af7bcd545f65eebb997814f61ef568912d776c54aec1054840b47ec0",
@@ -2626,7 +2470,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 23.35,
           "artifacts": {
             "result": {
               "sha256": "20a474508601d03150369058bb34f5a91a7626bdf13d860250a5f47b785c30cb",
@@ -2636,7 +2479,6 @@
         },
         "outlog": {
           "status": "ok",
-          "seconds": 28.74,
           "artifacts": {
             "outlog": {
               "sha256": "71aea7d9d00f5eb6acb4599b3555db5d52c817accf7748614e0dcbd4eee6915f",
@@ -2653,7 +2495,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 25.84,
           "artifacts": {
             "result": {
               "sha256": "5900d4090506b42f2acb89730e97507e9ce3f1000aa54c5d4c0c3ebdeda5b3b0",
@@ -2663,7 +2504,6 @@
         },
         "outlog": {
           "status": "ok",
-          "seconds": 28.92,
           "artifacts": {
             "outlog": {
               "sha256": "f9ab25e6fa981d22fc116ce44ffc524a7f5f10296393a486a6b64c7d5ae49a00",
@@ -2680,7 +2520,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 25.49,
           "artifacts": {
             "result": {
               "sha256": "3c47a2720f2f307c7d70b1b6a2cf08dc96b1818a014613cbbfeedcc90fe124e2",
@@ -2697,7 +2536,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 23.07,
           "artifacts": {
             "result": {
               "sha256": "5ac70145464aa2e84d31c6967329e81f7d0c975d0e81a808c71d6a6a23b4218f",
@@ -2714,7 +2552,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 23.53,
           "artifacts": {
             "result": {
               "sha256": "647d3a37ef3923e7cc4e71fe2c8f63a08a3239f04a4b789143da5a4cba513d46",
@@ -2731,7 +2568,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 26.48,
           "artifacts": {
             "result": {
               "sha256": "df1dbe4758a3833d0979a218a49801ebf3d3f2c3a6385cba3de41875f8666bb5",
@@ -2748,7 +2584,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 25.75,
           "artifacts": {
             "result": {
               "sha256": "f2e960d9ce1e4091073cceef0476eff06e1d929ef516bbc1d577508264f61869",
@@ -2765,7 +2600,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 24.36,
           "artifacts": {
             "result": {
               "sha256": "fb75cc58d46a1766ad0f05647978d2bcb0fbbd3924a7fc5f12f80a29b885adc0",
@@ -2782,7 +2616,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 25.01,
           "artifacts": {
             "result": {
               "sha256": "145c87d71b03bab5b6e79c2e6dea9107901534645d005ce82233e2f5244b1b58",
@@ -2799,7 +2632,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 21.4,
           "artifacts": {
             "result": {
               "sha256": "5cd9224616a117a2d55aadf20409e2381a7a3f4afd43416d5c9fa7bdbaadf37d",
@@ -2816,7 +2648,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 23.73,
           "artifacts": {
             "result": {
               "sha256": "3d57fea1578df91a926ccad5d910c66a106a3671c571feedf09ac4bcff29d28e",
@@ -2833,7 +2664,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 26.74,
           "artifacts": {
             "result": {
               "sha256": "3acdc7c6ad49ca627a4bdbce46b68df6b03c181fb6edcda403c7d605151c37fc",
@@ -2850,7 +2680,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 25.7,
           "artifacts": {
             "result": {
               "sha256": "e332625da1bd57f7bc55e7f7fe8d391b62fa52722ac196f5bbf44ac138587142",
@@ -2867,7 +2696,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 28.43,
           "artifacts": {
             "result": {
               "sha256": "af4bc24fb1cf213034ddb398b63eac614b0e266738133f7f4b1d0e7192b7805b",
@@ -2884,7 +2712,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 24.98,
           "artifacts": {
             "result": {
               "sha256": "fff84f67d2896a37a7c5cf6a7d19c3e54d2687f0bcdc3b33f222c3f6ca7e9763",
@@ -2901,7 +2728,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 26.59,
           "artifacts": {
             "result": {
               "sha256": "8917dd9f5970f4888c97e4591dd7ea04a55a8d5e613dbe7901466caeba79132c",
@@ -2918,7 +2744,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 26.2,
           "artifacts": {
             "result": {
               "sha256": "826e7047ff7cf3e6e42ca831d04fb1ea885a72c9d9083569152ac10cf19f58a5",
@@ -2935,7 +2760,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 25.65,
           "artifacts": {
             "result": {
               "sha256": "99793618436056cd9aaa63f044a1601df73f9c0206ae34f7a66b8a294c9579f3",
@@ -2952,7 +2776,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 29.06,
           "artifacts": {
             "result": {
               "sha256": "e22b9d075839b27c6f6c917dcf898ba4d252ecec1342be595fd1917e6db128c5",
@@ -2969,7 +2792,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 24.38,
           "artifacts": {
             "result": {
               "sha256": "17c49cab40e806d253fb639c0a471f2e0e5c0f49d7303762aba76086940aab54",
@@ -2986,7 +2808,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 28.18,
           "artifacts": {
             "result": {
               "sha256": "15c431aff1d231e5ac0155127cbaf703bf200408fa9ac928abc293c383a6b149",
@@ -3003,7 +2824,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 22.66,
           "artifacts": {
             "result": {
               "sha256": "5dd711ac4e931942fd8a6b8af8f8f431ae54a58ea5532f87052867083245a8f4",
@@ -3020,7 +2840,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 24.31,
           "artifacts": {
             "result": {
               "sha256": "daf857b2fc4f47fa80480d9596c62f63fafe9da3818db25dfc7a145ebfedd233",
@@ -3037,7 +2856,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 25.96,
           "artifacts": {
             "result": {
               "sha256": "37fc5be40eadddbf7bc5097704c3633b48c7f9c4d7c2534c83f3de6a776945e2",
@@ -3054,7 +2872,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 25.18,
           "artifacts": {
             "result": {
               "sha256": "f1778a4e7992cbd01538aa8380d1102e8901bfc6620c2a5db4b109edfad97835",
@@ -3071,7 +2888,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 29.94,
           "artifacts": {
             "result": {
               "sha256": "46efeaca91e27eb0b529fdcb73316a5cf1bfb27b0c47b8328a0ff6413f9c88cc",
@@ -3088,7 +2904,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 24.1,
           "artifacts": {
             "result": {
               "sha256": "e6787e040527538fa694df5dce74acb7a590ac89b9073264947c33c1e9b7ed3b",
@@ -3098,7 +2913,6 @@
         },
         "outlog": {
           "status": "ok",
-          "seconds": 27.87,
           "artifacts": {
             "outlog": {
               "sha256": "353393c4097cc6680304a19be520576ab446b0ea1e5a0d24661bfad251b292a1",
@@ -3115,7 +2929,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 25.46,
           "artifacts": {
             "result": {
               "sha256": "49b249cca77f23fa3d6cbe193b706566813670a707e7d4a588253cb7b179ae31",
@@ -3132,7 +2945,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 21.08,
           "artifacts": {
             "result": {
               "sha256": "f00a63c705324f4464f0731a0458b41ddfe873d871359694e00da199f4aba479",
@@ -3142,7 +2954,6 @@
         },
         "outlog": {
           "status": "ok",
-          "seconds": 26.12,
           "artifacts": {
             "outlog": {
               "sha256": "9a49de3402a4540d812d93214e920021d72190a2ebacf8950747ec53e7af1e6a",
@@ -3159,7 +2970,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 26.08,
           "artifacts": {
             "result": {
               "sha256": "c1af44bd9d7e19f12d726450cd038759cf6aef95445681c2b8493d2bb5419a85",
@@ -3176,7 +2986,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 30.11,
           "artifacts": {
             "result": {
               "sha256": "c94ab4e4ae51acca94699749d6684c97a100ba2b6a2c965e7362c0bab8bf23ce",
@@ -3193,7 +3002,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 24.72,
           "artifacts": {
             "result": {
               "sha256": "42f4641d5ffe2bfc86fa77ad0f97dbcd6e1cacad4b1c271845897a76d5f77f9c",
@@ -3210,7 +3018,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 27.17,
           "artifacts": {
             "result": {
               "sha256": "54aee65f67ae6c233d8a33bbac3d2a6e69353f5325b569c50be9ee82fc5ce28e",
@@ -3227,7 +3034,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 20.62,
           "artifacts": {
             "result": {
               "sha256": "be4416d64b5866b4e85c2a6182c84b1e250386824af6d93e5e2e4fbadf584c9e",
@@ -3237,7 +3043,6 @@
         },
         "outlog": {
           "status": "ok",
-          "seconds": 26.35,
           "artifacts": {
             "outlog": {
               "sha256": "b6bce3c9bca83ec6bef014a7fa3455467342591f862cf1b64081547f301c78fe",
@@ -3254,7 +3059,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 20.78,
           "artifacts": {
             "result": {
               "sha256": "2349e8465dad06b3ad5fc85861e01980b9e1d843dfc0fbc1c6d8d8724852e99f",
@@ -3264,7 +3068,6 @@
         },
         "outlog": {
           "status": "ok",
-          "seconds": 27.74,
           "artifacts": {
             "outlog": {
               "sha256": "00baed74c5259a93c1c0abbadd430a2b7bcdae73a934132f5ffaee9686f694c1",
@@ -3281,7 +3084,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 29.96,
           "artifacts": {
             "result": {
               "sha256": "0a073702ebd29279d7dc93ffcf790e0c709405b54323559d2ad193eaa4cf698c",
@@ -3298,7 +3100,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 30.17,
           "artifacts": {
             "result": {
               "sha256": "21732876fd15387a47111881142f469aa8ae51ca1f8ef9ea7d9b521633ae3848",
@@ -3315,7 +3116,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 31.02,
           "artifacts": {
             "result": {
               "sha256": "6830a0cb2669a5011777a6207ffa1257bd1c6eb3b3301da40215abca62462bee",
@@ -3332,7 +3132,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 31.15,
           "artifacts": {
             "result": {
               "sha256": "8b0859f2c2070499852175be10888651ad152a1d8db46bae3ecc5007c7b76c31",
@@ -3349,7 +3148,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 30.49,
           "artifacts": {
             "result": {
               "sha256": "1564eda63ffc8df3be3dc07ed36be2c16a67b8d65e27f317babcf7776c68a86d",
@@ -3366,10 +3164,9 @@
       "recipes": {
         "outlog": {
           "status": "ok",
-          "seconds": 37.35,
           "artifacts": {
             "outlog": {
-              "sha256": "91ed2c60f6c32a7882f261ad84dce2ca00e5452b89b3783686c53da2c71fce65",
+              "sha256": "0f0cd9834693d19cbc4ecbe20f16dd066cdf776e8dd17db4b8cb4d944455e75a",
               "bytes": 1076
             }
           }
@@ -3383,7 +3180,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 30.12,
           "artifacts": {
             "result": {
               "sha256": "c5b5069329596a148d456f4d1f228bba823c27e2b9296859a776c3ccd93ec077",
@@ -3400,7 +3196,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 31.79,
           "artifacts": {
             "result": {
               "sha256": "3f5810a84c7368731e6651cb42ccce70cfaff18eabc51820787cdbe330367061",
@@ -3417,7 +3212,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 27.33,
           "artifacts": {
             "result": {
               "sha256": "151d6c2611ab04a092aa4d6e7a00440c93f3ecab46a909683d2b08773e50395e",
@@ -3434,7 +3228,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 22.7,
           "artifacts": {
             "result": {
               "sha256": "c78b238b24c6dfb8b1a56ca2148e9ecab4b83cd13a020dad3c2fc300163e7e63",
@@ -3451,7 +3244,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 21.89,
           "artifacts": {
             "result": {
               "sha256": "4a03fbf7aaf1a8986f7aa70c3f87eb6b0f9852446c57a9be2c61fe5e192b262d",
@@ -3468,7 +3260,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 44.95,
           "artifacts": {
             "result": {
               "sha256": "de0d039b6b827ac87f416a8024afa65a54e59a6c681608492ee488081ec5fd1e",
@@ -3485,7 +3276,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 47.6,
           "artifacts": {
             "result": {
               "sha256": "b95ef942a722f54b3823d40ece5ea122b9d29115821a15461e5154c4223e29ab",
@@ -3502,7 +3292,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 37.45,
           "artifacts": {
             "result": {
               "sha256": "ca5c123a6a4dd35d1506ea1ef7e22b830c0d6d8617fdc5974cc4033afa2ffb93",
@@ -3519,7 +3308,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 32.76,
           "artifacts": {
             "result": {
               "sha256": "a6dded471cbd32ed9214e47fa415267778295603344ccdc84cc49f9556d83350",
@@ -3536,7 +3324,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 32.9,
           "artifacts": {
             "result": {
               "sha256": "24d6bcd9ebbeda231735e9bb1c4c840f5766b20aae157c12d9e2d9ff2fd2ec59",
@@ -3553,7 +3340,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 29.24,
           "artifacts": {
             "result": {
               "sha256": "c674dbe38301d13c16573a011c6da4ffb70af944232aaf58a28c1b63b791a744",
@@ -3570,7 +3356,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 38.55,
           "artifacts": {
             "result": {
               "sha256": "351db4f8efcd0ece998ac7313c6e3a849019fd0ba3b7527c8e373f7f465746e7",
@@ -3587,7 +3372,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 29.24,
           "artifacts": {
             "result": {
               "sha256": "2d864e0962bed8206887a00318f3000fb85e20fcb7b10bbcf565e3256843c076",
@@ -3604,7 +3388,6 @@
       "recipes": {
         "outlog": {
           "status": "ok",
-          "seconds": 28.35,
           "artifacts": {
             "outlog": {
               "sha256": "6625d30ab3a5773e5515804c7869bacda2cbeb14d57b3bec6da16c6fbbb64a7b",
@@ -3621,7 +3404,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 23.3,
           "artifacts": {
             "result": {
               "sha256": "6de6ce8ce6c91cc290c351c0363fb2bfd560c3da3d8528949c8e345b5c83532e",
@@ -3638,7 +3420,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 24.83,
           "artifacts": {
             "result": {
               "sha256": "844e442da0bb678f2ca62b35ddbf16995d828b9c0fd9843b0a779b0770352c3f",
@@ -3655,7 +3436,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 24.3,
           "artifacts": {
             "result": {
               "sha256": "5730f41d4cd1a33a662dec4a67b4a9bf9ddcfc05df5c5431e0c6df119fd8722e",
@@ -3672,7 +3452,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 24.76,
           "artifacts": {
             "result": {
               "sha256": "ffd9017e7a92543ea695bd47e8b54235e7f4f2f174f7b019228c1781b881f682",
@@ -3689,7 +3468,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 33.25,
           "artifacts": {
             "result": {
               "sha256": "2ca56214f3cf6a591daaaa848c2cd1ce7395611b3bf1ed0186ed5e63fc0358db",
@@ -3706,7 +3484,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 29.48,
           "artifacts": {
             "result": {
               "sha256": "cb3e4b01fc3106d3c69b48ae4d5a16a9722e965ec8c4b3a0aab827a654de7edc",
@@ -3723,7 +3500,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 26.07,
           "artifacts": {
             "result": {
               "sha256": "e323989bbb9743a62dbd9e3cbc6d694057d53b4214466a3097d9837b58c40227",
@@ -3740,7 +3516,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 25.64,
           "artifacts": {
             "result": {
               "sha256": "c2d78e7a7cec0ed067c4f0bc2fadff3147fcc5f68d5d2f590987b1624609cb5e",
@@ -3757,7 +3532,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 25.23,
           "artifacts": {
             "result": {
               "sha256": "3c12c4adc7c0fbf4154f7f0207548bec2ba168a611df122bf9412f9fa4b30c45",
@@ -3774,7 +3548,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 21.41,
           "artifacts": {
             "result": {
               "sha256": "cfaa1098504072050e6eb0312ffdc05455a4d3aff5e745ac1e8878a61efaceae",
@@ -3791,7 +3564,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 23.65,
           "artifacts": {
             "result": {
               "sha256": "e82e6b5122f27c8bf069f61d791f274f305b0980e9420da9907b04d43e09e30e",
@@ -3808,7 +3580,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 25.99,
           "artifacts": {
             "result": {
               "sha256": "27e53c0dac040ffd27ee283cb92510fc117f782da0ff296811be982a2ccc3694",
@@ -3825,7 +3596,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 28.5,
           "artifacts": {
             "result": {
               "sha256": "3df0c6907d156d124cc80fac8419818821822c45e447aff4fd8105e17fb8f47b",
@@ -3842,7 +3612,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 25.97,
           "artifacts": {
             "result": {
               "sha256": "4f5e936aa591d11c0a4fefd25f93ea24f53663eaf7eced1a6e8562fa8daa43dd",
@@ -3859,7 +3628,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 30.1,
           "artifacts": {
             "result": {
               "sha256": "265f431ac9fe02c137e594dc53daf5b871d3c2f6a5d362a3024c474b91406204",
@@ -3876,7 +3644,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 27.09,
           "artifacts": {
             "result": {
               "sha256": "6469dbedb064e7d24a15a4532798df47040100410393c9ca6b6d73bf3e241bd7",
@@ -3893,7 +3660,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 22.08,
           "artifacts": {
             "result": {
               "sha256": "9bc6be378d65028941ca3bcfa7c2605c3b0e9ae87d525bb33514d48af842f398",
@@ -3910,7 +3676,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 27.68,
           "artifacts": {
             "result": {
               "sha256": "86bc66f64a290f0908d788a71eb1b0b3fe8c469a7911743490359828cd095231",
@@ -3927,7 +3692,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 25.24,
           "artifacts": {
             "result": {
               "sha256": "a7bb74bc6ad7204fcd41b6eee55405c855f3220b9020b899660b314ff9719eac",
@@ -3944,7 +3708,6 @@
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 18.4,
           "artifacts": {
             "result": {
               "sha256": "12795cd1ae62b87a251bcb6975db17ecc7010423ba6e80a5d58b285df925b751",

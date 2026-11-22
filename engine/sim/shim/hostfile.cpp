@@ -421,8 +421,9 @@ Stream *newStream() {
 } // namespace
 
 // A log starts (with this many log files: 0, 1 or 2) or stops (0).  A log
-// file the table has no entry for is not opened in the original; here it is
-// counted as far as entries are free.
+// file the table has no entry for is not opened in the original (the box
+// "Can't open log file", probe e6); here the host's log service writes it all
+// the same, and only the free entries are counted (docs/differences/SH6.md).
 void easy68k_files_log_streams(int count) {
   int used = 0;
   for (int i = 0; i < STREAM_SLOTS; i++)

@@ -38,6 +38,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../../..');
@@ -676,7 +677,7 @@ async function studentPart(browser, name, os, fx) {
   );
 
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /** A task 2 prompt, and a program that waits for one key. */
@@ -760,7 +761,7 @@ async function promptPart(browser, name, os, fx) {
   check(`${p} the program received the code of "k"`, d6 === 'k'.charCodeAt(0), String(d6));
 
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /** Run, Pause, Trace Into, Step Over; the Registers, Listing, Memory and Stack panels follow. */
@@ -904,7 +905,7 @@ async function tracePart(browser, name, os, fx) {
   );
 
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /** The Hardware panel follows a running program, and the program follows its switches. */
@@ -986,7 +987,7 @@ async function hardwarePart(browser, name, os, fx) {
   const row = (await memoryRows(page))['00E00000'] ?? '';
   check(`${p} the Memory panel shows the display bytes at 00E00000`, row.startsWith('06 FF 5B'), row);
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /** A program that draws. */
@@ -1013,7 +1014,7 @@ async function drawPart(browser, name, os, fx) {
   }
   await page.screenshot({ path: join(outDir, `${name}-draw.png`) });
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /** Every official example: loaded, run for a moment, compared with the headless session. */
@@ -1123,7 +1124,7 @@ async function tourPart(browser, name, os, fx) {
     await toolbarButton(page, 'sim.run.rewind').click();
     await page.waitForTimeout(200);
   }
-  await context.close();
+  await closeWithin(context);
 }
 
 /** The page is reloaded: the files are still in the browser store and the program runs again. */
@@ -1166,7 +1167,7 @@ async function reloadPart(browser, name, os, fx) {
     errors.length + second.errors.length === 0,
     [...errors, ...second.errors].slice(0, 3).join(' | '),
   );
-  await context.close();
+  await closeWithin(context);
 }
 
 const PARTS = {
@@ -1274,17 +1275,17 @@ async function main() {
           }
         }
       } finally {
-        await browser.close();
+        await doneWith(browser, { last: name === browsers.at(-1) });
       }
     }
   } finally {
-    await server.close();
+    closeAtEnd(server);
   }
 
   if (notes.length > 0) console.log(`\nNotes (not failures):\n${notes.map((text) => `  - ${text}`).join('\n')}`);
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
-  process.exit(failures ? 1 : 0);
+  await endChecks(failures ? 1 : 0);
 }
 
 await main();

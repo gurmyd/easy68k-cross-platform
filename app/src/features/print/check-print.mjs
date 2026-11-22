@@ -28,6 +28,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../tests/browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -92,6 +93,8 @@ function recordFramePrint() {
   if (window === window.top) return;
   window.print = () => {
     const top = window.top;
+    // The focus pass's "dialog never shown": print() refuses (as a browser that blocks it does).
+    if (top.__framePrintThrows) throw new Error('print() refused');
     top.__framePrints = top.__framePrints ?? [];
     top.__framePrints.push({
       title: document.title,
@@ -116,9 +119,9 @@ const chordsOf = (page, id) =>
     return chordsOn(id, window.__easy68k.ctx.platform.os, false);
   }, id);
 
-async function openApp(browser) {
+async function openApp(browser, keys = keysChoice) {
   const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, reducedMotion: 'reduce' });
-  await context.addInitScript(pretendSystem, keysChoice);
+  await context.addInitScript(pretendSystem, keys);
   await context.addInitScript(recordFramePrint);
   const page = await context.newPage();
   const errors = [];
@@ -225,7 +228,7 @@ async function inspect(browser, html, name, { dark = false } = {}) {
     writeFileSync(join(outDir, `${name}.pdf`), pdf);
     pdfPages = (pdf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) ?? []).length;
   }
-  await context.close();
+  await closeWithin(context);
   return { ...facts, pdfPages };
 }
 
@@ -409,7 +412,180 @@ async function printPass(browser, name) {
   check(`${p} after the print dialog closes the frame is removed`, frameGone);
 
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
+}
+
+/** The chords the dispatcher cancels (ARCHITECTURE.md 2.9.3), as tests/e2e/app/chords.spec.ts. */
+function guardedChords(keys) {
+  const letters = ['O', 'S', 'P', 'F', 'G', 'R'];
+  return [
+    'F5',
+    'F6',
+    'F7',
+    'F10',
+    ...letters.map((letter) => `Ctrl+${letter}`),
+    ...(keys === 'mac' ? letters.filter((letter) => letter !== 'R').map((letter) => `Cmd+${letter}`) : []),
+  ];
+}
+
+/**
+ * After printing the keyboard focus is back where it was, in the top document, and the next chord
+ * is heard by the application (errata/E6.md; CI run 45034018006). The real print path of the web
+ * platform runs (the hidden frame; its print() recorded and answered with `afterprint`, which is
+ * what a browser reports whether its dialog was confirmed or cancelled), from the editor and from
+ * the Files panel's tree, on the key map `keys`; then every chord of 2.9.3 is pressed and must be
+ * heard and cancelled, each after the print it may have started has finished. Also: Cancel in the
+ * range question, a print() that refuses (no dialog shown), the printer error box, Printer Setup.
+ */
+async function focusPass(browser, name, keys) {
+  const p = `${name}, ${keys} key map, focus:`;
+  const { context, page, errors } = await openApp(browser, keys);
+  await page.evaluate(() => {
+    window.__easy68k.ctx.platform.print = window.__realPrint;
+    window.__framePrints = [];
+    window.__heard = [];
+    // After the application's own listener (registered at start-up), as in chords.spec.ts.
+    window.addEventListener('keydown', (event) => window.__heard.push(event.defaultPrevented), true);
+  });
+  const printChords = await chordsOf(page, 'ed.file.print');
+  const settled = () =>
+    page
+      .waitForFunction(
+        () => document.querySelector('iframe[srcdoc][aria-hidden="true"]') === null && document.hasFocus(),
+        null,
+        { polling: 50, timeout: STEP_MS },
+      )
+      .then(
+        () => true,
+        () => false,
+      );
+  const focused = () =>
+    page.evaluate(() => {
+      const a = document.activeElement;
+      return a
+        ? `${a.tagName.toLowerCase()}.${a.className}${a.getAttribute('role') ? `[${a.getAttribute('role')}]` : ''}`
+        : 'none';
+    });
+  const closeDialogs = async () => {
+    const open = page.locator('[role=dialog][aria-modal=true], [role=alertdialog]');
+    for (let attempt = 0; attempt < 5 && (await open.count()) > 0; attempt++) {
+      if (attempt === 0) await page.keyboard.press('Escape');
+      else await open.last().locator('.e68-dialog__footer button').last().click();
+      await open
+        .first()
+        .waitFor({ state: 'detached', timeout: 3_000 })
+        .catch(() => undefined);
+    }
+  };
+  const places = {
+    editor: async () => {
+      await page.locator('.e68-editor .cm-content').first().focus();
+    },
+    'Files tree': async () => {
+      const panel = page.locator('[data-e68-panel="files"]');
+      if (!(await panel.isVisible()))
+        await page.locator('.e68-shell__toolbar [data-command="app.files.toggle"]').click();
+      await panel.getByRole('tree').focus();
+    },
+  };
+
+  for (const [place, focusIt] of Object.entries(places)) {
+    for (const chord of printChords) {
+      await focusIt();
+      const before = await focused();
+      const prints = await page.evaluate(() => window.__framePrints.length);
+      await page.keyboard.press(playwrightKey(chord));
+      const printedNow = await page
+        .waitForFunction((n) => window.__framePrints.length > n, prints, { timeout: STEP_MS })
+        .then(
+          () => true,
+          () => false,
+        );
+      const back = await settled();
+      const after = await focused();
+      check(
+        `${p} ${chord} in the ${place} prints; afterwards the focus is back on ${before} in the top document`,
+        printedNow && back && after === before,
+        `printed=${printedNow} settled=${back} focus ${after}`,
+      );
+    }
+    const missed = [];
+    for (const chord of guardedChords(keys)) {
+      await page.evaluate(() => window.__heard.splice(0));
+      await page.keyboard.press(playwrightKey(chord));
+      const heard = await page.evaluate(() => window.__heard.splice(0));
+      if (heard.at(-1) !== true) missed.push(`${chord} ${JSON.stringify(heard)}`);
+      await closeDialogs();
+      if (!(await settled())) missed.push(`${chord}: the print it started did not finish`);
+    }
+    check(
+      `${p} after printing in the ${place} every chord of 2.9.3 is heard and cancelled`,
+      missed.length === 0,
+      missed.join(', '),
+    );
+  }
+
+  // The editor again, for the other ways a print ends.
+  const editorBack = async (what, act) => {
+    await places.editor();
+    const before = await focused();
+    await act();
+    const back = await settled();
+    const after = await focused();
+    check(`${p} ${what}: the focus is back on ${before}`, back && after === before, `settled=${back} focus ${after}`);
+  };
+  const dialog = page.getByRole('dialog', { name: 'Print', exact: true });
+  await editorBack('Cancel in the range question', async () => {
+    await setText(page, 'a\nb\n', 0, 1);
+    await page.keyboard.press(playwrightKey(printChords[0]));
+    await dialog.waitFor({ timeout: STEP_MS });
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await dialog.waitFor({ state: 'detached', timeout: STEP_MS });
+  });
+  await editorBack('Selection in the range question, then the print dialog', async () => {
+    await setText(page, 'a\nb\n', 0, 1);
+    await page.keyboard.press(playwrightKey(printChords[0]));
+    await dialog.waitFor({ timeout: STEP_MS });
+    await dialog.getByLabel('Selection').check();
+    await dialog.getByRole('button', { name: 'OK' }).click();
+    await dialog.waitFor({ state: 'detached', timeout: STEP_MS });
+  });
+  await editorBack('a print() that refuses (no print dialog shown)', async () => {
+    await setText(page, 'a\nb\n', 0);
+    await page.evaluate(() => (window.__framePrintThrows = true));
+    await page.keyboard.press(playwrightKey(printChords[0]));
+    await page.waitForFunction(() => document.querySelector('iframe[srcdoc][aria-hidden="true"]') === null, null, {
+      polling: 50,
+      timeout: STEP_MS,
+    });
+    await page.evaluate(() => (window.__framePrintThrows = false));
+  });
+  await editorBack('the printer error box (fixed tab size 0), answered with OK', async () => {
+    await page.evaluate(() => {
+      const ctx = window.__easy68k.ctx;
+      ctx.documents.update?.(ctx.store.getState().documents.activeId, { tabType: 1, tabSize: 0 });
+    });
+    await setText(page, 'a\tb\n', 0);
+    await page.keyboard.press(playwrightKey(printChords[0]));
+    const box = page.getByRole('alertdialog');
+    const shown = await box.waitFor({ timeout: STEP_MS }).then(
+      () => true,
+      () => false,
+    );
+    if (!shown) throw new Error('the printer error box did not open');
+    await box.getByRole('button', { name: 'OK' }).click();
+    await box.waitFor({ state: 'detached', timeout: STEP_MS });
+    await page.evaluate(() => {
+      const ctx = window.__easy68k.ctx;
+      ctx.documents.update?.(ctx.store.getState().documents.activeId, { tabType: 0, tabSize: 8 });
+    });
+  });
+  await editorBack('Printer Setup...', async () => {
+    await page.evaluate(() => void window.__easy68k.ctx.commands.run('ed.file.printerSetup'));
+  });
+  await page.screenshot({ path: join(outDir, `${name}-${keys}-focus-after-print.png`) });
+  check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await closeWithin(context);
 }
 
 // --- run -------------------------------------------------------------------------------
@@ -444,17 +620,32 @@ async function main() {
               .join(' | '),
           );
         }
+        for (const keys of ['windows', 'mac']) {
+          console.log(`\n[${name}, ${keys} key map, focus after printing]`);
+          try {
+            await focusPass(browser, name, keys);
+          } catch (error) {
+            check(
+              `${name}, ${keys} key map: the focus pass ran to its end`,
+              false,
+              String(error?.stack ?? error)
+                .split('\n')
+                .slice(0, 4)
+                .join(' | '),
+            );
+          }
+        }
       } finally {
-        await browser.close();
+        await doneWith(browser, { last: name === browsers.at(-1) });
       }
     }
   } finally {
-    await server.close();
+    closeAtEnd(server);
   }
 
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
-  process.exit(failures ? 1 : 0);
+  await endChecks(failures ? 1 : 0);
 }
 
 await main();

@@ -22,10 +22,19 @@
 //      D0.B counts), and for task 32 also the sub-task last loaded into D1 the same way. A task number
 //      computed at run time is not seen (stated as a limit, not hidden).
 //
-// The exit code is 1 when a threshold of item 2 is missed (fewer than 150 self-reporting programs,
-// fewer than 20 execution logs, fewer than 100,000 logged instructions, a table entry or a
-// non-interactive task that no self-reporting program exercises), so the script can serve as a
-// release gate. It is evidence for docs/integration/rc.md item 2 (I3); it changes nothing.
+// Before these, part 0 sorts the entries of known-differences.json as the correction note of 6.9
+// item 2 does (erratum T3 14): accepted, unconfirmed, or counted against the item.
+//
+// The exit code is 1 when the first two parts of item 2 do not hold as the item reads today: an
+// entry of known-differences.json that is neither accepted nor unconfirmed (it counts against the
+// item), an accepted one that docs/DIFFERENCES.md does not name, an unconfirmed one that its part 4
+// does not name, fewer than 150 self-reporting programs or one without an official result, fewer
+// than 20 identical execution logs or 100,000 instructions in them, a table entry or a
+// non-interactive task (erratum T3 11) that no self-reporting program exercises. That the port
+// produces every result not listed is shown by the sim project of npm run test:conformance, which
+// fails on any unlisted difference; this script reads the list, not the run. The third part (the
+// checklists) is item-02-checklists.mjs. Evidence for docs/integration/rc.md item 2 (I3); it
+// changes nothing.
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
@@ -49,14 +58,56 @@ const asm = await import(pathToFileURL(join(repo, 'engine', 'asm', 'asm68k.mjs')
 
 const programs = listPrograms();
 const manifest = loadGoldenManifest();
-const known = JSON.parse(readFileSync(join(simDir, 'known-differences.json'), 'utf8'));
+const known = JSON.parse(
+  readFileSync(process.env.EASY68K_RC_KNOWN_SIM ?? join(simDir, 'known-differences.json'), 'utf8'),
+);
 const fails = [];
+
+// ---------------------------------------------------------------- 0. the listed differences
+// The correction note of 6.9 item 2 (erratum T3 14) sorts every entry of known-differences.json
+// into one of three classes: accepted (the cause is known and recorded; the summary begins
+// "Accepted difference"; named in docs/DIFFERENCES.md), unconfirmed (an "unconfirmed" field; named
+// under part 4 "Not yet confirmed against the original"; an open item of item 11) and everything
+// else, which counts against item 2. EASY68K_RC_KNOWN_SIM=<file> and EASY68K_RC_DIFFERENCES=<file>
+// read other copies (to show that the judge fails when the input is broken).
+const differencesMd = readFileSync(process.env.EASY68K_RC_DIFFERENCES ?? join(repo, 'docs', 'DIFFERENCES.md'), 'utf8');
+const part4Start = differencesMd.indexOf('\n## 4. Not yet confirmed against the original');
+const part4 = part4Start < 0 ? '' : differencesMd.slice(part4Start, differencesMd.indexOf('\n## 5.', part4Start));
+if (part4Start < 0) fails.push('docs/DIFFERENCES.md has no part "## 4. Not yet confirmed against the original"');
+/** @returns {'accepted' | 'unconfirmed' | 'against'} */
+function classOf(entry) {
+  if (entry.unconfirmed) return 'unconfirmed';
+  if (/^Accepted difference/.test(entry.summary ?? '')) return 'accepted';
+  return 'against';
+}
+const listed = Object.entries(known).map(([key, entry]) => {
+  const id = key.split('|')[0];
+  const cls = classOf(entry);
+  const named = cls === 'unconfirmed' ? part4.includes(id) : differencesMd.includes(id);
+  return { key, id, cls, named };
+});
+console.log('0. Listed differences (tests/conformance/sim/known-differences.json, erratum T3 14):');
+for (const l of listed)
+  console.log(
+    `   ${l.cls.padEnd(11)} ${l.key}${l.named ? '' : `  - NOT named in docs/DIFFERENCES.md${l.cls === 'unconfirmed' ? ' part 4' : ''}`}`,
+  );
+for (const l of listed) {
+  if (l.cls === 'against') fails.push(`${l.key} differs from its golden and is neither accepted nor unconfirmed`);
+  else if (!l.named)
+    fails.push(
+      `${l.key} is ${l.cls} but docs/DIFFERENCES.md does not name it${l.cls === 'unconfirmed' ? ' under part 4' : ''}`,
+    );
+}
+const classOfKey = (key) => listed.find((l) => l.key === key)?.cls ?? null;
 
 // ---------------------------------------------------------------- 1. self-reporting programs
 const reporting = programs.filter((p) => p.recipes.some((r) => recipeId(r) === 'report'));
 const withGolden = reporting.filter((p) => manifest?.programs[p.id]?.recipes?.report?.status === 'ok');
+const withoutGolden = reporting.filter((p) => !withGolden.includes(p));
 const listedReport = withGolden.filter((p) => known[`${p.id}|report|result`]);
 const reproduced = withGolden.length - listedReport.length;
+const byClass = { accepted: [], unconfirmed: [], against: [] };
+for (const p of listedReport) byClass[classOfKey(`${p.id}|report|result`)].push(p.id);
 const bySuite = {};
 for (const p of reporting) bySuite[p.suite] = (bySuite[p.suite] ?? 0) + 1;
 console.log(
@@ -67,8 +118,17 @@ console.log(
 console.log(
   `   with an official result: ${withGolden.length}; result.bin byte-identical (not in known-differences.json): ${reproduced}`,
 );
-console.log(`   listed as differing: ${listedReport.map((p) => p.id).join(', ') || 'none'}`);
+console.log(`   accepted differences (do not count against the item): ${byClass.accepted.join(', ') || 'none'}`);
+console.log(
+  `   unconfirmed goldens (do not count against item 2; open items of item 11): ${byClass.unconfirmed.join(', ') || 'none'}`,
+);
+console.log(`   COUNTED AGAINST ITEM 2: ${byClass.against.join(', ') || 'none'}`);
+console.log(
+  `   produce the golden or an accepted or unconfirmed difference: ${reproduced + byClass.accepted.length + byClass.unconfirmed.length} of ${reporting.length}`,
+);
 if (reporting.length < 150) fails.push(`only ${reporting.length} self-reporting programs (150 required)`);
+if (withoutGolden.length > 0)
+  fails.push(`self-reporting programs without an official result: ${withoutGolden.map((p) => p.id).join(', ')}`);
 
 // ---------------------------------------------------------------- 2. execution logs
 const logRuns = [];
@@ -231,22 +291,22 @@ const TASKS = [
   ...Array.from({ length: 17 }, (_, i) => 80 + i),
   ...Array.from({ length: 8 }, (_, i) => 100 + i),
 ];
-/** Interactive: the result needs typed keys, a dialog, a mouse, a printer or a network peer. */
+/**
+ * Interactive: what the task returns needs a person or a device outside the simulator. Exactly the
+ * table of erratum T3 11 as corrected after its review (entry 13): tasks 102-104, 106 and 107 are
+ * interactive only after a task 100 or 101, and their paths before it have programs, so they count
+ * as non-interactive here.
+ */
 const INTERACTIVE = {
-  2: 'reads a typed line',
-  4: 'reads a typed number',
-  5: 'reads a typed key',
-  18: 'reads a typed number',
-  10: 'prints on a printer (print dialog)',
-  58: 'file dialog',
+  2: 'returns what a person types',
+  4: 'returns what a person types',
+  5: 'returns what a person types',
+  18: 'returns what a person types',
+  10: 'its only effect is on paper; it returns nothing a program can read',
+  58: 'returns what a person chooses in the file dialog',
   61: 'reads the mouse',
-  100: 'network peer',
-  101: 'network peer',
-  102: 'network peer',
-  103: 'network peer',
-  104: 'network peer',
-  106: 'network peer',
-  107: 'network peer',
+  100: "depends on the machine's network",
+  101: "depends on the machine's network",
 };
 
 const dumplibLines = readFileSync(join(simDir, 'dumplib.X68'), 'latin1').split(/\r\n|\n|\r/);

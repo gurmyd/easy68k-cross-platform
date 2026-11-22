@@ -59,6 +59,18 @@ D1 = -1). A student who writes past a stream's buffer therefore sees the box in 
 the original showed it in most measured cases, sees nothing where the original ended (q02's 4
 bytes), and sees the box where the original's heap happened to accept the bytes (x3's zeros).
 
+**A log started with a nearly full stream table.** While a log runs, its files are streams of the
+same table as the program's files (STDIO-MODEL.md section 8; this the port reproduces). When a log
+starts and the table has no free entry for one of its files, the original does not open that file:
+measured (probe e6: 46 streams whose close failed, then Log Start with both logs selected), the
+execution log was created, the box `Error` / `Can't open log file, error 0` appeared, the output
+log was not written, and the log stayed marked as running. In the port the log service opens and
+writes both logs; no box appears. A student meets this only after more than 44 opened files whose
+close failed in one session. Read in the code, not measured: the original's Log Stop closes the
+execution log's file pointer even when only an output log was started, so a pointer left from an
+earlier execution log could close a program's stream that has since taken its entry; the port
+has no such pointer.
+
 Two smaller differences: if a stream that has been read in the write state is left open while a
 task 58 dialog moves the current folder, the bytes the host writes for it at the end of the program
 can be more than the original's flush would write (STDIO-MODEL.md section 10); and a copy of a read

@@ -47,6 +47,7 @@ import {
   GOLDEN_MANIFEST_PATH,
   REPO_ROOT,
   SIM_CONFORMANCE_DIR,
+  artifactKey,
   artifactsOf,
   countLoggedInstructions,
   listPrograms,
@@ -207,7 +208,9 @@ function writeGolden(goldenName, bytes) {
 
 /**
  * The manifest entry of one recipe from what sim_batch.py recorded, and the artifacts' bytes.
- * A run counts only when every file the recipe should produce is there.
+ * A run counts only when every file the recipe should produce is there. The entry holds nothing that
+ * depends on the machine (no times: run 45034017858 changed 231 lines of the manifest with them
+ * alone), so that a run that reproduces the goldens leaves the manifest as it is.
  */
 export function recipeResult(program, recipe, record, read) {
   const stem = program.name;
@@ -223,17 +226,27 @@ export function recipeResult(program, recipe, record, read) {
       continue;
     }
     bytes[kind] = data;
-    artifacts[kind] = { sha256: sha256Hex(maskArtifact(kind, data)), bytes: data.length };
+    const masked = maskArtifact(kind, data, artifactKey(program.id, recipeId(recipe), kind));
+    artifacts[kind] = { sha256: sha256Hex(masked), bytes: data.length };
   }
   const ok = record.status === 'ok' && missing === null;
   const entry = {
     status: ok ? 'ok' : 'failed',
     ...(ok ? {} : { error: record.error ?? `${missing} was not written` }),
-    ...(record.seconds !== undefined ? { seconds: record.seconds } : {}),
     artifacts: ok ? artifacts : {},
   };
   if (ok && bytes.runlog) entry.instructions = countLoggedInstructions(maskArtifact('runlog', bytes.runlog));
   return { entry, bytes: ok ? bytes : {} };
+}
+
+/**
+ * The `updated` date of a new manifest: the previous one while nothing but the date would change,
+ * otherwise `today`.
+ */
+export function updatedDate(previous, next, today) {
+  if (!previous?.updated) return today;
+  const same = JSON.stringify({ ...previous, updated: '' }) === JSON.stringify({ ...next, updated: '' });
+  return same ? previous.updated : today;
 }
 
 /** golden/REPORT.md: the counts, and every run without a result. */
@@ -408,7 +421,7 @@ async function main() {
   const manifest = {
     wine: wineVersion(options.image),
     official: { ...OFFICIAL_SHA256 },
-    updated: new Date().toISOString().slice(0, 10),
+    updated: previous?.updated ?? '',
     programs: { ...(previous?.programs ?? {}) },
   };
   // Programs that no longer exist leave the manifest.
@@ -442,7 +455,8 @@ async function main() {
           differences.push(`${artifact.golden}: ${was.slice(0, 12)} -> ${now.slice(0, 12)}`);
         if (!options.check && now && bytes[artifact.kind]) {
           const stored = readGolden(artifact.golden);
-          if (!stored || sha256Hex(maskArtifact(artifact.kind, stored)) !== now)
+          const key = artifactKey(program.id, artifact.recipe, artifact.kind);
+          if (!stored || sha256Hex(maskArtifact(artifact.kind, stored, key)) !== now)
             writeGolden(artifact.golden, bytes[artifact.kind]);
         }
       }
@@ -456,6 +470,9 @@ async function main() {
     manifest.programs[program.id] = entry;
   }
   manifest.programs = Object.fromEntries(Object.entries(manifest.programs).sort(([a], [b]) => (a < b ? -1 : 1)));
+  // The date moves only when the content does, so that a run that reproduces the goldens writes the
+  // same files again (the oracle workflow reports any changed file as a candidate).
+  manifest.updated = updatedDate(previous, manifest, new Date().toISOString().slice(0, 10));
 
   if (options.check) {
     for (const line of differences) console.error(`DIFFERS ${line}`);

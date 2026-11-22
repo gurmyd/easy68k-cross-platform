@@ -55,6 +55,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../tests/browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -478,7 +479,7 @@ async function backendPass(browser, name) {
   );
 
   check(`${p} backend pass: no console errors or warnings`, messages.length === 0, messages.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 // ---- Chromium: the opened folder in the application ------------------------------------------------------
@@ -635,7 +636,7 @@ async function folderPass(browser, name) {
   await studentInFolder(page, p, name);
 
   check(`${p} folder pass: no console errors or warnings`, messages.length === 0, messages.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /** A program whose source lies in the opened folder writes a file of its own there (TRAP #15 52, 54, 56). */
@@ -940,7 +941,7 @@ async function linkedPass(browser, name) {
   await page.screenshot({ path: join(outDir, `${name}-containing-folder.png`) });
 
   check(`${p} linked pass: no console errors or warnings`, messages.length === 0, messages.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 // ---- WebKit: absent without a trace ---------------------------------------------------------------------
@@ -979,7 +980,7 @@ async function absentPass(browser, name) {
     JSON.stringify(databases),
   );
   check(`${p} no console message at all`, messages.length === 0, messages.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 // ---- run --------------------------------------------------------------------------------------------------
@@ -1017,16 +1018,16 @@ async function main() {
       } catch (error) {
         check(`${name}: the pass ran to the end`, false, String(error?.stack ?? error));
       } finally {
-        await browser.close();
+        await doneWith(browser, { last: name === browsers.at(-1) });
       }
     }
   } finally {
-    await server.close();
+    closeAtEnd(server);
   }
   writeFileSync(join(outDir, 'results.json'), JSON.stringify(results, null, 2));
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
-  process.exit(failures ? 1 : 0);
+  await endChecks(failures ? 1 : 0);
 }
 
 await main();

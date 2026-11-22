@@ -286,7 +286,16 @@ the output log (each when it is selected) are streams of the same table (`logU.c
 `prepareLogFile`). When none is free, `fopen` returns `NULL` before it opens anything. Measured:
 `a66` (with `result.bin` open, 46 streams whose close failed, then every open fails); `a69` (with
 the output log running and no `result.bin`, 46); probe e5 (a66 with the output log: 45, with the
-execution log: 45, with both: 44). The port counts the log files while a log runs
+execution log: 45, with both: 44). When a log starts with too few free entries, the log file that
+gets none is not opened (`prepareLogFile` opens the execution log first, then the output log): in
+probe e6 (46 streams whose close failed, then Log Start with both logs selected) the execution log
+was created, the box `Error` / `Can't open log file, error 0` appeared, no output log was written,
+and the log stayed marked as running (`LOGGING`). The port does not do this: the log files belong
+to the host's log service, which opens and writes them whatever the table holds; the engine only
+counts the entries that are free (a difference, docs/differences/SH6.md). Read in the code only,
+not measured: `stopLog` closes `ElogFile` even when only an output log was started, so a pointer
+left from an earlier execution log could close a program's stream that has since taken that entry;
+the port has no such pointer. The port counts the log files while a log runs
 (`easy68k_files_log_streams`, called by Log Start and Log Stop in `shim/log.cpp`).
 
 ## 9. The probes

@@ -239,14 +239,60 @@ export function latin1(bytes: Uint8Array): string {
 }
 
 /**
+ * Bytes of an official artifact that the official program does not fix: undefined behaviour of the
+ * original whose value differs between hosts, so that no golden can hold it (erratum T3 entry 16).
+ * They are replaced by MASKED_TEXT in the official artifact and in the port's alike, before the
+ * comparison and before the hash of golden/manifest.json. Keyed like known-differences.json
+ * (`<program id>|<recipe>|<artifact kind>`); every key is listed there too, with its cause.
+ */
+export interface ArtifactMask {
+  /** 1-based lines (split at LF) whose tail is masked. */
+  lines: number[];
+  /** The first masked column (1-based): from it to the end of the line, without its CR. */
+  fromColumn: number;
+  /** Why these bytes are not fixed, and the evidence. */
+  reason: string;
+}
+
+export const MASKED_TEXT = '<masked>';
+
+export const ARTIFACT_MASKS: Readonly<Record<string, ArtifactMask>> = {
+  'trap15-a/a55-task0-negative-count-first|outlog|outlog': {
+    lines: [3, 4, 5, 6],
+    fromColumn: 256,
+    reason:
+      "What task 0 prints after the 255th character of a string without a NUL is the official program's " +
+      'host-stack residue (strncpy without a terminator). The same image (Wine 8.0~repack-4) gave, every ' +
+      'time, $C0 after lines 3 and 4 on Docker Desktop (WSL 2 kernel 6.18.33.1) and $C0 after line 4 only ' +
+      "on GitHub's ubuntu-24.04 runner (oracle run 45034017858).",
+  },
+};
+
+/**
  * The form in which an artifact is compared and hashed: the header date of a log
  * (`EASy68K execution log file: 11/20/2026 9:56:12 PM`, `EASy68K output log file: ...`) becomes
- * `<date>`. Everything else, line ends included, is compared byte for byte.
+ * `<date>`, and for an artifact named in ARTIFACT_MASKS (`key`) the bytes it names become
+ * MASKED_TEXT. Everything else, line ends included, is compared byte for byte.
  */
-export function maskArtifact(kind: string, bytes: Uint8Array): string {
+export function maskArtifact(kind: string, bytes: Uint8Array, key?: string): string {
   const text = latin1(bytes);
-  if (kind === 'result') return text;
-  return text.replace(/^(EASy68K (?:execution|output) log file: )[^\r\n]*/, '$1<date>');
+  const dated =
+    kind === 'result' ? text : text.replace(/^(EASy68K (?:execution|output) log file: )[^\r\n]*/, '$1<date>');
+  const mask = key === undefined ? undefined : ARTIFACT_MASKS[key];
+  if (!mask) return dated;
+  return dated
+    .split('\n')
+    .map((line, index) => {
+      if (!mask.lines.includes(index + 1)) return line;
+      const cr = line.endsWith('\r') ? '\r' : '';
+      return `${line.slice(0, mask.fromColumn - 1)}${MASKED_TEXT}${cr}`;
+    })
+    .join('\n');
+}
+
+/** The key of ARTIFACT_MASKS and known-differences.json for one artifact of one recipe. */
+export function artifactKey(programId: string, recipe: string, kind: string): string {
+  return `${programId}|${recipe}|${kind}`;
 }
 
 /** The listing with its `Created On:` line masked (assembler §6, line 3). */

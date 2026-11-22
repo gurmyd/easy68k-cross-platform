@@ -68,7 +68,9 @@ if (!enginesPresent()) {
 }
 
 const programs = manualPrograms();
-const MANUAL_TEXT = readFileSync(join(repoRoot, 'docs', 'MANUAL-TEST-MAC.md'), 'utf8');
+// EASY68K_RC_MANUAL=<file> reads another copy of the manual's text (to show that a box the manual
+// does not mention fails the walk).
+const MANUAL_TEXT = readFileSync(process.env.EASY68K_RC_MANUAL ?? join(repoRoot, 'docs', 'MANUAL-TEST-MAC.md'), 'utf8');
 report.check(
   'the manual prints the three test programs echo, keys and fonts',
   ['echo', 'keys', 'fonts'].every((name) => programs[name]?.includes('END')),
@@ -125,8 +127,32 @@ async function checkMenus(page, p, which) {
   }
 }
 
+/** The text of a line with blanks collapsed, as the Listing panel shows a source line. */
+const squash = (line) => line.replace(/\s+/g, ' ').trim();
+/** A line of `source` that the program run before it does not have: its listing row proves that the new program is loaded. */
+function distinctLine(source, previous) {
+  const before = new Set((previous ?? '').split(/\r?\n/).map(squash));
+  return (
+    source
+      .split(/\r?\n/)
+      .map(squash)
+      .find((line) => line.length >= 12 && !line.startsWith('*') && !before.has(line)) ?? null
+  );
+}
+/** Waits until the Listing panel shows a row with `line` (the new program's listing, not the one before it). */
+async function newListing(page, line) {
+  if (!line) return null;
+  return until(async () => {
+    const rows = await page.locator('[data-e68-panel="listing"] [role=option]').allInnerTexts();
+    return rows.some((row) => squash(row).includes(line)) ? true : null;
+  }, 30_000);
+}
+let previousSource = null;
+
 /** File > New X68 Source File, the program by Select All and a paste, F9, Execute (manual, "The three test programs"). */
 async function assembleAndExecute(page, p, name, source, shot) {
+  const mark = distinctLine(source, previousSource);
+  previousSource = source;
   if ((await mode(page)) !== 'editor') {
     await page.getByRole('radiogroup', { name: 'Mode' }).getByRole('radio', { name: 'Editor', exact: true }).click();
     await until(async () => (await mode(page)) === 'editor', 10_000);
@@ -171,8 +197,16 @@ async function assembleAndExecute(page, p, name, source, shot) {
     if (!caution) return false;
     await box.getByRole('button', { name: 'OK', exact: true }).click();
     await until(async () => !(await box.isVisible()), 10_000);
-    await until(() => page.locator('[data-e68-panel="listing"] [role=option]').first().isVisible(), 30_000);
   }
+  // The manual: "wait for the listing before F9". The listing of the program before it is still
+  // shown until the new one is loaded, so wait for a row only the new program has.
+  const loaded = await newListing(page, mark);
+  report.check(
+    `${p} ${name}: after Execute (and OK in the Caution box, if it came) the Listing shows the new program`,
+    Boolean(loaded),
+    `waited for a listing row with "${mark}"`,
+  );
+  if (!loaded) return false;
   await page.keyboard.press('F9');
   return true;
 }

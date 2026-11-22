@@ -7,17 +7,19 @@ import { DocumentManager, documentRegistryOf } from '../../core/documents';
 import { NEW_PAGE_MARKER } from '../../core/print';
 import { createFakePlatform, createTestApplication, type TestApplication } from '../../state/testing';
 import { feature } from './index';
-import { PRINT_RANGE_DIALOG_ID, PRINTER_ERROR } from './print';
+import type { FocusEnvironment } from './focus';
+import { PRINT_RANGE_DIALOG_ID, PRINTER_ERROR, printActiveDocument, printerSetup } from './print';
 
 interface Printed {
   html: string;
   title: string;
 }
 
-function setup(text: string | null, options: { fail?: boolean } = {}) {
+function setup(text: string | null, options: { fail?: boolean; onPrint?: () => void } = {}) {
   const printed: Printed[] = [];
   const platform = createFakePlatform({
     print: async (html, title) => {
+      options.onPrint?.();
       if (options.fail) throw new Error('no printer');
       printed.push({ html, title });
     },
@@ -132,6 +134,35 @@ describe('feature "print"', () => {
     await app.ctx.commands.run('ed.file.print');
     expect((await box) as { text: string }).toMatchObject({ text: 'Printer error.  Please check printer.' });
     expect(printed).toEqual([]);
+  });
+
+  it('Print and Printer Setup give the focus back, whether printed, cancelled or failed', async () => {
+    // A page whose focus the platform's print frame takes away (focus.ts; errata/E6.md).
+    const page = { active: 'editor' as string | null, focused: [] as string[] };
+    const editor = { focus: () => ((page.active = 'editor'), page.focused.push('editor')) };
+    const env: FocusEnvironment = {
+      active: () => (page.active === 'editor' ? editor : null),
+      usable: () => true,
+      focusWindow: () => page.focused.push('window'),
+    };
+    for (const fail of [false, true]) {
+      const { app, select } = setup('a\nb', { fail, onPrint: () => (page.active = null) });
+      page.focused = [];
+      if (fail) void answer(app, 'message', 'OK');
+      await expect(printActiveDocument(app.ctx, env)).resolves.toBe(!fail);
+      expect(page.active, `print, fail=${fail}`).toBe('editor');
+      expect(page.focused).toEqual(['window', 'editor']);
+      page.active = 'editor';
+      if (fail) void answer(app, 'message', 'OK');
+      await expect(printerSetup(app.ctx, env)).resolves.toBe(!fail);
+      expect(page.active, `printer setup, fail=${fail}`).toBe('editor');
+      // Cancel in the range question prints nothing and still leaves the focus where it was.
+      select(0, 1);
+      page.focused = [];
+      void answer(app, PRINT_RANGE_DIALOG_ID, null);
+      await expect(printActiveDocument(app.ctx, env)).resolves.toBe(false);
+      expect(page.focused).toEqual(['window', 'editor']);
+    }
   });
 
   it('Printer Setup opens the system print dialog for the document, or an empty page without one', async () => {

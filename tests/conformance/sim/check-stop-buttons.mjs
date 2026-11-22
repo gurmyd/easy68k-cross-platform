@@ -26,6 +26,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../../..');
@@ -234,7 +235,7 @@ async function pass(browser, name, program) {
     }
   } finally {
     check(`${name}: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-    await context.close();
+    await closeWithin(context);
   }
 }
 
@@ -276,15 +277,15 @@ async function main() {
       } catch (error) {
         check(`${name}: the check ran to its end`, false, String(error?.stack ?? error));
       } finally {
-        await browser.close();
+        await doneWith(browser, { last: name === browsers.at(-1) });
       }
     }
   } finally {
-    await server.close();
+    closeAtEnd(server);
   }
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
-  process.exit(failures ? 1 : 0);
+  await endChecks(failures ? 1 : 0);
 }
 
 await main();

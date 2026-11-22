@@ -53,6 +53,7 @@ import { dirname, extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../browser-checks/ending.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../../..');
@@ -166,7 +167,7 @@ async function shootAndClose(label) {
           `        open dialogs: ${JSON.stringify(dialogs.map((t) => t.replace(/\s+/g, ' ').slice(0, 120)))}`,
         );
     }
-    await context.close().catch(() => {});
+    await closeWithin(context);
   }
 }
 
@@ -537,7 +538,7 @@ async function examplesPart(browser, name, os, fx) {
     await page.screenshot({ path: join(outDir, `${name}-examples-${stem}.png`) });
     await pauseAndAnswer(page);
   }
-  await context.close();
+  await closeWithin(context);
 }
 
 /** Edit, assemble and Execute three times in a row: each Execute is a cold start. */
@@ -592,7 +593,7 @@ async function cyclePart(browser, name, os, fx) {
   );
   await page.screenshot({ path: join(outDir, `${name}-cycle.png`) });
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 const dialogNamed = (page, title) => page.getByRole('dialog', { name: title, exact: true });
@@ -664,7 +665,7 @@ async function settingsPart(browser, name, os, fx) {
   );
   const settingsA = await a.page.evaluate(() => window.__easy68k.ctx.settings.get());
   check(`${p} no console or page errors in the first profile`, a.errors.length === 0, a.errors.slice(0, 3).join(' | '));
-  await first.close();
+  await closeWithin(first);
 
   // A new browser profile: an empty store and default settings, as a second student's machine.
   const second = await newContext(browser, os);
@@ -709,7 +710,7 @@ async function settingsPart(browser, name, os, fx) {
     b.errors.length === 0,
     b.errors.slice(0, 3).join(' | '),
   );
-  await second.close();
+  await closeWithin(second);
 }
 
 /** Logging with both logs, against the official logs of the same program. */
@@ -791,7 +792,7 @@ async function loggingPart(browser, name, os, fx) {
   );
   await page.screenshot({ path: join(outDir, `${name}-logging.png`) });
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /** Assembles, executes and runs a program written into the store; its Output panel text. */
@@ -842,7 +843,7 @@ async function filesPart(browser, name, os, fx) {
   check(`${p} the Files panel lists it in the program's folder`, listed > 0, `${listed} row(s)`);
   await page.screenshot({ path: join(outDir, `${name}-files.png`) });
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 async function breakpointPart(browser, name, os, fx) {
@@ -889,7 +890,7 @@ async function breakpointPart(browser, name, os, fx) {
     `${secondEnd}; ${JSON.stringify(all)}`,
   );
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 async function replacePart(browser, name, os, fx) {
@@ -928,7 +929,7 @@ async function replacePart(browser, name, os, fx) {
     `before ${JSON.stringify(before)}; end box ${ended}; ${count} replaced; after ${end} ${JSON.stringify(after)}`,
   );
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 async function errorPart(browser, name, os, fx) {
@@ -985,7 +986,7 @@ async function errorPart(browser, name, os, fx) {
     `line ${JSON.stringify(corrected)}; ${JSON.stringify(second)}; ${end} ${JSON.stringify(out)}`,
   );
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 async function includePart(browser, name, os, fx) {
@@ -1001,7 +1002,7 @@ async function includePart(browser, name, os, fx) {
     `${JSON.stringify(status)}; ${end} ${JSON.stringify(out)}`,
   );
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 /** Two windows of the application at once (3.8.6): one store, two simulators. */
@@ -1073,7 +1074,7 @@ async function windowsPart(browser, name, os, fx) {
     one.errors.length + two.errors.length === 0,
     [...one.errors, ...two.errors].slice(0, 3).join(' | '),
   );
-  await context.close();
+  await closeWithin(context);
 }
 
 /** The page is closed in the middle and opened again. */
@@ -1131,7 +1132,7 @@ async function reopenPart(browser, name, os, fx) {
     first.errors.length + again.errors.length === 0,
     [...first.errors, ...again.errors].slice(0, 3).join(' | '),
   );
-  await context.close();
+  await closeWithin(context);
 }
 
 /** 9.5: no command id without a handler, in each of the three modes. */
@@ -1169,7 +1170,7 @@ async function commandsPart(browser, name, os) {
     }
   }
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 // --- the production build under the preview's sub-path -----------------------------------------
@@ -1296,7 +1297,7 @@ async function subpathPart(browser, name, os, fx) {
     JSON.stringify(outside.slice(0, 5)),
   );
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
-  await context.close();
+  await closeWithin(context);
 }
 
 const PARTS = {
@@ -1429,18 +1430,18 @@ async function main() {
           console.log(`        (${part}: ${((Date.now() - began) / 1000).toFixed(1)} s)`);
         }
       } finally {
-        await browser.close();
+        await doneWith(browser, { last: name === browsers.at(-1) });
       }
     }
   } finally {
-    await server.close();
-    await site?.close();
+    closeAtEnd(server);
+    closeAtEnd(site, 'the sub-path site');
   }
 
   if (notes.length > 0) console.log(`\nNotes (not failures):\n${notes.map((text) => `  - ${text}`).join('\n')}`);
   const passed = results.filter((r) => r.ok).length;
   console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
-  process.exit(failures ? 1 : 0);
+  await endChecks(failures ? 1 : 0);
 }
 
 await main();
