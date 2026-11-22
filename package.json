@@ -64,6 +64,7 @@
     "check:a11y": "node tests/a11y/check-a11y.mjs",
     "check:perf": "node tests/perf/check-perf.mjs",
     "check:docs": "node --test tools/check-docs.test.mjs",
+    "test:check-ending": "node --test tests/browser-checks/ending.test.mjs",
     "check:rc": "node tests/integration/rc/rc.mjs",
     "oracle:wine:build": "docker build -t easy68k-oracle-wine tests/oracle/wine",
     "oracle:wine:asm": "node tests/oracle/wine/asm/regenerate.mjs",

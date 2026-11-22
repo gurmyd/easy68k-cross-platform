@@ -103,7 +103,8 @@ const spec = (font: { name: string; size: number; style: number }): FontSpec => 
 });
 /**
  * EASY68K_RC_SPOIL=<suite> moves the pen of the first reference of that suite by one pixel in
- * memory, to show that the judge fails when a reference and the port disagree.
+ * memory, to show that the judge fails when a reference and the port disagree: a text suite of
+ * 6.5.3 (suite(), below) or a primitive suite of 6.5.1 (countSuite()).
  */
 const spoilt = (name: string, pen: readonly [number, number], index: number): [number, number] =>
   process.env.EASY68K_RC_SPOIL === name && index === 0 ? [pen[0] + 1, pen[1]] : [pen[0], pen[1]];
@@ -215,13 +216,15 @@ function countSuite(suite: string): SuiteCount {
   let equal = 0;
   let total = 0;
   const failures: string[] = [];
-  for (const r of references(suite)) {
+  for (const [i, r] of references(suite).entries()) {
     total++;
     const got = replayOnSurface(r.case, 'raster');
     compared++;
     const diff = firstDifference(got, r.image);
+    // EASY68K_RC_SPOIL reaches the primitive suites too (review of the release-candidate check).
+    const pen = spoilt(suite, r.pen, i);
     if (diff) failures.push(`${r.case.id}: ${diff.count} pixels`);
-    else if (got.pen[0] !== r.pen[0] || got.pen[1] !== r.pen[1]) failures.push(`${r.case.id}: pen`);
+    else if (got.pen[0] !== pen[0] || got.pen[1] !== pen[1]) failures.push(`${r.case.id}: pen`);
     else equal++;
   }
   return { suite, total, compared, equal, failures };

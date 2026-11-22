@@ -11,7 +11,8 @@
 //   Reload                                                  a program has been loaded
 //
 // except that Run, Run To Cursor, Auto Trace, Step Over, Trace Into, Pause, Rewind and Reload are
-// enabled while the controller keeps commands (`keepsCommands`: during a load, and from the answer
+// enabled while the controller keeps commands (`RunController.keepsCommands`, read through the
+// contract and not the class, errata SH8.md entry 50: during a load, and from the answer
 // to the Caution question until the load begins). A key or click given then is not refused: the
 // controller carries it out when the load has ended, as the original's message queue delivers it
 // after its synchronous load (errata SH8.md entry 47).
@@ -28,7 +29,6 @@ import type {
   SimSettings,
 } from '../../contracts';
 import { dirname } from '../../core/paths/winpath';
-import { SimRunController } from '../../core/run/controller';
 import { showExitScreen } from '../../state/shell';
 
 /** The filter of the simulator's Open dialog (sim-ui §8.3). */
@@ -42,10 +42,7 @@ export const SPEED_DIALOG_ID = 'sim.speed';
 
 const notLoading = (state: AppState): boolean => state.sim.phase !== 'loading';
 /** The controller keeps a command given now and carries it out when the load has ended. */
-const kept = (ctx: AppContext): boolean => {
-  const controller: unknown = (ctx as Partial<AppContext>).sim?.controller;
-  return controller instanceof SimRunController && controller.keepsCommands;
-};
+const kept = (ctx: AppContext): boolean => (ctx as Partial<AppContext>).sim?.controller?.keepsCommands === true;
 /** The five commands that execute: disabled in the busy state, that is while running and after a halt. */
 const canExecute = (state: AppState, ctx: AppContext): boolean =>
   kept(ctx) || (state.sim.menuState === 0 && notLoading(state));

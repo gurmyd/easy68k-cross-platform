@@ -23,7 +23,10 @@
 // Each open item must have a row of its own in part 4 (ROWS / ROW_OF: the subsection and the first
 // cell) whose third cell states the port's chosen behaviour, and a confirmed item must have left
 // part 4. The unconfirmed conformance programs (a53, b19; erratum T3 14) are open items too.
-// EASY68K_RC_DIFFERENCES=<file> reads another copy (to show that the judge fails on a missing row).
+// EASY68K_RC_DIFFERENCES=<file> reads another copy (to show that the judge fails on a missing row,
+// or on a row whose third cell is empty or a dash), EASY68K_RC_PORTING=<folder> another copy of
+// docs/porting. The word is searched without regard to case; an occurrence only in lower or mixed
+// case is accounted for by LOWER_CASE.
 //
 // Exit code 0 only when the heading exists and no item and no occurrence is in neither place. The
 // tables below are the I3 reading of 2026-11-22; when a spec, an erratum or DIFFERENCES.md changes,
@@ -36,7 +39,9 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const porting = join(repo, 'docs', 'porting');
+// EASY68K_RC_PORTING=<folder>: another copy of docs/porting (to show that the judge fails on a new
+// occurrence that no table accounts for).
+const porting = process.env.EASY68K_RC_PORTING ?? join(repo, 'docs', 'porting');
 const all = process.argv.includes('--all');
 
 // ---- the spec lists of open items and how DIFFERENCES.md section 4 names them ---------------------
@@ -164,6 +169,41 @@ const ERRATA = [
   ['T1.md', 'engine README "UNVERIFIED against the real EASy68K.EXE', 'asm12.2'],
   ['T2.md', '## 3. trap15-tasks-0-59.md §12 (UNVERIFIED items 1-3): answers', 'a12.1'],
   ['W2.md', 'hardware §12 V1 marks the keystroke-level behaviour', 'h12.V1'],
+];
+/**
+ * The word in lower or mixed case ("unverified on the binary"), which the search finds too (it is
+ * case-insensitive since the review of the release-candidate check). [file as errata/X.md or X.md,
+ * piece of the line, what it is]: a list item that carries it; { settled }; { notTheMarker }; or
+ * { awaiting: owner, why }, a statement whose owner has not yet said whether it is an item of item 11
+ * (it is printed with its owner, apart from the counts, and does not decide the item; a lower-case
+ * occurrence in none of these rows does: it is unaccounted).
+ */
+const LOWER_CASE = [
+  [
+    'official-oracle.md',
+    'Synthetic stress files found four Wine deviations or unverified cases',
+    {
+      settled: 'the oracle tool under Wine, not the original program: official-oracle.md section 3.4 states each case',
+    },
+  ],
+  ['speed.md', '(0.3 to 3 million, unverified) brackets it', 'c13.8'],
+  ['errata/SH5.md', '(V14 unverified)', 'b15.V14'],
+  ['errata/DOC1.md', 'tests/integration/rc/item-11-unverified.mjs', { notTheMarker: "the name of this judge's file" }],
+  [
+    'errata/E4.md',
+    '`atoi` past 32 bits wraps (unverified on the binary',
+    { awaiting: 'E4', why: "the settings reader's atoi; DIFFERENCES.md part 4 row 6 is task 4's atoi, not this one" },
+  ],
+  [
+    'errata/E4.md',
+    'Ctrl-Z (0x1A) is not treated as an end of file',
+    { awaiting: 'E4', why: 'the settings reader and Ctrl-Z; no row of part 4' },
+  ],
+  [
+    'errata/E4.md',
+    'Unverified on the binary (Wine is not set up on this PC)',
+    { awaiting: 'E4', why: 'the line break after the last line of template.NEW on Save Template; no row of part 4' },
+  ],
 ];
 
 // ---- step 3: the items of the lists ----------------------------------------------------------------
@@ -521,6 +561,30 @@ else {
   section4 = norm(rest.slice(0, rest.search(/\n## /) >= 0 ? rest.search(/\n## /) : undefined));
 }
 const named = Object.fromEntries(Object.entries(LISTS).map(([id, l]) => [id, l.ref.test(section4)]));
+/**
+ * The cells of a Markdown table row, empty cells kept: split at every `|` that is neither escaped
+ * (`\|`) nor inside a code span, then the parts before the first and after the last `|` dropped.
+ * (Splitting at " | " instead joined an emptied cell to the next one, review of the release
+ * candidate.)
+ */
+function tableCells(line) {
+  const cells = [''];
+  let code = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === '\\' && line[i + 1] === '|') {
+      cells[cells.length - 1] += '\\|';
+      i += 1;
+    } else if (ch === '`') {
+      code = !code;
+      cells[cells.length - 1] += ch;
+    } else if (ch === '|' && !code) cells.push('');
+    else cells[cells.length - 1] += ch;
+  }
+  return cells.slice(1, -1).map((c) => c.trim());
+}
+/** A cell that states something: not empty and not only a dash. */
+const statesSomething = (cell) => !/^[\s\-–—]*$/.test(cell ?? '');
 /** The table rows of part 4, per subsection: cells "Item | Not confirmed | What the port does | How". */
 const part4Rows = [];
 if (hAt >= 0) {
@@ -535,13 +599,7 @@ if (hAt >= 0) {
       !line.startsWith('| Item |') &&
       !line.startsWith('| Program |')
     )
-      part4Rows.push({
-        section: sub,
-        cells: line
-          .slice(2, -2)
-          .split(' | ')
-          .map((c) => c.trim()),
-      });
+      part4Rows.push({ section: sub, cells: tableCells(line) });
   }
 }
 const rowsFor = (id) => {
@@ -567,8 +625,26 @@ for (const f of files) {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (/^#{1,4} /.test(line)) heading = line;
-    if (!line.includes('UNVERIFIED')) continue;
+    if (!/unverified/i.test(line)) continue;
     const at = `${f.erratum ? 'errata/' : ''}${f.name}:${i + 1}`;
+    if (!line.includes('UNVERIFIED')) {
+      // Only in lower or mixed case: LOWER_CASE says what it is.
+      const k = LOWER_CASE.findIndex(
+        ([file, piece]) => file === `${f.erratum ? 'errata/' : ''}${f.name}` && line.includes(piece),
+      );
+      let kind = 'UNACCOUNTED';
+      let to = null;
+      if (k >= 0) {
+        used.add(`L${k}`);
+        const what = LOWER_CASE[k][2];
+        if (typeof what === 'string') [kind, to] = ['carried', what];
+        else if (what.settled) [kind, to] = ['settled', what.settled];
+        else if (what.notTheMarker) [kind, to] = ['not the marker', what.notTheMarker];
+        else [kind, to] = ['awaiting its owner', `${what.awaiting}: ${what.why}`];
+      }
+      occ.push({ at, heading: heading.slice(0, 80), kind, to, text: line.trim().slice(0, 160), lowerCase: true });
+      continue;
+    }
     const find = (table) => table.findIndex(([file, piece]) => file === f.name && line.includes(piece));
     let kind;
     let to = null;
@@ -600,6 +676,7 @@ for (const [tag, table] of [
   ['S', SETTLED],
   ['C', CARRIED],
   ['E', ERRATA],
+  ['L', LOWER_CASE],
 ])
   table.forEach((row, k) => {
     if (!used.has(`${tag}${k}`)) problems.push(`table entry no longer found in the documents: ${row[0]}: "${row[1]}"`);
@@ -640,7 +717,7 @@ for (const [id, what, status] of ITEMS) {
   else if (status === 'open') {
     // Listed: a row of its own in part 4 whose third cell gives the port's chosen behaviour.
     const rows = rowsFor(id);
-    const withBehaviour = rows.filter((r) => (r.cells[2] ?? '').length > 0);
+    const withBehaviour = rows.filter((r) => statesSomething(r.cells[2]));
     if (withBehaviour.length > 0) out.openNamed.push(`${id} ${what}`);
     else
       out.neither.push(
@@ -660,11 +737,18 @@ for (const [id, what, status] of ITEMS) {
 const newItems = occ.filter((o) => o.kind === 'NOT CARRIED' || o.kind === 'UNACCOUNTED');
 
 // ---- print -----------------------------------------------------------------------------------------
-const count = (k) => occ.filter((o) => o.kind === k).length;
-console.log(`item 11: UNVERIFIED in docs/porting and docs/porting/errata: ${occ.length} occurrences`);
+const upper = occ.filter((o) => !o.lowerCase);
+const lower = occ.filter((o) => o.lowerCase);
+const count = (k, among = upper) => among.filter((o) => o.kind === k).length;
+console.log(`item 11: UNVERIFIED in docs/porting and docs/porting/errata: ${upper.length} occurrences`);
 console.log(
   `  ${count('definition')} define the marker, ${count('list')} inside a spec's list of open items, ${count('carried')} carried by a list item, ${count('erratum')} errata about a list item, ${count('settled')} settled where they stand, ${count('superseded')} superseded text, ${count('NOT CARRIED')} in no list, ${count('UNACCOUNTED')} unaccounted`,
 );
+console.log(
+  `the word in lower or mixed case ("unverified"), searched without regard to case: ${lower.length} occurrences: ${count('carried', lower)} carried by a list item, ${count('settled', lower)} settled where they stand, ${count('not the marker', lower)} not the marker, ${count('awaiting its owner', lower)} awaiting their owner's decision whether they are items of item 11, ${count('UNACCOUNTED', lower)} unaccounted`,
+);
+for (const o of lower.filter((x) => x.kind === 'awaiting its owner' || x.kind === 'UNACCOUNTED'))
+  console.log(`    ${o.kind.toUpperCase()} ${o.at} ${o.to ?? ''} | ${o.text}`);
 if (all) for (const o of occ) console.log(`    ${o.kind.padEnd(11)} ${o.at} ${o.to ?? ''} | ${o.text}`);
 console.log(`docs/DIFFERENCES.md: heading "${HEADING}" ${hAt >= 0 ? 'present' : 'MISSING'}`);
 for (const [id, l] of Object.entries(LISTS))

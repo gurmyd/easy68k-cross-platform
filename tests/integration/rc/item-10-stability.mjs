@@ -14,8 +14,9 @@
 //
 // Run from the repository root:
 //   node tests/integration/rc/item-10-stability.mjs [--current] <job log> [<job log> ...]
-// Exit code 0 only when every browser has 20 repetitions, every shard, no failed or flaky test and
-// (with --current) the count of this checkout; 1 otherwise.
+// Exit code 0 only when every log is of an Ubuntu runner (its "Image:" line, as
+// item-09-perf-verdict.mjs --require-ubuntu reads it), every browser has 20 repetitions, every
+// shard, no failed or flaky test and (with --current) the count of this checkout; 1 otherwise.
 // Skipped tests (a test that runs in Chromium only, for example) are not failures; they are counted
 // and printed.
 
@@ -53,12 +54,16 @@ function readLog(file) {
     ...new Set(lines.filter((l) => /^\s+\d+\) \[\w+\] › /.test(l)).map((l) => l.replace(/^\s+\d+\) /, '').trim())),
   ];
   const failureLines = lines.filter((l) => /^\s+\d+\) \[\w+\] › /.test(l)).length;
+  // The runner, from the job's set-up lines ("Image: ubuntu-26.04"), as item-09-perf-verdict.mjs
+  // reads it: item 10 asks for ubuntu-latest.
+  const image = /^\s*Image: (\S+)/.exec(lines.find((l) => /^\s*Image: /.test(l)) ?? '')?.[1] ?? null;
   const flakyNames = [];
   const flakyAt = lines.findIndex((l) => /^\s+\d+ flaky\b/.test(l));
   if (flakyAt >= 0) for (const l of lines.slice(flakyAt + 1)) if (/^\s+\[\w+\] › /.test(l)) flakyNames.push(l.trim());
   return {
     file,
     command,
+    image,
     browser,
     repeat,
     shard: shard ? { index: Number(shard[1]), total: Number(shard[2]) } : null,
@@ -109,7 +114,7 @@ const problems = [];
 console.log('6.9 item 10 (stability): e2e suites 20 times in a row on ubuntu-latest, per browser');
 for (const log of logs) {
   console.log(
-    `- ${log.file}\n    ${log.command || 'NO playwright command with --repeat-each found'}\n    browser ${log.browser}, repeat-each ${log.repeat}${log.shard ? `, shard ${log.shard.index}/${log.shard.total}` : ''}: ` +
+    `- ${log.file}\n    runner: ${log.image ?? 'not a GitHub log (no "Image:" line)'}\n    ${log.command || 'NO playwright command with --repeat-each found'}\n    browser ${log.browser}, repeat-each ${log.repeat}${log.shard ? `, shard ${log.shard.index}/${log.shard.total}` : ''}: ` +
       `${log.tests} tests run (${log.repeat ? log.tests / log.repeat : '?'} per repetition); passed ${log.passed}, failed ${log.failed}, flaky ${log.flaky}, skipped ${log.skipped}` +
       `${log.interrupted ? `, interrupted ${log.interrupted}` : ''}${log.didNotRun ? `, did not run ${log.didNotRun}` : ''} (${log.duration})`,
   );
@@ -118,6 +123,12 @@ for (const log of logs) {
     console.log(`    (${log.failureLines} failing results of ${log.failures.length} distinct test(s))`);
   for (const flaky of log.flakyNames) console.log(`    FLAKY: ${flaky}`);
 }
+
+for (const log of logs)
+  if (!log.image || !/^ubuntu/i.test(log.image))
+    problems.push(
+      `${log.file}: ${log.image ? `runner image ${log.image}` : 'no "Image:" line'}, not an Ubuntu runner (item 10 asks for ubuntu-latest)`,
+    );
 
 const browsers = [...new Set(logs.map((l) => l.browser))].sort();
 for (const wanted of ['chromium', 'webkit'])

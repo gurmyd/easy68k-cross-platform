@@ -22,7 +22,9 @@
 // named one is an exception with its cause and does not count against the item); a difference not
 // in known-differences.json or not named; fewer than 240 of the 30 x 8 runs of the fixed subset
 // (tests/corpus/option-subset.json) shown equal; a run with an official result that the last report
-// did not judge (a stale report, or the site set not fetched). EASY68K_RC_DIFFERENCES=<file> reads
+// did not judge (a stale report, or the site set not fetched). Exit code 2 when a report is missing
+// or older than tests/corpus/manifest.json, tests/conformance/asm/known-differences.json or the
+// assembler in engine/dist (item 1 not shown). EASY68K_RC_DIFFERENCES=<file> reads
 // another DIFFERENCES.md (to show that the judge fails when an exception is not named). It is
 // evidence for docs/integration/rc.md item 1 (I3); it changes nothing.
 
@@ -41,17 +43,39 @@ const fails = [];
 /** Runs with an official result that the last conformance report did not judge. */
 const unjudged = [];
 
-// The verdicts of the last npm run test:conformance on this machine.
+// The verdicts of the last npm run test:conformance on this machine. A report older than what it
+// was made from (the manifest, the list of known differences, the assembler in engine/dist) judges
+// another state of the repository: the judge then says so and exits 2, not shown (review of the
+// release-candidate check). EASY68K_RC_REPORTS=<folder> reads the reports from another folder.
+const reports = process.env.EASY68K_RC_REPORTS ?? join(repo, 'build', 'reports');
+const INPUTS = [
+  'tests/corpus/manifest.json',
+  'tests/conformance/asm/known-differences.json',
+  'engine/dist/asm68k.wasm',
+  'engine/dist/asm68k-loader.mjs',
+];
 const verdict = new Map();
+const stale = [];
 for (const name of ['corpus', 'checklist']) {
-  const path = join(repo, 'build', 'reports', `asm-conformance-${name}.json`);
+  const path = join(reports, `asm-conformance-${name}.json`);
   if (!existsSync(path)) {
     console.error(`${path} is missing: run npm run test:conformance first.`);
     process.exit(2);
   }
   const report = JSON.parse(readFileSync(path, 'utf8'));
-  console.log(`report ${name}: written ${statSync(path).mtime.toISOString()}, ${JSON.stringify(report.summary)}`);
+  const written = statSync(path).mtime;
+  console.log(`report ${name}: written ${written.toISOString()}, ${JSON.stringify(report.summary)}`);
+  for (const input of INPUTS) {
+    const at = join(repo, input);
+    if (existsSync(at) && statSync(at).mtime > written)
+      stale.push(`${name}: written ${written.toISOString()}, before ${input} (${statSync(at).mtime.toISOString()})`);
+  }
   for (const run of report.runs) verdict.set(`${run.id}|${run.label}`, run.verdict);
+}
+if (stale.length > 0) {
+  console.log(`\nitem 1 not shown: the conformance reports are STALE:\n - ${stale.join('\n - ')}`);
+  console.log('Run npm run test:conformance again (with the site set fetched), then this judge.');
+  process.exit(2);
 }
 
 /** The eight assembler options of the Assembler Options dialog (assembler 6, AsmOptions) with the label of the run that switches only that one. */

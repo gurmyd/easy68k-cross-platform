@@ -24,6 +24,7 @@ import {
   tool,
   step,
   pressInListing,
+  reload,
 } from './sim';
 
 const STEPS = program(
@@ -168,7 +169,9 @@ test('*[sim68k]break sets a breakpoint on the next instruction row; Rewind and R
   expect(await reg(app, 'D2')).toBe('00000000');
   await pressInListing(app, 'sim.run.rewind');
   expect(await breakpointOf(app, 'MOVE.L  #3,D3')).toBe('on');
-  await pressInListing(app, 'sim.run.reload');
+  // The breakpoints are read after the reload's load has ended: the success line was in the message
+  // area before the reload too (from the first load), so it is no sign that the second has ended.
+  await reload(app);
   await expect.poll(() => messages(app)).toContain('.S68 file read successful');
   expect(await breakpointOf(app, 'MOVE.L  #2,D2')).toBe('on');
   expect(await breakpointOf(app, 'MOVE.L  #3,D3')).toBe('on');

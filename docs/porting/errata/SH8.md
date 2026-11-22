@@ -335,6 +335,28 @@ candidate (`build/gate3/fixup-report.json`).
   walk-run --browser all` 88 of 88. The gap itself needs a runner whose frames are slow; only a new
   CI run shows it there.
 
+### 50. The run commands read `keepsCommands` through the contract (entry 47; review of the release-candidate check)
+
+- Seen: the review of the release-candidate check (`build/gate3/rc-result.json`, reviews, the
+  minor defect owned by SH8): `features/run/commands.ts` asked
+  `controller instanceof SimRunController && controller.keepsCommands`. `keepsCommands` was not a
+  member of the `RunController` contract (`contracts/run.ts`), and section 0 asks a feature to
+  depend on the contract, not on a class: any other controller (a fake one in a test, a stand-in)
+  was treated as keeping nothing.
+- Does: `RunController` has the optional, read-only member `keepsCommands?: boolean` with its
+  reason (added by SH8 for this follow-up, the one contract change of it). The class already had
+  the getter. `commands.ts` reads `ctx.sim.controller.keepsCommands === true` and no longer imports
+  the class; a controller without the member keeps nothing, and the commands follow the phase and
+  the busy state alone (4.8), as before entry 47.
+- Behaviour of the application: unchanged (the real controller is the class). Whether the commands
+  are shown enabled during a load stays as decided in entry 47 ("What the commands show"): enabled,
+  because a disabled button cannot receive the click that the decision keeps.
+- Tests: `features/run/commands.test.ts` (a plain contract object that keeps commands enables the
+  seven run commands, Open, Open Data and Close stay disabled; one without the member or with
+  `false` follows the phase). With the old `instanceof` test put back for a moment, its first test
+  fails; `session.test.ts` (the real controller) passes either way. `check-run.mjs` in both
+  browsers.
+
 ## Engine failure (4.8)
 
 ### 13. Where the opcode comes from, and when the cold start begins

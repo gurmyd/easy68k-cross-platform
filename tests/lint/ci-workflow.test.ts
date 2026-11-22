@@ -460,3 +460,39 @@ describe.skipIf(bash === null)('ci.yml: the desktop-dev guard (7.4; docs/request
     expect(valueOf(outputs, 'desktop_dev')).toBe(String(haveSuite));
   }, 30_000);
 });
+
+describe('ci.yml: the node:test suites of the check scripts run (docs/requests/W0-check-ending-test.md)', () => {
+  // Every node:test file of tests/browser-checks must be named by a root script that a step of the
+  // job `check` runs. Named, not found: on Windows Node 24's `node --test <folder>` finds nothing.
+  const scripts = (
+    JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')) as { scripts: Record<string, string> }
+  ).scripts;
+  const checkJob = (() => {
+    const at = lines.findIndex((line) => /^ {2}check:$/.test(line));
+    expect(at).toBeGreaterThan(0);
+    const end = lines.findIndex((line, i) => i > at && /^ {2}\S/.test(line));
+    return lines.slice(at, end === -1 ? undefined : end).join('\n');
+  })();
+  const files = readdirSync(join(repoRoot, 'tests', 'browser-checks')).filter((name) => name.endsWith('.test.mjs'));
+
+  it('finds the test of the shared ending', () => {
+    expect(files).toContain('ending.test.mjs');
+  });
+
+  it.each(files)('tests/browser-checks/%s is run by a root script in the job check', (file) => {
+    const named = Object.entries(scripts).filter(
+      ([, command]) => /^node --test /.test(command) && command.includes(`tests/browser-checks/${file}`),
+    );
+    expect(
+      named.map(([name]) => name),
+      'a root script "node --test tests/browser-checks/<file>"',
+    ).not.toEqual([]);
+    const run = named.filter(([name]) =>
+      new RegExp(`^ {8}run: npm run ${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'm').test(checkJob),
+    );
+    expect(
+      run.map(([name]) => name),
+      'a step of the job check that runs that script',
+    ).not.toEqual([]);
+  });
+});

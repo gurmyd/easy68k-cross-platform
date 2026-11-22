@@ -3,8 +3,9 @@
 // The web platform prints a prepared document from a hidden frame (app/src/platform/web.ts): it
 // focuses the frame, calls its `print()` and removes the frame on `afterprint`. Test automation
 // cannot answer a print dialog, and headless browsers differ: Chromium reports `afterprint` at once,
-// Playwright's WebKit returns from `print()` without it, so the hidden frame keeps the keyboard focus
-// until the platform's 60-second fallback. `recordPrints` replaces `print()` in every child frame by
+// Playwright's WebKit returns from `print()` without it, so the platform ends the print by its other
+// signs (about 1 s after `print()` returns when the page never lost the focus; errata W3.md entry 44;
+// before that entry, by a 60-second fallback). `recordPrints` replaces `print()` in every child frame by
 // one that records the document in the top window and then reports `afterprint`, as a browser does
 // when its dialog closes, so every browser behaves the same and the printed content can be read.
 

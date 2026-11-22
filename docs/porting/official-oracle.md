@@ -197,11 +197,18 @@ assembler ignores trailing blank lines, so s05 and s19 do not change the listing
 
 Other things the stress files showed about the **official program itself** (not Wine):
 
-- A 4000-character line makes EDIT68K raise `Access violation at address 00479971 in module
-  'EDIT68K.exe'. Read of address 58585B44.` (0x58 = 'X', the line's text) in a VCL message box
-  titled `EASy68K` over the status dialog. The box comes back after Enter, so the driver times
-  out, records the failure with screenshots and kills the program; `.L68`/`.S68` (14 errors)
-  were written. Lines of 1000 characters already give 2 errors, because the assembler reads
+- A 4000-character line ends differently on different hosts (errata T1 entry 27), in the same
+  image. On GitHub's ubuntu-24.04 runner the run is clean (6.8 s). On the PC where the image was
+  built, EDIT68K raised `Access violation at address 00479971 in module 'EDIT68K.exe'. Read of
+  address 58585B44.` (0x58 = 'X', the line's text) in a VCL message box over the status dialog in
+  four of five runs (13.5 to 15.9 s), and once a box captioned `Error` ("File Access Error. Please
+  verify that you have write permission to the folder ...") while it assembled. No time limit is
+  involved (the limit is 300 s per run): whether reading that address faults depends on what the
+  host has mapped there. In every outcome the `.L68` and `.S68` were written first and are the
+  same (14 errors, 1 warning; the listings differ only in `Created On:`), so the outputs are fixed
+  and only what follows them is not. `regenerate.mjs` lists the run in `HOST_DEPENDENT_RUNS`: those
+  windows count like a clean run when both outputs exist, and the goldens are `default.L68` /
+  `default.S68`. Lines of 1000 characters already give 2 errors, because the assembler reads
   source lines with `fgets(line, 256, ...)`.
 
 ### 3.5 Official 5.16.1 vs the 5.15.4 command-line oracle
@@ -400,8 +407,8 @@ pixels back with task 83 and writes them to its dump. `sim_run.py --screenshot` 
 - The Log Output dialog (memory range for log type 3, file names) is not automated.
 - Sound, full screen (`/f`), printing, serial, network and mouse/keyboard input programs were
   not tried. Programs that wait for keyboard input will hang recipe (a) until its time limit.
-- `diagnostics.x68` crashes the official editor; the 4000-character-line file leaves a
-  repeating access-violation box (both recorded as failures).
+- `diagnostics.x68` crashes the official editor (recorded as a failure); the 4000-character-line
+  file ends cleanly or with a box depending on the host, after writing the same outputs (3.4).
 - Execution logging is slow (5.2).
 
 ## 7. Timings

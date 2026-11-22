@@ -1,4 +1,4 @@
-﻿// The two keyboard-only walk-throughs of the accessibility audit (ARCHITECTURE.md 9.6 Q1
+// The two keyboard-only walk-throughs of the accessibility audit (ARCHITECTURE.md 9.6 Q1
 // acceptance; 2.9, 2.10, 2.11). Owner: Q1.
 //
 //   walk-edit  "edit, assemble, fix an error": from a freshly opened application, reach the editor
@@ -20,6 +20,7 @@
 
 /* global document, window */
 
+import { closeWithin } from '../../browser-checks/ending.mjs';
 import {
   describeFocus,
   dialogStack,
@@ -234,7 +235,7 @@ export async function walkEdit({ browser, name, os, baseUrl, report, outDir }) {
     report.check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   } finally {
     await shoot(page, outDir, `${name}-${os}-walk-edit-end`);
-    await context.close();
+    await closeWithin(context);
   }
 }
 
@@ -484,6 +485,6 @@ export async function walkRun({ browser, name, os, baseUrl, report, outDir }) {
     report.check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   } finally {
     await shoot(page, outDir, `${name}-${os}-walk-run-end`);
-    await context.close();
+    await closeWithin(context);
   }
 }

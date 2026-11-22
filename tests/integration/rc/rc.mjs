@@ -3,10 +3,12 @@
 // the twelve items of the definition of done. Owner: I3. See README.md in this folder for what
 // proves each item and how to run each part alone.
 //
-//   npm run check:rc [-- --browsers --dist <production build>] [-- --logs <folder>]
+//   npm run check:rc [-- --browsers --dist <production build>] [-- --logs <folder>] [-- --out <folder below build/>]
 //
 // It runs what a developer's machine can run in a few minutes, with Node and the pinned
-// dependencies, and prints one line per item:
+// dependencies: first the comparisons that items 2 and 5 read (the sim project of
+// test:conformance, and the files the unit entries of the parity matrix name; Vitest JSON reports
+// in --out, by default build/I3/rc, emptied first), then every judge; and prints one line per item:
 //
 //   holds                      the local judge of the item exits 0;
 //   does not hold              the local judge exits 1 (its own output says why);
@@ -26,7 +28,7 @@
 // --dist <dir> takes an existing production build, otherwise each walk builds app/ itself into
 // build/I3, which takes a minute or two more).
 //
-// Needs engine/dist (items 2 and 3) and the reports of the last `npm run test:conformance` in
+// Needs engine/dist (items 2, 3 and 5) and the reports of the last `npm run test:conformance` in
 // build/reports (item 1; with the site set fetched by node tools/fetch-site-examples.mjs, or item 1
 // says that the site set was not judged). Starts no browser without --browsers, no Docker, no
 // network. (Not named check-*.mjs: it is no browser check of the CI table; tests/lint/ci-workflow.test.ts.)
@@ -37,8 +39,8 @@
 // Part of easy68k-cross-platform, an unofficial port of EASy68K. GPL-2.0-or-later.
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { dirname, join, posix, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { JOBS, RUNS } from './lib/runs.mjs';
 
@@ -49,6 +51,12 @@ const option = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : n
 const logs = option('--logs');
 const dist = option('--dist');
 const browsers = args.includes('--browsers');
+// The reports of the comparisons this script runs (items 2 and 5); below build/, git-ignored.
+const out = resolve(repo, option('--out') ?? 'build/I3/rc');
+if (!relative(join(repo, 'build'), out) || relative(join(repo, 'build'), out).startsWith('..')) {
+  console.error(`--out must be a folder below build/ (it is emptied first): ${out}`);
+  process.exit(2);
+}
 
 // The CI runs of the release-candidate check and the jobs each item reads: lib/runs.mjs.
 const run = (key) => `${RUNS[key].workflow} run ${RUNS[key].id}`;
@@ -59,10 +67,10 @@ const jobsOf = (key) =>
   logs && nonEmpty(join(logs, `run-${RUNS[key].id}.json`)) ? join(logs, `run-${RUNS[key].id}.json`) : null;
 
 /** Runs a judge; returns its exit code (null on a time-out) and its last lines. */
-function judge(label, command, commandArgs, { timeout = 600_000, env = {} } = {}) {
+function judge(label, command, commandArgs, { timeout = 600_000, env = {}, cwd = repo } = {}) {
   const started = Date.now();
   const r = spawnSync(command, commandArgs, {
-    cwd: repo,
+    cwd,
     encoding: 'utf8',
     timeout,
     shell: process.platform === 'win32' && command === 'npx',
@@ -96,20 +104,70 @@ const verdict = (r, holds = 'holds', fails = 'does not hold') =>
 
 console.log('Running the local judges (tests/integration/rc/README.md):');
 
+// The comparisons the judges of items 2 and 5 read, as Vitest JSON reports in <out>: the sim
+// project of npm run test:conformance (every conformance program run and compared with its golden;
+// conformance.test.ts also writes what it compared and measured, EASY68K_SIM_REPORT_JSON), and the
+// files that the unit entries of tests/parity/matrix.json name, each with the Vitest configuration
+// of its folder (four workers).
+rmSync(out, { recursive: true, force: true });
+mkdirSync(out, { recursive: true });
+const SIM_CONFIG = 'tests/conformance/sim/vitest.config.ts';
+const simReport = join(out, 'sim-report.json');
+const simVitest = join(out, 'sim-vitest.json');
+const vitestJson = (file) => ['--maxWorkers=4', '--reporter=default', '--reporter=json', `--outputFile.json=${file}`];
+const sim = judge('2, 5', 'npx', ['vitest', 'run', '--config', SIM_CONFIG, ...vitestJson(simVitest)], {
+  timeout: 900_000,
+  env: { EASY68K_SIM_REPORT_JSON: simReport },
+});
+/** The nearest vitest.config.ts above a file or folder of the repository. */
+function configOf(path) {
+  for (let dir = statSync(join(repo, path)).isDirectory() ? path : posix.dirname(path); dir && dir !== '.';) {
+    if (existsSync(join(repo, dir, 'vitest.config.ts'))) return `${dir}/vitest.config.ts`;
+    const up = posix.dirname(dir);
+    dir = up === dir ? '' : up;
+  }
+  return null;
+}
+const matrix = JSON.parse(readFileSync(join(repo, 'tests/parity/matrix.json'), 'utf8'));
+const unitFiles = [
+  ...new Set(matrix.rows.flatMap((row) => (row.verifiedBy ?? []).filter((e) => e.kind === 'unit').map((e) => e.file))),
+].filter((file) => existsSync(join(repo, file)));
+const byConfig = new Map();
+for (const file of unitFiles) {
+  const config = configOf(file);
+  if (config === SIM_CONFIG || config === null) continue; // the sim run above covers it (or item 5 says it is absent)
+  if (!byConfig.has(config)) byConfig.set(config, []);
+  byConfig.get(config).push(file);
+}
+const unitReports = existsSync(simVitest) ? [simVitest] : [];
+for (const [config, files] of byConfig) {
+  const cwd = join(repo, dirname(config));
+  const report = join(out, `unit-${dirname(config).replace(/[\\/]/g, '-')}.json`);
+  const filters = files.map((f) => relative(cwd, join(repo, f)).replace(/\\/g, '/'));
+  judge('5', 'npx', ['vitest', 'run', '--config', 'vitest.config.ts', ...filters, ...vitestJson(report)], {
+    timeout: 900_000,
+    cwd,
+  });
+  if (existsSync(report)) unitReports.push(report);
+}
+
 // 1. Assembler
 const i1 = node('1', 'item-01-asm-evidence.mjs');
 item(1, 'assembler', [
-  `${verdict(i1)} here (${i1.code === 2 ? 'no conformance report: run npm run test:conformance first' : i1.last(/item 1 /)})`,
+  `${verdict(i1)} here (${i1.code === 2 ? 'no conformance report, or one older than the manifest, the list or engine/dist: run npm run test:conformance first' : i1.last(/item 1 /)})`,
   `the site set is judged only where it is fetched (this machine, and oracle.yml ${RUNS.oracle.id})`,
 ]);
 
 // 2. Simulator
-const i2a = node('2', 'item-02-sim-evidence.mjs');
+const i2a = node('2', 'item-02-sim-evidence.mjs', [
+  ...(existsSync(simReport) ? ['--sim-report', simReport] : []),
+  ...(existsSync(simVitest) ? ['--sim-vitest', simVitest] : []),
+]);
 const i2b = node('2', 'item-02-checklists.mjs');
 item(2, 'simulator', [
   i2a.code === 0 && i2b.code === 0 ? 'holds' : i2a.code === 1 || i2b.code === 1 ? 'does not hold' : 'not shown here',
-  `${i2a.last(/COUNTED AGAINST ITEM 2/) || i2a.last(/item 2 /)}; checklists: ${i2b.last(/proof/)}`,
-  'that every unlisted program equals its golden is the sim project of npm run test:conformance (CI: conformance jobs)',
+  `${i2a.last(/COUNTED AGAINST ITEM 2/) || i2a.last(/item 2 /)}; ${i2a.last(/byte-identical, as the comparison measured/) || 'the results NOT compared'}; checklists: ${i2b.last(/proof/)}`,
+  `the comparison: the sim project of npm run test:conformance, run here (exit ${sim.code ?? 'none'}: ${sim.last(/^\s*Tests /) || 'no total'})`,
 ]);
 
 // 3. Drawing
@@ -139,9 +197,9 @@ const e2eArgs = Object.entries(JOBS.e2e).flatMap(([name, id]) => {
 const deskArgs = [JOBS.desktopDev, JOBS.releaseArm64, JOBS.releaseX64].flatMap((id) =>
   logOf(id) ? ['--desktop', logOf(id)] : [],
 );
-const i5 = node('5', 'item-05-parity.mjs', [...e2eArgs, ...deskArgs]);
+const i5 = node('5', 'item-05-parity.mjs', [...e2eArgs, ...deskArgs, ...unitReports.flatMap((r) => ['--unit', r])]);
 item(5, 'parity', [
-  `${verdict(i5)} here (${i5.last(/^problems/)}${e2eArgs.length ? `; ${e2eArgs.length / 2} e2e logs judged` : ''})`,
+  `${verdict(i5)} here (${i5.last(/^problems/)}; ${i5.last(/^unit entries passed/) || 'unit entries not judged'}${e2eArgs.length ? `; ${e2eArgs.length / 2} e2e logs judged` : ''})`,
   ...(e2eArgs.length ? [] : [`e2e and desktop results shown only in CI (${run('push')}, ${run('release')})`]),
   'open for a person: the 15 manual entries (8 items of 6.8) signed off in the release copy of docs/MANUAL-TEST-MAC.md',
 ]);

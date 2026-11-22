@@ -1,4 +1,4 @@
-﻿// Part "scan" of the accessibility audit: axe-core over every mode and every dialog of the
+// Part "scan" of the accessibility audit: axe-core over every mode and every dialog of the
 // application, in both themes (ARCHITECTURE.md 2.11, 6.6, 6.9 item 8). Owner: Q1.
 //
 // The scan is not a keyboard test (the walk-throughs are): it reaches each screen the quickest
@@ -15,6 +15,7 @@
 
 /* global document, window, getComputedStyle */
 
+import { closeWithin } from '../../browser-checks/ending.mjs';
 import { AxeBuilder } from '@axe-core/playwright';
 import { classify, droppedLabels, findingsOf, isBlocking, partitionDroppedLabels } from './findings.mjs';
 import { dialogStack, modeOf, openApp, newContext, shoot, waitFor, waitForApp } from './app.mjs';
@@ -537,7 +538,7 @@ export async function scanPart({ browser, name, os, baseUrl, report, outDir, eng
 
       report.check(`${prefix}: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
     } finally {
-      await context.close();
+      await closeWithin(context);
     }
     if (name === 'webkit') await storageNoticeStep({ browser, os, baseUrl, theme, prefix, report, all, outDir });
   }
@@ -615,7 +616,7 @@ async function storageNoticeStep({ browser, os, baseUrl, theme, prefix, report, 
       errors.slice(0, 3).join(' | '),
     );
   } finally {
-    await context.close();
+    await closeWithin(context);
   }
 }
 

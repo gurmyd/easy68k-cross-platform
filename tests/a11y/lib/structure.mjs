@@ -22,6 +22,7 @@
 
 /* global document, window, getComputedStyle, MutationObserver, CSS */
 
+import { closeWithin } from '../../browser-checks/ending.mjs';
 import { contrastRatio, formatRatio, over, parseColor } from './contrast.mjs';
 import { describeFocus, focusOf, newContext, openApp, pressCommand, shoot, tab, waitFor } from './app.mjs';
 import { assembleAndExecute } from './scan.mjs';
@@ -729,7 +730,7 @@ async function motionChecks(browser, os, baseUrl, p, report) {
         };
       });
     } finally {
-      await context.close();
+      await closeWithin(context);
     }
   }
   report.check(
@@ -786,7 +787,7 @@ export async function structurePart({ browser, name, os, baseUrl, report, outDir
     }
     report.check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   } finally {
-    await context.close();
+    await closeWithin(context);
   }
   await motionChecks(browser, os, baseUrl, p, report);
 }

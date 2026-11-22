@@ -1,6 +1,10 @@
 ﻿# Request W0: run the test of the check scripts' guarded ending
 
-Status: open (gate I3, CI triage of run 45034018006)
+Status: done (follow-ups after b27ae56): root script `test:check-ending` (`node --test
+tests/browser-checks/ending.test.mjs`), run by the step "Check scripts' ending (W0)" of the job
+`check` in ci.yml after "Documents (DOC1)"; `tests/lint/ci-workflow.test.ts` fails when a
+`*.test.mjs` of tests/browser-checks is not named by a root script that a step of that job runs.
+Opened at gate I3, CI triage of run 45034018006.
 
 From: W0 (the convention of the browser check scripts; errata/W0.md entry 12)
 To: the gate's configuration engineer (root package.json, ci.yml)

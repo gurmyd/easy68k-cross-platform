@@ -112,18 +112,34 @@ export async function newDocument(app: App): Promise<void> {
 
 /**
  * Assembles `lines` and starts it in the simulator with Execute: Simulator mode, the program loaded
- * and not running (1.4 note 20). Waits until the listing shows the program and the run commands are
- * enabled.
+ * and not running (1.4 note 20). Waits until the load has ended as a person sees it (`load`): the
+ * status bar went through "Loading" to a settled state, the listing shows the program and the PC
+ * field shows its start address; then the run commands are enabled.
+ *
+ * Run and Trace Into being enabled is no sign of a program loaded: during a load the run commands
+ * are enabled too, because a run command given then is kept and carried out when the load ends
+ * (errata SH8.md entries 47 and 48). A helper that took them for "loaded" let a test give Run
+ * during the load and pass only because the controller kept it.
  */
 export async function execute(app: App, lines: Source, name?: string): Promise<void> {
   const dialog = await assemble(app, lines, name);
-  await app.button(dialog, 'Execute').click();
-  await expect(dialog).toBeHidden();
-  await expect.poll(() => app.mode()).toBe('simulator');
-  await waitForLoad(app);
+  await load(app, 'Execute', async () => {
+    await app.button(dialog, 'Execute').click();
+    await expect(dialog).toBeHidden();
+    await expect.poll(() => app.mode()).toBe('simulator');
+  });
   await expect(listingRows(app).first()).toBeVisible();
   await expect(app.toolbarButton('sim.run.run')).toBeEnabled();
   await expect(app.toolbarButton('sim.run.traceInto')).toBeEnabled();
+}
+
+/**
+ * Reload Program with its chord in the listing (`pressInListing`), and waits until that load has
+ * ended (`load`). A reload loads the same program again, so neither the listing nor the messages
+ * show the difference; the status bar does.
+ */
+export async function reload(app: App): Promise<void> {
+  await load(app, 'Reload', () => pressInListing(app, 'sim.run.reload'));
 }
 
 /**
@@ -141,61 +157,128 @@ export const LOAD_LIMIT_MS = 90_000;
 /** A load longer than this is printed (and annotated), so that the CI log shows the slow ones. */
 const SLOW_LOAD_MS = 15_000;
 
+/** What the page records of the status bar's run cell while a load is watched (`load`). */
+interface LoadWatch {
+  /** The texts the cell showed, in order, each once (a repeat of the last one is not added). */
+  shown: string[];
+  /** The cell has shown "Loading" and, after it, something else: the load has ended. */
+  ended: boolean;
+}
+
+/** The property of `window` under which `load` keeps its record. */
+const LOAD_WATCH = '__e2eLoadWatch';
+
 /**
- * Waits until Simulator mode has finished loading the program: the status bar's run state is no
- * longer "Loading" and the Listing panel has rows. On a failure the message says what the page was
- * doing: the run state, whether the fonts and the simulator engine had been fetched, and whether
- * the page still answered.
+ * Does `action` (a click on Execute, the chord of Reload, ...), which begins a load, and waits until
+ * that load has ended as Simulator mode shows it to a person:
+ *
+ *   - the status bar's run cell has shown "Loading" since just before `action`, and after it a
+ *     settled state again (Stopped, or Halted, Running ... for a command line's run switch);
+ *   - the Listing panel has rows;
+ *   - when the listing's first row, "<address> Starting Address", is on screen, the PC field shows
+ *     that address: the snapshot of the new program, published with the end of the load.
+ *
+ * The run cell is recorded in the page from a MutationObserver, so a "Loading" that is on screen for
+ * less than one poll of Playwright's is not missed: the controller publishes "loading" before the
+ * load's first await, and the status bar commits it in a microtask after that publication, before
+ * the load goes on. The listing alone is no sign of a new load (Reload shows the same rows, and a
+ * second Execute of the same program the same listing); neither are the run commands, which are
+ * enabled during a load (errata SH8.md entries 47 and 48).
+ *
+ * On a failure the message says what the page was doing: the texts the run cell showed, whether
+ * the fonts and the simulator engine had been fetched, and whether the page still answered.
  */
-async function waitForLoad(app: App): Promise<void> {
+export async function load(app: App, what: string, action: () => Promise<void>): Promise<void> {
   const info = test.info();
   info.setTimeout(info.timeout + LOAD_LIMIT_MS);
+  // A load still under way (the simulator's own start) would end inside the watch and be taken for
+  // the one `action` begins: it is waited for first. The cell exists only in Simulator mode, so in
+  // Editor mode there is nothing to wait for.
+  await expect
+    .poll(async () => ((await runState(app).count()) > 0 ? await runState(app).textContent() : '(no status bar)'), {
+      timeout: LOAD_LIMIT_MS,
+      message: 'no load is under way before the watched one',
+    })
+    .not.toBe('Loading');
+  await app.page.evaluate((key) => {
+    const store = window as unknown as Record<string, (LoadWatch & { observer: MutationObserver }) | undefined>;
+    store[key]?.observer.disconnect();
+    const read = () => document.querySelector('[data-e68-status="run"]')?.textContent ?? '(no status bar)';
+    const watch = {
+      shown: [read()],
+      ended: false,
+      observer: new MutationObserver(() => {
+        const text = read();
+        if (text !== watch.shown[watch.shown.length - 1]) watch.shown.push(text);
+        if (text !== 'Loading' && watch.shown.includes('Loading')) {
+          watch.ended = true;
+          watch.observer.disconnect();
+        }
+      }),
+    };
+    watch.observer.observe(document.body, { subtree: true, childList: true, characterData: true });
+    store[key] = watch;
+  }, LOAD_WATCH);
   const started = Date.now();
-  const stage = async (): Promise<string> =>
-    (await runState(app).textContent()) === 'Loading'
-      ? 'Loading'
-      : (await listingRows(app).count()) > 0
-        ? 'loaded'
-        : `"${(await runState(app).textContent()) ?? ''}" without a listing`;
+  await action();
+  const watched = () =>
+    app.page.evaluate((key) => {
+      const watch = (window as unknown as Record<string, LoadWatch | undefined>)[key];
+      return { shown: watch?.shown ?? [], ended: watch?.ended ?? false };
+    }, LOAD_WATCH);
+  const stage = async (): Promise<string> => {
+    const { shown, ended } = await watched();
+    if (!ended) return `the run cell showed ${shown.map((text) => `"${text}"`).join(' -> ')}`;
+    return (await listingRows(app).count()) > 0 ? 'loaded' : `the load ended (${shown.join(' -> ')}) without a listing`;
+  };
   try {
     await expect
-      .poll(stage, { timeout: LOAD_LIMIT_MS, message: 'Simulator mode loads the program after Execute' })
+      .poll(stage, { timeout: LOAD_LIMIT_MS, message: `Simulator mode loads the program after ${what}` })
       .toBe('loaded');
+    const start = listingRows(app).filter({ hasText: /^[0-9A-F]{8} Starting Address$/ });
+    if ((await start.count()) > 0) {
+      const address = ((await start.first().textContent()) ?? '').trim().slice(0, 8);
+      await expectReg(app, 'PC', address, `after ${what} the PC field shows the start address ${address}`);
+    }
   } catch (error) {
-    throw new Error(`${error instanceof Error ? error.message : String(error)}\n${await loadDiagnosis(app, started)}`, {
-      cause: error,
-    });
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}\n${await loadDiagnosis(app, started, what)}`,
+      { cause: error },
+    );
   }
   const took = Date.now() - started;
   if (took > SLOW_LOAD_MS) {
-    const text = `the load after Execute took ${took} ms (${await loadDiagnosis(app, started)})`;
+    const text = `the load after ${what} took ${took} ms (${await loadDiagnosis(app, started, what)})`;
     info.annotations.push({ type: 'slow load', description: text });
     console.log(`  note: ${info.title}: ${text}`);
   }
 }
 
-/** What the page had done since Execute, from its own resource timing; whether it still answers. */
-async function loadDiagnosis(app: App, started: number): Promise<string> {
+/** What the page had done since `what`, from its own resource timing; whether it still answers. */
+async function loadDiagnosis(app: App, started: number, what: string): Promise<string> {
   const asked = Date.now();
   const unanswered = new Promise<null>((resolve) => setTimeout(() => resolve(null), 10_000));
   const answer = app.page
-    .evaluate(() => {
+    .evaluate((key) => {
       const resources = performance.getEntriesByType('resource') as PerformanceResourceTiming[];
       const done = (part: string) =>
         resources.filter((entry) => entry.name.includes(part)).map((entry) => Math.round(entry.responseEnd));
       const fonts = done('/fonts/');
+      const watch = (window as unknown as Record<string, LoadWatch | undefined>)[key];
       return {
         now: Math.round(performance.now()),
         fonts: `${fonts.length} font files, the last at ${fonts.length ? Math.max(...fonts) : '-'} ms`,
         engine: `simulator engine files at ${done('sim68k').join(', ') || '-'} ms`,
+        shown: (watch?.shown ?? []).join(' -> ') || '-',
       };
-    })
+    }, LOAD_WATCH)
     .catch(() => null);
   const timing = await Promise.race([answer, unanswered]);
   if (!timing) return `the page did not answer within ${Date.now() - asked} ms (its main thread is stalled)`;
   return (
-    `${Date.now() - started} ms after Execute, run state "${(await runState(app).textContent()) ?? ''}"; ` +
-    `page clock ${timing.now} ms: ${timing.fonts}, ${timing.engine}; the page answered in ${Date.now() - asked} ms`
+    `${Date.now() - started} ms after ${what}, run state "${(await runState(app).textContent()) ?? ''}" ` +
+    `(the run cell showed ${timing.shown}); page clock ${timing.now} ms: ${timing.fonts}, ${timing.engine}; ` +
+    `the page answered in ${Date.now() - asked} ms`
   );
 }
 

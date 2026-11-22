@@ -57,9 +57,81 @@ export function isAllowedExternalUrl(url: string): boolean {
 }
 
 /**
+ * What the platform hears while a print is under way (printDocument): the frame's `afterprint`;
+ * print() returning, with whether the page had the focus then; the frame's window losing the
+ * focus (`blur`: a print dialog took it); `focus` on the top window or the frame's window; a
+ * pointer or key event in the top document or the frame; a poll of the page's focus; the fallback.
+ */
+export type PrintSignal =
+  | { readonly kind: 'afterprint' }
+  | { readonly kind: 'returned'; readonly at: number; readonly hasFocus: boolean }
+  | { readonly kind: 'blur' }
+  | { readonly kind: 'focus' }
+  | { readonly kind: 'input' }
+  | { readonly kind: 'poll'; readonly at: number; readonly hasFocus: boolean }
+  | { readonly kind: 'fallback' };
+
+/** Why a print ended: what showed that its dialog is gone. */
+export type PrintEnd = 'afterprint' | 'focus back' | 'input' | 'no dialog' | 'fallback';
+
+/** The state of one print: when print() returned, whether the page lost the focus, the end. */
+export interface PrintWatch {
+  readonly returnedAt: number | null;
+  readonly lostFocus: boolean;
+  readonly ended: PrintEnd | null;
+}
+
+export const PRINT_WATCH_START: PrintWatch = { returnedAt: null, lostFocus: false, ended: null };
+/** How long the page must keep the focus after print() returned for no dialog to be open. */
+export const PRINT_QUIET_MS = 1_000;
+/** How often the page's focus is looked at while a print is under way. */
+export const PRINT_POLL_MS = 100;
+/** The last resort for a browser that reports nothing (a page without the focus all along). */
+export const PRINT_FALLBACK_MS = 60_000;
+
+/**
+ * The next state of a print for `signal` (errata/W3.md entry 44). The hidden frame must stay while
+ * the print dialog is open: a browser whose print() returns before its dialog has closed prints
+ * the frame's document from that dialog. It is needed no longer than that, and while it is in the
+ * page it holds the keyboard focus. Most browsers report the end with `afterprint`; for those that
+ * do not, the dialog is known to be gone once print() has returned and
+ *   - the page has the focus again after losing it (a poll, the top window's or the frame's
+ *     `focus`): the dialog took it and gave it back;
+ *   - a pointer or key event arrives in the page: a print dialog is modal, the person is back;
+ *   - the page kept the focus for PRINT_QUIET_MS without losing it: no dialog took it (print()
+ *     waited for its dialog, or showed none);
+ * and at the latest after PRINT_FALLBACK_MS. Before print() returns nothing but `afterprint` ends
+ * the print (a browser may run events while its print() waits for the dialog).
+ */
+export function watchPrint(state: PrintWatch, signal: PrintSignal): PrintWatch {
+  if (state.ended) return state;
+  const end = (ended: PrintEnd): PrintWatch => ({ ...state, ended });
+  switch (signal.kind) {
+    case 'afterprint':
+      return end('afterprint');
+    case 'fallback':
+      return end('fallback');
+    case 'blur':
+      return { ...state, lostFocus: true };
+    case 'focus':
+      return state.returnedAt !== null && state.lostFocus ? end('focus back') : state;
+    case 'input':
+      return state.returnedAt !== null ? end('input') : state;
+    case 'returned':
+      if (signal.hasFocus && state.lostFocus) return { ...state, returnedAt: signal.at, ended: 'focus back' };
+      return { ...state, returnedAt: signal.at, lostFocus: state.lostFocus || !signal.hasFocus };
+    case 'poll':
+      if (!signal.hasFocus) return state.lostFocus ? state : { ...state, lostFocus: true };
+      if (state.returnedAt === null) return state;
+      if (state.lostFocus) return end('focus back');
+      return signal.at - state.returnedAt >= PRINT_QUIET_MS ? end('no dialog') : state;
+  }
+}
+
+/**
  * Prints a prepared HTML document through the browser's print dialog (1.4 note 2). The document
- * is loaded into a hidden frame, so the page itself is not disturbed. Resolves when the dialog
- * has closed, or at once in a browser that does not report it.
+ * is loaded into a hidden frame, so the page itself is not disturbed. Resolves, and removes the
+ * frame, as soon as the dialog is known to be gone (watchPrint).
  */
 function printDocument(win: Window, html: string, title: string): Promise<void> {
   return new Promise<void>((resolve) => {
@@ -70,25 +142,52 @@ function printDocument(win: Window, html: string, title: string): Promise<void> 
     frame.title = title;
     Object.assign(frame.style, { position: 'fixed', width: '0', height: '0', border: '0', visibility: 'hidden' });
     let finished = false;
+    const cleanups: (() => void)[] = [];
     const finish = () => {
       if (finished) return;
       finished = true;
+      for (const cleanup of cleanups.splice(0)) cleanup();
       frame.remove();
       resolve();
+    };
+    const listen = (target: Window, type: string, listener: () => void, capture = false) => {
+      target.addEventListener(type, listener, capture);
+      cleanups.push(() => target.removeEventListener(type, listener, capture));
     };
     frame.addEventListener('load', () => {
       const target = frame.contentWindow;
       if (!target) return finish();
       target.document.title = title;
-      target.addEventListener('afterprint', finish);
+      let state = PRINT_WATCH_START;
+      const hear = (signal: PrintSignal) => {
+        state = watchPrint(state, signal);
+        if (state.ended) finish();
+      };
+      const pageHasFocus = () => doc.hasFocus();
+      listen(target, 'afterprint', () => hear({ kind: 'afterprint' }));
+      listen(target, 'blur', () => hear({ kind: 'blur' }));
+      for (const where of [win, target]) {
+        listen(where, 'focus', () => hear({ kind: 'focus' }));
+        listen(where, 'pointerdown', () => hear({ kind: 'input' }), true);
+        listen(where, 'keydown', () => hear({ kind: 'input' }), true);
+      }
       try {
         target.focus();
         target.print();
       } catch {
-        finish();
+        return finish();
       }
-      // Browsers that never send `afterprint` (and print() calls that return at once).
-      win.setTimeout(finish, 60_000);
+      hear({ kind: 'returned', at: Date.now(), hasFocus: pageHasFocus() });
+      if (finished) return;
+      const poll = win.setInterval(
+        () => hear({ kind: 'poll', at: Date.now(), hasFocus: pageHasFocus() }),
+        PRINT_POLL_MS,
+      );
+      const fallback = win.setTimeout(() => hear({ kind: 'fallback' }), PRINT_FALLBACK_MS);
+      cleanups.push(() => {
+        win.clearInterval(poll);
+        win.clearTimeout(fallback);
+      });
     });
     frame.srcdoc = html;
     doc.body.append(frame);

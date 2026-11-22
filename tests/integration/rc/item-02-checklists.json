@@ -568,9 +568,9 @@
         },
         {
           "id": "files-4",
-          "item": "Task 51 on a read-only file: 3, valid FID; 53 works; 54 gives 2",
+          "item": "Task 51 on a read-only file: 3, valid FID; 53 works; 54 gives 2 for more than 512 bytes, and 0 for up to 512, after which 56 gives 2 (corrected, erratum STDIO 2)",
           "verdict": "proved",
-          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12); the write of up to 512 bytes as measured in the official program (docs/porting/errata/STDIO.md entry 2)",
           "proofs": [
             {
               "test": "app/src/core/sim-host/files/program-files.engine.test.ts",
@@ -578,7 +578,7 @@
             },
             {
               "test": "tests/conformance/sim/checklist.test.ts",
-              "title": "files-4: task 51 on a read-only file gives 3 and a valid FID; task 53 reads through it; task 54 gives 2"
+              "title": "files-4: task 51 on a read-only file gives 3 and a valid FID; task 53 reads through it; task 54 gives 0, the close 2"
             }
           ]
         },
