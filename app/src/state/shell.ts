@@ -12,7 +12,10 @@ import type { AppContext, Mode, Store } from '../contracts';
 import { createStore } from './store';
 
 export interface ShellState {
-  /** The tool tab in front (2.3); null = the first visible one. */
+  /** The tool tab in front (2.3); null = the first visible one. Since ARCHITECTURE-PLUS (N1) the
+   *  dock's selected tabs decide what is in front; the dock keeps this field (and outputInFront)
+   *  in step with the selected tab of the group that holds the tool panels (P3.1.5), for the code
+   *  that reads them, and starts its default arrangement from them. */
   activeTool: string | null;
   /** The Output panel is collapsed (1.4 note 35: it can be collapsed, never closed). Not persisted:
    *  it is always visible at start (2.4). */

@@ -126,3 +126,14 @@
 .e68-tabpanel:focus-visible {
   outline-offset: -2px;
 }
+
+/* Dragging (the optional `drag` property, ARCHITECTURE-PLUS P5 N2): the tab a drop would land on
+   shows the accent at its start; a drop beside the tabs outlines the strip. */
+.e68-tabs__tab[data-e68-drop='true'] {
+  box-shadow: inset 2px 0 0 var(--c-accent);
+}
+
+.e68-tabs[data-e68-drop='true'] {
+  outline: 2px solid var(--c-accent);
+  outline-offset: -2px;
+}

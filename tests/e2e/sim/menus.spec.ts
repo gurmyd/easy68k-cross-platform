@@ -49,7 +49,8 @@ const MENUS: Record<string, Row[]> = {
 
 /** Items the port added after the original's items of a menu (1.5), in order. */
 const ADDED: Record<string, string[]> = {
-  View: ['Log'],
+  // ARCHITECTURE-PLUS P3.1.4 (N1): the layout commands, below a separator after Log.
+  View: ['Log', 'Move Panel To...', 'Lock Layout', 'Reset Layout'],
   // Serial Ports... is the desktop app's (erratum W3 43): shown greyed in a browser.
   Options: ['Import/Export Settings...', 'Execution Speed...', 'Serial Ports...'],
   Help: ['Examples...', 'Differences from EASy68K'],
@@ -59,7 +60,10 @@ const ADDED: Record<string, string[]> = {
 const DESKTOP_ONLY = new Set(['Serial Ports...']);
 
 /** Added items that stand below a separator of their own (1.5), and the item they follow. */
-const AFTER_SEPARATOR: Record<string, string> = { 'Serial Ports...': 'Execution Speed...' };
+const AFTER_SEPARATOR: Record<string, string> = {
+  'Serial Ports...': 'Execution Speed...',
+  'Move Panel To...': 'Log',
+};
 
 const SIZES = [
   '640x480',

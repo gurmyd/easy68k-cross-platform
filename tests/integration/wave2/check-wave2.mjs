@@ -1144,9 +1144,6 @@ const PLUS_COMMANDS = [
   'ed.window.splitDown',
   'ed.window.unsplit',
   'ed.file.history',
-  'app.layout.move',
-  'app.layout.lock',
-  'app.layout.reset',
   'app.files.trash',
   'app.additions.options',
 ];

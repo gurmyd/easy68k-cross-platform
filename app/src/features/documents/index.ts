@@ -11,6 +11,10 @@
 // Files handed over later (file association, Dock icon: Platform.onOpenFiles) are opened the same
 // way, in Editor mode.
 //
+// A start-up file that the viewer takes (ARCHITECTURE-PLUS P3.4.2: a PDF, a picture) makes open()
+// return null; the viewer's tab is queued by the dock controller and shown once the Editor dock
+// attaches, and the Editor then holds the template document, as for any file that does not open.
+//
 // Unload guard (1.3.3): while any document is modified the browser's "leave site?" prompt is on;
 // the feature asks for it as the party 'documents' (Platform.confirmBeforeUnload(needed, who)).
 //
@@ -36,6 +40,10 @@ export function createDocumentService(ctx: AppContext): DocumentService {
     dialogs: ctx.dialogs,
     vfs: ctx.vfs,
     fileDialogs: ctx.fileDialogs,
+    // ARCHITECTURE-PLUS P3.4, P4.4 (N6): the bootstrap creates the viewer before the documents;
+    // without one (tests) every file opens as text.
+    ...(ctx.viewer ? { viewer: ctx.viewer } : {}),
+    clock: ctx.clock,
   });
 }
 

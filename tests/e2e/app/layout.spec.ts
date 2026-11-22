@@ -35,16 +35,15 @@ test('tool panels of Simulator mode shown with the View menu are shown again aft
 });
 
 test('a dragged splitter keeps its size after a reload', async ({ app, page }) => {
+  // The workspaces are docks since ARCHITECTURE-PLUS (N1): the splitter's aria-valuenow is
+  // FlexLayout's percentage, so the size is the Files panel's width in pixels.
   const splitter = page.getByRole('separator', { name: 'Resize the Files panel' });
-  const before = Number(await splitter.getAttribute('aria-valuenow'));
+  const width = () => app.filesPanel.evaluate((element) => Math.round(element.getBoundingClientRect().width));
+  const before = await width();
   await splitter.focus();
   for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowRight');
-  await expect.poll(async () => Number(await splitter.getAttribute('aria-valuenow'))).toBeGreaterThan(before);
-  const after = Number(await splitter.getAttribute('aria-valuenow'));
+  await expect.poll(width).toBe(before + 50);
   await app.open();
-  await expect
-    .poll(async () =>
-      Number(await page.getByRole('separator', { name: 'Resize the Files panel' }).getAttribute('aria-valuenow')),
-    )
-    .toBe(after);
+  await expect.poll(width).toBe(before + 50);
+  await expect(page.getByRole('separator', { name: 'Resize the Files panel' })).toBeVisible();
 });

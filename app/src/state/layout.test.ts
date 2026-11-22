@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultSettings } from '../core/settings/defaults';
 import {
+  DEFAULT_SPLIT_FRACTIONS,
   MESSAGES_CLEAN,
   MESSAGES_INITIAL,
   MESSAGES_OPEN_MIN,
@@ -97,6 +98,18 @@ describe('panels', () => {
 });
 
 describe('separators', () => {
+  it('give the dock their default fractions (ARCHITECTURE-PLUS P3.1.3)', () => {
+    expect(DEFAULT_SPLIT_FRACTIONS).toEqual({
+      'editor.files': 0.18,
+      'sim.columns': 0.5,
+      'sim.messages': 0.16,
+      'sim.tools': 0.4,
+      'app.help': 0.32,
+    });
+    for (const id of Object.keys(SPLITS) as (keyof typeof SPLITS)[])
+      expect(DEFAULT_SPLIT_FRACTIONS[id]).toBe(SPLITS[id].fraction);
+  });
+
   it('use the default fraction until one is stored, and ignore a stored value that is not a fraction', () => {
     const settings = defaultSettings();
     expect(splitFraction(settings, 'sim.columns')).toBe(SPLITS['sim.columns'].fraction);

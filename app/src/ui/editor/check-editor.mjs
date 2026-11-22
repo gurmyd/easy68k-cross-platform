@@ -23,13 +23,18 @@
 //     clipboard (note 45) and, where the browser refuses, shows `Press Ctrl+V to paste`;
 //   - the context menu of editor-ui §4.1; two-pane layouts (Tile Horizontally / Vertically,
 //     Cascade); Modified dot; marks on characters Windows-1252 lacks; inline assembler markers;
-//   - an accessibility scan (axe-core) of the editor area in both themes; no console errors.
+//   - an accessibility scan (axe-core) of the editor area in both themes; no console errors;
+//   - the stage of additions (ARCHITECTURE-PLUS P5 N2): the split commands from the Window menu
+//     (Split Editor Right, Split Editor Down, Close Split), dragging a document tab to the other pane
+//     (onto its strip and onto its body), the Window menu's document list unchanged by moves, the
+//     tab tool-tip (the place text of each store), `Earlier Versions...` at the end of the context
+//     menu (disabled until its handler, N4's, exists).
 //
 // Screenshots go to build/E2/editor-check (git-ignored) unless --out says otherwise. Exit code
 // 0 = everything passed. The page object `window.__easy68k` and the view hook `e68View` on the
 // view's element exist in development builds only.
 
-/* global console, process, document, window, navigator, DataTransfer, ClipboardEvent, Navigator, requestAnimationFrame, setTimeout -- browser globals are used inside page.evaluate() callbacks */
+/* global console, process, document, window, navigator, DataTransfer, ClipboardEvent, Navigator, requestAnimationFrame, setTimeout, TextEncoder -- browser globals are used inside page.evaluate() callbacks */
 
 import { mkdirSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -678,7 +683,7 @@ async function editingPass(browser, name) {
     }),
   );
   check(
-    `${p} the context menu lists the nine items of editor-ui §4.1`,
+    `${p} the context menu lists the nine items of editor-ui §4.1, then the stage's Earlier Versions...`,
     JSON.stringify(items) ===
       JSON.stringify([
         'Undo',
@@ -690,6 +695,8 @@ async function editingPass(browser, name) {
         'Comment Selection',
         'Uncomment Selection',
         'Reload File',
+        // ARCHITECTURE-PLUS P3.6 (N2): below a separator after Reload File.
+        'Earlier Versions...',
       ]),
     JSON.stringify(items),
   );
@@ -766,6 +773,269 @@ async function panesPass(browser, name) {
     window.__easy68k.ctx.commands.isEnabled('ed.window.minimizeAll'),
   ]);
   check(`${p} Arrange and Minimize All are disabled`, JSON.stringify(windowMenuDisabled) === '[false,false]');
+  check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await context.close();
+}
+
+/** The stage of additions (ARCHITECTURE-PLUS P5 N2): editor split and document tabs. */
+async function splitPass(browser, name) {
+  const p = `${name}:`;
+  const { context, page, errors } = await openApp(browser);
+  // Three files in three stores, opened as documents: My Programs, a linked file, an opened folder.
+  // The linked store and the folder are memory stores with the real mounts' names and labels, so the
+  // place texts are those of P3.2.5 (the desktop app's real path is covered by split.test.ts).
+  await page.evaluate(async () => {
+    const ctx = window.__easy68k.ctx;
+    const { MemoryBackend } = await import('/src/fs/memory-backend.ts');
+    const bytes = (text) => new TextEncoder().encode(text);
+    for (const [mount, label] of [
+      ['linked', 'Linked files'],
+      ['folder', 'Lab'],
+    ]) {
+      if (ctx.vfs.backends().some((backend) => backend.mount === mount)) ctx.vfs.unmount(mount);
+      ctx.vfs.mount(new MemoryBackend({ mount, label, kind: 'fsaccess' }));
+    }
+    const files = ['/browser/demo/prog.X68', '/linked/k3x9/lab1.X68', '/folder/prog2.X68'];
+    for (const path of files) {
+      await ctx.vfs.mkdirp(path.slice(0, path.lastIndexOf('/')));
+      await ctx.vfs.writeFile(path, bytes(`* ${path}\r\n    ORG $1000\r\n`));
+      await ctx.documents.open(path);
+    }
+  });
+  await page.waitForFunction(() => document.querySelectorAll('.e68-editor [role=tab]').length >= 4);
+  const tabs = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('.e68-editor__pane')].map((pane) => ({
+        pane: pane.getAttribute('data-pane'),
+        tabs: [...pane.querySelectorAll('[role=tab]')].map((tab) => ({
+          name: tab.querySelector('.e68-tabs__label')?.textContent,
+          title: tab.getAttribute('title'),
+          draggable: tab.getAttribute('draggable'),
+        })),
+      })),
+    );
+  const layout = () => page.evaluate(() => document.querySelector('.e68-editor')?.getAttribute('data-layout'));
+  const paneOf = (label) =>
+    page.evaluate((label) => {
+      for (const pane of document.querySelectorAll('.e68-editor__pane')) {
+        for (const tab of pane.querySelectorAll('[role=tab]')) {
+          if (tab.querySelector('.e68-tabs__label')?.textContent === label) return pane.getAttribute('data-pane');
+        }
+      }
+      return null;
+    }, label);
+
+  // The tool-tip of each document tab is the place text (P3.2.5, P4.5); never an internal path.
+  const all = (await tabs()).flatMap((pane) => pane.tabs);
+  const titleOf = (label) => all.find((tab) => tab.name === label)?.title;
+  const wantTitles = {
+    'prog.X68': 'My Programs/demo/prog.X68',
+    'lab1.X68': 'lab1.X68 - on this computer, edited in place',
+    'prog2.X68': 'Lab/prog2.X68 - in the folder "Lab" on this computer',
+  };
+  for (const [label, want] of Object.entries(wantTitles)) {
+    check(`${p} the tab of ${label} has the tool-tip "${want}"`, titleOf(label) === want, `title=${titleOf(label)}`);
+  }
+  const untitled = all.find((tab) => !Object.keys(wantTitles).includes(tab.name));
+  check(
+    `${p} a document without a file has its name as tool-tip; no tool-tip shows an internal path`,
+    untitled !== undefined &&
+      untitled.title === untitled.name &&
+      all.every((tab) => !/^\/(linked|folder|browser)\//.test(tab.title ?? '')),
+    JSON.stringify(all.map((tab) => tab.title)),
+  );
+  check(
+    `${p} document tabs are draggable`,
+    all.length >= 4 && all.every((tab) => tab.draggable === 'true'),
+    JSON.stringify(all),
+  );
+  // The tool-tip shown on hover is the title (the browser's own tool-tip, not in a screenshot).
+  await page.locator('.e68-editor [role=tab]', { hasText: 'lab1.X68' }).hover();
+  await shot(page, `${name}-tabs`);
+
+  // The Window menu: its document list, and the split commands from it.
+  const windowMenu = page.locator('[role=menubar] > [role=menuitem]', { hasText: 'Window' });
+  const openWindowMenu = async () => {
+    await windowMenu.click();
+    await page.locator('[role=menu]').first().waitFor();
+  };
+  const menuState = async () => {
+    await openWindowMenu();
+    const state = await page.evaluate(() => {
+      const menu = document.querySelector('[role=menu]');
+      const text = (item) => item.textContent.replace(/\s+/g, ' ').trim();
+      const disabled = (item) => (item.getAttribute('aria-disabled') === 'true' ? ' (disabled)' : '');
+      return {
+        documents: [...menu.querySelectorAll('[role=menuitemradio]')].map(text),
+        items: [
+          ...menu.querySelectorAll('[role=menuitem],[role=menuitemcheckbox],[role=menuitemradio],[role=separator]'),
+        ].map((item) => (item.getAttribute('role') === 'separator' ? '---' : `${text(item)}${disabled(item)}`)),
+      };
+    });
+    await page.keyboard.press('Escape');
+    return state;
+  };
+  const fromWindowMenu = async (caption) => {
+    await openWindowMenu();
+    await page.locator('[role=menu] [role=menuitem]', { hasText: caption }).first().click();
+    await page.waitForTimeout(200);
+  };
+  const before = await menuState();
+  console.log(`        Window menu: ${before.items.join(' | ')}`);
+  const at = (caption) => before.items.findIndex((item) => item.startsWith(caption));
+  const lastDocument = before.items.lastIndexOf(before.documents[before.documents.length - 1]);
+  check(
+    `${p} the Window menu has Split Editor Right, Split Editor Down, Close Split after Move Panel To..., below the document list`,
+    before.documents.length >= 4 &&
+      at('Split Editor Right') === at('Move Panel To') + 1 &&
+      at('Split Editor Down') === at('Split Editor Right') + 1 &&
+      at('Close Split') === at('Split Editor Down') + 1 &&
+      at('Move Panel To') > lastDocument,
+    before.items.join(' | '),
+  );
+  check(
+    `${p} one pane: Split Editor Right and Down are enabled, Close Split is disabled`,
+    before.items.includes('Split Editor Right') &&
+      before.items.includes('Split Editor Down') &&
+      before.items.includes('Close Split (disabled)'),
+    before.items.join(' | '),
+  );
+  const activeName = () =>
+    page.evaluate(() => {
+      const state = window.__easy68k.ctx.store.getState().documents;
+      return state.items.find((doc) => doc.id === state.activeId)?.name;
+    });
+
+  // Split Editor Right from one pane: Tile Vertically (the active document goes to the second pane).
+  const first = await activeName();
+  await fromWindowMenu('Split Editor Right');
+  await page.waitForFunction(() => document.querySelectorAll('.e68-editor__pane').length === 2);
+  check(
+    `${p} Split Editor Right: two panes side by side, the active document in the second`,
+    (await layout()) === 'vertical' && (await paneOf(first)) === '1',
+    `layout=${await layout()} ${first} in pane ${await paneOf(first)}`,
+  );
+  await shot(page, `${name}-split-right`);
+  // Split Editor Down from side by side: one above the other, the active document across.
+  await fromWindowMenu('Split Editor Down');
+  check(
+    `${p} Split Editor Down: one above the other, the active document moved to the other pane`,
+    (await layout()) === 'horizontal' && (await paneOf(first)) === '0',
+    `layout=${await layout()} ${first} in pane ${await paneOf(first)}`,
+  );
+  await shot(page, `${name}-split-down`);
+  // Split Editor Right again: side by side, and across again.
+  await fromWindowMenu('Split Editor Right');
+  check(
+    `${p} Split Editor Right from one above the other: side by side, the active document across`,
+    (await layout()) === 'vertical' && (await paneOf(first)) === '1',
+    `layout=${await layout()} ${first} in pane ${await paneOf(first)}`,
+  );
+  const split = await menuState();
+  check(`${p} two panes: Close Split is enabled`, split.items.includes('Close Split'), split.items.join(' | '));
+
+  // Drag a document tab of pane 0 onto the strip of pane 1.
+  const pane = (index) => page.locator(`.e68-editor__pane[data-pane="${index}"]`);
+  // Playwright's WebKit dispatches no pointer events for the first press after a drag (seen on
+  // Windows), and the menu bar opens on pointerdown: one press on the window's status bar (no
+  // control) takes that place after each drag.
+  const afterDrag = () => page.locator('[data-e68-editor-status]').click();
+  const tabIn = (index, label) => pane(index).locator('[role=tab]', { hasText: label });
+  const zeroTabs = (await tabs()).find((entry) => entry.pane === '0')?.tabs.map((tab) => tab.name) ?? [];
+  const moved = zeroTabs[0];
+  const texts = () =>
+    page.evaluate(() =>
+      window.__easy68k.ctx.store.getState().documents.items.map((doc) => window.__easy68k.ctx.documents.text(doc.id)),
+    );
+  const textBefore = await texts();
+  await tabIn(0, moved).dragTo(pane(1).locator('[role=tablist]'));
+  await afterDrag();
+  await page.waitForTimeout(300);
+  check(
+    `${p} a document tab dragged onto the other pane's strip moves the document there`,
+    (await paneOf(moved)) === '1',
+    `${moved} in pane ${await paneOf(moved)}; ${JSON.stringify(await tabs())}`,
+  );
+  // Drag it back onto the body (the editor) of pane 0, with a screenshot of the drop outline.
+  const source = await tabIn(1, moved).boundingBox();
+  const body = await pane(0).locator('.cm-content').boundingBox();
+  await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(source.x + source.width / 2 + 10, source.y + source.height / 2 + 10, { steps: 4 });
+  await page.mouse.move(body.x + body.width / 2, body.y + body.height / 2, { steps: 12 });
+  await page.waitForTimeout(150);
+  const outlined = await page.evaluate(() =>
+    [...document.querySelectorAll('.e68-editor__slot')].map((slot) => slot.getAttribute('data-e68-drop')),
+  );
+  await shot(page, `${name}-drag-outline`);
+  await page.mouse.up();
+  await afterDrag();
+  await page.waitForTimeout(300);
+  check(
+    `${p} while a tab is dragged over the other pane, that pane is outlined`,
+    outlined[0] === 'true' && outlined[1] !== 'true',
+    JSON.stringify(outlined),
+  );
+  check(
+    `${p} a document tab dragged onto the other pane's body moves the document there`,
+    (await paneOf(moved)) === '0',
+    `${moved} in pane ${await paneOf(moved)}`,
+  );
+  // A drop on its own pane changes nothing, and no drop wrote into a document.
+  const ownBefore = await tabs();
+  await tabIn(0, moved).dragTo(pane(0).locator('.cm-content'));
+  await afterDrag();
+  await page.waitForTimeout(300);
+  const textAfter = await texts();
+  check(
+    `${p} a drop on the tab's own pane moves nothing, and no drop changed a document's text`,
+    JSON.stringify(await tabs()) === JSON.stringify(ownBefore) &&
+      JSON.stringify(textAfter) === JSON.stringify(textBefore),
+    JSON.stringify(await tabs()),
+  );
+  const leftOver = await page.locator('.e68-editor [data-e68-drop]').count();
+  check(`${p} no drop outline is left after the drags`, leftOver === 0, `${leftOver} left`);
+  await shot(page, `${name}-after-drags`);
+
+  // The Window menu's document list and its order are unchanged by the moves.
+  const after = await menuState();
+  check(
+    `${p} the Window menu's document list and order are unchanged by splits and moves`,
+    JSON.stringify(after.documents) === JSON.stringify(before.documents),
+    `before ${JSON.stringify(before.documents)}; after ${JSON.stringify(after.documents)}`,
+  );
+
+  // The context menu ends with Earlier Versions... below a separator after Reload File.
+  await pane(0).locator('.cm-content').click({ button: 'right' });
+  await page.locator('[role=menu]').first().waitFor();
+  const contextItems = await page.evaluate(() =>
+    [...document.querySelectorAll('[role=menu] [role=menuitem], [role=menu] [role=separator]')].map((item) =>
+      item.getAttribute('role') === 'separator'
+        ? '---'
+        : `${item.textContent.replace(/\s+/g, ' ').trim()}${item.getAttribute('aria-disabled') === 'true' ? ' (disabled)' : ''}`,
+    ),
+  );
+  await shot(page, `${name}-context-menu`);
+  await page.keyboard.press('Escape');
+  const reload = contextItems.findIndex((item) => item.startsWith('Reload File'));
+  const historyEnabled = await page.evaluate(() => window.__easy68k.ctx.commands.isEnabled('ed.file.history'));
+  check(
+    `${p} the context menu has Earlier Versions... below a separator after Reload File (${historyEnabled ? 'enabled' : 'disabled'}, as its command)`,
+    reload >= 0 &&
+      contextItems[reload + 1] === '---' &&
+      contextItems[reload + 2]?.startsWith('Earlier Versions...') &&
+      contextItems[reload + 2]?.endsWith('(disabled)') === !historyEnabled,
+    contextItems.join(' | '),
+  );
+
+  // Close Split: one pane with every document (Cascade).
+  await fromWindowMenu('Close Split');
+  await page.waitForFunction(() => document.querySelectorAll('.e68-editor__pane').length === 1);
+  check(
+    `${p} Close Split: one pane with every document`,
+    (await layout()) === 'one' && (await page.locator('.e68-editor [role=tab]').count()) === all.length,
+    `layout=${await layout()}`,
+  );
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   await context.close();
 }
@@ -891,6 +1161,7 @@ async function main() {
       const passes = [
         ['editing', editingPass],
         ['panes', panesPass],
+        ['split and document tabs (N2)', splitPass],
         ['paste from the menu', pastePass],
         ['themes and accessibility', themePass],
       ];

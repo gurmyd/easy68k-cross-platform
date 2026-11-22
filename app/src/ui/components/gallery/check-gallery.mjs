@@ -360,6 +360,54 @@ async function keyboardPass(browser, name) {
     `${remaining} tabs left; focus on ${a?.tag} role=${a?.role} "${a?.text.slice(0, 30)}"`,
   );
 
+  // Tabs with the optional `drag` property (ARCHITECTURE-PLUS P5 N2): without it no tab is
+  // draggable (the strips above); with it every tab is, and a drop on a tab reports that tab.
+  const draggable = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('#tabs [role=tablist]')).map((list) => ({
+      label: list.getAttribute('aria-label'),
+      draggable: Array.from(list.querySelectorAll('[role=tab]')).map((tab) => tab.getAttribute('draggable')),
+    })),
+  );
+  const plainStrips = draggable.filter((list) => list.label !== 'Draggable documents');
+  const withDrag = draggable.find((list) => list.label === 'Draggable documents');
+  check(
+    `${p} tabs without drag are not draggable; with drag every tab is`,
+    plainStrips.length === 2 &&
+      plainStrips.every((list) => list.draggable.every((value) => value === null)) &&
+      withDrag !== undefined &&
+      withDrag.draggable.length === 3 &&
+      withDrag.draggable.every((value) => value === 'true'),
+    JSON.stringify(draggable),
+  );
+  const dragTabs = page.getByRole('tablist', { name: 'Draggable documents' });
+  // The drag's mouse press may move the focus (WebKit focuses the pressed tab); it goes back where
+  // it was afterwards, so that the checks below start as they did before this case existed.
+  await page.evaluate(() => {
+    window.__e68beforeDrag = document.activeElement;
+  });
+  await dragTabs.getByRole('tab', { name: /demo\.L68/ }).dragTo(dragTabs.getByRole('tab', { name: /demo\.X68/ }));
+  await page
+    .waitForFunction(
+      () => document.querySelector('[data-testid=gallery-output]')?.textContent?.includes('Tab dropped'),
+      null,
+      { timeout: 5000 },
+    )
+    .catch(() => undefined);
+  const dropOut = await output(page);
+  const dragOrder = await dragTabs.getByRole('tab').allInnerTexts();
+  check(
+    `${p} a dragged tab dropped on another reports that tab, and the example reorders`,
+    dropOut.includes('Tab dropped: listing before demo') &&
+      JSON.stringify(dragOrder.map((text) => text.trim().split(/\s/)[0])) ===
+        JSON.stringify(['demo.L68', 'demo.X68', 'macros.X68']),
+    `${dropOut}; order ${JSON.stringify(dragOrder)}`,
+  );
+  // Playwright's WebKit dispatches no pointerdown for the first press after a drag, which would
+  // leave the kit's "last pressed control" (focus.ts) on the dragged tab: one press on the example's
+  // panel text (not a control) takes that place.
+  await page.locator('#gallery-drag-panel-demo, [id^=gallery-drag-panel-]').first().click();
+  await page.evaluate(() => window.__e68beforeDrag?.focus?.());
+
   // Modal dialog (2.7, 2.11). The dialog moves the focus on every Tab and Shift+Tab itself
   // (errata W2 entry 13): Safari with the macOS default setting skips buttons and check boxes, so a
   // dialog that left the moves in the middle of its list to the browser lost the focus there. The

@@ -16,6 +16,9 @@
 // holding its lock for a moment (errata E1.md entry 19). That wait happens before the offer lock is
 // taken, so that a live window with unsaved work does not make every new window queue behind it.
 //
+// A document moved by DocumentService.relocate (ARCHITECTURE-PLUS P3.2.4, P4.4) has its draft
+// rewritten at once under the same key, with the new path (the hook: N6).
+//
 // Owner: E1.
 
 import type { AppContext, DocumentState } from '../../contracts';
@@ -227,6 +230,13 @@ export function startDraftKeeper(deps: DraftKeeperDeps): DraftKeeper {
     if (changed) schedule();
   };
   const unsubscribe = ctx.store.subscribe(onStore);
+  // ARCHITECTURE-PLUS P4.4 (N6): a document that relocate() moved has its draft rewritten at once,
+  // naming the new path, before relocate's promise resolves.
+  const stopRelocated = documents.onRelocated((ids) => {
+    if (disposed) return;
+    for (const id of ids) written.delete(id);
+    return flush();
+  });
   const stopHidden = deps.onHidden?.(() => void flush()) ?? (() => {});
 
   const sleep = (ms: number) => new Promise<void>((resolve) => ctx.scheduler.setTimer(ms, resolve));
@@ -316,6 +326,7 @@ export function startDraftKeeper(deps: DraftKeeperDeps): DraftKeeper {
     dispose() {
       disposed = true;
       unsubscribe();
+      stopRelocated();
       stopHidden();
       cancelTimer?.();
     },

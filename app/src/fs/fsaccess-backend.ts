@@ -250,6 +250,11 @@ export class FolderBackend implements FileSystemBackend {
     this.label = options.label ?? folderLabel(handle.name);
   }
 
+  /** The handle the backend was made with, so that the history finds its root (ARCHITECTURE-PLUS P4.3, N3). */
+  get rootHandle(): FsaDirectoryHandle {
+    return this.handle;
+  }
+
   async stat(rel: string): Promise<FileStat | null> {
     checkRel(rel, true);
     if (rel === '') return { kind: 'dir', size: 0, mtime: 0, readOnly: false };

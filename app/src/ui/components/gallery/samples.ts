@@ -208,3 +208,19 @@ export const MESSAGE_ROWS = [
 
 /** The fixed caption above the SR field (sim-ui §4.1), one character per bit. Verbatim: two and three spaces. */
 export const SR_FLAGS_CAPTION = 'T S  INT   XNZVC';
+
+/** The drag type of the gallery's draggable tabs (Tabs' optional `drag`, ARCHITECTURE-PLUS P5 N2). */
+export const GALLERY_TAB_DRAG_TYPE = 'application/x-e68-gallery-tab';
+
+/** Moves the item `moved` before the item `before` (null: to the end); an unknown id changes nothing. */
+export function moveItemBefore<T extends { id: string }>(
+  items: readonly T[],
+  moved: string,
+  before: string | null,
+): T[] {
+  const item = items.find((entry) => entry.id === moved);
+  if (!item || moved === before) return [...items];
+  const rest = items.filter((entry) => entry.id !== moved);
+  const at = before === null ? rest.length : rest.findIndex((entry) => entry.id === before);
+  return at < 0 ? [...items] : [...rest.slice(0, at), item, ...rest.slice(at)];
+}

@@ -1,4 +1,7 @@
 // Browser check of the application shell (ARCHITECTURE.md 9.1, W3 acceptance). Owner: W3.
+// The workspaces of Editor and Simulator mode are docks since ARCHITECTURE-PLUS (N1): the checks
+// that located today's regions, columns and separators find them in the dock with the same meaning
+// (ui/dock/check-dock.mjs checks the dock itself).
 //
 //   node app/src/ui/shell/check-shell.mjs [--browser chromium|webkit|all] [--out <dir>]
 //
@@ -1548,9 +1551,11 @@ async function windowsPass(browser, name) {
   const separator = a.page.locator(
     '[data-e68-workspace="simulator"] [role=separator][aria-label="Resize the two columns"]',
   );
+  // The left column's width: the Listing panel spans it (the workspace is a dock since
+  // ARCHITECTURE-PLUS, N1; the default arrangement keeps today's columns).
   const widthOf = () =>
     a.page
-      .locator('[data-e68-workspace="simulator"] .e68-simws__column')
+      .locator('[data-e68-workspace="simulator"] [data-e68-panel="listing"]')
       .first()
       .evaluate((element) => Math.round(element.getBoundingClientRect().width));
   const widthBefore = await widthOf();
@@ -1621,13 +1626,25 @@ async function windowsPass(browser, name) {
     (await a.page.evaluate(() => window.__easy68k.ctx.settings.get().app.layout.panels.memory?.visible)) === false,
   );
   await a.page.setViewportSize({ width: 1000, height: 900 });
-  await a.page.waitForFunction(() => document.querySelector('.e68-simws')?.getAttribute('data-narrow') === 'true');
-  const stacked = await a.page.evaluate(() => {
-    const [left, right] = Array.from(
-      document.querySelectorAll('[data-e68-workspace="simulator"] .e68-simws__column'),
-    ).map((element) => element.getBoundingClientRect());
-    return right.top >= left.bottom - 1 && Math.abs(right.left - left.left) <= 1;
-  });
+  // The left column (Registers, Listing, Messages) and below it the right one (the Output panel).
+  const columns = () =>
+    a.page.evaluate(() => {
+      const box = (id) =>
+        document.querySelector(`[data-e68-workspace="simulator"] [data-e68-panel="${id}"]`)?.getBoundingClientRect();
+      const left = { top: box('registers').top, bottom: box('messages').bottom, left: box('listing').left };
+      const right = box('output');
+      return right.top >= left.bottom - 1 && Math.abs(right.left - left.left) <= 1;
+    });
+  await a.page.waitForFunction(
+    () => {
+      const box = (id) =>
+        document.querySelector(`[data-e68-workspace="simulator"] [data-e68-panel="${id}"]`)?.getBoundingClientRect();
+      return box('output').top >= box('messages').bottom - 1;
+    },
+    null,
+    { timeout: 15_000 },
+  );
+  const stacked = await columns();
   const narrowTabs = await a.page.locator('[data-e68-workspace="simulator"] [role=tab]').allInnerTexts();
   check(`${p} below 1100 px the right column moves under the left one`, stacked === true);
   check(

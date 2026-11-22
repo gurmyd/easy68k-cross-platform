@@ -1,6 +1,7 @@
 /*
  * The shell: window frame, workspace regions, mode switch, status bar
- * (ARCHITECTURE.md 2.1-2.3, 2.8). Owner: W3.
+ * (ARCHITECTURE.md 2.1-2.3, 2.8). Owner: W3; the workspaces of Editor and Simulator mode are
+ * docks since ARCHITECTURE-PLUS (N1, ui/dock/dock.css).
  *
  * Only layout and the shell's own parts are styled here. Panels bring their own
  * styles; menus, toolbars, tabs, separators and dialogs are the component kit's.
@@ -172,7 +173,7 @@ body {
   color: var(--c-danger);
 }
 
-/* ---- two panes with a separator ----------------------------------------- */
+/* ---- two panes with a separator (SplitPane) ------------------------------ */
 
 .e68-split {
   display: flex;
@@ -203,88 +204,7 @@ body {
   flex: 1 1 0;
 }
 
-/* ---- Editor mode --------------------------------------------------------- */
-
-.e68-editorws {
-  display: flex;
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: 0;
-}
-
-.e68-editorws__center {
-  display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-}
-
-/* ---- Simulator mode ------------------------------------------------------ */
-
-.e68-simws {
-  display: flex;
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: 0;
-}
-
-.e68-simws[data-narrow='true'] {
-  flex-direction: column;
-}
-
-.e68-simws__column {
-  display: flex;
-  flex: none;
-  min-width: 0;
-  min-height: 0;
-}
-
-.e68-simws__column--rest {
-  flex: 1 1 0;
-}
-
-.e68-simws__left,
-.e68-simws__right {
-  display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-}
-
-.e68-simws__left > .e68-region--auto {
-  min-height: 24px;
-  border-bottom: 1px solid var(--c-border);
-}
-
-.e68-simws__output {
-  display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-}
-
-.e68-simws__output[data-collapsed='true'] {
-  flex: none;
-}
-
-.e68-simws__expand {
-  height: 24px;
-  padding: 0 var(--sp-2);
-  border: 0;
-  border-bottom: 1px solid var(--c-border);
-  background: var(--c-panel);
-  color: var(--c-text);
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  text-align: left;
-}
-
-.e68-simws__expand:hover {
-  background: var(--c-hover);
-}
+/* Editor mode and Simulator mode are docks (ui/dock/dock.css, ARCHITECTURE-PLUS P3.1). */
 
 /* ---- status bar ----------------------------------------------------------- */
 

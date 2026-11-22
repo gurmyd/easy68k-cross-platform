@@ -1,0 +1,106 @@
+/* The viewer of files that are not text (ARCHITECTURE-PLUS P3.4.2). Owner: N6. */
+
+.e68-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--c-surface);
+  color: var(--c-text);
+  font: var(--fs-md) / var(--lh-body) var(--font-ui);
+}
+
+.e68-viewer__strip {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--h-control);
+  padding: 2px 8px;
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-panel);
+}
+
+.e68-viewer__name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+
+.e68-viewer__size {
+  flex: none;
+  color: var(--c-text-muted);
+  white-space: nowrap;
+}
+
+.e68-viewer__spacer {
+  flex: 1 1 auto;
+}
+
+.e68-viewer__hint {
+  flex: none;
+  margin: 0;
+  padding: 2px 8px;
+  border-bottom: 1px solid var(--c-border);
+  color: var(--c-text-muted);
+  font-size: var(--fs-sm);
+}
+
+.e68-viewer__body {
+  display: flex;
+  position: relative;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--c-surface);
+}
+
+.e68-viewer__body:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring-inset);
+}
+
+/* Actual size: the picture at 1:1 with scroll bars. `safe` keeps a large picture's top-left corner
+   reachable when it is larger than the panel. */
+.e68-viewer__body[data-actual='true'] {
+  align-items: safe center;
+  justify-content: safe center;
+  overflow: auto;
+}
+
+.e68-viewer__picture {
+  display: block;
+  flex: none;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.e68-viewer__picture[data-actual='true'] {
+  max-width: none;
+  max-height: none;
+}
+
+.e68-viewer__frame {
+  align-self: stretch;
+  width: 100%;
+  border: 0;
+}
+
+.e68-viewer__notice {
+  max-width: 60ch;
+  padding: 16px;
+}
+
+.e68-viewer__notice-text {
+  margin: 0 0 12px;
+  white-space: pre-wrap;
+}
+
+.e68-viewer__notice-buttons {
+  display: flex;
+  gap: 8px;
+}

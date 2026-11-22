@@ -1,5 +1,9 @@
 // The shell's components, rendered to markup under Node (ARCHITECTURE.md 2.1-2.4, 2.7). What
 // needs a real browser - focus, keys, separators, the narrow layout - is in check-shell.mjs.
+// The workspaces of Editor and Simulator mode are docks (ARCHITECTURE-PLUS P3.1, N1): FlexLayout
+// lays out and mounts their panels only in a page, so the regions are tested here as the dock
+// places them (PanelRegion, the dock's tab content and its model) and on screen by
+// ui/dock/check-dock.mjs.
 
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -10,6 +14,11 @@ import { ApplicationProvider, useAppContext, useAppState } from '../../state/con
 import { showPanel } from '../../state/panels';
 import { initialAppState } from '../../state/store';
 import { createTestApplication, type TestApplication } from '../../state/testing';
+import { groupOf } from '../dock/actions';
+import { DockContent } from '../dock/DockWorkspace';
+import { DockEngine } from '../dock/engine';
+import { globalAttributes, panelsOf } from '../dock/model';
+import { PanelRegion } from './PanelRegion';
 import { Shell } from './Shell';
 import { runStateText, speedText } from './StatusBar';
 import { toMenuBarMenus } from './menu-entries';
@@ -187,28 +196,41 @@ describe('regions and panels', () => {
     ];
     const app = createTestApplication({ features });
     await app.ctx.commands.run('app.mode.set', 'simulator');
-    const html = render(app);
-    expect(html).toMatch(
+    // The dock puts each panel's PanelRegion into its tab (ui/dock/DockWorkspace.tsx).
+    const region = (id: 'registers' | 'listing') =>
+      renderToStaticMarkup(
+        <ApplicationProvider app={app}>
+          <PanelRegion id={id} mode="simulator" className="e68-region--fill" />
+        </ApplicationProvider>,
+      );
+    expect(region('registers')).toMatch(
       /<section role="region" aria-label="CPU Registers" data-e68-panel="registers"[^>]*><i>20 boxes in simulator<\/i>/,
     );
     // A region without a panel shows its title.
-    expect(html).toMatch(/aria-label="Listing" data-e68-panel="listing" data-empty="true"[^>]*><h2[^>]*>Listing<\/h2>/);
+    expect(region('listing')).toMatch(
+      /aria-label="Listing" data-e68-panel="listing" data-empty="true"[^>]*><h2[^>]*>Listing<\/h2>/,
+    );
+    // ...in the dock of Simulator mode, which the shell draws.
+    expect(render(app)).toContain('data-e68-dock="simulator"');
   });
 
-  it('shows the visible tool panels as tabs under the Output panel, the one in front selected', () => {
+  it('shows the visible tool panels as tabs of one group under the Output panel, the one in front selected', () => {
     const app = createTestApplication();
-    expect(render(app)).not.toContain('role="tablist"');
+    void app.ctx.commands.run('app.mode.set', 'simulator');
+    const dock = new DockEngine(app.ctx, app.panels, app.shell, 'simulator');
+    const stop = dock.start();
+    expect(panelsOf(dock.tree())).toEqual(['registers', 'listing', 'messages', 'output']);
     showPanel(app.ctx, 'memory');
     showPanel(app.ctx, 'hardware');
-    const html = render(app);
-    const tabs = [...html.matchAll(/role="tab" aria-selected="(true|false)"[^>]*>.*?e68-tabs__label">([^<]+)</g)].map(
-      (match) => `${match[2]}:${match[1]}`,
-    );
-    expect(tabs).toEqual(['Memory:false', 'Hardware:true']);
-    // Both stay mounted; the one behind is hidden.
-    expect(html).toMatch(/role="tabpanel"[^>]*data-e68-panel="memory"[^>]*hidden=""/);
-    expect(html).toMatch(/role="tabpanel"[^>]*data-e68-panel="hardware"/);
-    expect(html).not.toMatch(/data-e68-panel="hardware"[^>]*hidden=""/);
+    const tools = groupOf(dock.model, 'simulator', 'memory')!;
+    const name = (node: unknown) => (node as { getName(): string }).getName();
+    expect(tools.getChildren().map(name)).toEqual(['Memory', 'Hardware']);
+    expect(name(tools.getSelectedNode())).toBe('Hardware');
+    expect(tools.isEnableTabStrip()).toBe(true);
+    expect(groupOf(dock.model, 'simulator', 'output')).not.toBe(tools);
+    // Every tab stays mounted, also the one behind (P2.2: no render on demand).
+    expect(globalAttributes(true).tabEnableRenderOnDemand).toBe(false);
+    stop();
   });
 
   it('shows the Help panel as a drawer in every mode once it is visible', async () => {
@@ -225,9 +247,14 @@ describe('regions and panels', () => {
 
   it('collapses the Output panel to a bar that expands it again', () => {
     const app = createTestApplication();
+    const dock = new DockEngine(app.ctx, app.panels, app.shell, 'simulator');
     app.shell.setState((state) => ({ ...state, outputCollapsed: true }));
-    const html = render(app);
-    expect(html).toMatch(/<button[^>]*class="e68-simws__expand"[^>]*aria-expanded="false"[^>]*>Output<\/button>/);
+    const html = renderToStaticMarkup(
+      <ApplicationProvider app={app}>
+        <DockContent engine={dock} panel="output" />
+      </ApplicationProvider>,
+    );
+    expect(html).toMatch(/<button[^>]*class="e68-dock__expand"[^>]*aria-expanded="false"[^>]*>Output<\/button>/);
     expect(html).toMatch(/data-e68-panel="output"[^>]*hidden=""/);
   });
 });

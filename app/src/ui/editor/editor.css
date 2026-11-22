@@ -260,3 +260,20 @@
   border-right: 0;
   color: var(--c-text-muted);
 }
+
+/* ---- dragging a document tab to the other pane (ARCHITECTURE-PLUS P5 N2): the pane a drop would
+   move the document to is outlined. */
+
+.e68-editor__slot {
+  position: relative;
+}
+
+.e68-editor__slot[data-e68-drop='true']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  outline: 2px solid var(--c-accent);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--c-accent) 8%, transparent);
+  pointer-events: none;
+}

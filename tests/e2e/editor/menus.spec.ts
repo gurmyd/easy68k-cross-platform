@@ -216,6 +216,8 @@ test.describe('context menus (editor-ui §4)', () => {
       'Comment Selection',
       'Uncomment Selection',
       'Reload File',
+      // ARCHITECTURE-PLUS P3.6, P5 N2: below a separator after the original's items.
+      'Earlier Versions...',
     ]);
     await app.page.keyboard.press('Escape');
     await expect(app.page.locator('[role=menu][data-e68-menu]')).toHaveCount(0);

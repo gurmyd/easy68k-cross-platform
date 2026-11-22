@@ -2,9 +2,10 @@
 // (ARCHITECTURE.md 2.2-2.4, 3.10 `AppSettings.layout`). Owner: W3.
 //
 // The layout has exactly the regions drawn in sections 2.2 and 2.3; panels are not floating
-// windows and there is no docking. What is stored per window is small: `panels[id].visible` and
-// `splits[id]` (a fraction 0..1). Everything here is a pure function of the settings; the shell
-// (ui/shell) draws the regions and state/panels.ts changes the settings.
+// windows. What is stored per window is small: `panels[id].visible` and `splits[id]` (a fraction
+// 0..1); since ARCHITECTURE-PLUS (N1) also `dock`, a changed arrangement of the docks
+// (ui/dock/stored.ts reads it). Everything here is a pure function of the settings; the shell and
+// its docks (ui/shell, ui/dock) draw the regions and state/panels.ts changes the settings.
 
 import type { AppState, Platform, Settings } from '../contracts';
 
@@ -113,6 +114,15 @@ export const SPLITS = {
   'app.help': { fraction: 0.32, min: 240, minRest: 360 },
 } as const;
 export type SplitId = keyof typeof SPLITS;
+
+/**
+ * The default fraction of each separator (SPLITS), for the dock (ARCHITECTURE-PLUS P3.1.3): its
+ * default arrangements are sized from `layout.splits` or these, and `Reset Layout` sets the mode's
+ * entries back to them.
+ */
+export const DEFAULT_SPLIT_FRACTIONS: Readonly<Record<SplitId, number>> = Object.freeze(
+  Object.fromEntries(Object.entries(SPLITS).map(([id, spec]) => [id, spec.fraction])) as Record<SplitId, number>,
+);
 
 /** The stored fraction of a separator, or its default. */
 export function splitFraction(settings: Settings, id: SplitId): number {

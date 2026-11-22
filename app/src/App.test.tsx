@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { App } from './App';
 import { EXIT_TEXT } from './state/shell';
+import { DockEngine } from './ui/dock/engine';
 import { createFakePlatform, createTestApplication } from './state/testing';
 
 const render = (app = createTestApplication()) => renderToStaticMarkup(<App app={app} />);
@@ -55,12 +56,18 @@ describe('App', () => {
     expect(titles(render(app))).toEqual(['File', 'Help']);
   });
 
-  it('draws every region of sections 2.2 and 2.3', () => {
+  it('draws the docks of Editor and Simulator mode and the region of EASyBIN', () => {
+    // The regions of 2.2 and 2.3 are the docks' panels (ARCHITECTURE-PLUS P3.1, N1). FlexLayout lays
+    // them out, and mounts them, only in a page: under Node the docks render their frame, and the
+    // regions on screen are checked by app/src/ui/dock/check-dock.mjs.
     const html = render();
+    const docks = [...html.matchAll(/data-e68-dock="(\w+)"/g)].map((match) => match[1]);
+    expect(docks).toEqual(['editor', 'simulator']);
+    expect(html).toMatch(
+      /data-e68-workspace="editor"><div class="e68-dock" data-e68-dock="editor"><div class="flexlayout__layout">/,
+    );
     const regions = [...html.matchAll(/data-e68-panel="([\w-]+)"/g)].map((match) => match[1]);
-    // Editor: files, editor, messages. Simulator: registers, listing, messages, output. EASyBIN.
-    expect(regions).toEqual(['files', 'editor', 'messages', 'registers', 'listing', 'messages', 'output', 'easybin']);
-    expect(html).toContain('role="region" aria-label="Registers"');
+    expect(regions).toEqual(['easybin']);
   });
 
   it('has no in-window menu bar in the macOS app, where the menu is the native one', () => {
@@ -71,9 +78,12 @@ describe('App', () => {
   });
 
   it('hides the Files panel by default in the desktop app and shows it in a browser', () => {
-    expect(render()).toContain('data-e68-panel="files"');
-    const desktop = createTestApplication({ platform: createFakePlatform({ kind: 'desktop', os: 'mac' }) });
-    expect(render(desktop)).not.toContain('data-e68-panel="files"');
+    const filesIn = (app: ReturnType<typeof createTestApplication>) =>
+      new DockEngine(app.ctx, app.panels, app.shell, 'editor').has('files');
+    expect(filesIn(createTestApplication())).toBe(true);
+    expect(filesIn(createTestApplication({ platform: createFakePlatform({ kind: 'desktop', os: 'mac' }) }))).toBe(
+      false,
+    );
   });
 
   it('shows every toolbar command without a handler as disabled', () => {

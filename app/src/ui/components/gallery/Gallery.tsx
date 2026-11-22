@@ -42,11 +42,13 @@ import {
   EDITOR_CONTEXT_MENU,
   EDITOR_MENUS,
   EDITOR_TOOLBAR,
+  GALLERY_TAB_DRAG_TYPE,
   MESSAGE_ROWS,
   MESSAGE_SAMPLES,
   SIM_OPTIONS_MENU,
   SIM_TOOLBAR,
   SR_FLAGS_CAPTION,
+  moveItemBefore,
   type ToolSample,
 } from './samples';
 
@@ -516,6 +518,8 @@ function TabsSection({ report }: { report: Report }) {
   const [doc, setDoc] = useState<string | null>('demo');
   const [tools, setTools] = useState(TOOLS);
   const [tool, setTool] = useState<string | null>('stack');
+  const [dragged, setDragged] = useState(DOCUMENTS);
+  const [draggedDoc, setDraggedDoc] = useState<string | null>('demo');
   const close = (
     list: TabItem[],
     id: string,
@@ -537,7 +541,8 @@ function TabsSection({ report }: { report: Report }) {
         <>
           Document tabs of the editor (a dot marks a modified document; the tool-tip is the full path, 2.4) and the
           simulator&apos;s tool tabs (2.3). Left / Right move and select, Home / End, Delete closes; the <code>x</code>{' '}
-          is for the mouse, so the tab list contains only tabs.
+          is for the mouse, so the tab list contains only tabs. With the optional <code>drag</code> property the tabs
+          can be dragged, and the strip reports a drop of its type with the tab it landed on.
         </>
       }
     >
@@ -591,6 +596,39 @@ function TabsSection({ report }: { report: Report }) {
         {tool && (
           <TabPanel idBase="gallery-tools" tabId={tool} className="e68-gallery__tabpanel">
             <span className="e68-gallery__muted">The {tools.find((t) => t.id === tool)?.label} panel.</span>
+          </TabPanel>
+        )}
+      </Specimen>
+      <Specimen label="Draggable tabs (drag: drop a tab on another to put it before that one)" wide>
+        <Tabs
+          idBase="gallery-drag"
+          label="Draggable documents"
+          items={dragged}
+          selectedId={draggedDoc}
+          onSelect={setDraggedDoc}
+          drag={{
+            type: GALLERY_TAB_DRAG_TYPE,
+            data: (id) => id,
+            onDropAt: (at, data) => {
+              setDragged((list) => moveItemBefore(list, data, at));
+              report(`Tab dropped: ${data} before ${at ?? 'the end'}`);
+            },
+          }}
+          end={
+            <Button
+              size="small"
+              variant="quiet"
+              caption="Reset"
+              onClick={() => {
+                setDragged(DOCUMENTS);
+                setDraggedDoc('demo');
+              }}
+            />
+          }
+        />
+        {draggedDoc && (
+          <TabPanel idBase="gallery-drag" tabId={draggedDoc} className="e68-gallery__tabpanel">
+            <span className="e68-gallery__muted">{`Order: ${dragged.map((t) => t.label).join(', ')}`}</span>
           </TabPanel>
         )}
       </Specimen>

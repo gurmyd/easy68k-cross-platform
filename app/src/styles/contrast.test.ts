@@ -128,3 +128,33 @@ describe('contrast rules of 2.8, both themes', () => {
     expect(rows.length).toBe(CONTRAST_RULES.length * 2 + INFORMATIVE_RULES.length * 2);
   });
 });
+
+// The dock's colours (ARCHITECTURE-PLUS P3.1.8; ui/dock/dock.css maps every --flexlayout-* variable
+// to these tokens): tab strips on --c-panel, content on --c-surface, splitters --c-border-strong
+// (controls: 3:1 against both neighbours), the selected tab, the drop outline and the focus in
+// --c-accent. Added by N1.
+describe("the dock's colour pairs (ARCHITECTURE-PLUS P3.1.8), both themes", () => {
+  const v = (name: string) => `var(${name})`;
+  const DOCK_RULES: { fg: string; bg: string[]; kind: 'text' | 'graphic'; use: string }[] = [
+    { fg: v('--c-text-muted'), bg: [v('--c-panel')], kind: 'text', use: 'dock tab, not selected' },
+    { fg: v('--c-text'), bg: [v('--c-panel'), v('--c-hover')], kind: 'text', use: 'dock tab, hovered' },
+    { fg: v('--c-text'), bg: [v('--c-panel')], kind: 'text', use: 'dock tab, selected' },
+    { fg: v('--c-text'), bg: [v('--c-panel')], kind: 'text', use: "the collapsed Output panel's bar" },
+    { fg: v('--c-accent'), bg: [v('--c-panel')], kind: 'graphic', use: "the selected tab's bar, a tab's focus ring" },
+    { fg: v('--c-text-muted'), bg: [v('--c-panel')], kind: 'graphic', use: "a tab's x" },
+    { fg: v('--c-text'), bg: [v('--c-panel'), v('--c-pressed')], kind: 'graphic', use: "a tab's x, hovered" },
+    { fg: v('--c-border-strong'), bg: [v('--c-surface')], kind: 'graphic', use: 'splitter beside a panel' },
+    { fg: v('--c-border-strong'), bg: [v('--c-panel')], kind: 'graphic', use: 'splitter beside a tab strip' },
+    { fg: v('--c-border-strong'), bg: [v('--c-bg')], kind: 'graphic', use: 'splitter beside the window background' },
+    { fg: v('--c-accent'), bg: [v('--c-surface')], kind: 'graphic', use: 'splitter hovered or focused, drop outline' },
+    { fg: v('--c-accent'), bg: [v('--c-accent-soft')], kind: 'graphic', use: 'drop outline on its fill' },
+    { fg: v('--c-surface'), bg: [v('--c-border-strong')], kind: 'graphic', use: 'edge marker arrow' },
+  ];
+  for (const theme of ['light', 'dark'] as const) {
+    for (const rule of DOCK_RULES) {
+      it(`${theme}: ${rule.fg} on ${rule.bg.join(' + ')} (${rule.use})`, () => {
+        expect(ruleRatio(rule, tokens[theme])).toBeGreaterThanOrEqual(MIN_RATIO[rule.kind]);
+      });
+    }
+  }
+});

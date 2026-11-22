@@ -8,6 +8,7 @@ import {
   focusPanel,
   focusPanelElement,
   hidePanel,
+  isRenderedVisible,
   PANEL_FOCUS_EVENT,
   nextPanelInCycle,
   panelOf,
@@ -15,6 +16,7 @@ import {
   showPanel,
   togglePanel,
 } from './panels';
+import { attachDock } from './dock';
 import { showExitScreen } from './shell';
 import { createFakePlatform, createTestApplication } from './testing';
 
@@ -257,6 +259,76 @@ describe('focusPanelElement', () => {
   it('reports false when the region is not rendered', () => {
     expect(focusPanelElement(root(), 'memory')).toBe(false);
     expect(focusPanelElement(root(region({ hidden: true })), 'memory')).toBe(false);
+  });
+
+  it('takes the region that is rendered visible: a dock hides the panels behind another tab with styles (ARCHITECTURE-PLUS P3.1.5)', () => {
+    const behind = { ...region({ control: true }), visible: false };
+    const front = { ...region({ control: true }), visible: true };
+    const withVisibility = (entry: typeof behind) => ({
+      ...entry,
+      element: {
+        ...entry.element,
+        checkVisibility: (options?: { visibilityProperty?: boolean }) =>
+          entry.visible && options?.visibilityProperty === true,
+      },
+    });
+    const a = withVisibility(behind);
+    const b = withVisibility(front);
+    expect(focusPanelElement(root(a, b), 'messages')).toBe(true);
+    expect(behind.focused).toEqual([]);
+    expect(front.focused).toEqual(['control']);
+    // Without checkVisibility: an element without an offsetParent is not shown.
+    expect(isRenderedVisible({ closest: () => null, offsetParent: null } as unknown as HTMLElement)).toBe(false);
+  });
+});
+
+describe('the dock controller (ARCHITECTURE-PLUS P3.1.5)', () => {
+  function withDock() {
+    const app = createTestApplication();
+    const calls: string[] = [];
+    attachDock(app.ctx, {
+      mode: 'simulator',
+      has: () => true,
+      reveal: (id, select) => void calls.push(`reveal ${id} ${select}`),
+      park: (id) => void calls.push(`park ${id}`),
+      present: (id) => {
+        calls.push(`present ${id}`);
+        return true;
+      },
+      openTransient: () => {},
+      selectTransient: () => false,
+      closeTransient: () => {},
+      closeAllTransients: () => {},
+      move: () => {},
+      reset: () => {},
+      lockChanged: () => {},
+      describe: () => [],
+    });
+    return { app, calls };
+  }
+
+  it('showPanel sets visible, then reveals the tab and selects it; then the focus request selects it again', () => {
+    const { app, calls } = withDock();
+    showPanel(app.ctx, 'memory');
+    expect(app.ctx.settings.get().app.layout.panels.memory?.visible).toBe(true);
+    expect(calls).toEqual(['reveal memory true', 'present memory']);
+  });
+
+  it('hidePanel sets visible false and parks the tab; the Output panel is never parked', () => {
+    const { app, calls } = withDock();
+    hidePanel(app.ctx, 'stack');
+    hidePanel(app.ctx, 'output');
+    expect(calls).toEqual(['park stack']);
+    expect(app.shell.getState().outputCollapsed).toBe(true);
+  });
+
+  it("focusNextPanel selects the target's tab before it asks for the focus, in PANEL_CYCLE order", () => {
+    const { app, calls } = withDock();
+    showPanel(app.ctx, 'stack', { focus: false });
+    calls.length = 0;
+    expect(focusNextPanel(app.ctx, null)).toBe('output');
+    expect(focusNextPanel(app.ctx, { closest: () => ({ getAttribute: () => 'output' }) })).toBe('stack');
+    expect(calls).toEqual(['present output', 'present stack']);
   });
 });
 

@@ -295,13 +295,7 @@ describe('features', () => {
   // 'some.command.id': 'PACKAGE (what is missing)'. The stage of additions (ARCHITECTURE-PLUS P3.6)
   // adds its commands without handlers (N0); each package removes its own when the handler arrives.
   const OWED_HANDLERS: Readonly<Record<string, string>> = {
-    'ed.window.splitRight': 'N2 (editor split)',
-    'ed.window.splitDown': 'N2 (editor split)',
-    'ed.window.unsplit': 'N2 (editor split)',
     'ed.file.history': 'N4 (Earlier Versions dialog)',
-    'app.layout.move': 'N1 (Move Panel To dialog)',
-    'app.layout.lock': 'N1 (Lock Layout)',
-    'app.layout.reset': 'N1 (Reset Layout)',
     'app.files.trash': 'N4 (Trash dialog)',
     'app.additions.options': 'N7 (Port Additions dialog)',
   };

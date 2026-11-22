@@ -14,6 +14,11 @@
 // mode keeps its state while another is in front and a program keeps running while the editor is
 // shown. The Help panel is a drawer on the right edge in every mode. In the macOS app the menu
 // bar is the system's and the in-window one is not drawn.
+//
+// Editor mode and Simulator mode are docks (ui/dock/DockWorkspace.tsx, ARCHITECTURE-PLUS P3.1,
+// N1): their panels can be moved and grouped; the default arrangement is today's. A dock lays out
+// its panels once it is shown for the first time (its panels mount then) and keeps them mounted
+// while its workspace is hidden. EASyBIN has one panel and the Help drawer stays a drawer.
 
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { Mode } from '../../contracts';
@@ -24,13 +29,12 @@ import { focusPanelElement } from '../../state/panels';
 import { EXIT_TEXT } from '../../state/shell';
 import { applyThemeSetting } from '../../styles';
 import { Splitter } from '../components';
+import { DockWorkspace } from '../dock/DockWorkspace';
 import { DialogHost, ToastHost } from './DialogHost';
-import { EditorWorkspace } from './EditorWorkspace';
 import { ModeSwitch } from './ModeSwitch';
 import { PanelRegion } from './PanelRegion';
 import { ShellMenuBar } from './ShellMenuBar';
 import { ShellToolbar } from './ShellToolbar';
-import { SimWorkspace } from './SimWorkspace';
 import { useElementSize, useSplit } from './SplitPane';
 import { StatusBar } from './StatusBar';
 import './shell.css';
@@ -38,9 +42,9 @@ import './shell.css';
 function Workspace({ mode }: { mode: Mode }) {
   switch (mode) {
     case 'editor':
-      return <EditorWorkspace />;
+      return <DockWorkspace mode="editor" />;
     case 'simulator':
-      return <SimWorkspace />;
+      return <DockWorkspace mode="simulator" />;
     case 'easybin':
       return <PanelRegion id="easybin" mode="easybin" className="e68-region--fill" />;
   }
@@ -65,6 +69,9 @@ function useTheme() {
   useLayoutEffect(() => applyThemeSetting(theme), [theme]);
 }
 
+/** Frames a focus request waits for its panel: a dock lays a panel out a few frames after it is put in. */
+const FOCUS_FRAMES = 12;
+
 /** Carries out the focus requests of state/panels.ts once the panel is on screen. */
 function usePanelFocus() {
   const { shell } = useApplication();
@@ -76,11 +83,16 @@ function usePanelFocus() {
         state.focusRequest?.serial === request.serial ? { ...state, focusRequest: null } : state,
       );
     if (focusPanelElement(document, request.panel)) return done();
-    // The panel may be rendered by an update that has not been committed yet.
-    const frame = requestAnimationFrame(() => {
-      focusPanelElement(document, request.panel);
-      done();
-    });
+    // The panel may be rendered by an update that has not been committed yet, or laid out by its
+    // dock in a later frame (a tab that was just put back or a dock shown for the first time).
+    let frames = 0;
+    let frame = 0;
+    const retry = () => {
+      frames++;
+      if (focusPanelElement(document, request.panel) || frames >= FOCUS_FRAMES) done();
+      else frame = requestAnimationFrame(retry);
+    };
+    frame = requestAnimationFrame(retry);
     return () => cancelAnimationFrame(frame);
   }, [request, shell]);
 }
