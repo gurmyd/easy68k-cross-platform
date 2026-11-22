@@ -217,7 +217,22 @@ test('the Serial Ports dialog edits AppSettings.serialPortMap', async () => {
   await expect(names.nth(1)).toHaveValue('COM1');
   // OK is off while the new row has no device.
   await expect(dialog.getByRole('button', { name: 'OK' })).toBeDisabled();
+  // A device problem marks the Device field of its row, not the Name field.
+  await expect(names.nth(1)).not.toHaveAttribute('aria-invalid', 'true');
+  await expect(dialog.getByRole('textbox', { name: 'Device:' }).nth(1)).toHaveAttribute('aria-invalid', 'true');
   await dialog.getByRole('textbox', { name: 'Device:' }).nth(1).fill('/dev/cu.usbserial-TEST');
+  // A name used twice (in any letter case) marks the Name field, with its message, not the device.
+  await names.nth(1).fill('com4');
+  await expect(names.nth(1)).toHaveAttribute('aria-invalid', 'true');
+  await expect(names.nth(1)).toHaveAccessibleDescription('com4 is in the list twice.');
+  await expect(dialog.getByRole('textbox', { name: 'Device:' }).nth(1)).not.toHaveAttribute('aria-invalid', 'true');
+  await expect(dialog.getByRole('button', { name: 'OK' })).toBeDisabled();
+  const twice = testInfo.outputPath('serial-ports-dialog-twice.png');
+  console.log(
+    `the dialog with a name twice: ${(await captureWindow(desktop.app, page, twice)) ? twice : 'no capture'}`,
+  );
+  await names.nth(1).fill('COM1');
+  await expect(names.nth(1)).not.toHaveAttribute('aria-invalid', 'true');
   const added = testInfo.outputPath('serial-ports-dialog-added.png');
   console.log(`the dialog with a new row: ${(await captureWindow(desktop.app, page, added)) ? added : 'no capture'}`);
   await dialog.getByRole('button', { name: 'OK' }).click();

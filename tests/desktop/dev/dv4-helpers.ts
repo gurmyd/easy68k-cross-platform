@@ -132,19 +132,34 @@ export function deviceCalls(app: ElectronApplication): Promise<Record<string, nu
 
 /**
  * A PNG of the window's page, made by the main process (webContents.capturePage): a hidden test
- * window paints no frames for Playwright's screenshot. Returns false when the capture failed.
+ * window paints no frames for Playwright's screenshot. A hidden window composites only when asked,
+ * so one capture returns the frame before the latest change: this asks for a repaint, then captures
+ * until two captures in a row are the same image, so the PNG shows the page as it is now. Returns
+ * false when the capture failed.
  */
 export async function captureWindow(app: ElectronApplication, page: Page, path: string): Promise<boolean> {
   const id = await windowIdOf(app, page);
-  const base64 = await app
-    .evaluate(async ({ BrowserWindow }, windowId) => {
-      const window = BrowserWindow.fromId(windowId);
-      if (!window) return '';
-      const image = await window.webContents.capturePage(undefined, { stayHidden: true });
-      return image.isEmpty() ? '' : image.toPNG().toString('base64');
-    }, id)
-    .catch(() => '');
+  const capture = () =>
+    app
+      .evaluate(async ({ BrowserWindow }, windowId) => {
+        const window = BrowserWindow.fromId(windowId);
+        if (!window) return '';
+        window.webContents.invalidate();
+        const image = await window.webContents.capturePage(undefined, { stayHidden: true });
+        return image.isEmpty() ? '' : image.toPNG().toString('base64');
+      }, id)
+      .catch(() => '');
+  let previous = await capture();
+  let base64 = previous;
+  let tries = 1;
+  for (; tries < 8 && previous; tries++) {
+    await new Promise((done) => setTimeout(done, 150));
+    base64 = await capture();
+    if (base64 === previous) break;
+    previous = base64;
+  }
   if (!base64) return false;
+  console.log(`captureWindow: ${tries} capture(s) until the image was steady`);
   writeFileSync(path, Buffer.from(base64, 'base64'));
   return true;
 }

@@ -86,7 +86,7 @@ does not fit the code that exists, what the repository does, and why.
   counterpart) becomes WSAECONNRESET; a name not in the table becomes WSAENETDOWN.
 - So that the same program gets the same D0 on every system, the page itself answers three cases
   that the operating systems answer differently: a UDP send to address 0 or port 0
-  (WSAEADDRNOTAVAIL, `$27310001`), a UDP send to 255.255.255.255 (what `inet_addr` gives for a
+  (WSAEADDRNOTAVAIL, `$27410001`), a UDP send to 255.255.255.255 (what `inet_addr` gives for a
   string that is no address: broadcast without SO_BROADCAST, WSAEACCES, `$271D0001`), and a TCP
   send on a socket that is not connected (the listening socket of a server, WSAENOTCONN,
   `$27490001`).
@@ -140,3 +140,16 @@ does not fit the code that exists, what the repository does, and why.
 
 - Winsock's answer to `recv` with length 0 on a stream socket is not documented in the specs; the
   port reports 0 bytes and result 0 unless the peer has closed.
+
+### 14. Task 100 with a host name: `remote` after the lookup (repaired after verification)
+
+- Net.cpp:173 assigns `remote.sin_addr.s_addr = inet_addr(server)` before it calls
+  `gethostbyname`, so a name that is not a dotted address leaves `remote` at INADDR_NONE
+  (255.255.255.255) even when the lookup then fails and the task returns 8. The port does the
+  same: a send after a failed lookup is a broadcast without SO_BROADCAST, `$271D0001`, and sends
+  nothing (the first version kept the old address and really sent a datagram there).
+- Net.cpp:174-185 treats every answer of `gethostbyname` as success. A lookup that answers
+  255.255.255.255 (the string "255.255.255.255" itself, which `inet_addr` refuses; Node's lookup
+  returns it) therefore gives 0 and writes "255.255.255.255" to (A2), and `remote` stays
+  INADDR_NONE. Whether Winsock's `gethostbyname` accepts that numeric string as Node does is not
+  verified (no Windows check of it was possible here); if it does not, the original gives 8.

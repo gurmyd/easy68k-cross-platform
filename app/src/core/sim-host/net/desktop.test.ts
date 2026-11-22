@@ -328,6 +328,41 @@ describe('task 100 with a host name', () => {
     expect(readText(memory, 0x1000, 11)).toBe('127.000.0.1');
     expect(main.count('net.lookup')).toBe(1);
   });
+
+  it('a failed lookup on a fresh start leaves remote at 255.255.255.255: task 102 gives $271D0001 (Net.cpp:173)', () => {
+    const { net, memory, main } = setup();
+    memory.set(ascii('no-such-host.invalid\0'), 0x1000);
+    expect(net.createNetClient(settings(4001, UDP), ascii('no-such-host.invalid'), 0x1000)).toBe(8);
+    expect(net.state.remote).toBe('255.255.255.255');
+    memory.set(ascii('hello'), 0x2000);
+    expect(net.sendNet(5, 0x2000, ascii('127.0.0.1'))).toEqual({ result: 0x271d0001 });
+    expect(main.count('net.send')).toBe(0);
+  });
+
+  it('a failed lookup after an earlier client sends nothing to the old address', () => {
+    const { net, memory, main } = setup();
+    memory.set(ascii('127.0.0.1\0'), 0x1000);
+    expect(net.createNetClient(settings(4001, UDP), ascii('127.0.0.1'), 0x1000)).toBe(0);
+    memory.set(ascii('hello'), 0x2000);
+    expect(net.sendNet(5, 0x2000, ascii('127.0.0.1'))).toEqual({ result: 0, count: 5 });
+    expect(main.count('net.send')).toBe(1);
+    memory.set(ascii('no-such-host.invalid\0'), 0x1000);
+    expect(net.createNetClient(settings(4001, UDP), ascii('no-such-host.invalid'), 0x1000)).toBe(8);
+    expect(net.sendNet(5, 0x2000, ascii('127.0.0.1'))).toEqual({ result: 0x271d0001 });
+    expect(main.count('net.send')).toBe(1);
+  });
+
+  it('a lookup that answers 255.255.255.255 is success: 0, the text at (A2), remote stays broadcast', () => {
+    const main = workingMain();
+    main.handlers['net.lookup'] = () => '255.255.255.255';
+    const { net, memory } = setup(main);
+    memory.set(ascii('255.255.255.255\0'), 0x1000);
+    expect(net.createNetClient(settings(4001, UDP), ascii('255.255.255.255'), 0x1000)).toBe(0);
+    expect(readText(memory, 0x1000, 16)).toBe('255.255.255.255\0');
+    expect(net.state).toMatchObject({ mode: 2, remote: '255.255.255.255' });
+    memory.set(ascii('hello'), 0x2000);
+    expect(net.sendNet(5, 0x2000, ascii('127.0.0.1'))).toEqual({ result: 0x271d0001 });
+  });
 });
 
 describe('task 105', () => {

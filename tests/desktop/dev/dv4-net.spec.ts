@@ -333,6 +333,9 @@ test('task 100 with a host name (16 bytes at (A2), or 8), task 105, and a datagr
       strings: { BAD: 'no-such-host.invalid', NAME: 'localhost', AFTER: 'MARK' },
       steps: [
         { kind: 'call', task: 100, d1: P.netSettings(serverPort, 0), a2: 'BAD', save: 'badName' },
+        // Net.cpp:173 set remote to INADDR_NONE before the failed lookup: the send is a broadcast
+        // without SO_BROADCAST, WSAEACCES.
+        { kind: 'call', task: 102, d1: 1, a1: 'AFTER', a2: 'BAD', save: 'sendAfterBadName' },
         { kind: 'call', task: 100, d1: P.netSettings(serverPort, 0), a2: 'NAME', save: 'name' },
         { kind: 'call', task: 105, a2: 'SENDER', save: 'local' },
         { kind: 'call', task: 101, d1: P.netSettings(serverPort, 0), save: 'server' },
@@ -352,6 +355,7 @@ test('task 100 with a host name (16 bytes at (A2), or 8), task 105, and a datagr
     peer.socket.send('0123456789ABCDEF', serverPort, '127.0.0.1');
     const slots = await waitDone(desktop.page, program, 'the host-name program');
     expect(slots['badName']?.d0).toBe(hex(8));
+    expect(slots['sendAfterBadName']?.d0).toBe(hex(0x271d0001));
     expect(slots['name']?.d0).toBe(hex(0));
     const strings = await readMemory(desktop.page, 0x5000, 0x30);
     // A failed name is left as it was.

@@ -13,7 +13,7 @@ import {
   detectedLabel,
   mapFromRows,
   nextPortName,
-  rowProblems,
+  rowProblemDetails,
   rowsFromMap,
   type DetectedPort,
   type PortRow,
@@ -34,7 +34,7 @@ export function SerialPortsDialog({
   close,
 }: DialogProps<SerialPortsDialogProps, Record<string, string> | null>) {
   const [rows, setRows] = useState<PortRow[]>(() => rowsFromMap(props.map));
-  const problems = rowProblems(rows);
+  const problems = rowProblemDetails(rows);
   const result = mapFromRows(rows);
   const detectedOptions = [
     { value: '', label: 'Detected devices...' },
@@ -73,7 +73,8 @@ export function SerialPortsDialog({
                     value={row.name}
                     onChange={(name) => change(index, { name })}
                     widthCh={8}
-                    invalid={problem !== null && row.name.trim() === ''}
+                    invalid={problem?.field === 'name'}
+                    {...(problem?.field === 'name' ? { message: problem.text } : {})}
                     spellCheck={false}
                   />
                   <TextField
@@ -81,8 +82,8 @@ export function SerialPortsDialog({
                     value={row.device}
                     onChange={(device) => change(index, { device })}
                     monospace
-                    invalid={problem !== null && row.name.trim() !== ''}
-                    {...(problem ? { message: problem } : {})}
+                    invalid={problem?.field === 'device'}
+                    {...(problem?.field === 'device' ? { message: problem.text } : {})}
                     spellCheck={false}
                   />
                   {props.detected.length > 0 && (

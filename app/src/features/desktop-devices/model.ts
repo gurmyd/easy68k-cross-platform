@@ -44,23 +44,38 @@ export function rowsFromMap(map: Readonly<Record<string, string>>): PortRow[] {
     });
 }
 
-/** What is wrong with each row (null when nothing is), in the order of `rows`. */
-export function rowProblems(rows: readonly PortRow[]): (string | null)[] {
+/** What is wrong with a row, and which of its two fields the problem is in. */
+export interface RowProblem {
+  field: 'name' | 'device';
+  text: string;
+}
+
+/** What is wrong with each row and in which field (null when nothing is), in the order of `rows`. */
+export function rowProblemDetails(rows: readonly PortRow[]): (RowProblem | null)[] {
   const seen = new Map<string, number>();
   rows.forEach((row, index) => {
     const key = row.name.trim().toUpperCase();
     if (key && !seen.has(key)) seen.set(key, index);
   });
-  return rows.map((row, index) => {
+  return rows.map((row, index): RowProblem | null => {
     const name = row.name.trim();
-    if (name === '') return 'Enter a port name, such as COM1.';
-    if (name.length > MAX_NAME_LENGTH) return `A port name has at most ${MAX_NAME_LENGTH} characters.`;
-    if (seen.get(name.toUpperCase()) !== index) return `${name} is in the list twice.`;
+    if (name === '') return { field: 'name', text: 'Enter a port name, such as COM1.' };
+    if (name.length > MAX_NAME_LENGTH) {
+      return { field: 'name', text: `A port name has at most ${MAX_NAME_LENGTH} characters.` };
+    }
+    if (seen.get(name.toUpperCase()) !== index) return { field: 'name', text: `${name} is in the list twice.` };
     const device = row.device.trim();
-    if (device === '') return `Enter the device for ${name}, such as /dev/cu.usbserial-1.`;
-    if (device.length > MAX_DEVICE_LENGTH) return 'The device path is too long.';
+    if (device === '') {
+      return { field: 'device', text: `Enter the device for ${name}, such as /dev/cu.usbserial-1.` };
+    }
+    if (device.length > MAX_DEVICE_LENGTH) return { field: 'device', text: 'The device path is too long.' };
     return null;
   });
+}
+
+/** What is wrong with each row (null when nothing is), in the order of `rows`. */
+export function rowProblems(rows: readonly PortRow[]): (string | null)[] {
+  return rowProblemDetails(rows).map((problem) => problem?.text ?? null);
 }
 
 /** The map of valid rows (names and devices trimmed); null when a row has a problem. */

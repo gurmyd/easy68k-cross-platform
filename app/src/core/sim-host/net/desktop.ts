@@ -258,16 +258,19 @@ export class DesktopNet implements DesktopNetApi {
     if (status !== NET_OK) return status;
 
     const name = decode(server);
-    let address = inetAddr(name);
-    if (address === INADDR_NONE) {
+    // Net.cpp:173 assigns `remote.sin_addr.s_addr = inet_addr(server)` before it looks the
+    // name up, so a name that is not a dotted quad leaves remote at INADDR_NONE
+    // (255.255.255.255) even when the lookup then fails: a later send goes to broadcast.
+    this.remoteAddress = inetAddr(name);
+    if (this.remoteAddress === INADDR_NONE) {
       const found = this.request('net.lookup', name);
-      const resolved = typeof found === 'string' ? inetAddr(found) : INADDR_NONE;
-      if (typeof found !== 'string' || resolved === INADDR_NONE) return NET_DOMAIN_NOT_FOUND;
-      address = resolved;
+      if (typeof found !== 'string') return NET_DOMAIN_NOT_FOUND;
+      // Any answer of gethostbyname is success, 255.255.255.255 included (Net.cpp:174-185
+      // has no further check): inet_addr of it is INADDR_NONE again, which is what remote holds.
+      this.remoteAddress = inetAddr(found);
       // strncpy(server, inet_ntoa(remote.sin_addr), 16): exactly 16 bytes, zero padded.
-      if (serverAddress !== undefined) this.writeString(serverAddress, inetNtoa(address), 16);
+      if (serverAddress !== undefined) this.writeString(serverAddress, inetNtoa(this.remoteAddress), 16);
     }
-    this.remoteAddress = address;
     this.mode = NetMode.Client;
 
     if (this.type === NetType.UnconnectedTcp) {

@@ -11,6 +11,7 @@ import {
   deviceBridgeOf,
   mapFromRows,
   nextPortName,
+  rowProblemDetails,
   rowProblems,
   rowsFromMap,
 } from './model';
@@ -41,6 +42,10 @@ describe('rows of AppSettings.serialPortMap', () => {
       'com1 is in the list twice.',
       'Enter the device for COM3, such as /dev/cu.usbserial-1.',
     ]);
+    // The dialog marks the field the problem is in: a name problem is never shown on the device.
+    expect(rowProblemDetails(rows).map((problem) => problem?.field ?? null)).toEqual([null, 'name', 'name', 'device']);
+    expect(rowProblemDetails([{ name: 'X'.repeat(256), device: '/dev/a' }])[0]?.field).toBe('name');
+    expect(rowProblemDetails([{ name: 'COM1', device: 'x'.repeat(1025) }])[0]?.field).toBe('device');
     expect(mapFromRows(rows)).toBeNull();
     expect(mapFromRows([{ name: ' COM4 ', device: ' /dev/ttys004 ' }])).toEqual({ COM4: '/dev/ttys004' });
     expect(mapFromRows([])).toEqual({});
