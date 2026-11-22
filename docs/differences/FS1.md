@@ -35,6 +35,12 @@ None of these changes what a student's program can observe.
   application is shown and the Files panel says that My Programs is still opening; what is opened
   or saved meanwhile waits for the storage (at most 20 s, after which the session keeps files in
   memory and says so).
+- **A notice about Safari's storage rules (an addition; risk R-10).** In Safari, and in every
+  browser on an iPhone or iPad, the Files panel shows a short notice above the tree from the first
+  start: Safari deletes the programs kept in the browser after seven days without a visit, and an
+  app made with "Add to Dock" starts with its own, empty My Programs. It offers Export... (the whole
+  store as a `.zip`) and `Got it`, which hides it for good in that browser. The Dock app shows, while
+  its store is empty, one sentence with Import.... The desktop app and other browsers show none.
 - **A full or blocked browser storage is reported.** The original writes to the disk and shows the
   run-time library's error. The port says in plain words that the file was not saved and that
   nothing saved before is lost, or that the browser keeps no files at all (some private windows).

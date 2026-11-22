@@ -190,9 +190,9 @@ any of them returns. The texts of the findings are kept as they were found.
   their own (`KNOWN_DROPPED_LABEL` and `partitionDroppedLabels` in `tests/a11y/lib/findings.mjs`,
   used by `lib/scan.mjs`); the general check "no aria-label on an element whose role drops it" is
   never excused. Unit tests in `findings.test.mjs`.
-- The six entries above and their `KNOWN_CHECKS` lines are unchanged: their owners repair them in
-  this round, and the engineer who closes the round removes each entry once the check prints that
-  it seems repaired.
+- At the start of that round the six entries above and their `KNOWN_CHECKS` lines were left in
+  place: their owners were to repair them in the round, and the engineer who closed it was to
+  remove each line once the check printed that it seemed repaired (done, next bullet).
 - Close-out of that round (21 November 2026): the full audit printed that each of Q1-1 to Q1-6
   seems repaired in both browsers; their six `KNOWN_CHECKS` lines were removed and the entries
   above marked repaired. The check "the File Split digits of EASyBIN have a name that is read"

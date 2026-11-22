@@ -19,7 +19,14 @@
 //   existed already. mount() and unmount() are reported, synchronously, as a 'write' and a
 //   'remove' of "/<mount>" (gate I2, errata FS2.md C1, errata W1.md entry 14); an unmount of a
 //   name that is not mounted reports nothing. An appendFile is reported with `appended` (the size
-//   before and the bytes added), learnt by a stat inside the path's queue just before the append.
+//   before and the bytes added). The size before is the one the Vfs knows from its own last write or
+//   append of that path; only when it knows none is it learnt by a stat inside the path's queue just
+//   before the append, so that a log appended at every flush costs one stat, not one per flush. A
+//   known size is dropped by every change that did not come through that path's queue: a remove of
+//   it or a folder above it, a write of another spelling, a failure, a change the backend reports
+//   (after which that path's size is always asked for), an unmount. A change that arrives while the
+//   append is in progress leaves `appended` out. Sizes are kept only for a backend that reports
+//   others' changes (errata W1.md entry 17).
 // - resolve() finds each segment's stored spelling in the listing of its folder. A folder that may
 //   not be listed (the desktop app's folders above the granted roots, 7.6) keeps the segment as
 //   given; it does not make the name "not found" (defect D1, errata W1.md entry 15). Only an
@@ -69,6 +76,22 @@ export function createVfs(): Vfs {
 interface Mounted {
   backend: FileSystemBackend;
   unsubscribe: () => void;
+  /** The backend reports the changes others make (onExternalChange): only then can a size be kept. */
+  reports: boolean;
+}
+
+/** A write or append of one path in progress; `stale` once something else may have changed the file. */
+interface Pending {
+  key: string; // the folded path
+  stale: boolean;
+}
+
+/** How many file sizes the Vfs keeps at most (the oldest is dropped): logs, not whole folders. */
+const MAX_KNOWN_SIZES = 64;
+
+/** `path` is `folder` or lies below it; both folded. */
+function within(path: string, folder: string): boolean {
+  return path === folder || path.startsWith(folder.endsWith('/') ? folder : `${folder}/`);
 }
 
 interface Subscription {
@@ -81,11 +104,21 @@ class VirtualFileSystem implements Vfs {
   private readonly subscriptions = new Set<Subscription>();
   /** Per path (folded): the promise of the last mutation requested. */
   private readonly tails = new Map<string, Promise<void>>();
+  /**
+   * The size of a file after this Vfs's own last write or append of it, by exact path; the oldest
+   * first. Dropped by any change that did not come through that path's queue (errata W1.md entry 17).
+   */
+  private readonly sizes = new Map<VPath, number>();
+  /** The write or append in progress, by folded path (one at a time per path: the queue). */
+  private readonly inProgress = new Map<string, Pending>();
+  /** Folded paths someone else has changed: their sizes are never kept again, but asked for. */
+  private readonly shared = new Set<string>();
 
   mount(backend: FileSystemBackend): void {
     const name = backend.mount;
     if (!isVPath(`/${name}`) || name.includes('/')) throw new TypeError(`invalid mount name "${name}"`);
     if (this.mounts.has(name)) throw new Error(`"/${name}" is already mounted`);
+    const reports = typeof backend.onExternalChange === 'function';
     const unsubscribe =
       backend.onExternalChange?.((change: BackendChange) => {
         let path: VPath;
@@ -94,9 +127,12 @@ class VirtualFileSystem implements Vfs {
         } catch {
           return; // a backend reported a path that is not one: ignore it
         }
+        this.forget(path);
+        this.shared.add(foldCase(path));
         this.emit({ path, kind: change.kind, origin: 'external' });
       }) ?? (() => {});
-    this.mounts.set(name, { backend, unsubscribe });
+    this.forget(`/${name}`);
+    this.mounts.set(name, { backend, unsubscribe, reports });
     this.emit({ path: `/${name}`, kind: 'write', origin: 'local' });
   }
 
@@ -105,6 +141,7 @@ class VirtualFileSystem implements Vfs {
     if (!mounted) return;
     mounted.unsubscribe();
     this.mounts.delete(mount);
+    this.forget(`/${mount}`);
     this.emit({ path: `/${mount}`, kind: 'remove', origin: 'local' });
   }
 
@@ -125,14 +162,24 @@ class VirtualFileSystem implements Vfs {
   }
 
   writeFile(path: VPath, data: Bytes): Promise<void> {
-    return this.mutate(path, 'write', (backend, rel) => backend.writeFile(rel, data));
+    return this.mutate(path, 'write', async (backend, rel) => {
+      const token = this.begin(path);
+      try {
+        await backend.writeFile(rel, data);
+      } finally {
+        this.end(path, token);
+      }
+      this.learnSize(path, token, data.length);
+    });
   }
 
   appendFile(path: VPath, data: Bytes): Promise<void> {
     // The change says what was appended (VfsChange.appended, request SH6-append-change), so that a
-    // view holding a copy of the file need not read it whole again. The size before is taken inside
-    // the path's queue, just before the append; if it cannot be learnt, the change says nothing more
-    // than 'write', and the append itself goes ahead unchanged. The bytes are copied at the call, so
+    // view holding a copy of the file need not read it whole again. The size before is the one this
+    // Vfs knows from its own last write or append of the path (`sizes`), or else a stat inside the
+    // path's queue, just before the append (errata W1.md entry 17). If it cannot be learnt, or
+    // something else may have changed the file meanwhile, the change says nothing more than
+    // 'write', and the append itself goes ahead unchanged. The bytes are copied at the call, so
     // that the file and the change both hold what the caller passed, even if it reuses its buffer.
     const copy = data.slice();
     let appended: VfsChange['appended'];
@@ -140,23 +187,42 @@ class VirtualFileSystem implements Vfs {
       path,
       'write',
       async (backend, rel) => {
-        const before = await backend.stat(rel).then(
-          (stat) => (stat === null ? 0 : stat.kind === 'file' ? stat.size : null),
-          () => null,
-        );
-        await backend.appendFile(rel, copy);
-        if (before !== null) appended = { at: before, data: copy };
+        const known = this.sizes.get(path);
+        const token = this.begin(path);
+        let before: number | null;
+        try {
+          before =
+            known ??
+            (await backend.stat(rel).then(
+              (stat) => (stat === null ? 0 : stat.kind === 'file' ? stat.size : null),
+              () => null,
+            ));
+          await backend.appendFile(rel, copy);
+        } finally {
+          this.end(path, token);
+        }
+        if (before === null || token.stale) return;
+        appended = { at: before, data: copy };
+        this.learnSize(path, token, before + copy.length);
       },
       () => (appended === undefined ? {} : { appended }),
     );
   }
 
   remove(path: VPath): Promise<void> {
-    return this.mutate(path, 'remove', (backend, rel) => backend.remove(rel));
+    return this.mutate(path, 'remove', async (backend, rel) => {
+      this.forget(path);
+      try {
+        await backend.remove(rel);
+      } finally {
+        this.forget(path);
+      }
+    });
   }
 
   mkdirp(path: VPath): Promise<void> {
-    // The root of a mount always exists; a backend is never asked to create it.
+    // The root of a mount always exists; a backend is never asked to create it. Creating folders
+    // changes no file, so the sizes this Vfs knows stay as they are.
     return this.mutate(path, 'write', (backend, rel) => (rel === '' ? Promise.resolve() : backend.mkdirp(rel)));
   }
 
@@ -283,6 +349,54 @@ class VirtualFileSystem implements Vfs {
     const mounted = this.mounts.get(mount);
     if (!mounted) throw fsError('not-found', `nothing is mounted at /${mount}`);
     return { backend: mounted.backend, rel };
+  }
+
+  /**
+   * A write or append of `path` starts (inside its queue). Every other spelling of the path, and
+   * anything below it, loses its known size, and a write or append of those in progress is marked
+   * stale: on a disk that ignores letter case they are the same file.
+   */
+  private begin(path: VPath): Pending {
+    const pending: Pending = { key: foldCase(path), stale: false };
+    this.forget(path);
+    this.inProgress.set(pending.key, pending);
+    return pending;
+  }
+
+  private end(path: VPath, pending: Pending): void {
+    if (this.inProgress.get(pending.key) === pending) this.inProgress.delete(pending.key);
+  }
+
+  /** The file at `path` is `size` bytes long after this Vfs's own write or append, if nothing else intervened. */
+  private learnSize(path: VPath, pending: Pending, size: number): void {
+    if (pending.stale || !this.mayKeepSize(path)) return;
+    this.sizes.delete(path);
+    this.sizes.set(path, size);
+    if (this.sizes.size > MAX_KNOWN_SIZES) this.sizes.delete(this.sizes.keys().next().value as VPath);
+  }
+
+  /**
+   * A size may be kept only where the backend reports the changes others make, and only for a path
+   * that nobody else has changed since the mount: there a report may come late (another window's
+   * appends), and the size is asked for before each append instead.
+   */
+  private mayKeepSize(path: VPath): boolean {
+    const { mount } = splitVPath(path);
+    if (!this.mounts.get(mount)?.reports) return false;
+    let folder = foldCase(path);
+    for (;;) {
+      if (this.shared.has(folder)) return false;
+      const slash = folder.lastIndexOf('/');
+      if (slash <= 0) return true;
+      folder = folder.slice(0, slash);
+    }
+  }
+
+  /** Something changed `path` or what lies below it: drop the sizes known there and mark work in progress stale. */
+  private forget(path: string): void {
+    const folder = foldCase(path);
+    for (const known of [...this.sizes.keys()]) if (within(foldCase(known), folder)) this.sizes.delete(known);
+    for (const pending of this.inProgress.values()) if (within(pending.key, folder)) pending.stale = true;
   }
 
   /** Resolves when the mutations requested for `path` so far have finished (successfully or not). */

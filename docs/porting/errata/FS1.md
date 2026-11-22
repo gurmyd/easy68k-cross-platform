@@ -258,6 +258,62 @@ fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`.
     `cancel`, which every supported browser sends (Chromium 113, Safari 16.4, Firefox 91 or
     later; the user guide asks for macOS 14, whose Safari is 17). `check-files.mjs` checks the late
     files and that a cancelled chooser still ends the choice.
+28. **The Safari storage notice (risk R-10; the gate's decision of the second round before I3).**
+    Built in `features/files/storage-notice.ts` (decision, texts, environment) and `FilesPanel.tsx`
+    (a `role=note` named `About keeping programs in Safari` between the strip and the tree; no
+    dialog, no toast, takes no focus, blocks nothing).
+    - **When.** `storageNoticeKind({ platform, engine, installed, store, storeEmpty, acknowledged,
+      automated, forced })`: only `platform` `web`; only engine `webkit`; only while /browser is the
+      browser's own store (`BrowserBackend`, or a `PendingBrowserStore` still opening, which almost
+      always becomes one; never the memory stand-in, whose own message says nothing is kept, and
+      never without a browser store); never once acknowledged. In a tab: `tab`. Installed: `installed`
+      only when the store had no entry when the window first listed it (decided once per window, so
+      an import does not take the notice away before `Got it`; after a reload a filled store shows
+      none). Under automation only with the address parameter. Unit tests decide all 512
+      combinations against the rule written out again.
+    - **What is tested for the engine.** `navigator.vendor === 'Apple Computer, Inc.'`, the string
+      every WebKit browser reports (Safari on macOS, iOS and iPadOS, every other browser on an iPhone
+      or iPad, WebKitGTK, Playwright's WebKit); Chromium-based browsers report `Google Inc.`, Gecko an
+      empty string. The product name in the user agent is not read. Installed:
+      `matchMedia('(display-mode: standalone)')` or iOS's `navigator.standalone`.
+    - **Automation.** `navigator.webdriver` true hides the notice, so every other check sees the
+      panel it always saw, unless the query has `storage-notice=1` (`STORAGE_NOTICE_PARAM`), which
+      shows it as for a person; the parameter does not overrule the engine or the acknowledgement.
+    - **Remembered.** `Got it` sets `AppSettings.storageNoticeSeen = true`: the per-browser part of
+      the settings (one `localStorage` document for every window; not `app.layout`, the one
+      per-window setting). The key is optional and has no default: this package added exactly that
+      one optional member to `contracts/settings.ts` (allowed for this round); the settings service
+      keeps a key it has no default for, so `defaults.ts` (W1) is unchanged. Any stored value but
+      `true` counts as not acknowledged. The focus moves to the tree when `Got it` had it.
+    - **Buttons.** The gate asked for "the existing command that exports the whole store as a .zip
+      (use its real caption)": no command of that name exists; the store's export is the panel's
+      `Export...` with the store root, so the notice's button has that caption and exports
+      `/browser` whatever is selected (`My Programs.zip`). The installed variant's button is the
+      panel's `Import...`, which goes straight to the file chooser of "Files or .zip..." and imports
+      into the store's root (the menu's second item, a folder, is not what the notice is about).
+      Both buttons have `tabIndex=0` (WebKit's Tab rule) and sit between the strip and the tree in
+      the Tab order.
+    - **Texts** (constants in `storage-notice.ts`):
+      - tab (`STORAGE_NOTICE_TAB_TEXT`): `Safari deletes the programs kept here after seven days
+        without a visit to this page. "Add to Dock" makes a separate app that starts with its own,
+        empty My Programs. Use Export... here to save them all as a .zip, and Import... in the app to
+        bring them over.`
+      - installed (`STORAGE_NOTICE_INSTALLED_TEXT`): `This app keeps its own programs, separate from
+        Safari's: use Import... to bring over programs you exported in Safari.`
+      - buttons `Export...`, `Import...`, `Got it`.
+    - **Checks.** `storage-notice.test.ts` (Node). `check-files.mjs` pass "the Safari storage
+      notice" (both browsers): absent under automation without the parameter; absent in Chromium
+      with it; in WebKit present at the first start with the exact text, named, not focused, above
+      the tree; Tab order strip > Export... > Got it > tree and back; Export... downloads `My
+      Programs.zip` whose files equal the store's bytes; axe clean in both themes; Got it hides it,
+      sets the setting, gives the tree the focus, the panel's geometry then equals that of a page
+      that never showed it; not shown after a reload nor in a second window; installed variant with
+      an empty store (Import... brings the .zip over byte for byte, the notice stays until Got it,
+      not shown after a reload with a filled store; Got it remembered with the store still empty).
+      `tests/e2e/app/storage-notice.spec.ts` (X1) checks the same essentials on the production
+      build. Screenshots: `build/FS1/files-check/webkit-storage-notice-*.png`.
+    - `check-files.mjs` also takes `--pass <text>` (run only passes whose label contains it), an
+      addition for working on one pass; CI runs all of them.
 
 ## Contract
 

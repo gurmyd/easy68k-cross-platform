@@ -69,6 +69,14 @@ export interface AppSettings {
     outputZoom: 'fit' | 1 | 2;
   };
   serialPortMap: Record<string, string>; // desktop: "COM4" -> device path (3.3.4)
+  /**
+   * Added in the second round before gate I3 (FS1, risk R-10; docs/porting/errata/FS1.md): true
+   * once the person has pressed `Got it` on the Files panel's Safari storage notice. Per browser,
+   * like every setting but the layout. Optional and without a default in defaults.ts: absent (or
+   * any value but true) means not acknowledged; the settings service keeps the key as it keeps
+   * every key it has no default for.
+   */
+  storageNoticeSeen?: boolean;
 }
 
 export interface Settings {

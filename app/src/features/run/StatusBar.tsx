@@ -4,10 +4,49 @@
 //
 // Owner: SH8.
 
+import { useEffect, useState } from 'react';
 import { Box } from '../../contracts';
 import { useAppContext, useAppState } from '../../state/context';
 import { shallowEqual } from '../../state/store';
+import { RunAnnouncer } from './announce';
+import { runSessionOf } from './session';
 import { statusCells } from './status';
+
+/**
+ * The hidden polite region that tells a screen reader the settled run states: a halt, a stop, the
+ * start and end of Auto Trace (2.11; announce.ts; errata SH8.md entry 43). Each announcement is a
+ * new element, so that the same words said twice (two halts) are read twice.
+ */
+function RunAnnouncement() {
+  const ctx = useAppContext();
+  const [said, setSaid] = useState({ text: '', seq: 0 });
+  useEffect(() => {
+    const session = runSessionOf(ctx.sim);
+    if (!session) return undefined; // a stand-in session: nothing runs
+    const { controller } = session;
+    const announcer = new RunAnnouncer({
+      read: () => ({ stop: controller.lastStop, sim: ctx.store.getState().sim }),
+      now: () => performance.now(),
+      setTimer: (fn, ms) => {
+        const id = setTimeout(fn, ms);
+        return () => clearTimeout(id);
+      },
+      say: (text) => setSaid((previous) => ({ text, seq: previous.seq + 1 })),
+    });
+    const stopStore = ctx.store.subscribe(() => announcer.update());
+    const stopController = controller.subscribe(() => announcer.update());
+    return () => {
+      stopStore();
+      stopController();
+      announcer.dispose();
+    };
+  }, [ctx]);
+  return (
+    <span className="e68-sr" role="status" data-e68-run-announce="">
+      {said.text === '' ? null : <span key={said.seq}>{said.text}</span>}
+    </span>
+  );
+}
 
 export function SimStatusBar() {
   const ctx = useAppContext();
@@ -18,11 +57,12 @@ export function SimStatusBar() {
   }, shallowEqual);
   return (
     <>
-      {/* A polite live region (2.11: "a halt ... announced"; finding Q1-5 of docs/integration/rc.md):
-          Halted, Stopped, Running and the other run states are told when they change. */}
-      <span className="e68-statusbar__cell" data-e68-status="run" role="status">
+      {/* The visible cell is not a live region: it passes through Running and Waiting at every input
+          or host wait. RunAnnouncement says the settled states (review of f17e78a). */}
+      <span className="e68-statusbar__cell" data-e68-status="run">
         {cells.run}
       </span>
+      <RunAnnouncement />
       <span className="e68-statusbar__cell e68-statusbar__cell--mono" data-e68-status="pc">
         {cells.pc}
       </span>

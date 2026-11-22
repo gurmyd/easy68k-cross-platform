@@ -654,6 +654,170 @@ describe('subscribe', () => {
   });
 });
 
+// The review of f17e78a: a stat before every append is a round trip to the main process on the
+// desktop app's disk, and the execution log appends at every flush (errata W1.md entry 17).
+describe('appendFile takes the size before from what the Vfs knows', () => {
+  /** A MemoryBackend that counts its stats and can hold an append until the test lets it go. */
+  class Counting extends MemoryBackend {
+    stats = 0;
+    hold: Promise<void> | null = null;
+    override async stat(rel: string): Promise<FileStat | null> {
+      this.stats++;
+      return super.stat(rel);
+    }
+    override async appendFile(rel: string, data: Bytes): Promise<void> {
+      if (this.hold) await this.hold;
+      return super.appendFile(rel, data);
+    }
+  }
+
+  async function counting(files: Record<string, string> = {}) {
+    const backend = new Counting();
+    for (const [rel, content] of Object.entries(files)) await backend.writeFile(rel, text(content));
+    const vfs = createVfs();
+    vfs.mount(backend);
+    const seen: VfsChange[] = [];
+    vfs.subscribe('/', (c) => seen.push(c));
+    backend.stats = 0;
+    return { vfs, backend, seen };
+  }
+
+  /** Every `appended` of `seen` for `path`, applied in turn to `start`, gives the file; returns the offsets. */
+  async function replay(vfs: ReturnType<typeof createVfs>, seen: VfsChange[], path: string, start: string) {
+    let copy: Bytes = text(start);
+    const offsets: (number | null)[] = [];
+    for (const change of seen.filter((c) => c.path === path && c.origin === 'local')) {
+      if (!change.appended) {
+        offsets.push(null);
+        copy = await vfs.readFile(path as `/${string}`); // a listener that cannot apply it reads the file
+        continue;
+      }
+      offsets.push(change.appended.at);
+      expect(change.appended.at, 'the copy is exactly as long as the file was').toBe(copy.length);
+      copy = Uint8Array.from([...copy, ...change.appended.data]);
+    }
+    return { copy, offsets };
+  }
+
+  it('a run of a thousand appends makes one stat at most, and every offset is exact', async () => {
+    const { vfs, backend, seen } = await counting({ 'log.txt': 'head\r\n' });
+    const appends: Promise<void>[] = [];
+    for (let i = 0; i < 1000; i++)
+      appends.push(vfs.appendFile('/memory/log.txt', text(`${i % 10}`.repeat(1 + (i % 7)))));
+    await Promise.all(appends);
+    expect(backend.stats).toBe(1);
+    const { copy, offsets } = await replay(vfs, seen, '/memory/log.txt', 'head\r\n');
+    expect(offsets).toHaveLength(1000);
+    expect(offsets.every((at) => at !== null)).toBe(true);
+    expect(str(copy)).toBe(str(await backend.readFile('log.txt')));
+  });
+
+  it('after a write of the file, its appends make no stat at all (the execution log)', async () => {
+    const { vfs, backend, seen } = await counting();
+    await vfs.writeFile('/memory/exec.txt', text('first flush\r\n'));
+    for (let i = 0; i < 100; i++) await vfs.appendFile('/memory/exec.txt', text(`line ${i}\r\n`));
+    expect(backend.stats).toBe(0);
+    expect(seen.at(-1)?.appended?.at).toBe((await backend.readFile('exec.txt')).length - 'line 99\r\n'.length);
+  });
+
+  it('another window changes the file between two appends: the size is asked again, the offset exact', async () => {
+    const { vfs, backend, seen } = await counting({ 'log.txt': 'a' });
+    await vfs.appendFile('/memory/log.txt', text('b')); // asks: 1
+    await vfs.appendFile('/memory/log.txt', text('c')); // knows
+    await backend.externalWrite('log.txt', text('rewritten by someone else'));
+    await vfs.appendFile('/memory/log.txt', text('d')); // asks again: 2
+    await vfs.appendFile('/memory/log.txt', text('e')); // and from now on always: 3
+    expect(backend.stats).toBe(3);
+    const local = seen.filter((c) => c.origin === 'local').map((c) => c.appended?.at);
+    expect(local).toEqual([1, 2, 25, 26]);
+    expect(str(await vfs.readFile('/memory/log.txt'))).toBe('rewritten by someone elsede');
+  });
+
+  it('a change reported while an append is in progress leaves `appended` out', async () => {
+    const { vfs, backend, seen } = await counting({ 'log.txt': 'a' });
+    await vfs.appendFile('/memory/log.txt', text('b'));
+    let release = () => {};
+    backend.hold = new Promise<void>((resolve) => (release = resolve));
+    const append = vfs.appendFile('/memory/log.txt', text('c'));
+    await new Promise((resolve) => setTimeout(resolve, 0)); // the append waits in the backend
+    await backend.externalWrite('log.txt', text('xyz'));
+    backend.hold = null;
+    release();
+    await append;
+    const last = seen.filter((c) => c.origin === 'local').at(-1);
+    expect(last).toEqual({ path: '/memory/log.txt', kind: 'write', origin: 'local' });
+    expect(str(await vfs.readFile('/memory/log.txt'))).toBe('xyzc');
+  });
+
+  it('a writer the backend does not report: without onExternalChange the size is asked before every append', async () => {
+    const inner = new MemoryBackend({ mount: 'plain', kind: 'memory', label: 'Plain' });
+    let stats = 0;
+    const plain: FileSystemBackend = {
+      mount: 'plain',
+      kind: 'memory',
+      label: 'Plain',
+      stat: (rel) => (stats++, inner.stat(rel)),
+      readFile: (rel) => inner.readFile(rel),
+      writeFile: (rel, data) => inner.writeFile(rel, data),
+      appendFile: (rel, data) => inner.appendFile(rel, data),
+      remove: (rel) => inner.remove(rel),
+      list: (rel) => inner.list(rel),
+      mkdirp: (rel) => inner.mkdirp(rel),
+    };
+    const vfs = createVfs();
+    vfs.mount(plain);
+    const seen: VfsChange[] = [];
+    vfs.subscribe('/plain', (c) => seen.push(c));
+    await vfs.writeFile('/plain/log.txt', text('ab'));
+    await vfs.appendFile('/plain/log.txt', text('c'));
+    await inner.appendFile('log.txt', text('XYZ')); // nobody is told
+    await vfs.appendFile('/plain/log.txt', text('d'));
+    expect(stats).toBe(2);
+    expect(seen.map((c) => c.appended?.at)).toEqual([undefined, 2, 6]);
+  });
+
+  it('a remove, of the file or a folder above it, a write of another spelling and a failure drop the size', async () => {
+    const { vfs, backend, seen } = await counting({ 'dir/log.txt': 'a' });
+    await vfs.appendFile('/memory/dir/log.txt', text('b')); // asks: 1
+    await vfs.remove('/memory/dir');
+    await vfs.appendFile('/memory/dir/log.txt', text('c')); // asks: 2 (the file is new: 0)
+    await vfs.remove('/memory/dir/log.txt');
+    await vfs.appendFile('/memory/dir/log.txt', text('d')); // asks: 3
+    await vfs.writeFile('/memory/dir/LOG.txt', text('other spelling'));
+    await vfs.appendFile('/memory/dir/log.txt', text('e')); // asks: 4
+    backend.setReadOnly('dir/log.txt');
+    await expect(vfs.appendFile('/memory/dir/log.txt', text('f'))).rejects.toMatchObject({ code: 'read-only' }); // knew the size: no stat
+    backend.setReadOnly('dir/log.txt', false);
+    await vfs.appendFile('/memory/dir/log.txt', text('g')); // the failure dropped the size: asks, 5
+    await vfs.mkdirp('/memory/dir'); // creates no file: the size stays known
+    await vfs.appendFile('/memory/dir/log.txt', text('h'));
+    expect(backend.stats).toBe(5);
+    const offsets = seen
+      .filter((c) => c.path === '/memory/dir/log.txt' && c.kind === 'write')
+      .map((c) => c.appended?.at);
+    expect(offsets).toEqual([1, 0, 0, 1, 2, 3]);
+  });
+
+  it('an unmount forgets the sizes of the mount', async () => {
+    const { vfs, backend } = await counting({ 'log.txt': 'a' });
+    await vfs.appendFile('/memory/log.txt', text('b'));
+    vfs.unmount('memory');
+    await backend.writeFile('log.txt', text('changed while unmounted'));
+    vfs.mount(backend);
+    const seen: VfsChange[] = [];
+    vfs.subscribe('/memory/log.txt', (c) => seen.push(c));
+    await vfs.appendFile('/memory/log.txt', text('!'));
+    expect(seen[0]?.appended?.at).toBe('changed while unmounted'.length);
+  });
+
+  it('keeps the sizes of at most 64 files', async () => {
+    const { vfs, backend } = await counting();
+    for (let i = 0; i < 100; i++) await vfs.writeFile(`/memory/f${i}.txt`, text('x'));
+    for (let i = 99; i >= 0; i--) await vfs.appendFile(`/memory/f${i}.txt`, text('y'));
+    expect(backend.stats).toBe(36); // the first 36 were dropped, the last 64 are known
+  });
+});
+
 describe('snapshot', () => {
   it('takes every file below the folder with its bytes and mtime', async () => {
     const { vfs, backend } = await vfsWith({

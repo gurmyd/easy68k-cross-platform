@@ -113,7 +113,9 @@ export function MessagesPanel() {
         ]}
         {...menu.menuProps}
       />
-      <div ref={announce} className="e68-sr" role="log" aria-live="polite" aria-label={MESSAGES_LABEL} />
+      {/* No name of its own: the grid is the one element named `Assembler messages`, so that a
+          screen reader's list of regions does not show two of them (review of f17e78a). */}
+      <div ref={announce} className="e68-sr e68-asm-messages__announce" role="log" aria-live="polite" />
     </div>
   );
 }

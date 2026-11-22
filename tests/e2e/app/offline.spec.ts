@@ -49,15 +49,20 @@ test.describe('offline', () => {
     context,
     browserName,
   }) => {
-    // Known open item of another package, not of the suite (errata X1 entry 9): in WebKit the help
-    // frame's page does not come from the service worker offline. The frame stays at the
-    // fallback title "Introduction" and the console says "Failed to load resource: WebKit
-    // encountered an internal error". Seen in CI run 44941673365 on ubuntu-latest and macos-latest,
-    // and on the development PC (Windows). The application itself reloads offline in WebKit (the
-    // test above). Expected to fail in WebKit until the owners of the help panel (H1) and the
-    // service worker (DV1) have repaired it or shown that Safari itself does not have it; then
-    // this line goes.
-    test.fail(browserName === 'webkit', 'H1/DV1: the help frame does not load offline in WebKit');
+    // Cause found (errata X1 entry 12, H1 entry, docs/requests/H1-help-offline-webkit.md): WebKit
+    // does not send the navigation of a frame sandboxed WITHOUT allow-scripts to the service
+    // worker at all. Online that frame's page comes from the network (Playwright reports
+    // fromServiceWorker false for it, true for the same page in a frame with allow-scripts, and
+    // true in Chromium for every sandbox); offline it fails with "WebKit encountered an internal
+    // error". The help frame is sandboxed without scripts on purpose (ARCHITECTURE.md 7.6), so
+    // the repair is a security decision of the architect, asked in that request. The rule depends
+    // on the frame's sandbox and holds online too, so it is the engine's, not Playwright's offline
+    // switch: real Safari is expected to behave the same; MANUAL-TEST-MAC.md W1 checks it. When the frame is repaired, this test
+    // reports "expected to fail, but passed": then this line goes.
+    test.fail(
+      browserName === 'webkit',
+      'WebKit sends no navigation of a frame sandboxed without allow-scripts to the service worker (X1 errata 12)',
+    );
     try {
       await reloadOffline(app, page, context);
       await app.chooseMenu('Help', 'Help');
