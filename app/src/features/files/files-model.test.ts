@@ -23,7 +23,7 @@ import { createVfs } from '../../fs/vfs';
 import { afterRename, renameRefused } from './actions';
 import { deleteItems, type UndoEntry } from './bulk';
 import { transferItems } from './move';
-import { renameChecked } from './store';
+import { renameChecked } from './rename';
 import { fakeDocuments, filesTestDeps, scriptedDialogs } from './testing';
 
 const ONE = process.env.EASY68K_N5_SEED ? Number(process.env.EASY68K_N5_SEED) : null;

@@ -18,14 +18,16 @@ import { guardImport, type StorageEstimator } from './import-guard';
 import {
   GIT_NOT_IMPORTED,
   IMPORT_TITLE,
+  NEW_FOLDER_INITIAL_NAME,
+  NEW_FOLDER_TITLE,
   RENAME_TITLE,
+  changedAfterRenaming,
   exportedToast,
   gitNameRefused,
   gitRefusal,
   openInEditor,
 } from './texts';
-
-const NEW_FOLDER_TITLE = 'New Folder';
+import { renameChecked } from './rename';
 import { filesDeps } from './undo';
 import {
   type BeforeReplace,
@@ -34,7 +36,6 @@ import {
   itemsFromZip,
   makeFolder,
   planImport,
-  renameChecked,
   runImport,
   type ImportItem,
   type ImportResult,
@@ -160,6 +161,9 @@ export async function importInto(
   return result;
 }
 
+/** The largest file the history gives versions (P3.3.4); larger ones are not read for it. */
+const LARGEST_VERSIONED = 1024 * 1024;
+
 /**
  * ARCHITECTURE-PLUS P3.3.4: an import that replaces a file keeps its current bytes as `Before
  * import`, for a file that gets versions, without waiting for the history.
@@ -175,9 +179,6 @@ export function keepBeforeImport(ctx: AppContext): BeforeReplace | undefined {
     void history.record(path, current, 'before-import', ctx.clock.wallTime().getTime()).catch(() => {});
   };
 }
-
-/** The largest file the history gives versions (P3.3.4); larger ones are not read for it. */
-const LARGEST_VERSIONED = 1024 * 1024;
 
 /** `keep` of importOne: the current bytes of a file the copy replaces, as `Before import`. */
 export function keepImportedCopy(ctx: AppContext): ((path: VPath, current: Uint8Array) => void) | undefined {
@@ -227,9 +228,9 @@ export async function newFolder(ctx: AppContext, parent: VPath): Promise<VPath |
     await inform(ctx, NEW_FOLDER_TITLE, store);
     return null;
   }
-  let initial = 'New Folder';
+  let initial = NEW_FOLDER_INITIAL_NAME;
   for (;;) {
-    const name = await askName(ctx, { title: 'New Folder', label: '&Name:', initial });
+    const name = await askName(ctx, { title: NEW_FOLDER_TITLE, label: '&Name:', initial });
     if (name === null) return null;
     const trimmed = name.trim();
     // ARCHITECTURE-PLUS P1.1 rule 2: no folder named .git is made (errata N5 entry 15).
@@ -238,7 +239,7 @@ export async function newFolder(ctx: AppContext, parent: VPath): Promise<VPath |
     const taken = target ? await ctx.vfs.resolve(parent, trimmed) : null;
     if (reason || taken) {
       await ctx.dialogs.messageBox({
-        title: 'New Folder',
+        title: NEW_FOLDER_TITLE,
         text: reason ?? `"${trimmed}" already exists.`,
         icon: 'warning',
         buttons: ['OK'],
@@ -250,7 +251,7 @@ export async function newFolder(ctx: AppContext, parent: VPath): Promise<VPath |
       await makeFolder(ctx.vfs, target as VPath);
       return target;
     } catch (error) {
-      await showError(ctx, 'New Folder', error);
+      await showError(ctx, NEW_FOLDER_TITLE, error);
       return null;
     }
   }
@@ -306,23 +307,37 @@ export async function afterRename(deps: FilesDeps, from: VPath, to: VPath): Prom
 async function askAndRename(ctx: AppContext, path: VPath): Promise<VPath | null> {
   let initial = basename(path);
   for (;;) {
-    const name = await askName(ctx, { title: 'Rename', label: '&Name:', initial });
+    const name = await askName(ctx, { title: RENAME_TITLE, label: '&Name:', initial });
     if (name === null) return null;
     const trimmed = name.trim();
     if (trimmed === basename(path)) return null;
     // ARCHITECTURE-PLUS P1.1 rule 2: nothing is renamed to .git (errata N5 entry 15).
     const reason = invalidNameReason(trimmed) ?? (isGitName(trimmed) ? gitNameRefused(trimmed) : null);
     if (reason) {
-      await ctx.dialogs.messageBox({ title: 'Rename', text: reason, icon: 'warning', buttons: ['OK'] });
+      await ctx.dialogs.messageBox({ title: RENAME_TITLE, text: reason, icon: 'warning', buttons: ['OK'] });
       initial = trimmed;
       continue;
     }
+    let renamed: VPath;
+    const kept: VPath[] = [];
+    let copies: VPath | null = null;
     try {
-      return await renameChecked(ctx.vfs, path, trimmed);
+      renamed = await renameChecked(ctx.vfs, path, trimmed, {
+        kept: (files, folder) => {
+          kept.push(...files);
+          copies = folder;
+        },
+      });
     } catch (error) {
-      await showError(ctx, 'Rename', error);
+      await showError(ctx, RENAME_TITLE, error);
       initial = trimmed;
+      continue;
     }
+    // A file that changed at the last moment stayed under the old name (errata N5 entry 18).
+    for (const file of kept) {
+      await inform(ctx, RENAME_TITLE, changedAfterRenaming(basename(file), displayPath(ctx.vfs, copies ?? renamed)));
+    }
+    return renamed;
   }
 }
 

@@ -64,8 +64,23 @@ export function applyAdditions(ctx: AppContext, initial: PlusSettings, chosen: P
   ctx.settings.update((settings) => withPlus(settings, change));
 }
 
-/** What a button of the Storage group did. */
-export type StorageOutcome = 'done' | 'declined' | 'empty' | 'unavailable';
+/** What a button of the Storage group did. 'failed': the store could not do it and said why. */
+export type StorageOutcome = 'done' | 'declined' | 'empty' | 'unavailable' | 'failed';
+
+/**
+ * The store rejects a change it could not make (errata N3, "When a transaction fails"): its message
+ * is shown under the button's caption, as the Trash dialog shows a failed Delete History and Trash
+ * (N4), and nothing is reported as done.
+ */
+async function failed(ctx: AppContext, title: string, error: unknown): Promise<StorageOutcome> {
+  await ctx.dialogs.messageBox({
+    title,
+    text: error instanceof Error ? error.message : String(error),
+    icon: 'error',
+    buttons: ['OK'],
+  });
+  return 'failed';
+}
 
 /**
  * Runs the Storage group's actions one at a time. An action asked for while another runs (a click
@@ -130,7 +145,11 @@ export async function emptyTrash(ctx: AppContext): Promise<StorageOutcome> {
     buttons: ['Yes', 'No'],
   });
   if (answer !== 'Yes') return 'declined';
-  await history.dropTrash(items.map((item) => item.id));
+  try {
+    await history.dropTrash(items.map((item) => item.id));
+  } catch (error) {
+    return failed(ctx, EMPTY_TRASH_CAPTION, error);
+  }
   return 'done';
 }
 
@@ -148,6 +167,10 @@ export async function deleteEarlierVersions(ctx: AppContext): Promise<StorageOut
     buttons: ['Yes', 'No'],
   });
   if (answer !== 'Yes') return 'declined';
-  await history.clearVersions();
+  try {
+    await history.clearVersions();
+  } catch (error) {
+    return failed(ctx, DELETE_VERSIONS_CAPTION, error);
+  }
   return 'done';
 }

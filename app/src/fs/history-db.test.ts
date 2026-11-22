@@ -19,6 +19,8 @@ import {
   cannotKeepQuestion,
   changedWhileReplacing,
   changedWhileRestoring,
+  gitRefused,
+  historyNotChanged,
 } from '../core/history/texts';
 import { browserHistoryDeps, createHistoryService, createHistoryStore, type HistoryStore } from './history-db';
 import {
@@ -431,6 +433,31 @@ describe('guard (P3.3.4)', () => {
     expect(confirm).not.toHaveBeenCalled();
   });
 
+  it('an opened .git folder: untracked says git, and no Trash item is restored into it', async () => {
+    // N3's review of the gate's change: the store's other members knew a .git folder only by a
+    // segment of the path, so untracked() said "tracked" there and a restore into a folder chosen
+    // in such a store, or into an item's own place, would have written below .git.
+    const env = setup();
+    env.vfs.mount(new MemoryBackend({ mount: 'disk', kind: 'disk', label: 'This computer' }));
+    const h = env.make();
+    await save(env, h, '/disk/lab/p.X68', text('p'));
+    const kept = await h.guard('/disk/lab/p.X68', 'delete', remover(env, '/disk/lab/p.X68'), yes);
+    env.vfs.unmount('disk');
+    const folder = new MemoryBackend({ mount: 'folder', kind: 'fsaccess', label: '.git' });
+    Object.assign(folder, { rootHandle: { kind: 'directory', name: '.git' } });
+    env.vfs.mount(folder);
+    expect(h.untracked('/folder/HEAD', 3, text('ref'))).toBe('git');
+    expect(h.untracked('/browser/p.X68', 1, text('p'))).toBeNull();
+    const fallback = vi.fn(async () => '/folder' as VPath);
+    const result = await h.restoreTrash(kept.item ?? '', { ...RESTORE_ALL, fallback });
+    expect(fallback).toHaveBeenCalledTimes(1);
+    expect(result.restored).toEqual([]);
+    expect(result.left).toEqual(['/folder/p.X68']);
+    expect(result.error).toBe(gitRefused('/folder/p.X68', 'below'));
+    expect(await env.vfs.list('/folder')).toEqual([]);
+    expect((await h.trashItems()).map((i) => i.id)).toEqual([kept.item]);
+  });
+
   it('a copy of 20 MB is kept, one of 20 MB + 1 byte and an item above B / 2 call confirm', async () => {
     const env = setup();
     const h = env.make();
@@ -649,6 +676,127 @@ describe('guard (P3.3.4)', () => {
     const db = await dump(env.factory);
     expect(db.versions.every((v) => (v.value as { size: number }).size <= MB)).toBe(true);
   }, 120_000);
+});
+
+/**
+ * An IDBFactory over `inner` whose next `failing` read-write transactions abort before their first
+ * request completes, and whose deleteDatabase fails while `deleteFails` is set.
+ */
+function abortingFactory(inner: IDBFactory) {
+  const control = { failing: 0, deleteFails: false };
+  const wrap = (db: IDBDatabase) => {
+    const original = db.transaction.bind(db);
+    (db as { transaction: unknown }).transaction = (
+      names: string | string[],
+      mode?: IDBTransactionMode,
+      options?: IDBTransactionOptions,
+    ) => {
+      const tx = original(names, mode, options);
+      if (mode === 'readwrite' && control.failing > 0) {
+        control.failing--;
+        queueMicrotask(() => tx.abort());
+      }
+      return tx;
+    };
+  };
+  const factory = {
+    open(name: string, version?: number) {
+      const request = version === undefined ? inner.open(name) : inner.open(name, version);
+      request.addEventListener('success', () => wrap(request.result));
+      return request;
+    },
+    deleteDatabase(name: string) {
+      if (!control.deleteFails) return inner.deleteDatabase(name);
+      const request = { error: new Error('the disk refused'), onsuccess: null, onerror: null, onblocked: null } as {
+        error: Error;
+        onerror: (() => void) | null;
+      };
+      setTimeout(() => request.onerror?.(), 0);
+      return request as unknown as IDBOpenDBRequest;
+    },
+    cmp: (a: unknown, b: unknown) => inner.cmp(a, b),
+    databases: () => inner.databases(),
+  } as IDBFactory;
+  return { factory, control };
+}
+
+/** historyNotChanged(<the browser's reason>), exactly. */
+const NOT_CHANGED = new RegExp(
+  `^${historyNotChanged('@@')
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace('@@', '.+')}$`,
+);
+
+describe('when a transaction fails: retried, then rejected, never reported as done (errata N3)', () => {
+  const make = (env: Env, factory: IDBFactory) =>
+    createMemoryHistoryStore(
+      { vfs: env.vfs, clock: env.clock, scheduler: env.scheduler, settings: env.settings, factory },
+      { schedulePass: false },
+    );
+
+  it('moved: an aborted change is tried again and the history follows (seed 7064)', async () => {
+    const env = setup();
+    const { factory, control } = abortingFactory(env.factory);
+    const h = make(env, factory);
+    await save(env, h, '/browser/d/x.X68', text('x'));
+    await env.vfs.writeFile('/browser/e/x.X68', text('x'));
+    await env.vfs.remove('/browser/d/x.X68');
+    control.failing = 1;
+    await h.moved('/browser/d/x.X68', '/browser/e/x.X68');
+    expect(control.failing).toBe(0);
+    expect((await h.versions('/browser/e/x.X68')).length).toBe(1);
+    expect(await h.versions('/browser/d/x.X68')).toEqual([]);
+  });
+
+  it('moved that cannot be made rejects; the history stays whole at the old place', async () => {
+    const env = setup();
+    const { factory, control } = abortingFactory(env.factory);
+    const h = make(env, factory);
+    await save(env, h, '/browser/d/x.X68', text('x'));
+    const before = await dump(env.factory);
+    control.failing = 99;
+    await expect(h.moved('/browser/d/x.X68', '/browser/e/x.X68')).rejects.toThrow(NOT_CHANGED);
+    expect(control.failing).toBe(96); // three tries
+    control.failing = 0;
+    expect(await dump(env.factory)).toEqual(before);
+    expect((await h.versions('/browser/d/x.X68')).length).toBe(1);
+  });
+
+  it('dropTrash and clearVersions reject when they cannot drop; what is listed is still there', async () => {
+    const env = setup();
+    const { factory, control } = abortingFactory(env.factory);
+    const h = make(env, factory);
+    await save(env, h, '/browser/p.X68', text('p1'));
+    await save(env, h, '/browser/p.X68', text('p2'));
+    await save(env, h, '/browser/q.X68', text('q'));
+    await h.guard('/browser/q.X68', 'delete', remover(env, '/browser/q.X68'), yes);
+    const [item] = await h.trashItems();
+    control.failing = 99;
+    await expect(h.dropTrash([item?.id ?? ''])).rejects.toThrow(NOT_CHANGED);
+    await expect(h.clearVersions()).rejects.toThrow(NOT_CHANGED);
+    control.failing = 0;
+    expect((await h.trashItems()).map((i) => i.id)).toEqual([item?.id]);
+    expect((await h.versions('/browser/p.X68')).length).toBe(2);
+    // Once a try goes through, they do their work.
+    control.failing = 2;
+    await h.dropTrash([item?.id ?? '']);
+    await h.clearVersions();
+    expect(await h.trashItems()).toEqual([]);
+    expect(await h.versions('/browser/p.X68')).toEqual([]);
+  });
+
+  it('deleteAll rejects when the browser does not delete the database, and the history stays', async () => {
+    const env = setup();
+    const { factory, control } = abortingFactory(env.factory);
+    const h = make(env, factory);
+    await save(env, h, '/browser/p.X68', text('p1'));
+    control.deleteFails = true;
+    await expect(h.deleteAll()).rejects.toThrow(historyNotChanged('the disk refused'));
+    control.deleteFails = false;
+    expect((await h.versions('/browser/p.X68')).length).toBe(1);
+    await h.deleteAll();
+    expect(await h.versions('/browser/p.X68')).toEqual([]);
+  });
 });
 
 describe('moved and restore (P3.3.5)', () => {

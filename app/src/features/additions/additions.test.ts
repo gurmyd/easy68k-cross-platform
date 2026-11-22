@@ -5,6 +5,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import type { HistoryService, HistoryUsage, MessageBoxRequest, TrashItemInfo } from '../../contracts';
+import { historyNotChanged } from '../../core/history/texts';
 import { readPlus } from '../../core/plus/settings';
 import { createFakePlatform, createTestApplication, type TestApplication } from '../../state/testing';
 import { feature } from './index';
@@ -479,6 +480,27 @@ describe('Delete Earlier Versions', () => {
     const app = withHistory(undefined);
     expect(await deleteEarlierVersions(app.ctx)).toBe('unavailable');
     expect(app.ctx.store.getState().dialogs.stack).toEqual([]);
+  });
+});
+
+describe('a change the store could not make (errata N3, "When a transaction fails")', () => {
+  it('Empty Trash and Delete Earlier Versions show why under their caption and report failed', async () => {
+    const reason = historyNotChanged('the transaction was aborted');
+    const history = fakeHistory({ items: [item('a', 10)] });
+    history.dropTrash = vi.fn(() => Promise.reject(new Error(reason)));
+    history.clearVersions = vi.fn(() => Promise.reject(new Error(reason)));
+    const app = withHistory(history);
+    for (const [run, title] of [
+      [emptyTrash, 'Empty Trash'],
+      [deleteEarlierVersions, 'Delete Earlier Versions'],
+    ] as const) {
+      const done = run(app.ctx);
+      app.dialogs.close((await dialogOnTop(app, 'message')).key, 'Yes');
+      const box = await dialogOnTop(app, 'message');
+      expect(box.props).toEqual({ title, text: reason, icon: 'error', buttons: ['OK'] });
+      app.dialogs.close(box.key, 'OK');
+      expect(await done).toBe('failed');
+    }
   });
 });
 

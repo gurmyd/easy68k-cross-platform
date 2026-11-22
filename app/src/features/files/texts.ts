@@ -177,6 +177,10 @@ export const exportedToast = (n: number, name: string): string => `Exported ${fi
 export const MOVE_TITLE = 'Move';
 export const COPY_TITLE = 'Copy';
 export const RENAME_TITLE = 'Rename';
+/** New Folder...'s question and messages (FS1's title). */
+export const NEW_FOLDER_TITLE = 'New Folder';
+/** The name New Folder... offers first (FS1's). */
+export const NEW_FOLDER_INITIAL_NAME = 'New Folder';
 export const MOVE_TO_DIALOG_TITLE = 'Move To';
 export const MOVE_BUTTON = 'Move';
 export const COPY_BUTTON = 'Copy';
@@ -205,6 +209,9 @@ export function replaceManyQuestion(n: number, place: string, ready: boolean): s
  */
 export const alreadyExists = (name: string): string => `${quoted(name)} already exists.`;
 
+/** The item to rename is gone (FS1's renameEntry text; `Rename` or `Undo`, `error`, `OK`). */
+export const noLongerExists = (name: string): string => `${quoted(name)} no longer exists.`;
+
 /** A file to be replaced is open and modified (`Move`, `information`, `OK`). */
 export const unsavedReplace = (name: string): string =>
   `${quoted(name)} has changes that are not saved. Save it or close it first, then replace it.`;
@@ -222,6 +229,25 @@ export const changedWhileMoving = (name: string, place: string, back: boolean): 
   back
     ? `${quoted(name)} changed while it was being moved back, so it stays where it is. The copy in ${place} holds it as it was before the change.`
     : `${quoted(name)} changed while it was being moved, so it stays where it was. The copy in ${place} holds it as it was before the change.`;
+
+/**
+ * A file changed (or appeared) between its copy and the removal of the old name, found before
+ * anything was removed: the rename is not made, the copies made so far are removed again (`Rename`
+ * or `Undo`, `error`, `OK`, as renameEntry's own refusals; errata N5 entry 18). `item` is the file or folder being renamed,
+ * `changed` the file within it, as a path below the item's folder ("lab/prog.X68").
+ */
+export const changedWhileRenaming = (item: string, changed: string, isFolder: boolean): string =>
+  isFolder
+    ? `The folder ${quoted(item)} was not renamed: ${quoted(changed)} changed while it was being renamed. Rename it again to use the new name.`
+    : `${quoted(item)} was not renamed: it changed while it was being renamed. Rename it again to use the new name.`;
+
+/**
+ * A file of a renamed folder changed in the moment between the last check and its removal: it stays
+ * under the old name, and the renamed folder holds it as it was before the change (`Rename` or
+ * `Undo`, `information`, `OK`; errata N5 entry 18).
+ */
+export const changedAfterRenaming = (changed: string, place: string): string =>
+  `${quoted(changed)} changed while its folder was being renamed, so it stays where it was. The copy in ${place} holds it as it was before the change.`;
 
 /** The toast after a move (P3.2.4), with `Undo`. `only` names the one item moved. */
 export function movedToast(count: number, only: string | null, target: string, copied: boolean): string {

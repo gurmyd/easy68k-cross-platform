@@ -97,6 +97,8 @@ export function splitterPlans(
 }
 
 const INERT = 'data-e68-inert';
+/** Marks a splitter or strip that has a slot in the content layer (order.ts). */
+const RELOCATED = 'data-e68-relocated';
 
 function setAttr(element: Element, name: string, value: string | null): void {
   if (value === null) {
@@ -108,17 +110,21 @@ function setAttr(element: Element, name: string, value: string | null): void {
 
 /**
  * Applies the splitter plans to FlexLayout's splitter elements under `root`. `flexKeyOf` turns a
- * splitter's `data-layout-path` into the plan's key.
+ * splitter's `data-layout-path` into the plan's key. `relocated` maps the key of each splitter
+ * that has a slot in the content layer (Lock Layout on, order.ts) to its id: such a splitter is
+ * reached through its slot, so it leaves the Tab order here.
  */
 export function decorateSplitters(
   root: ParentNode,
   plans: Map<string, SplitterPlan>,
   keyOfFlexPath: (flexPath: string) => string | null,
+  relocated: ReadonlyMap<string, string> = new Map(),
 ): void {
   for (const element of Array.from(root.querySelectorAll('.flexlayout__splitter[data-layout-path]'))) {
     const key = keyOfFlexPath(element.getAttribute('data-layout-path') ?? '');
     const plan = key === null ? undefined : plans.get(key);
     if (!plan) continue;
+    const id = key === null ? undefined : relocated.get(key);
     if (plan.name === null) {
       setAttr(element, 'role', null);
       setAttr(element, 'aria-label', null);
@@ -126,13 +132,16 @@ export function decorateSplitters(
       setAttr(element, 'aria-hidden', 'true');
       setAttr(element, INERT, 'true');
       setAttr(element, 'data-e68-split', null);
+      setAttr(element, RELOCATED, null);
     } else {
       setAttr(element, 'role', 'separator');
       setAttr(element, 'aria-label', plan.name);
-      setAttr(element, 'tabindex', '0');
+      setAttr(element, 'tabindex', id === undefined ? '0' : '-1');
       setAttr(element, 'aria-hidden', null);
       setAttr(element, INERT, null);
       setAttr(element, 'data-e68-split', plan.role ?? null);
+      setAttr(element, RELOCATED, id === undefined ? null : 'splitter');
+      if (id !== undefined) setAttr(element, 'id', id);
     }
   }
 }
@@ -145,12 +154,35 @@ export function decorateTabPanels(
   root: ParentNode,
   hasStrip: (tabId: string) => boolean,
   isViewer: (tabId: string) => boolean,
+  inner = false,
 ): void {
   for (const element of Array.from(root.querySelectorAll('.flexlayout__tab[id^="flexlayout-tab-"]'))) {
     const tabId = element.id.slice('flexlayout-tab-'.length);
     const panel = hasStrip(tabId) && !isViewer(tabId);
-    setAttr(element, 'role', panel ? 'tabpanel' : null);
-    setAttr(element, 'aria-labelledby', panel ? `flexlayout-tabbutton-${tabId}` : null);
+    // With Lock Layout on, a strip's slot (order.ts) sits in the tab's element just before the
+    // panel's content, so the tabpanel role goes on the content's own wrapper: the strip is then
+    // read before the tab panel, not inside it.
+    const content = element.querySelector(`[data-e68-dock-content="${tabId}"]`);
+    const onInner = inner && content !== null;
+    setAttr(element, 'role', panel && !onInner ? 'tabpanel' : null);
+    setAttr(element, 'aria-labelledby', panel && !onInner ? `flexlayout-tabbutton-${tabId}` : null);
     setAttr(element, 'data-e68-dock-tab', tabId);
+    if (content) {
+      setAttr(content, 'role', panel && onInner ? 'tabpanel' : null);
+      setAttr(content, 'aria-labelledby', panel && onInner ? `flexlayout-tabbutton-${tabId}` : null);
+      setAttr(content, 'id', panel && onInner ? innerPanelId(tabId) : null);
+    }
+    // The tab names the element that is its tab panel (aria-controls): the content's wrapper while
+    // it holds the role, a viewer's own element, else FlexLayout's own `.flexlayout__tab` again
+    // (errata N1 25).
+    const button = root.querySelector(`[id="flexlayout-tabbutton-${tabId}"]`);
+    const controls = button?.getAttribute('aria-controls') ?? null;
+    if (button && controls !== null) {
+      const inner = element.querySelector(`[id="${innerPanelId(tabId)}"]`);
+      setAttr(button, 'aria-controls', inner ? inner.id : element.id);
+    }
   }
 }
+
+/** The id of a panel's content wrapper while it is the tab panel (Lock Layout on, a strip shown). */
+export const innerPanelId = (tabId: string) => `e68-dock-tabpanel-${tabId}`;

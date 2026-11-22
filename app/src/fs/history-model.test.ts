@@ -2,8 +2,11 @@
 // steps of the command driver of fs/history-model.ts, beside the reference model, with the seven
 // properties checked after every step. Seeds 1 to 2,000 in CI, split over 4 processes that run at
 // the same time (EASY68K_HISTORY_SEEDS and EASY68K_HISTORY_SHARDS override the count and the split;
-// EASY68K_HISTORY_SEED=<n> runs one seed alone and prints its steps). On a failure the seed, the
-// step and the sequence up to it are printed.
+// EASY68K_HISTORY_SEED=<n> runs one seed alone and prints its steps; EASY68K_HISTORY_FIRST=<n> starts
+// the range elsewhere, so that CI can run it in parts, docs/requests/N3-model-test-ci.md). Seeds
+// outside that range that once failed run every time as named cases (REGRESSION_SEEDS). On a failure
+// the seed, the step and the sequence up to it are printed; EASY68K_HISTORY_DEBUG=1 prints the
+// database, the promises and the restores of every step as well.
 //
 // Hashing and compression are Node's, made synchronous (node:crypto, node:zlib) so that the order
 // in which two windows' awaits interleave is the same on every run of a seed.
@@ -211,6 +214,79 @@ describe.runIf(SHARDS > 1)('the model test of the safety net, in processes at on
     const failed = results.filter((r) => r.code !== 0);
     expect(failed.map((r) => r.out.slice(-4000)).join('\n')).toBe('');
   }, 7_200_000);
+});
+
+/**
+ * Seeds outside 1 to 2,000 that once failed (the second round of the gate, 2026-11-22; errata N3,
+ * "What the model test found, second round of the gate"): each runs on every `npm test`, against
+ * the store with two windows and faults, where it failed (of the 30 found before the repair, 14 were
+ * defects of the store and 16 gaps of the model; 4063, found after it, a gap of the model; each label
+ * says which). A choice added to the driver later must draw from its `later`
+ * stream, or these seeds no longer replay the steps that failed.
+ */
+const ABORTED_MOVE = 'moved() met an aborted transaction and resolved; the history stayed at the old place (the store)';
+const BESIDE_IN_FOLDER = 'a Trash restore into the folder chosen wrote beside a taken name there (the model)';
+const HOLDER =
+  "the version was held by the file's own record elsewhere (in the Trash, or living where a restore wrote it; the model)";
+const SAME_BYTES = 'a Replace onto a file with the same bytes overwrote it, and guard had to keep it (the model)';
+const REGRESSION_SEEDS: readonly [number, string][] = [
+  [2217, HOLDER],
+  [2738, ABORTED_MOVE],
+  [2762, ABORTED_MOVE],
+  [
+    4063,
+    "a Trash restore's copy that did not fit pruned the versions half and was then not kept (the model; found after the repair)",
+  ],
+  [4590, HOLDER],
+  [4999, ABORTED_MOVE],
+  [5097, ABORTED_MOVE],
+  [7064, ABORTED_MOVE],
+  [9397, BESIDE_IN_FOLDER],
+  [9490, "a copy's identical bytes in the Trash hid the step that pruned the file's own version (the model)"],
+  [10116, BESIDE_IN_FOLDER],
+  [10189, ABORTED_MOVE],
+  [10480, SAME_BYTES],
+  [11106, ABORTED_MOVE],
+  [11719, SAME_BYTES],
+  [12022, ABORTED_MOVE],
+  [12413, ABORTED_MOVE],
+  [13319, ABORTED_MOVE],
+  [14580, HOLDER],
+  [15624, BESIDE_IN_FOLDER],
+  [15844, HOLDER],
+  [16765, ABORTED_MOVE],
+  [16946, HOLDER],
+  [17973, HOLDER],
+  [19246, BESIDE_IN_FOLDER],
+  [19390, HOLDER],
+  [19531, ABORTED_MOVE],
+  [20527, SAME_BYTES],
+  [20540, HOLDER],
+  [20602, ABORTED_MOVE],
+  [21130, ABORTED_MOVE],
+];
+
+/** Seeds that failed against createMemoryHistoryService (found after the repair). */
+const MEMORY_REGRESSION_SEEDS: readonly [number, string][] = [
+  [3694, "a delete's own copies had left the versions half before its settle pruned it (the model)"],
+];
+
+// They failed against createHistoryService (two windows, faults), and run there; the three the review
+// named run against createMemoryHistoryService as well, and so do the seeds that failed there.
+describe.runIf(ONE === null && !CHILD)('the model test: seeds that failed once (P3.3.1)', () => {
+  const cases: [number, string, 'store' | 'memory'][] = [
+    ...REGRESSION_SEEDS.map(([seed, what]) => [seed, what, 'store'] as [number, string, 'store']),
+    ...REGRESSION_SEEDS.filter(([seed]) => [7064, 9397, 9490].includes(seed)).map(
+      ([seed, what]) => [seed, what, 'memory'] as [number, string, 'memory'],
+    ),
+    ...MEMORY_REGRESSION_SEEDS.map(([seed, what]) => [seed, what, 'memory'] as [number, string, 'memory']),
+  ];
+  for (const [seed, what, mode] of cases) {
+    it(`seed ${seed} (${mode}): ${what}`, async () => {
+      const result = await runSeed(seed, mode);
+      expect(report(seed, mode, result)).toBe('');
+    }, 120_000);
+  }
 });
 
 describe.runIf(SHARDS <= 1)('the model test of the safety net (P3.3.1)', () => {

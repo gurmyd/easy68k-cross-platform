@@ -26,11 +26,13 @@ import {
 } from './bulk';
 import { gitRefusalFor } from './git-guard';
 import { unchangedSince } from './move';
-import { displayPath, renameChecked } from './store';
+import { renameChecked } from './rename';
+import { displayPath } from './store';
 import {
   UNDO_TITLE,
   cannotMoveBackExists,
   cannotMoveBackGone,
+  changedAfterRenaming,
   changedWhileMoving,
   openInEditor,
   type UndoKind,
@@ -263,11 +265,22 @@ async function undoRename(deps: FilesDeps, entry: Extract<UndoEntry, { kind: 'mo
     return [];
   }
   let renamed: VPath;
+  const kept: VPath[] = [];
+  let copies: VPath | null = null;
   try {
-    renamed = await renameChecked(vfs, to, basename(from));
+    renamed = await renameChecked(vfs, to, basename(from), {
+      kept: (files, folder) => {
+        kept.push(...files);
+        copies = folder;
+      },
+    });
   } catch (error) {
     await showError(deps, UNDO_TITLE, error);
     return [];
+  }
+  // A file that changed at the last moment stayed under the name it had (errata N5 entry 18).
+  for (const file of kept) {
+    await inform(deps, UNDO_TITLE, changedAfterRenaming(basename(file), displayPath(vfs, copies ?? renamed)));
   }
   await deps.history?.moved(to, renamed).catch(() => {});
   if (openDocumentsAt(documents, to).length > 0) await documents.relocate?.(to, renamed).catch(() => {});

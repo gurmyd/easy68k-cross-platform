@@ -145,8 +145,13 @@ function checkScripts(): string[] {
   };
   walk('app/src');
   walk('tests');
+  // tools/ holds checks too since the gate of the stage of additions (check-frame-policy.mjs).
+  walk('tools');
   return found.sort();
 }
+
+/** Scripts that run another table row's file: check:engine-browsers runs the binding's browser suite. */
+const RUNNER_OF: Record<string, string> = { 'tools/check-engine-browsers.mjs': 'app/src/engine/browser.test.ts' };
 
 describe('ci.yml and package.json: every browser check runs in CI', () => {
   // A check script nobody runs proves nothing (X3, DV4, P1 and Q1 each waited a gate for this).
@@ -164,7 +169,7 @@ describe('ci.yml and package.json: every browser check runs in CI', () => {
   const OWN_JOBS: Record<string, string> = { 'tests/perf/check-perf.mjs': 'check:perf' };
 
   it.each(checkScripts().filter((file) => !(file in OWN_JOBS)))("%s is in the plan step's table", (file) => {
-    expect([...files]).toContain(file);
+    expect([...files]).toContain(RUNNER_OF[file] ?? file);
   });
 
   it.each(Object.entries(OWN_JOBS).map(([file, script]) => ({ file, script })))(
@@ -375,6 +380,41 @@ describe('ci.yml: the e2e-stability job is split into shards (6.9 item 10, gate 
     expect(text).toContain(
       '          name: playwright-report-stability-${{ matrix.browser }}-shard-${{ matrix.shard }}-of-${{ matrix.shards }}',
     );
+  });
+});
+
+describe('ci.yml: the history model test runs its whole range (ARCHITECTURE-PLUS P5 N3)', () => {
+  // docs/requests/N3-model-test-ci.md: npm test runs a quick 200 seeds; the job history-model runs
+  // seeds 1 to 2,000 in two parts of 1,000, each on a runner of its own, on the three systems.
+  const job = jobLines('history-model');
+  const text = job.join('\n');
+  const parts = job
+    .map((line) => /^ {10}- \{ first: (\d+), last: (\d+) \}$/.exec(line))
+    .filter((match): match is RegExpExecArray => match !== null)
+    .map((match) => ({ first: Number(match[1]), last: Number(match[2]) }));
+
+  it('splits seeds 1 to 2,000 into parts that meet end to end, each of the size it asks for', () => {
+    expect(parts).toEqual([
+      { first: 1, last: 1000 },
+      { first: 1001, last: 2000 },
+    ]);
+    expect(text).toMatch(/^ {8}os: \[ubuntu-latest, windows-latest, macos-latest\]$/m);
+    expect(text).toContain('EASY68K_HISTORY_FIRST: ${{ matrix.seeds.first }}');
+    expect(text).toContain("EASY68K_HISTORY_SEEDS: '1000'");
+    expect(text).toContain("EASY68K_HISTORY_SHARDS: '4'");
+    expect(text).toContain('run: npx vitest run src/fs/history-model.test.ts');
+  });
+
+  it('npm test in the job unit runs the quick 200 seeds', () => {
+    const unit = jobLines('unit');
+    const at = unit.findIndex((line) => line === '      - name: Unit tests');
+    expect(at).toBeGreaterThan(0);
+    expect(unit.slice(at, at + 4)).toEqual([
+      '      - name: Unit tests',
+      '        run: npm test',
+      '        env:',
+      "          EASY68K_HISTORY_SEEDS: '200'",
+    ]);
   });
 });
 

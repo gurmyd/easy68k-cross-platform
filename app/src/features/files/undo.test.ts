@@ -250,7 +250,7 @@ describe('Rename (P3.2.4)', { timeout: 60_000 }, () => {
     await seed(vfs, { '/browser/a/r.X68': 'ONE' });
     const deps = filesTestDeps({ vfs, history: scriptedHistory(vfs) });
     const { afterRename } = await import('./actions');
-    const { renameChecked } = await import('./store');
+    const { renameChecked } = await import('./rename');
     await afterRename(deps, '/browser/a/r.X68', await renameChecked(vfs, '/browser/a/r.X68', 'R.X68'));
     await vfs.writeFile('/browser/a/r.X68', ascii('TWO')); // a save under the old spelling: a second file
     const names = (await vfs.list('/browser/a')).map((e) => e.name).sort();

@@ -37,6 +37,10 @@
 //              list changes; the Registers group follows its content after a font change
 //   frames     View > Memory, Stack and Log have focused their panel by the time the panel is in the
 //              page, with today's frames and with frames 130 ms late (GitHub's macOS runners)
+//   taborder   Lock Layout on (the default): Tab and Shift+Tab go through the window in main's order,
+//              in the three modes, wide and narrow, with and without a tool panel (the lists below,
+//              recorded on main); in Chromium the accessibility tree reads the dock in main's order;
+//              unlocked, no slot is left; a splitter reached through its slot keeps its keys
 //   scan       axe (WCAG 2.0/2.1 A and AA) of each mode in both themes, locked and unlocked: no
 //              serious or critical finding; screenshots of both themes
 //
@@ -1007,6 +1011,21 @@ async function movesPass(browser, name, os) {
     `${p} a transient panel alone in a new group while locked shows its strip and its x`,
     transient.strip && transient.alone === 1 && transient.close,
     JSON.stringify(transient),
+  );
+  // The viewer's tab names the viewer's own element, its tab panel, which the tab labels.
+  const viewerPanel = await page.evaluate(() => {
+    const button = document.getElementById('flexlayout-tabbutton-editor:viewer:91');
+    const panel = document.getElementById(button?.getAttribute('aria-controls') ?? '');
+    return {
+      role: panel?.getAttribute('role') ?? null,
+      panel: panel?.getAttribute('data-e68-panel') ?? null,
+      labelled: panel?.getAttribute('aria-labelledby') === button?.id,
+    };
+  });
+  check(
+    `${p} the viewer's tab controls the viewer's own tab panel, which the tab labels`,
+    viewerPanel.role === 'tabpanel' && viewerPanel.panel === 'viewer:91' && viewerPanel.labelled,
+    JSON.stringify(viewerPanel),
   );
   await page.locator('[id="flexlayout-tabbutton-editor:viewer:91"]').focus();
   await page.keyboard.press('Delete');
@@ -2157,6 +2176,467 @@ async function framesPass(browser, name) {
   }
 }
 
+// --- pass: today's Tab order and reading order with Lock Layout on --------------------------------
+
+// The Tab order of main (b247e17, the faithful port without the dock), recorded in Chromium and
+// WebKit with fresh storage, the Windows key map and Lock Layout's default (the two browsers gave
+// the same list; c:\easy64k\build\tab-plus\probe.mjs). Each entry is `role|name|panel` of the
+// focused element ('-' outside the panels); a leading `~` marks an element that is not a tab stop
+// of Safari on a Mac (a button or a check box without an explicit tabindex; tests/a11y isSafariTabStop),
+// which a browser that does not stop at buttons skips. Every list is the whole order: a walk with
+// Tab goes through it from the start of the page until the body or the Output panel's key field
+// (which keeps Tab for the running program), a walk with Shift+Tab from the end of the page back.
+// In the editor the walk presses Esc first, as a keyboard user does (the editor keeps Tab).
+const REGISTER_INPUTS = Array(19).fill('input||registers');
+const OUTPUT_KEYS = 'textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output';
+const MEMORY_PANEL = [
+  'input|Address|memory',
+  'input|From|memory',
+  'input|To|memory',
+  'input|Bytes|memory',
+  '~button|Copy|memory',
+  '~button|Fill|memory',
+  '~button|Save|memory',
+  'group|Memory contents|memory',
+  '~button|Row up|memory',
+  '~button|Row down|memory',
+  '~button|Page up|memory',
+  '~button|Page down|memory',
+  '~input|Live|memory',
+];
+const SIM_LEFT = [
+  'menuitem|File|-',
+  'radio|Simulator|-',
+  'button|Open (Ctrl+O)|-',
+  ...REGISTER_INPUTS,
+  '~button|Clear Cycles|registers',
+  'input||registers',
+  'listbox|Listing|listing',
+  'separator|Resize the Messages panel|-',
+  'list|Messages|messages',
+  'separator|Resize the two columns|-',
+];
+const MAIN_TAB_ORDER = {
+  editor: [
+    'menuitem|File|-',
+    'radio|Editor|-',
+    'button|Files|-',
+    'button|New Folder...|files',
+    'tree|Files|files',
+    // The stage's own addition to the Files panel (P3.2, N5): its storage line.
+    '~button|This site uses *|files',
+    'separator|Resize the Files panel|-',
+    'tab|untitled1.x68|editor',
+    'textbox|untitled1.x68|editor',
+    'separator|Resize the Messages panel|-',
+    'grid|Assembler messages|messages',
+  ],
+  'simulator wide': [
+    ...SIM_LEFT,
+    'select|Fit100%200%|output',
+    '~button|Full Screen (Alt+Enter)|output',
+    '~button|Collapse the Output panel|output',
+    'region|Output picture|output',
+    OUTPUT_KEYS,
+  ],
+  'simulator wide, Memory shown': [
+    ...SIM_LEFT,
+    'select|Fit100%200%|output',
+    '~button|Full Screen (Alt+Enter)|output',
+    '~button|Collapse the Output panel|output',
+    'region|Output picture|output',
+    OUTPUT_KEYS,
+    'separator|Resize the tool panels|-',
+    'tab|Memory|-',
+    ...MEMORY_PANEL,
+  ],
+  'simulator narrow': [
+    ...SIM_LEFT,
+    'tab|Output|-',
+    'select|Fit100%200%|output',
+    '~button|Full Screen (Alt+Enter)|output',
+    'region|Output picture|output',
+    OUTPUT_KEYS,
+  ],
+  'simulator narrow, Memory shown': [...SIM_LEFT, 'tab|Memory|-', ...MEMORY_PANEL],
+  easybin: [
+    'menuitem|File|-',
+    'radio|EASyBIN|-',
+    'button|Theme|-',
+    'input|Start Address|easybin',
+    '~button|Open S-Record...|easybin',
+    '~input||easybin',
+    'input|First Address|easybin',
+    'input|Length of the binary files|easybin',
+    '~button|Save Binary...|easybin',
+    'input|From|easybin',
+    'input|To|easybin',
+    'input|Size|easybin',
+    '~button|Copy|easybin',
+    'input|Fill byte|easybin',
+    '~button|Fill|easybin',
+    'input|Address|easybin',
+    'group|Memory|easybin',
+    '~button|Row up|easybin',
+    '~button|Row down|easybin',
+    '~button|Page up|easybin',
+    '~button|Page down|easybin',
+  ],
+};
+
+// The reading order of main in Chromium's accessibility tree (CDP Accessibility.getFullAXTree) for
+// the dock's parts: named separators, tab lists, tabs, tab panels, regions and the panels' main
+// controls. The dock's tab panels hold the panel's PanelRegion, which keeps its own name inside
+// (P3.1.8): a region right after a tab panel of the same name is that, and is not counted.
+const SIM_LEFT_READ = [
+  'region|Registers',
+  'region|Listing',
+  'listbox|Listing',
+  'separator|Resize the Messages panel',
+  'region|Messages',
+  'list|Messages',
+  'log|',
+  'separator|Resize the two columns',
+];
+const MAIN_READING_ORDER = {
+  editor: [
+    'region|Files',
+    'tree|Files',
+    'separator|Resize the Files panel',
+    'region|Editor',
+    'tablist|Documents',
+    'tab|untitled1.x68',
+    'tabpanel|untitled1.x68',
+    'separator|Resize the Messages panel',
+    'region|Messages',
+    'grid|Assembler messages',
+    'log|',
+    'region|Notifications',
+  ],
+  'simulator wide': [
+    ...SIM_LEFT_READ,
+    'region|Output',
+    'region|Output picture',
+    'log|Text of the Output panel',
+    'region|Notifications',
+  ],
+  'simulator wide, Memory shown': [
+    ...SIM_LEFT_READ,
+    'region|Output',
+    'region|Output picture',
+    'log|Text of the Output panel',
+    'separator|Resize the tool panels',
+    'tablist|Tool panels',
+    'tab|Memory',
+    'tabpanel|Memory',
+    'region|Notifications',
+  ],
+  'simulator narrow': [
+    ...SIM_LEFT_READ,
+    'tablist|Tool panels',
+    'tab|Output',
+    'tabpanel|Output',
+    'region|Output picture',
+    'log|Text of the Output panel',
+    'region|Notifications',
+  ],
+  'simulator narrow, Memory shown': [
+    ...SIM_LEFT_READ,
+    'tablist|Tool panels',
+    'tab|Output',
+    'tab|Memory',
+    'tabpanel|Memory',
+    'region|Notifications',
+  ],
+  easybin: ['region|EASyBIN', 'region|Notifications'],
+};
+
+/** The focused element as `role|name|panel` (the entries of MAIN_TAB_ORDER). */
+function focusEntry() {
+  const e = document.activeElement;
+  if (!e || e === document.body) return { entry: 'body', editor: false };
+  const role = e.getAttribute('role') ?? e.tagName.toLowerCase();
+  let name = e.getAttribute('aria-label');
+  if (!name && e.getAttribute('aria-labelledby')) {
+    name = e
+      .getAttribute('aria-labelledby')
+      .split(/\s+/)
+      .map((id) => document.getElementById(id)?.textContent ?? '')
+      .join(' ');
+  }
+  if (!name) name = e.getAttribute('title') ?? (e.textContent ?? '').trim().slice(0, 24);
+  const panel = e.closest('[data-e68-panel]')?.getAttribute('data-e68-panel') ?? '-';
+  return { entry: `${role}|${name}|${panel}`, editor: e.isContentEditable === true };
+}
+
+const entryMatches = (expected, actual) => {
+  const want = expected.replace(/^~/, '');
+  if (!want.includes('*')) return want === actual;
+  const [head, tail] = want.split('*');
+  return actual.startsWith(head) && actual.endsWith(tail);
+};
+
+/**
+ * Tab (or Shift+Tab) from the start (the end) of the page; the focused elements in order, up to
+ * the body, the Output panel's key field or `until`.
+ */
+async function walkTabs(page, backward, until = null, beforeKeys = false) {
+  await page.evaluate(
+    ({ atEnd, beforeKeys }) => {
+      // The sequential navigation starts where this element is (the page's start or end, or just
+      // before the Output panel's key field, which keeps Tab and Shift+Tab for the running program).
+      const mark = document.createElement('span');
+      mark.tabIndex = -1;
+      mark.setAttribute('data-e68-walk-mark', '');
+      const keys = beforeKeys ? document.querySelector('[data-e68-panel="output"] textarea') : null;
+      if (keys) keys.before(mark);
+      else if (atEnd) document.body.append(mark);
+      else document.body.prepend(mark);
+      mark.focus();
+      if (!keys) mark.remove();
+    },
+    { atEnd: backward, beforeKeys },
+  );
+  const seen = [];
+  for (let i = 0; i < 90; i++) {
+    await page.keyboard.press(backward ? 'Shift+Tab' : 'Tab');
+    if (i === 0) await page.evaluate(() => document.querySelector('[data-e68-walk-mark]')?.remove());
+    const focus = await page.evaluate(focusEntry);
+    seen.push(focus.entry);
+    if (focus.entry === 'body' || focus.entry.startsWith('textarea|') || focus.entry === until) break;
+    if (focus.editor) await page.keyboard.press('Escape');
+  }
+  return seen;
+}
+
+/** The walk a list predicts: up to the body or the Output panel's key field. */
+function predictedWalk(list, backward, buttonsStop) {
+  const stops = list.filter((entry) => buttonsStop || !entry.startsWith('~'));
+  const ordered = backward ? [...stops].reverse() : stops;
+  const keys = ordered.findIndex((entry) => entry.startsWith('textarea|'));
+  return keys >= 0 ? ordered.slice(0, keys + 1) : [...ordered, 'body'];
+}
+
+function compareWalk(label, expected, actual) {
+  const ok = expected.length === actual.length && expected.every((entry, i) => entryMatches(entry, actual[i]));
+  let detail = `${actual.length} stops`;
+  if (!ok) {
+    const at = expected.findIndex((entry, i) => !entryMatches(entry, actual[i] ?? ''));
+    const from = Math.max(0, at - 2);
+    detail = `differs at ${at}: expected ${JSON.stringify(expected.slice(from, at + 4).map((e) => e.replace(/^~/, '')))}, got ${JSON.stringify(actual.slice(from, at + 4))}`;
+  }
+  check(label, ok, detail);
+}
+
+/** Chromium only: the dock's part of the accessibility tree in reading order. */
+async function readingOrderOf(page) {
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    const { nodes } = await cdp.send('Accessibility.getFullAXTree');
+    const byId = new Map(nodes.map((node) => [node.nodeId, node]));
+    const roles = new Set(['tab', 'tablist', 'region', 'tabpanel', 'tree', 'grid', 'listbox', 'list', 'log']);
+    const out = [];
+    const visit = (node) => {
+      const role = node.role?.value;
+      const name = node.name?.value ?? '';
+      if (!node.ignored && (roles.has(role) || (role === 'separator' && name !== ''))) {
+        const entry = `${role}|${name}`;
+        // The PanelRegion inside a dock tab panel of the same name (P3.1.8).
+        if (!(role === 'region' && out[out.length - 1] === `tabpanel|${name}`)) out.push(entry);
+      }
+      for (const child of node.childIds ?? []) {
+        const next = byId.get(child);
+        if (next) visit(next);
+      }
+    };
+    if (nodes[0]) visit(nodes[0]);
+    return out;
+  } finally {
+    await cdp.detach().catch(() => {});
+  }
+}
+
+/** Whether Tab stops at a plain button here (Safari on a Mac does not; Playwright's WebKit elsewhere does). */
+async function buttonsAreTabStops(browser) {
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await page.setContent('<input id="a"><button id="b">b</button><input id="c">');
+    await page.focus('#a');
+    await page.keyboard.press('Tab');
+    return (await page.evaluate(() => document.activeElement?.id)) === 'b';
+  } finally {
+    await context.close();
+  }
+}
+
+/**
+ * P1.2 and P3.1.8, the gate's major finding: with Lock Layout on (the default), Tab and the reading
+ * order go through the window exactly as on main, in the three modes, wide and narrow; Shift+Tab
+ * the same backwards. The splitters and the shown strips are reached through their slots (order.ts,
+ * errata N1 25). Unlocked, FlexLayout's own elements are tab stops again and no slot is left; locked
+ * again, today's order is back.
+ */
+async function tabOrderPass(browser, name) {
+  const p = `${name}/taborder:`;
+  const buttonsStop = await buttonsAreTabStops(browser);
+  note(`${name}: Tab ${buttonsStop ? 'stops' : 'does not stop'} at plain buttons in this browser`);
+  const cases = [
+    { label: 'editor', mode: 'editor', viewport: VIEWPORT },
+    { label: 'editor', mode: 'editor', viewport: { width: 1000, height: 800 }, narrow: true },
+    { label: 'simulator wide', mode: 'simulator', viewport: VIEWPORT },
+    { label: 'simulator wide, Memory shown', mode: 'simulator', viewport: VIEWPORT, memory: true },
+    { label: 'simulator narrow', mode: 'simulator', viewport: { width: 1000, height: 800 } },
+    {
+      label: 'simulator narrow, Memory shown',
+      mode: 'simulator',
+      viewport: { width: 1000, height: 800 },
+      memory: true,
+    },
+    { label: 'easybin', mode: 'easybin', viewport: VIEWPORT },
+    { label: 'easybin', mode: 'easybin', viewport: { width: 1000, height: 800 }, narrow: true },
+  ];
+  for (const item of cases) {
+    const tag = `${p} ${item.label}${item.narrow ? ' (1000 px)' : ''}`;
+    const context = await newContext(browser, 'windows', item.viewport);
+    const { page, errors } = await openApp(context);
+    try {
+      const locked = await page.evaluate(() => window.__dock.controller().locked());
+      check(`${tag}: Lock Layout is on by default`, locked === true);
+      if (item.mode !== 'editor') await setMode(page, item.mode);
+      await settle(page);
+      if (item.memory) {
+        await page.evaluate(() => window.__easy68k.ctx.commands.run('sim.view.memory'));
+        await settle(page);
+      }
+      const list = MAIN_TAB_ORDER[item.label];
+      for (const backward of [false, true]) {
+        const walk = await walkTabs(page, backward);
+        compareWalk(
+          `${tag}: ${backward ? 'Shift+Tab' : 'Tab'} goes through the window as on main`,
+          predictedWalk(list, backward, buttonsStop),
+          walk,
+        );
+      }
+      // The key field ends a walk (it keeps Tab and Shift+Tab), so a Shift+Tab walk from the end
+      // of a page that shows it covers only what follows it: a second walk goes back from just
+      // before the key field to the start of the page.
+      const keysAt = list.findIndex((entry) => entry.startsWith('textarea|'));
+      if (keysAt > 0) {
+        const walk = await walkTabs(page, true, null, true);
+        compareWalk(
+          `${tag}: Shift+Tab from the Output panel's key field back to the start goes as on main`,
+          predictedWalk(list.slice(0, keysAt), true, buttonsStop),
+          walk,
+        );
+      }
+      if (name === 'chromium') {
+        const read = await readingOrderOf(page);
+        const want = MAIN_READING_ORDER[item.label];
+        check(
+          `${tag}: the reading order (accessibility tree) is main's`,
+          same(read, want),
+          same(read, want) ? '' : `expected ${JSON.stringify(want)}, got ${JSON.stringify(read)}`,
+        );
+      }
+      // Each selected tab names its tab panel (aria-controls), which is labelled by the tab: the
+      // tabpanel role moved to the content's wrapper while locked (errata N1 25), so must the name.
+      const tabs = await page.evaluate(() =>
+        [...document.querySelectorAll('[data-e68-workspace] [role="tab"][aria-selected="true"]')]
+          .filter((tab) => tab.checkVisibility())
+          .map((tab) => {
+            const panel = document.getElementById(tab.getAttribute('aria-controls') ?? '');
+            return {
+              tab: tab.textContent.trim(),
+              role: panel?.getAttribute('role') ?? null,
+              labelled: panel?.getAttribute('aria-labelledby') === tab.id,
+            };
+          }),
+      );
+      check(
+        `${tag}: each selected tab controls its tab panel, which the tab labels`,
+        // Editor mode has its documents' strip; the simulator a strip with a tool panel or narrow.
+        (item.mode === 'editor' || (item.mode === 'simulator' && (item.memory || item.label.includes('narrow')))
+          ? tabs.length > 0
+          : true) && tabs.every((tab) => tab.role === 'tabpanel' && tab.labelled),
+        JSON.stringify(tabs),
+      );
+      // The focus ring of a splitter or a tab reached through its slot is drawn on it, where it is.
+      const shot = { editor: 'separator|Resize the Files panel|-', 'simulator narrow, Memory shown': 'tab|Memory|-' };
+      if (shot[item.label] && !item.narrow) {
+        const reached = await walkTabs(page, false, shot[item.label]);
+        const ring = await page.evaluate(() => {
+          const e = document.activeElement;
+          return e ? getComputedStyle(e).outlineStyle : 'none';
+        });
+        check(
+          `${tag}: ${shot[item.label].split('|')[0]} reached by Tab shows its focus ring`,
+          reached[reached.length - 1] === shot[item.label] && ring !== 'none',
+          `outline ${ring}`,
+        );
+        await page.screenshot({ path: join(outDir, `${name}-taborder-${item.mode}-focus.png`) });
+      }
+      if (item.label === 'simulator wide, Memory shown') {
+        // Unlocked: FlexLayout's splitters and tabs are tab stops of their own, no slot is left.
+        await setLocked(page, false);
+        const unlocked = await page.evaluate(() => {
+          const ws = document.querySelector('[data-e68-workspace="simulator"]');
+          return {
+            slots: ws.querySelectorAll('[data-e68-dock-slot]').length,
+            relocated: ws.querySelectorAll('[data-e68-relocated]').length,
+            splitters: [...ws.querySelectorAll('.flexlayout__splitter[role="separator"]')].map((s) => s.tabIndex),
+            tabs: [...ws.querySelectorAll('.flexlayout__tab_button[aria-selected="true"]')].map((t) => t.tabIndex),
+          };
+        });
+        check(
+          `${tag}: unlocked, no slot is left and the splitters and selected tabs are tab stops`,
+          unlocked.slots === 0 &&
+            unlocked.relocated === 0 &&
+            unlocked.splitters.length > 0 &&
+            unlocked.splitters.every((t) => t === 0) &&
+            unlocked.tabs.length > 0 &&
+            unlocked.tabs.every((t) => t === 0),
+          JSON.stringify(unlocked),
+        );
+        await setLocked(page, true);
+        const again = await walkTabs(page, true);
+        compareWalk(
+          `${tag}: locked again, Shift+Tab goes through the window as on main`,
+          predictedWalk(list, true, buttonsStop),
+          again,
+        );
+        // The keys of a splitter reached through its slot are the splitter's own (P3.1.1).
+        const moved = await page.evaluate(async () => {
+          const ws = document.querySelector('[data-e68-workspace="simulator"]');
+          const splitter = [...ws.querySelectorAll('.flexlayout__splitter[role="separator"]')].find(
+            (s) => s.getAttribute('aria-label') === 'Resize the tool panels',
+          );
+          return splitter ? splitter.getBoundingClientRect().top : null;
+        });
+        const back = await walkTabs(page, true, 'separator|Resize the tool panels|-');
+        const onSplitter = back[back.length - 1] === 'separator|Resize the tool panels|-';
+        await page.keyboard.press('ArrowDown');
+        await settle(page);
+        const after = await page.evaluate(() => {
+          const ws = document.querySelector('[data-e68-workspace="simulator"]');
+          const splitter = [...ws.querySelectorAll('.flexlayout__splitter[role="separator"]')].find(
+            (s) => s.getAttribute('aria-label') === 'Resize the tool panels',
+          );
+          return splitter ? splitter.getBoundingClientRect().top : null;
+        });
+        check(
+          `${tag}: the splitter reached with Shift+Tab moves with Down`,
+          onSplitter && moved !== null && after !== null && after > moved,
+          `on splitter ${onSplitter}, top ${moved} -> ${after}`,
+        );
+      }
+      check(`${tag}: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+    } finally {
+      await context.close();
+    }
+  }
+}
+
 // --- run -----------------------------------------------------------------------------------------
 
 const PASSES = {
@@ -2167,6 +2647,7 @@ const PASSES = {
   program: (browser, name) => programPass(browser, name),
   editor: (browser, name) => editorPass(browser, name),
   frames: (browser, name) => framesPass(browser, name),
+  taborder: (browser, name) => tabOrderPass(browser, name),
   scan: (browser, name) => scanPass(browser, name),
 };
 

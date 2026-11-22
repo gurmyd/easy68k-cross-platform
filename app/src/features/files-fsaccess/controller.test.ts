@@ -49,8 +49,9 @@ function fakeDocuments(docs: Partial<DocumentState>[]) {
       log.push(`close ${id}`);
       return true;
     },
-    open: async (path: VPath) => {
-      log.push(`open ${path}`);
+    open: async (path: VPath, options?: { asText?: boolean }) => {
+      // ARCHITECTURE-PLUS P3.4.1: only a person's own Open asks the viewer; a reopen asks for text.
+      log.push(`open ${path}${options?.asText ? ' as text' : ''}`);
       return null;
     },
   } as unknown as DocumentService;
@@ -334,7 +335,7 @@ describe('feature "files-fsaccess"', { timeout: 60_000 }, () => {
     s.folderPicks.push(s.disk.root('home/course'));
     expect(await s.access.openContainingFolder(path as VPath, file)).toBe(true);
     expect(s.dirOptions[0]?.startIn).toBe(file);
-    expect(documents.log).toEqual(['close d1', 'open /folder/lab1/prog.X68']);
+    expect(documents.log).toEqual(['close d1', 'open /folder/lab1/prog.X68 as text']);
     expect(s.toasts.at(-1)?.text).toBe(FSACCESS_TEXTS.moved('prog.X68', 'course'));
     s.application.dispose();
   });

@@ -24,7 +24,7 @@ import type { Bytes, SeenFile, VPath } from '../../contracts';
 import { createVfs } from '../../fs/vfs';
 import { MemoryBackend } from '../../fs/memory-backend';
 import { createMemoryHistoryStore } from '../../fs/history-memory';
-import { editText, noiseBytes, seededRandom } from '../../fs/history-model';
+import { editText, noiseBytes, readHistoryDatabase, seededRandom } from '../../fs/history-model';
 import { DAY, HOUR, MB, MINUTE } from './limits';
 import type { PlanEvent } from './plans';
 
@@ -69,12 +69,13 @@ function world(quota: number | undefined) {
   const log: { op: Op['kind']; event: PlanEvent }[] = [];
   let current: Op['kind'] = 'save';
   const clock = { now: () => now, wallTime: () => new Date(now) };
+  const factory = new IDBFactory();
   const store = createMemoryHistoryStore(
     {
       vfs,
       clock,
       scheduler: { setTimer: () => () => {}, onFrame: () => () => {} },
-      factory: new IDBFactory(),
+      factory,
       subtle,
       compression: { CompressionStream: SyncCompression as never, DecompressionStream: globalThis.DecompressionStream },
       estimate: async () => (env.quota === undefined ? {} : { quota: env.quota, usage: env.usage }),
@@ -91,6 +92,7 @@ function world(quota: number | undefined) {
   return {
     vfs,
     store,
+    factory,
     env,
     log,
     get now() {
@@ -110,6 +112,8 @@ type World = ReturnType<typeof world>;
 /** What every run checks after every operation, and counts. */
 class Checks {
   prunes = { versions: 0, trash: 0 };
+  /** What the prunings removed: versions (of living records and of records in the Trash), items. */
+  pruned = { versions: 0, items: 0 };
   /** From which operation on the halves must be at most B / 2 again (run d). */
   boundFrom = 0;
   ops = 0;
@@ -133,6 +137,8 @@ class Checks {
       if (event.kind !== 'prune') continue;
       if (event.by === 'lower') lowered[event.half] = true;
       this.prunes[event.half]++;
+      this.pruned.versions += event.livingVersions + event.trashVersions;
+      this.pruned.items += event.items.length;
       if (op === 'save' && event.items.length > 0) fail('a save removed a Trash item');
       if (op === 'delete' && event.livingVersions > 0) fail('a delete removed an earlier version');
       for (const item of event.items) {
@@ -286,7 +292,50 @@ async function student(run: StudentRun) {
     w.advance(Math.max(HOUR, Math.min(gap, start + 90 * DAY - w.now)));
   }
   await globalPass();
-  return { w, checks, saved, deleted, passes: pass, tightSeen, files };
+  return { w, checks, saved, deleted, passes: pass, tightSeen, files, start };
+}
+
+/**
+ * The parts of run (a)'s figure, read from the database (for the owner's decision of D4, errata N3
+ * "The typical-student figure"): each half's versions by kind of file (the 5 % of files of 0.5 to
+ * 1 MB that do not compress, and the sources), with the ages of the earlier versions kept.
+ */
+async function figureParts(w: World): Promise<string> {
+  const db = await readHistoryDatabase(w.factory);
+  const half = {
+    versions: { big: { n: 0, bytes: 0 }, sources: { n: 0, bytes: 0 } },
+    trash: { big: { n: 0, bytes: 0 }, sources: { n: 0, bytes: 0 } },
+  };
+  const ages = { big: [] as number[], sources: [] as number[] };
+  let records = { versions: 0, trash: 0 };
+  for (const [id, record] of db.files) {
+    if (record.trash) records = { ...records, trash: records.trash + 1 };
+    else records = { ...records, versions: records.versions + 1 };
+    for (const v of db.versions.get(id) ?? []) {
+      const kind = v.size >= MB / 2 ? 'big' : 'sources';
+      const inTrash = !!record.trash && v.seq === record.newestSeq;
+      const part = half[inTrash ? 'trash' : 'versions'][kind];
+      part.n++;
+      part.bytes += v.stored + 128;
+      if (!inTrash && v.seq !== record.newestSeq) ages[kind].push((w.now - v.time) / DAY);
+    }
+  }
+  const mb = (bytes: number) => `${(bytes / MB).toFixed(2)} MB`;
+  const span = (list: number[]) => {
+    if (list.length === 0) return 'none';
+    const by = (from: number, to: number) => list.filter((d) => d >= from && d < to).length;
+    return (
+      `${list.length} (under 1 day ${by(0, 1)}, 1 to 7 days ${by(1, 7)}, 7 to 60 days ${by(7, 60)}, ` +
+      `over 60 days ${by(60, Infinity)}; the oldest ${Math.max(...list).toFixed(1)} days)`
+    );
+  };
+  return (
+    `versions half: files of 0.5 to 1 MB ${mb(half.versions.big.bytes)} (${half.versions.big.n} versions), ` +
+    `sources ${mb(half.versions.sources.bytes)} (${half.versions.sources.n}), records ${mb(records.versions * 128)}; ` +
+    `Trash half: files of 0.5 to 1 MB ${mb(half.trash.big.bytes)} (${half.trash.big.n} copies), ` +
+    `sources ${mb(half.trash.sources.bytes)} (${half.trash.sources.n}), records ${mb(records.trash * 128)}; ` +
+    `earlier versions of the sources ${span(ages.sources)}; of the files of 0.5 to 1 MB ${span(ages.big)}`
+  );
 }
 
 describe('the stress runs of the history store (P5 N3)', () => {
@@ -296,7 +345,7 @@ describe('the stress runs of the history store (P5 N3)', () => {
     '(a) a student over 90 days, B = 64 MB; a burst leaves the week before untouched',
     async () => {
       const started = Date.now();
-      const { w, checks, saved, deleted } = await student({ quota: undefined });
+      const { w, checks, saved, deleted, start: startedAt } = await student({ quota: undefined });
       const usage = await w.store.usage();
       // The burst: 500 saves of one file in one hour, after a week of daily saves of it. In the
       // run's own store the oldest versions are pruned (B is full of the 1 MB files), so the burst is
@@ -328,6 +377,10 @@ describe('the stress runs of the history store (P5 N3)', () => {
           `(${usage.trashItems} items); the typical-student figure is ${(typical / MB).toFixed(2)} MB (D4: deltas above 16 MB); ` +
           `prunings ${JSON.stringify(checks.prunes)}; the burst kept ${before.filter((v) => after.has(v.seq)).length} of the ${before.length} ` +
           `daily versions from before it (${weekBefore.filter((v) => after.has(v.seq)).length} of ${weekBefore.length} of the week before)`,
+      );
+      console.log(
+        `stress (a), the figure's parts after ${((w.now - startedAt) / DAY).toFixed(1)} days at B = ${(usage.budget / MB).toFixed(0)} MB: ` +
+          `${await figureParts(w)}; the prunings removed ${checks.pruned.versions} versions and ${checks.pruned.items} items`,
       );
       expect(checks.failures).toEqual([]);
       expect(before.length).toBe(14);

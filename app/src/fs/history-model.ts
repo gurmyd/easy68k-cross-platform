@@ -284,6 +284,8 @@ export interface Promised {
   time: number;
   /** The Trash item (half 'trash'). */
   item?: string;
+  /** The record that held it at the last check (half 'versions'). */
+  holder?: string;
 }
 
 /** What the driver tells the checker about the step that just ran. */
@@ -615,6 +617,7 @@ function watchHistory(model: HistoryModel, history: HistoryService): HistoryServ
       let answered: boolean | null = null;
       let confirmedBeforeAct = false;
       let acted = false;
+      let actResolved = false;
       let atAct = new Map<VPath, Bytes>();
       const result = await history
         .guard(
@@ -628,6 +631,7 @@ function watchHistory(model: HistoryModel, history: HistoryService): HistoryServ
               seen.flatMap((file) => (files.has(file.path) ? [[file.path, files.get(file.path) as Bytes]] : [])),
             );
             await act(seen);
+            actResolved = true;
           },
           async () => {
             const answer = await confirm();
@@ -639,9 +643,11 @@ function watchHistory(model: HistoryModel, history: HistoryService): HistoryServ
           return { failed: error } as const;
         });
       // What act removed (delete) or overwrote (replace, restore). A file another window changed
-      // while act ran is not act's doing: act leaves it (P3.3.4 step 4).
+      // while act ran is not act's doing: act leaves it (P3.3.4 step 4). A Replace or Restore whose
+      // act resolved overwrote its file, also with the same bytes (open case 5: "for a replace or a
+      // restore, when act resolved"; seed 10480, a move onto a copy of itself).
       const touched = [...atAct.entries()].filter(([file, bytes]) =>
-        how === 'delete' ? !files.has(file) : !equalBytes(files.get(file), bytes),
+        how === 'delete' ? !files.has(file) : actResolved || !equalBytes(files.get(file), bytes),
       );
       const outcome = 'failed' in result ? null : result.outcome;
       if (outcome === 'declined' && acted) violations.push(`guard of "${path}" declined after act ran`);
@@ -714,7 +720,9 @@ function watchHistory(model: HistoryModel, history: HistoryService): HistoryServ
           if (!fallbackRoot || !info) return false;
           const rel = info.kind === 'file' ? '' : p.path.slice(info.path.length);
           const top = info.path.slice(info.path.lastIndexOf('/'));
-          return target === `${fallbackRoot}${top}${rel}`;
+          // In the folder chosen too, a taken name may be answered with `beside` (seed 9397).
+          const there: VPath = `${fallbackRoot}${top}${rel}`;
+          return target === there || [1, 2, 3, 4, 5, 6].some((n) => besideName(there, n) === target);
         });
         return fits.find((p) => equalBytes(p.bytes, files.get(target))) ?? fits[0] ?? null;
       };
@@ -746,6 +754,7 @@ function watchHistory(model: HistoryModel, history: HistoryService): HistoryServ
                     ? `${folder}${item.path.slice(item.path.lastIndexOf('/'))}`
                     : `${folder}${item.path.slice(item.path.lastIndexOf('/'))}${p.path.slice(item.path.length)}`;
                 allow(target, p.bytes);
+                for (let n = 1; n <= 6; n++) allow(besideName(target, n), p.bytes);
               }
             }
             return folder;
@@ -757,6 +766,19 @@ function watchHistory(model: HistoryModel, history: HistoryService): HistoryServ
           },
         })
         .finally(() => state.restores.delete(expect));
+      if (globalThis.process?.env?.EASY68K_HISTORY_DEBUG)
+        console.log(
+          'RESTORE',
+          JSON.stringify({
+            id,
+            mine: mine.map((m) => [m.path, m.bytes.length, !!m.promise]),
+            fallbackRoot,
+            result,
+            answers: [...answers],
+            confirmed: [...confirmed],
+            found: result.restored.map((t) => allowed(t)?.path ?? null),
+          }),
+        );
       for (const target of result.restored) {
         const found = allowed(target);
         if (!found) {
@@ -799,6 +821,8 @@ function watchHistory(model: HistoryModel, history: HistoryService): HistoryServ
     usage: () => history.usage(),
     guard,
     restoreTrash,
+    // A member that rejects did not do its work (errata N3, "When a transaction fails"): the model
+    // keeps what it promised as it was, and the step's command goes on as its caller does.
     async dropTrash(ids) {
       await history.dropTrash(ids);
       for (const id of ids) state.dropped.add(id);
@@ -806,6 +830,7 @@ function watchHistory(model: HistoryModel, history: HistoryService): HistoryServ
       model.release((p) => p.half === 'trash' && gone.has(p.item ?? ''));
     },
     async moved(from, to) {
+      // Rejected: the records stayed at `from`, and so do the promises.
       await stage(() => history.moved(from, to));
       // The history follows by place (P4.3: the browser store ignores letter case).
       const fromPlace = placeOf(from);
@@ -816,8 +841,13 @@ function watchHistory(model: HistoryModel, history: HistoryService): HistoryServ
       }
     },
     async clearVersions() {
-      await history.clearVersions();
-      model.release((p) => p.half === 'versions');
+      try {
+        await history.clearVersions();
+      } finally {
+        // The person asked for every earlier version to go: also when it rejects after some batches,
+        // what went had a cause (what stayed is still readable, and checked as such by (5) and (6)).
+        model.release((p) => p.half === 'versions');
+      }
     },
     async deleteAll() {
       await history.deleteAll();
@@ -930,6 +960,18 @@ export async function checkHistoryInvariants(db: IDBFactory, vfs: Vfs, model: Hi
     const item = entry[1].trash?.item;
     if (item) byItem.set(item, [...(byItem.get(item) ?? []), entry]);
   }
+  if (globalThis.process?.env?.EASY68K_HISTORY_DEBUG) {
+    for (const p of model.promises) {
+      if (p.half !== 'versions') continue;
+      const holders = [...after.files]
+        .filter(([fid]) => (after.versions.get(fid) ?? []).some((v) => v.hash === p.hash))
+        .map(([fid, r]) => `${fid}@${r.live ?? `trash:${r.trash?.item}`}`);
+      console.log(
+        `HOLDERS ${p.id} ${placeOf(p.path)} living=${living.get(placeOf(p.path) ?? '')} ${holders.join(' ')}`,
+      );
+    }
+  }
+  const filePlaces = new Set([...model.files.keys()].map((path) => placeOf(path) ?? ''));
   for (const p of [...model.promises]) {
     let found = false;
     if (p.half === 'trash') {
@@ -938,11 +980,31 @@ export async function checkHistoryInvariants(db: IDBFactory, vfs: Vfs, model: Hi
         if (copy && copy.hash === p.hash) found = true;
       }
     } else {
-      // The record of the file holds it: living, or in the Trash when a page closed during a delete
-      // (P3.3.4: a record in the Trash whose file still exists).
+      // The record of the file holds it: the living record of its place, or the record that held it
+      // at the last check (`holder`) wherever that record is now: in the Trash while its file still
+      // exists (a page closed during a delete, P3.3.4; the file may have moved since, seed 14580), or
+      // living where a restore wrote its copy (beside a name taken meanwhile, in a folder chosen;
+      // seed 4590), whose path the promise then takes. Not any other record that happens to hold the
+      // same bytes (a copy of the file deleted elsewhere): that would hide the step in which the
+      // file's own record lost the version (seed 9490).
       const place = placeOf(p.path) ?? '';
-      const ids = [living.get(place), ...[...after.files].filter(([, r]) => r.trash).map(([fid]) => fid)];
-      found = ids.some((fid) => !!fid && (after.versions.get(fid) ?? []).some((v) => v.hash === p.hash));
+      const holds = (fid: string | undefined): fid is string =>
+        !!fid && (after.versions.get(fid) ?? []).some((v) => v.hash === p.hash);
+      const live = living.get(place);
+      if (holds(live)) {
+        p.holder = live;
+        found = true;
+      } else if (holds(p.holder)) {
+        const record = after.files.get(p.holder) as DbFile;
+        if (record.live === undefined) found = true;
+        else if (record.live !== place && filePlaces.has(record.live)) {
+          // Living elsewhere only where a file is: a record left at a place that holds no file (a
+          // move whose history did not follow, but reported that it did) hides the version from
+          // the file's Earlier Versions, and is a loss (seed 7064 against the store as it was).
+          p.path = record.spelling as VPath;
+          found = true;
+        }
+      }
     }
     if (found) continue;
     const why = explainLoss(p, before, after, state);
@@ -1070,6 +1132,20 @@ function explainLoss(p: Promised, before: DbSnapshot | null, after: DbSnapshot, 
       if (!oldVersions.has(v.seq) || wasHalf !== half) added[half] += counted(v);
     }
     if (old && !!old.trash !== !!record.trash) added[record.trash ? 'trash' : 'versions'] += RECORD_BYTES;
+    // A copy that moved back with its record and was not admitted (no room even after pruning,
+    // P3.3.4 "What does not fit after pruning is not kept") was still checked against B / 2, and its
+    // admission may have pruned the half first (seed 4063).
+    if (old?.trash && !record.trash) {
+      const copy = (before.versions.get(id) ?? []).find((v) => v.seq === old.newestSeq);
+      if (copy && !(after.versions.get(id) ?? []).some((v) => v.seq === copy.seq)) added.versions += counted(copy);
+    }
+  }
+  // The same for a record of an item being restored that went altogether: a living record without
+  // versions is not kept (open case 4).
+  for (const [id, old] of before.files) {
+    if (!old.trash || after.files.has(id) || !state.stepRestoring.has(old.trash.item)) continue;
+    const copy = (before.versions.get(id) ?? []).find((v) => v.seq === old.newestSeq);
+    if (copy) added.versions += counted(copy);
   }
   // Copies guard kept in this step whose records went back to living after act (files act left,
   // a failed act) passed Trash admission on their way: they count as what the step added there.
@@ -1124,7 +1200,7 @@ function explainLoss(p: Promised, before: DbSnapshot | null, after: DbSnapshot, 
   const holds = (id: string) => (before.versions.get(id) ?? []).some((v) => v.hash === p.hash);
   const entry =
     [...before.files.entries()].find(([id, r]) => r.live === place && holds(id)) ??
-    [...before.files.entries()].find(([id, r]) => r.trash && holds(id)) ??
+    [...before.files.entries()].find(([id]) => id === p.holder && holds(id)) ??
     [...before.files.entries()].find(([, r]) => r.live === place);
   if (!entry) return before.totals.trash + added.trash > limit || needed('versions') ? 'its record left' : null;
   const mark = entry[1].trash;
@@ -1162,6 +1238,10 @@ function explainLoss(p: Promised, before: DbSnapshot | null, after: DbSnapshot, 
     if (!other) continue;
     for (const v of versions) {
       if (other.trash && v.seq === other.newestSeq) continue;
+      // A copy that went into the Trash half in this step (the step's own delete kept it before the
+      // pruning) was no longer in the versions half (seed 3694).
+      const otherAfter = after.files.get(otherId);
+      if (otherAfter?.trash && v.seq === otherAfter.newestSeq) continue;
       if (v.time > mine.time || (v.time === mine.time && (otherId > id || (otherId === id && v.seq >= mine.seq))))
         continue;
       if ((after.versions.get(otherId) ?? []).some((w) => w.seq === v.seq)) return null;
@@ -1260,6 +1340,10 @@ export async function runModelSequence(options: DriverOptions): Promise<DriverRe
   const random = seededRandom(options.seed);
   const pick = <T>(list: readonly T[]): T => list[Math.floor(random() * list.length)] as T;
   const chance = (p: number) => random() < p;
+  // Choices added after a seed range was searched draw from a stream of their own, so that every
+  // seed keeps the sequence of steps it had (a seed named in a regression case replays the steps
+  // that once failed).
+  const later = seededRandom(options.seed + 0x9e3779b9);
   const stats: Record<string, number> = {};
   const count = (key: string) => {
     stats[key] = (stats[key] ?? 0) + 1;
@@ -1291,7 +1375,7 @@ export async function runModelSequence(options: DriverOptions): Promise<DriverRe
   const diskBackend = new MemoryBackend({ mount: 'disk', kind: 'disk', label: 'This computer', now: () => ++fileTime });
   raw.mount(diskBackend);
 
-  const faults = { vfs: null as 'write' | 'remove' | null, abortAfter: -1 };
+  const faults = { vfs: null as 'write' | 'remove' | null, abortAfter: -1, abortEvery: false };
   const model = createHistoryModel(raw, () => (options.database ?? (() => options.factory))(), faults);
   world.storeVfs = model.storeVfs;
   world.factory = abortingFactory(options.factory, faults);
@@ -1510,7 +1594,8 @@ export async function runModelSequence(options: DriverOptions): Promise<DriverRe
         const data = model.files.get(from) as Bytes;
         await model.vfs.writeFile(to, data);
         await model.vfs.remove(from);
-        await w.moved(from, to);
+        // As the Files panel does (N5): a history that did not follow does not undo the rename.
+        await w.moved(from, to).catch(() => {});
         pushUndo({ kind: 'move', pairs: [[from, to]] });
         return `rename ${from} -> ${to}`;
       },
@@ -1547,8 +1632,9 @@ export async function runModelSequence(options: DriverOptions): Promise<DriverRe
           for (const [file] of done) await model.vfs.remove(file).catch(() => {});
           if (source === folder) await removeEmptyFolders(model.vfs, folder);
           // P3.2.4: once for each file moved; a folder moved without a merge may call it once.
-          if (source === folder && !merge && done.length === list.length) await w.moved(source, `${into}${top}`);
-          else for (const [file, target] of done) await w.moved(file, target);
+          if (source === folder && !merge && done.length === list.length)
+            await w.moved(source, `${into}${top}`).catch(() => {});
+          else for (const [file, target] of done) await w.moved(file, target).catch(() => {});
           pushUndo({ kind: 'move', pairs: done, replaced });
         } else {
           pushUndo({ kind: 'copy', copies: done.map(([, t]) => t), replaced });
@@ -1586,7 +1672,7 @@ export async function runModelSequence(options: DriverOptions): Promise<DriverRe
             if (model.files.has(from) || !model.files.has(to)) continue;
             await model.vfs.writeFile(from, model.files.get(to) as Bytes);
             await model.vfs.remove(to);
-            await w.moved(to, from);
+            await w.moved(to, from).catch(() => {});
           }
         } else {
           for (const copy of last.copies ?? []) {
@@ -1718,10 +1804,23 @@ export async function runModelSequence(options: DriverOptions): Promise<DriverRe
       'abort',
       async () => {
         faults.abortAfter = 1 + Math.floor(random() * 8);
+        // Now and then every read-write transaction of the step aborts (a disk that keeps refusing):
+        // a member that cannot do its work even when it tries again must say so, not resolve as if
+        // it had (errata N3, "When a transaction fails"), and the seven properties still hold.
+        faults.abortEvery = later() < 0.25;
         const w = pick(windows).history;
         const folder = pick(folders.slice(0, 2));
-        const text = await run(w, folder);
-        faults.abortAfter = -1;
+        let text: string;
+        try {
+          text = await run(w, folder);
+        } finally {
+          faults.abortAfter = -1;
+        }
+        if (faults.abortEvery) {
+          faults.abortEvery = false;
+          count('abort every');
+          return `with every transaction aborted in the middle: ${text}`;
+        }
         return `with a transaction aborted in the middle: ${text}`;
       },
     ],
@@ -1833,11 +1932,16 @@ export async function runModelSequence(options: DriverOptions): Promise<DriverRe
       text = `a step failed: ${String(error)}`;
       count('failed');
     }
+    faults.abortEvery = false;
     for (const w of windows) await w.store.settled();
     faults.abortAfter = -1;
     faults.vfs = null;
     steps.push(text);
     options.trace?.(step, text);
+    if (globalThis.process?.env?.EASY68K_HISTORY_DEBUG)
+      console.log(
+        `STEP ${step}: ${text}\nPROMISES ${model.promises.map((p) => `${p.id}:${p.half}:${p.path}:${p.hash.slice(0, 8)}${p.item ? `:${p.item}` : ''}`).join(' ')}`,
+      );
     const violations = await checkHistoryInvariants(database(), raw, model);
     if (violations.length > 0) {
       for (const w of windows) w.store.close();
@@ -1917,16 +2021,17 @@ function binaryBytes(random: () => number, size: number): Bytes {
 
 /**
  * An IDBFactory whose next read-write transaction is aborted after `faults.abortAfter` requests
- * (a transaction aborted in the middle). It wraps the databases the factory opens.
+ * (a transaction aborted in the middle), or every one while `faults.abortEvery` is set. It wraps
+ * the databases the factory opens.
  */
-function abortingFactory(factory: IDBFactory, faults: { abortAfter: number }): IDBFactory {
+function abortingFactory(factory: IDBFactory, faults: { abortAfter: number; abortEvery: boolean }): IDBFactory {
   const wrapDb = (db: IDBDatabase) => {
     const original = db.transaction.bind(db);
     const transaction = (names: string | string[], mode?: IDBTransactionMode, opts?: IDBTransactionOptions) => {
       const tx = original(names, mode, opts);
       if (mode !== 'readwrite' || faults.abortAfter <= 0) return tx;
       let left = faults.abortAfter;
-      faults.abortAfter = -1;
+      if (!faults.abortEvery) faults.abortAfter = -1;
       const objectStore = tx.objectStore.bind(tx);
       const countRequest = () => {
         if (--left === 0) {

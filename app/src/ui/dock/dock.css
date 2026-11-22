@@ -296,6 +296,21 @@
   outline-offset: -2px;
 }
 
+/* A slot of a splitter or a strip in the content layer (Lock Layout on, order.ts): a tab stop that
+   hands the focus on at once, and the place where the accessibility tree reads its block. Not seen,
+   and it takes no room. */
+.e68-dock__slot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  outline: none;
+}
+
 /* The live region of the moves (P3.1.8): read, not seen. */
 .e68-dock__live {
   position: absolute;

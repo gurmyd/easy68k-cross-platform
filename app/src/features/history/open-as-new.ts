@@ -2,7 +2,8 @@
 // source document with the version's text, so that the student can copy what they need. Owner: N4.
 //
 // DocumentService.newSourceWithText (optional; docs/requests/N4-history-ui.md item 1) makes it when
-// the document service has it. Without it the document is made from the template (`newSource()`)
+// the document service has it, as the application's service does (errata N4 entry 8). Without it
+// (a service that lacks the optional member) the document is made from the template (`newSource()`)
 // and the text is put into the new document by the editor itself: a view plugin,
 // registered through `ctx.editorExtensions` for that one document, replaces the template with the
 // version's text when the document's view exists, as one change that Undo does not take back

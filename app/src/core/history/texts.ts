@@ -67,6 +67,17 @@ export function historyUnreadable(detail: string): string {
   return `The history cannot be read (${detail}). Your files are not affected.`;
 }
 
+/**
+ * A change of the history that could not be made even when tried again (`Delete for Good`, `Empty
+ * Trash`, `Delete Earlier Versions`, a move's history, deleting the database): the store rejects
+ * with it rather than report success, and the dialogs show it (errata N3, "When a transaction
+ * fails"). Built on P3.3.7's `The history cannot be read (<detail>).`, which the document gives;
+ * this one it does not give.
+ */
+export function historyNotChanged(detail: string): string {
+  return `The history could not be changed (${detail}). Your files are not affected.`;
+}
+
 /** P3.3.7: the button that deletes the database, and its confirmation (`Yes`, `No`). */
 export const DELETE_HISTORY_BUTTON = 'Delete History and Trash';
 export const DELETE_HISTORY_QUESTION =

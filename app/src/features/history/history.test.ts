@@ -30,6 +30,7 @@ import {
   STORAGE_TIGHT_TOAST,
   cannotKeepQuestion,
   changedWhileRestoring,
+  historyNotChanged,
   historyUnreadable,
   unreadableEntries,
 } from '../../core/history/texts';
@@ -688,6 +689,29 @@ describe('the Trash (P3.3.8)', () => {
     await emptyTrash({ history: { dropTrash } as unknown as HistoryService, dialogs }, listed);
     expect(boxes[0]?.text).toBe('Delete everything in the Trash for good? (12 items, 1.4 MB)');
     expect(dropTrash).toHaveBeenCalledWith(listed.map((i) => i.id));
+  });
+
+  it('a drop the store could not make is shown under the command, not reported as done (errata N3)', async () => {
+    const reason = historyNotChanged('the transaction was aborted');
+    const dropTrash = vi.fn(async () => {
+      throw new Error(reason);
+    });
+    const history = { dropTrash } as unknown as HistoryService;
+    for (const [run, title] of [
+      [
+        (dialogs: Parameters<typeof deleteForGood>[0]['dialogs']) =>
+          deleteForGood({ history, dialogs }, [item('a', 1)]),
+        'Delete for Good',
+      ],
+      [
+        (dialogs: Parameters<typeof emptyTrash>[0]['dialogs']) => emptyTrash({ history, dialogs }, [item('a', 1)]),
+        'Empty Trash',
+      ],
+    ] as const) {
+      const { boxes, dialogs } = asking('Yes');
+      expect(await run(dialogs)).toBe(false);
+      expect(boxes.at(-1)).toEqual({ title, text: reason, icon: 'error', buttons: ['OK'] });
+    }
   });
 
   it('Delete History and Trash asks its question and runs deleteAll', async () => {

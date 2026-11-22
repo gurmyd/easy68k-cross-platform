@@ -76,6 +76,21 @@ async function yes(dialogs: Ask, title: string, text: string): Promise<boolean> 
   return (await dialogs.messageBox({ title, text, icon: 'confirmation', buttons: ['Yes', 'No'] })) === 'Yes';
 }
 
+/**
+ * The store rejects a change it could not make (errata N3, "When a transaction fails"): its message
+ * is shown under the command's caption, as for Delete History and Trash, and nothing is reported as
+ * done (the list, read again, still shows the items).
+ */
+async function failed(dialogs: Ask, title: string, error: unknown): Promise<false> {
+  await dialogs.messageBox({
+    title,
+    text: error instanceof Error ? error.message : String(error),
+    icon: 'error',
+    buttons: ['OK'],
+  });
+  return false;
+}
+
 /** `Delete for Good` on the selected items: the question, then dropTrash. True when dropped. */
 export async function deleteForGood(
   deps: { history: HistoryService; dialogs: Ask },
@@ -83,7 +98,11 @@ export async function deleteForGood(
 ): Promise<boolean> {
   if (items.length === 0) return false;
   if (!(await yes(deps.dialogs, DELETE_FOR_GOOD_BUTTON, deleteForGoodQuestion(items.length)))) return false;
-  await deps.history.dropTrash(items.map((item) => item.id));
+  try {
+    await deps.history.dropTrash(items.map((item) => item.id));
+  } catch (error) {
+    return failed(deps.dialogs, DELETE_FOR_GOOD_BUTTON, error);
+  }
   return true;
 }
 
@@ -95,7 +114,11 @@ export async function emptyTrash(
   if (listed.length === 0) return false;
   const size = formatSize(listed.reduce((sum, item) => sum + item.bytes, 0));
   if (!(await yes(deps.dialogs, EMPTY_TRASH_BUTTON, emptyTrashQuestion(listed.length, size)))) return false;
-  await deps.history.dropTrash(listed.map((item) => item.id));
+  try {
+    await deps.history.dropTrash(listed.map((item) => item.id));
+  } catch (error) {
+    return failed(deps.dialogs, EMPTY_TRASH_BUTTON, error);
+  }
   return true;
 }
 
@@ -105,13 +128,7 @@ export async function deleteHistoryAndTrash(deps: { history: HistoryService; dia
   try {
     await deps.history.deleteAll();
   } catch (error) {
-    await deps.dialogs.messageBox({
-      title: DELETE_HISTORY_BUTTON,
-      text: error instanceof Error ? error.message : String(error),
-      icon: 'error',
-      buttons: ['OK'],
-    });
-    return false;
+    return failed(deps.dialogs, DELETE_HISTORY_BUTTON, error);
   }
   return true;
 }

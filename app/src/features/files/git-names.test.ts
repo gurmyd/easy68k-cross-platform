@@ -15,7 +15,7 @@ import type { DroppedFolderProvider } from './providers';
 import { gitRefusalFor, gitStoreName, writesBelowGit } from './git-guard';
 import { createFileDialogs, feature } from './index';
 import { moveTargets, transferItems } from './move';
-import { renameChecked } from './store';
+import { renameChecked } from './rename';
 import { GIT_DROP_TOAST, GIT_NOT_IMPORTED, gitNameRefused, gitPathRefused, gitStoreRefused } from './texts';
 import { ascii, filesTestDeps, memoryStores, scriptedDialogs, scriptedHistory, text } from './testing';
 

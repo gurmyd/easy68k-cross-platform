@@ -10,6 +10,7 @@ import {
   cannotKeepQuestion,
   changedWhileReplacing,
   changedWhileRestoring,
+  historyNotChanged,
   historyUnreadable,
   unreadableEntries,
 } from './texts';
@@ -72,6 +73,9 @@ describe('the other texts', () => {
     expect(unreadableEntries(3)).toBe('3 entries could not be read.');
     expect(historyUnreadable('the database did not open')).toBe(
       'The history cannot be read (the database did not open). Your files are not affected.',
+    );
+    expect(historyNotChanged('the transaction was aborted')).toBe(
+      'The history could not be changed (the transaction was aborted). Your files are not affected.',
     );
     expect(DELETE_HISTORY_BUTTON).toBe('Delete History and Trash');
     expect(DELETE_HISTORY_QUESTION).toBe(

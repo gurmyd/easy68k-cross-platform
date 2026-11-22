@@ -21,7 +21,9 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type FocusEvent as ReactFocusEvent,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
 } from 'react';
 import { useApplication, useShellState } from '../../state/context';
 import { NARROW_WIDTH, PANEL_TITLES, type PanelId } from '../../state/layout';
@@ -31,7 +33,8 @@ import { PanelRegion } from '../shell/PanelRegion';
 import './dock.css';
 import { DockEngine } from './engine';
 import { DOCK_KEY_MAP, isViewerId, panelOfTab, tabIdOf, type DockMode } from './model';
-import type { SplitRole } from './splitters';
+import { blockOf, stopsOf } from './order';
+import { innerPanelId, type SplitRole } from './splitters';
 import { TabMenu, type TabMenuState } from './TabMenu';
 import { CLOSE_TAB, SPLITTER_LABEL } from './texts';
 
@@ -88,7 +91,7 @@ function RegistersContent({ engine }: { engine: DockEngine }) {
     return () => observer.disconnect();
   }, [auto, engine]);
   return (
-    <div ref={wrapper} className="e68-dock__content">
+    <div ref={wrapper} className="e68-dock__content" data-e68-dock-content={tabIdOf('simulator', 'registers')}>
       <PanelRegion
         id="registers"
         mode="simulator"
@@ -106,7 +109,11 @@ function OutputContent({ engine }: { engine: DockEngine }) {
   const bar = collapsed && view.collapseApplies;
   const title = app.panels.find('simulator', 'output')?.title ?? PANEL_TITLES.output;
   return (
-    <div className="e68-dock__content e68-dock__output" data-collapsed={bar ? 'true' : undefined}>
+    <div
+      className="e68-dock__content e68-dock__output"
+      data-collapsed={bar ? 'true' : undefined}
+      data-e68-dock-content={tabIdOf('simulator', 'output')}
+    >
       {bar && (
         <button
           type="button"
@@ -127,6 +134,7 @@ function TransientContent({ engine, panel }: { engine: DockEngine; panel: string
   const spec = engine.transients.get(panel);
   return (
     <section
+      id={innerPanelId(tabIdOf(engine.mode, panel))}
       data-e68-panel={panel}
       role="tabpanel"
       aria-labelledby={`flexlayout-tabbutton-${tabIdOf(engine.mode, panel)}`}
@@ -138,17 +146,108 @@ function TransientContent({ engine, panel }: { engine: DockEngine; panel: string
   );
 }
 
+/** The tab that is about to receive the focus by Tab or Shift+Tab, as the last Tab key said. */
+const lastTab = { backward: false, at: Number.NEGATIVE_INFINITY };
+
+/**
+ * A slot of a strip or a splitter in the content layer (Lock Layout on, order.ts): it owns the
+ * block for the accessibility tree and, reached by Tab, passes the focus on to the block's first
+ * element (by Shift+Tab, its last).
+ */
+function DockSlot({ engine, panel, side }: { engine: DockEngine; panel: string; side: 'before' | 'after' }) {
+  const block = useSyncExternalStore(
+    engine.subscribeSlots,
+    () => engine.slotOf(panel, side),
+    () => engine.slotOf(panel, side),
+  );
+  if (block === null) return null;
+  const onFocus = (event: ReactFocusEvent<HTMLSpanElement>) => {
+    if (engine.passingFocus) return;
+    const slot = event.currentTarget;
+    const target = slot.ownerDocument.getElementById(block);
+    const stops = target ? stopsOf(target) : [];
+    if (stops.length === 0) return;
+    let backward: boolean;
+    if (performance.now() - lastTab.at < 1000) backward = lastTab.backward;
+    else {
+      // Without a recent Tab key: from an element after the slot means backward.
+      const from = event.relatedTarget as globalThis.Node | null;
+      backward =
+        from !== null && (slot.compareDocumentPosition(from) & globalThis.Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    }
+    stops[backward ? stops.length - 1 : 0]!.focus();
+  };
+  return (
+    <span
+      className="e68-dock__slot"
+      // A tab stop of its own: the slot hands the focus on at once.
+      tabIndex={0}
+      aria-owns={block}
+      data-e68-dock-slot={side}
+      onFocus={onFocus}
+    />
+  );
+}
+
+/** A panel's content between the slots of the blocks that come before and after it. */
+function Slotted({ engine, panel, children }: { engine: DockEngine; panel: string; children: ReactNode }) {
+  return (
+    <>
+      <DockSlot engine={engine} panel={panel} side="before" />
+      {children}
+      <DockSlot engine={engine} panel={panel} side="after" />
+    </>
+  );
+}
+
 /** The content of a panel's tab (exported for the shell's tests under Node). */
 export function DockContent({ engine, panel }: { engine: DockEngine; panel: string }) {
   useMountCount(engine, panel);
-  if (isViewerId(panel)) return <TransientContent engine={engine} panel={panel} />;
-  if (engine.mode === 'simulator' && panel === 'output') return <OutputContent engine={engine} />;
-  if (engine.mode === 'simulator' && panel === 'registers') return <RegistersContent engine={engine} />;
+  let content: ReactNode;
+  if (isViewerId(panel)) content = <TransientContent engine={engine} panel={panel} />;
+  else if (engine.mode === 'simulator' && panel === 'output') content = <OutputContent engine={engine} />;
+  else if (engine.mode === 'simulator' && panel === 'registers') content = <RegistersContent engine={engine} />;
+  else
+    content = (
+      <div className="e68-dock__content" data-e68-dock-content={tabIdOf(engine.mode, panel)}>
+        <PanelRegion id={panel as PanelId} mode={engine.mode} className="e68-region--fill" />
+      </div>
+    );
   return (
-    <div className="e68-dock__content">
-      <PanelRegion id={panel as PanelId} mode={engine.mode} className="e68-region--fill" />
-    </div>
+    <Slotted engine={engine} panel={panel}>
+      {content}
+    </Slotted>
   );
+}
+
+/**
+ * Tab or Shift+Tab on an element of a relocated block (Lock Layout on): the next element of the
+ * block, or, at its end, on from the block's slot. Returns whether the key was handled here.
+ */
+function tabFromBlock(engine: DockEngine, root: HTMLElement, target: Element, backward: boolean): boolean {
+  const block = blockOf(target);
+  if (!block || !block.id || !root.contains(block)) return false;
+  const stops = stopsOf(block);
+  let at = stops.indexOf(target as HTMLElement);
+  // A tab of the strip that is not its tab stop (reached with the arrows) counts as the tab stop.
+  if (at < 0 && target.closest('[role="tab"]')) at = 0;
+  const next = at < 0 ? -1 : backward ? at - 1 : at + 1;
+  if (at >= 0 && next >= 0 && next < stops.length) {
+    stops[next]!.focus();
+    return true;
+  }
+  const slot = Array.from(root.querySelectorAll<HTMLElement>('[data-e68-dock-slot]')).find(
+    (element) => element.getAttribute('aria-owns') === block.id,
+  );
+  if (!slot) return false;
+  // The browser's own Tab then goes on from the slot (not handled: no preventDefault).
+  engine.passingFocus = true;
+  try {
+    slot.focus({ preventScroll: true });
+  } finally {
+    engine.passingFocus = false;
+  }
+  return false;
 }
 
 /** True for an event whose target is inside the Output panel's key field (P1.1 rule 5). */
@@ -242,6 +341,14 @@ export function DockWorkspace({ mode }: { mode: DockMode }) {
     const onKeyDown = (event: KeyboardEvent) => {
       if (fromProgramKeys(event)) return;
       const target = event.target as Element | null;
+      // Lock Layout on: Tab and Shift+Tab on a splitter or a strip go on from its slot (order.ts).
+      if (event.key === 'Tab' && !event.ctrlKey && !event.altKey && !event.metaKey) {
+        if (target && tabFromBlock(engine, element, target, event.shiftKey)) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        return;
+      }
       const tab = tabButtonPanel(target);
       if (
         tab &&
@@ -301,10 +408,19 @@ export function DockWorkspace({ mode }: { mode: DockMode }) {
         outline.style.visibility = 'hidden';
       }
     };
+    // The direction of the last Tab, wherever it was pressed: a slot that receives the focus hands
+    // it to the first or the last element of its block.
+    const onTabKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return;
+      lastTab.backward = event.shiftKey;
+      lastTab.at = performance.now();
+    };
     element.addEventListener('keydown', onKeyDown, true);
     element.addEventListener('dblclick', onDoubleClick);
     document.addEventListener('dragover', onDragOver);
+    document.addEventListener('keydown', onTabKey, true);
     return () => {
+      document.removeEventListener('keydown', onTabKey, true);
       element.removeEventListener('keydown', onKeyDown, true);
       element.removeEventListener('dblclick', onDoubleClick);
       document.removeEventListener('dragover', onDragOver);

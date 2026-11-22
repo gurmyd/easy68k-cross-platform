@@ -63,7 +63,7 @@ import {
   freeSpace,
   isTight,
 } from '../core/history/limits';
-import { belowGit, besideName, isGitName, placeOf, untrackedReason } from '../core/history/places';
+import { belowGit, besideName, isGitName, placeOf, touchesGit, untrackedReason } from '../core/history/places';
 import {
   groupItems,
   planCheckMeta,
@@ -103,7 +103,7 @@ import {
 } from '../core/history/records';
 import type { HistoryTx, Keyed, TimeKey } from '../core/history/store';
 import { historySwitchOn } from '../core/history/switch';
-import { VERSION_NOT_KEPT, changedWhileReplacing, gitRefused } from '../core/history/texts';
+import { VERSION_NOT_KEPT, changedWhileReplacing, gitRefused, historyNotChanged } from '../core/history/texts';
 
 export interface HistoryDeps {
   vfs: Vfs;
@@ -476,6 +476,13 @@ async function walk(vfs: Vfs, path: VPath, files: SeenFile[], dirs: VPath[]): Pr
 
 const NO_USAGE: HistoryUsage = { versions: 0, versionBytes: 0, trashItems: 0, trashBytes: 0, budget: 0 };
 const NO_VERSION = VERSION_NOT_KEPT;
+/** How often one change of the history is tried before it gives up (Store.change). */
+const CHANGE_ATTEMPTS = 3;
+
+/** The error a member rejects with when its change could not be made (errata N3). */
+function notChanged(error: unknown): Error {
+  return new Error(historyNotChanged(errorText(error)));
+}
 
 /** A record() call waiting in the queue (P3.3.5). */
 interface Queued {
@@ -618,6 +625,8 @@ class Store implements HistoryStore {
   }
 
   untracked(path: VPath, size: number, head: Bytes) {
+    // In an opened folder that is itself a .git folder every file lies below .git (P3.3.10).
+    if (isVPath(path) && splitVPath(path).mount !== 'memory' && this.storeIsGit(path)) return 'git' as const;
     return untrackedReason(path, size, head);
   }
 
@@ -786,6 +795,28 @@ class Store implements HistoryStore {
       }
       throw error;
     }
+  }
+
+  /**
+   * One change of the history in one read-write transaction, with its own phase 1, tried up to
+   * CHANGE_ATTEMPTS times: an aborted transaction is mostly passing (another window's
+   * versionchange, a busy disk), and a member that cannot do its work must not report success
+   * (errata N3, "When a transaction fails"). Rejects with the last error when every try failed, at
+   * once when the history became unavailable, was closed, or the browser refused for the quota.
+   */
+  private async change<T>(plan: (tx: HistoryTx, env: PlanEnv) => Promise<T>): Promise<T> {
+    let last: unknown = new Error('the history was closed');
+    for (let attempt = 0; attempt < CHANGE_ATTEMPTS; attempt++) {
+      if (this.closed || this.failure !== null) break;
+      const env = await this.phase1();
+      try {
+        return await this.run('readwrite', (tx) => plan(tx, env));
+      } catch (error) {
+        last = error;
+        if (isQuota(error)) break;
+      }
+    }
+    throw last;
   }
 
   // ---- phase 1 ----------------------------------------------------------------------------------
@@ -1184,14 +1215,11 @@ class Store implements HistoryStore {
 
   /** Step 4's transaction, tried three times: the item's untouched records back, the marks cleared. */
   private async settle(item: string, untouched: ReadonlySet<string>): Promise<void> {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const env = await this.phase1();
-        await this.run('readwrite', (tx) => planGuardSettle(tx, env, { item, untouched }));
-        return;
-      } catch {
-        if (this.failure !== null) return;
-      }
+    try {
+      await this.change((tx, env) => planGuardSettle(tx, env, { item, untouched }));
+    } catch {
+      // The item stays as kept: a record in the Trash whose file still exists, which loses nothing
+      // (P3.3.4); guard's outcome is still true, the copy was kept.
     }
   }
 
@@ -1220,11 +1248,11 @@ class Store implements HistoryStore {
       }
       if (gone.length > 0) {
         try {
-          const env = await this.phase1();
-          await this.run('readwrite', (tx) => planDropLiving(tx, env, gone));
+          await this.change((tx, env) => planDropLiving(tx, env, gone));
           this.changed(gone);
         } catch {
-          // the history could not be changed: its records stay, nothing current is touched
+          // The history could not be changed: its records stay, reachable as they were, and nothing
+          // current is touched; the outcome `not-kept` is still true.
         }
       }
     }
@@ -1336,6 +1364,8 @@ class Store implements HistoryStore {
     const backend = this.deps.vfs.backends().find((b) => b.mount === scheme);
     if (!backend) return false;
     if (scheme !== 'folder') return true;
+    // An opened folder that is itself a .git folder is never a place to restore into (P1.1 rule 2).
+    if (this.storeIsGit('/folder')) return false;
     const root = await this.rootOf(backend);
     return root !== null && place.startsWith(`folder:${root}/`);
   }
@@ -1437,6 +1467,10 @@ class Store implements HistoryStore {
         // The item's empty folders are created with its last file (P3.3.8).
         for (const { record } of folders) {
           const target = base(record.value.spelling);
+          if (touchesGit(target) || this.storeIsGit(target)) {
+            error = gitRefused(target, 'below');
+            break;
+          }
           try {
             await this.deps.vfs.mkdirp(target);
           } catch (e) {
@@ -1444,8 +1478,7 @@ class Store implements HistoryStore {
             break;
           }
           try {
-            const env = await this.phase1();
-            await this.run('readwrite', (tx) => planRestoreDir(tx, env, { record: record.id, item: id }));
+            await this.change((tx, env) => planRestoreDir(tx, env, { record: record.id, item: id }));
           } catch {
             // the folder exists; its record stays in the Trash, which loses nothing
           }
@@ -1467,6 +1500,9 @@ class Store implements HistoryStore {
     options: Parameters<HistoryService['restoreTrash']>[1],
   ): Promise<{ kind: 'written'; path: VPath } | { kind: 'left' | 'cancel' } | { kind: 'failed'; message: string }> {
     if (!version || !content) return { kind: 'left' };
+    // Nothing is written below .git, also when the folder chosen for an item whose store is not
+    // mounted is in one, or is an opened folder that is itself a .git folder (P1.1 rule 2, P3.3.10).
+    if (belowGit(target) || this.storeIsGit(target)) return { kind: 'failed', message: gitRefused(target, 'below') };
     let bytes: Bytes;
     try {
       bytes = await this.decompress(content);
@@ -1524,14 +1560,12 @@ class Store implements HistoryStore {
     try {
       const place = await this.place(path);
       if (place) {
-        const env = await this.phase1();
-        await this.run('readwrite', (tx) =>
-          planRestoreFile(tx, env, { record: record.id, item, place, spelling: path }),
-        );
+        await this.change((tx, env) => planRestoreFile(tx, env, { record: record.id, item, place, spelling: path }));
         this.changed([place]);
       }
     } catch {
-      // the file is written; its record stays in the Trash (a record whose file exists, P3.3.3)
+      // The file is written, so it is restored; its record stays in the Trash (a record whose file
+      // exists, P3.3.3), listed and restorable as before.
     }
     try {
       await options.after?.(path);
@@ -1567,39 +1601,47 @@ class Store implements HistoryStore {
 
   async dropTrash(ids: readonly string[]): Promise<void> {
     if (this.failure !== null || ids.length === 0) return;
+    // Whole or not at all; rejects when the items could not be dropped (they stay listed and
+    // restorable), so that the dialogs do not report a Delete for Good that did not happen.
     try {
-      const env = await this.phase1();
-      await this.run('readwrite', (tx) => planDropItems(tx, env, ids));
-      this.changed();
-    } catch {
-      // nothing current is touched either way
+      await this.change((tx, env) => planDropItems(tx, env, ids));
+    } catch (error) {
+      if (this.failure !== null) return; // unavailable meanwhile: resolves without effect (P4.4)
+      throw notChanged(error);
     }
+    this.changed();
   }
 
   async moved(from: VPath, to: VPath): Promise<void> {
     if (this.failure !== null) return;
+    const fromPlace = await this.place(from).catch(() => null);
+    const toPlace = await this.place(to).catch(() => null);
+    if (!fromPlace || !toPlace) return;
+    // The history follows the file (P3.3.5). When the change cannot be made even when tried again,
+    // the records stay at the old place, whole and reachable, and moved rejects: it does not report
+    // that the history followed when it did not (seed 7064 of the model test). The Files panel's
+    // move has happened either way; it passes the rejection by.
+    let count: number;
     try {
-      const fromPlace = await this.place(from);
-      const toPlace = await this.place(to);
-      if (!fromPlace || !toPlace) return;
-      const env = await this.phase1();
-      const count = await this.run('readwrite', (tx) => planMoved(tx, env, { fromPlace, toPlace, to }));
-      if (count > 0) this.changed([fromPlace, toPlace]);
-    } catch {
-      // R10: the history of a file that moved twice at once stays where one move left it
+      count = await this.change((tx, env) => planMoved(tx, env, { fromPlace, toPlace, to }));
+    } catch (error) {
+      if (this.failure !== null) return;
+      throw notChanged(error);
     }
+    if (count > 0) this.changed([fromPlace, toPlace]);
   }
 
   async clearVersions(): Promise<void> {
     if (this.failure !== null) return;
+    // In batches; what was done stays done, and a batch that cannot be made rejects.
     try {
-      const env = await this.phase1();
-      while (await this.run('readwrite', (tx) => planClearVersions(tx, env, PASS_RECORDS / 2))) {
+      while (await this.change((tx, env) => planClearVersions(tx, env, PASS_RECORDS / 2))) {
         // the next batch
       }
+    } catch (error) {
+      if (this.failure === null) throw notChanged(error);
+    } finally {
       this.changed();
-    } catch {
-      // what was done stays done
     }
   }
 
@@ -1616,16 +1658,18 @@ class Store implements HistoryStore {
       }
     }
     this.openDb = null;
-    await new Promise<void>((resolve) => {
+    // A database the browser does not delete rejects (the dialog shows why, P3.3.7): this member
+    // does not report a deletion that did not happen (errata N3, "When a transaction fails").
+    await new Promise<void>((resolve, reject) => {
       let request: IDBOpenDBRequest;
       try {
         request = factory.deleteDatabase(HISTORY_DB_NAME);
-      } catch {
-        resolve();
+      } catch (error) {
+        reject(notChanged(error));
         return;
       }
       request.onsuccess = () => resolve();
-      request.onerror = () => resolve();
+      request.onerror = () => reject(notChanged(request.error ?? new Error('the database was not deleted')));
       request.onblocked = () => {
         // Other windows close their connection on versionchange (P3.3.5); the delete then goes on.
       };

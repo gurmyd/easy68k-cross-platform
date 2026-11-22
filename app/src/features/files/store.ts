@@ -18,7 +18,7 @@ import {
 } from '../../core/paths/winpath';
 import { placeShort } from '../../core/places/display';
 import { looksLikeZip, readZip, writeZip, type ZipInput, type ZipSkipped } from '../../fs/zip';
-import { LINKED_ROOT_LABEL, gitNameRefused } from './texts';
+import { LINKED_ROOT_LABEL } from './texts';
 
 /** The folder "From this computer..." and dropped files are copied into (3.8.1). */
 export const IMPORTED_DIR: VPath = '/browser/Imported';
@@ -218,25 +218,8 @@ export async function renameEntry(vfs: Vfs, from: VPath, newName: string): Promi
   return to;
 }
 
-/**
- * renameEntry, refused first when the folder holds another entry whose name equals `newName` but
- * for letter case: a store that keeps case apart (a Linux disk, a memory store) can hold `r.X68`
- * beside `R.X68`, and renameEntry's case-only path would write over that other file (it takes the
- * exact match that resolve finds for the entry being renamed). The Files panel's Rename and Undo
- * Rename go through here; renameEntry itself is not changed (P5 N5).
- */
-export async function renameChecked(vfs: Vfs, from: VPath, newName: string): Promise<VPath> {
-  // Nothing of the student is renamed to .git (P1.1 rule 2): a folder of that name and its files
-  // would vanish from the tree, and the history treats a path named .git as a Git one (errata N5
-  // entry 15). A file too, so that the two never disagree.
-  if (foldCase(newName) === foldCase('.git')) throw new Error(gitNameRefused(newName));
-  const own = basename(from);
-  const entries = await vfs.list(dirname(from)).catch(() => null);
-  if (entries?.some((entry) => entry.name !== own && foldCase(entry.name) === foldCase(newName))) {
-    throw new Error(`"${newName}" already exists.`);
-  }
-  return renameEntry(vfs, from, newName);
-}
+// The Files panel's Rename and Undo Rename go through renameChecked (rename.ts, ARCHITECTURE-PLUS
+// N5), which keeps renameEntry's rules and adds the stage's checks; renameEntry is not changed.
 
 // ---- import ----------------------------------------------------------------------------------------
 

@@ -83,6 +83,7 @@ import {
   type DockMode,
   type FlexJsonOptions,
 } from './model';
+import { EMPTY_RELOCATION, decorateStrips, relocationPlan, type Relocation } from './order';
 import { insertPanel, removePanel, withoutViewers } from './park';
 import { allowsDrop, decideAction } from './rules';
 import {
@@ -149,6 +150,11 @@ export class DockEngine implements DockLive {
   private readonly viewListeners = new Set<() => void>();
   private disposers: (() => void)[] = [];
   private frame = 0;
+  private relocation: Relocation = EMPTY_RELOCATION;
+  private slotsKey = '[]';
+  private readonly slotListeners = new Set<() => void>();
+  /** True while the focus is put on a slot only to let Tab go on from there (DockWorkspace). */
+  passingFocus = false;
   private readonly changeListener = {
     onBeforeAction: (action: Action) => this.onBeforeAction(action),
     onAfterAction: (action: Action) => this.onAfterAction(action),
@@ -843,7 +849,17 @@ export class DockEngine implements DockLive {
       const path = index.pathOfFlex.get(match[1] ?? '');
       return path === undefined || path === 'wrapper' ? null : `${path}/${Number(match[2]) + 1}`;
     };
-    decorateSplitters(root, plans, keyOf);
+    // Lock Layout on: the splitters and the shown strips get their slots in the content layer, at
+    // today's places in the Tab order and the reading order (order.ts, errata N1 25).
+    const locked = this.locked();
+    const relocation = locked
+      ? relocationPlan(this.mode, index.tree, plans, (_group, path) => {
+          const node = index.nodes.get(path);
+          return node instanceof TabSetNode && node.isEnableTabStrip();
+        })
+      : EMPTY_RELOCATION;
+    decorateSplitters(root, plans, keyOf, relocation.splitters);
+    decorateStrips(root, relocation, index.flexOfPath);
     decorateTabPanels(
       root,
       (tabId) => {
@@ -851,7 +867,9 @@ export class DockEngine implements DockLive {
         return parent instanceof TabSetNode && parent.isEnableTabStrip();
       },
       (tabId) => isViewerId(panelOfTab(tabId) ?? ''),
+      locked,
     );
+    this.setRelocation(relocation);
     // The tab list of the tool panels' group keeps today's name (`Tool panels`).
     const narrowOutput = this.narrowOutputStrip();
     for (const strip of Array.from(root.querySelectorAll('.flexlayout__tabset'))) {
@@ -864,6 +882,24 @@ export class DockEngine implements DockLive {
       if (label === undefined) list.removeAttribute('aria-label');
       else if (list.getAttribute('aria-label') !== label) list.setAttribute('aria-label', label);
     }
+  }
+
+  private setRelocation(relocation: Relocation): void {
+    const key = JSON.stringify([...relocation.slots].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+    this.relocation = relocation;
+    if (key === this.slotsKey) return;
+    this.slotsKey = key;
+    for (const listener of [...this.slotListeners]) listener();
+  }
+
+  subscribeSlots = (listener: () => void) => {
+    this.slotListeners.add(listener);
+    return () => this.slotListeners.delete(listener);
+  };
+
+  /** The id of the block a panel's slot owns before or after its content, or null (order.ts). */
+  slotOf(panel: string, side: 'before' | 'after'): string | null {
+    return this.relocation.slots.get(panel)?.[side] ?? null;
   }
 
   /**

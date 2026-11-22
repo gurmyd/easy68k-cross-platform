@@ -32,6 +32,10 @@
 //     installed app's variant with an empty store and its Import..., both themes, Tab order and
 //     names; never in Chromium, never under automation without the parameter, and the panel's
 //     layout without it is the one it always had;
+//   - ARCHITECTURE-PLUS P3.2 (N5): the multiple selection and the keys of P1.3 on both key maps, also
+//     with the storage notice shown (WebKit); drag, the storage line and the large-import question;
+//     in Chromium an opened folder on a real directory handle with a log of every write, and an
+//     opened folder that is itself a .git folder;
 //   - no console errors.
 //
 // Screenshots go to build/FS1/files-check (git-ignored). Exit code 0 = everything passed.
@@ -2093,6 +2097,138 @@ async function selectionPass(browser, name, keys) {
 }
 
 /**
+ * The Safari storage notice (main's R-10) together with the stage's Files panel (P3.2.1, P3.2.6,
+ * P1.3), in WebKit, where the notice is shown: the panel reads strip, notice, tree, storage line
+ * from top to bottom; the notice never takes the focus while the multiple selection and the keys
+ * of P1.3 work as without it; both themes. Chromium never shows the notice (only Safari's engine
+ * has the rule), so this pass runs in WebKit only.
+ */
+async function noticeSelectionPass(browser, name, keys) {
+  const p = `${name} (${keys} keys): storage notice with the stage's panel:`;
+  const context = await keyMapContext(browser, keys);
+  await context.addInitScript(withoutFileSystemAccess);
+  const { page, errors } = await openApp(context, { query: NOTICE_QUERY });
+  await page.locator(NOTICE).waitFor({ timeout: 15_000 });
+  const mod = keys === 'mac' ? 'Meta' : 'Control';
+  await seedFiles(page, ['/browser/sel/a.X68', '/browser/sel/b.X68', '/browser/sel/c.X68', '/browser/sel/d.X68']);
+  await revealRow(page, '/browser/sel/a.X68');
+  // The storage line is filled from the browser's estimate after the panel appears.
+  await page.locator(`${FILES} [data-e68-storage-line]`).waitFor({ timeout: 15_000 });
+  const layout = await page.evaluate(() => {
+    const box = (selector) => {
+      const r = document.querySelector(`[data-e68-panel="files"] ${selector}`)?.getBoundingClientRect();
+      return r ? { top: r.top, bottom: r.bottom, height: r.height } : null;
+    };
+    return {
+      panel: box('.e68-files'),
+      strip: box('.e68-files__strip'),
+      notice: box('[role=note]'),
+      tree: box('[role=tree]'),
+      line: box('[data-e68-storage-line]'),
+      lineText: document.querySelector('[data-e68-panel="files"] [data-e68-storage-line]')?.textContent ?? null,
+    };
+  });
+  const { panel, strip, notice, tree, line } = layout;
+  check(
+    `${p} from the top: strip, notice, tree, storage line, all inside the panel`,
+    Boolean(panel && strip && notice && tree && line) &&
+      strip.bottom <= notice.top + 0.5 &&
+      notice.bottom <= tree.top + 0.5 &&
+      tree.bottom <= line.top + 0.5 &&
+      line.bottom <= panel.bottom + 0.5 &&
+      line.height > 0 &&
+      tree.height > 100,
+    JSON.stringify(layout),
+  );
+
+  const noticeState = () =>
+    page.evaluate(() => {
+      const note = document.querySelector('[data-e68-panel="files"] [role=note]');
+      return { shown: note !== null, focusInside: note ? note.contains(document.activeElement) : false };
+    });
+  const steps = [];
+  const after = async (step) => {
+    const state = await noticeState();
+    steps.push(`${step}: ${state.shown ? 'shown' : 'GONE'}${state.focusInside ? ', FOCUS INSIDE' : ''}`);
+    return state.shown && !state.focusInside;
+  };
+  let untouched = true;
+
+  await row(page, '/browser/sel/a.X68').click();
+  await row(page, '/browser/sel/c.X68').click({ modifiers: ['Shift'] });
+  let s = await treeState(page);
+  untouched = (await after('Shift+click')) && untouched;
+  check(
+    `${p} Shift+click selects the range, "3 items selected"`,
+    same(s.selected, ['a.X68', 'b.X68', 'c.X68']) && s.count === '3 items selected',
+    JSON.stringify(s),
+  );
+  await modClick(page, '/browser/sel/b.X68', mod);
+  s = await treeState(page);
+  untouched = (await after(`${mod}+click`)) && untouched;
+  check(`${p} ${mod}+click removes a row`, same(s.selected, ['a.X68', 'c.X68']), JSON.stringify(s.selected));
+  await page.locator(FILES).screenshot({ path: join(outDir, `${name}-${keys}-notice-multi-selection-light.png`) });
+  await scan(page, `${name} ${keys} light Files panel with the notice and a multiple selection`);
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('app.theme.set', 'dark'));
+  await page.waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'dark');
+  await page.locator(FILES).screenshot({ path: join(outDir, `${name}-${keys}-notice-multi-selection-dark.png`) });
+  await scan(page, `${name} ${keys} dark Files panel with the notice and a multiple selection`);
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('app.theme.set', 'light'));
+
+  await row(page, '/browser/sel/a.X68').click();
+  await page.locator(TREE).focus();
+  await page.keyboard.press('Shift+ArrowDown');
+  await page.keyboard.press('Shift+ArrowDown');
+  s = await treeState(page);
+  untouched = (await after('Shift+Down twice')) && untouched;
+  check(
+    `${p} Shift+Down twice extends to three rows`,
+    same(s.selected, ['a.X68', 'b.X68', 'c.X68']),
+    JSON.stringify(s),
+  );
+  for (const chord of await chordsInPage(page, 'ed.edit.selectAll')) {
+    await row(page, '/browser/sel/a.X68').click();
+    await page.keyboard.press(playwrightKey(chord));
+    s = await treeState(page);
+    const rowCount = await page.locator(`${FILES} [role=treeitem]:not(.e68-files__row--root)`).count();
+    untouched = (await after(chord)) && untouched;
+    check(
+      `${p} ${chord} in the tree selects every visible row`,
+      s.selected.length === rowCount && s.active,
+      `${s.selected.length} of ${rowCount}; tree focused ${s.active}`,
+    );
+  }
+  await page.keyboard.press('Escape');
+  s = await treeState(page);
+  untouched = (await after('Esc')) && untouched;
+  check(
+    `${p} Esc clears the multiple selection to the focused row`,
+    s.selected.length === 1 && s.active,
+    JSON.stringify(s),
+  );
+  // Delete's question still opens from the tree and still has No as its default.
+  await page.keyboard.press('Delete');
+  const box = page.locator('[role=alertdialog]').last();
+  await box.waitFor({ timeout: 10_000 });
+  await page.waitForFunction(() => document.activeElement?.closest('[role=alertdialog]') !== null, null, {
+    timeout: 5_000,
+  });
+  const focusedButton = await page.evaluate(() => document.activeElement?.textContent?.trim() ?? null);
+  await page.keyboard.press('Enter');
+  await box.waitFor({ state: 'detached', timeout: 10_000 });
+  const stillThere = await waitForPaths(page, ['/browser/sel/a.X68', '/browser/sel/b.X68'], [], 2_000);
+  untouched = (await after('Delete, Enter')) && untouched;
+  check(
+    `${p} Delete asks with No as the default; Enter deletes nothing`,
+    focusedButton === 'No' && stillThere,
+    `focused ${JSON.stringify(focusedButton)}`,
+  );
+  check(`${p} the notice stays and never takes the focus`, untouched, steps.join('; '));
+  check(`${p} no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await context.close();
+}
+
+/**
  * P3.2.4 and P3.2.6: dragging rows onto a folder, the 800 ms expand, the copy cursor and tool-tip
  * across stores, the storage line with and without an estimate and its refresh at most once per
  * second, the large import question.
@@ -2631,6 +2767,137 @@ async function openedFolderPass(browser, name) {
   await context.close();
 }
 
+/**
+ * Chromium, an opened folder that is itself a repository's .git folder (FS2's Open Folder... can
+ * choose one; P1.1 rule 2, P3.3.10, errata N5 entries 15 and 19): what the Files panel shows, and
+ * that no command of the stage writes into it or keeps anything of it (the fake directory handle's
+ * write log stays empty; the history keeps no version and no Trash item there).
+ */
+async function gitFolderPass(browser, name) {
+  const p = `${name}: opened .git folder:`;
+  const context = await keyMapContext(browser, 'windows');
+  await context.addInitScript(logHandleWrites);
+  const { page, errors } = await openApp(context);
+  await page.evaluate(async () => {
+    const root = await navigator.storage.getDirectory();
+    const write = async (path, content) => {
+      const parts = path.split('/');
+      let d = root;
+      for (const part of parts.slice(0, -1)) d = await d.getDirectoryHandle(part, { create: true });
+      const f = await d.getFileHandle(parts.at(-1), { create: true });
+      const w = await f.createWritable();
+      await w.write(new TextEncoder().encode(content));
+      await w.close();
+    };
+    for (const path of ['Repo/.git/HEAD', 'Repo/.git/config', 'Repo/.git/refs/heads/main', 'Repo/main.X68'])
+      await write(path, `* ${path}\r\n`);
+    const git = await (await root.getDirectoryHandle('Repo')).getDirectoryHandle('.git');
+    const { FolderBackend } = await import('/src/fs/fsaccess-backend.ts');
+    const { vfs } = window.__easy68k.ctx;
+    await vfs.writeFile('/browser/mine.X68', new TextEncoder().encode('* mine\r\n'));
+    vfs.mount(new FolderBackend(git));
+    window.__fsLog.length = 0;
+  });
+  await row(page, '/folder').waitFor({ timeout: 10_000 });
+  await revealRow(page, '/folder/refs/heads/main');
+  const shown = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('[data-e68-panel="files"] [role=treeitem]')];
+    const root = document.querySelector('[data-e68-panel="files"] [data-e68-path="/folder"]');
+    return {
+      root: root?.innerText.replace(/\s+/g, ' ').trim(),
+      title: root?.getAttribute('title'),
+      rows: rows.map((r) => r.getAttribute('data-e68-path')).filter((path) => path?.startsWith('/folder')),
+    };
+  });
+  const texts = await page.evaluate(async () => {
+    const t = await import('/src/features/files/texts.ts');
+    return { refused: t.gitStoreRefused('.git') };
+  });
+  check(
+    `${p} the root reads "Folder: .git on this computer" and lists the files of the .git folder`,
+    shown.root === 'Folder: .git on this computer' &&
+      same(shown.rows, [
+        '/folder',
+        '/folder/refs',
+        '/folder/refs/heads',
+        '/folder/refs/heads/main',
+        '/folder/config',
+        '/folder/HEAD',
+      ]),
+    JSON.stringify(shown),
+  );
+  await page.locator(FILES).screenshot({ path: join(outDir, `${name}-opened-git-folder-light.png`) });
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('app.theme.set', 'dark'));
+  await page.waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'dark');
+  await page.locator(FILES).screenshot({ path: join(outDir, `${name}-opened-git-folder-dark.png`) });
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('app.theme.set', 'light'));
+
+  // Every command refuses with the text of errata N5 entry 15.
+  const answers = {};
+  await row(page, '/folder/HEAD').click();
+  await page.locator(TREE).focus();
+  await page.keyboard.press('Delete');
+  answers.delete = await answerBox(page, 'OK');
+  await page.keyboard.press('F2');
+  answers.rename = await answerBox(page, 'OK');
+  await page.locator(FILES).getByRole('button', { name: 'New Folder...' }).click();
+  answers.newFolder = await answerBox(page, 'OK');
+  await page.locator(`${FILES} button[aria-label="Import..."]`).click();
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    page.getByRole('menuitem', { name: /Files or \.zip/ }).click(),
+  ]);
+  await chooser.setFiles({ name: 'into.X68', mimeType: 'text/plain', buffer: Buffer.from('* into\r\n') });
+  answers.import = await answerBox(page, 'OK');
+  await revealRow(page, '/browser/mine.X68');
+  await syntheticDrag(page, '/browser/mine.X68', '/folder');
+  answers.moveInto = await answerBox(page, 'OK');
+  await revealRow(page, '/folder/HEAD');
+  await syntheticDrag(page, '/folder/HEAD', '/browser');
+  answers.copyOut = await answerBox(page, 'OK');
+  const refusedAll = Object.values(answers).every((text) => text.includes(texts.refused));
+  check(
+    `${p} Delete, Rename, New Folder, Import, a move into it and a copy out of it are refused with the text`,
+    refusedAll,
+    JSON.stringify(answers),
+  );
+
+  // The history keeps nothing there (P3.3.1 property 7, fs/history-db.ts): a save's version is not
+  // recorded, and no Trash item names it.
+  const history = await page.evaluate(async () => {
+    const { history, vfs } = window.__easy68k.ctx;
+    const bytes = await vfs.readFile('/folder/config');
+    await history.record('/folder/config', new TextEncoder().encode('* edited\r\n'), 'saved', Date.now());
+    await history.record('/folder/config', bytes, 'saved', Date.now() + 1000);
+    await new Promise((r) => setTimeout(r, 500));
+    return {
+      versions: (await history.versions('/folder/config')).length,
+      trash: (await history.trashItems()).filter((item) => item.path.startsWith('/folder')).length,
+    };
+  });
+  check(
+    `${p} the history keeps no version and no Trash item of it`,
+    history.versions === 0 && history.trash === 0,
+    JSON.stringify(history),
+  );
+  await page.waitForTimeout(300);
+  const entries = await page.evaluate(() => window.__fsLog.splice(0));
+  const after = await page.evaluate(async () => {
+    const { vfs } = window.__easy68k.ctx;
+    return {
+      top: (await vfs.list('/folder')).map((e) => e.name).sort(),
+      browser: (await vfs.list('/browser')).map((e) => e.name).sort(),
+    };
+  });
+  check(
+    `${p} nothing was written into it or removed from it; nothing was copied out`,
+    entries.length === 0 && same(after.top, ['HEAD', 'config', 'refs']) && !after.browser.includes('HEAD'),
+    `${JSON.stringify(entries)} | ${JSON.stringify(after)}`,
+  );
+  check(`${p} no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await context.close();
+}
+
 /** Opens the application without waiting for the Files panel (it may be hidden, or absent in Simulator mode). */
 async function openAppAnyMode(context, query = '') {
   const page = await context.newPage();
@@ -2854,8 +3121,21 @@ async function main() {
           // ARCHITECTURE-PLUS P3.2 (N5): both key maps on every system.
           ['selection and keys, Windows key map', (b, n) => selectionPass(b, n, 'windows')],
           ['selection and keys, macOS key map', (b, n) => selectionPass(b, n, 'mac')],
+          // main's storage notice with the stage's panel: shown in Safari's engine only.
+          ...(name === 'webkit'
+            ? [
+                ['storage notice with the selection, Windows key map', (b, n) => noticeSelectionPass(b, n, 'windows')],
+                ['storage notice with the selection, macOS key map', (b, n) => noticeSelectionPass(b, n, 'mac')],
+              ]
+            : []),
           ['drag, storage line, large import', dragAndStoragePass],
-          ...(name === 'chromium' ? [['opened folder with a write log', openedFolderPass]] : []),
+          // A real directory handle: the origin's private file system, with createWritable (Chromium).
+          ...(name === 'chromium'
+            ? [
+                ['opened folder with a write log', openedFolderPass],
+                ['opened folder that is a .git folder', gitFolderPass],
+              ]
+            : []),
         ];
         for (const [label, pass] of passes) {
           if (onlyPass && !label.includes(onlyPass)) continue;
