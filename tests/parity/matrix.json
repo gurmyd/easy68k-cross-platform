@@ -3350,6 +3350,11 @@
       "status": "+",
       "verifiedBy": [
         {
+          "kind": "web-e2e",
+          "file": "tests/e2e/plus/editor-split.spec.ts",
+          "test": "Split Editor Right, Split Editor Down and Close Split from the Window menu arrange the editor in two panes and back"
+        },
+        {
           "kind": "unit",
           "file": "app/src/features/editor/commands.test.ts",
           "test": "Split Editor Right / Down and Close Split drive the layout and the panes of the window"
@@ -3360,7 +3365,7 @@
           "test": "enabled: Split while a document is open, Close Split while there are two panes"
         }
       ],
-      "note": "No end-to-end test of tests/e2e/plus runs the split commands; the unit tests of N2 run them on the real command handlers and the pane model."
+      "note": "The end-to-end test chooses the three commands in the Editor's Window menu with three documents open and reads where the two panes are drawn, the tab in front and the text of each pane, and which of the commands are enabled; the unit tests of N2 run each command from each layout on the real command handlers and the pane model."
     },
     {
       "section": "1.5",
@@ -3368,6 +3373,11 @@
       "id": "`app.layout.lock`, `app.layout.reset`",
       "status": "+",
       "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/plus/layout.spec.ts",
+          "test": "Lock Layout off shows every tab strip and keeps a move across a reload; on again hides them and keeps the panels where they are"
+        },
         {
           "kind": "web-e2e",
           "file": "tests/e2e/plus/layout.spec.ts",
@@ -3379,7 +3389,7 @@
           "test": "panels moved in Editor mode and in Simulator mode are where they were put after a reload"
         }
       ],
-      "note": "The Reset test chooses Window > Reset Layout and checks that Lock Layout stays checked; the move test checks that Lock Layout is on by default and that a move keeps it. No test turns the lock off."
+      "note": "The Lock Layout test unchecks Window > Lock Layout in Editor mode (every group then shows its tab strip), moves Files with Move Panel To... and reloads (the move and the unlocked state stay), then checks View > Lock Layout in Simulator mode (one lock for both modes: the strips go, the panels stay where they are, Move Panel To... stays enabled) and reloads again. The Reset test chooses Window > Reset Layout and checks that Lock Layout stays checked; the move test checks that Lock Layout is on by default and that a move keeps it."
     },
     {
       "section": "1.5",

@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
 import type { BrowserContext, Locator } from '@playwright/test';
 import { expect, test } from '@playwright/test';
+import { PASS_LOCK } from '../../../app/src/core/history/limits';
 import { bytesOf, escapeRegExp, readDownload, type App, type FileSpec } from './app';
 
 // ---- sample files -------------------------------------------------------------------------------
@@ -165,6 +166,43 @@ export async function openEarlierVersions(app: App, name: string): Promise<Locat
   await expect(dialog).toBeVisible();
   await historyLoaded(dialog);
   return dialog;
+}
+
+/**
+ * Takes the history's pass lock (`easy68k.history.pass`, P3.3.4) in a window and holds it until the
+ * returned function is called; resolves once the lock is granted. Every window of the profile runs
+ * its global pass only when it gets that lock (`ifAvailable`), and skips the pass otherwise; a pass
+ * also tells the window's open history dialogs to read their lists again. While the lock is held, a
+ * dialog of another window therefore learns of a change ONLY through the message between the windows
+ * (BroadcastChannel `easy68k.history`), never from its own timer (the first pass ten seconds after a
+ * window starts, then every ten minutes). The same hold as app/src/fs/check-history.mjs makes; a
+ * lock is shared state of the profile, nothing of the application is called. If another window's
+ * pass holds the lock at the call, the call waits until that pass is over.
+ */
+export async function holdHistoryPass(app: App): Promise<() => Promise<void>> {
+  await app.page.evaluate(
+    (name) =>
+      new Promise<void>((granted) => {
+        const holder = globalThis as unknown as { __n9ReleasePass?: () => void };
+        void navigator.locks.request(
+          name,
+          () =>
+            new Promise<void>((release) => {
+              holder.__n9ReleasePass = release;
+              granted();
+            }),
+        );
+      }),
+    PASS_LOCK,
+  );
+  return async () => {
+    await app.page.evaluate(() => (globalThis as unknown as { __n9ReleasePass?: () => void }).__n9ReleasePass?.());
+  };
+}
+
+/** The names of the Web Locks held in the profile now (`navigator.locks.query()`, published state). */
+export async function heldLocks(app: App): Promise<string[]> {
+  return app.page.evaluate(async () => ((await navigator.locks.query()).held ?? []).map((lock) => lock.name ?? ''));
 }
 
 /** Opens the Trash with the Files panel's strip button `Trash...`; returns the dialog. */

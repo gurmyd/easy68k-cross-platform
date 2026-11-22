@@ -6,11 +6,12 @@
 // BroadcastChannels as two tabs of one browser profile do (X1's convention, fixtures/windows.ts).
 
 import { expect, test } from '@playwright/test';
+import { PASS_LOCK } from '../../../app/src/core/history/limits';
 import { formatSize } from '../../../app/src/core/history/size';
 import { REASON_SHOWN_AS } from '../../../app/src/features/history/texts';
 import { RELOAD_ACTION, changedOutsideText } from '../../../app/src/features/reload-offer/texts';
 import { crlf, latin1, type App } from '../fixtures';
-import { gridRows, openEarlierVersions, toast, toastAction } from '../fixtures/plus';
+import { gridRows, heldLocks, holdHistoryPass, openEarlierVersions, toast, toastAction } from '../fixtures/plus';
 import { EDITS, reopenedText, savedBytes } from './student';
 
 const START = crlf('* shared between two windows', '    ORG    $1000', '    END    $1000');
@@ -81,31 +82,42 @@ export async function saveShowsInOtherDialog(app: App): Promise<void> {
   await openShared(app);
   await editAndSave(app, EDITS[0]!);
 
-  const other = await app.openWindow();
-  await other.showFiles();
-  const dialog = await openEarlierVersions(other, 'shared.X68');
-  await expect
-    .poll(async () => (await gridRows(dialog)).map((row) => [row[1], row[2]]))
-    .toEqual([
-      [formatSize(savedBytes(EDITS[0]!).length), REASON_SHOWN_AS.saved],
-      [formatSize(START.length), REASON_SHOWN_AS.opened],
-    ]);
+  // A window's open history dialog reads its list again on every change it hears of: a message from
+  // another window, and also its own window's global pass (ten seconds after the window starts, then
+  // every ten minutes), which would bring the new row without any message. The pass lock is taken
+  // before the second window exists, so that window never runs a pass during the test (P3.3.4: a
+  // window that does not get the lock skips the pass): the new row can only come from the message.
+  const releasePass = await holdHistoryPass(app);
+  try {
+    const other = await app.openWindow();
+    await other.showFiles();
+    const dialog = await openEarlierVersions(other, 'shared.X68');
+    await expect
+      .poll(async () => (await gridRows(dialog)).map((row) => [row[1], row[2]]))
+      .toEqual([
+        [formatSize(savedBytes(EDITS[0]!).length), REASON_SHOWN_AS.saved],
+        [formatSize(START.length), REASON_SHOWN_AS.opened],
+      ]);
+    expect(await heldLocks(other), 'the pass lock is still held when the first window saves').toContain(PASS_LOCK);
 
-  // The first window saves again while the dialog stays open in the other (BroadcastChannel
-  // easy68k.history, P3.3.8).
-  await editAndSave(app, EDITS[2]!);
-  await expect
-    .poll(async () => (await gridRows(dialog)).map((row) => [row[1], row[2]]), {
-      message: 'the open dialog of the other window lists the new version',
-    })
-    .toEqual([
-      [formatSize(savedBytes(EDITS[2]!).length), REASON_SHOWN_AS.saved],
-      [formatSize(savedBytes(EDITS[0]!).length), REASON_SHOWN_AS.saved],
-      [formatSize(START.length), REASON_SHOWN_AS.opened],
-    ]);
-  // The new row is the third attempt: its comparison shows it.
-  await dialog.locator('[role=grid] [role=row][data-row="0"]').click();
-  await expect(dialog.locator('.e68-history__view')).toContainText('(attempt 3)');
-  await other.button(dialog, 'Close').click();
-  await expect(dialog).toBeHidden();
+    // The first window saves again while the dialog stays open in the other (BroadcastChannel
+    // easy68k.history, P3.3.8).
+    await editAndSave(app, EDITS[2]!);
+    await expect
+      .poll(async () => (await gridRows(dialog)).map((row) => [row[1], row[2]]), {
+        message: 'the open dialog of the other window lists the new version',
+      })
+      .toEqual([
+        [formatSize(savedBytes(EDITS[2]!).length), REASON_SHOWN_AS.saved],
+        [formatSize(savedBytes(EDITS[0]!).length), REASON_SHOWN_AS.saved],
+        [formatSize(START.length), REASON_SHOWN_AS.opened],
+      ]);
+    // The new row is the third attempt: its comparison shows it.
+    await dialog.locator('[role=grid] [role=row][data-row="0"]').click();
+    await expect(dialog.locator('.e68-history__view')).toContainText('(attempt 3)');
+    await other.button(dialog, 'Close').click();
+    await expect(dialog).toBeHidden();
+  } finally {
+    await releasePass();
+  }
 }
