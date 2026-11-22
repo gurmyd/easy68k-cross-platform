@@ -64,18 +64,22 @@ char *ultoa(unsigned long value, char *str, int radix);
 
 // ---- stdio redirection --------------------------------------------------------
 // SIMOPS2.CPP opens host files with fopen() and deletes them with remove().
-// Both are routed to the shim (shim/hostfile.cpp), which hands back a FILE*
-// whose reads, writes and seeks go to the host object.  fread, fwrite, fseek,
-// fclose, feof and fgets then work on that FILE* unchanged.
+// Both are routed to the shim (shim/hostfile.cpp): fopen hands back a FILE*
+// that is either a stream of the modelled Borland run-time (the 68000
+// program's files) or a C library stream (loadSrec's "rt").
 FILE *easy68k_fopen(const char *name, const char *mode);
 int easy68k_remove(const char *name);
 
-// fread() / fwrite() as the Borland run-time library linked into SIM68K.exe
-// answers the two requests where it differs from a C99 library (gate I2,
-// measured by T3 under Wine): see shim/hostfile.cpp.  Function-like macros, so
-// that the shim can still reach the C library's own functions as (fread).
+// fread(), fwrite(), fseek(), fclose() and feof() on the files of the 68000
+// program are those of the Borland run-time library linked into SIM68K.exe,
+// modelled in shim/hostfile.cpp (shim/STDIO-MODEL.md); on any other FILE* they
+// are the C library's.  Function-like macros, so that the shim can still
+// reach the C library's own functions as (fread) etc.
 size_t easy68k_fread(void *buffer, size_t size, size_t count, FILE *stream);
 size_t easy68k_fwrite(const void *buffer, size_t size, size_t count, FILE *stream);
+int easy68k_fseek(FILE *stream, long offset, int whence);
+int easy68k_fclose(FILE *stream);
+int easy68k_feof(FILE *stream);
 
 #ifdef __cplusplus
 }
@@ -85,5 +89,11 @@ size_t easy68k_fwrite(const void *buffer, size_t size, size_t count, FILE *strea
 #define remove easy68k_remove
 #define fread(buffer, size, count, stream) easy68k_fread(buffer, size, count, stream)
 #define fwrite(buffer, size, count, stream) easy68k_fwrite(buffer, size, count, stream)
+#undef fseek
+#undef fclose
+#undef feof
+#define fseek(stream, offset, whence) easy68k_fseek(stream, offset, whence)
+#define fclose(stream) easy68k_fclose(stream)
+#define feof(stream) easy68k_feof(stream)
 
 #endif

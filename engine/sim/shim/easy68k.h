@@ -59,4 +59,12 @@ struct Easy68kDepth {
   ~Easy68kDepth() { --easy68k_depth_count; }
 };
 
+// The 68000 memory (api.cpp) is followed by this many zero bytes (PATCHES.md
+// section 4, 11.4).
+enum { EASY68K_MEMORY_PADDING = 0x10000 };
+
+// TRAP #15 task 58: the dialog was accepted, so the program's current folder
+// may have moved (shim/hostfile.cpp).
+void easy68k_files_folder_changed();
+
 #endif

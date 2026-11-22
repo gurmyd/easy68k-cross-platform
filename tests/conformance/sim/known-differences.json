@@ -4,24 +4,6 @@
     "summary": "Accepted difference. The original uses each listing row as a printf format string in the execution log (sim-ui 19 Q23): '100% sure: %d %x %%' came out as '100\\xc8\\x9bRure: 4730280 10 %' (stack contents). The port writes the row literally (engine/sim/PATCHES.md 11.7).",
     "evidence": "golden/logs/l14-percent-in-listing.log2.RunLog.txt.gz line 8; docs/differences/T3.md"
   },
-  "trap15-a/a51-files-read-after-write|report|result": {
-    "owner": "SH6",
-    "summary": "Task 53 right after a task 54 on the same stream, without a seek (C leaves it undefined): the original's Borland run-time gives D0.W = 0 and D2 = 4 for a 4-byte read after writing 'ABCDE' (4 bytes of its buffer land in memory), and after the close the file holds 1 byte; the port commits the 5 bytes before the read (ARCHITECTURE.md 3.8.4), gives D0.W = 1 (end of file), and the file holds 'ABCDE'.",
-    "evidence": "golden/trap15-a/a51-files-read-after-write.result.bin lines 2, 4-6 (also the T3 review probe v4); docs/porting/errata/T3.md F7",
-    "unconfirmed": "run a51 on Windows (6.8; the C library is the Borland one inside SIM68K.exe, only the file system below it is Wine's). If Windows agrees, SH6 imitates the Borland stream state for a read that follows a write without a seek; if it does not, the golden is replaced by the Windows result."
-  },
-  "trap15-a/a52-files-write-after-read|report|result": {
-    "owner": "SH6",
-    "summary": "Task 54 right after a task 53 on the same stream, without a seek (write 'ABCDE', seek to 1, read 2, write 'X'): the original reports success (D0.W = 0) but the file is unchanged ('ABCDE') after the close; the port writes at the read position and the file is 'ABCXE'.",
-    "evidence": "golden/trap15-a/a52-files-write-after-read.result.bin line 7 (also the T3 review probe v5); docs/porting/errata/T3.md F7",
-    "unconfirmed": "run a52 on Windows (6.8). If Windows agrees, SH6 drops a write that follows a read without a seek as the Borland run-time does."
-  },
-  "trap15-a/a53-files-past-end-then-read|report|result": {
-    "owner": "SH6",
-    "summary": "Write 'ABCDE', seek to 25, write 'X', then task 53 without a seek: the original's read gives D0.W = 0 (port: 1, end of file), its close gives D0.W = 2 (port: 0), a new stream then reads only 'ABCDE' (5 bytes; port: 26, the gap as zeros and 'X'), and task 57 on the file fails with 2 (the first stream is still open; port: 0).",
-    "evidence": "golden/trap15-a/a53-files-past-end-then-read.result.bin lines 2, 3, 5-8 (also the T3 review probe v1); docs/porting/errata/T3.md F7",
-    "unconfirmed": "run a53 on Windows (6.8). If Windows agrees, SH6 imitates the failed close and the lost bytes."
-  },
   "trap15-a/a55-task0-negative-count-first|outlog|outlog": {
     "owner": "engine",
     "summary": "T4's defect report D1. Task 0 with D1.W = -1 on a 300-byte string as the first TRAP #15 of the program: the official program printed 255 'A' and then one byte $C0 after NOP and after MULU, and exactly 255 'A' after MOVE.L (SP)+ and after RTS (golden lines 3-6; the bytes after the 255th are residue of the host stack: undefined behaviour of strncpy without a NUL); the port prints exactly 255 every time (the engine's P24 ends the string at character 255 explicitly since gate I2). With other host calls before it (trap15-a/a05) the original printed exactly 255 in every case, like the port. Accepted: nothing a program can rely on (docs/porting/errata/T4.md D1, T3.md F1).",

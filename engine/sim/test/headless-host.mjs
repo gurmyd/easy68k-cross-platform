@@ -9,7 +9,8 @@
 //     the shadow text array) and to a transcript with the bytes the original
 //     would write to its output log;
 //   * keyboard input comes from a script (a queue of characters);
-//   * files of the 68000 program live in memory;
+//   * files of the 68000 program live in memory, with the pending bytes of
+//     the application's ProgramFiles (see fileOpen);
 //   * time is simulated: it advances with the cycle counter and with
 //     TRAP #15 task 23 delays, never with the wall clock, so runs repeat exactly;
 //   * graphics, sound, serial, network and printer calls are recorded with
@@ -209,6 +210,11 @@ export class HeadlessHost {
 
   // ---- files ----------------------------------------------------------------------------
 
+  // The files behave as the application's ProgramFiles does (and as the operating system does
+  // below the Borland run-time, shim/STDIO-MODEL.md section 10): a write of fewer than 512 bytes,
+  // or one that fits with the bytes already pending, is held as pending bytes of the handle until
+  // its next read, seek or close, or a write that does not fit; another handle does not see them;
+  // exit() writes them. A file that is open cannot be removed.
   fileOpen(name, mode) {
     const key = HeadlessHost.fileKey(name);
     const exists = this.files.has(key);
@@ -219,12 +225,32 @@ export class HeadlessHost {
       return 0;
     }
     const handle = this.nextHandle++;
-    this.handles.set(handle, { key, position: 0, writable: mode !== 1 });
+    this.handles.set(handle, { key, position: 0, writable: mode !== 1, pending: null });
     return handle;
+  }
+  _put(key, at, bytes) {
+    let data = this.files.get(key);
+    if (!data) return false;
+    const end = at + bytes.length;
+    if (end > data.length) {
+      const grown = new Uint8Array(end);
+      grown.set(data);
+      data = grown;
+      this.files.set(key, data);
+    }
+    data.set(bytes, at);
+    return true;
+  }
+  _commit(h) {
+    if (!h.pending) return true;
+    const { start, bytes } = h.pending;
+    h.pending = null;
+    return this._put(h.key, start, Uint8Array.from(bytes));
   }
   fileRead(handle, count) {
     const h = this.handles.get(handle);
-    const data = h && this.files.get(h.key);
+    if (!h || !this._commit(h)) return null;
+    const data = this.files.get(h.key);
     if (!data) return null;
     const chunk = data.slice(Math.min(h.position, data.length), Math.min(h.position + count, data.length));
     h.position += chunk.length;
@@ -233,29 +259,42 @@ export class HeadlessHost {
   fileWrite(handle, bytes) {
     const h = this.handles.get(handle);
     if (!h || !h.writable || !this.files.has(h.key)) return -1;
-    let data = this.files.get(h.key);
-    const end = h.position + bytes.length;
-    if (end > data.length) {
-      const grown = new Uint8Array(end);
-      grown.set(data);
-      data = grown;
-      this.files.set(h.key, data);
+    if (h.pending && h.pending.bytes.length + bytes.length > 512 && !this._commit(h)) return -1;
+    if (!h.pending && bytes.length >= 512) {
+      this._put(h.key, h.position, bytes);
+    } else {
+      if (!h.pending) h.pending = { start: h.position, bytes: [] };
+      h.pending.bytes.push(...bytes);
     }
-    data.set(bytes, h.position);
-    h.position = end;
+    h.position += bytes.length;
     return bytes.length;
   }
   fileSeek(handle, offset, whence) {
     const h = this.handles.get(handle);
-    const data = h && this.files.get(h.key);
+    if (!h || !this._commit(h)) return -1;
+    const data = this.files.get(h.key);
     if (!data) return -1;
     const position = (whence === 0 ? 0 : whence === 1 ? h.position : data.length) + offset;
     if (position < 0) return -1;
     h.position = position;
     return position;
   }
-  fileClose(handle) { return this.handles.delete(handle); }
-  fileRemove(name) { return this.files.delete(HeadlessHost.fileKey(name)); }
+  fileClose(handle) {
+    const h = this.handles.get(handle);
+    if (!h) return false;
+    const ok = this._commit(h);
+    this.handles.delete(handle);
+    return ok;
+  }
+  fileRemove(name) {
+    const key = HeadlessHost.fileKey(name);
+    for (const h of this.handles.values()) if (h.key === key) return false;
+    return this.files.delete(key);
+  }
+  /** The end of the process: every handle's pending bytes are written. */
+  exit() {
+    for (const h of this.handles.values()) this._commit(h);
+  }
   fileDialog(mode, title, filter, fileName) {
     this.dialogs.push({ mode, title: bytesToText(title), filter: bytesToText(filter), fileName: bytesToText(fileName) });
   }
