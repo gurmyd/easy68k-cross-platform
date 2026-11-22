@@ -18,7 +18,8 @@
 
 import { createHash } from 'node:crypto';
 import type { Locator, Page } from '@playwright/test';
-import { expect, type App } from '../fixtures';
+import type { KnownCommandId } from '../../../app/src/commands/ids';
+import { chordOf, expect, type App } from '../fixtures';
 
 /** Register field numbers (contracts `Box`): D0-D7, A0-A7, US, SS, PC, SR. */
 export const BOX = {
@@ -94,7 +95,8 @@ export async function assemble(app: App, lines: Source, name?: string): Promise<
   await app.focusEditor();
   await app.press('ed.project.assemble');
   const dialog = app.dialog(title);
-  await expect(dialog, `the dialog "${title}" after F9`).toBeVisible();
+  // The first assembly of a window starts the assembler engine: generous on a loaded machine.
+  await expect(dialog, `the dialog "${title}" after F9`).toBeVisible({ timeout: 60_000 });
   const text = await dialog.innerText();
   expect(text, `the program assembles without errors:\n${lines.join('\n')}`).toMatch(/Errors:\s*0/);
   return dialog;
@@ -173,6 +175,31 @@ export async function tool(app: App, id: string): Promise<void> {
   const button = app.toolbarButton(id);
   await expect(button, `toolbar button ${id}`).toBeEnabled();
   await button.click();
+}
+
+/**
+ * Trace Into or Step Over with its key, as a user steps: when the command is enabled again (a key
+ * pressed while the previous step still runs does nothing, sim-ui §3.6), and waits until the PC
+ * field shows the next instruction.
+ */
+export async function step(
+  app: App,
+  id: 'sim.run.traceInto' | 'sim.run.stepOver' = 'sim.run.traceInto',
+): Promise<void> {
+  await expect(app.toolbarButton(id), `${id} is enabled before the step`).toBeEnabled();
+  const before = await reg(app, 'PC');
+  await app.press(id);
+  await expect.poll(() => reg(app, 'PC'), { message: `${id} moved the PC from ${before}` }).not.toBe(before);
+}
+
+/**
+ * Presses a command's chord with the keyboard in the Listing panel. After Run the Output panel has
+ * the keyboard (trap15-a §3.9), where the port's added Shift+F<n> chords - the first chords of Rewind
+ * and Reload on the macOS key map - belong to the program (K3, 2.9.4); a user clicks the listing first.
+ */
+export async function pressInListing(app: App, id: KnownCommandId): Promise<void> {
+  await listing(app).focus();
+  await app.press(id);
 }
 
 /** The enabled state of every run command's toolbar button, in toolbar order. */
@@ -321,6 +348,16 @@ export async function answer(app: App, button: string, title?: string): Promise<
   await app.button(box, button).click();
   await expect(box).toBeHidden();
   return text;
+}
+
+/**
+ * Presses the first chord of a command on the page's key map, like `App.press`, also for the chords
+ * the macOS key map writes with `Option` (`Ctrl+Option+O`, `Option+Return`): Option is the Alt key,
+ * and the letter is pressed by its position (rule K6).
+ */
+export async function pressCommand(app: App, id: KnownCommandId): Promise<void> {
+  const chord = chordOf(id, app.keys).replace(/\bOption\b/g, 'Alt');
+  await app.pressChord(chord);
 }
 
 /** Presses a key with a hold, so that a polling program sees it (6.6, "hold keys and buttons"). */

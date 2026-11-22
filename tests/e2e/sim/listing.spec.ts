@@ -22,6 +22,8 @@ import {
   selectedRowText,
   switchMode,
   tool,
+  step,
+  pressInListing,
 } from './sim';
 
 const STEPS = program(
@@ -127,7 +129,7 @@ test('a click selects a row; a double-click on an instruction row puts its addre
   await row.dblclick();
   const address = (await row.textContent())!.trim().slice(0, 8);
   await expectReg(app, 'PC', address);
-  await app.press('sim.run.traceInto');
+  await step(app);
   await expectReg(app, 'D3', '00000003');
   expect(await reg(app, 'D1')).toBe('00000000');
 });
@@ -150,9 +152,9 @@ test('*[sim68k]break sets a breakpoint on the next instruction row; Rewind and R
   await tool(app, 'sim.run.run');
   await expectReg(app, 'D1', '00000001');
   expect(await reg(app, 'D2')).toBe('00000000');
-  await app.press('sim.run.rewind');
+  await pressInListing(app, 'sim.run.rewind');
   expect(await breakpointOf(app, 'MOVE.L  #3,D3')).toBe('on');
-  await app.press('sim.run.reload');
+  await pressInListing(app, 'sim.run.reload');
   await expect.poll(() => messages(app)).toContain('.S68 file read successful');
   expect(await breakpointOf(app, 'MOVE.L  #2,D2')).toBe('on');
   expect(await breakpointOf(app, 'MOVE.L  #3,D3')).toBe('on');

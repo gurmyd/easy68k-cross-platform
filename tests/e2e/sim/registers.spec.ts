@@ -7,7 +7,19 @@
 // PC finds the PC row, on an address register shows the Memory panel at that address.
 
 import { expect, test } from '../fixtures';
-import { execute, expectReg, listingRow, panel, program, reg, register, selectedRowText, tool, typeInto } from './sim';
+import {
+  execute,
+  expectReg,
+  listingRow,
+  panel,
+  program,
+  reg,
+  register,
+  selectedRowText,
+  tool,
+  typeInto,
+  step,
+} from './sim';
 
 /** Copies D0 and A1 into D6 and D7, so that a step shows what the CPU holds. */
 const COPY = program('    MOVE.L  D0,D6', '    MOVE.L  A1,D7', '    NOP', '    NOP', '    SIMHALT');
@@ -65,7 +77,7 @@ test('D0 reaches the CPU at the next run command; Pause before that shows the CP
   await execute(app, COPY);
   await typeInto(register(app, 'D0'), '0000BEEF');
   await expectReg(app, 'D0', '0000BEEF');
-  await app.press('sim.run.traceInto');
+  await step(app);
   await expectReg(app, 'D6', '0000BEEF', 'MOVE.L D0,D6 used the edited D0');
   // A register that changed since the last stop is marked (added, note 31); one that did not is not.
   await expect(register(app, 'D6')).toHaveAttribute('data-changed', 'true');
@@ -81,8 +93,8 @@ test('A1 reaches the CPU at once: Pause keeps it', async ({ app }) => {
   await expectReg(app, 'A1', '00ABCDEF');
   await tool(app, 'sim.run.pause');
   await expectReg(app, 'A1', '00ABCDEF');
-  await app.press('sim.run.traceInto');
-  await app.press('sim.run.traceInto');
+  await step(app);
+  await step(app);
   await expectReg(app, 'D7', '00ABCDEF');
 });
 
@@ -109,7 +121,7 @@ test('PC edit moves the listing selection; a double-click on PC finds the PC row
   await register(app, 'PC').dblclick();
   await expect.poll(() => selectedRowText(app)).toContain('NOP');
   // The edited PC is used by the next run command.
-  await app.press('sim.run.traceInto');
+  await step(app);
   await expect.poll(() => reg(app, 'PC')).not.toBe(nop);
   expect(await reg(app, 'D6'), 'the MOVE at $1000 was skipped').toBe('00000000');
 });

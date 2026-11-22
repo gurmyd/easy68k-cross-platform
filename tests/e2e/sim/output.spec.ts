@@ -17,6 +17,8 @@ import {
   programKeys,
   surface,
   tool,
+  pressCommand,
+  step,
 } from './sim';
 
 /** Prints 100 characters with task 1 (no CR LF), then halts. */
@@ -58,9 +60,9 @@ test('task 33 sets the surface size; the menu check follows; a size that is not 
       '    SIMHALT',
     ),
   );
-  await tool(app, 'sim.run.traceInto');
-  await tool(app, 'sim.run.traceInto');
-  await tool(app, 'sim.run.traceInto');
+  await step(app);
+  await step(app);
+  await step(app);
   await expect.poll(async () => (await sizes(app)).canvas).toBe('800x600');
   expect(await sizes(app)).toEqual({ header: '800x600', canvas: '800x600', checked: ['800x600'] });
   await tool(app, 'sim.run.run');
@@ -194,7 +196,7 @@ test('full screen: the button enters, Alt+Enter in the Output panel leaves; the 
   }
   expect((await surface(app)).width).toBe(before.width);
   await programKeys(app).focus();
-  await app.press('sim.output.fullscreen');
+  await pressCommand(app, 'sim.output.fullscreen');
   await expect(output).not.toHaveAttribute('data-fullscreen', 'true');
 });
 

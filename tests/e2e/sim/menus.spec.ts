@@ -7,7 +7,7 @@
 // not read from the application's tables, so that a change of a table is caught.
 
 import { expect, test, type App, type KeyMap } from '../fixtures';
-import { execute, panel, program, switchMode, view, workspace } from './sim';
+import { execute, panel, pressCommand, program, switchMode, view, workspace, step } from './sim';
 
 /** A menu row: caption with `&` before the access key, and the shortcut on each key map. */
 type Row = [caption: string, windows?: string, mac?: string];
@@ -234,7 +234,7 @@ test('F2 moves through the visible panels in the order of the original Ctrl+Tab;
   await expect.poll(() => focusedPanel(app)).toBe('output');
   seen.push(await focusedPanel(app));
   // F2 belongs to the program in the Output panel (K5): the release chord moves on.
-  await app.press('sim.output.releaseKeyboard');
+  await pressCommand(app, 'sim.output.releaseKeyboard');
   await expect.poll(() => focusedPanel(app)).toBe('memory');
   seen.push(await focusedPanel(app));
   for (const next of ['stack', 'hardware', 'breakpoints', 'listing']) {
@@ -313,7 +313,7 @@ test('a run shortcut acts while another simulator panel has the focus', async ({
   await execute(app, program('    MOVE.L  #$AA,D3', '    SIMHALT'));
   await view(app, 'Memory', 'memory');
   await expect.poll(() => focusedPanel(app)).toBe('memory');
-  await app.press('sim.run.traceInto');
+  await step(app);
   await expect(panel(app, 'registers').locator('input[data-box="3"]')).toHaveValue('000000AA');
   await expect(workspace(app)).toBeVisible();
 });

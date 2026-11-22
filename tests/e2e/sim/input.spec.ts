@@ -20,6 +20,7 @@ import {
   programKeys,
   reg,
   tool,
+  pressCommand,
 } from './sim';
 
 /** Task 2 into BUF, the length into D7, then the string again with task 13. */
@@ -244,7 +245,7 @@ test('task 24: the simulator keys go to the program; Ctrl+Alt+O still leaves the
   await hold(page, 'F6', () => expectState(app, 'Halted'));
   // The keyboard-release chord works in every state.
   await programKeys(app).focus();
-  await app.press('sim.output.releaseKeyboard');
+  await pressCommand(app, 'sim.output.releaseKeyboard');
   await expect.poll(() => focusedPanel(app)).not.toBe('output');
   // The toolbar still works after task 24 (only the keys were taken).
   await tool(app, 'sim.run.rewind');

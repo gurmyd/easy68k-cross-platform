@@ -2,17 +2,31 @@
 // Owner: X2.
 
 import { expect, test, type App } from '../fixtures';
-import { execute, expectReg, expectState, messages, panel, program, reg, tool, typeInto, view } from './sim';
+import { execute, expectReg, expectState, messages, panel, program, reg, tool, typeInto, view, step } from './sim';
 
-/** The program's interrupt handlers count in D7 and return; level 1 at vector 25 ($64). */
+/**
+ * The program's interrupt handlers (autovectors 25 and 26, at $64 and $68) count in D7 and D6 and
+ * show that they ran on the LEDs, which the Hardware panel draws while the program runs (the
+ * registers are shown only at a stop).
+ */
 function withHandler(...body: string[]): string[] {
   return [
     '    ORG    $64',
     '    DC.L   IRQ1',
     '    DC.L   IRQ2',
-    ...program(...body, 'IRQ1 ADDQ.L  #1,D7', '    RTE', 'IRQ2 ADDQ.L  #1,D6', '    RTE'),
+    ...program(
+      ...body,
+      'IRQ1 ADDQ.L  #1,D7',
+      '    MOVE.B  D7,$E00010',
+      '    RTE',
+      'IRQ2 ADDQ.L  #1,D6',
+      '    MOVE.B  #$80,$E00010',
+      '    RTE',
+    ),
   ];
 }
+
+const leds = (app: App) => panel(app, 'hardware').getByRole('img', { name: /^LEDs: / });
 
 const SPIN = withHandler('LOOP BRA     LOOP');
 
@@ -59,7 +73,7 @@ test('a switch sets its bit in the switch byte; a held push button clears its bi
   await hw.getByRole('switch', { name: 'Switch 0' }).click();
   await hw.getByRole('switch', { name: 'Switch 5' }).click();
   await expect(hw.getByRole('switch', { name: 'Switch 5' })).toBeChecked();
-  await app.press('sim.run.traceInto');
+  await step(app);
   await expectReg(app, 'D1', '00000021');
   await tool(app, 'sim.run.run');
   await expectState(app, 'Running');
@@ -84,9 +98,14 @@ test('IRQ buttons interrupt the running program with exceptions enabled; each le
   const hw = await hardware(app);
   await tool(app, 'sim.run.run');
   await expectState(app, 'Running');
+  // One request at a time: each is seen on the LEDs before the next (a request at a level that is
+  // still pending is not counted twice by the original either).
   await hw.getByRole('button', { name: 'IRQ 1' }).click();
+  await expect(leds(app)).toHaveAccessibleName('LEDs: 00000001');
   await hw.getByRole('button', { name: 'IRQ 1' }).click();
+  await expect(leds(app)).toHaveAccessibleName('LEDs: 00000010');
   await hw.getByRole('button', { name: 'IRQ 2' }).click();
+  await expect(leds(app)).toHaveAccessibleName('LEDs: 10000000');
   await app.press('sim.run.pause');
   await expectState(app, 'Stopped');
   await expectReg(app, 'D7', '00000002');
@@ -127,10 +146,10 @@ test('Reset loads SSP and PC from vectors 0 and 1 and sets the interrupt mask to
     '    ORG    0',
     '    DC.L   $00008000',
     '    DC.L   AFTER',
-    ...program('LOOP BRA     LOOP', 'AFTER MOVE.L  #$77,D3', '    SIMHALT'),
+    ...program('    NOP', 'LOOP BRA     LOOP', 'AFTER MOVE.L  #$77,D3', '    SIMHALT'),
   ]);
   const hw = await hardware(app);
-  await app.press('sim.run.traceInto');
+  await step(app);
   // Stopped in trace mode, the simulator stays paused at the new PC (hardware §3.8).
   await hw.getByRole('button', { name: 'Reset', exact: true }).click();
   await expectReg(app, 'SS', '00008000');

@@ -17,6 +17,8 @@ import {
   runState,
   selectedRowText,
   tool,
+  step,
+  pressInListing,
 } from './sim';
 
 /** A call to a subroutine between two plain instructions, then SIMHALT. */
@@ -51,7 +53,7 @@ test('Trace Into executes one instruction, reports it in the message area and fo
 }) => {
   await execute(app, CALL);
   expect(await pcRowText(app)).toMatch(/^00001000 .*MOVE\.L\s+#\$12345678,D0/);
-  await app.press('sim.run.traceInto');
+  await step(app);
   await expectReg(app, 'D0', '12345678');
   // The mnemonic is the core's table entry as it is, padded (sim-ui §7.1, `inst_arr[i].name`).
   await expect.poll(async () => (await messages(app)).at(-1)).toMatch(/^PC=00001000 {2}Code=203C {2}MOVEL\s*$/);
@@ -59,7 +61,7 @@ test('Trace Into executes one instruction, reports it in the message area and fo
   await expectReg(app, 'PC', bsr);
   expect(await pcRowText(app)).toContain('BSR     SUB');
   // Trace Into enters the subroutine.
-  await app.press('sim.run.traceInto');
+  await step(app);
   await expectReg(app, 'PC', await addressOf(app, 'SUB MOVE.L'));
   expect(await reg(app, 'D1')).toBe('00000000');
   await expectState(app, 'Stopped');
@@ -67,9 +69,9 @@ test('Trace Into executes one instruction, reports it in the message area and fo
 
 test('Step Over runs a subroutine at full speed and stops on the instruction after the call', async ({ app }) => {
   await execute(app, CALL);
-  await app.press('sim.run.stepOver');
+  await step(app, 'sim.run.stepOver');
   await expectReg(app, 'D0', '12345678');
-  await app.press('sim.run.stepOver');
+  await step(app, 'sim.run.stepOver');
   await expectReg(app, 'PC', await addressOf(app, 'MOVE.L  #$33333333,D2'));
   await expectReg(app, 'D1', '22222222');
   expect(await reg(app, 'D2')).toBe('00000000');
@@ -175,7 +177,7 @@ test('Rewind keeps memory and resets the registers; Reload loads the program afr
   await tool(app, 'sim.run.run');
   await expectState(app, 'Halted');
   await expectReg(app, 'D1', '00000000');
-  await app.press('sim.run.rewind');
+  await pressInListing(app, 'sim.run.rewind');
   await expectState(app, 'Stopped');
   await expectReg(app, 'PC', '00001000');
   await expectReg(app, 'D1', '00000000');
@@ -186,7 +188,7 @@ test('Rewind keeps memory and resets the registers; Reload loads the program afr
   await tool(app, 'sim.run.run');
   await expectState(app, 'Halted');
   await expectReg(app, 'D1', '00000001', 'after Rewind the variable keeps the value the first run wrote');
-  await app.press('sim.run.reload');
+  await pressInListing(app, 'sim.run.reload');
   await expectState(app, 'Stopped');
   await expect.poll(() => messages(app)).toContain('.S68 file read successful');
   await tool(app, 'sim.run.run');
@@ -198,15 +200,15 @@ test('the message area of a load: the S0 line and the success line, cleared by t
   await execute(app, CALL);
   const loaded = ['S0 = 68KPROG   20CREATED BY EASY68K', '.S68 file read successful'];
   await expect.poll(() => messages(app)).toEqual(loaded);
-  await app.press('sim.run.traceInto');
+  await step(app);
   await expect.poll(async () => (await messages(app)).length).toBe(3);
-  await app.press('sim.run.reload');
+  await pressInListing(app, 'sim.run.reload');
   await expect.poll(() => messages(app)).toEqual(loaded);
 });
 
 test('Go to PC selects the current instruction again after another row was clicked', async ({ app }) => {
   await execute(app, CALL);
-  await app.press('sim.run.traceInto');
+  await step(app);
   await expectReg(app, 'PC', await addressOf(app, 'BSR     SUB'));
   await listingRow(app, 'SIMHALT').click();
   expect(await selectedRowText(app)).toContain('SIMHALT');
@@ -242,10 +244,10 @@ test('Find: case-insensitive over the whole row, Find (F3) for the next hit, no 
 test('Clear Cycles sets the counter to 0; a step counts again', async ({ app }) => {
   await execute(app, CALL);
   expect(await cycles(app)).toBe('0');
-  await app.press('sim.run.traceInto');
+  await step(app);
   await expect.poll(() => cycles(app)).toBe('12');
   await panel(app, 'registers').getByRole('button', { name: 'Clear Cycles' }).click();
   await expect.poll(() => cycles(app)).toBe('0');
-  await app.press('sim.run.traceInto');
+  await step(app);
   await expect.poll(() => cycles(app)).not.toBe('0');
 });

@@ -22,6 +22,7 @@ import {
   tool,
   typeInto,
   view,
+  step,
 } from './sim';
 
 const FIRST = program('    MOVE.L  #$11111111,D1', '    MOVE.L  #$22222222,D2', '    SIMHALT');
@@ -140,7 +141,7 @@ test('File > Open Data overlays memory and appends its messages; the listing sta
 
 test('File > Close asks Caution; OK resets the simulator, clears the listing and keeps memory', async ({ app }) => {
   await execute(app, FIRST);
-  await app.press('sim.run.traceInto');
+  await step(app);
   await expectReg(app, 'D1', '11111111');
   await app.chooseMenu('File', 'Close');
   expect(await answer(app, 'Cancel', 'Caution')).toBe(
@@ -234,16 +235,22 @@ test('a second window has a simulator of its own (note 43)', async ({ app }) => 
 test('leaving the page asks nothing while a program is loaded and stopped (shut-down)', async ({ app, page }) => {
   // Saved, so that no modified document of the editor makes the page ask (1.3.3, Exit row).
   await execute(app, FIRST, 'shutdown.X68');
-  await app.press('sim.run.traceInto');
+  await step(app);
   await expectReg(app, 'D1', '11111111');
   // What the browser asks the page before it unloads: a `beforeunload` that a handler cancels (or
   // gives a return value) makes the browser show its "leave site?" question. Dispatched in the page,
   // because how each browser then shows (or suppresses) that question is not the page's doing.
-  const asked = await page.evaluate(() => {
-    const event = new Event('beforeunload', { cancelable: true });
-    window.dispatchEvent(event);
-    return { prevented: event.defaultPrevented, returnValue: (event as Event & { returnValue: unknown }).returnValue };
-  });
-  expect(asked).toEqual({ prevented: false, returnValue: true });
+  // The page may ask while bytes are still on their way to storage (the document just saved, 3.8.6;
+  // the guard of features/run/session.ts): polled until everything is written.
+  const asked = () =>
+    page.evaluate(() => {
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+      return {
+        prevented: event.defaultPrevented,
+        returnValue: (event as Event & { returnValue: unknown }).returnValue,
+      };
+    });
+  await expect.poll(asked, { timeout: 30_000 }).toEqual({ prevented: false, returnValue: true });
   void reg;
 });

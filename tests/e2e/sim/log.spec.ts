@@ -5,7 +5,7 @@
 // 41, 42; sim-ui §13; trap15-a §3.11). Owner: X2.
 
 import { expect, test, type App } from '../fixtures';
-import { answer, execute, expectState, panel, program, switchMode, tool, view } from './sim';
+import { answer, execute, expectState, panel, program, switchMode, tool, view, step, pressInListing } from './sim';
 
 const NAME = 'logme';
 
@@ -50,12 +50,12 @@ test('both logs: Log Start shows LOGGING; SIMHALT stops the log with the origina
   await expect(app.toolbarButton('sim.run.logStart')).toBeDisabled();
   await chooseLogTypes(app, 'Instruction only', 'Text Only');
   await expect(app.toolbarButton('sim.run.logStart')).toBeEnabled();
-  await app.press('sim.run.logStart');
+  await pressInListing(app, 'sim.run.logStart');
   await expect(logging(app)).toBeVisible();
   await expect(app.toolbarButton('sim.run.logStop')).toBeEnabled();
   await expect(app.toolbarButton('sim.run.logStart')).toBeDisabled();
-  await app.press('sim.run.traceInto');
-  await app.press('sim.run.traceInto');
+  await step(app);
+  await step(app);
   await tool(app, 'sim.run.run');
   expect(await answer(app, 'OK', 'Information')).toBe('Current Log Stopped.');
   await expectState(app, 'Halted');
@@ -79,12 +79,12 @@ test('Log File Options: Append adds to an existing log, Replace starts it again,
 }) => {
   await execute(app, PROGRAM, `${NAME}.X68`);
   await chooseLogTypes(app, 'Instruction only', 'Text Only');
-  await app.press('sim.run.logStart');
+  await pressInListing(app, 'sim.run.logStart');
   await expect(logging(app)).toBeVisible();
-  await app.press('sim.run.logStop');
+  await pressInListing(app, 'sim.run.logStop');
   await expect(logging(app)).toHaveCount(0);
 
-  await app.press('sim.run.logStart');
+  await pressInListing(app, 'sim.run.logStart');
   const options = app.dialog('Log File Options');
   await expect(options).toBeVisible();
   await expect(options).toContainText('Execution Log File exists!');
@@ -93,12 +93,12 @@ test('Log File Options: Append adds to an existing log, Replace starts it again,
   await app.button(options, 'Replace').click();
   await expect(options).toBeHidden();
   await expect(logging(app)).toBeVisible();
-  await app.press('sim.run.logStop');
+  await pressInListing(app, 'sim.run.logStop');
   await expect(logging(app)).toHaveCount(0);
   expect((await fileText(app, `${NAME}_RunLog.txt`)).match(/EASy68K execution log file: /g)).toHaveLength(2);
   expect((await fileText(app, `${NAME}_OutLog.txt`)).match(/EASy68K output log file: /g)).toHaveLength(1);
 
-  await app.press('sim.run.logStart');
+  await pressInListing(app, 'sim.run.logStart');
   await expect(options).toBeVisible();
   await app.button(options, 'Cancel').click();
   // Cancel of either question means logging does not start (1.4 note 41).
