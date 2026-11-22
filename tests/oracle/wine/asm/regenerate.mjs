@@ -9,6 +9,8 @@
 //   --only text      only programs whose id contains the text (may be given more than once)
 //   --containers N   containers to run in parallel (default 4)
 //   --timeout S      seconds allowed per program (default 300)
+//   --cpus N         CPUs for all containers together (docker run --cpus, shared out evenly;
+//                    default: no limit)
 //   --large          also try sources over 1 MB (the editor needs over an hour for them under Wine;
 //                    give a matching --timeout). Without it such a run is not tried, and a result
 //                    an earlier --large run recorded for the same source is kept
@@ -66,6 +68,7 @@ import {
   hasOfficialOutput,
   loadManifest,
   outputStem,
+  loadOptionSubset,
   sha256Hex,
   sourceFlags,
   sourcePath,
@@ -79,7 +82,7 @@ import {
   runContainer,
   wineVersion,
 } from '../common/docker.mjs';
-import { CORPUS_OPTION_SETS, buildSettingsDat, optionLabel } from './settings.ts';
+import { CORPUS_OPTION_SETS, SINGLE_OPTION_SETS, buildSettingsDat, listingOnLabel, optionLabel } from './settings.ts';
 
 const WINE_DIRECTORY = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SITE_INDEX_PATH = join(REPO, 'tests', 'corpus', 'site-examples.json');
@@ -240,7 +243,46 @@ export function planPrograms(sets = TRACKED_SETS) {
       }
     }
   }
+  addSingleOptionRuns(programs);
   return programs;
+}
+
+/**
+ * Gives every program of the fixed subset (tests/corpus/option-subset.json, 6.9 item 1) one run per
+ * assembler option switched alone (SINGLE_OPTION_SETS), after its own runs; a run it already has
+ * under the same label is not added twice. Throws when the list names a program of the tracked sets
+ * that does not exist, or a label that is not one of the eight.
+ */
+export function addSingleOptionRuns(programs, subset = loadOptionSubset()) {
+  const labels = Object.keys(SINGLE_OPTION_SETS);
+  if (subset.options.join() !== labels.join()) {
+    throw new Error(
+      `option-subset.json names the options ${subset.options.join(', ')}, settings.ts ${labels.join(', ')}`,
+    );
+  }
+  const ids = new Set(subset.files.map((file) => file.id));
+  // Checked only against the sets that were planned (a run of `--sets site` plans none of them).
+  const planned = new Set(programs.map((program) => program.set));
+  for (const id of ids) {
+    if (setOfId(id) === 'site')
+      throw new Error(`option-subset.json names ${id}: the site set may not be redistributed`);
+    if (planned.has(setOfId(id)) && !programs.some((program) => program.id === id)) {
+      throw new Error(`option-subset.json names ${id}, which is not a program of the corpus`);
+    }
+  }
+  for (const program of programs) {
+    if (!ids.has(program.id)) continue;
+    for (const [label, options] of Object.entries(SINGLE_OPTION_SETS)) {
+      if (!program.runs.some((run) => run.label === label)) program.runs.push({ label, options });
+    }
+  }
+  return programs;
+}
+
+/** The set a program id belongs to, from its first part. */
+function setOfId(id) {
+  const head = id.split('/')[0];
+  return head === 'official' ? 'official' : head === 'github' ? 'github-mit' : head === 'site' ? 'site' : 'conformance';
 }
 
 // --- 2. running the official editor ----------------------------------------------------------------
@@ -251,7 +293,7 @@ export function planPrograms(sets = TRACKED_SETS) {
  * Resolves with a Map from job id to the record asm_batch.py wrote for it, plus the folder with its
  * outputs in `record.outDirectory`.
  */
-export async function runJobs(jobs, { image, official, mounts, containers, timeout, workDirectory }) {
+export async function runJobs(jobs, { image, official, mounts, containers, timeout, workDirectory, cpus }) {
   const jobDirectory = join(workDirectory, 'job');
   const outDirectory = join(workDirectory, 'out');
   mkdirSync(join(jobDirectory, 'settings'), { recursive: true });
@@ -282,11 +324,14 @@ export async function runJobs(jobs, { image, official, mounts, containers, timeo
     ...bind(jobDirectory, '/mnt/job'),
     ...bind(outDirectory, '/mnt/out', false),
   ];
+  // --cpus: the CPUs of all containers together, shared out evenly (docker run --cpus).
+  const cpusEach = cpus ? Math.max(0.1, Math.floor((cpus / count) * 100) / 100) : undefined;
   const statuses = await Promise.all(
     Array.from({ length: count }, (_, shard) =>
       runContainer({
         name: `easy68k-oracle-asm-${run}-${shard}`,
         image,
+        ...(cpusEach ? { cpus: cpusEach } : {}),
         mounts: mountArguments,
         env: { ASM_TIMEOUT: String(timeout) },
         command: ['/oracle/asm_corpus.sh', String(shard), String(count)],
@@ -334,12 +379,15 @@ export function failureOf(record) {
 /**
  * What the manifest records for one run, from the record of asm_batch.py and the files it left.
  * Returns the entry and the files to keep ({ listing, sRecord, received } as bytes or null).
+ * `maskingListing`: for a run without a listing, the official listing of the same program and
+ * options with the listing on, whose undefined-symbol statements are masked in the S-records
+ * (compare.ts, erratum T1 20).
  *
  * A failed run keeps its outputs when the editor had finished assembling - its status dialog was
  * up, so the record has `status_title` - and a file is there with something in it (a crash during
  * assembly leaves two empty files). Such an entry has `outputsKept` and the hashes of those files.
  */
-export function ingestRun({ options, record, source }) {
+export function ingestRun({ options, record, source, maskingListing = null }) {
   const reason = failureOf(record);
   const nonEmpty = (bytes) => (bytes && bytes.length > 0 ? bytes : null);
   const assembled = reason === null || typeof record?.status_title === 'string';
@@ -353,7 +401,7 @@ export function ingestRun({ options, record, source }) {
     };
   }
   const received = found('.received.txt') ?? new Uint8Array();
-  const hashes = canonicalHashes({ listing, sRecord });
+  const hashes = canonicalHashes({ listing, sRecord, maskingListing: listing === null ? maskingListing : null });
   const counts = listing ? listingCounts(listing) : { errors: null, warnings: null };
   const modelText = editorLoad(source).text;
   const receivedDiffers = Buffer.compare(Buffer.from(modelText), Buffer.from(received)) !== 0;
@@ -376,7 +424,15 @@ export function ingestRun({ options, record, source }) {
     golden: false,
     ...(notes.length > 0 ? { notes } : {}),
   };
-  return { run, files: { listing, sRecord, received: receivedDiffers ? received : null } };
+  return {
+    run,
+    files: {
+      listing,
+      sRecord,
+      received: receivedDiffers ? received : null,
+      maskingListing: listing === null ? maskingListing : null,
+    },
+  };
 }
 
 /** Writes `bytes` unless the file already holds the same canonical content; returns whether it wrote. */
@@ -421,7 +477,8 @@ export function storeRun(program, label, run, files) {
   const identity = (bytes) => bytes;
   // With undefined symbols the stored object code is uninitialised memory of that run: a file is
   // replaced only when it changed in something that is compared.
-  const masked = files.listing ? undefinedSymbolRanges(files.listing) : [];
+  const maskSource = files.listing ?? files.maskingListing ?? null;
+  const masked = maskSource ? undefinedSymbolRanges(maskSource) : [];
   const put = (extension, bytes, canonical) => {
     const path = join(directory, `${stem}.${extension}`);
     if (bytes) written += writeIfChanged(path, bytes, canonical) ? 1 : 0;
@@ -451,13 +508,29 @@ export function rehashManifest(manifest, readOutput) {
         result.missing.push(name);
         continue;
       }
-      const hashes = canonicalHashes({ listing, sRecord });
-      if (hashes.l68 === run.l68 && hashes.s68 === run.s68) {
+      const companion = listingOnLabel(run.options);
+      const companionRun = companion === null ? undefined : program.runs[companion];
+      const maskingListing =
+        listing === null && companionRun && hasOfficialOutput(companionRun) && companionRun.l68 !== null
+          ? readOutput(program, companion, companionRun, 'L68')
+          : null;
+      const hashes = canonicalHashes({ listing, sRecord, maskingListing });
+      if (
+        hashes.l68 === run.l68 &&
+        hashes.s68 === run.s68 &&
+        hashes.undefinedSymbols === (run.undefinedSymbols ?? false)
+      ) {
         result.unchanged++;
         continue;
       }
-      run.l68 = hashes.l68;
-      run.s68 = hashes.s68;
+      // Rebuilt in the key order of ingestRun, with `undefinedSymbols` right after the hashes.
+      const { undefinedSymbols: _old, ...rest } = run;
+      const rebuilt = {};
+      for (const [key, value] of Object.entries(rest)) {
+        rebuilt[key] = key === 'l68' ? hashes.l68 : key === 's68' ? hashes.s68 : value;
+        if (key === 's68' && hashes.undefinedSymbols) rebuilt.undefinedSymbols = true;
+      }
+      program.runs[label] = rebuilt;
       result.changed.push(name);
     }
   }
@@ -610,6 +683,20 @@ export function renderReport(manifest) {
   return lines.join('\n');
 }
 
+/**
+ * The official listing of the run `label` of a program: from this invocation's result when that
+ * run was clean, else the stored one of the manifest's entry; null when there is none.
+ */
+function officialListing(program, before, label, records) {
+  if (label === null) return null;
+  const record = records.get(`${program.id}#${label}`);
+  if (record && failureOf(record) === null) return findOutput(record.outDirectory, '.l68');
+  const recorded = before?.runs[label];
+  return recorded && hasOfficialOutput(recorded) && recorded.l68 !== null
+    ? readStoredOutput(program, label, recorded, 'L68')
+    : null;
+}
+
 function writeJson(path, value) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(value, null, 1)}\n`);
@@ -634,6 +721,7 @@ function parseArguments(argv) {
     only: [],
     containers: 4,
     timeout: 300,
+    cpus: null,
     large: false,
     check: false,
     report: false,
@@ -655,6 +743,7 @@ function parseArguments(argv) {
     else if (argument === '--only') options.only.push(value());
     else if (argument === '--containers') options.containers = Number(value());
     else if (argument === '--timeout') options.timeout = Number(value());
+    else if (argument === '--cpus') options.cpus = Number(value());
     else if (argument === '--large') options.large = true;
     else if (argument === '--check') options.check = true;
     else if (argument === '--report') options.report = true;
@@ -671,6 +760,7 @@ function parseArguments(argv) {
   if (!Number.isInteger(options.containers) || options.containers < 1)
     throw new Error('--containers needs a positive integer');
   if (!(options.timeout > 0)) throw new Error('--timeout needs a positive number of seconds');
+  if (options.cpus !== null && !(options.cpus > 0)) throw new Error('--cpus needs a positive number');
   return options;
 }
 
@@ -793,6 +883,7 @@ async function main() {
           containers: options.containers,
           timeout: options.timeout,
           workDirectory,
+          cpus: options.cpus,
         })
       : new Map();
   console.log(
@@ -834,7 +925,12 @@ async function main() {
             },
             files: {},
           }
-        : ingestRun({ options: runOptions, record: records.get(id), source });
+        : ingestRun({
+            options: runOptions,
+            record: records.get(id),
+            source,
+            maskingListing: officialListing(program, before, listingOnLabel(runOptions), records),
+          });
       if (run.status === 'ok') ok++;
       else failed++;
       if (recorded?.status === 'ok' && run.status !== 'ok') lost.push(`${program.id} (${label}): ${run.reason}`);

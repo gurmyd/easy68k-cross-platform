@@ -260,8 +260,9 @@ fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`.
     files and that a cancelled chooser still ends the choice.
 28. **The Safari storage notice (risk R-10; the gate's decision of the second round before I3).**
     Built in `features/files/storage-notice.ts` (decision, texts, environment) and `FilesPanel.tsx`
-    (a `role=note` named `About keeping programs in Safari` between the strip and the tree; no
-    dialog, no toast, takes no focus, blocks nothing).
+    (a `role=note` named `About keeping your programs` between the strip and the tree; no
+    dialog, takes no focus, blocks nothing; third round: the same text as a toast at the first write
+    when the panel is not on the screen, below).
     - **When.** `storageNoticeKind({ platform, engine, installed, store, storeEmpty, acknowledged,
       automated, forced })`: only `platform` `web`; only engine `webkit`; only while /browser is the
       browser's own store (`BrowserBackend`, or a `PendingBrowserStore` still opening, which almost
@@ -294,12 +295,16 @@ fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`.
       Both buttons have `tabIndex=0` (WebKit's Tab rule) and sit between the strip and the tree in
       the Tab order.
     - **Texts** (constants in `storage-notice.ts`):
-      - tab (`STORAGE_NOTICE_TAB_TEXT`): `Safari deletes the programs kept here after seven days
-        without a visit to this page. "Add to Dock" makes a separate app that starts with its own,
-        empty My Programs. Use Export... here to save them all as a .zip, and Import... in the app to
-        bring them over.`
-      - installed (`STORAGE_NOTICE_INSTALLED_TEXT`): `This app keeps its own programs, separate from
-        Safari's: use Import... to bring over programs you exported in Safari.`
+      - tab (`STORAGE_NOTICE_TAB_TEXT`): `This browser may delete the programs kept here after seven
+        days without a visit to this page. An app made with "Add to Dock" or "Add to Home Screen"
+        starts with its own, empty My Programs. Use Export... in the Files panel to save them all as a
+        .zip, and Import... in the app to bring them over.`
+      - installed (`STORAGE_NOTICE_INSTALLED_TEXT`): `This app keeps its own programs, apart from the
+        browser's: Import... in the Files panel brings over programs exported there.`
+      - name of the note (`STORAGE_NOTICE_LABEL`): `About keeping your programs`.
+      (Texts of the third round; the second round's said "Safari deletes", "\"Add to Dock\" makes a
+      separate app", "Export... here" and "separate from Safari's", and the note was named "About
+      keeping programs in Safari".)
       - buttons `Export...`, `Import...`, `Got it`.
     - **Checks.** `storage-notice.test.ts` (Node). `check-files.mjs` pass "the Safari storage
       notice" (both browsers): absent under automation without the parameter; absent in Chromium
@@ -314,6 +319,49 @@ fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`.
       build. Screenshots: `build/FS1/files-check/webkit-storage-notice-*.png`.
     - `check-files.mjs` also takes `--pass <text>` (run only passes whose label contains it), an
       addition for working on one pass; CI runs all of them.
+    - **Third round before I3 (review of the second round, two minor points).**
+      - *True wherever it is shown.* The notice is shown in every WebKit browser: Safari on a Mac,
+        and every browser on an iPhone or iPad, where the menu item is "Add to Home Screen" and
+        Chrome, Firefox and Edge are WebKit but not Safari. The second round's texts said "Safari
+        deletes" (false in Chrome on an iPad) and named only "Add to Dock" (false on an iPhone). Now
+        no sentence names Safari; the storage rule is "may delete" (WebKit's seven-day rule is
+        Safari's Intelligent Tracking Prevention, which other WebKit browsers may or may not apply);
+        both menu items are named, as the names of the apps they make; and the buttons are placed
+        "in the Files panel", which is true in the panel and in the note of the next point. A unit
+        test fixes the exact texts and that none says "Safari" or "Export... here".
+      - *Seen before or when the first file is written.* The notice lived only in the Files panel,
+        which may be hidden (its visibility is remembered) or absent (a first visit that starts in
+        Simulator mode with `?open=`), so a document could become the only copy without the notice
+        ever having been on the screen (R-10: "documents are never the only copy without that notice
+        having been shown"). Chosen: **the same text as a note where the person is looking, at the
+        first write.** `watchFirstWrite` (feature init) listens to `/browser`; at the first write of a
+        file by this window (origin `local`, a path below `/browser`, not the mount itself) while a
+        notice is due (`storageNoticeKind`) and has not been on the screen in this window, it shows
+        a toast with the notice's text and the action `Got it` (the panel's `Got it`: the same
+        setting), duration 0 (it stays until it is answered or closed), once per window. "On the
+        screen" is: the panel's notice was visible for a second (`markStorageNoticeSeen`; a panel of
+        Editor mode that is mounted but hidden, as in a start that goes on to Simulator mode, does not
+        count), or it is visible at the moment of the write. Why this and not "show the Files panel
+        once at such a start": that does not help in Simulator mode, which has no Files panel, and it
+        would change the remembered layout of a person who hid the panel; the note changes nothing
+        for anyone to whom the notice is not due (another engine, the desktop app, a store that
+        keeps nothing, after `Got it`, under automation without the parameter), appears only when a
+        file is really written, and says the same as the panel. The pure rule is
+        `noticeAtWrite({ due, seen, change })`: its table (120 combinations) and the watcher's cases
+        (hidden panel, installed app with an empty or a filled store, seen, acknowledged, Chromium,
+        automation, desktop) are in `storage-notice.test.ts`; `check-files.mjs` pass "the storage
+        notice at the first write" proves in WebKit: Files panel hidden before the first start with
+        the parameter, the first write shows the note with the exact text and `Got it`, it stays
+        past a toast's default 8 s, a second write adds nothing, its `Got it` sets the setting and
+        the panel shown again has no notice; a first visit in Simulator mode (`?open=` an `.S68`)
+        shows no Files panel and no note until the first write, then the note (axe-scanned); with
+        the panel's notice on the screen a write shows nothing; and in Chromium nothing at all.
+      - *The audit.* `tests/a11y` opens the page with `?storage-notice=1` in WebKit in both themes
+        (`openApp` takes a query; `storageNoticeStep` in `lib/scan.mjs`): axe scan, a named note
+        with two named buttons, no live region, no focus taken, Tab reaches both buttons with a
+        visible focus.
+      - The engine rule `engineOf` moved to `core/help/engine.ts` (erratum H1 11), where the Help
+        frame uses it too; `storage-notice.ts` re-exports it under the same name.
 
 ## Contract
 

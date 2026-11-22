@@ -71,16 +71,17 @@ export async function newContext(browser, os, options = {}) {
 
 /**
  * Opens the application and waits until it has started (the simulator session included).
+ * `query` (for example `?storage-notice=1`) is appended to the address.
  * `errors` collects console errors and page errors.
  */
-export async function openApp(context, baseUrl) {
+export async function openApp(context, baseUrl, query = '') {
   const page = await context.newPage();
   const errors = [];
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text());
   });
   page.on('pageerror', (error) => errors.push(String(error)));
-  await page.goto(baseUrl, { timeout: LOAD_TIMEOUT });
+  await page.goto(`${baseUrl}${query}`, { timeout: LOAD_TIMEOUT });
   await waitForApp(page);
   return { page, errors };
 }

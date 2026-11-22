@@ -197,14 +197,29 @@
         {
           "kind": "web-e2e",
           "file": "tests/e2e/editor/editing.spec.ts",
-          "test": "Cut, Copy and Paste with the keyboard move text through the clipboard"
+          "test": "Cut and Copy with every chord of this key map put the selected text into the event; Cut is one undo step"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Cut and Copy from the Edit menu, the toolbar and the context menu put the selected text into the event"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Ctrl+C and Ctrl+X put the selected text into the event; Ctrl+V without clipboard access says Press Cmd+V to paste"
         },
         {
           "kind": "web-e2e",
           "file": "tests/e2e/editor/editing.spec.ts",
           "test": "Cut and Copy are disabled without a selection and enabled with one"
+        },
+        {
+          "kind": "manual",
+          "item": "Paste from the editor's menu, toolbar and context menu in each (note 45)"
         }
-      ]
+      ],
+      "note": "The web-e2e tests run in Chromium and WebKit: the cut event the editor answers carries the selected text in its clipboardData (from every chord of the key map, the Edit menu, the toolbar, the context menu, and Ctrl+X of the macOS key map), the selection goes, and one Undo brings it back. That the browser then puts the text on the system clipboard, and that another program can paste it, is the browser's: shown in Chromium only by \"Cut, Copy and Paste with the keyboard move text through the clipboard\" (Playwright grants the clipboard in Chromium alone, so that test is not named here), in Safari by a person. 6.8 has no item for Cut or Copy into another program; the manual entry quotes the nearest one (note 45), whose checks need a step for it (errata X2 entry 11)."
     },
     {
       "section": "1.3.1",
@@ -215,9 +230,29 @@
         {
           "kind": "web-e2e",
           "file": "tests/e2e/editor/editing.spec.ts",
-          "test": "Cut, Copy and Paste with the keyboard move text through the clipboard"
+          "test": "Cut and Copy with every chord of this key map put the selected text into the event; Cut is one undo step"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Cut and Copy from the Edit menu, the toolbar and the context menu put the selected text into the event"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Ctrl+C and Ctrl+X put the selected text into the event; Ctrl+V without clipboard access says Press Cmd+V to paste"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Cut and Copy are disabled without a selection and enabled with one"
+        },
+        {
+          "kind": "manual",
+          "item": "Paste from the editor's menu, toolbar and context menu in each (note 45)"
         }
-      ]
+      ],
+      "note": "The web-e2e tests run in Chromium and WebKit: the copy event the editor answers carries the selected text in its clipboardData (from every chord of the key map, the Edit menu, the toolbar, the context menu, and Ctrl+C of the macOS key map) and the text is unchanged. That the browser then puts the text on the system clipboard, and that another program can paste it, is the browser's: shown in Chromium only by \"Cut, Copy and Paste with the keyboard move text through the clipboard\" (Playwright grants the clipboard in Chromium alone, so that test is not named here), in Safari by a person. 6.8 has no item for Cut or Copy into another program; the manual entry quotes the nearest one (note 45), whose checks need a step for it (errata X2 entry 11)."
     },
     {
       "section": "1.3.1",
@@ -228,7 +263,22 @@
         {
           "kind": "web-e2e",
           "file": "tests/e2e/editor/editing.spec.ts",
-          "test": "Cut, Copy and Paste with the keyboard move text through the clipboard"
+          "test": "a paste event inserts its text at the caret as one undo step: CR LF and CR as line breaks, tabs kept"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Paste from the Edit menu, the toolbar and the context menu asks for the clipboard during the click and inserts its text as one undo step"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Paste from the Edit menu, the toolbar and the context menu without clipboard access says Press Ctrl+V (Cmd+V) to paste"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Ctrl+C and Ctrl+X put the selected text into the event; Ctrl+V without clipboard access says Press Cmd+V to paste"
         },
         {
           "kind": "unit",
@@ -239,7 +289,8 @@
           "kind": "manual",
           "item": "Paste from the editor's menu, toolbar and context menu in each (note 45)"
         }
-      ]
+      ],
+      "note": "The web-e2e tests run in Chromium and WebKit. The paste chords are the browser's own (the dispatcher leaves them to the editor): the test dispatches the paste event the browser delivers, with its text, and the editor inserts it at the caret as one undo step, CR LF and CR as line breaks, a tab kept as a tab with Real Tabs off (editor-ui 8.7). Paste from the menu, toolbar and context menu asks navigator.clipboard.readText while the click's user activation lasts and inserts the answer (given by the test, as Safari gives it after its Paste callout); refused, it shows the toast of note 45. The real system clipboard is shown in Chromium only by \"Cut, Copy and Paste with the keyboard move text through the clipboard\" (not named here: Playwright grants the clipboard in Chromium alone) and in Safari by the manual checks P2, P3."
     },
     {
       "section": "1.3.1",
@@ -663,10 +714,16 @@
       "verifiedBy": [
         {
           "kind": "web-e2e",
-          "file": "tests/e2e/editor/menus.spec.ts",
-          "test": "the menus open from the keyboard: Alt+letter on Windows and Linux (note 14), arrows and Enter"
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Alt+F, Alt+E, Alt+P, Alt+O, Alt+W and Alt+H open their menus; arrows move between them, Enter chooses"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/editor/editing.spec.ts",
+          "test": "Option+F, E, P, O, W and H open no menu: macOS has no menu mnemonics"
         }
-      ]
+      ],
+      "note": "The first test gives the page the Windows key map, the second the macOS key map, on every system, so both run in Chromium and WebKit wherever the suite runs (the access keys are the application's handling of the key, not the browser's). menus.spec.ts \"the menus open from the keyboard: Alt+letter on Windows and Linux (note 14), arrows and Enter\" tests the Windows key map on the host's key map only, so it is skipped on macOS and not named here."
     },
     {
       "section": "1.3.2",

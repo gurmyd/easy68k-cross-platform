@@ -109,7 +109,7 @@ START:
     ANDI    #$27FF,SR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* MOVE    #$0009,CCR
+* EORI    #$0509,SR
     MOVE.L  #$72FB9522,D0
     MOVE.L  #$44444444,D1
     MOVE.L  #$00008000,D2
@@ -119,10 +119,10 @@ START:
     MOVE.W  #$ADB8,D1
     MOVE    #$1D,CCR
     JSR     DMP_CLRC
-    MOVE    #$0009,CCR
+    EORI    #$0509,SR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* MOVE    D1,CCR
+* MOVE    #$000E,CCR
     MOVE.L  #$1A0DB7A3,D0
     MOVE.L  #$FFFFFF76,D1
     MOVE.L  #$3BDFB704,D2
@@ -132,10 +132,10 @@ START:
     MOVE.W  #$3036,D1
     MOVE    #$17,CCR
     JSR     DMP_CLRC
-    MOVE    D1,CCR
+    MOVE    #$000E,CCR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* ANDI    #$A7,CCR
+* MOVE    D1,CCR
     MOVE.L  #$0000000F,D0
     MOVE.L  #$FFFF009A,D1
     MOVE.L  #$000000FF,D2
@@ -145,10 +145,10 @@ START:
     MOVE.W  #$0E8C,D1
     MOVE    #$19,CCR
     JSR     DMP_CLRC
-    ANDI    #$A7,CCR
+    MOVE    D1,CCR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* ORI     #$07,CCR
+* ANDI    #$E7,CCR
     MOVE.L  #$76767676,D0
     MOVE.L  #$FFFFFFFF,D1
     MOVE.L  #$FFFFFF4E,D2
@@ -158,10 +158,10 @@ START:
     MOVE.W  #$591C,D1
     MOVE    #$16,CCR
     JSR     DMP_CLRC
-    ORI     #$07,CCR
+    ANDI    #$E7,CCR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* EORI    #$15,CCR
+* ORI     #$15,CCR
     MOVE.L  #$FFFFFF63,D0
     MOVE.L  #$2A3659BF,D1
     MOVE.L  #$00000038,D2
@@ -171,10 +171,10 @@ START:
     MOVE.W  #$E20F,D1
     MOVE    #$19,CCR
     JSR     DMP_CLRC
-    EORI    #$15,CCR
+    ORI     #$15,CCR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* MOVE    SR,D2
+* EORI    #$10,CCR
     MOVE.L  #$80000000,D0
     MOVE.L  #$000000FF,D1
     MOVE.L  #$00007FFF,D2
@@ -184,10 +184,10 @@ START:
     MOVE.W  #$97F6,D1
     MOVE    #$03,CCR
     JSR     DMP_CLRC
-    MOVE    SR,D2
+    EORI    #$10,CCR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* ORI     #$2013,SR
+* MOVE    SR,D2
     MOVE.L  #$FFFF00D1,D0
     MOVE.L  #$00000080,D1
     MOVE.L  #$67676767,D2
@@ -197,10 +197,10 @@ START:
     MOVE.W  #$CC5E,D1
     MOVE    #$16,CCR
     JSR     DMP_CLRC
-    ORI     #$2013,SR
+    MOVE    SR,D2
     JSR     DMP_REGS
     JSR     DMP_CYC
-* ANDI    #$27FF,SR
+* ORI     #$200F,SR
     MOVE.L  #$6A6A6A6A,D0
     MOVE.L  #$07B3135A,D1
     MOVE.L  #$00000011,D2
@@ -210,10 +210,10 @@ START:
     MOVE.W  #$0690,D1
     MOVE    #$18,CCR
     JSR     DMP_CLRC
-    ANDI    #$27FF,SR
+    ORI     #$200F,SR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* MOVE    #$0002,CCR
+* ANDI    #$27FF,SR
     MOVE.L  #$00007F7F,D0
     MOVE.L  #$67134D8E,D1
     MOVE.L  #$0000FFFF,D2
@@ -223,10 +223,10 @@ START:
     MOVE.W  #$9ED0,D1
     MOVE    #$00,CCR
     JSR     DMP_CLRC
-    MOVE    #$0002,CCR
+    ANDI    #$27FF,SR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* MOVE    D1,CCR
+* EORI    #$050E,SR
     MOVE.L  #$0000FFFF,D0
     MOVE.L  #$000000A8,D1
     MOVE.L  #$00FFFF32,D2
@@ -236,10 +236,10 @@ START:
     MOVE.W  #$A2CD,D1
     MOVE    #$1D,CCR
     JSR     DMP_CLRC
-    MOVE    D1,CCR
+    EORI    #$050E,SR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* ANDI    #$32,CCR
+* MOVE    #$0012,CCR
     MOVE.L  #$CF9F2F30,D0
     MOVE.L  #$37373737,D1
     MOVE.L  #$00000100,D2
@@ -249,10 +249,10 @@ START:
     MOVE.W  #$1E4C,D1
     MOVE    #$0D,CCR
     JSR     DMP_CLRC
-    ANDI    #$32,CCR
+    MOVE    #$0012,CCR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* ORI     #$10,CCR
+* MOVE    D1,CCR
     MOVE.L  #$00000078,D0
     MOVE.L  #$FFFFFF54,D1
     MOVE.L  #$81989091,D2
@@ -262,10 +262,10 @@ START:
     MOVE.W  #$0FDB,D1
     MOVE    #$1E,CCR
     JSR     DMP_CLRC
-    ORI     #$10,CCR
+    MOVE    D1,CCR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* EORI    #$00,CCR
+* ANDI    #$00,CCR
     MOVE.L  #$00000000,D0
     MOVE.L  #$0000006C,D1
     MOVE.L  #$000000B6,D2
@@ -275,10 +275,10 @@ START:
     MOVE.W  #$F6F6,D1
     MOVE    #$1D,CCR
     JSR     DMP_CLRC
-    EORI    #$00,CCR
+    ANDI    #$00,CCR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* MOVE    SR,D2
+* ORI     #$1C,CCR
     MOVE.L  #$FFFFFFFF,D0
     MOVE.L  #$6F304626,D1
     MOVE.L  #$FFFFFF7C,D2
@@ -288,10 +288,10 @@ START:
     MOVE.W  #$8AFB,D1
     MOVE    #$0B,CCR
     JSR     DMP_CLRC
-    MOVE    SR,D2
+    ORI     #$1C,CCR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* ORI     #$2018,SR
+* EORI    #$18,CCR
     MOVE.L  #$0000FFFF,D0
     MOVE.L  #$61A10A6D,D1
     MOVE.L  #$FBFBFBFB,D2
@@ -301,10 +301,10 @@ START:
     MOVE.W  #$A20C,D1
     MOVE    #$1D,CCR
     JSR     DMP_CLRC
-    ORI     #$2018,SR
+    EORI    #$18,CCR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* ANDI    #$27FF,SR
+* MOVE    SR,D2
     MOVE.L  #$8F8F8F8F,D0
     MOVE.L  #$12646014,D1
     MOVE.L  #$00000100,D2
@@ -314,10 +314,10 @@ START:
     MOVE.W  #$B6BB,D1
     MOVE    #$1B,CCR
     JSR     DMP_CLRC
-    ANDI    #$27FF,SR
+    MOVE    SR,D2
     JSR     DMP_REGS
     JSR     DMP_CYC
-* MOVE    #$000B,CCR
+* ORI     #$200B,SR
     MOVE.L  #$00FFFF1B,D0
     MOVE.L  #$5CA23D7A,D1
     MOVE.L  #$0000005A,D2
@@ -327,10 +327,10 @@ START:
     MOVE.W  #$1082,D1
     MOVE    #$19,CCR
     JSR     DMP_CLRC
-    MOVE    #$000B,CCR
+    ORI     #$200B,SR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* MOVE    D1,CCR
+* ANDI    #$27FF,SR
     MOVE.L  #$00010000,D0
     MOVE.L  #$D0D0D0D0,D1
     MOVE.L  #$00010000,D2
@@ -340,10 +340,10 @@ START:
     MOVE.W  #$6E0C,D1
     MOVE    #$05,CCR
     JSR     DMP_CLRC
-    MOVE    D1,CCR
+    ANDI    #$27FF,SR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* ANDI    #$D2,CCR
+* EORI    #$0612,SR
     MOVE.L  #$00000000,D0
     MOVE.L  #$00000004,D1
     MOVE.L  #$00000000,D2
@@ -353,10 +353,10 @@ START:
     MOVE.W  #$4791,D1
     MOVE    #$13,CCR
     JSR     DMP_CLRC
-    ANDI    #$D2,CCR
+    EORI    #$0612,SR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* ORI     #$11,CCR
+* MOVE    #$0011,CCR
     MOVE.L  #$00000000,D0
     MOVE.L  #$A3A3A3A3,D1
     MOVE.L  #$FFFFFF25,D2
@@ -366,10 +366,10 @@ START:
     MOVE.W  #$5B75,D1
     MOVE    #$1F,CCR
     JSR     DMP_CLRC
-    ORI     #$11,CCR
+    MOVE    #$0011,CCR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* EORI    #$13,CCR
+* MOVE    D1,CCR
     MOVE.L  #$7879BEC3,D0
     MOVE.L  #$4C7168B7,D1
     MOVE.L  #$00000100,D2
@@ -379,10 +379,10 @@ START:
     MOVE.W  #$2063,D1
     MOVE    #$0D,CCR
     JSR     DMP_CLRC
-    EORI    #$13,CCR
+    MOVE    D1,CCR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* MOVE    SR,D2
+* ANDI    #$EE,CCR
     MOVE.L  #$000000FC,D0
     MOVE.L  #$B8B8B8B8,D1
     MOVE.L  #$51515151,D2
@@ -392,10 +392,10 @@ START:
     MOVE.W  #$928F,D1
     MOVE    #$00,CCR
     JSR     DMP_CLRC
-    MOVE    SR,D2
+    ANDI    #$EE,CCR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* ORI     #$200E,SR
+* ORI     #$0E,CCR
     MOVE.L  #$00000001,D0
     MOVE.L  #$BA9B4B70,D1
     MOVE.L  #$0000007F,D2
@@ -405,10 +405,10 @@ START:
     MOVE.W  #$3A6C,D1
     MOVE    #$17,CCR
     JSR     DMP_CLRC
-    ORI     #$200E,SR
+    ORI     #$0E,CCR
     JSR     DMP_REGS
     JSR     DMP_CYC
-* ANDI    #$27FF,SR
+* EORI    #$08,CCR
     MOVE.L  #$E0E0E0E0,D0
     MOVE.L  #$000000B3,D1
     MOVE.L  #$000000A3,D2
@@ -418,7 +418,59 @@ START:
     MOVE.W  #$33A1,D1
     MOVE    #$04,CCR
     JSR     DMP_CLRC
+    EORI    #$08,CCR
+    JSR     DMP_REGS
+    JSR     DMP_CYC
+* MOVE    SR,D2
+    MOVE.L  #$0000FFFF,D0
+    MOVE.L  #$FFFF0087,D1
+    MOVE.L  #$000000ED,D2
+    MOVE.L  #$41414141,D3
+    LEA     SCR,A0
+    LEA     SCR+8,A1
+    MOVE.W  #$A48E,D1
+    MOVE    #$1D,CCR
+    JSR     DMP_CLRC
+    MOVE    SR,D2
+    JSR     DMP_REGS
+    JSR     DMP_CYC
+* ORI     #$2017,SR
+    MOVE.L  #$FFFFFFFF,D0
+    MOVE.L  #$0000007F,D1
+    MOVE.L  #$000000D7,D2
+    MOVE.L  #$35E81622,D3
+    LEA     SCR,A0
+    LEA     SCR+8,A1
+    MOVE.W  #$0D22,D1
+    MOVE    #$14,CCR
+    JSR     DMP_CLRC
+    ORI     #$2017,SR
+    JSR     DMP_REGS
+    JSR     DMP_CYC
+* ANDI    #$27FF,SR
+    MOVE.L  #$0000FFFF,D0
+    MOVE.L  #$00000001,D1
+    MOVE.L  #$F0F0F0F0,D2
+    MOVE.L  #$DE6F024B,D3
+    LEA     SCR,A0
+    LEA     SCR+8,A1
+    MOVE.W  #$3066,D1
+    MOVE    #$16,CCR
+    JSR     DMP_CLRC
     ANDI    #$27FF,SR
+    JSR     DMP_REGS
+    JSR     DMP_CYC
+* EORI    #$0203,SR
+    MOVE.L  #$00008083,D0
+    MOVE.L  #$000000FF,D1
+    MOVE.L  #$A4A4A4A4,D2
+    MOVE.L  #$2FFE1253,D3
+    LEA     SCR,A0
+    LEA     SCR+8,A1
+    MOVE.W  #$BC7C,D1
+    MOVE    #$11,CCR
+    JSR     DMP_CLRC
+    EORI    #$0203,SR
     JSR     DMP_REGS
     JSR     DMP_CYC
     JSR     DMP_CLOSE

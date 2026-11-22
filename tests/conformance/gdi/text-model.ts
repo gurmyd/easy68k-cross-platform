@@ -13,19 +13,25 @@
 //     bytes count 0 if the string has a byte of $80 or above and their full advance otherwise, in
 //     every style (textExtent; in the outline faces $7F also changes its width in such a string).
 //
-// textUnmodelled() in cases.ts names the strings these rules do not cover (bytes Windows takes from
-// a fallback font); no case of the `text` suite contains one.
+//   - Windows' Unicode text path (README.md "Windows' text path"; erratum T2 26; gate I3 item 3b):
+//     for a string with one of TEXT_PATH_BYTES and the font data's raster.textPath, the zero-width
+//     bar, the euro sign's width, a box of at least one cell, and italic itemization (severalItems).
+//
+// textUnmodelled() in cases.ts names the strings the rules above the last one do not cover (bytes
+// Windows takes from a fallback font); no case of the `text` suite contains one. The last rule covers
+// the suite text-path and most of text-control, which keeps its cases.
 
 import {
   cellOf,
   outlineEntry,
   rasterGlyph,
+  STYLE_NAMES,
   ZERO_WIDTH_BYTES,
   type FontRequest,
   type Metrics,
   type TestGlyph,
 } from './fonts';
-import { ITALIC_SPECIAL_BYTES, type GdiCase } from './cases';
+import { ITALIC_SPECIAL_BYTES, UNDEFINED_BYTES, type GdiCase } from './cases';
 import { spots } from './golden';
 
 export interface Picture {
@@ -40,6 +46,10 @@ export interface TextLayout {
   glyphs: { glyph: TestGlyph; x: number }[];
   /** Width of the opaque cell. */
   boxWidth: number;
+  /** Where the opaque cell starts relative to the text position (the bar: -1); 0 when absent. */
+  boxLeft?: number;
+  /** Height of the opaque cell when it is not the font's cell (the bar). */
+  boxHeight?: number;
   /** TextWidth(string): how far the pen moves. */
   extent: number;
   cellHeight: number;
@@ -78,6 +88,75 @@ export function italicOverhangDropped(bytes: readonly number[]): boolean {
   if (drawn.length < bytes.length) return true;
   const special = drawn.filter((b) => ITALIC_SPECIAL_BYTES.includes(b)).length;
   return special > 0 && special < drawn.length;
+}
+
+/**
+ * Bytes that send a text down Windows' Unicode text path in the raster faces (README.md "Windows'
+ * text path"; erratum T2 26): the zero-width bytes, $7F, the undefined bytes, $86 $87 $88 $98.
+ */
+export const TEXT_PATH_BYTES: readonly number[] = [
+  ...ZERO_WIDTH_BYTES,
+  0x7f,
+  ...UNDEFINED_BYTES,
+  0x86,
+  0x87,
+  0x88,
+  0x98,
+];
+export const onTextPath = (bytes: readonly number[]): boolean => bytes.some((b) => TEXT_PATH_BYTES.includes(b));
+
+const PUNCTUATION = [0x82, 0x84, 0x85, 0x86, 0x87, 0x89, 0x8b, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x99, 0x9b];
+/** The item class of a byte on the text path (measured with every byte next to $86 and $88 in italic). */
+export function itemClass(b: number): string {
+  if (isZeroWidth(b)) return 'zero-width';
+  if (b < 0x20) return 'control';
+  if (b === 0x7f) return 'del';
+  if (UNDEFINED_BYTES.includes(b)) return 'undefined';
+  if (b === 0x80) return 'euro';
+  if (PUNCTUATION.includes(b)) return 'punctuation';
+  if (b === 0xb2 || b === 0xb3 || b === 0xb9) return 'superscript';
+  if (b === 0xa0) return 'neutral';
+  if ((b >= 0x41 && b <= 0x5a) || (b >= 0x61 && b <= 0x7a) || b >= 0x80) return 'latin';
+  return 'neutral';
+}
+const CONTROL_CLASSES = ['zero-width', 'control', 'del', 'undefined'];
+/** Whether the text path cuts a string into two or more items: neutrals join any class but a control. */
+export function severalItems(bytes: readonly number[]): boolean {
+  const classes = new Set(bytes.map(itemClass).filter((k) => k !== 'neutral'));
+  const control = [...classes].some((k) => CONTROL_CLASSES.includes(k));
+  return classes.size >= 2 || (control && bytes.some((b) => itemClass(b) === 'neutral'));
+}
+
+/**
+ * Whether a string on the text path is a control text (errata T2 27 and T2 28). It is one when
+ * - it is made of controls ($7F, the undefined bytes), punctuation and neutrals only: no letter, digit,
+ *   euro sign, superscript, zero-width byte or other byte below $20;
+ * - it has a control, and a byte that is not an undefined byte;
+ * - each of its runs of punctuation and neutrals has a punctuation byte;
+ * - and it does not alternate byte by byte between one punctuation-or-neutral byte and one control
+ *   with as many of each ($86 $81, $7F $86 $7F $86; $86 $7F $86 and $86 $86 $81 are control texts).
+ * Such a string keeps the whole italic overhang, and one that ends with an undefined byte has a box
+ * one cell of the face wider in plain, bold and italic (not in underline or strike-out). Measured with
+ * T2's capture program on about 210,000 texts over every size class and style of both raster faces
+ * (gate I3, item 3c).
+ */
+export function controlText(bytes: readonly number[]): boolean {
+  const kinds = bytes.map(itemClass);
+  if (kinds.some((k) => k !== 'del' && k !== 'undefined' && k !== 'punctuation' && k !== 'neutral')) return false;
+  if (bytes.some((b) => b >= 0x30 && b <= 0x39)) return false;
+  const control = kinds.map((k) => k === 'del' || k === 'undefined');
+  if (!control.includes(true) || kinds.every((k) => k === 'undefined')) return false;
+  const runs: { from: number; to: number; punctuation: boolean }[] = [];
+  kinds.forEach((k, i) => {
+    if (control[i]) return;
+    const last = runs[runs.length - 1];
+    if (last && last.to === i) last.to = i + 1;
+    else runs.push({ from: i, to: i + 1, punctuation: false });
+    if (k === 'punctuation') (runs[runs.length - 1] as { punctuation: boolean }).punctuation = true;
+  });
+  if (runs.some((r) => !r.punctuation)) return false;
+  const alternating = bytes.length % 2 === 0 && control.every((c, i) => i === 0 || c !== control[i - 1]);
+  return !alternating;
 }
 
 /** Whether $7F takes the fallback glyph's width in this outline-face string (see textExtent). */
@@ -163,28 +242,57 @@ export function layoutText(
   glyphOf: GlyphOf = rasterGlyph,
 ): TextLayout {
   const cell = cellOf(metrics, font);
+  // Windows' text path in a raster face (README.md "Windows' text path"; erratum T2 26).
+  const style = STYLE_NAMES[font.style] as (typeof STYLE_NAMES)[number];
+  const textPath = cell.kind === 'raster' && metrics.raster.textPath !== undefined && onTextPath(bytes);
+  const euroWidth = textPath ? (metrics.raster.textPath?.fallbackEuro[font.name]?.[style]?.[font.size] ?? null) : null;
+  const glyphFor = (b: number): TestGlyph =>
+    b === 0x80 && euroWidth !== null
+      ? {
+          advance: euroWidth,
+          width: euroWidth,
+          height: cell.rowHeight,
+          coverage: new Uint8Array(euroWidth * cell.rowHeight),
+        }
+      : glyphOf(metrics, font, b, bytes);
   const glyphs: { glyph: TestGlyph; x: number }[] = [];
   let x = 0;
   for (const b of bytes) {
     if (bytes.length >= 2 && isZeroWidth(b)) continue;
-    const g = glyphOf(metrics, font, b, bytes);
+    const g = glyphFor(b);
     glyphs.push({ glyph: g, x });
     x += g.advance;
   }
-  const extent = textExtent(bytes, (b) => glyphOf(metrics, font, b, bytes).advance);
+  const extent = textExtent(bytes, (b) => glyphFor(b).advance);
   // GDI's simulated bold and italic overhang the last advance; the opaque cell covers the overhang
   // too (tmOverhang: 1 for bold, floor((h - 1) / 2) for italic; 0 for the outline faces).
   const fullOverhang = cell.kind === 'raster' ? rasterOverhang(font.style, cell.rowHeight) : 0;
   const allZero = bytes.length > 0 && bytes.every(isZeroWidth);
+  const bar = textPath ? (metrics.raster.textPath?.zeroWidthBar[font.name]?.[style]?.[String(font.size)] ?? 0) : 0;
+  const separators = bytes.some((b, i) => b === 0x1f && bytes[i + 1] === 0x1f);
+  if (allZero && bar > 0 && (bytes.length % 2 === 1 || separators)) {
+    // The bar: the opaque box of a glyph of no width from the fallback font.
+    return { glyphs: [], boxWidth: 3, boxLeft: -1, boxHeight: bar, extent, cellHeight: cell.rowHeight };
+  }
+  // On the text path the box is at least one cell of the face wide, and so is the first glyph's part.
+  const least = textPath ? cell.colWidth : 0;
+  // A control text (controlText) keeps the italic overhang, and ending with an undefined byte it has
+  // one more cell in plain, bold and italic.
+  const control = textPath && controlText(bytes);
+  const extraCell =
+    control && font.style <= 2 && UNDEFINED_BYTES.includes(bytes[bytes.length - 1] as number) ? cell.colWidth : 0;
   let boxWidth: number;
   if (allZero) boxWidth = glyphOf(metrics, font, bytes[0] as number, bytes).advance + fullOverhang;
   else if (glyphs.length === 0) boxWidth = 0;
-  else if (font.style === 2 && italicOverhangDropped(bytes)) {
+  else if (
+    font.style === 2 &&
+    (textPath ? !control && glyphs.length >= 2 && severalItems(bytes) : italicOverhangDropped(bytes))
+  ) {
     // Only the first glyph's overhang is kept then, where it reaches past the advances
     // (Fixedsys 72 italic "A",$0D,"B": 40 + 44 = 84, not 80; with four glyphs 160).
     const first = glyphs[0] as { glyph: TestGlyph };
-    boxWidth = Math.max(x, first.glyph.advance + fullOverhang);
-  } else boxWidth = x + fullOverhang;
+    boxWidth = Math.max(x, least, Math.max(first.glyph.advance, least) + fullOverhang);
+  } else boxWidth = Math.max(x, least) + extraCell + fullOverhang;
   return { glyphs, boxWidth, extent, cellHeight: cell.rowHeight };
 }
 
@@ -314,8 +422,9 @@ export function drawTextCase(
         break;
       case 'text': {
         const layout = layoutText(metrics, font, o.bytes, glyphOf);
-        for (let y = 0; y < layout.cellHeight; y++)
-          for (let x = 0; x < layout.boxWidth; x++) put(o.x + x, o.y + y, fill);
+        const left = layout.boxLeft ?? 0;
+        for (let y = 0; y < (layout.boxHeight ?? layout.cellHeight); y++)
+          for (let x = 0; x < layout.boxWidth; x++) put(o.x + left + x, o.y + y, fill);
         for (const { glyph, x } of layout.glyphs) {
           for (let y = 0; y < glyph.height; y++) {
             for (let gx = 0; gx < glyph.width; gx++)

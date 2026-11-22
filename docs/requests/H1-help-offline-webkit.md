@@ -1,4 +1,4 @@
-Status: open (asked in the second round before I3 by the engineer of FS1, E5, H1, DV1 and X1; for the architect, before I3).
+Status: done (third round before I3). The architect took option 1 with limits a to e; built as erratum H1 11 (and DV1 15, X1 15); one correction note under ARCHITECTURE.md 7.6.
 
 # H1: the Help frame offline in WebKit needs a decision on its sandbox
 

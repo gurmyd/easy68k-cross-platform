@@ -1619,7 +1619,7 @@ macros with binary constants work in the field it evidently copies an invalid sp
 so `fputs` is equivalent except for body lines whose `%` happens to form a **valid** conversion (for
 example `'%d'`, `% d` in a comment, `%%`), where the real program substitutes garbage or collapses `%%`.
 
-> **Corrected (erratum T1 10).** Measured (`checklist/macro-09-*`): with `DC.B '%d%s%%'` as a body line the official program ends the expansion at that line (neither it nor `ENDM` is listed, no code, no error, the assembly goes on after the call); a `%` without a valid conversion expands normally. The port expands the line literally; listed in `tests/conformance/asm/known-differences.json` for the engine's owner.
+> **Corrected (erratum T1 10).** Measured (`checklist/macro-09-*`): with `DC.B '%d%s%%'` as a body line the official program ends the expansion at that line (neither it nor `ENDM` is listed, no code, no error, the assembly goes on after the call); the other body line, `AND.B #%00001111,D0 ; 50% done`, expands unchanged although `% d` is a valid conversion; why Borland's `fprintf` left it so is not known (erratum T1 25). The `fprintf` is the one that writes the body line into the macro store (`MACRO.CPP:106`), so the code differs with *Macros Expanded* off too. The port expands the line literally; listed in `tests/conformance/asm/known-differences.json` for the engine's owner.
 
 #### 9.3.5 `writeMap` overflows `char data[6]` [EXP]
 
@@ -1694,7 +1694,7 @@ original corrupts memory.
   in the rare case that the symbol does not exist in pass 2 (for instance a `SET` line that only pass 2
   reaches). In WebAssembly that silently writes near address 0. Guard in the patch or accept.
 
-> **Corrected (erratum T1 11).** Measured (`checklist/dir-11-*`): a `SET` line that only pass 2 reaches (`IFNE FWD` / `S SET 5` / `DC.B S` / `ENDC` / `FWD EQU 1`) assembles `DC.B S` to `05` with no error in the official program; the port reports `Undefined symbol` and emits `00`. Listed in `known-differences.json` (`PATCHES.md` P14).
+> **Corrected (errata T1 11 and 24).** Measured (`checklist/dir-11-*`): with `IFNE FWD` / `S SET 5` / `DC.B S` / `M MACRO` ... `ENDM` / `ENDC` / `FWD EQU 1` the official program assembles `DC.B S` to `05` with no error and lists `FWD`, `M` and `S` in its symbol table: it assembled the block in pass 1, because the unwritten `t` of §9.3.3 (`EVAL.CPP:76`) was not 0. The port starts `t` at 0 (`PATCHES.md` P7), skips the block in pass 1, and in pass 2 reaches the case of this section (P14): `DC.B S` is `Undefined symbol`, `00`. The unpatched native twin reproduces the official listing. Listed in `tests/conformance/asm/known-differences.json`.
 
 ### 9.4 Files, line ends, paths, encoding
 

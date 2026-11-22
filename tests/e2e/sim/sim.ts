@@ -19,7 +19,7 @@
 import { createHash } from 'node:crypto';
 import type { Locator, Page } from '@playwright/test';
 import type { KnownCommandId } from '../../../app/src/commands/ids';
-import { expect, type App } from '../fixtures';
+import { expect, test, type App } from '../fixtures';
 
 /** Register field numbers (contracts `Box`): D0-D7, A0-A7, US, SS, PC, SR. */
 export const BOX = {
@@ -120,9 +120,83 @@ export async function execute(app: App, lines: Source, name?: string): Promise<v
   await app.button(dialog, 'Execute').click();
   await expect(dialog).toBeHidden();
   await expect.poll(() => app.mode()).toBe('simulator');
+  await waitForLoad(app);
   await expect(listingRows(app).first()).toBeVisible();
   await expect(app.toolbarButton('sim.run.run')).toBeEnabled();
   await expect(app.toolbarButton('sim.run.traceInto')).toBeEnabled();
+}
+
+/**
+ * The longest the load after Execute may take (ARCHITECTURE.md 4.7: the cold start, a new engine,
+ * the fonts of the Output window, the program's files read from the browser store and the files
+ * view brought up to date), while the status bar shows "Loading". Measured with a production build
+ * in Chromium (build/repairs-r4/load-time.mjs, gate I3 round 4): 36 ms on the development PC,
+ * 0.4 s with the CPU slowed six times and 2.5 s twenty times; once in 6,140 tests of a run of 20
+ * repetitions on a fully loaded PC it took more than 15 s (breakpoints.spec.ts:111, the help
+ * engineer's run of round 3). That is a load that takes long, not one that never ends, so the
+ * helper waits for the load itself with a limit that slowness alone does not reach, and gives the
+ * test that much more time; a load that does end in time is not waited for any longer.
+ */
+export const LOAD_LIMIT_MS = 90_000;
+/** A load longer than this is printed (and annotated), so that the CI log shows the slow ones. */
+const SLOW_LOAD_MS = 15_000;
+
+/**
+ * Waits until Simulator mode has finished loading the program: the status bar's run state is no
+ * longer "Loading" and the Listing panel has rows. On a failure the message says what the page was
+ * doing: the run state, whether the fonts and the simulator engine had been fetched, and whether
+ * the page still answered.
+ */
+async function waitForLoad(app: App): Promise<void> {
+  const info = test.info();
+  info.setTimeout(info.timeout + LOAD_LIMIT_MS);
+  const started = Date.now();
+  const stage = async (): Promise<string> =>
+    (await runState(app).textContent()) === 'Loading'
+      ? 'Loading'
+      : (await listingRows(app).count()) > 0
+        ? 'loaded'
+        : `"${(await runState(app).textContent()) ?? ''}" without a listing`;
+  try {
+    await expect
+      .poll(stage, { timeout: LOAD_LIMIT_MS, message: 'Simulator mode loads the program after Execute' })
+      .toBe('loaded');
+  } catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\n${await loadDiagnosis(app, started)}`, {
+      cause: error,
+    });
+  }
+  const took = Date.now() - started;
+  if (took > SLOW_LOAD_MS) {
+    const text = `the load after Execute took ${took} ms (${await loadDiagnosis(app, started)})`;
+    info.annotations.push({ type: 'slow load', description: text });
+    console.log(`  note: ${info.title}: ${text}`);
+  }
+}
+
+/** What the page had done since Execute, from its own resource timing; whether it still answers. */
+async function loadDiagnosis(app: App, started: number): Promise<string> {
+  const asked = Date.now();
+  const unanswered = new Promise<null>((resolve) => setTimeout(() => resolve(null), 10_000));
+  const answer = app.page
+    .evaluate(() => {
+      const resources = performance.getEntriesByType('resource') as PerformanceResourceTiming[];
+      const done = (part: string) =>
+        resources.filter((entry) => entry.name.includes(part)).map((entry) => Math.round(entry.responseEnd));
+      const fonts = done('/fonts/');
+      return {
+        now: Math.round(performance.now()),
+        fonts: `${fonts.length} font files, the last at ${fonts.length ? Math.max(...fonts) : '-'} ms`,
+        engine: `simulator engine files at ${done('sim68k').join(', ') || '-'} ms`,
+      };
+    })
+    .catch(() => null);
+  const timing = await Promise.race([answer, unanswered]);
+  if (!timing) return `the page did not answer within ${Date.now() - asked} ms (its main thread is stalled)`;
+  return (
+    `${Date.now() - started} ms after Execute, run state "${(await runState(app).textContent()) ?? ''}"; ` +
+    `page clock ${timing.now} ms: ${timing.fonts}, ${timing.engine}; the page answered in ${Date.now() - asked} ms`
+  );
 }
 
 // ---- registers ------------------------------------------------------------------------------

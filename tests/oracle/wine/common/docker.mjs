@@ -117,7 +117,8 @@ function removeRunning() {
 /**
  * Starts one container and resolves with its exit status when it ends. Output goes to `logFile`.
  * The container is named `name`; if this process is interrupted, it is removed by that name.
- * @param {{ name: string, image: string, mounts: string[], env?: Record<string, string>, command: string[], logFile: string }} spec
+ * `cpus`, when given, limits the container to that many CPUs (`docker run --cpus`).
+ * @param {{ name: string, image: string, mounts: string[], env?: Record<string, string>, cpus?: number, command: string[], logFile: string }} spec
  * @returns {Promise<number>}
  */
 export function runContainer(spec) {
@@ -131,7 +132,19 @@ export function runContainer(spec) {
     }
   }
   const env = Object.entries(spec.env ?? {}).flatMap(([key, value]) => ['-e', `${key}=${value}`]);
-  const args = ['run', '--rm', '--init', '--name', spec.name, ...env, ...spec.mounts, spec.image, ...spec.command];
+  const cpus = spec.cpus ? ['--cpus', String(spec.cpus)] : [];
+  const args = [
+    'run',
+    '--rm',
+    '--init',
+    '--name',
+    spec.name,
+    ...cpus,
+    ...env,
+    ...spec.mounts,
+    spec.image,
+    ...spec.command,
+  ];
   return new Promise((resolvePromise, reject) => {
     const log = createWriteStream(spec.logFile);
     running.add(spec.name);

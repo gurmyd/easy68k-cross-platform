@@ -53,7 +53,8 @@ async function findVcvars64() {
 
 function runBatch(batchFile) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn('cmd.exe', ['/d', '/c', batchFile], { stdio: ['ignore', 'pipe', 'pipe'] });
+    // windowsHide: no console window on the desktop, whatever the parent process is attached to.
+    const child = spawn('cmd.exe', ['/d', '/c', batchFile], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     let output = '';
     child.stdout.on('data', (d) => (output += d));
     child.stderr.on('data', (d) => (output += d));

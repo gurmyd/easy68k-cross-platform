@@ -18,18 +18,25 @@
 // Owner: FS1.
 
 import type { AppContext, FileSystemBackend } from '../../contracts';
+import { engineOf, type BrowserEngine } from '../../core/help/engine';
 import { BrowserBackend, PendingBrowserStore, UnsavedBrowserStore } from '../../fs/browser-backend';
 import { BROWSER_ROOT } from './store';
 
-/** The notice in a browser tab: both facts of R-10, in plain words. */
+/**
+ * The notice in a browser tab: both facts of R-10, in plain words. Every sentence is true wherever
+ * the notice is shown: in Safari on a Mac, on an iPhone or iPad (where "Add to Dock" is "Add to
+ * Home Screen") and in the other browsers there, which are WebKit too but not Safari; in the Files
+ * panel and in the note shown at the first write when the panel is not on the screen (errata
+ * FS1.md entry 28, third round).
+ */
 export const STORAGE_NOTICE_TAB_TEXT =
-  'Safari deletes the programs kept here after seven days without a visit to this page. ' +
-  '"Add to Dock" makes a separate app that starts with its own, empty My Programs. ' +
-  'Use Export... here to save them all as a .zip, and Import... in the app to bring them over.';
+  'This browser may delete the programs kept here after seven days without a visit to this page. ' +
+  'An app made with "Add to Dock" or "Add to Home Screen" starts with its own, empty My Programs. ' +
+  'Use Export... in the Files panel to save them all as a .zip, and Import... in the app to bring them over.';
 
 /** The notice in the installed app (display-mode standalone) while its store is empty. */
 export const STORAGE_NOTICE_INSTALLED_TEXT =
-  "This app keeps its own programs, separate from Safari's: use Import... to bring over programs you exported in Safari.";
+  "This app keeps its own programs, apart from the browser's: Import... in the Files panel brings over programs exported there.";
 
 /** The acknowledging button of both variants. */
 export const STORAGE_NOTICE_DISMISS_CAPTION = 'Got it';
@@ -37,13 +44,15 @@ export const STORAGE_NOTICE_DISMISS_CAPTION = 'Got it';
 export const STORAGE_NOTICE_EXPORT_CAPTION = 'Export...';
 export const STORAGE_NOTICE_IMPORT_CAPTION = 'Import...';
 /** The notice's accessible name (role note). */
-export const STORAGE_NOTICE_LABEL = 'About keeping programs in Safari';
+export const STORAGE_NOTICE_LABEL = 'About keeping your programs';
 
 /** The query parameter that shows the notice under automation as for a person. */
 export const STORAGE_NOTICE_PARAM = 'storage-notice';
 
-/** The browser engine, as far as the notice cares: Safari's (WebKit) or any other. */
-export type BrowserEngine = 'webkit' | 'other';
+// The browser engine: the application's one rule (core/help/engine.ts, erratum H1 11), which the
+// Help frame's sandbox uses too. Re-exported here so that the names this file always had stay.
+export { engineOf };
+export type { BrowserEngine };
 
 /**
  * What keeps the files at /browser: the browser's own store (IndexedDB), a store still opening
@@ -92,17 +101,6 @@ export function storeKindOf(backend: FileSystemBackend | undefined): StoreKind {
   if (backend instanceof UnsavedBrowserStore) return 'memory';
   if (backend instanceof BrowserBackend) return 'indexeddb';
   return 'none';
-}
-
-/**
- * The browser engine from navigator.vendor. Every WebKit browser reports `Apple Computer, Inc.`:
- * Safari on macOS, iOS and iPadOS, every other browser on an iPhone or iPad (Chrome, Firefox, Edge
- * there are WebKit too), WebKitGTK, and Playwright's WebKit build on every system. Chromium-based
- * browsers report `Google Inc.`, Gecko reports an empty string. The product name in the user agent
- * is not consulted.
- */
-export function engineOf(vendor: string | undefined): BrowserEngine {
-  return vendor === 'Apple Computer, Inc.' ? 'webkit' : 'other';
 }
 
 /** True when the address's query (location.search) asks for the notice: storage-notice=1. */
@@ -170,4 +168,121 @@ export function readNoticeEnvironment(): NoticeEnvironment {
     automated: navigator.webdriver === true,
     forced: forcedBy(window.location?.search ?? ''),
   };
+}
+
+// ---- the notice at the first write when the Files panel is not on the screen ----------------------
+//
+// R-10: "documents are never the only copy without that notice having been shown". The notice lives
+// in the Files panel, which may be hidden (its visibility is remembered) or absent (Simulator mode,
+// where a first visit with ?open= starts). So, while the notice is due and this window has not had
+// it on the screen, the first write into the browser's store made by this window shows the same
+// text as a note where the person is looking: a toast that stays until it is answered (Got it, which
+// is the panel's Got it) or closed. Nothing changes for anyone to whom the notice is not due, and
+// nothing is shown twice in a window (errata FS1.md entry 28, third round).
+
+/** A change of the Vfs, as far as the first-write rule looks at it. */
+export interface NoticeWriteChange {
+  path: string;
+  kind: 'write' | 'remove';
+  origin: 'local' | 'external';
+}
+
+export interface NoticeAtWriteInput {
+  /** storageNoticeKind() at the moment of the write. */
+  due: StorageNoticeKind;
+  /** The notice has been on the screen in this window (the Files panel showed it, or this note). */
+  seen: boolean;
+  change: NoticeWriteChange;
+}
+
+/**
+ * Which notice the first write shows as a toast, or null: only a write by this window ('local') of
+ * an entry below /browser (not the mount itself, which mount() reports as a write), while a notice
+ * is due and this window has not shown it yet. Another window's write is that window's to note.
+ */
+export function noticeAtWrite(input: NoticeAtWriteInput): StorageNoticeKind {
+  if (input.due === null || input.seen) return null;
+  const { change } = input;
+  if (change.kind !== 'write' || change.origin !== 'local') return null;
+  if (!change.path.startsWith(`${BROWSER_ROOT}/`)) return null;
+  return input.due;
+}
+
+/** Windows (contexts) in which the notice has been on the screen. */
+const noticeSeen = new WeakMap<object, true>();
+
+/** The Files panel showed the notice in this window. */
+export function markStorageNoticeSeen(ctx: object): void {
+  noticeSeen.set(ctx, true);
+}
+
+/** True once the notice has been on the screen in this window. */
+export function storageNoticeSeenIn(ctx: object): boolean {
+  return noticeSeen.has(ctx);
+}
+
+/** The element is rendered and visible (not inside a hidden panel or mode). */
+export function onScreen(element: Element): boolean {
+  const check = (element as Element & { checkVisibility?: (options?: object) => boolean }).checkVisibility;
+  if (typeof check === 'function') return check.call(element, { visibilityProperty: true });
+  return element.getClientRects().length > 0;
+}
+
+/** The panel's notice is on the screen at this moment (in this window's document). */
+export function storageNoticeOnScreen(): boolean {
+  if (typeof document === 'undefined') return false;
+  return [...document.querySelectorAll('[data-e68-storage-notice]')].some(onScreen);
+}
+
+/** The text of a notice of the given kind. */
+export function storageNoticeText(kind: Exclude<StorageNoticeKind, null>): string {
+  return kind === 'tab' ? STORAGE_NOTICE_TAB_TEXT : STORAGE_NOTICE_INSTALLED_TEXT;
+}
+
+/**
+ * Listens for the first write into /browser (feature init). Returns the function that stops. The
+ * environment is read once, as the panel reads it; the store's emptiness at start is asked at once
+ * when the installed variant could be due, before any write of this window can change it.
+ */
+export function watchFirstWrite(
+  ctx: Pick<AppContext, 'vfs' | 'settings' | 'dialogs' | 'platform'>,
+  environment: NoticeEnvironment = readNoticeEnvironment(),
+): () => void {
+  if (ctx.platform.kind !== 'web' || environment.engine !== 'webkit') return () => {};
+  let emptyAtStartNow = false;
+  if (environment.installed) {
+    void storeEmptyAtStart(ctx).then((empty) => {
+      emptyAtStartNow = empty;
+    });
+  }
+  let stopped = false;
+  let unsubscribe: () => void = () => {};
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    unsubscribe();
+  };
+  unsubscribe = ctx.vfs.subscribe(BROWSER_ROOT, (change) => {
+    if (stopped) return;
+    const browser = ctx.vfs.backends().find((backend) => backend.mount === 'browser');
+    const due = storageNoticeKind({
+      platform: ctx.platform.kind,
+      ...environment,
+      store: storeKindOf(browser),
+      storeEmpty: emptyAtStartNow,
+      acknowledged: storageNoticeAcknowledged(ctx),
+    });
+    const seen = storageNoticeSeenIn(ctx) || storageNoticeOnScreen();
+    const kind = noticeAtWrite({ due, seen, change });
+    if (kind === null) return;
+    markStorageNoticeSeen(ctx);
+    stop();
+    ctx.dialogs.toast(
+      storageNoticeText(kind),
+      { label: STORAGE_NOTICE_DISMISS_CAPTION, run: () => acknowledgeStorageNotice(ctx) },
+      { duration: 0 },
+    );
+  });
+  if (stopped) unsubscribe();
+  return stop;
 }

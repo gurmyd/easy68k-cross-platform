@@ -6,6 +6,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { canonicalHashes } from '../conformance/asm/compare';
+import { listingOnLabel } from '../oracle/wine/asm/settings';
 import {
   GOLDEN_TRACKED,
   REPO,
@@ -13,6 +14,7 @@ import {
   goldenDirectory,
   hasOfficialOutput,
   loadManifest,
+  loadOptionSubset,
   outputStem,
   programAvailable,
   readProgram,
@@ -88,6 +90,21 @@ describe('tests/corpus/manifest.json', () => {
     }
   });
 
+  it('has, for each of the 30 programs of option-subset.json, a run with each option switched alone (6.9 item 1)', () => {
+    const subset = loadOptionSubset();
+    expect(subset.files).toHaveLength(30);
+    const missing: string[] = [];
+    for (const { id } of subset.files) {
+      const program = manifest.programs.find((candidate) => candidate.id === id);
+      for (const label of subset.options) {
+        const run = program?.runs[label];
+        const keys = Object.keys(run?.options ?? {});
+        if (!run || keys.length !== 1) missing.push(`${id} (${label})`);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+
   it('gives a program its files by the names INCLUDE and INCBIN use', () => {
     const main = manifest.programs.find((program) => program.id === 'github/pacman-mc68000/GAME/MAIN.X68') as CorpusProgram;
     const { mainName, files } = readProgram(main);
@@ -107,7 +124,14 @@ describe('tests/conformance/asm/golden', () => {
         const path = (extension: string): string => join(directory, `${outputStem(label, run)}.${extension}`);
         const listing = run.l68 === null ? null : read(path('L68'));
         const sRecord = run.s68 === null ? null : read(path('S68'));
-        const hashes = canonicalHashes({ listing, sRecord });
+        // Without a listing, the listing of the same options with the listing on masks (erratum T1 20).
+        const companion = listingOnLabel(run.options);
+        const companionRun = companion === null ? undefined : program.runs[companion];
+        const maskingListing =
+          listing === null && companion !== null && companionRun?.golden && companionRun.l68 !== null
+            ? read(join(directory, `${outputStem(companion, companionRun)}.L68`))
+            : null;
+        const hashes = canonicalHashes({ listing, sRecord, maskingListing });
         expect({ l68: hashes.l68, s68: hashes.s68 }, `${program.id} (${label})`).toEqual({ l68: run.l68, s68: run.s68 });
         if (run.receivedFile) expect(sha256Hex(read(path('received.txt'))), program.id).toBe(run.received);
       }

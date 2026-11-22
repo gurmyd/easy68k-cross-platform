@@ -26,7 +26,9 @@
 //   it or a folder above it, a write of another spelling, a failure, a change the backend reports
 //   (after which that path's size is always asked for), an unmount. A change that arrives while the
 //   append is in progress leaves `appended` out. Sizes are kept only for a backend that reports
-//   others' changes (errata W1.md entry 17).
+//   others' changes (errata W1.md entry 17). Such reports can arrive late (a BroadcastChannel's
+//   do): until another window's report arrives, `at` is what this Vfs knew and may be stale, so a
+//   listener confirms the size after the append before it applies `data` (VfsChange.appended).
 // - resolve() finds each segment's stored spelling in the listing of its folder. A folder that may
 //   not be listed (the desktop app's folders above the granted roots, 7.6) keeps the segment as
 //   given; it does not make the name "not found" (defect D1, errata W1.md entry 15). Only an

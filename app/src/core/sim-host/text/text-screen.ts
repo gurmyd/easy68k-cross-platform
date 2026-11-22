@@ -42,6 +42,122 @@ const DEL = 0x7f;
  *  $1C-$1F (trap15-b §6.7, measured on Windows). */
 const ZERO_WIDTH_BYTES: ReadonlySet<number> = new Set([0x09, 0x0a, 0x0d, 0x1c, 0x1d, 0x1e, 0x1f]);
 
+const EURO = 0x80;
+const UNIT_SEPARATOR = 0x1f;
+/** The five bytes Windows-1252 leaves undefined; Windows makes them the C1 controls U+0081 etc. */
+const UNDEFINED_BYTES: ReadonlySet<number> = new Set([0x81, 0x8d, 0x8f, 0x90, 0x9d]);
+/**
+ * Bytes that send a text through Windows' Unicode text path in the raster faces (the script
+ * itemization of Uniscribe, which ExtTextOut and GetTextExtentPoint32 use for such texts): the
+ * zero-width bytes, $7F, the undefined bytes and $86 $87 $88 $98 (measured by T2 and in item 3b of
+ * the release-candidate gate; tests/oracle/gdi-capture/README.md, "Windows' text path").
+ */
+const TEXT_PATH_BYTES: ReadonlySet<number> = new Set([
+  ...ZERO_WIDTH_BYTES,
+  DEL,
+  ...UNDEFINED_BYTES,
+  0x86,
+  0x87,
+  0x88,
+  0x98,
+]);
+
+/** Whether Windows takes a text through its Unicode text path (see `TEXT_PATH_BYTES`). */
+export function onTextPath(text: ArrayLike<number>): boolean {
+  for (let i = 0; i < text.length; i++) if (TEXT_PATH_BYTES.has(text[i] as number)) return true;
+  return false;
+}
+
+/**
+ * The class of a byte for the itemization of Windows' text path, as measured with every byte next
+ * to $86 and $88 in italic (the classes are what decides whether the italic overhang stays):
+ * - `neutral`: space, digits, ASCII punctuation, no-break space - they join the item of their
+ *   neighbours;
+ * - `latin`: letters, $83 $88 $8A $8C $8E $98 $9A $9C $9E $9F and $A1-$FF but for $B2 $B3 $B9;
+ * - `punctuation`: $82 $84 $85 $86 $87 $89 $8B $91-$97 $99 $9B (Unicode's general punctuation);
+ * - `superscript`: $B2 $B3 $B9;  `euro`: $80;
+ * - controls, each class an item of its own that no neutral joins: the zero-width bytes, $7F, the
+ *   undefined bytes, and the other bytes below $20.
+ */
+type ItemClass =
+  'neutral' | 'latin' | 'punctuation' | 'superscript' | 'euro' | 'zeroWidth' | 'del' | 'undefined' | 'control';
+const PUNCTUATION_BYTES: ReadonlySet<number> = new Set([
+  0x82, 0x84, 0x85, 0x86, 0x87, 0x89, 0x8b, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x99, 0x9b,
+]);
+function itemClass(byte: number): ItemClass {
+  if (ZERO_WIDTH_BYTES.has(byte)) return 'zeroWidth';
+  if (byte < 0x20) return 'control';
+  if (byte === DEL) return 'del';
+  if (UNDEFINED_BYTES.has(byte)) return 'undefined';
+  if (byte === EURO) return 'euro';
+  if (PUNCTUATION_BYTES.has(byte)) return 'punctuation';
+  if (byte === 0xb2 || byte === 0xb3 || byte === 0xb9) return 'superscript';
+  if ((byte >= 0x41 && byte <= 0x5a) || (byte >= 0x61 && byte <= 0x7a) || byte >= 0x80)
+    return byte === 0xa0 ? 'neutral' : 'latin';
+  return 'neutral';
+}
+const CONTROL_CLASSES: ReadonlySet<ItemClass> = new Set(['zeroWidth', 'del', 'undefined', 'control']);
+
+/** Whether Windows' text path cuts a text into two or more items (see `itemClass`). */
+function severalItems(text: Bytes): boolean {
+  const classes = new Set<ItemClass>();
+  let neutral = false;
+  let control = false;
+  for (let i = 0; i < text.length; i++) {
+    const kind = itemClass(text[i] as number);
+    if (kind === 'neutral') neutral = true;
+    else {
+      classes.add(kind);
+      if (CONTROL_CLASSES.has(kind)) control = true;
+    }
+  }
+  return classes.size >= 2 || (control && neutral);
+}
+
+/**
+ * Whether a text on Windows' text path is a "control text". It is one when
+ * - it is made of controls ($7F and the undefined bytes), punctuation and neutrals only: no letter,
+ *   digit, euro sign, superscript, zero-width byte or other byte below $20;
+ * - it has a control, and a byte that is not an undefined byte;
+ * - each of its runs of punctuation and neutrals has a punctuation byte;
+ * - and it does not alternate byte by byte between one punctuation-or-neutral byte and one control,
+ *   with as many of each.
+ * Such a text keeps the whole italic overhang, and when it ends with an undefined byte its box is one
+ * cell of the face wider, in plain, bold and italic (not in underline or strike-out). Measured with
+ * T2's capture program (errata T2 27 and T2 28; about 210,000 texts over every size class and style
+ * of both raster faces). Fixedsys 9: $95 $81 $81 is 16 pixels wide (a control text ending with an
+ * undefined byte), $97 $81 is 8 (it alternates), $86 " " $81 is 24 and " " $86 $81 too, but $86 "1"
+ * $81 is 16 (a digit) and $7F " " $81 is 16 (a run without punctuation). $7F $81 $86 keeps the italic
+ * overhang, $7F $81 "A" and $7F $86 $7F $86 do not.
+ */
+function controlText(text: Bytes): boolean {
+  let control = false;
+  let notUndefined = false;
+  let alternates = text.length % 2 === 0;
+  let previous: boolean | null = null;
+  let run: { punctuation: boolean } | null = null; // the run of punctuation and neutrals being read
+  for (let i = 0; i < text.length; i++) {
+    const byte = text[i] as number;
+    const kind = itemClass(byte);
+    if (kind !== 'del' && kind !== 'undefined' && kind !== 'punctuation' && kind !== 'neutral') return false;
+    if (byte >= 0x30 && byte <= 0x39) return false; // digits
+    const isControl = kind === 'del' || kind === 'undefined';
+    if (isControl) {
+      control = true;
+      if (run && !run.punctuation) return false;
+      run = null;
+    } else {
+      run ??= { punctuation: false };
+      if (kind === 'punctuation') run.punctuation = true;
+    }
+    if (kind !== 'undefined') notUndefined = true;
+    if (previous === isControl) alternates = false;
+    previous = isControl;
+  }
+  if (run && !run.punctuation) return false;
+  return control && notUndefined && !alternates;
+}
+
 /** A glyph without ink: `advance` pixels of the opaque box and nothing else. */
 function emptyGlyph(advance: number, height: number): Glyph {
   return { advance, width: advance, height, coverage: new Uint8Array(advance * height) };
@@ -82,11 +198,6 @@ export class TextScreen implements TextScreenApi {
    */
   private overhang = 0;
   /**
-   * The box is the sum of the advances the surface is given, so the overhang travels as one more
-   * glyph without ink. Null for a font without an overhang.
-   */
-  private overhangGlyph: Glyph | null = null;
-  /**
    * What the byte $7F is in a text that also has a byte of $80 or above, in a font in which Windows
    * draws it from a fallback font there (the outline faces). Null: the byte's own glyph.
    */
@@ -96,6 +207,10 @@ export class TextScreen implements TextScreenApi {
    * opaque cell Windows builds from the widths it draws (see `layout`).
    */
   private monospacedOutline = false;
+  /** The font in use draws a text of zero-width bytes only as a bar this high (0: as a cell; see `layout`). */
+  private zeroWidthBar = 0;
+  /** What $80 is in a text on Windows' text path in the font in use, when not its own glyph (see `layout`). */
+  private euroInTextPath: Glyph | null = null;
 
   constructor(private readonly deps: TextScreenDeps) {
     this.state = {
@@ -342,8 +457,9 @@ export class TextScreen implements TextScreenApi {
    * Windows as one text; `layout` says what Windows does with it.
    */
   drawText(text: Bytes, x: number, y: number): void {
-    const { glyphs, extent } = this.layout(text);
-    this.deps.surface.textOut(x, y, glyphs, extent, this.state.fontColor, 'both');
+    const { glyphs, extent, shift } = this.layout(text);
+    // A box that starts left of the text position (the bar) moves the pen by as much less.
+    this.deps.surface.textOut(x + shift, y, glyphs, extent - shift, this.state.fontColor, 'both');
   }
 
   /**
@@ -365,61 +481,102 @@ export class TextScreen implements TextScreenApi {
    * - $7F in an outline face. In a text that has a byte of $80 or above Windows draws it from a
    *   fallback font; it then has that font's width, in the box and for the pen.
    *
+   * Windows takes a text with one of `TEXT_PATH_BYTES` through its Unicode text path, which cuts it
+   * into items (Uniscribe's script itemization) and draws the characters the face has no glyph for
+   * from a fallback font. In the raster faces that path decides three things (measured, README.md of
+   * tests/oracle/gdi-capture, "Windows' text path"):
+   * - The bar. At the requested sizes the font set lists (`zeroWidthBar`), in plain, bold and italic,
+   *   a text of zero-width bytes only that has an odd number of bytes or two $1F in a row is drawn as
+   *   the opaque box of a glyph of no width from the fallback font: 3 pixels wide from one pixel left
+   *   of the text position, and as high as the font set says, instead of the first byte's cell.
+   * - The euro sign. $80 is the face's default character, which the path takes from a fallback font:
+   *   it has that glyph's width (`euroInTextPath`), in the box and for the pen.
+   * - At least one cell. The box is at least one cell of the face wide (a text of undefined bytes
+   *   only, the euro sign alone), and so is the first glyph's part of it in the italic rule below.
+   * - Italic. Only when the text is cut into two or more items (`severalItems`) does GDI leave out
+   *   the overhang of all but the first glyph: the box is the wider of the advances and the first
+   *   glyph with an advance plus the overhang. (Every text with a zero-width byte is cut so, and so
+   *   is one with $7F and another drawn byte.)
+   * - Control texts (`controlText`: controls with punctuation and little else) keep the whole italic
+   *   overhang, and one that ends with an undefined byte has one more cell in plain, bold and italic.
+   *
+   * Not modelled: $0C on the path, which Windows draws from a fallback font with ClearType and a
+   * width that depends on its item (docs/differences/SH3.md; the GDI suite text-path-formfeed); and
+   * "@" on the path in Courier, which Windows draws differently depending on what the process drew
+   * before (erratum T2 28): the port draws the face's own "@", whose pen Windows gives in every
+   * history when the text has no byte of $80 or above.
+   *
    * The box travels as glyph advances (the surface fills exactly those), so what it has beyond the
-   * drawn glyphs is one more glyph without ink.
+   * drawn glyphs is one more glyph without ink. `shift` is where the box starts, relative to the
+   * text position: -1 for the bar, 0 otherwise.
    *
    * The fixed-pitch outline faces (Courier New, Lucida Console, Consolas) build the box differently;
    * see `outlineLayout`.
    */
-  private layout(text: Bytes): { glyphs: Glyph[]; extent: number } {
-    if (this.monospacedOutline) return this.outlineLayout(text);
+  private layout(text: Bytes): { glyphs: Glyph[]; extent: number; shift: number } {
+    if (this.monospacedOutline) return { ...this.outlineLayout(text), shift: 0 };
     const provider = this.deps.glyphs;
     const font = this.state.font;
     const inText = text.length >= 2;
     let zeroWidth = 0;
-    let del = 0;
     let high = false;
+    let textPath = false;
+    let separators = false; // two $1F in a row
     for (let i = 0; i < text.length; i++) {
       const byte = text[i] as number;
       if (ZERO_WIDTH_BYTES.has(byte)) zeroWidth++;
-      else if (byte === DEL) del++;
       else if (byte >= 0x80) high = true;
+      if (TEXT_PATH_BYTES.has(byte)) textPath = true;
+      if (byte === UNIT_SEPARATOR && text[i + 1] === UNIT_SEPARATOR) separators = true;
     }
 
     const fallbackDel = high ? this.delInHighText : null;
+    const euro = textPath ? this.euroInTextPath : null;
     const glyphs: Glyph[] = [];
     let extent = 0;
     let advances = 0; // of the drawn bytes
     for (let i = 0; i < text.length; i++) {
       const byte = text[i] as number;
-      const glyph = byte === DEL && fallbackDel ? fallbackDel : provider.glyph(font, byte);
+      const glyph =
+        byte === DEL && fallbackDel ? fallbackDel : byte === EURO && euro ? euro : provider.glyph(font, byte);
       const skipped = inText && ZERO_WIDTH_BYTES.has(byte);
       if (!(skipped && high)) extent += glyph.advance;
       if (skipped) continue;
       glyphs.push(glyph);
       advances += glyph.advance;
     }
-    if (text.length === 0) return { glyphs, extent };
+    if (text.length === 0) return { glyphs, extent, shift: 0 };
 
-    let box = advances + this.overhang;
+    let box: number;
     if (zeroWidth === text.length) {
+      if (this.zeroWidthBar > 0 && (text.length % 2 === 1 || separators)) {
+        return { glyphs: [emptyGlyph(3, this.zeroWidthBar)], extent, shift: -1 };
+      }
       // Zero-width bytes only: one cell, as high as the first byte's glyph.
       const first = provider.glyph(font, text[0] as number);
       box = first.advance + this.overhang;
       if (glyphs.length === 0) {
         glyphs.push(emptyGlyph(box, first.height));
-        return { glyphs, extent };
+        return { glyphs, extent, shift: 0 };
       }
-    } else if (
-      this.overhang > 0 &&
-      styleOf(font) === 'italic' &&
-      glyphs.length >= 2 &&
-      (zeroWidth > 0 || (del > 0 && del < glyphs.length))
-    ) {
-      box = Math.max(advances, (glyphs[0] as Glyph).advance + this.overhang);
+    } else {
+      // On the text path of a raster face the box is at least one cell of the font wide, and so is
+      // the first glyph's part of it (a text of undefined bytes only, the narrow euro sign alone).
+      const cell = textPath && this.euroInTextPath ? this.state.colWidth : 0;
+      const run = cell > 0 && controlText(text);
+      const style = styleOf(font);
+      const extraCell =
+        run && UNDEFINED_BYTES.has(text[text.length - 1] as number) && style !== 'underline' && style !== 'strikeOut'
+          ? cell
+          : 0;
+      const drawn = Math.max(advances, cell) + extraCell;
+      box = drawn + this.overhang;
+      if (!run && this.overhang > 0 && style === 'italic' && textPath && glyphs.length >= 2 && severalItems(text)) {
+        box = Math.max(drawn, Math.max((glyphs[0] as Glyph).advance, cell) + this.overhang);
+      }
     }
     if (box > advances) glyphs.push(emptyGlyph(box - advances, this.state.rowHeight));
-    return { glyphs, extent };
+    return { glyphs, extent, shift: 0 };
   }
 
   /**
@@ -518,12 +675,13 @@ export class TextScreen implements TextScreenApi {
     s.textCols = Math.min(Math.trunc(this.canWidth / s.colWidth), MAX_COLS);
     // A provider without `textOverhang` (it is optional in the contract) has no overhang.
     this.overhang = Math.max(0, this.deps.glyphs.textOverhang?.(s.font) ?? 0);
-    this.overhangGlyph = this.overhang > 0 ? emptyGlyph(this.overhang, s.rowHeight) : null;
     // `delInHighText` is an optional member of the contract's GlyphProvider (since gate I1 round 3);
     // `monospacedOutline` is not, and only the port's own provider has it.
     this.delInHighText = this.deps.glyphs.delInHighText?.(s.font) ?? null;
     const fallback = this.deps.glyphs as Partial<FallbackGlyphs>;
     this.monospacedOutline = fallback.monospacedOutline?.(s.font) ?? false;
+    this.zeroWidthBar = fallback.zeroWidthBar?.(s.font) ?? 0;
+    this.euroInTextPath = fallback.euroInTextPath?.(s.font) ?? null;
   }
 
   setTextWrap(on: boolean): void {
@@ -657,19 +815,13 @@ export class TextScreen implements TextScreenApi {
   }
 
   /** A TextOut of one character at (x, textY): `layout` for a text of one byte, which is its glyph
-   *  and the style overhang in the opaque box, whatever the byte - except $7F in a fixed-pitch
-   *  outline face, which takes the fallback glyph. The pen moves by the advance. */
+   *  and the style overhang in the opaque box for nearly every byte - $7F in a fixed-pitch outline
+   *  face takes the fallback glyph, a zero-width byte may be the bar, an undefined byte fills a cell.
+   *  The pen moves by the advance. */
   private textOutChar(x: number, ch: number, target: 'both' | 'window'): void {
     const s = this.state;
-    if (this.monospacedOutline && ch === DEL) {
-      // Windows draws $7F of these faces from a fallback font, also alone (see `outlineLayout`).
-      const { glyphs, extent } = this.outlineLayout(Uint8Array.of(ch));
-      this.deps.surface.textOut(x, s.textY, glyphs, extent, s.fontColor, target);
-      return;
-    }
-    const glyph = this.deps.glyphs.glyph(s.font, ch);
-    const glyphs = this.overhangGlyph ? [glyph, this.overhangGlyph] : [glyph];
-    this.deps.surface.textOut(x, s.textY, glyphs, glyph.advance, s.fontColor, target);
+    const { glyphs, extent, shift } = this.layout(Uint8Array.of(ch));
+    this.deps.surface.textOut(x + shift, s.textY, glyphs, extent - shift, s.fontColor, target);
   }
 
   /** One byte for the output log; the log service keeps it only while the output log is on. */

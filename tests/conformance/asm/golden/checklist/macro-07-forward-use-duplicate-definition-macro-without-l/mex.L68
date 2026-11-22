@@ -1,0 +1,35 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:56:44 AM
+
+00001000                             1      ORG $1000
+00001000                             2m     FWD
+00001000  4E71                       3m     NOP
+00001002                             4m     ENDM
+Line 5 WARNING: Forward reference may cause 'Symbol value differs...' error
+00001002                             5      ENDM
+Line 6 ERROR: Symbol value differs between first and second pass
+00001002                             6  AFTER   NOP
+00001002                             7  FWD MACRO
+00001002                             8      NOP
+00001002                             9      ENDM
+Line 10 ERROR: Symbol defined more than once
+00001002                            10  FWD MACRO
+00001002= 0001                      11      DC.W 1
+Line 12 ERROR: Invalid opcode
+00001004                            12      ENDM
+00001004                            13      MACRO
+00001004                            14      NOP
+00001004                            15      ENDM
+00001004                            16      END $1000
+
+3 errors detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+AFTER               1000
+FWD                 0
+                    D

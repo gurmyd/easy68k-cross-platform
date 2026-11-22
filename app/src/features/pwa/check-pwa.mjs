@@ -61,6 +61,40 @@ mkdirSync(outDir, { recursive: true });
 const BASE = '/easy68k-cross-platform/';
 const FIXTURE_URL = 'check/offline-fixture.txt';
 const FIXTURE = join(here, 'fixtures', 'offline-fixture.txt');
+/** A help page with links out of the help folder (erratum H1 11); import-help would refuse it. */
+const FRAME_GUARD_URL = 'help/check/frame-guard.htm';
+const FRAME_GUARD = join(here, 'fixtures', 'frame-guard.htm');
+/** An address below help/ that the server answers with a redirect to the application's page. */
+const REDIRECT_URL = 'help/check/redirect.htm';
+/**
+ * Frame navigations that must never show anything but Help (gate I3 round 4): encoded separators
+ * and dots in either letter case, double encoding, a query, a fragment, a backslash, absolute
+ * addresses of the same origin, a redirect, an escape that does not decode, a help address that is
+ * not in the build. The server decodes the path as GitHub Pages does, so several of them are the
+ * application's page for the server. `inScope`: the address is below the worker's scope, so the
+ * worker must answer it alone and nothing may reach the server.
+ */
+const FRAME_ADDRESSES = [
+  ['help/..%2Findex.html', true],
+  ['help/..%2findex.html', true],
+  ['help/..%5Cindex.html', true],
+  ['help/..%5cindex.html', true],
+  ['help/%2E%2E%2Findex.html', true],
+  ['help/%2e%2e/index.html', true],
+  ['help/.%2E/index.html', true],
+  ['help/..%252Findex.html', true],
+  ['help/..%2F..%2Feasy68k-cross-platform/index.html', true],
+  ['help/main.htm%2F..%2F..%2Findex.html', true],
+  ['help/..%2Findex.html?x=1', true],
+  ['help/..%2Findex.html#top', true],
+  ['help/..\\index.html', true],
+  ['help/%E0%A4%A.htm', true],
+  ['help/check/not-in-the-build.htm', true],
+  [REDIRECT_URL, true],
+  ['index.html', true],
+  ['?open=/browser/demo.X68', true],
+  ['ABSOLUTE:/easy68k-cross-platform', false],
+];
 const NOTICE = 'A new version is available.';
 const BROWSERS = { chromium, webkit };
 const browsers = browserChoice === 'all' ? ['chromium', 'webkit'] : [browserChoice];
@@ -97,6 +131,8 @@ async function makeSite(dist, target, line, code) {
   cpSync(dist, target, { recursive: true });
   mkdirSync(join(target, 'check'), { recursive: true });
   writeFileSync(join(target, ...FIXTURE_URL.split('/')), `${readFileSync(FIXTURE, 'utf8')}${line}\n`);
+  mkdirSync(join(target, 'help', 'check'), { recursive: true });
+  cpSync(FRAME_GUARD, join(target, ...FRAME_GUARD_URL.split('/')));
   const report = await finishPwaBuild(target, { code });
   return { dir: target, report, manifest: readServiceWorkerManifest(readFileSync(join(target, 'sw.js'), 'utf8')) };
 }
@@ -124,7 +160,7 @@ const TYPES = {
 
 /** Serves `root` under BASE only, like a project site of GitHub Pages. */
 function startServer() {
-  const state = { root: '', down: false, attempts: [], requests: 0 };
+  const state = { root: '', down: false, attempts: [], requests: 0, log: [] };
   const server = createServer((request, response) => {
     if (state.down) {
       state.attempts.push(request.url);
@@ -132,7 +168,10 @@ function startServer() {
       return;
     }
     state.requests++;
+    state.log.push(request.url ?? '');
     const url = new URL(request.url ?? '/', 'http://localhost');
+    // The path decoded as GitHub Pages decodes it: %2F is a slash there, so help/..%2Findex.html
+    // is the application's page (the frame guard's addresses rely on that).
     let path;
     try {
       path = decodeURIComponent(url.pathname);
@@ -141,6 +180,11 @@ function startServer() {
     }
     if (path === BASE.slice(0, -1)) {
       response.writeHead(301, { location: BASE });
+      response.end();
+      return;
+    }
+    if (path === `${BASE}${REDIRECT_URL}`) {
+      response.writeHead(302, { location: `${BASE}index.html` });
       response.end();
       return;
     }
@@ -319,6 +363,204 @@ function engineFiles(entries, origin) {
   return { names, urls, complete: Object.values(names).every(Boolean) };
 }
 
+// --- the Help frame shows Help and nothing else (erratum H1 11) ---------------------------------
+
+/** What the Help panel's frame shows, read from the page (the frame's document may be an error page). */
+const helpFrameState = (page) =>
+  page.evaluate(() => {
+    const element = document.querySelector('[data-e68-panel="help"] iframe');
+    if (!element) return null;
+    let href;
+    try {
+      href = element.contentWindow?.location.href ?? null;
+    } catch {
+      href = '(not readable: an error page)';
+    }
+    const doc = element.contentDocument;
+    return {
+      sandbox: element.getAttribute('sandbox'),
+      href,
+      title: doc?.title ?? null,
+      scripts: doc ? doc.querySelectorAll('script').length : 0,
+      app: doc ? doc.querySelector('#root, .e68-shell, link[rel=manifest]') !== null : false,
+      text: (doc?.body?.textContent ?? '').trim().slice(0, 60),
+    };
+  });
+
+/**
+ * A help page with links to the application's own page, clicked in the Help frame while the worker
+ * controls the page (in WebKit the frame has allow-scripts then): the frame must not load the
+ * application. A link to another help page must still work.
+ */
+/** Help > Help: the Help panel with its introduction page in the frame. Returns the frame's element. */
+async function openHelp(page) {
+  await page
+    .locator('.e68-shell__menubar .e68-menubar__title')
+    .filter({ hasText: /^Help$/ })
+    .click();
+  const menu = page.locator('[role=menu][data-e68-menu]').last();
+  await menu
+    .locator(':scope > [role^=menuitem]')
+    .filter({ has: page.locator('.e68-menu__caption', { hasText: /^Help$/ }) })
+    .click();
+  const frame = page.locator('[data-e68-panel="help"] iframe');
+  await frame.waitFor({ timeout: 30_000 });
+  await page.waitForFunction(
+    () => document.querySelector('[data-e68-panel="help"] iframe')?.contentDocument?.title === 'Easy68k Introduction',
+    undefined,
+    { timeout: 30_000 },
+  );
+  return frame;
+}
+
+/** Navigates the Help frame itself (as a link or a script in it would) and gives a page that would load time to. */
+async function navigateFrame(page, frame, url) {
+  await frame.evaluate((element, target) => element.contentWindow.location.replace(target), url);
+  await page.waitForTimeout(2500);
+  return helpFrameState(page);
+}
+
+/** What the application in a frame would show: its shell, its root's content, its global. */
+const bootedInFrame = (page) =>
+  page.evaluate(() => {
+    const element = document.querySelector('[data-e68-panel="help"] iframe');
+    try {
+      const doc = element.contentDocument;
+      return {
+        readable: true,
+        shell: doc?.querySelector('.e68-shell, .e68-shell__menubar') !== null,
+        rootChildren: doc?.querySelector('#root')?.childElementCount ?? null,
+        global: Boolean(element.contentWindow?.__easy68k),
+        title: doc?.title ?? null,
+      };
+    } catch {
+      return { readable: false };
+    }
+  });
+
+/** Console messages that a refused or script-less frame navigation causes; nothing else may appear. */
+const FRAME_MESSAGES =
+  /^Failed to load resource|net::ERR_FAILED|WebKit encountered an internal error|^Response served by service worker is an error|^Cannot load |^Blocked script execution|sandboxed and the 'allow-scripts' permission is not set/i;
+
+/**
+ * The first visit, before a worker controls the page (gate I3 round 4): the frame's navigations go
+ * to the network, and help/..%2Findex.html is the application's page for a server that decodes %2F.
+ * That is safe because the frame's sandbox has no allow-scripts until a worker controls the page:
+ * the page shows, but nothing of the application runs in the frame.
+ */
+async function firstVisitFramePass(p, page, base, errors) {
+  const before = errors.length;
+  const frame = await openHelp(page);
+  const sandbox = await frame.getAttribute('sandbox');
+  const controlled = await page.evaluate(() => navigator.serviceWorker.controller !== null);
+  check(
+    `${p} first visit: no worker controls the page and the Help frame has no allow-scripts`,
+    !controlled && sandbox === 'allow-same-origin allow-popups allow-popups-to-escape-sandbox',
+    `controlled ${controlled}, sandbox ${sandbox}`,
+  );
+  for (const address of ['help/..%2Findex.html', REDIRECT_URL]) {
+    await navigateFrame(page, frame, `${base}${address}`);
+    await page.waitForTimeout(2500); // the application would boot meanwhile, if it could
+    const booted = await bootedInFrame(page);
+    check(
+      `${p} first visit: ${address} in the Help frame runs nothing of the application (no scripts in the frame)`,
+      !booted.readable || (!booted.shell && !booted.global && !booted.rootChildren),
+      JSON.stringify(booted),
+    );
+  }
+  const during = errors.splice(before);
+  errors.push(...during.filter((text) => !FRAME_MESSAGES.test(text)));
+  await page.locator('[data-e68-panel="help"]').getByRole('button', { name: 'Close Help' }).click();
+}
+
+async function frameGuardPass(p, page, base, errors, serve) {
+  const before = errors.length;
+  const frame = await openHelp(page);
+  const webkit = (await page.evaluate(() => navigator.vendor)) === 'Apple Computer, Inc.';
+  const sandbox = await frame.getAttribute('sandbox');
+  check(
+    `${p} Help frame: allow-scripts only in WebKit under the worker (erratum H1 11)`,
+    sandbox ===
+      (webkit
+        ? 'allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox'
+        : 'allow-same-origin allow-popups allow-popups-to-escape-sandbox'),
+    String(sandbox),
+  );
+  const show = async () => {
+    await frame.evaluate((element, url) => element.contentWindow.location.replace(url), `${base}${FRAME_GUARD_URL}`);
+    await page.waitForFunction(
+      () => document.querySelector('[data-e68-panel="help"] iframe')?.contentDocument?.title === 'Frame guard',
+      undefined,
+      { timeout: 30_000 },
+    );
+  };
+  const inner = page.frameLocator('[data-e68-panel="help"] iframe');
+  for (const id of ['to-app', 'to-root']) {
+    await show();
+    await inner.locator(`#${id}`).click();
+    // The navigation ends in an error page at once; give a page that would load (and boot) time to.
+    await page.waitForTimeout(3000);
+    const state = await helpFrameState(page);
+    check(
+      `${p} Help frame: a link to the application's page (${id}) does not load the application in the frame`,
+      state !== null && !state.app && state.scripts === 0 && !/EASy68K/.test(state.title ?? ''),
+      JSON.stringify(state),
+    );
+  }
+  await show();
+  await inner.locator('#to-help').click();
+  await page
+    .waitForFunction(
+      () => document.querySelector('[data-e68-panel="help"] iframe')?.contentDocument?.title === 'Easy68k Introduction',
+      undefined,
+      { timeout: 30_000 },
+    )
+    .then(
+      () => check(`${p} Help frame: a link to another help page still loads it`, true),
+      async () =>
+        check(
+          `${p} Help frame: a link to another help page still loads it`,
+          false,
+          JSON.stringify(await helpFrameState(page)),
+        ),
+    );
+  // The frame itself navigated to addresses that leave the help folder, however they are spelt
+  // (gate I3 round 4): the worker answers each with an error, from nothing but its own copy of the
+  // help folder, and nothing of an address below its scope reaches the server.
+  for (const [address, inScope] of FRAME_ADDRESSES) {
+    const url = address.startsWith('ABSOLUTE:') ? `${serve.origin}${address.slice(9)}` : `${base}${address}`;
+    const asked = serve.state.log.length;
+    const state = await navigateFrame(page, frame, url);
+    const booted = await bootedInFrame(page);
+    const reached = serve.state.log.slice(asked).filter((line) => !/\/sw\.js(\?|$)/.test(line));
+    check(
+      `${p} Help frame: ${url.slice(serve.origin.length)} shows no page of the site but Help${inScope ? ', and nothing reaches the server' : ''}`,
+      state !== null &&
+        !state.app &&
+        state.scripts === 0 &&
+        !/EASy68K/.test(state.title ?? '') &&
+        !(booted.readable && (booted.shell || booted.global)) &&
+        (!inScope || reached.length === 0),
+      `${JSON.stringify(state)}${reached.length ? `; reached the server: ${reached.join(', ')}` : ''}`,
+    );
+  }
+  // A help page with a query and a fragment is still the help page.
+  const withQuery = await navigateFrame(page, frame, `${base}help/main.htm?x=..%2Findex.html#top`);
+  check(
+    `${p} Help frame: a help page with a query and a fragment still loads`,
+    withQuery?.title === 'Easy68k Introduction',
+    JSON.stringify(withQuery),
+  );
+  // The refused navigations are reported by the browser as failed loads; nothing else may be.
+  const during = errors.splice(before);
+  const unexpected = during.filter((text) => !FRAME_MESSAGES.test(text));
+  console.log(
+    `        console messages of the refused frame navigations: ${during.length}${during.length ? ` (${[...new Set(during)].join(' | ')})` : ''}`,
+  );
+  errors.push(...unexpected);
+  await page.locator('[data-e68-panel="help"]').getByRole('button', { name: 'Close Help' }).click();
+}
+
 // --- the pass of one browser ------------------------------------------------------------------
 
 async function browserPass(name, serve, siteA, siteB) {
@@ -401,6 +643,7 @@ async function browserPass(name, serve, siteA, siteB) {
       (await page1.evaluate(() => navigator.serviceWorker.controller)) === null,
     );
     await page1.screenshot({ path: join(outDir, `${name}-online.png`) });
+    await firstVisitFramePass(p, page1, base, errors);
 
     // ---- network off
     serve.state.down = true;
@@ -460,6 +703,9 @@ async function browserPass(name, serve, siteA, siteB) {
     console.log(`        update checks of sw.js refused while offline: ${serve.state.attempts.length - other.length}`);
     await context.setOffline(false);
     serve.state.down = false;
+
+    // ---- the Help frame shows Help and nothing else (page 1 is controlled by the worker now)
+    await frameGuardPass(p, page1, base, errors, serve);
 
     // ---- installation: the manifest as Chromium itself parsed it (DevTools protocol). The install
     // prompt cannot be driven, and Page.getInstallabilityErrors answers [] in headless Chromium

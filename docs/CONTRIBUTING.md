@@ -109,6 +109,12 @@ developer's machine.
 - The continuous integration (`.github/workflows/ci.yml`) runs the type check, lint and the format
   check on Linux; the unit tests, the engines' suites, the browser checks and the end-to-end tests
   on Linux, macOS and Windows; and the conformance tests on Linux and macOS. All must pass.
+- A manual run of the continuous integration (Actions > ci > Run workflow) adds two jobs that a push
+  does not run. The performance job runs the whole of `npm run check:perf`; its verdicts in Chromium
+  on ubuntu-latest decide item 9 of `docs/ARCHITECTURE.md` 6.9. The stability job (input
+  `e2e_stability`, ticked by default; item 10) runs the end-to-end suites with `--repeat-each=20`,
+  split with Playwright's `--shard` into six jobs: Chromium in 2, WebKit in 4. The shards of one
+  browser together run every test exactly 20 times, and the item passes only if all six jobs pass.
 - Everything a person has to check on a real Mac is in [MANUAL-TEST-MAC.md](MANUAL-TEST-MAC.md);
   if your change adds such a thing, add it there.
 - Releases are drafted by `.github/workflows/release.yml` from a tag `v<version>` and published by a

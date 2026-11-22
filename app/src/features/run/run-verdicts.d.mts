@@ -52,3 +52,23 @@ export interface MaximumPair {
 }
 
 export declare function judgeMaximum(pairs: readonly MaximumPair[]): Verdict & { notes: string[] };
+
+export declare const FRAME_KEEP_SHARE: number;
+export declare const MIN_JUDGED_FRAMES: number;
+export declare const FROZEN_FPS: number;
+
+/** A window as judgeFrames reads it: its display frames and its length in ms. */
+export interface FramesWindow {
+  frames: number;
+  ms: number;
+}
+
+/** The verdict on the page's frames at Maximum against the default speed's, over the same pairs. */
+export declare function judgeFrames(
+  pairs: readonly { normal: FramesWindow; max: FramesWindow }[],
+): Verdict & { notes: string[] };
+
+export declare const MAX_FRAME_WINDOW_MS: number;
+
+/** The window length (ms) for measuring the frames again, or null when every default window had enough. */
+export declare function frameWindowMs(pairs: readonly { normal: FramesWindow; max: FramesWindow }[]): number | null;

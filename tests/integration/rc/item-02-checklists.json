@@ -1,0 +1,1517 @@
+{
+  "about": "Release candidate, item 2 (ARCHITECTURE.md 6.9): every automatable item of trap15-a section 13, hardware section 13 and the sim-ui section 19 quirks marked as affecting program results, with the tests that prove it. Built by hand by I3 from the three specs and the test sources on 2026-11-22; checked by item-02-checklists.mjs (every named program and test must exist). verdict: proved = the named tests cover the whole item; partial = they cover a part (note says which); none = no test found; manual = needs a person or a device. A program proof counts against the official SIM68K.exe golden; a test proof is a unit, engine or conformance test against what the spec dictates (no golden).",
+  "lists": [
+    {
+      "name": "trap15-a 13",
+      "items": [
+        {
+          "id": "text-1",
+          "item": "Task 14 'AB' at home: A at (0,0), B at (0,1), cursor (0,2); task 11 get gives $0200",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a01-task14-at-home"
+            }
+          ]
+        },
+        {
+          "id": "text-2",
+          "item": "Task 13 with an empty string: cursor to column 0 of the next row",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a02-task13-empty-string"
+            }
+          ]
+        },
+        {
+          "id": "text-3",
+          "item": "Task 0 with D1.W = 3, 300, 5 with an embedded NUL",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a03-task0-counts"
+            }
+          ]
+        },
+        {
+          "id": "text-4",
+          "item": "Task 6 with $09 at column 0, $08 at column 0, $08 after ABC",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a06-task6-cursor-controls"
+            }
+          ]
+        },
+        {
+          "id": "text-5",
+          "item": "Task 6 with $0A on the last row scrolls one row",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a07-task6-lf-last-row"
+            }
+          ]
+        },
+        {
+          "id": "text-6",
+          "item": "Task 6 with $0B on row 30 of 32",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a08-task6-vt-near-bottom"
+            }
+          ]
+        },
+        {
+          "id": "text-7",
+          "item": "Task 6 with $0C: screen black, cursor home",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a09-task6-form-feed"
+            }
+          ]
+        },
+        {
+          "id": "text-8",
+          "item": "Task 6 with $01, $1B, $00 nothing; $7F, $E9 a glyph",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a10-task6-ignored-and-high"
+            }
+          ]
+        },
+        {
+          "id": "text-9",
+          "item": "81 printable characters, wrap off; task 22 at (1,0) gives the 81st (stride aliasing)",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a11-wrap-off-past-edge"
+            },
+            {
+              "test": "app/src/core/sim-host/text/engine.test.ts",
+              "title": "81 printable characters from column 0, wrap off"
+            }
+          ]
+        },
+        {
+          "id": "text-10",
+          "item": "The same with wrap on",
+          "verdict": "proved",
+          "note": "no golden: the Wine oracle cannot switch Text Wrap on in the official program",
+          "proofs": [
+            {
+              "test": "app/src/core/sim-host/text/engine.test.ts",
+              "title": "the same with wrap on: the 80th character leaves the cursor at (next row, 0)"
+            }
+          ]
+        },
+        {
+          "id": "text-11",
+          "item": "Wrap on: printing in the bottom-right cell scrolls at once",
+          "verdict": "proved",
+          "note": "no golden (wrap on)",
+          "proofs": [
+            {
+              "test": "app/src/core/sim-host/text/engine.test.ts",
+              "title": "with wrap on, printing in the bottom-right cell scrolls the screen immediately"
+            }
+          ]
+        },
+        {
+          "id": "text-12",
+          "item": "Task 3 with $FFFFFFFF; task 15 in bases 16, 2, 1, 37, 36",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a12-task3-values"
+            },
+            {
+              "program": "trap15-a/a14-task15-bases"
+            }
+          ]
+        },
+        {
+          "id": "text-13",
+          "item": "Task 20 with 42 and widths 5, -5, 1",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a15-task20-widths"
+            }
+          ]
+        },
+        {
+          "id": "text-14",
+          "item": "Task 17 'N=' and -5",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a16-task17-string-number"
+            }
+          ]
+        },
+        {
+          "id": "text-15",
+          "item": "Task 81 blue then task 14: blue cell backgrounds; task 11 $FF00 clears to black",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a19-fill-colour-text-background"
+            }
+          ]
+        },
+        {
+          "id": "text-16",
+          "item": "A graphics line moves up one text row when LF on the last row scrolls",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a20-scroll-moves-graphics"
+            }
+          ]
+        },
+        {
+          "id": "cursor-1",
+          "item": "Task 11 with $0A05, $0A28, $8005, $00FF, $FF00",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a17-task11-positions"
+            },
+            {
+              "program": "trap15-a/a42-task11-clear"
+            }
+          ]
+        },
+        {
+          "id": "cursor-2",
+          "item": "Task 11 get preserves D1 bits 31..16",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a01-task14-at-home"
+            },
+            {
+              "program": "trap15-a/a17-task11-positions"
+            }
+          ]
+        },
+        {
+          "id": "input-1",
+          "item": "Task 2, abc Enter: 61 62 63 00, D1.L = 3 (also with D1 = $FFFFFFFF before)",
+          "verdict": "proved",
+          "note": "typed keys: no golden (Wine cannot type into the official program reliably); headless harness against the spec",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "task 2: abc Enter stores 61 62 63 00 and D1.L = 3"
+            },
+            {
+              "test": "engine/sim/test/io.test.mjs",
+              "title": "task 2: WAIT_INPUT, then the string is stored through mem_put and D1.L is its length"
+            }
+          ]
+        },
+        {
+          "id": "input-2",
+          "item": "Task 2, 79 characters then any key: 79 stored, the last key not",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "79 characters then any key end the input"
+            },
+            {
+              "test": "engine/sim/test/io.test.mjs",
+              "title": "task 2: the 80th key ends the input and is discarded"
+            }
+          ]
+        },
+        {
+          "id": "input-3",
+          "item": "Task 2, ab Backspace c Enter: ac; Backspace on an empty line: nothing",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "ab, Backspace, c gives ac"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "input-3: Backspace on an empty line does nothing"
+            }
+          ]
+        },
+        {
+          "id": "input-4",
+          "item": "Task 2 after task 16 with D1.B = 2: Enter still moves to the next row",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "input-4: task 2 after task 16 with D1.B = 2"
+            }
+          ]
+        },
+        {
+          "id": "input-5",
+          "item": "Task 2 after task 12 with D1.B = 0: nothing drawn, cursor advances, Enter does CR LF",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "app/src/core/sim-host/text/engine.test.ts",
+              "title": "task 2 after task 12 with D1.B = 0"
+            },
+            {
+              "test": "engine/sim/test/io.test.mjs",
+              "title": "task 12 echo off: nothing echoed, the cursor still moves, CR LF still done; task 16"
+            }
+          ]
+        },
+        {
+          "id": "input-6",
+          "item": "Task 4: 123, -45, 12x, x, empty, $10",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "task 4: 123 -> 123, -45 -> $FFFFFFD3, 12x -> 12, x -> 0, empty -> 0, $10 -> 0"
+            }
+          ]
+        },
+        {
+          "id": "input-7",
+          "item": "A key during a task 23 delay, then task 7 = 1, task 5 returns it, task 7 = 0; three keys: only the last",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "test": "app/src/core/run/controller.delay.test.ts",
+              "title": "keys typed during a delay become the type-ahead and do not shorten it"
+            },
+            {
+              "test": "app/src/features/output/engine.test.ts",
+              "title": "type-ahead is one character: only the last key typed before a read survives"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "input-7: a key during a task 23 delay"
+            }
+          ]
+        },
+        {
+          "id": "input-8",
+          "item": "Enter during a delay, then task 2 returns at once with length 0",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "app/src/core/sim-host/text/engine.test.ts",
+              "title": "quirk: a type-ahead Enter completes the input at once"
+            }
+          ]
+        },
+        {
+          "id": "input-9",
+          "item": "Task 5 + Enter: $0D, next row; after task 16 D1.B = 2 the same row",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "task 5: Enter gives D1.B = $0D"
+            }
+          ]
+        },
+        {
+          "id": "input-10",
+          "item": "Task 5 and task 7 preserve D1 bits 31..8",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "keeps bits 31..8 and moves to column 0 of the next row"
+            },
+            {
+              "program": "trap15-a/a44-task7-no-key"
+            },
+            {
+              "test": "engine/sim/test/io.test.mjs",
+              "title": "tasks 7 and 5: key pending flag and character input touch only D1.B"
+            }
+          ]
+        },
+        {
+          "id": "input-11",
+          "item": "Task 5 in Trace Into: returns to the debugger at once; the key typed later sets D1.B",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "app/src/core/run/controller.waits.test.ts",
+              "title": "after Trace Into the engine does not wait: the keys typed later complete the read"
+            }
+          ]
+        },
+        {
+          "id": "input-12",
+          "item": "Task 19 with 'ASDF' while S is held: $00FF0000; D1 = 0 after Q pressed and released: $00510051",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "test": "app/src/core/run/controller.queue.test.ts",
+              "title": "a keyDown and keyUp posted together are both seen by a program that polls task 19"
+            },
+            {
+              "test": "tests/e2e/sim/input.spec.ts",
+              "title": "task 19 sees a held letter key"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "input-12: task 19 with D1 = 'ASDF' while S is held gives $00FF0000"
+            }
+          ]
+        },
+        {
+          "id": "input-13",
+          "item": "Task 22 after task 14 'HI' with D1 = 1: $49; task 22 on a typed character: $20",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a18-task22-read-char"
+            },
+            {
+              "test": "app/src/core/sim-host/text/engine.test.ts",
+              "title": "task 22 on a typed character gives $20"
+            }
+          ]
+        },
+        {
+          "id": "input-14",
+          "item": "Click Run while the main window has the focus: the I/O window comes to the front and takes the keys",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "input-14, the part a session shows"
+            },
+            {
+              "test": "tests/e2e/sim/input.spec.ts",
+              "title": "Run gives the Output panel the keyboard"
+            }
+          ]
+        },
+        {
+          "id": "input-15",
+          "item": "Task 2 and Tab: no effect; Ctrl+I: $09 echoed and stored; task 5 Ctrl+I: $09, five columns",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "test": "app/src/features/output/engine.test.ts",
+              "title": "rule 3: plain Tab and Shift+Tab give the program no key-down and no character"
+            },
+            {
+              "test": "app/src/core/sim-host/input/chars.test.ts",
+              "title": "Ctrl+I is $09"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "input-15: Ctrl+I in task 2 is echoed as one glyph"
+            }
+          ]
+        },
+        {
+          "id": "input-16",
+          "item": "Task 19 loop on F6: pauses before task 24, $FF after task 24 D1 = 1; F9 the same",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "test": "app/src/features/output/engine.test.ts",
+              "title": "after task 24 the eleven shortcuts reach the program and only the release chord acts"
+            },
+            {
+              "test": "app/src/features/output/engine.test.ts",
+              "title": "rule 2: F9 runs Run and is not seen by task 19; its key-up is"
+            },
+            {
+              "test": "app/src/features/output/engine.test.ts",
+              "title": "key commands enabled: F6 runs Pause and the program never sees $FF"
+            },
+            {
+              "test": "app/src/features/output/engine.test.ts",
+              "title": "after task 24 with D1 = 1: F6 does not pause and task 19 gives $000000FF"
+            }
+          ]
+        },
+        {
+          "id": "input-17",
+          "item": "HELLO, cursor back onto H, task 2 Enter: H blanked on screen, task 22 still H, back at the next repaint",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "app/src/core/sim-host/text/engine.test.ts",
+              "title": "HELLO, cursor back onto the H, task 2 and Enter at once"
+            }
+          ]
+        },
+        {
+          "id": "input-18",
+          "item": "Task 2 with A1 = $FFFFFE, abc Enter: bytes at $FFFFFE, $FFFFFF, $000000, $000001",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "input-18: task 2 with A1 = $FFFFFE"
+            }
+          ]
+        },
+        {
+          "id": "time-1",
+          "item": "Task 8 twice around a task 23 of 100: difference >= 100",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a21-task8-around-delay"
+            }
+          ]
+        },
+        {
+          "id": "time-2",
+          "item": "MOVEQ #30 / TRAP / MOVEQ #31 / TRAP gives D1 = 4",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a22-task30-31-cycles"
+            }
+          ]
+        },
+        {
+          "id": "time-3",
+          "item": "Task 32 with D1.B = 4, 1, 2, 3, 7",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a23-task32-values"
+            }
+          ]
+        },
+        {
+          "id": "time-4",
+          "item": "Task 33 with 0, $03200258, $00640064",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a24-task33-window-size"
+            }
+          ]
+        },
+        {
+          "id": "time-5",
+          "item": "Unassigned tasks 99 and 26 with exceptions off halt with the TRAP message; $0000010E is task 14",
+          "verdict": "proved",
+          "note": "the golden program a26 runs with exceptions on; the halt with exceptions off is the engine test",
+          "proofs": [
+            {
+              "program": "trap15-a/a25-task-number-byte"
+            },
+            {
+              "program": "trap15-a/a26-unassigned-task-exception"
+            },
+            {
+              "test": "engine/sim/test/io.test.mjs",
+              "title": "TRAP #15 with D0.B >= $80 or an unassigned number is an ordinary TRAP exception"
+            }
+          ]
+        },
+        {
+          "id": "files-1",
+          "item": "Task 52 gives FID 0, then 1; close 0, open: 0 again",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a27-files-lowest-free-slot"
+            }
+          ]
+        },
+        {
+          "id": "files-2",
+          "item": "Nine opens: the ninth gives 2 and $FFFFFFFF",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a28-files-nine-opens"
+            }
+          ]
+        },
+        {
+          "id": "files-3",
+          "item": "Task 51 on a missing file: 2, $FFFFFFFF, not created",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a29-files-open-missing"
+            }
+          ]
+        },
+        {
+          "id": "files-4",
+          "item": "Task 51 on a read-only file: 3, valid FID; 53 works; 54 gives 2",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "test": "app/src/core/sim-host/files/program-files.engine.test.ts",
+              "title": "a read-only file gives result 3"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "files-4: task 51 on a read-only file gives 3"
+            }
+          ]
+        },
+        {
+          "id": "files-5",
+          "item": "Write 10, seek 0, read 20: 0 and 10; again: 1 and 20",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a30-files-write-seek-read"
+            }
+          ]
+        },
+        {
+          "id": "files-6",
+          "item": "Task 53 with D2 = 0 on a new file; task 54 with D2 = 0 (what the original returns)",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a31-files-zero-length"
+            }
+          ]
+        },
+        {
+          "id": "files-7",
+          "item": "Task 53 with A1 = $2000, D2 = $FFFFFFFF on a 10-byte file",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a32-files-bounds"
+            }
+          ]
+        },
+        {
+          "id": "files-8",
+          "item": "Tasks 53-56 with FID 8, -1 or a closed FID: 2",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a33-files-bad-fid"
+            }
+          ]
+        },
+        {
+          "id": "files-9",
+          "item": "Task 53 with A1 = $FFFFF0, D2 = $20: 2, nothing read",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a32-files-bounds"
+            }
+          ]
+        },
+        {
+          "id": "files-10",
+          "item": "Task 55 with offset -1: 2",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a34-files-seek-negative"
+            }
+          ]
+        },
+        {
+          "id": "files-11",
+          "item": "Task 59 writable 0, read-only 3, missing 2; D1 unchanged",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "program": "trap15-a/a35-files-exists-delete"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "files-11: task 59 on a writable file 0"
+            }
+          ]
+        },
+        {
+          "id": "files-12",
+          "item": "Task 57 on a closed file 0, again 2",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a35-files-exists-delete"
+            }
+          ]
+        },
+        {
+          "id": "files-13",
+          "item": "Task 50 with nothing open: 0",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a36-files-close-all"
+            }
+          ]
+        },
+        {
+          "id": "files-14",
+          "item": "After a file task D0 bits 31..16 are unchanged and D0.B no longer holds the task number",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a27-files-lowest-free-slot"
+            }
+          ]
+        },
+        {
+          "id": "files-15",
+          "item": "Task 58 Cancel: D1 = 0, buffer unchanged; OK: D1 = 1, path at (A3), zeros to offset 255",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "test": "engine/sim/test/io.test.mjs",
+              "title": "task 58 cancelled: D1 = 0, buffer untouched"
+            },
+            {
+              "test": "app/src/core/sim-host/files/program-files.engine.test.ts",
+              "title": "task 58: Cancel; OK in Open mode moves the current directory"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "files-15: task 58 OK: D1 = 1"
+            }
+          ]
+        },
+        {
+          "id": "serial-1",
+          "item": "Task 40 with CID 16: 1; CID 0 and a missing port: 2; tasks 41-43 unopened: 3",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "trap15-a/a47-serial-without-port"
+            }
+          ]
+        },
+        {
+          "id": "map-1",
+          "item": "MEMORY INVALID $8000: task 14 / task 13 at $7FFE raise a bus error and halt with the message (exceptions off); an empty string raises nothing",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "program": "trap15-a/a38-memory-map-invalid"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "map-1: MEMORY INVALID $8000, exceptions off"
+            }
+          ]
+        },
+        {
+          "id": "map-2",
+          "item": "MEMORY ROM $8000: task 2 into ROM works and leaves memory; task 53 into ROM reads nothing",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "program": "trap15-a/a39-memory-map-rom"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "map-2: MEMORY ROM $8000, task 2 with A1 = $8000"
+            }
+          ]
+        },
+        {
+          "id": "map-3",
+          "item": "Output log Text Only: 41 42 0A for task 13 'AB'; 0D 0A; nothing for $07; typed abX BS c Enter: 61 62 58 63 0A",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "app/src/core/sim-host/text/engine.test.ts",
+              "title": "the output log gets what trap15-a §13 lists: 41 42 0A for task 13"
+            },
+            {
+              "test": "app/src/core/sim-host/text/text-screen.test.ts",
+              "title": "the output log of abX, Backspace, c, Enter typed into task 2 is 61 62 58 63 0A"
+            },
+            {
+              "program": "trap15-a/a13-text-tasks"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "hardware 13",
+      "items": [
+        {
+          "id": "1",
+          "item": "After a load with the window visible: 64 segments and 8 LEDs lit, $E00012 = $00, $E00014 = $FF",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "app/src/core/sim-host/hardware/engine.test.ts",
+              "title": "1. after a load with the panel visible"
+            },
+            {
+              "program": "hardware/h01-device-bytes-at-start"
+            }
+          ]
+        },
+        {
+          "id": "2",
+          "item": "Writes to $E00000, $E0000E, $E00002",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "hardware/h02-device-writes"
+            },
+            {
+              "test": "app/src/core/sim-host/hardware/engine.test.ts",
+              "title": "2, 3. program writes to the display and the LEDs"
+            }
+          ]
+        },
+        {
+          "id": "3",
+          "item": "$A5 to $E00010 lights LEDs 7, 5, 2, 0",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "hardware/h02-device-writes"
+            },
+            {
+              "test": "app/src/core/sim-host/hardware/engine.test.ts",
+              "title": "2, 3. program writes to the display and the LEDs"
+            }
+          ]
+        },
+        {
+          "id": "4",
+          "item": "Switch 3 click sets and clears bit 3",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 4: a click on switch 3 sets bit 3 of $E00012"
+            }
+          ]
+        },
+        {
+          "id": "5",
+          "item": "Program writes $FF to $E00012: pictures stay; clicks",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "app/src/core/sim-host/hardware/engine.test.ts",
+              "title": "5. a program writes $FF to $E00012"
+            }
+          ]
+        },
+        {
+          "id": "6",
+          "item": "Hide and show with a switch on: byte $00, picture on, next click",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "app/src/core/sim-host/hardware/engine.test.ts",
+              "title": "6. hiding and showing the panel with a switch on"
+            }
+          ]
+        },
+        {
+          "id": "7",
+          "item": "Push button 2 held: $FB; after $00 written, press and release: $04",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 7: holding push button 2 reads $FB"
+            }
+          ]
+        },
+        {
+          "id": "8",
+          "item": "A device write inside ROM, Read, Protected or Invalid succeeds",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "hardware/h03-device-write-in-rom"
+            },
+            {
+              "test": "app/src/core/sim-host/hardware/engine.test.ts",
+              "title": "8. a write to a hardware address inside an enabled ROM, Read, Protected or Invalid range succeeds"
+            }
+          ]
+        },
+        {
+          "id": "9",
+          "item": "7-segment address 100000: digits follow; task 32/1 gives $00100000",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "app/src/core/sim-host/hardware/engine.test.ts",
+              "title": "9. moving the display to $100000"
+            }
+          ]
+        },
+        {
+          "id": "10",
+          "item": "Task 32 sub-tasks 1, 2, 3, 7 and 4",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "hardware/h01-device-bytes-at-start"
+            },
+            {
+              "program": "trap15-a/a23-task32-values"
+            }
+          ]
+        },
+        {
+          "id": "11",
+          "item": "Exc off: IRQ 3 click on an idle program starts it, +44 cycles, no handler",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 11: exceptions off, an IRQ click on a loaded idle program starts it"
+            }
+          ]
+        },
+        {
+          "id": "12",
+          "item": "Exc on: IRQ n enters the handler at $60+4n with mask n, S = 1, T = 0, 6-byte frame, +78 cycles",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 12: exceptions on, mask 0, an IRQ click enters the handler"
+            },
+            {
+              "program": "hardware/h09-irq-cycles-and-frame"
+            }
+          ]
+        },
+        {
+          "id": "13",
+          "item": "Mask 3: IRQ 2 pending until the mask drops; IRQ 7 at mask 7",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "hardware/h05-irq-held-by-mask"
+            },
+            {
+              "program": "hardware/h09-irq-cycles-and-frame"
+            }
+          ]
+        },
+        {
+          "id": "14",
+          "item": "Two pending levels: highest first",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "hardware/h06-two-levels"
+            }
+          ]
+        },
+        {
+          "id": "15",
+          "item": "Trace mode: an IRQ click runs nothing; one step lands in the handler",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 15: in trace mode an IRQ click runs nothing"
+            }
+          ]
+        },
+        {
+          "id": "16",
+          "item": "Auto IRQ 1, interval 500, Run: label Automatic Enabled, about two per second; Pause: Disabled, ticks stop",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "app/src/core/sim-host/hardware/session.test.ts",
+              "title": "a checked box with interval 500: 19 ticks in 10 s at 16 ms frames while running"
+            },
+            {
+              "test": "app/src/core/sim-host/hardware/engine.test.ts",
+              "title": "a checked box with interval 500 gives two timerTick posts per second during a run and none after Pause"
+            },
+            {
+              "test": "app/src/core/sim-host/hardware/model.test.ts",
+              "title": "labels and buttons follow hardwareState"
+            }
+          ]
+        },
+        {
+          "id": "17",
+          "item": "Open a file: all seven boxes unchecked, label Automatic Disabled",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "test": "app/src/core/sim-host/hardware/model.test.ts",
+              "title": "resetToStartup switches all seven off and forgets the reported state"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 17: opening a file unchecks all seven automatic boxes"
+            }
+          ]
+        },
+        {
+          "id": "18",
+          "item": "Check a box, Reset Program, wait: the program starts by itself at the first tick",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "engine/sim/test/hardware.test.mjs",
+              "title": "after Rewind a checked auto interrupt starts the program by itself (QUIRK)"
+            }
+          ]
+        },
+        {
+          "id": "19",
+          "item": "Task 32/6 with $81 and 250: IRQ 1 every 250 ms; 0 then $81: no interrupts until the next Run",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "hardware/h08-auto-irq-disable-then-enable"
+            },
+            {
+              "test": "engine/sim/test/hardware.test.mjs",
+              "title": "TRAP #15 task 32/6: \"enable\" after \"disable all\" does not start the timer (QUIRK)"
+            }
+          ]
+        },
+        {
+          "id": "20",
+          "item": "STOP #$2000 with Exc on: message, IRQ resumes, stacked PC = second instruction after STOP; a second STOP no message",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 20: STOP with exceptions on halts with its message"
+            },
+            {
+              "program": "hardware/h04-stop-auto-irq"
+            }
+          ]
+        },
+        {
+          "id": "21",
+          "item": "STOP with Exc off: message with location, IRQ and Reset disabled (dark-maroon look), clicks do nothing",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 21: STOP with exceptions off prints its message with the location and IRQ clicks do nothing"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 21: STOP with exceptions off prints its message"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 21: after STOP with exceptions off the model reports the IRQ and Reset buttons disabled"
+            },
+            {
+              "test": "app/src/features/hardware/check-hardware.mjs",
+              "title": "after SIMHALT the IRQ and Reset buttons are disabled"
+            }
+          ]
+        },
+        {
+          "id": "22",
+          "item": "After SIMHALT IRQ and Reset disabled; Pause then Run: label Enabled, buttons disabled, no interrupt",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 22: after SIMHALT an IRQ click delivers nothing and starts nothing"
+            },
+            {
+              "test": "engine/sim/test/hardware.test.mjs",
+              "title": "the hardware stays disabled after SIMHALT even if the program is continued with Pause and Run"
+            }
+          ]
+        },
+        {
+          "id": "23",
+          "item": "Reset button: SSP and PC from vectors 0 and 4, mask 7, +84 cycles, registers kept, runs",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 23: Reset loads SSP and PC from vectors 0 and 4"
+            }
+          ]
+        },
+        {
+          "id": "24",
+          "item": "Fresh start, no file, window shown: one IRQ click halts at once (SIMHALT at 0), buttons disabled until a file or Reset Program",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 24: fresh start, no file, window shown"
+            }
+          ]
+        },
+        {
+          "id": "25",
+          "item": "Exc off, stopped by Illegal instruction: an IRQ click resumes after the word",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 25: exceptions off, after \"Illegal instruction found\" an IRQ click resumes"
+            }
+          ]
+        },
+        {
+          "id": "26",
+          "item": "Exc off at start, IRQ latched; task 32/5 later: taken at the end of that TRAP",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 26: exceptions off, an IRQ latched during the run is taken at the end of TRAP #15 task 32/5"
+            },
+            {
+              "program": "hardware/h07-pending-irq-exceptions-later"
+            }
+          ]
+        },
+        {
+          "id": "27",
+          "item": "SSP inside ROM: handler entered, stack bytes unchanged; Read range below SSP: +200 cycles, SSP 62 lower",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 27: exceptions on, an SSP inside ROM"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 27: exceptions on, a 16-byte Read range right below the SSP"
+            }
+          ]
+        },
+        {
+          "id": "28",
+          "item": "MEMORY ROM $2000,$2FFF produces the S0 record; loading it checks ROM",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "asm": "checklist/dir-17-memory-directives-and-s0-map-records"
+            },
+            {
+              "test": "engine/sim/test/loader.test.mjs",
+              "title": "S0 memory-map records after the EASy68K header switch the map on"
+            }
+          ]
+        },
+        {
+          "id": "29",
+          "item": "MAP MEMORY ROM (label): Label is not allowed, no record; MEMORY.W: Invalid size code, record",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "asm": "checklist/dir-17-memory-directives-and-s0-map-records"
+            },
+            {
+              "asm": "checklist/dir-25-every-directive-with-a-label-with-a-size-suffix"
+            }
+          ]
+        },
+        {
+          "id": "30",
+          "item": "ROM: a write to $2000 ignored; a long write at $1FFE ignored completely",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "program": "trap15-a/a39-memory-map-rom"
+            },
+            {
+              "test": "engine/sim/test/exceptions.test.mjs",
+              "title": "a ROM range swallows writes silently"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 30: ROM $2000: a long write at $1FFE is ignored completely"
+            }
+          ]
+        },
+        {
+          "id": "31",
+          "item": "Read: a write raises a bus error; reads work",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 31: Read range"
+            }
+          ]
+        },
+        {
+          "id": "32",
+          "item": "Invalid: reads and writes fault; a long read 2 below does not, a long write 2 below does",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 32: Invalid range"
+            }
+          ]
+        },
+        {
+          "id": "33",
+          "item": "Protected: S = 1 shown at Run lets user mode in during that Run; single-stepping faults",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 33: Protected range"
+            },
+            {
+              "test": "engine/sim/test/debug.test.mjs",
+              "title": "Protected range: the supervisor test uses the DISPLAYED S bit (QUIRK)"
+            }
+          ]
+        },
+        {
+          "id": "34",
+          "item": "A second program without MEMORY leaves the first program's map enabled",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 34: a second program without MEMORY directives"
+            }
+          ]
+        },
+        {
+          "id": "35",
+          "item": "The S-record loader can place data inside ROM / Read / Invalid ranges",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "program": "trap15-a/a39-memory-map-rom"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 35: the S-record loader places data inside ROM, Read and Invalid ranges"
+            }
+          ]
+        },
+        {
+          "id": "36",
+          "item": "The Stack window shows bytes of the enabled Invalid range in red",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "app/src/features/stack/model.test.ts",
+              "title": "shows the Invalid range of the memory map in red"
+            }
+          ]
+        },
+        {
+          "id": "37",
+          "item": "Protected 0-$400, user code single-stepped into TRAP #1: the port stops cleanly with an error report",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "test": "engine/sim/test/hardware.test.mjs",
+              "title": "bus-error vector inside an Invalid range: the endless recursion ends in the exec_inst error box"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "item 37: Protected 0-$400, exceptions on, user code single-stepped into TRAP #1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "sim-ui 19 (affects program results)",
+      "about": "Rows whose answer is not No, Debugger only or Display only: Q1 Q2 Q3 Q4 Q7 Q8 Q10 Q11 Q13 Q14 Q19 Q21 Q22 Q23 Q24 Q25 (16 of 27).",
+      "items": [
+        {
+          "id": "Q1",
+          "item": "Registers are re-read from the fields at every run command",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "engine/sim/test/debug.test.mjs",
+              "title": "register boxes: D, SR and PC edits are taken over by the next run command only"
+            },
+            {
+              "test": "app/src/features/sim-main/model.test.ts",
+              "title": "an edit of D0 is forwarded at once, used by the next Trace Into, and all boxes are re-read"
+            }
+          ]
+        },
+        {
+          "id": "Q2",
+          "item": "A0-A6, A7, US, SS typed are written at once, even while running",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "engine/sim/test/debug.test.mjs",
+              "title": "register boxes: address registers are written through at once"
+            }
+          ]
+        },
+        {
+          "id": "Q3",
+          "item": "The program stops when the PC becomes 0",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "Q3: a running program that reaches address 0 is paused there with no message"
+            },
+            {
+              "test": "engine/sim/test/quirks.test.mjs",
+              "title": "Run stops silently when the PC becomes 0"
+            }
+          ]
+        },
+        {
+          "id": "Q4",
+          "item": "A stale runToAddr after an interrupted Run To Cursor stops a later Run once",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "Q4: a Run To Cursor interrupted by Pause leaves its target"
+            }
+          ]
+        },
+        {
+          "id": "Q7",
+          "item": "Trace Into does not wait for input",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "app/src/core/run/controller.waits.test.ts",
+              "title": "after Trace Into the engine does not wait: the keys typed later complete the read"
+            }
+          ]
+        },
+        {
+          "id": "Q8",
+          "item": "Pause cancels a pending input request",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "app/src/core/run/controller.waits.test.ts",
+              "title": "Pause cancels the read; the program later continues without its input"
+            },
+            {
+              "test": "engine/sim/test/io.test.mjs",
+              "title": "Pause during a keyboard read cancels it; the program continues without input (QUIRK)"
+            }
+          ]
+        },
+        {
+          "id": "Q10",
+          "item": "Rewind keeps memory; Rewind/Reload/Open/Close forget open files",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "Q10: Rewind keeps memory"
+            },
+            {
+              "test": "engine/sim/test/loader.test.mjs",
+              "title": "Rewind restores the start address and the registers but not memory"
+            },
+            {
+              "test": "app/src/core/sim-host/files/program-files.engine.test.ts",
+              "title": "abandoned streams: after Rewind task 57 fails"
+            }
+          ]
+        },
+        {
+          "id": "Q11",
+          "item": "Reload after Open Data reloads the data file",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "app/src/core/run/controller.load.test.ts",
+              "title": "becomes what Reload loads (sim-ui Q11)"
+            }
+          ]
+        },
+        {
+          "id": "Q13",
+          "item": "The listing's first line overrides the S-record start address",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "quirks/q01-listing-first-line-start"
+            },
+            {
+              "test": "engine/sim/test/loader.test.mjs",
+              "title": "the first eight characters of the listing override the S-record start address"
+            }
+          ]
+        },
+        {
+          "id": "Q14",
+          "item": "bitfield, /e and /b persist into later sessions through the settings file",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "test": "app/src/features/sim-options/options.test.ts",
+              "title": "Enable Exceptions and Enable Bit Field: the check follows the setting, saved at once, engine told"
+            },
+            {
+              "test": "app/src/core/run/controller.load.test.ts",
+              "title": "commandLine: cold start, load, /e and /b"
+            },
+            {
+              "program": "quirks/q08-exceptions-option-persists"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "Q14: /e and /b change the saved options"
+            }
+          ]
+        },
+        {
+          "id": "Q19",
+          "item": "Memory window edits, Copy and Fill bypass the memory map; Fill uses a 4-byte pattern; no live update at address 0",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "test": "app/src/features/memory/model.test.ts",
+              "title": "Fill: writes the 4-byte pattern From through To"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "Q19: Memory window writes"
+            },
+            {
+              "test": "app/src/features/memory/model.test.ts",
+              "title": "Live: sets SimOption.MemLive and repaints changed rows once per frame, also at address 0"
+            }
+          ]
+        },
+        {
+          "id": "Q21",
+          "item": "Advanced breakpoints: hex count, count 0, A7 = user SP, read side effect, parenthesis conversion, ... odd memory condition",
+          "verdict": "proved",
+          "note": "completed in round I3 (docs/porting/errata/T3.md entry 12)",
+          "proofs": [
+            {
+              "test": "engine/sim/test/debug.test.mjs",
+              "title": "Run resets the hit counters; a count of 0 breaks on every step until the expression is first true (QUIRK)"
+            },
+            {
+              "test": "engine/sim/test/debug.test.mjs",
+              "title": "Run resets the hit counters; a count of 0 breaks on every step"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "Q21: a break condition on A7 tests the user stack pointer"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "Q21: evaluating a word memory condition on an odd address"
+            },
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "Q21: evaluating a memory condition reads the address"
+            }
+          ]
+        },
+        {
+          "id": "Q22",
+          "item": "Log Start sets logging even when the dialog was cancelled",
+          "verdict": "proved",
+          "note": "changed on purpose: logging stays off (DIFFERENCES.md note 41, U4); the test proves the port's rule",
+          "proofs": [
+            {
+              "test": "app/src/core/sim-host/log/log-service.test.ts",
+              "title": "Cancel: engine.startLog is not called, logging stays off, nothing is written"
+            }
+          ]
+        },
+        {
+          "id": "Q23",
+          "item": "Listing rows are printf formats in the execution log",
+          "verdict": "proved",
+          "note": "changed on purpose (written literally; DIFFERENCES.md U4, T3); the golden differs and is an accepted entry of known-differences.json",
+          "proofs": [
+            {
+              "program": "logs/l14-percent-in-listing",
+              "accepted": true
+            }
+          ]
+        },
+        {
+          "id": "Q24",
+          "item": "Rewind/Reload notes only after the Log Output dialog was shown with a type",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "test": "tests/conformance/sim/checklist.test.ts",
+              "title": "Q24: Rewind writes its note to the output log only after the Log Output dialog was shown"
+            },
+            {
+              "test": "app/src/core/sim-host/log/log-engine.test.ts",
+              "title": "(sim-ui Q24)"
+            }
+          ]
+        },
+        {
+          "id": "Q25",
+          "item": "Execution-log lookup is a binary search; non-ascending listings fall back to the short line",
+          "verdict": "proved",
+          "proofs": [
+            {
+              "program": "logs/l15-org-backwards"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

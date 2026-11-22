@@ -195,6 +195,85 @@ entry 28 and the lines marked "Gate I1, round 2" in its second round.
   `files.recoverJournal()`) is the first step of `controller.start()`, before the first engine is
   created. Every load waits for the start (entry 21), so no program sees its files earlier.
 
+### 47. A run command given during a load is carried out when the load ends (4.7 steps 1 and 3, 4.8)
+
+Architect's decision of 22 November 2026, on the finding of the fixup round before the release
+candidate (`build/gate3/fixup-report.json`).
+
+- Says: 4.7 step 3, "From here until step 10 ... every simulator command is disabled"; step 1, "A
+  request that arrives while the phase is `loading` is ignored"; 4.8's availability table, Run, Run
+  To Cursor, Auto Trace, Step Over, Trace Into "`menuState == 0` and the phase is not `loading`",
+  Pause and Rewind "the phase is not `loading`".
+- Problem: the person assembles, chooses Execute while a program runs, answers OK to `Caution`
+  and presses F9. During the load `sim.run.run` reported itself disabled and the key dispatcher
+  cancelled the key: the new program sat there, Stopped, 0 cycles. Measured with
+  `check-run.mjs --pass "run key during a load"` on the code before this entry: F9 in the same task
+  as the click on OK and at once after it lost in Chromium and WebKit, and 10 and 50 ms after OK
+  lost in WebKit; the toolbar's Run button at once, 10 and 50 ms after OK lost in WebKit and in the
+  task after the click in Chromium; Run > Run from the menu lost in WebKit (the load lasts 24 to 65
+  ms in Chromium and 158 to 221 ms in WebKit on the development PC, longer on a slow one). In the
+  original the load is one synchronous call, and Windows delivers a key or click given meanwhile
+  from its message queue when the call returns: F9 runs the new program.
+- Does (`core/run/controller.ts`, `features/run/commands.ts`):
+  - While a load is under way, and from the moment the `Caution` question is answered until the
+    load begins (`keepsCommands`; the dialog closes in one task and the controller hears the answer
+    a few microtasks later, so a key in that task would otherwise find the old program's commands
+    busy), the controller **keeps** Run, Run To Cursor, Step Over, Trace Into, Auto Trace, Pause,
+    Rewind and Reload instead of refusing them, and `finishLoading` (the code that ends every load)
+    carries them out in the order given, each as if it were given at that moment. No timer and no
+    polling.
+  - Each kept command meets the state the original's would meet when its queue delivers it: a Run
+    after the load runs the new program; a second Run then finds the commands busy and does
+    nothing; Trace Into twice traces two instructions; a Run followed by Pause runs and pauses.
+    Pause and Rewind alone act on the program just loaded, as the original's queued key does
+    (Pause: `cmdPause`, Stopped; Rewind: the program at its start, which it already is). Reload
+    loads the program again, and what was given after it waits for the end of that second load.
+    Run To Cursor reads the selected row when it is carried out (`ControllerUi.cursorRow`), as the
+    original's handler reads the listing's selection when its message is delivered; after Execute
+    that is no row (a cold start selects none, 3.3.2), so it shows `Invalid Run-To-Cursor
+    Selection`. A run command is a user gesture, so audio is unlocked when it is kept.
+  - A load that fails drops what was kept, as the original would run nothing: the `.S68` cannot be
+    read, no engine could be created, a host part failed, or the engine failed (the recovery of
+    4.8 ends with nothing carried out; during the recovery nothing is kept).
+  - A second Execute during the load of the first: the original starts a new simulator process for
+    each Execute, and a key given before it went to the first one's window, never to the second.
+    Here the second program replaces the first, so what was kept for the first is dropped; the
+    second Execute itself is kept and loaded when the first load has ended (no `Caution` question:
+    the first program is then idle), and what was given after it is carried out on the second
+    program. It is not dropped when the first load fails, being the next program's. Before this
+    entry a second Execute during a load was ignored (step 1); `open()` resolves when its load has
+    ended.
+  - On Cancel what was given after the answer is carried out at once, on the program that stays
+    (a running program's commands are busy, so a Run does nothing; an idle one runs). After
+    `confirmLoad()` (a dropped file in a browser) it is carried out at once too: the caller's
+    `open(..., { confirmed: true })` follows after the file has been copied, and the controller
+    cannot know that it will.
+  - Open, Open Data and Close stay disabled and ignored during a load, as written: the decision
+    names the run commands, and a File menu command needs a dialog the person cannot reach in
+    that fraction of a second.
+  - What the commands show: while commands are kept, Run, Run To Cursor, Auto Trace, Step Over,
+    Trace Into, Pause, Rewind and Reload are **enabled** in the web menu bar and the toolbar (their
+    `enabled` answers true), because a key or click given then is accepted. That is right: a
+    disabled button cannot be clicked at all (a disabled HTML button receives no click), so showing
+    them disabled would lose the click the decision keeps; in the original the window is not
+    repainted during the synchronous load, and the click queued on a button that looked disabled
+    acts when it is delivered. In the same task as the click on OK the toolbar still shows the old
+    program's state (a running program: Run disabled) until the page renders, which a person's
+    next click always follows. The desktop app's native menu (`commands/native-menu.ts`, owned by
+    W3/DV2) greys every item during a load by its own phase check. Its accelerators are only shown
+    (`desktop/src/menu.ts`: the page's key dispatcher handles every key that is not a role chord),
+    so F9 reaches the page and is kept there too; what that menu cannot take during the fraction of
+    a second of the load is a click on its greyed item, which a person cannot open and reach in that
+    time. Not run in the desktop app in this round.
+  - A command given while no load is under way behaves exactly as before.
+- Tests: `core/run/controller.kept.test.ts` (each of the five run commands, Pause, Rewind and
+  Reload kept and carried out; two in order; a failed load for two causes; a second Execute,
+  including after a failed first load; a command between OK and the load; Cancel; dispose);
+  `controller.load.test.ts` (Reload twice now loads twice); `features/run/session.test.ts` (the
+  enabling during a load, a Run given through the registry, Run To Cursor after an Execute);
+  `check-run.mjs --pass "run key during a load"` in Chromium and WebKit.
+- Proposed text: a correction note under 4.7 (made in this round; see there).
+
 ## Engine failure (4.8)
 
 ### 13. Where the opcode comes from, and when the cold start begins
@@ -629,6 +708,103 @@ entry 28 and the lines marked "Gate I1, round 2" in its second round.
   Chromium and WebKit; the same pass against f17e78a's status bar failed 2 of 7 as above), and the
   audit's "a halt is announced by a live region" (`tests/a11y`, `--only structure`) passes with the
   hidden region and fails without it.
+
+### 44. The frames check of check-run.mjs compares Maximum with the default speed (4.2; CI run 44999787233 of 4bd5f68)
+
+- Problem: "the page keeps its frames while the program runs at Maximum" counted
+  `requestAnimationFrame` callbacks for half a second at Maximum and asked for more than 15 per
+  second, an absolute figure. On GitHub's macOS runner (job "browser-checks (macos-latest,
+  simulator)") Chromium printed 11 and failed; it had passed there with 23 two runs earlier and
+  failed with 12 on another branch. The Maximum check of the same run shows why: the half-second
+  windows had 8 and 7, 8 and 9, 9 and 8 frames (Maximum, default), so that Chromium delivers about
+  15 frames per second whatever the program does, at the default speed (engine 10 of 63 ms) as at
+  Maximum (engine 63 of 69 ms). WebKit there: 60 per second, 30 and 29 frames per window. The
+  threshold judged the runner.
+- What the check is for: 4.2 gives the engine at most half of each frame's time (8 ms, or half the
+  interval), so running at Maximum takes no frame from a page whose display delivers them. That is
+  a comparison with the same page on the same machine while the engine takes almost no time.
+- Does: `judgeFrames` (`run-verdicts.mjs`) judges the frames of the three pairs of windows that the
+  Maximum check (entry 41) already measures back to back; the separate frame count is gone, and
+  nothing the Maximum check proves changed. A pair passes when Maximum's frame rate is at least
+  70 % of the default's in the same pair (`FRAME_KEEP_SHARE`) and at least 4 per second
+  (`FROZEN_FPS`, a frozen page). Two of the three pairs must pass. The line prints per pair both
+  counts, both window lengths, both rates and the share, so that the CI log alone tells the runner
+  from the product.
+  - Why 70 %: a window counts a steady stream of frames to plus or minus one, so with 6 frames or
+    more at the default (`MIN_JUDGED_FRAMES`, 12 per second) a page that keeps its frames measures
+    at least 5/6 to 5/7 (83 to 71 %), and the macOS runner's worst pair was 7 against 9 (78 %). An
+    engine that overruns the frame halves the rate on a display bound to its refresh (WebKit
+    here), which at the fewest frames judged is at most 4 of 6 (67 %). 70 % lies between.
+  - Why a majority, not the best pair: a loss the product causes is systematic (Maximum fills the
+    engine's budget in every window) and shows in every pair. The best pair would let one window
+    the runner disturbed in the product's favour (a stall in a default window) pass a real loss; a
+    majority keeps one disturbed window, either way, from deciding alone.
+  - Too few frames: a pair whose default window had fewer than 6 frames cannot carry a share (one
+    frame is a sixth or more); it is judged by the floor alone, and a note says how many pairs were.
+    A page frozen at Maximum fails in every case.
+- Evidence on this PC (Windows, loaded): `npm run check:run`, 116 of 116; Chromium 31/30, 30/30,
+  30/30 frames (103, 100, 102 %), WebKit 29/26, 22/26, 25/24 (112, 85, 107 %). That it can still
+  fail: a scratch copy of the script (`build/SH8-frames/make-busy-copy.mjs`, not in the tree) makes
+  the page busy-wait after every `engine.run` call in the Maximum windows. 40 ms: Chromium 13 of 30
+  frames (40, 41, 40 %), WebKit 9 to 12 of 30 to 32 (28 to 34 %), both fail ("the engine took the
+  page's frames"). 20 ms (a call longer than the 16.7 ms frame): WebKit 17/29, 16/26, 17/21 (56, 60,
+  78 %), fails 1 of 3; Chromium, whose headless frames are not bound to a refresh, kept 25 of 30
+  (76 to 79 %) and passed: a loss of a quarter is within the rule, a loss of a third or more is not.
+  12 ms (the call still fits in the frame): no frame lost in either browser, rightly a pass.
+  Estimate for the macOS runner from run 44999787233: Chromium 114, 89 and 113 %, WebKit about
+  100 %: a pass. Only the next CI run on macos-latest shows the real figures there. Tests:
+  `run-verdicts.test.ts` ("judgeFrames": the runner's Chromium and WebKit figures, this PC's, a page
+  that loses most or half of its frames, a frozen page, too few frames at the default, the majority,
+  windows of different lengths).
+
+### 45. judgeFrames: pairs passed by the floor, and longer windows (review R4 of gate I3; entry 44)
+
+- Problem (found by the review): below `MIN_JUDGED_FRAMES` frames at the default only the floor of
+  4 per second applied, and the detail still said that every passing pair "kept at least 70 % of
+  the default's frame rate". `judgeFrames` of three pairs of 2 frames at Maximum against 5 at the
+  default (a loss of 60 %) passed with "3 of 3 pairs kept at least 70 %". The doc comment's "an
+  engine that overruns the frame halves the rate or worse" also did not hold for headless
+  Chromium, where entry 44's own 20 ms busy wait passed at 76 to 79 %.
+- Does: (1) the detail counts the two kinds apart: "K of N pairs kept at least 70 % ..., F passed by
+  the floor of 4 per second alone (too few frames at the default for a share)". (2) The cause is a
+  window too short for the machine's frame rate, so `check-run.mjs` now measures the frames again
+  when a default window had fewer than 6: three new pairs of windows `frameWindowMs(pairs)` long,
+  twice the time the slowest such window needs for 6 frames, at least 1 s and at most 4 s
+  (`MAX_FRAME_WINDOW_MS`), and judges those; a note says so. A page with fewer than 1.5 frames
+  per second at the default still has fewer than 6 in 4 s and is judged by the floor, and the detail
+  says so. The
+  Maximum check keeps its half-second pairs. (3) The doc comment states what entry 44 measured:
+  on a display bound to its refresh (WebKit) an overrunning engine halves the rate; headless
+  Chromium loses only about a quarter at 20 ms (passes) and 60 % at 40 ms (fails).
+- Evidence: `run-verdicts.test.ts`, 26 tests (3 new: the reviewer's figures give "0 of 3 pairs
+  kept ..., 3 passed by the floor"; `frameWindowMs` gives null, 1000, 1200, 2000 and 4000 ms where
+  it should; in 1.2 s windows the reviewer's page of 10 frames per second that loses 60 % fails).
+  `check-run.mjs --browser all` on this PC: 116 of 116, the line unchanged in form ("3 of 3 pairs
+  kept ...": Chromium 60/60 per second, WebKit 62/63), no second measurement. A scratch copy that
+  always takes the second measurement (`build/SH3-R4/make-long-copy.mjs`, not in the tree),
+  `--pass run`: 82 of 82; both browsers print "measured again in windows of 1000 ms" and judge 60
+  to 65 frames per window (98 to 101 %).
+
+### 46. judgeFrames: a pair too short to judge does not pass (gate I3 round 4; entries 44 and 45)
+
+- Problem (left by entry 45, a reviewer's minor point): a pair with fewer than `MIN_JUDGED_FRAMES`
+  frames at the default still passed by the floor of 4 per second alone, so a large loss (2 frames
+  at Maximum against 5 at the default, 60 %) passed the check, and the check's caption, "the page
+  keeps its frames ... (at least 70 % of the default speed's frame rate in the same pair, in most of
+  three pairs)", claimed a share that was never judged. Entry 45 only made the detail count such
+  pairs apart.
+- Does: such a pair cannot show that the page kept its frames, so it does not pass. `ok` is true
+  only when a majority of the pairs kept the share (and the floor), which is exactly what the
+  caption says. The detail reads "K of N pairs kept at least 70 % of the default's frame rate, U had
+  too few frames at the default to judge (counted as not kept): ..."; a note says so, and when no
+  pair could be judged the failure says "the frames could not be judged". `check-run.mjs` keeps its
+  second measurement in longer windows (`frameWindowMs`, up to 4 s), so this fails only where the
+  page has fewer than 1.5 frames per second at the default speed even in 4 s windows; such a page
+  also fails the floor at Maximum in practice.
+- Evidence: `run-verdicts.test.ts` 26 tests (the reviewer's 2-against-5 pairs fail with the new
+  detail; one short pair among two kept ones passes as 2 of 3; one short pair with one lossy pair
+  fails); `node app/src/features/run/check-run.mjs --browser all` on 2026-11-22: 116 of 116, both
+  browsers "3 of 3 pairs kept at least 70 %" (Chromium 97 to 101 %, WebKit 98 to 103 %).
 
 ### 28. A session or controller disposed before it starts stays inert (3.12.3, 4.7.1)
 

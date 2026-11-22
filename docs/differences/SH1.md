@@ -13,8 +13,10 @@ original in every case below unless the row says otherwise. DOC1 merges this fil
 | The window while double buffering is off | drawn separately from the back buffer, each call a second time. `LineTo` on the window starts at the window canvas's own pen position, and a flood fill reads the window's own pixel, so the window can show something else than the back buffer (after an input prompt moved the window pen; while the window is partly covered) | the screen shows the back buffer | one picture (ARCHITECTURE.md 3.4 rule 9; trap15-b §4.1, task 89) | No. Task 83 reads the back buffer in the original too. The picture on screen can differ in those two rare cases |
 | The input prompt (`_`) and its erasing blank | painted on the window and left there until something is drawn over the cell or Windows repaints the window | a cell laid over the picture, removed at the next drawing call, task 94 or mode 16 | ARCHITECTURE.md 3.5.3 | No (task 83 never sees the prompt in either) |
 | Size of the surface | any size up to 65535 x 65535 that Windows grants | each side at most 4096 (`MAX_SURFACE`) | memory; ARCHITECTURE.md 2.5 | Yes: task 33 with `D1.L = 0` then returns the clamped size |
-| Ellipses and lines of a pen 2 or more pixels wide (until SH2 delivers) | GDI's shapes | stubs: an ideal ellipse; the band of a wide line without its round caps. A zero-length line and a one-point ellipse already draw GDI's dot at every pen width | wave order (ARCHITECTURE.md 9.2, 9.4) | Yes, pixel by pixel, until wave 2 |
 
 No longer a difference: the round dots of pens wider than 14 pixels. They were a plain disc until
 gate I1; they are now GDI's dots, measured for every pen width 2-255
-(`docs/porting/errata/SH1.md` entry 14).
+(`docs/porting/errata/SH1.md` entry 14). Nor are ellipses and lines of pens 2 or more pixels wide,
+which SH1 drew with stand-ins until SH2 delivered them in wave 2: they follow GDI's rules now, and
+the few wide-pen ellipses that are not yet Windows' pixels are listed by SH2
+(`docs/differences/SH2.md`).

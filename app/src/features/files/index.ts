@@ -7,7 +7,8 @@
 //                            (FilesRevealArg) shows it and reveals that path (reveal.ts)
 //   feature.panels           the Files panel of Editor mode (FilesPanel.tsx)
 //   feature.dialogs          file.open, file.save (FileDialog.tsx), files.name (NameDialog.tsx)
-//   feature.init             drops on the window (drop.ts), and the store's problems as messages
+//   feature.init             drops on the window (drop.ts), the store's problems as messages, and the
+//                            storage notice at the first write when the panel is not on the screen
 //
 // Owner: W3 > FS1.
 
@@ -24,6 +25,7 @@ import { NameDialog } from './NameDialog';
 import { EDITOR_OPEN_FILTERS, normalizeDefaultExt } from './filters';
 import { NATIVE_PROVIDER_ID, UPLOAD_PROVIDER_ID, canTakeDroppedFolder, markImportingUpload } from './providers';
 import { forgetPendingReveal, requestReveal, revealPathOf } from './reveal';
+import { watchFirstWrite } from './storage-notice';
 import { IMPORTED_DIR, displayPath, importOne } from './store';
 
 /**
@@ -211,9 +213,12 @@ export const feature: FeatureModule = {
   init(ctx) {
     const stopDrops = listenForDrops(ctx);
     const stopProblems = reportStoreProblems(ctx);
+    // The storage notice at the first write while the Files panel is not on the screen (R-10).
+    const stopNotice = watchFirstWrite(ctx);
     return () => {
       stopDrops();
       stopProblems();
+      stopNotice();
     };
   },
 };

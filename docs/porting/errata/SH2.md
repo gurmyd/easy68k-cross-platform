@@ -152,6 +152,21 @@ Surface calls (`rasterEllipse`, `strokeWideLine`) are unchanged apart from C2's 
   section 2 now lists every family that still differs with its measured scope, in place of the
   sentence "These are all the differences known".
 
+### 10. `docs/differences/SH2.md` was written outside SH2's paths (gate I3, item 3)
+
+- `docs/differences/SH2.md` (committed in a31a677) is SH2's fragment of `docs/DIFFERENCES.md`
+  (ARCHITECTURE.md section 8 gives `docs/differences/<package id>.md` to each package), but SH2 did
+  not write it: the first engineer of the release candidate's item 3 (text drawing), working for T2
+  and SH3, created it on 22 November 2026, so that the four wide-pen ellipses of SH2's suite
+  `ellipses-wide` that are not Windows' pixels (`-00125`, `-00158`, `-00195`, `-00428`; 496 of 500)
+  appear among the differences a user can read. The first review of text drawing pointed out that the
+  file was outside that engineer's paths; T2 and SH3 then left it untouched and asked SH2 to adopt or
+  correct it (`docs/requests/T2-sh2-differences.md`).
+- It is SH2's fragment now. Its figures are those of `docs/porting/gdi-deviations.md` (table row
+  "Ellipses, pen widths 2 to 8": 496 of 500, worst 3 pixels, `ellipses-wide-00125`; section 2 names
+  the four boxes). Written down in gate I3 round 4 by the engineer of that round's repairs, who
+  changed nothing in the fragment.
+
 ## Notes
 
 - Performance (Node 24, this machine, best of three): a 65,536 x 32,001 ellipse on a 640 x 480

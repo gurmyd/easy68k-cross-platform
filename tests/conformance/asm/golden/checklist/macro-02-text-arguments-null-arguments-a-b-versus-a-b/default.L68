@@ -1,0 +1,29 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:56:09 AM
+
+00000000                             1  M   MACRO
+00000000                             2      DC.B NARG
+00000000                             3      DC.B '\1'
+00000000                             4      ENDM
+00001000                             5      ORG $1000
+00001000                             6m     M <1,2>
+00001004                             7m     M <A<B>C>
+0000100A                             8m     M <<GT>>
+0000100F                             9m     M 'IT''S'
+Line 10 ERROR: Invalid syntax
+00001010=                           10m     DC.B ''ITS''
+00001010                            11m     M A, B
+00001012                            12m     M A ,B
+00001014                            13m     M '',X
+00001015                            14m     M this is a comment
+0000101A                            15      END $1000
+
+1 error detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+M                   0

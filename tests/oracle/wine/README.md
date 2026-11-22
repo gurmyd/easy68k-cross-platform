@@ -28,7 +28,10 @@ that do not have the SHA-256 of v5.16.1.
 
 `npm run oracle:wine:asm` is `asm/regenerate.mjs`. It assembles every program of the tracked sets
 (`tests/corpus/official`, `tests/corpus/github`, the conformance programs of
-`tests/conformance/asm`) with every option set the program has, and then rewrites
+`tests/conformance/asm`) with every option set the program has (the examples: default and the
+three expansion options together; the conformance programs: those of `checklist/programs.json`;
+the 30 programs of `tests/corpus/option-subset.json` also each of the eight assembler options
+switched alone), and then rewrites
 
 - `tests/conformance/asm/golden/<program id>/<option label>.L68` and `.S68` (a file is replaced
   only when it changed in more than its date line),
@@ -39,6 +42,7 @@ Useful variants (`node tests/oracle/wine/asm/regenerate.mjs --help` is the comme
 
 ```sh
 node tests/oracle/wine/asm/regenerate.mjs --only official/ --containers 2   # some programs
+node tests/oracle/wine/asm/regenerate.mjs --containers 4 --cpus 6            # at most 6 CPUs for all containers
 node tools/fetch-site-examples.mjs                                           # the site set (not redistributable)
 node tests/oracle/wine/asm/regenerate.mjs --sets site                        # ... its results: hashes in the manifest, files in build/golden-local/
 node tests/oracle/wine/asm/regenerate.mjs --sets site --check                # change nothing, exit 1 on a difference

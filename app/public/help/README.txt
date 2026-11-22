@@ -12,6 +12,10 @@ Changes made to the originals (nothing else is changed):
   - four links get target="_blank" (excode.htm, quickStart.htm, GNU General Public License.htm,
     Quick Reference.htm: the three web addresses and the PDF), because the frame that shows the
     pages cannot open a PDF or another site itself.
+  - every page starts its head with <meta http-equiv="Content-Security-Policy"
+    content="script-src 'none'">, so that no script can run in it; the import refuses a page with
+    a script, an event handler attribute, a javascript: address or a link to an address of the
+    site outside this folder.
 
 Added: EASy68KQuickRef.pdf (copied from the help project because Quick Reference.htm links to it),
 Port/differences.htm (the port's list of differences, rendered from docs/DIFFERENCES.md),

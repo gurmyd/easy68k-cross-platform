@@ -1,0 +1,41 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:58:59 AM
+
+00001000                             1      ORG $1000
+00001000  4E71                       2  zeta    NOP
+00001002  4E71                       3  ALPHA   NOP
+00001004  4E71                       4  _under  NOP
+00001006  4E71                       5  A   NOP
+00001008  4E71                       6  VERYLONGSYMBOLNAME_X    NOP
+0000100A                             7  M   MACRO
+0000100A                             8      ENDM
+0000100A                             9  R   REG D0
+0000100A  =FFFFFFFF                 10  NEG EQU -1
+00000000                            11  S   SECTION 3
+00000000  4E71                      12  .loc    NOP
+00000002                            13      IF D0 <EQ> #1 THEN
+00000002  B07C 0001                 14s     CMP.W   #1,D0
+00000006  6600 0002                 15s     BNE _00000000
+0000000A                            16      ENDI
+0000000A                            17s _00000000
+0000000A                            18      END $1000
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+A                   1006
+ALPHA               1002
+M                   0
+NEG                 FFFFFFFF
+R                   1
+S                   3
+S:LOC               0
+VERYLONGSYMBOLNAME_X  1008
+ZETA                1000
+_00000000           A
+_UNDER              1004

@@ -20,6 +20,31 @@ export const CORPUS_OPTION_SETS: Readonly<Record<'default' | 'expand', OracleOpt
   expand: { macrosExpanded: true, structuredExpanded: true, constantsExpanded: true },
 };
 
+/**
+ * The eight assembler options of the Assembler Options dialog, each switched alone from its shipped
+ * value, by the label `optionLabel` gives the run (ARCHITECTURE.md 6.9 item 1). The programs of
+ * tests/corpus/option-subset.json are assembled with each of them besides their other runs.
+ */
+export const SINGLE_OPTION_SETS: Readonly<Record<string, OracleOptions>> = {
+  nolist: { generateListing: false },
+  nosrec: { generateSRecord: false },
+  nowar: { showWarnings: false },
+  nocre: { crossReference: false },
+  mex: { macrosExpanded: true },
+  sex: { structuredExpanded: true },
+  cex: { constantsExpanded: true },
+  nobit: { bitFieldInstructions: false },
+};
+
+/**
+ * For a run with Generate Listing off: the label of the run with the same options and the listing
+ * on, whose listing names the undefined-symbol statements to mask in this run's S-records (erratum
+ * T1 20). Null for a run that has a listing of its own.
+ */
+export function listingOnLabel(options: OracleOptions): string | null {
+  return options.generateListing === false ? optionLabel({ ...options, generateListing: true }) : null;
+}
+
 /** Key text of settings.dat for each assembler option (optionsS.cpp:157-173). */
 const KEYS: Readonly<Record<keyof AsmOptions, string>> = {
   generateListing: 'generate list',

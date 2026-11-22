@@ -1,0 +1,264 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:50:13 AM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title         : graphicSound
+00000000                             3  * Written by    : Chuck Kelly
+00000000                             4  * Date Created  : May-3-2002
+00000000                             5  * Description   : Test simulator graphics
+00000000                             6  *
+00000000                             7  * The graphics resolution is 640 x 480 with 0,0 at the top left.
+00000000                             8  *  (see help for information on graphics and sound)
+00000000                             9  * Modification    : Oct-18-2008 by CK
+00000000                            10  * Dec-25-2012 by CK, Uses SIMHALT
+00000000                            11  *-----------------------------------------------------------
+00001000                            12      ORG    $1000
+00001000                            13  
+00001000                            14  START
+00001000                            15  
+00001000  223C 00FFFF00             16      move.l  #AQUA,d1        set pen color
+00001006  103C 0050                 17      move.b  #80,d0
+0000100A  4E4F                      18      trap    #15
+0000100C                            19  
+0000100C  7250                      20      move.l  #80,d1          X = 80
+0000100E  7450                      21      move.l  #80,d2          Y = 80
+00001010  103C 0052                 22      move.b  #82,d0
+00001014  4E4F                      23      trap    #15             draw pixel
+00001016                            24  
+00001016  103C 0053                 25      move.b  #83,d0
+0000101A  4E4F                      26      trap    #15             get pixel
+0000101C                            27  
+0000101C  223C 000000FF             28      move.l  #RED,d1
+00001022  103C 0050                 29      move.b  #80,d0
+00001026  4E4F                      30      trap    #15             set pen color
+00001028                            31  
+00001028  7264                      32      move.l  #100,d1         X = 100
+0000102A  243C 000000C8             33      move.l  #200,d2         Y = 200
+00001030  103C 0056                 34      move.b  #86,d0
+00001034  4E4F                      35      trap    #15             move to X,Y
+00001036                            36  
+00001036  223C 0000012C             37      move.l  #300,d1         X = 300
+0000103C  243C 00000190             38      move.l  #400,d2         Y = 400
+00001042  103C 0055                 39      move.b  #85,d0
+00001046  4E4F                      40      trap    #15             line to X,Y
+00001048                            41      
+00001048  223C 00FF0000             42      move.l  #BLUE,d1
+0000104E  103C 0050                 43      move.b  #80,d0
+00001052  4E4F                      44      trap    #15             set pen color
+00001054                            45  
+00001054  223C 00800000             46      move.l  #NAVY,d1
+0000105A  103C 0051                 47      move.b  #81,d0
+0000105E  4E4F                      48      trap    #15             set fill color
+00001060                            49  
+00001060  7214                      50      move.l  #20,d1          X1 = 20
+00001062  7414                      51      move.l  #20,d2          Y1 = 20
+00001064  763C                      52      move.l  #60,d3          X2 = 60
+00001066  783C                      53      move.l  #60,d4          Y2 = 60
+00001068  103C 0057                 54      move.b  #87,d0
+0000106C  4E4F                      55      trap    #15             draw filled rectangle
+0000106E                            56  
+0000106E  223C 0000FFFF             57      move.l  #YELLOW,d1
+00001074  103C 0050                 58      move.b  #80,d0
+00001078  4E4F                      59      trap    #15             set pen color
+0000107A                            60  
+0000107A  223C 00800080             61      move.l  #PURPLE,d1
+00001080  103C 0051                 62      move.b  #81,d0
+00001084  4E4F                      63      trap    #15             set fill color
+00001086                            64  
+00001086  7214                      65      move.l  #20,d1          X1 = 20
+00001088  243C 000000C8             66      move.l  #200,d2         Y1 = 300
+0000108E  7650                      67      move.l  #80,d3          X2 = 80
+00001090  283C 000000F0             68      move.l  #240,d4         Y2 = 340
+00001096  103C 0058                 69      move.b  #88,d0
+0000109A  4E4F                      70      trap    #15             draw filled ellipse
+0000109C                            71  
+0000109C  123C 0005                 72      move.b  #5,d1           pen width = 5
+000010A0  103C 005D                 73      move.b  #93,d0
+000010A4  4E4F                      74      trap    #15             set pen width
+000010A6                            75  
+000010A6  7205                      76      move.l  #5,d1           X1 = 5
+000010A8  243C 000000C8             77      move.l  #200,d2         Y1 = 300
+000010AE  263C 00000258             78      move.l  #600,d3         X2 = 600
+000010B4  283C 00000104             79      move.l  #260,d4         Y2 = 360
+000010BA  103C 005A                 80      move.b  #90,d0
+000010BE  4E4F                      81      trap    #15             draw unfilled rectangle
+000010C0                            82  
+000010C0  223C 000000B4             83      move.l  #180,d1         X1 = 180
+000010C6  243C 000000C8             84      move.l  #200,d2         Y1 = 300
+000010CC  263C 000000DC             85      move.l  #220,d3         X2 = 220
+000010D2  283C 000000F0             86      move.l  #240,d4         Y2 = 340
+000010D8  103C 005B                 87      move.b  #91,d0
+000010DC  4E4F                      88      trap    #15             draw unfilled ellipse
+000010DE                            89  
+000010DE  223C 00FF0000             90      move.l  #BLUE,d1
+000010E4  103C 0051                 91      move.b  #81,d0
+000010E8  4E4F                      92      trap    #15             set fill color
+000010EA                            93  
+000010EA  725A                      94      move.l  #90,d1          X1 = 90
+000010EC  243C 000000D2             95      move.l  #210,d2         Y1 = 310
+000010F2  103C 0059                 96      move.b  #89,d0
+000010F6  4E4F                      97      trap    #15             flood fill
+000010F8                            98  
+000010F8  123C 001E                 99      move.b  #30,d1          pen width = 30
+000010FC  103C 005D                100      move.b  #93,d0
+00001100  4E4F                     101      trap    #15             set pen width
+00001102                           102  
+00001102  223C 00FFFFFF            103      move.l  #WHITE,d1
+00001108  103C 0050                104      move.b  #80,d0
+0000110C  4E4F                     105      trap    #15             set pen color
+0000110E                           106  
+0000110E  720A                     107      move.l  #10,d1          X1 = 10
+00001110  243C 0000015E            108      move.l  #350,d2         Y1 = 400
+00001116  263C 00000276            109      move.l  #630,d3         X2 = 400
+0000111C  283C 0000015E            110      move.l  #350,d4         Y2 = 400
+00001122  103C 0054                111      move.b  #84,d0
+00001126  4E4F                     112      trap    #15             draw line from X1,Y1 to X2,Y2
+00001128                           113  
+00001128  223C 000000FF            114      move.l  #RED,d1
+0000112E  103C 0050                115      move.b  #80,d0
+00001132  4E4F                     116      trap    #15             set pen color
+00001134                           117  
+00001134  720A                     118      move.l  #10,d1          X1 = 10
+00001136  243C 0000017C            119      move.l  #380,d2         Y1 = 420
+0000113C  263C 00000276            120      move.l  #630,d3         X2 = 400
+00001142  283C 0000017C            121      move.l  #380,d4         Y2 = 420
+00001148  103C 0054                122      move.b  #84,d0
+0000114C  4E4F                     123      trap    #15             draw line from X1,Y1 to X2,Y2
+0000114E                           124  
+0000114E  223C 00008000            125      move.l  #GREEN,d1
+00001154  103C 0050                126      move.b  #80,d0
+00001158  4E4F                     127      trap    #15             set pen color
+0000115A                           128  
+0000115A  720A                     129      move.l  #10,d1          X1 = 10
+0000115C  243C 0000019A            130      move.l  #410,d2         Y1 = 440
+00001162  263C 00000276            131      move.l  #630,d3         X2 = 400
+00001168  283C 0000019A            132      move.l  #410,d4         Y2 = 440
+0000116E  103C 0054                133      move.b  #84,d0
+00001172  4E4F                     134      trap    #15             draw line from X1,Y1 to X2,Y2
+00001174                           135  
+00001174  223C 00FF0000            136      move.l  #BLUE,d1
+0000117A  103C 0050                137      move.b  #80,d0
+0000117E  4E4F                     138      trap    #15             set pen color
+00001180                           139  
+00001180  720A                     140      move.l  #10,d1          X1 = 10
+00001182  243C 000001B8            141      move.l  #440,d2         Y1 = 460
+00001188  263C 00000276            142      move.l  #630,d3         X2 = 400
+0000118E  283C 000001B8            143      move.l  #440,d4         Y2 = 460
+00001194  103C 0054                144      move.b  #84,d0
+00001198  4E4F                     145      trap    #15             draw line from X1,Y1 to X2,Y2
+0000119A                           146  
+0000119A                           147  
+0000119A                           148  * demonstrate the different drawing modes
+0000119A  123C 000A                149      move.b  #10,d1          pen width = 10
+0000119E  103C 005D                150      move.b  #93,d0
+000011A2  4E4F                     151      trap    #15             set pen width
+000011A4                           152  
+000011A4  223C 00808000            153      move.l  #TEAL,d1
+000011AA  103C 0050                154      move.b  #80,d0
+000011AE  4E4F                     155      trap    #15             set pen color
+000011B0                           156  
+000011B0  1A3C 0000                157      move.b  #0,d5           drawing mode starts at 0
+000011B4  3C3C 000A                158      move.w  #10,d6          X2, move this end of the line each time
+000011B8                           159  
+000011B8                           160      repeat     
+000011B8  1205                     161          move.b  d5,d1       drawing mode
+000011BA  103C 005C                162          move.b  #92,d0
+000011BE  4E4F                     163          trap    #15         set drawing mode
+000011C0                           164  
+000011C0  223C 00000140            165          move.l  #320,d1     X1 = 320
+000011C6  243C 00000280            166          move.l  #640,d2     Y1 = 640, NOTE this is below the bottom of the screen
+000011CC  2606                     167          move.l  d6,d3       X2 = d6
+000011CE  283C 000000C8            168          move.l  #200,d4     Y2 = 200
+000011D4  103C 0054                169          move.b  #84,d0
+000011D8  4E4F                     170          trap    #15         draw line from X1,Y1 to X2,Y2
+000011DA                           171  
+000011DA  0646 0028                172          add.w   #40,d6      move end of line for next mode
+000011DE  5205                     173          addq.b  #1,d5       next drawing mode
+000011E0  BA3C 000F                174          cmp.b   #15,d5      until all modes tried
+000011E4                           175      until.b d5 <hi> #15 do.s     
+000011EA                           176  
+000011EA                           177  * Load sounds into memory
+000011EA  43F9 00001240            178      lea     zero,a1         load "zero" wav
+000011F0  323C 0000                179      move    #0,d1           sound number 0
+000011F4  303C 0047                180      move    #71,d0
+000011F8  4E4F                     181      trap    #15
+000011FA                           182  
+000011FA  43F9 00001246            183      lea     one,a1          load "one" wav
+00001200  323C 0001                184      move    #1,d1           sound number 1
+00001204  303C 0047                185      move    #71,d0
+00001208  4E4F                     186      trap    #15
+0000120A                           187  
+0000120A                           188  * Play sounds from memory
+0000120A  323C 0001                189      move    #1,d1           play "one"
+0000120E  303C 0048                190      move    #72,d0
+00001212  4E4F                     191      trap    #15
+00001214                           192  
+00001214  323C 0000                193  play0 move  #0,d1           play "zero"
+00001218  303C 0048                194      move    #72,d0
+0000121C  4E4F                     195      trap    #15
+0000121E  4A40                     196      tst.w   d0              d0 = 0 if player is busy
+00001220  67F2                     197      beq     play0           loop until sound plays
+00001222                           198  
+00001222                           199  * Play sound directly from wav file
+00001222  43F9 00001236            200  playr lea   roger,a1
+00001228  303C 0046                201      move    #70,d0
+0000122C  4E4F                     202      trap    #15    
+0000122E  4A40                     203      tst.w   d0              d0 = 0 if player is busy
+00001230  67F0                     204      beq     playr           loop until sound plays
+00001232                           205  
+00001232  FFFF FFFF                206      SIMHALT                 Halt Simulator
+00001236                           207  
+00001236= 72 6F 67 65 72 2E ...    208  roger   dc.b    'roger.wav',0    sound file
+00001240= 30 2E 77 61 76 00        209  zero    dc.b    '0.wav',0    
+00001246= 31 2E 77 61 76 00        210  one     dc.b    '1.wav',0        
+0000124C                           211  
+0000124C  =00000000                212  BLACK   EQU    $00000000
+0000124C  =00000080                213  MAROON  EQU    $00000080
+0000124C  =00008000                214  GREEN   EQU    $00008000
+0000124C  =00008080                215  OLIVE   EQU    $00008080
+0000124C  =00800000                216  NAVY    EQU    $00800000
+0000124C  =00800080                217  PURPLE  EQU    $00800080
+0000124C  =00808000                218  TEAL    EQU    $00808000
+0000124C  =00808080                219  GRAY    EQU    $00808080
+0000124C  =000000FF                220  RED     EQU    $000000FF
+0000124C  =0000FF00                221  LIME    EQU    $0000FF00
+0000124C  =0000FFFF                222  YELLOW  EQU    $0000FFFF
+0000124C  =00FF0000                223  BLUE    EQU    $00FF0000
+0000124C  =00FF00FF                224  FUCHSIA EQU    $00FF00FF
+0000124C  =00FFFF00                225  AQUA    EQU    $00FFFF00
+0000124C  =00C0C0C0                226  LTGRAY  EQU    $00C0C0C0
+0000124C  =00FFFFFF                227  WHITE   EQU    $00FFFFFF
+0000124C                           228  
+0000124C                           229      END    START
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+AQUA                FFFF00
+BLACK               0
+BLUE                FF0000
+FUCHSIA             FF00FF
+GRAY                808080
+GREEN               8000
+LIME                FF00
+LTGRAY              C0C0C0
+MAROON              80
+NAVY                800000
+OLIVE               8080
+ONE                 1246
+PLAY0               1214
+PLAYR               1222
+PURPLE              800080
+RED                 FF
+ROGER               1236
+START               1000
+TEAL                808000
+WHITE               FFFFFF
+YELLOW              FFFF
+ZERO                1240
+_30000000           11B8

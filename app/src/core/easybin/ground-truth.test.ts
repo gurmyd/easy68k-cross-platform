@@ -40,6 +40,11 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
+/** Whether build/golden-local/asm exists and holds at least one golden .S68 file. */
+function localGoldenPresent(): boolean {
+  return existsSync(local) && walk(local).length > 0;
+}
+
 /** The save-back rule of the manifest tool: From = start, To = end + 1 (at most FFFFFF). */
 function saveLine(resultLine: string): string {
   const m = /^result (\d) start=([0-9A-F]{8}) end=([0-9A-F]{8})/.exec(resultLine);
@@ -100,7 +105,10 @@ describe('the official assembler outputs of the corpus', () => {
     expect(mismatches).toEqual([]);
   }, 600_000);
 
-  it.skipIf(!existsSync(local))(
+  // The local folder counts as present only when it holds at least one golden .S68: a test that
+  // writes below it and removes only its own sub-folder can leave empty folders behind
+  // (tests/oracle/wine/asm/regenerate.test.mjs did, gate I3 round 3), and those are no golden folder.
+  it.skipIf(!localGoldenPresent())(
     'the same for the local golden folder (build/golden-local/asm)',
     () => {
       // The tracked folder first (a no-op when the test above ran: compare skips what it has seen).

@@ -87,6 +87,8 @@ export interface KitOptions {
   scheduler?: Scheduler;
   /** false: do not start the controller; the test calls `controller.start()` itself. */
   start?: boolean;
+  /** `ControllerUi.cursorRow`: the listing row selected now. Absent = the member is absent. */
+  cursorRow?: () => number;
 }
 
 /** A step of a load that a test can make wait. */
@@ -438,6 +440,7 @@ export async function createKit(env: KitEnv, options: KitOptions = {}): Promise<
         ...options.commandLine,
       }),
       report: (what, error) => void note(`report:${what}: ${error instanceof Error ? error.message : String(error)}`),
+      ...(options.cursorRow ? { cursorRow: options.cursorRow } : {}),
     },
     ...(options.partsUntouched ? { partsUntouched: options.partsUntouched } : {}),
     ...(options.settingsUnchanged ? { settingsUnchanged: options.settingsUnchanged } : {}),

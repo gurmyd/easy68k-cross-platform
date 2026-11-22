@@ -4,8 +4,8 @@
     {
       "id": "checklist/dir-11-set-and-macro-lines-reached-only-in-pass-2-forwa",
       "label": "*",
-      "reason": "A SET line that only pass 2 reaches (it is inside `IFNE FWD`, and FWD is defined further down): the official assembler defines the symbol in pass 2, `DC.B S` assembles to 05 and there is no error. The port reports `Undefined symbol` for the DC.B line and emits 00 (1 error instead of 0).",
-      "owner": "engine/asm (PATCHES.md P14, assembler §9.3.9)",
+      "reason": "An `IFNE FWD` block with `S SET 5`, `DC.B S` and a MACRO, where FWD is defined further down: the official assembler gives `DC.B S` = 05, no error, and lists FWD, M and S in its symbol table. The port reports `Undefined symbol` for the DC.B line and emits 00 (1 error instead of 0; only FWD in the symbol table). In pass 1 eval pushes an unwritten local for the undefined FWD (EVAL.CPP:76): the port starts it at 0 (P7), so the block is skipped in pass 1 and in pass 2 define() finds no S (the case P14 guards); the original's value was not 0, so it assembled the block in pass 1 too. The native build of the unpatched sources reproduces the official listing.",
+      "owner": "engine/asm (PATCHES.md P7 at EVAL.CPP:76, assembler §9.3.3; P14, §9.3.9)",
       "ours": {
         "default": {
           "errors": 1,
@@ -18,9 +18,15 @@
     {
       "id": "checklist/macro-09-binary-constants-and-a-valid-printf-conversion-i",
       "label": "*",
-      "reason": "A macro body line with a valid printf conversion (`DC.B '%d%s%%'`): in the official assembler the expansion ends at that line - neither the line nor the ENDM line reaches the listing, no code is emitted for it and no error is reported. The port expands the line literally (6 bytes of object code more). The original passes the line to fprintf as the format string (assembler §9.3.4), so its result depends on what the conversions read from the stack; this is what the binary did under Wine.",
-      "owner": "engine/asm (PATCHES.md P5, assembler §9.3.4)",
+      "reason": "A macro body line with a valid printf conversion (`DC.B '%d%s%%'`): in the official assembler the expansion ends at that line, with Macros Expanded on and off - neither the line nor the ENDM line reaches the listing, no code is emitted for it (with the option off the next statement's address shows it: 1004 against the port's 100A) and no error is reported. The port expands the line literally (6 bytes of object code more). The original copies each macro body line into its macro store with fprintf(tmpFile, line) (MACRO.CPP:106, assembler §9.3.4), so the line is a format string and its result depends on what the conversions read from the stack; this is what the binary did under Wine, in this program. The port copies the line literally (P5).",
+      "owner": "engine/asm (PATCHES.md P5 at MACRO.CPP:106, assembler §9.3.4)",
       "ours": {
+        "default": {
+          "errors": 0,
+          "warnings": 0,
+          "l68": "34b31f264275608060788e95faae5f5b6b2d9c410d783ab78f75c85111d93e0e",
+          "s68": "6f41a2f6d77aa82b4c105bccc5d4a25f9d378d18c6fbd5b09f907e427344f2d5"
+        },
         "mex": {
           "errors": 0,
           "warnings": 0,

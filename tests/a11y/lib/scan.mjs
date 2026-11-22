@@ -13,7 +13,7 @@
 // when modal, a title that labels it, the focus inside a modal dialog, Tab and Shift+Tab staying
 // inside, and the focus back where it was after Escape.
 
-/* global document, window */
+/* global document, window, getComputedStyle */
 
 import { AxeBuilder } from '@axe-core/playwright';
 import { classify, droppedLabels, findingsOf, isBlocking, partitionDroppedLabels } from './findings.mjs';
@@ -539,8 +539,84 @@ export async function scanPart({ browser, name, os, baseUrl, report, outDir, eng
     } finally {
       await context.close();
     }
+    if (name === 'webkit') await storageNoticeStep({ browser, os, baseUrl, theme, prefix, report, all, outDir });
   }
   return { findings: all, covered, registered };
+}
+
+/**
+ * The Files panel with the Safari storage notice (R-10; errata FS1.md entry 28), which an automated
+ * browser shows only with ?storage-notice=1, and only in WebKit (Chromium has no seven-day rule):
+ * scanned like the other states, and its structure checked (2.11): a note with a name, two named
+ * buttons that Tab reaches with a visible focus, no live region, the focus not taken.
+ */
+async function storageNoticeStep({ browser, os, baseUrl, theme, prefix, report, all, outDir }) {
+  const context = await newContext(browser, os, { colorScheme: theme });
+  const { page, errors } = await openApp(context, baseUrl, '?storage-notice=1');
+  try {
+    await page.evaluate((value) => window.__easy68k.ctx.commands.run('app.theme.set', value), theme);
+    await waitFor(page, (value) => document.documentElement.getAttribute('data-theme') === value, theme, 5000);
+    const shown = await waitFor(
+      page,
+      () => document.querySelector('[data-e68-panel="files"] [role=note]') !== null,
+      null,
+      15_000,
+    );
+    report.check(`${prefix}: the Files panel shows the storage notice with storage-notice=1`, shown);
+    if (!shown) return;
+    await axeScan(page, `${prefix} editor with the storage notice in the Files panel`, report, all);
+    await shoot(page, outDir, `${prefix}-storage-notice`.replace(/\s+/g, '-'));
+    const facts = await page.evaluate(() => {
+      const note = document.querySelector('[data-e68-panel="files"] [role=note]');
+      const buttons = [...note.querySelectorAll('button')];
+      const live =
+        note.closest('[aria-live], [role=status], [role=alert], [role=log]') ??
+        note.querySelector('[aria-live], [role=status], [role=alert]');
+      return {
+        name: note.getAttribute('aria-label') ?? '',
+        text: note.textContent?.trim().length ?? 0,
+        buttons: buttons.map((b) => (b.getAttribute('aria-label') ?? b.textContent ?? '').trim()),
+        live: live !== null,
+        focusInside: note.contains(document.activeElement),
+      };
+    });
+    report.check(
+      `${prefix}: the storage notice is a named note with named buttons, not a live region, and takes no focus`,
+      facts.name !== '' &&
+        facts.text > 40 &&
+        facts.buttons.length === 2 &&
+        facts.buttons.every((b) => b !== '') &&
+        !facts.live &&
+        !facts.focusInside,
+      JSON.stringify(facts),
+    );
+    // Tab from the panel's strip reaches each of the notice's buttons, each with a visible focus.
+    await page.locator('[data-e68-panel="files"] .e68-files__strip button').first().focus();
+    const reached = [];
+    for (let i = 0; i < 8 && reached.length < 2; i++) {
+      await page.keyboard.press('Tab');
+      const focus = await page.evaluate(() => {
+        const element = document.activeElement;
+        if (!element?.closest('[role=note]')) return null;
+        const style = getComputedStyle(element);
+        const ring = style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0;
+        return { name: element.textContent.trim(), visible: ring || style.boxShadow !== 'none' };
+      });
+      if (focus) reached.push(focus);
+    }
+    report.check(
+      `${prefix}: Tab reaches both buttons of the storage notice with a visible focus`,
+      reached.length === 2 && reached.every((r) => r.visible),
+      JSON.stringify(reached),
+    );
+    report.check(
+      `${prefix}: storage notice: no console or page errors`,
+      errors.length === 0,
+      errors.slice(0, 3).join(' | '),
+    );
+  } finally {
+    await context.close();
+  }
 }
 
 /** documents.drafts: a modified document, the draft written (2 s), the page reloaded. */

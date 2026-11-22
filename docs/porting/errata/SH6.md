@@ -162,6 +162,51 @@ owners" name a defect or a question that is not SH6's to change.
     without reading the file" and "an append the copy cannot follow ... reads the file". Not
     measured again in Chromium with a 30 MB log (the 122 ms of entry 5a was U4's figure).
 
+14. **Windows device names (gate I3 round 3; T3's a58).** The original passes the program's name
+    to `fopen`, so a name Windows reads as a device reaches the device, not a file. Which names
+    those are was measured on this project's reference machine, Windows 11 10.0.26300, with
+    `GetFullPathNameW`, `RtlIsDosDeviceName_U` and `CreateFileA` as Borland's `fopen` calls it
+    (`GENERIC_READ | GENERIC_WRITE`, `CREATE_ALWAYS` for `"w+b"` and `OPEN_EXISTING` for `"r+b"`),
+    then `WriteFile` 3 bytes, `SetFilePointer` to 0 and to 5, `ReadFile` 3, `CloseHandle`, and
+    `DeleteFileA` (probe script kept in the round's scratch folder):
+
+    | Name | Windows 11 | Port now |
+    |---|---|---|
+    | `NUL`, `nul`, `nUl`, `NUL `, `NUL.`, `NUL..`, `NUL:`, `NUL :`, `NUL::`, `NUL. .` | null device: open ok in both dispositions, write 3 ok, seek 0 and 5 ok, read 0 bytes (end of file), close ok; nothing created; `DeleteFile` fails (error 5) | null device, the same |
+    | `.\NUL`, `..\NUL`, `folder\NUL` (folder exists), `nofolder\..\NUL`, `folder\nul .`, `folder/NUL`, `\NUL`, `/NUL`, `C:\NUL`, `C:NUL`, `C:\Windows\NUL`, `\\.\NUL`, `\\?\NUL` | null device | null device |
+    | `nofolder\NUL`, `folder\folder2\NUL` (folder missing), `Z:\NUL` (no drive Z:) | open fails, error 3 (path not found) | null device: `SyncFiles` cannot say whether a folder exists (differences SH6.md) |
+    | `NUL.txt`, `nul.dat.x`, `NUL .txt`, `folder\NUL.txt`, ` NUL`, `NUL\.`, `NULL`, `NUL1` | ordinary files (Microsoft's naming documentation and older Windows read `NUL.txt` as the device; Windows 11 does not) | ordinary files, as before |
+    | `CON`, `PRN`, `AUX`, `COM1`-`COM9`, `LPT1`-`LPT9`, `COM¹ COM² COM³ LPT¹ LPT² LPT³`, `CONIN$`, `CONOUT$`, with trailing spaces, periods or a colon (`COM1:`, `prn.`, `aux `, `CON:`) | devices, but only as the whole name. `PRN` on this PC: open fails (error 2, no printer port); `AUX` hung in `CreateFile` (a port exists); a GUI program such as SIM68K.exe has no console, so `CON` does not open | do not open (`D0.W = 2`), task 59 gives 2, task 57 fails; no file of that name is created or removed |
+    | `folder\CON`, `.\COM1`, `\CON`, `C:\COM1`, `con.txt`, `COM1.txt`, `LPT1.log`, `aux.c`, `COM0`, `LPT0`, `COM10`, `CLOCK$` | ordinary files on Windows 11 | ordinary files, as before |
+
+    `ProgramFiles.deviceOf()` implements the table; `fileOpen`, `fileRemove` and `read` ask it before
+    any view, so the browser store, an opened folder and the desktop app's disk behave alike, and a
+    file named `NUL` on a Mac's disk is never reached. Null streams take their handles from the same
+    counter as the others. Tests: `program-files.test.ts` ("ProgramFiles: Windows devices", six
+    cases) and `program-files.engine.test.ts` ("NUL: task 52, 54, 55, 56, 59, 51, 53, 57 ..."); a58
+    produces its golden.
+
+15. **Changes coalesced behind a running refresh (gate I3 round 3; another engineer's hypothesis,
+    confirmed).** `changed()` kept only the last change that arrived while a refresh of the same
+    path ran (`running.again = change`). When another window's write (no `appended`) was waiting
+    there and this window's own append (U4's log: a 'local' change with `appended`) replaced it, the
+    next refresh added the appended bytes to a copy that had never seen the other window's write:
+    storage `XYZd`, the program's copy `ABCd`. Now a change that arrives while another one is
+    already waiting is kept without `appended`, so that the refresh reads the file whole; a single
+    waiting append is still applied without a read. Test: `cached.test.ts`, "another window's
+    change waiting behind a running refresh is not lost to an append that follows" (it gives `ABCd`
+    without the repair).
+
+16. **revalidate() beyond limits.maxFiles (gate I3 round 3; found by another package's verifier).**
+    With 50 program files and 3,000 others in a folder, `prepare()` loaded `DEFAULT_SNAPSHOT_LIMITS.
+    maxFiles` (2,000) and named the rest, but `revalidate()` then loaded 3,050, because it read every
+    file new to the view through `reload()`, which checked only the byte limits. `reload()` now
+    applies the file count to a file that is not in memory yet, with the same message as `prepare()`
+    (`Not available to the program: <path> (too many files)`, once per file). This also covers new
+    files that the Vfs reports (a save, another window), which took the same way. Test:
+    `cached.test.ts`, "revalidate() and the changes others report load no more files than prepare()
+    (maxFiles)" (3,050 without the repair).
+
 ## Contract
 
 C1. **`OpenRequest` cannot carry an initial file name, and `SaveRequest` no start folder.** The
@@ -247,8 +292,8 @@ E6. **SH8 and the contracts engineer (`SimSession.printJobs`, gate I2):** the se
    52, 59: **answered** (T3.md F8, a57): the original agrees.
 8. Task 52 on `NUL` and `CON` (Windows devices; the port creates ordinary files): **measured under
    Wine for `NUL`** (T3.md F8, a58): a read gives end of file where the port reads back what it
-   stored. Not repaired yet: T3 marks it unconfirmed until it runs on Windows (Wine's null device);
-   `CON` was not measured.
+   stored. **Repaired in gate I3 round 3** (entry 14), from a measurement on Windows 11 of every
+   device name.
 9. Task 10: the job a form feed sends (with a PDF printer as the default printer), to compare the
    page geometry of 3.8.4 (margins 1/8 and 1/11 of the page, cell from Courier New 10). Items 3, 4,
    5 and 9 cannot be measured with the oracle's recipes (T3.md F8).
