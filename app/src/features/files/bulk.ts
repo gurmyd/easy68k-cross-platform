@@ -20,7 +20,7 @@ import { cannotKeepQuestion, type CannotKeepCommand } from '../../core/history/t
 import { basename, childPath, dirname, isWithin, sameName, splitVPath } from '../../core/paths/winpath';
 import type { ZipInput } from '../../fs/zip';
 import { writeZip } from '../../fs/zip';
-import { findGitHolder, innerName, isGitName } from './git-guard';
+import { findGitHolder, gitRefusalFor, innerName, isGitName } from './git-guard';
 import { buildExport, displayPath, locations, sortEntries, type ExportFile } from './store';
 import {
   CANNOT_BE_UNDONE,
@@ -108,6 +108,7 @@ export function cannotKeepConfirm(
       text: cannotKeepQuestion(command, name, isFolder),
       icon: 'warning',
       buttons: ['Yes', 'No'],
+      defaultButton: 'No', // P3.3.4: No has the focus
     })) === 'Yes';
 }
 
@@ -337,6 +338,17 @@ export async function deleteItems(deps: FilesDeps, selected: readonly VPath[]): 
   }
   if (planned.length === 0 && linked.length === 0) return outcome;
 
+  // Nothing below a folder named .git is removed (P1.1 rule 2), nor in an opened folder that is
+  // itself a repository's .git folder (errata N5 entry 15).
+  const gitText = gitRefusalFor(
+    vfs,
+    planned.map((p) => p.path),
+  );
+  if (gitText !== null) {
+    await inform(deps, DELETE_TITLE, gitText);
+    return outcome;
+  }
+
   // A folder that holds .git is not deleted: nothing is (the first in the tree's order is named).
   for (const { path, item } of planned) {
     if (!item.isFolder) continue;
@@ -364,6 +376,7 @@ export async function deleteItems(deps: FilesDeps, selected: readonly VPath[]): 
     text,
     icon: 'confirmation',
     buttons: ['Yes', 'No'],
+    defaultButton: 'No', // P3.2.2: No has the focus
   });
   if (answer !== 'Yes') return outcome;
   outcome.confirmed = true;

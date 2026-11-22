@@ -24,7 +24,7 @@ import { ADDRESS_FIELD, INTERVAL_FIELD, REGISTER_FIELD, SR_FIELD, formatMaskedVa
 import { Menu } from '../Menu';
 import { MenuBar } from '../MenuBar';
 import type { MenuSelectable } from '../menu-model';
-import { MessageBox, type MessageBoxButton, type MessageBoxIcon } from '../MessageBox';
+import { MessageBox, messageBoxDefaultIndex, type MessageBoxButton, type MessageBoxIcon } from '../MessageBox';
 import { RadioGroup } from '../RadioGroup';
 import { Select } from '../Select';
 import { SpinField } from '../SpinField';
@@ -52,6 +52,14 @@ import {
   moveItemBefore,
   type ToolSample,
 } from './samples';
+
+/** A sample's default button as the kit's index, as DialogHost turns MessageBoxRequest.defaultButton into it. */
+function sampleDefaultIndex(sample: (typeof MESSAGE_SAMPLES)[number]): number {
+  return messageBoxDefaultIndex(
+    sample.buttons as readonly MessageBoxButton[],
+    'defaultButton' in sample ? sample.defaultButton : undefined,
+  );
+}
 
 export interface GalleryProps {
   initialTheme?: ThemeSetting;
@@ -1424,9 +1432,17 @@ function DialogsSection({ report }: { report: Report }) {
             {MESSAGE_SAMPLES.map((sample, index) => (
               <Button
                 key={sample.title}
-                caption={`Message box: ${sample.icon}`}
+                caption={
+                  'defaultButton' in sample
+                    ? `Message box: ${sample.icon}, ${sample.defaultButton} the default`
+                    : `Message box: ${sample.icon}`
+                }
                 onClick={() => setOpen({ kind: 'message', index })}
-                data-testid={`open-message-${sample.icon}`}
+                data-testid={
+                  'defaultButton' in sample
+                    ? `open-message-default-${sample.defaultButton.toLowerCase()}`
+                    : `open-message-${sample.icon}`
+                }
               />
             ))}
           </div>
@@ -1457,6 +1473,7 @@ function DialogsSection({ report }: { report: Report }) {
             text={sample.text}
             icon={sample.icon as MessageBoxIcon}
             buttons={sample.buttons as readonly MessageBoxButton[]}
+            defaultButton={sampleDefaultIndex(sample)}
             onResult={(button) => report(`${sample.title}: ${button}`)}
           />
         ))}
@@ -1610,6 +1627,7 @@ function DialogsSection({ report }: { report: Report }) {
           text={message.text}
           icon={message.icon as MessageBoxIcon}
           buttons={message.buttons as readonly MessageBoxButton[]}
+          defaultButton={sampleDefaultIndex(message)}
           onResult={(button) => {
             setOpen(null);
             report(`${message.title}: ${button}`);

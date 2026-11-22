@@ -26,7 +26,7 @@
 // production build. Screenshots go to build/N7-plus/additions-check (git-ignored).
 // Exit code 0 = everything passed. `window.__easy68k` exists in development builds only.
 
-/* global console, process, window, document, navigator, TextEncoder, TextDecoder */
+/* global console, process, window, document, navigator, TextEncoder, TextDecoder, getComputedStyle */
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { createServer as createNetServer } from 'node:net';
@@ -168,6 +168,34 @@ async function formatSizeIn(page, bytes) {
 
 // ---- the dialog --------------------------------------------------------------------------------
 
+/**
+ * The Storage group's frame is drawn whole: the legend (which the browser cuts out of the top
+ * border) is no wider than its caption, so the border goes on right of it to the corner. WebKit
+ * stretched the legend of this flex-column fieldset to the whole width, leaving the top border out
+ * from the caption to the right corner (gate finding).
+ */
+async function groupFrame(dialog, p, theme) {
+  const box = await dialog.locator('fieldset.e68-additions__storage').evaluate((fieldset) => {
+    const legend = fieldset.querySelector(':scope > legend');
+    const style = legend ? getComputedStyle(legend) : null;
+    const pad = style ? parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) : 0;
+    // The caption's own width: the extent of the legend's contents (text or elements).
+    const range = document.createRange();
+    if (legend) range.selectNodeContents(legend);
+    return {
+      fieldset: Math.round(fieldset.getBoundingClientRect().width),
+      legend: legend ? Math.round(legend.getBoundingClientRect().width) : -1,
+      caption: legend ? Math.round(range.getBoundingClientRect().width + pad) : -1,
+      border: getComputedStyle(fieldset).borderTopStyle,
+    };
+  });
+  check(
+    `${p} the Storage group's top border runs on right of its caption (${theme})`,
+    box.legend > 0 && box.legend <= box.caption + 2 && box.legend < box.fieldset / 2 && box.border === 'solid',
+    JSON.stringify(box),
+  );
+}
+
 async function dialogPass(browser, name) {
   const p = `${name}:`;
   const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, reducedMotion: 'reduce' });
@@ -250,6 +278,7 @@ async function dialogPass(browser, name) {
   check(`${p} without an argument the focus starts on the default button OK`, focused === 'OK', String(focused));
   await page.screenshot({ path: join(outDir, `${name}-dialog-light.png`) });
   await scan(page, `${name} Port Additions (light)`);
+  await groupFrame(dialog, p, 'light');
 
   // Cancel stores nothing; Escape neither.
   const before = await plus(page);
@@ -390,6 +419,11 @@ async function dialogPass(browser, name) {
   await box.getByRole('button', { name: 'No', exact: true }).click();
   await box.waitFor({ state: 'hidden' });
   check(`${p} No keeps the Trash`, (await page.evaluate(() => window.__easy68k.ctx.history.usage())).trashItems === 1);
+  await page
+    .waitForFunction(() => document.activeElement?.textContent?.trim() === 'Empty Trash', null, { timeout: 5_000 })
+    .catch(() => {});
+  const afterNo = await page.evaluate(() => document.activeElement?.textContent?.trim() ?? null);
+  check(`${p} after No the focus is back on Empty Trash`, afterNo === 'Empty Trash', String(afterNo));
   await emptyButton.click();
   box = messageBox(page);
   await box.waitFor();
@@ -468,6 +502,55 @@ async function dialogPass(browser, name) {
     JSON.stringify(final),
   );
 
+  // A click on the other button at once after a Yes, while that action may still be finishing, is
+  // acted on: its question appears (gate finding: WebKit used to drop it without a sign).
+  await page.evaluate(async () => {
+    const { vfs, history } = window.__easy68k.ctx;
+    const bytes = (text) => new TextEncoder().encode(text);
+    for (const [i, text] of ['a', 'b'].entries()) {
+      await vfs.writeFile('/browser/n7-check/again.X68', bytes(text));
+      await history.record('/browser/n7-check/again.X68', bytes(text), 'saved', Date.now() - 1000 + i);
+    }
+    await vfs.writeFile('/browser/n7-check/gone2.X68', bytes('gone again'));
+    await history.guard(
+      '/browser/n7-check/gone2.X68',
+      'delete',
+      async () => vfs.remove('/browser/n7-check/gone2.X68'),
+      async () => true,
+    );
+  });
+  await startCommand(page, 'app.additions.options');
+  await dialog.waitFor();
+  await waitLine(dialog, 'trash', /^Trash: 1 item, /);
+  await dialog.getByRole('button', { name: 'Empty Trash', exact: true }).click();
+  box = messageBox(page);
+  await box.waitFor();
+  await box.getByRole('button', { name: 'Yes', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Delete Earlier Versions', exact: true }).click({ timeout: 10_000 });
+  box = messageBox(page);
+  const appeared = await box
+    .waitFor({ timeout: 15_000 })
+    .then(() => true)
+    .catch(() => false);
+  const appearedText = appeared ? await textOf(box.locator('.e68-messagebox__text')) : null;
+  check(
+    `${p} a click on Delete Earlier Versions at once after Yes on Empty Trash asks its question`,
+    appeared && appearedText === TEXT.deleteVersions,
+    String(appearedText),
+  );
+  if (appeared) {
+    await box.getByRole('button', { name: 'No', exact: true }).click();
+    await box.waitFor({ state: 'hidden' });
+  }
+  const afterBoth = await page.evaluate(() => window.__easy68k.ctx.history.usage());
+  check(
+    `${p} ... and the Trash was emptied while the versions stay (No)`,
+    afterBoth.trashItems === 0 && afterBoth.versions > 0,
+    JSON.stringify(afterBoth),
+  );
+  await page.keyboard.press('Escape');
+  await commandDone(page);
+
   // The dark theme.
   await page.evaluate(() => window.__easy68k.ctx.settings.update((s) => ({ ...s, app: { ...s.app, theme: 'dark' } })));
   await page.waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'dark');
@@ -476,6 +559,7 @@ async function dialogPass(browser, name) {
   await lines(dialog);
   await page.screenshot({ path: join(outDir, `${name}-dialog-dark.png`) });
   await scan(page, `${name} Port Additions (dark)`);
+  await groupFrame(dialog, p, 'dark');
   await page.keyboard.press('Escape');
   await commandDone(page);
   await page.evaluate(() => window.__easy68k.ctx.settings.update((s) => ({ ...s, app: { ...s.app, theme: 'light' } })));

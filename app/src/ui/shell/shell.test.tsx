@@ -277,6 +277,30 @@ describe('dialogs and toasts', () => {
     expect(html.match(/e68-button__caption/g)).toHaveLength(2);
   });
 
+  // docs/requests/N5-default-button.md: MessageBoxRequest.defaultButton reaches the kit's MessageBox.
+  const defaultCaption = (html: string): string[] =>
+    [...html.matchAll(/<button[^>]*data-e68-default="true"[^>]*>(.*?)<\/button>/g)].map((m) =>
+      (m[1] ?? '').replace(/<[^>]+>/g, ''),
+    );
+
+  it('makes the first button the default when the request names none (as before)', () => {
+    const app = createTestApplication();
+    void app.ctx.dialogs.messageBox({ title: 'Delete', text: 'Sure?', icon: 'warning', buttons: ['Yes', 'No'] });
+    expect(defaultCaption(render(app))).toEqual(['Yes']);
+  });
+
+  it('makes the button named by defaultButton the default (No for the question of P3.3.4)', () => {
+    const app = createTestApplication();
+    void app.ctx.dialogs.messageBox({
+      title: 'Delete',
+      text: 'Sure?',
+      icon: 'warning',
+      buttons: ['Yes', 'No'],
+      defaultButton: 'No',
+    });
+    expect(defaultCaption(render(app))).toEqual(['No']);
+  });
+
   it("draws a feature's dialog with its props, and nothing for a closed one", () => {
     function Find({ props }: DialogProps<{ text: string }, string | null>) {
       return <aside>Find what: {props.text}</aside>;

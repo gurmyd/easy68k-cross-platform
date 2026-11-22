@@ -93,6 +93,11 @@ const FORBIDDEN: [string, string][] = [
   ['app/src/ui/dock/DockWorkspace.tsx', "import { vfs } from '../../fs/vfs';"],
   ['app/src/ui/dock/DockWorkspace.tsx', "import lodash from 'lodash';"],
   ['app/src/features/layout/index.ts', "import { DockWorkspace } from '../../ui/dock/DockWorkspace';"],
+  // fake-indexeddb only in the one test-only file fs/history-memory.ts (N0.md section 7 item 1).
+  ['app/src/fs/history-db.ts', "import { IDBFactory } from 'fake-indexeddb';"],
+  ['app/src/fs/history-memory-other.ts', "import { IDBFactory } from 'fake-indexeddb';"],
+  ['app/src/state/testing.ts', "import { IDBFactory } from 'fake-indexeddb';"],
+  ['app/src/fs/history-memory.ts', "import lodash from 'lodash';"],
 ];
 
 /** [file, code] pairs that must pass. */
@@ -158,6 +163,11 @@ const ALLOWED: [string, string][] = [
   ],
   ['app/src/state/panels.ts', "import { dockOf } from './dock';"],
   ['app/src/features/viewer/index.ts', "import { dockOf } from '../../state/dock';"],
+  // The history store over a fake IndexedDB, imported only by tests (N0.md section 7 item 1).
+  [
+    'app/src/fs/history-memory.ts',
+    "import { IDBFactory, IDBKeyRange } from 'fake-indexeddb';\nimport { createHistoryStore } from './history-db';",
+  ],
 ];
 
 describe('layer rules of ARCHITECTURE.md 3.1', () => {

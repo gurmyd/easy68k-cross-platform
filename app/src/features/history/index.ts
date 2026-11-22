@@ -50,7 +50,10 @@ export const feature: FeatureModule = {
   id: 'history',
   commands: {
     'ed.file.history': {
-      enabled: (_state, ctx) => ctx.history !== undefined && versionsPathOf(ctx) !== null,
+      // P3.6: enabled while ctx.history exists and the path (the argument's, else the active
+      // document's) is a file outside /memory. Menus ask without an argument; the Files panel's
+      // context menu runs it with the row's path, whatever document is active (errata N4 entry 10).
+      enabled: (_state, ctx, arg) => ctx.history !== undefined && versionsPathOf(ctx, arg) !== null,
       async run(ctx, arg) {
         const path = versionsPathOf(ctx, arg);
         if (!ctx.history || path === null) return;

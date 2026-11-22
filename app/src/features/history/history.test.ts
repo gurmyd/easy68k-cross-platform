@@ -9,6 +9,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import type {
+  AppContext,
   Bytes,
   DialogService,
   DocumentService,
@@ -40,6 +41,7 @@ import { createVfs } from '../../fs/vfs';
 import { createTestApplication } from '../../state/testing';
 import { createDocumentService } from '../documents';
 import { feature, versionsPathOf } from './index';
+import { openAsNewDocument } from './open-as-new';
 import { startRecording } from './recording';
 import {
   CAUSE_SHOWN_AS,
@@ -444,11 +446,13 @@ describe("Earlier Versions' Restore (P3.3.8, P3.3.4)", () => {
       // The versions kept before are still listed under the switched-off line.
       const view = describeVersions({ state: 'off', unreadable: 0, detail: '', rows: versions, reason: null });
       expect(view).toEqual({ kind: 'list', lines: [SWITCHED_OFF_LINE], rows: versions, empty: null });
-      const question: MessageBoxRequest = {
+      // No has the focus (P3.3.4; defaultButton as docs/requests/N5-default-button.md asks for it).
+      const question: MessageBoxRequest & { defaultButton: 'No' } = {
         title: 'Restore',
         text: cannotKeepQuestion('restore', 'p.X68', false),
         icon: 'warning',
         buttons: ['Yes', 'No'],
+        defaultButton: 'No',
       };
       t.answers.push('No');
       expect(await restoreVersion(t.deps, '/browser/p.X68', versions[1]!.seq)).toBe('declined');
@@ -743,6 +747,48 @@ describe('the commands ed.file.history and app.files.trash (P3.6)', () => {
     },
     SLOW,
   );
+
+  it(
+    'Earlier Versions... with an explicit path opens the dialog for it, also while an untitled document is active',
+    async () => {
+      const { ctx, documents } = application();
+      documents.newSource();
+      // The menus ask without an argument: the untitled active document decides (P3.6).
+      expect(ctx.commands.isEnabled('ed.file.history')).toBe(false);
+      // The Files panel's context menu passes the row's path (N5): that path decides.
+      expect(ctx.commands.isEnabled('ed.file.history', { path: '/browser/other.X68' })).toBe(true);
+      expect(ctx.commands.isEnabled('ed.file.history', { path: '/memory/x.X68' })).toBe(false);
+      expect(ctx.commands.isEnabled('ed.file.history', { path: '/browser' })).toBe(false);
+      void ctx.commands.run('ed.file.history', { path: '/browser/other.X68' });
+      await settle(undefined);
+      expect(ctx.store.getState().dialogs.stack).toMatchObject([
+        { id: VERSIONS_DIALOG_ID, props: { path: '/browser/other.X68' }, modal: true },
+      ]);
+    },
+    SLOW,
+  );
+
+  it('Open as New Document uses DocumentService.newSourceWithText when there is one, else the editor', () => {
+    const made: string[] = [];
+    let registered = 0;
+    const editorExtensions = {
+      register: () => {
+        registered++;
+        return () => {};
+      },
+    } as unknown as AppContext['editorExtensions'];
+    const doc = { id: 'd1', path: null, modified: true } as unknown as DocumentState;
+    const withText = {
+      newSource: () => (made.push('template'), doc),
+      newSourceWithText: (text: string) => (made.push(text), doc),
+    } as unknown as AppContext['documents'];
+    expect(openAsNewDocument({ documents: withText, editorExtensions }, 'ORG $1000\n')).toBe(doc);
+    expect([made, registered]).toEqual([['ORG $1000\n'], 0]);
+    made.length = 0;
+    const without = { newSource: () => (made.push('template'), doc) } as unknown as AppContext['documents'];
+    expect(openAsNewDocument({ documents: without, editorExtensions }, 'ORG $1000\n')).toBe(doc);
+    expect([made, registered]).toEqual([['template'], 1]);
+  });
 
   it('without ctx.history both are disabled', () => {
     const app = createTestApplication({

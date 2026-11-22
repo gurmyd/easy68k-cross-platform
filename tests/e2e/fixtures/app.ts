@@ -10,7 +10,7 @@
 //     characters are drawn by a widget, so the DOM text does not contain them);
 //   - `select()` puts the caret or a selection at character offsets, as a mouse drag would.
 //
-// Bytes in storage are read back with the Files panel's Export... (a download) and written with its
+// Bytes in storage are read back with the Files panel's Export (a download) and written with its
 // Import... (a file chooser) or by dropping files, as a student does.
 
 import type { Download, Locator, Page } from '@playwright/test';
@@ -400,13 +400,17 @@ export class App implements ProbeHost {
     for (const file of files) await expect(this.treeItem(file.name)).toBeVisible();
   }
 
-  /** Downloads a file of the Files panel with Export... and returns its bytes. */
+  /**
+   * Downloads a file of the Files panel with its Export button and returns its bytes. The button's
+   * name says what it exports (ARCHITECTURE-PLUS P3.2.3): with the one file selected it is
+   * `Export "<name>"`, so a click on it can only export that file.
+   */
   async exportFile(name: string): Promise<Uint8Array> {
     await this.showFiles();
     await this.treeItem(name).click();
     const [download] = await Promise.all([
       this.page.waitForEvent('download', { timeout: 60_000 }),
-      this.filesPanel.getByRole('button', { name: 'Export...' }).click(),
+      this.filesPanel.getByRole('button', { name: `Export "${name}"`, exact: true }).click(),
     ]);
     return readDownload(download);
   }

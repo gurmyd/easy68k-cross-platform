@@ -13,9 +13,19 @@ import type { AppContext, VPath } from '../../contracts';
 import { basename, childPath, dirname, splitVPath } from '../../core/paths/winpath';
 import { deleteItems, exportItems, inform, openDocumentsAt, type FilesDeps } from './bulk';
 import { invalidNameReason } from './filters';
-import { findGitHolder, innerName } from './git-guard';
+import { findGitHolder, gitRefusalFor, innerName, isGitName } from './git-guard';
 import { guardImport, type StorageEstimator } from './import-guard';
-import { RENAME_TITLE, exportedToast, gitRefusal, openInEditor } from './texts';
+import {
+  GIT_NOT_IMPORTED,
+  IMPORT_TITLE,
+  RENAME_TITLE,
+  exportedToast,
+  gitNameRefused,
+  gitRefusal,
+  openInEditor,
+} from './texts';
+
+const NEW_FOLDER_TITLE = 'New Folder';
 import { filesDeps } from './undo';
 import {
   type BeforeReplace,
@@ -67,7 +77,12 @@ export async function importInto(
   items: readonly ImportItem[],
   options: { estimate?: StorageEstimator } = {},
 ): Promise<ImportResult | null> {
-  const expanded: ImportItem[] = [];
+  const store = gitRefusalFor(ctx.vfs, [dir]);
+  if (store !== null) {
+    await inform(ctx, IMPORT_TITLE, store);
+    return null;
+  }
+  const unpacked: ImportItem[] = [];
   const notes: string[] = [];
   for (const item of items) {
     const segments = item.rel.split('/');
@@ -85,7 +100,7 @@ export async function importInto(
           const prefix = segments.slice(0, -1).join('/');
           const zip = await itemsFromZip(bytes);
           for (const entry of zip.items)
-            expanded.push({ ...entry, rel: prefix ? `${prefix}/${entry.rel}` : entry.rel });
+            unpacked.push({ ...entry, rel: prefix ? `${prefix}/${entry.rel}` : entry.rel });
           for (const skipped of zip.skipped) {
             if (skipped.reason !== 'resource-fork') notes.push(`${skipped.path}: ${skipped.reason}`);
           }
@@ -95,11 +110,13 @@ export async function importInto(
           continue;
         }
       }
-      expanded.push({ rel: item.rel, read: async () => bytes, size: bytes.length });
+      unpacked.push({ rel: item.rel, read: async () => bytes, size: bytes.length });
       continue;
     }
-    expanded.push(item);
+    unpacked.push(item);
   }
+  const { items: expanded, notes: gitNotes } = withoutTopGit(unpacked);
+  notes.push(...gitNotes);
 
   // ARCHITECTURE-PLUS P3.2.6: a question before a large import into the browser's storage.
   const fileItems = expanded.filter((item) => !item.rel.endsWith('/'));
@@ -205,12 +222,18 @@ export async function deletePath(ctx: AppContext, path: VPath): Promise<boolean>
 
 /** New Folder...: asks for a name and creates the folder in `parent`. Returns its path. */
 export async function newFolder(ctx: AppContext, parent: VPath): Promise<VPath | null> {
+  const store = gitRefusalFor(ctx.vfs, [parent]);
+  if (store !== null) {
+    await inform(ctx, NEW_FOLDER_TITLE, store);
+    return null;
+  }
   let initial = 'New Folder';
   for (;;) {
     const name = await askName(ctx, { title: 'New Folder', label: '&Name:', initial });
     if (name === null) return null;
     const trimmed = name.trim();
-    const reason = invalidNameReason(trimmed);
+    // ARCHITECTURE-PLUS P1.1 rule 2: no folder named .git is made (errata N5 entry 15).
+    const reason = invalidNameReason(trimmed) ?? (isGitName(trimmed) ? gitNameRefused(trimmed) : null);
     const target = reason ? null : childPath(parent, trimmed);
     const taken = target ? await ctx.vfs.resolve(parent, trimmed) : null;
     if (reason || taken) {
@@ -250,6 +273,11 @@ export async function renamePath(ctx: AppContext, path: VPath): Promise<VPath | 
 
 /** Rename's refusals (P3.2.4): a folder that holds .git; an open file while relocate is missing. */
 export async function renameRefused(deps: FilesDeps, path: VPath): Promise<boolean> {
+  const gitText = gitRefusalFor(deps.vfs, [path]);
+  if (gitText !== null) {
+    await inform(deps, RENAME_TITLE, gitText);
+    return true;
+  }
   const stat = await deps.vfs.stat(path).catch(() => null);
   if (stat?.kind === 'dir') {
     const holder = await findGitHolder(deps.vfs, path);
@@ -282,7 +310,8 @@ async function askAndRename(ctx: AppContext, path: VPath): Promise<VPath | null>
     if (name === null) return null;
     const trimmed = name.trim();
     if (trimmed === basename(path)) return null;
-    const reason = invalidNameReason(trimmed);
+    // ARCHITECTURE-PLUS P1.1 rule 2: nothing is renamed to .git (errata N5 entry 15).
+    const reason = invalidNameReason(trimmed) ?? (isGitName(trimmed) ? gitNameRefused(trimmed) : null);
     if (reason) {
       await ctx.dialogs.messageBox({ title: 'Rename', text: reason, icon: 'warning', buttons: ['OK'] });
       initial = trimmed;
@@ -295,6 +324,26 @@ async function askAndRename(ctx: AppContext, path: VPath): Promise<VPath | null>
       initial = trimmed;
     }
   }
+}
+
+/**
+ * The items of an import that would make a folder named .git at the top of the import folder (a
+ * picked or zipped folder named .git): they are left out, and named once each (errata N5 entry 15).
+ * Deeper .git folders (a repository's own, `lab3/.git/...`) are imported as today (P1.1 rule 2).
+ */
+export function withoutTopGit(items: readonly ImportItem[]): { items: ImportItem[]; notes: string[] } {
+  const out: ImportItem[] = [];
+  const tops: string[] = [];
+  for (const item of items) {
+    const segments = item.rel.split('/');
+    const top = segments[0] as string;
+    if (isGitName(top) && segments.length > 1) {
+      if (!tops.includes(top)) tops.push(top);
+      continue;
+    }
+    out.push(item);
+  }
+  return { items: out, notes: tops.map((top) => `${top}/: ${GIT_NOT_IMPORTED}`) };
 }
 
 /** The folder an action on `path` works in: the folder itself, or the folder of a file. */

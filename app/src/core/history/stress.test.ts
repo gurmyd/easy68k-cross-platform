@@ -310,7 +310,10 @@ describe('the stress runs of the history store (P5 N3)', () => {
         await b.store.record(path, data, 'saved', b.now);
         b.advance(DAY);
       }
-      const before = (await b.store.versions(path)).filter((v) => b.now - v.time >= 7 * DAY);
+      // Every version from before the burst: the daily versions of the week before (1 to 7 days
+      // old) and of the week before that.
+      const before = await b.store.versions(path);
+      const weekBefore = before.filter((v) => b.now - v.time <= 7 * DAY);
       for (let i = 0; i < 500; i++) {
         data = editText(seededRandom(i + 1), data);
         await b.vfs.writeFile(path, data);
@@ -323,11 +326,13 @@ describe('the stress runs of the history store (P5 N3)', () => {
         `stress (a): ${saved} saves, ${deleted} deletes in ${((Date.now() - started) / 1000).toFixed(1)} s; ` +
           `versions half ${(usage.versionBytes / MB).toFixed(2)} MB (${usage.versions} versions), Trash half ${(usage.trashBytes / MB).toFixed(2)} MB ` +
           `(${usage.trashItems} items); the typical-student figure is ${(typical / MB).toFixed(2)} MB (D4: deltas above 16 MB); ` +
-          `prunings ${JSON.stringify(checks.prunes)}; the burst kept ${before.filter((v) => after.has(v.seq)).length} of ${before.length} versions older than 7 days`,
+          `prunings ${JSON.stringify(checks.prunes)}; the burst kept ${before.filter((v) => after.has(v.seq)).length} of the ${before.length} ` +
+          `daily versions from before it (${weekBefore.filter((v) => after.has(v.seq)).length} of ${weekBefore.length} of the week before)`,
       );
       expect(checks.failures).toEqual([]);
-      expect(before.length).toBeGreaterThan(0);
-      expect(before.every((v) => after.has(v.seq))).toBe(true);
+      expect(before.length).toBe(14);
+      expect(weekBefore.length).toBe(7);
+      expect(before.filter((v) => !after.has(v.seq)).map((v) => (b.now - v.time) / DAY)).toEqual([]);
     },
     timeout,
   );

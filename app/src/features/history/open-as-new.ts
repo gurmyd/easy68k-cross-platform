@@ -1,9 +1,9 @@
 // `Open as New Document` of the Earlier Versions dialog (ARCHITECTURE-PLUS P3.3.8): a new untitled
 // source document with the version's text, so that the student can copy what they need. Owner: N4.
 //
-// DocumentService (P4.4) can make a new document only from the template (`newSource()`); it has no
-// member that gives a new document a text (docs/requests/N4-history-ui.md, item 1, asks for one).
-// Until it has, the text is put into the new document by the editor itself: a view plugin,
+// DocumentService.newSourceWithText (optional; docs/requests/N4-history-ui.md item 1) makes it when
+// the document service has it. Without it the document is made from the template (`newSource()`)
+// and the text is put into the new document by the editor itself: a view plugin,
 // registered through `ctx.editorExtensions` for that one document, replaces the template with the
 // version's text when the document's view exists, as one change that Undo does not take back
 // (`Transaction.addToHistory` false), and then unregisters itself. The document is modified, so
@@ -18,6 +18,7 @@ export function openAsNewDocument(
   ctx: Pick<AppContext, 'documents' | 'editorExtensions'>,
   text: string,
 ): DocumentState {
+  if (ctx.documents.newSourceWithText) return ctx.documents.newSourceWithText(text);
   let done = false;
   let unregister: (() => void) | null = null;
   const target = { id: '' };

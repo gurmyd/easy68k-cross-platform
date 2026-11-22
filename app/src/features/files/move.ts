@@ -22,7 +22,7 @@ import {
   type TrashRef,
   type UndoEntry,
 } from './bulk';
-import { findGitHolder, innerName, touchesGit } from './git-guard';
+import { findGitHolder, gitRefusalFor, gitStoreName, innerName, touchesGit } from './git-guard';
 import { displayPath, locations, sortEntries, storedSpelling } from './store';
 import { changedWhileReplacing } from '../../core/history/texts';
 import {
@@ -30,6 +30,7 @@ import {
   MOVE_TITLE,
   UNDO_ACTION,
   alreadyExists,
+  changedWhileMoving,
   gitRefusal,
   movedToast,
   openInEditor,
@@ -104,6 +105,8 @@ export async function moveTargets(deps: Pick<FilesDeps, 'vfs'>, items: readonly 
   };
   for (const location of locations(deps.vfs)) {
     const mount = location.backend.mount;
+    // An opened folder that is itself a repository's .git folder takes nothing (errata N5 entry 15).
+    if (gitStoreName(deps.vfs, location.root) !== null) continue;
     out.push({ path: location.root, label: location.label, depth: 0, mount });
     await walk(location.root, 1, mount);
   }
@@ -113,6 +116,30 @@ export async function moveTargets(deps: Pick<FilesDeps, 'vfs'>, items: readonly 
 /** The name the toast gives the target ("demo"; a root: its label). */
 function targetName(deps: Pick<FilesDeps, 'vfs'>, dir: VPath): string {
   return splitVPath(dir).rel === '' ? displayPath(deps.vfs, dir) : basename(dir);
+}
+
+/** A file as a move read it: its modification time, size and bytes. */
+export interface SourceSeen {
+  mtime: number;
+  size: number;
+  data: Uint8Array;
+}
+
+/**
+ * True when the file at `path` is still the one `seen` describes: the same modification time, size
+ * and bytes (the bytes too, because two writes within one clock tick keep the time, and a rewrite
+ * of the same length keeps the size). False without `seen`.
+ */
+export async function unchangedSince(
+  vfs: Pick<FilesDeps['vfs'], 'stat' | 'readFile'>,
+  path: VPath,
+  seen: SourceSeen | undefined,
+): Promise<boolean> {
+  if (!seen) return false;
+  const now = await vfs.stat(path).catch(() => null);
+  if (now?.kind !== 'file' || now.mtime !== seen.mtime || now.size !== seen.size) return false;
+  const bytes = await vfs.readFile(path).catch(() => null);
+  return bytes !== null && bytes.length === seen.data.length && bytes.every((b, i) => b === seen.data[i]);
 }
 
 interface PlannedFile {
@@ -151,6 +178,13 @@ export async function transferItems(
   const mode = forced ?? transferModeOf(carried, targetDir);
   const title = mode === 'move' ? MOVE_TITLE : COPY_TITLE;
   const outcome: TransferOutcome = { mode, done: false, written: [], items: [], undo: null, toast: null };
+  // Nothing is written, removed or copied below a folder named .git (P1.1 rule 2): neither the
+  // items nor the target may lie in one, nor in an opened folder that is one (errata N5 entry 15).
+  const gitText = gitRefusalFor(vfs, [...carried, targetDir]);
+  if (gitText !== null && carried.length > 0) {
+    await inform(deps, title, gitText);
+    return outcome;
+  }
   if (refusedTarget(carried, targetDir)) return outcome;
   if ((await vfs.stat(targetDir).catch(() => null))?.kind !== 'dir') return outcome;
 
@@ -203,6 +237,12 @@ export async function transferItems(
     }
   }
   if (planned.length === 0 && emptyFolders.length === 0) return outcome;
+  // A second line of defence: no target the plan made may lie below a folder named .git.
+  const gitTarget = gitRefusalFor(vfs, [...planned.map((file) => file.to), ...emptyFolders.map(([, to]) => to)]);
+  if (gitTarget !== null) {
+    await inform(deps, title, gitTarget);
+    return outcome;
+  }
 
   // Without DocumentService.relocate an open file is not moved (P3.2.4).
   if (mode === 'move' && !documents.relocate) {
@@ -258,12 +298,16 @@ export async function transferItems(
   // (3) the writes: a Replace through guard; nothing is removed until every copy is written.
   const replaced: TrashRef[] = [];
   const replacedDocs: { path: VPath; doc: DocumentState }[] = [];
+  // What each source was when its bytes were taken: a move removes it only while it is unchanged.
+  const taken = new Map<VPath, SourceSeen>();
   let failed = false;
   for (const file of planned) {
     if (file.skip) continue;
     let data;
     try {
+      const before = await vfs.stat(file.from);
       data = await vfs.readFile(file.from);
+      if (before) taken.set(file.from, { mtime: before.mtime, size: before.size, data });
     } catch (error) {
       await showError(deps, title, error);
       file.skip = true;
@@ -331,6 +375,12 @@ export async function transferItems(
     const moved: [VPath, VPath][] = [];
     for (const [from, to] of written) {
       if (sameName(from, to)) continue; // never remove the file just written (cannot happen: alreadyIn)
+      // A source that changed after its bytes were copied (another window saved it, a program
+      // wrote it) stays: removing it would lose the change (errata N5 entry 16).
+      if (!(await unchangedSince(vfs, from, taken.get(from)))) {
+        await inform(deps, title, changedWhileMoving(basename(from), displayPath(vfs, dirname(to)), false));
+        continue;
+      }
       try {
         await vfs.remove(from);
         moved.push([from, to]);

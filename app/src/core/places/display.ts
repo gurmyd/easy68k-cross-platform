@@ -10,13 +10,21 @@
 //   /browser/demo/prog.X68   My Programs/demo/prog.X68                          (both forms)
 //   /linked/<id>/lab1.X68    lab1.X68 - on this computer, edited in place       placeShort: lab1.X68 (on this computer)
 //   /folder/prog.X68         Lab/prog.X68 - in the folder "Lab" on this computer placeShort: Lab/prog.X68
+//                            (the folder's backend label is "Folder: Lab"; the "Folder: " is left out)
 //   /disk/Users/me/x.X68     /Users/me/x.X68 in the desktop app (the real path)  placeShort: the same
 //   /linked, /linked/<id>    the linked store's label, "Linked files" when it is not mounted
 //   anything else            <label>/<rel>, the root of a mount its label, an unknown mount the path itself
 
 import type { FileSystemBackend, VPath } from '../../contracts';
 import { isVPath, splitVPath } from '../paths/winpath';
-import { FOLDER_ROOT_SUFFIX, LINKED_FALLBACK_LABEL, LINKED_SHORT_SUFFIX, LINKED_SUFFIX, folderSuffix } from './texts';
+import {
+  FOLDER_LABEL_PREFIX,
+  FOLDER_ROOT_SUFFIX,
+  LINKED_FALLBACK_LABEL,
+  LINKED_SHORT_SUFFIX,
+  LINKED_SUFFIX,
+  folderSuffix,
+} from './texts';
 
 export interface PlaceLabels {
   mount: string;
@@ -27,6 +35,17 @@ export interface PlaceLabels {
 /** The mount names of P4.3 that have a text of their own. */
 const LINKED_MOUNT = 'linked';
 const FOLDER_MOUNT = 'folder';
+
+/**
+ * The name a person reads for a mount: for the opened folder its own name ("Lab"), without the
+ * `Folder: ` that its backend's label (FS2's folderLabel) puts in front for the dialogs and the Files
+ * panel; for every other mount its label as it is.
+ */
+function nameOf(mount: string, label: string): string {
+  return mount === FOLDER_MOUNT && label.startsWith(FOLDER_LABEL_PREFIX)
+    ? label.slice(FOLDER_LABEL_PREFIX.length)
+    : label;
+}
 
 /** `label/rel`, or the label alone for the root of the mount. */
 function labelled(label: string, rel: string): string {
@@ -73,9 +92,8 @@ export function placeText(labels: readonly PlaceLabels[], path: VPath, platformK
   if (entry?.kind === 'disk' && platformKind === 'desktop') return realPath(rel);
   if (!entry) return path;
   if (mount === FOLDER_MOUNT) {
-    return rel === ''
-      ? `${entry.label}${FOLDER_ROOT_SUFFIX}`
-      : `${labelled(entry.label, rel)}${folderSuffix(entry.label)}`;
+    const name = nameOf(mount, entry.label);
+    return rel === '' ? `${name}${FOLDER_ROOT_SUFFIX}` : `${labelled(name, rel)}${folderSuffix(name)}`;
   }
   return labelled(entry.label, rel);
 }
@@ -91,5 +109,5 @@ export function placeShort(labels: readonly PlaceLabels[], path: VPath): string 
   }
   if (!entry) return path;
   if (entry.kind === 'disk') return realPath(rel);
-  return labelled(entry.label, rel);
+  return labelled(nameOf(mount, entry.label), rel);
 }

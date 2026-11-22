@@ -115,6 +115,32 @@ export function gitRefusal(
   }
 }
 
+/**
+ * Rename or New Folder was given the name .git in some letter case (P1.1 rule 2; errata N5 entry
+ * 15): shown as the commands show a name that cannot be used (`warning`, `OK`), then the name is
+ * asked again. `name` is the name as typed (`.Git`).
+ */
+export const gitNameRefused = (name: string): string =>
+  `The name ${quoted(name)} cannot be used in the Files panel: a folder named .git holds a Git repository's own files, and the Files panel does not show it or write into it. Choose another name.`;
+
+/**
+ * Move, Copy, Delete or Undo was given an item or a target named .git, or one inside a folder named
+ * .git (the tree lists none; errata N5 entry 15): the command's title, `information`, `OK`.
+ */
+export const gitPathRefused = (name: string): string =>
+  `${quoted(name)} belongs to a Git repository: the Files panel does not write, move, copy or delete anything named .git or inside a folder named .git. Use your own tools.`;
+
+/** The opened folder is itself a repository's .git folder (errata N5 entry 15). */
+export const gitStoreRefused = (name: string): string =>
+  `The folder ${quoted(name)} is the .git folder of a Git repository. The Files panel changes nothing in it.`;
+
+/** Import: why the items of a folder named .git at the top of the import were left out (entry 15). */
+export const GIT_NOT_IMPORTED = 'a folder named .git is not imported into the Files panel';
+
+/** A dropped folder named .git is not opened (entry 15). */
+export const GIT_DROP_TOAST =
+  "A folder named .git is not opened: the Files panel writes nothing into a Git repository's .git folder. Drop the folder that holds it.";
+
 /** The toast after a delete (P3.2.2). `only` names the one item deleted. */
 export function deletedToast(count: number, only: string | null, forGood: number, changedKept: number): string {
   let text: string;
@@ -186,6 +212,16 @@ export const unsavedReplace = (name: string): string =>
 /** While DocumentService.relocate does not exist, an open file is not moved or renamed. */
 export const openInEditor = (name: string, command: 'move' | 'rename'): string =>
   `${quoted(name)} is open in the editor. Close it first, then ${command === 'move' ? 'move' : 'rename'} it.`;
+
+/**
+ * A moved file changed after its bytes were copied and before its source was removed (another
+ * window saved it, a program wrote it): the source is not removed (`Move` or `Undo`, `information`,
+ * `OK`; errata N5 entry 16). `place` is where the earlier copy was written.
+ */
+export const changedWhileMoving = (name: string, place: string, back: boolean): string =>
+  back
+    ? `${quoted(name)} changed while it was being moved back, so it stays where it is. The copy in ${place} holds it as it was before the change.`
+    : `${quoted(name)} changed while it was being moved, so it stays where it was. The copy in ${place} holds it as it was before the change.`;
 
 /** The toast after a move (P3.2.4), with `Undo`. `only` names the one item moved. */
 export function movedToast(count: number, only: string | null, target: string, copied: boolean): string {

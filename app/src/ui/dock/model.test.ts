@@ -10,6 +10,7 @@ import {
   defaultTree,
   fromFlexJson,
   globalAttributes,
+  groupLabel,
   isClosablePanel,
   needsStrip,
   normalizeDock,
@@ -135,6 +136,22 @@ describe('tab strips (P3.1.4)', () => {
   });
   it('unlocked: every group', () => {
     for (const panel of DOCK_PANELS.simulator) expect(needsStrip([panel], false)).toBe(true);
+  });
+});
+
+describe('the names of the tab lists', () => {
+  it('the tool panels group is named Tool panels, other groups have no name', () => {
+    expect(groupLabel(['output', 'memory'])).toBe('Tool panels');
+    expect(groupLabel(['hardware'])).toBe('Tool panels');
+    expect(groupLabel(['listing', 'messages'])).toBeUndefined();
+    expect(groupLabel(['output'])).toBeUndefined();
+    expect(groupLabel(['editor', 'viewer:1'])).toBeUndefined();
+  });
+  it("the narrow default's Output strip keeps today's name with Output alone (no tool panel shown)", () => {
+    expect(groupLabel(['output'], true)).toBe('Tool panels');
+    expect(groupLabel(['output', 'stack'], true)).toBe('Tool panels');
+    expect(groupLabel(['listing', 'messages'], true)).toBeUndefined();
+    expect(groupLabel(['registers'], true)).toBeUndefined();
   });
 });
 

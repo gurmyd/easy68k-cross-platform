@@ -24,13 +24,9 @@ import type {
 } from '../../contracts';
 import { TabType } from '../../contracts';
 import { decodeFile, stripTrailer } from '../../core/documents/format';
-import {
-  cannotKeepQuestion,
-  changedWhileRestoring,
-  historyUnreadable,
-  unreadableEntries,
-} from '../../core/history/texts';
+import { changedWhileRestoring, historyUnreadable, unreadableEntries } from '../../core/history/texts';
 import { basename, foldCase, mountOf } from '../../core/paths/winpath';
+import { cannotKeepBox } from '../../core/trash-restore/restore-flow';
 import { VERSION_NO_LONGER_KEPT, unsavedChanges } from '../../core/trash-restore/texts';
 import { HEAD_BYTES } from './recording';
 import {
@@ -46,20 +42,14 @@ import {
 /** The reasons of `untracked` (P4.4). */
 export type UntrackedReason = ReturnType<HistoryService['untracked']>;
 
-/** The two members N3's store has beyond P4.4 (docs/requests/N3-history-contract.md). */
-export interface HistoryExtras {
-  unreadable?(): number;
-  unavailableDetail?(): string | null;
-}
-
-/** P3.3.7's count of records that did not parse, and the detail of an unavailable history. */
+/** P3.3.7's count of records that did not parse, and the detail of an unavailable history (the
+ *  optional members `unreadable` and `unavailableDetail` of HistoryService). */
 export function problemsOf(history: HistoryService): { unreadable: number; detail: string } {
-  const extras = history as HistoryService & HistoryExtras;
   let unreadable = 0;
   let detail: string | null = null;
   try {
-    unreadable = extras.unreadable?.() ?? 0;
-    detail = extras.unavailableDetail?.() ?? null;
+    unreadable = history.unreadable?.() ?? 0;
+    detail = history.unavailableDetail?.() ?? null;
   } catch {
     // The dialogs show what they can.
   }
@@ -231,12 +221,7 @@ export async function restoreVersion(
     await deps.vfs.writeFile(path, bytes);
   };
   const confirm = async () =>
-    (await deps.dialogs.messageBox({
-      title: RESTORE_TITLE,
-      text: cannotKeepQuestion('restore', name, false),
-      icon: 'warning',
-      buttons: ['Yes', 'No'],
-    })) === 'Yes';
+    (await deps.dialogs.messageBox(cannotKeepBox(RESTORE_TITLE, 'restore', name, false))) === 'Yes';
   try {
     const result = await deps.history.guard(path, 'restore', write, confirm);
     if (result.outcome === 'declined') return 'declined';

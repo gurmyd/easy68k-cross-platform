@@ -289,21 +289,31 @@ describe('features', () => {
     }
   });
 
-  // Gate I2 (9.5): no command id is left without a handler once wave two is in. The commands
-  // below are owed by the package named; remove one from the list when its handler arrives (the
-  // test fails until then, so the list can only shrink).
-  // Empty since U4 gave sim.view.log its handler (gate I2); an entry reads
-  // 'some.command.id': 'PACKAGE (what is missing)'. The stage of additions (ARCHITECTURE-PLUS P3.6)
-  // adds its commands without handlers (N0); each package removes its own when the handler arrives.
-  const OWED_HANDLERS: Readonly<Record<string, string>> = {};
+  // Gate I2 (9.5): no command id is left without a handler once wave two is in. The stage of
+  // additions (ARCHITECTURE-PLUS P3.6) added its nine commands without handlers (N0) and listed them
+  // here as owed by N1, N2, N4 and N7; every one of them has its handler now (the gate of the stage),
+  // so the list of owed handlers is gone and no command at all may be without one.
+  const PLUS_COMMANDS = [
+    'app.layout.move',
+    'app.layout.lock',
+    'app.layout.reset',
+    'ed.window.splitRight',
+    'ed.window.splitDown',
+    'ed.window.unsplit',
+    'ed.file.history',
+    'app.files.trash',
+    'app.additions.options',
+  ] as const;
   for (const kind of ['web', 'desktop'] as const) {
-    it(`with the features of wave two, every command has a handler (${kind}; gate I2, 9.5)`, () => {
+    it(`with the features of wave two and of the stage, every command has a handler (${kind}; gate I2, 9.5)`, () => {
       const app = createTestApplication({ features: FEATURES, platform: createFakePlatform({ kind }) });
-      const missing = COMMAND_IDS.filter((id) => !app.commands.hasHandler(id));
       expect(
-        missing.map((id) => `${id}: ${OWED_HANDLERS[id] ?? 'no owner recorded'}`),
+        COMMAND_IDS.filter((id) => !app.commands.hasHandler(id)),
         'commands without a handler',
-      ).toEqual(Object.keys(OWED_HANDLERS).map((id) => `${id}: ${OWED_HANDLERS[id]}`));
+      ).toEqual([]);
+      // The stage's nine commands of P3.6 are command ids, so the line above covers them; named here
+      // so that a later edit cannot drop one from COMMAND_IDS unnoticed.
+      expect(PLUS_COMMANDS.filter((id) => !(COMMAND_IDS as readonly string[]).includes(id))).toEqual([]);
     }, 60_000);
   }
 });

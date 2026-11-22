@@ -18,7 +18,7 @@ import {
 } from '../../core/paths/winpath';
 import { placeShort } from '../../core/places/display';
 import { looksLikeZip, readZip, writeZip, type ZipInput, type ZipSkipped } from '../../fs/zip';
-import { LINKED_ROOT_LABEL } from './texts';
+import { LINKED_ROOT_LABEL, gitNameRefused } from './texts';
 
 /** The folder "From this computer..." and dropped files are copied into (3.8.1). */
 export const IMPORTED_DIR: VPath = '/browser/Imported';
@@ -226,6 +226,10 @@ export async function renameEntry(vfs: Vfs, from: VPath, newName: string): Promi
  * Rename go through here; renameEntry itself is not changed (P5 N5).
  */
 export async function renameChecked(vfs: Vfs, from: VPath, newName: string): Promise<VPath> {
+  // Nothing of the student is renamed to .git (P1.1 rule 2): a folder of that name and its files
+  // would vanish from the tree, and the history treats a path named .git as a Git one (errata N5
+  // entry 15). A file too, so that the two never disagree.
+  if (foldCase(newName) === foldCase('.git')) throw new Error(gitNameRefused(newName));
   const own = basename(from);
   const entries = await vfs.list(dirname(from)).catch(() => null);
   if (entries?.some((entry) => entry.name !== own && foldCase(entry.name) === foldCase(newName))) {

@@ -219,6 +219,8 @@ async function newContext(browser, options = {}) {
 const engineDist = join(repoRoot, 'engine', 'dist');
 const enginesPresent = existsSync(join(engineDist, 'asm68k.wasm')) && existsSync(join(engineDist, 'sim68k.wasm'));
 const enginesRequired = process.env.EASY68K_REQUIRE_ENGINES === '1';
+/** CI (and EASY68K_REQUIRE_BROWSERS=1) has Playwright's full Chromium: its PDF checks must run there. */
+const requireFullChromium = process.env.CI === 'true' || process.env.EASY68K_REQUIRE_BROWSERS === '1';
 const isMissingEngineError = (text) =>
   !enginesPresent &&
   !enginesRequired &&
@@ -357,7 +359,9 @@ async function viewerPass(browser, name) {
   // A PDF: the frame and its blob. A browser that says it shows no PDFs (Playwright's Chromium
   // headless shell) gets the notice instead, which the pass pdf-off checks; here it is a note.
   const pdfViewer = await page.evaluate(() => navigator.pdfViewerEnabled !== false);
-  if (!pdfViewer) note(`${p} this browser reports pdfViewerEnabled false: the PDF frame is not checked in it`);
+  if (!pdfViewer && requireFullChromium && name.startsWith('chromium')) {
+    check(`${p} Chromium reports a PDF viewer (required in CI: the PDF frame is checked)`, false);
+  } else if (!pdfViewer) note(`${p} this browser reports pdfViewerEnabled false: the PDF frame is not checked in it`);
   const panel = await mountHarness(page, '/browser/viewer/report.pdf');
   if (pdfViewer) await pdfFrameChecks(page, panel, name, pdf);
   else {
@@ -517,6 +521,14 @@ async function notices(page, name) {
       same(buttons, [TEXTS.openAsText, TEXTS.export]),
       buttons.join(', '),
     );
+    // Each command once in the tab: the strip does not repeat the notice's buttons (errata N6 7).
+    const all = await panel.getByRole('button').allInnerTexts();
+    check(
+      `${p} ${file}: one Open as Text and one Export in the tab (the strip leaves them to the notice)`,
+      all.filter((text) => text === TEXTS.openAsText).length === 1 &&
+        all.filter((text) => text === TEXTS.export).length === 1,
+      all.join(', '),
+    );
     check(`${p} ${file}: no <img> is left on screen`, (await panel.locator('img').count()) === 0);
     await page.screenshot({ path: join(outDir, `${name}-${file.replace('.', '-')}-notice.png`) });
     if (file === 'data.bin') {
@@ -530,7 +542,7 @@ async function notices(page, name) {
       const before = (await recorded(page)).blobs.length;
       const [download] = await Promise.all([
         page.waitForEvent('download', { timeout: 30_000 }),
-        panel.locator('.e68-viewer__strip').getByRole('button', { name: TEXTS.export }).click(),
+        panel.locator('.e68-viewer__notice').getByRole('button', { name: TEXTS.export }).click(),
       ]);
       const saved = join(outDir, `${name}-export-data.bin`);
       await download.saveAs(saved);
@@ -555,7 +567,7 @@ async function notices(page, name) {
 
   // Open as Text: the file opens as a document and the viewer closes.
   panel = await mountHarness(page, '/browser/viewer/data.bin');
-  await panel.locator('.e68-viewer__strip').getByRole('button', { name: TEXTS.openAsText }).click();
+  await panel.locator('.e68-viewer__notice').getByRole('button', { name: TEXTS.openAsText }).click();
   await page
     .waitForFunction(() =>
       window.__easy68k.ctx.store.getState().documents.items.some((doc) => doc.path === '/browser/viewer/data.bin'),
@@ -735,7 +747,7 @@ async function dockPass(browser, name) {
   await page.evaluate(() => window.__easy68k.ctx.documents.open('/browser/viewer/data.bin'));
   const binViewer = page.locator(DOCK_VIEWER, { hasText: TEXTS.notice('data.bin') });
   await binViewer.waitFor({ timeout: 15_000 }).catch(() => {});
-  await binViewer.locator('.e68-viewer__strip').getByRole('button', { name: TEXTS.openAsText }).click();
+  await binViewer.locator('.e68-viewer__notice').getByRole('button', { name: TEXTS.openAsText }).click();
   await page
     .waitForFunction(() =>
       window.__easy68k.ctx.store.getState().documents.items.some((doc) => doc.path === '/browser/viewer/data.bin'),
@@ -750,6 +762,35 @@ async function dockPass(browser, name) {
       )),
     JSON.stringify(afterText),
   );
+
+  // Opening it again (an ordinary Open) while it is open as text: the viewer shows it, and the text
+  // document the person has open stays open, unchanged (nothing a person has open is closed by an
+  // Open; the gate's finding).
+  const again = await page.evaluate(async () => {
+    const { ctx } = window.__easy68k;
+    const before = ctx.store.getState().documents.items.find((doc) => doc.path === '/browser/viewer/data.bin');
+    const result = await ctx.documents.open('/browser/viewer/data.bin');
+    const after = ctx.store.getState().documents.items.find((doc) => doc.path === '/browser/viewer/data.bin');
+    return { result: result === null ? null : 'document', before: before?.id ?? null, after: after?.id ?? null };
+  });
+  await page
+    .locator(DOCK_VIEWER, { hasText: TEXTS.notice('data.bin') })
+    .waitFor({ timeout: 15_000 })
+    .catch(() => {});
+  const againTabs = await describe();
+  check(
+    `${p} an Open of a file that is open as text shows the viewer and keeps the text document open`,
+    again.result === null &&
+      again.before !== null &&
+      again.after === again.before &&
+      againTabs.some((tab) => tab.title === 'data.bin'),
+    `${JSON.stringify(again)}; ${JSON.stringify(againTabs)}`,
+  );
+  await page.evaluate(async () => {
+    const { dockOf } = await import('/src/state/dock.ts');
+    const dock = dockOf(window.__easy68k.ctx);
+    for (const tab of dock.describe()) if (tab.title === 'data.bin') dock.closeTransient(tab.panel);
+  });
 
   // Simulator Open... of an .S68 and EASyBIN's Open Binary are unchanged with the viewer on.
   const blobsBefore = (await recorded(page)).blobs.length;
@@ -958,7 +999,11 @@ async function launch(name) {
     try {
       return await chromium.launch({ channel: 'chromium' });
     } catch (error) {
-      note(`Chromium's full build could not start (${String(error).split('\n')[0]}); using the headless shell`);
+      const why = String(error).split('\n')[0];
+      // In CI the full build is installed (npx playwright install chromium): there a missing build
+      // must not turn the PDF frame's checks into a note (the gate's reviewer).
+      if (requireFullChromium) check(`chromium: Playwright's full Chromium starts (required in CI)`, false, why);
+      else note(`Chromium's full build could not start (${why}); using the headless shell`);
     }
   }
   return BROWSERS[name].launch();

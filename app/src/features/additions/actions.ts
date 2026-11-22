@@ -68,6 +68,43 @@ export function applyAdditions(ctx: AppContext, initial: PlusSettings, chosen: P
 export type StorageOutcome = 'done' | 'declined' | 'empty' | 'unavailable';
 
 /**
+ * Runs the Storage group's actions one at a time. An action asked for while another runs (a click
+ * on the other button after a Yes, while the store is still working) is not dropped: it runs next;
+ * of several such, the latest. Nothing more runs once `alive` says the dialog is gone. `after` is
+ * called after each action (the figures are read again).
+ */
+export function serialActions<T>(
+  run: (action: T) => Promise<unknown>,
+  alive: () => boolean,
+  after: () => void = () => {},
+): (action: T) => Promise<void> {
+  let busy = false;
+  let queued: { action: T } | null = null;
+  return async (action: T) => {
+    if (busy) {
+      queued = { action };
+      return;
+    }
+    busy = true;
+    try {
+      let next: { action: T } | null = { action };
+      while (next && alive()) {
+        queued = null;
+        try {
+          await run(next.action);
+        } finally {
+          after();
+        }
+        next = queued;
+      }
+    } finally {
+      queued = null;
+      busy = false;
+    }
+  };
+}
+
+/**
  * `Empty Trash` (P3.5, P3.3.8): asks `Delete everything in the Trash for good? (12 items, 1.4 MB)`
  * (`Yes`, `No`) and deletes the items listed. With nothing in the Trash it says so instead of asking
  * (errata N7). Acts at once, not on OK.

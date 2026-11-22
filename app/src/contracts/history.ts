@@ -25,6 +25,10 @@ export interface TrashItemInfo {
   bytes: number;
   /** False when its store is not mounted now (P3.3.8). */
   restorableInPlace: boolean;
+  /** The opened folder's own name, for an item below /folder, when the store knows it (P3.3.8's
+   *  `"<name>" was in the folder "<folder>", which is not open.`). Optional (docs/requests/N4-history-ui.md
+   *  item 3). */
+  folderName?: string;
 }
 /** `versions`, `versionBytes`: the versions half; `trashItems`, `trashBytes`: the Trash half (P3.3.4). */
 export interface HistoryUsage {
@@ -103,4 +107,10 @@ export interface HistoryService {
   deleteAll(): Promise<void>; // deletes the database
   usage(): Promise<HistoryUsage>;
   subscribe(listener: () => void): () => void; // any change, from this window or another
+  /** Records that did not parse, skipped and counted: P3.3.7's `<n> entries could not be read.`
+   *  Optional (docs/requests/N3-history-contract.md item 1). */
+  unreadable?(): number;
+  /** Why the history is unavailable in this window, for P3.3.7's `<detail>`; null when it is not.
+   *  Optional (docs/requests/N3-history-contract.md item 1). */
+  unavailableDetail?(): string | null;
 }

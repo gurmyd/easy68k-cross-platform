@@ -165,7 +165,7 @@ export function selectionKeyOf(event: TreeKeyEvent, os: Os): SelectionKey | null
   if ((key === 'ArrowUp' || key === 'ArrowDown') && only(mac ? { alt: true } : { ctrl: true }))
     return { kind: 'focus', key };
   // The space bar by its position: on a Mac, Option+Space types a no-break space (key U+00A0).
-  const space = event.code === 'Space' || key === ' ' || key === ' ' || key === 'Spacebar';
+  const space = event.code === 'Space' || key === ' ' || key === '\u00a0' || key === 'Spacebar';
   if (space && only(mac ? { alt: true } : { ctrl: true })) return { kind: 'toggle' };
   if (key === 'Escape' && only({})) return { kind: 'clear' };
   if (key === 'Delete' && only({})) return { kind: 'delete' };

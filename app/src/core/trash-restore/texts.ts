@@ -2,6 +2,8 @@
 // Owner: N0 > N4. Shown by restoreWithQuestions (restore-flow.ts) for the Trash dialog (N4) and
 // the Files panel's Undo (N5).
 
+import { VERSION_NOT_KEPT } from '../history/texts';
+
 /** The folder of My Programs that takes files whose store is not available (P3.3.8). */
 export const RESTORED_FOLDER = 'Restored';
 
@@ -59,5 +61,12 @@ export function noLongerInTrash(name: string): string {
   return `"${name}" cannot be brought back: it is no longer in the Trash.`;
 }
 
-/** P3.3.8: Earlier Versions' Restore of a version pruned since the list was shown. */
-export const VERSION_NO_LONGER_KEPT = 'This version is no longer kept.';
+/** P3.3.8: Earlier Versions' Restore of a version pruned since the list was shown (the store's
+ *  rejection of `read` says the same, core/history/texts.ts). */
+export const VERSION_NO_LONGER_KEPT = VERSION_NOT_KEPT;
+
+/**
+ * The folder's name in `folderNotOpen` when the store cannot tell it (an item of an opened folder
+ * whose roots entry is gone; errata N4 entry 3). The store gives the name in every other case.
+ */
+export const UNKNOWN_FOLDER_NAME = 'opened folder';

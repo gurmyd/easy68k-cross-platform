@@ -1167,6 +1167,34 @@ async function dialogPass(browser, name) {
   await page.waitForFunction(() => window.__answer !== null);
   check(`${p} an OK box answers OK on Escape`, (await page.evaluate(() => window.__answer)) === 'OK');
 
+  // MessageBoxRequest.defaultButton (docs/requests/N5-default-button.md): without it Yes has the
+  // focus and Enter answers Yes, as before; with defaultButton 'No' (ARCHITECTURE-PLUS P3.3.4) No
+  // has the focus and Enter answers No.
+  for (const [defaultButton, expected] of [
+    [undefined, 'Yes'],
+    ['No', 'No'],
+  ]) {
+    await page.evaluate((named) => {
+      window.__answer = null;
+      const request = { title: 'Delete', text: 'This cannot be undone.', icon: 'warning', buttons: ['Yes', 'No'] };
+      void window.__easy68k.ctx.dialogs
+        .messageBox(named ? { ...request, defaultButton: named } : request)
+        .then((button) => {
+          window.__answer = button;
+        });
+    }, defaultButton ?? null);
+    await page.waitForSelector('[role=alertdialog][aria-modal=true]');
+    const focused = await page.evaluate(() => document.activeElement?.textContent ?? '');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.__answer !== null);
+    const answer = await page.evaluate(() => window.__answer);
+    check(
+      `${p} a Yes/No box with defaultButton ${defaultButton ?? '(none)'}: the focus is on ${expected} and Enter answers ${expected}`,
+      focused === expected && answer === expected,
+      `focus on "${focused}", answer ${answer}`,
+    );
+  }
+
   // Simulator mode: a modal dialog holds the controller (4.4.5).
   await setMode(page, 'simulator');
   const before = await page.evaluate(() => window.__easy68k.ctx.sim.controller.held);

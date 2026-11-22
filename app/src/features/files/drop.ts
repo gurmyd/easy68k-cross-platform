@@ -33,7 +33,9 @@
 
 import type { Bytes, DialogService, Mode, VPath } from '../../contracts';
 import { changeFileExt, foldCase } from '../../core/paths/winpath';
+import { isGitName } from './git-guard';
 import type { DroppedFolderProvider } from './providers';
+import { GIT_DROP_TOAST } from './texts';
 
 export const DROP_FOLDER_TOAST = 'Drop files, not folders. Use Import... for a folder.';
 export const DROP_CAUTION_TITLE = 'Caution';
@@ -204,6 +206,13 @@ export async function handleDrop(items: readonly DroppedItem[], deps: DropDeps):
       continue;
     }
     if (item.isFolder) {
+      // A repository's own .git folder is not opened as the opened folder: the Files panel's
+      // commands would then write below it (P1.1 rule 2, errata N5 entry 15).
+      if (isGitName(item.name)) {
+        deps.toast(GIT_DROP_TOAST);
+        outcome.folders = outcome.folders === 'taken' ? 'taken' : 'refused';
+        continue;
+      }
       if (await offerFolder(item, deps)) {
         outcome.folders = 'taken';
       } else {

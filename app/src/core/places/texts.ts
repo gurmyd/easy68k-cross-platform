@@ -15,5 +15,11 @@ export const folderSuffix = (label: string): string => ` - in the folder "${labe
  * fs/fsaccess-backend.ts, which core may not import).
  */
 export const LINKED_FALLBACK_LABEL = 'Linked files';
+/**
+ * The words before an opened folder's own name in its backend's label: FS2's `folderLabel(name)` in
+ * fs/fsaccess-backend.ts (which core may not import) is `Folder: Lab`, and P3.2.5 names the folder
+ * `Lab` (docs/requests/N8-folder-place-text.md).
+ */
+export const FOLDER_LABEL_PREFIX = 'Folder: ';
 /** The opened folder's root itself (P3.2.5 gives its secondary text `on this computer`). */
 export const FOLDER_ROOT_SUFFIX = ' - on this computer';

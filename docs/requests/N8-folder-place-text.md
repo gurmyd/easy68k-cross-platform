@@ -1,7 +1,9 @@
 # N8: the place text of an opened folder repeats `Folder: `
 
-Status: open. For: the owner of `app/src/core/places/display.ts` (N0, finished; the orchestrator
-decides who changes it). Filed by N8.
+Status: done at the gate of the stage (N0), option 1: `FOLDER_LABEL_PREFIX` in
+`core/places/texts.ts`, left out of the opened folder's label by `placeText` and `placeShort`; the
+table test uses FS2's real `folderLabel('Lab')`. `check-status.mjs` may now turn its note into the
+check `FOLDER_TEXT` (N8). Filed by N8.
 
 ## What is wrong
 

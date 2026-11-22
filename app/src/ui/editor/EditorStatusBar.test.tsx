@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { AppContext, FileSystemBackend, VPath } from '../../contracts';
 import { DocumentManager } from '../../core/documents/service';
 import { LINKED_SUFFIX, folderSuffix } from '../../core/places/texts';
+import { folderLabel } from '../../fs/fsaccess-backend';
 import { MemoryBackend } from '../../fs/memory-backend';
 import { ApplicationProvider } from '../../state/context';
 import { createFakePlatform, createTestApplication, type TestApplication } from '../../state/testing';
@@ -15,7 +16,9 @@ import { EditorWindowStatus, windowPlaceText } from './EditorStatusBar';
 type Labels = Pick<FileSystemBackend, 'mount' | 'label' | 'kind'>;
 const MY_PROGRAMS: Labels = { mount: 'browser', label: 'My Programs', kind: 'browser' };
 const LINKED: Labels = { mount: 'linked', label: 'Linked files', kind: 'fsaccess' };
-const FOLDER: Labels = { mount: 'folder', label: 'Lab', kind: 'fsaccess' };
+// The label FS2's FolderBackend really gives an opened folder named Lab (Folder: Lab); the status bar
+// shows P3.2.5's text, without the "Folder: " (verify round 1 of N8; docs/requests/N8-folder-place-text.md).
+const FOLDER: Labels = { mount: 'folder', label: folderLabel('Lab'), kind: 'fsaccess' };
 const DISK: Labels = { mount: 'disk', label: 'This computer', kind: 'disk' };
 const ALL = [MY_PROGRAMS, LINKED, FOLDER, DISK];
 
@@ -34,7 +37,8 @@ describe('windowPlaceText: the status bar text for each store', () => {
       'lab1.X68 - on this computer, edited in place',
     );
   });
-  it('the opened folder', () => {
+  it('the opened folder, by the label its backend really has', () => {
+    expect(FOLDER.label).toBe('Folder: Lab');
     const text = windowPlaceText(ALL, doc('/folder/prog.X68'), 'web');
     expect(text).toBe('Lab/prog.X68 - in the folder "Lab" on this computer');
     expect(text).toBe(`Lab/prog.X68${folderSuffix('Lab')}`);
@@ -103,7 +107,10 @@ describe('EditorWindowStatus markup', () => {
       ),
     ).toBe('lab1.X68 - on this computer, edited in place');
     expect(
-      await shown([browser(), store({ mount: 'folder', kind: 'fsaccess', label: 'Lab' })], '/folder/prog.X68'),
+      await shown(
+        [browser(), store({ mount: 'folder', kind: 'fsaccess', label: folderLabel('Lab') })],
+        '/folder/prog.X68',
+      ),
     ).toBe('Lab/prog.X68 - in the folder "Lab" on this computer');
     expect(
       await shown(

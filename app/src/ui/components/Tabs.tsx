@@ -19,7 +19,9 @@
 // Without `drag` nothing is draggable and the strip accepts no drop, exactly as before.
 // A browser may drop a custom type from the drag data (Playwright's WebKit on Windows keeps only
 // text/plain, text/uri-list and text/html); for a tab dragged in this page the strip then reads the
-// type and data from the drag the page started (`pageDrag`).
+// type and data from the drag the page started (`pageDrag`), which is forgotten when the drag ends
+// anywhere in the window. With `drag.positional` false the strip takes a drop as a whole (no tab is
+// marked) for a caller that puts the dropped tab by an order of its own.
 
 import { useRef, useState, type DragEvent, type HTMLAttributes, type KeyboardEvent, type ReactNode } from 'react';
 import '../../styles/components.css';
@@ -45,6 +47,13 @@ export interface TabsDrag {
   data(id: string): string;
   /** A drop of `type` on the strip: on the tab `id`, or beside the tabs (null). */
   onDropAt?(id: string | null, data: string): void;
+  /**
+   * Whether a drop lands at the tab it is dropped on (default true: the tab shows the mark where the
+   * dropped tab would go). False: the caller puts a dropped tab by an order of its own (the editor
+   * keeps its documents in their order of opening), so the strip is outlined as a whole, no tab is
+   * marked, and onDropAt gets null.
+   */
+  positional?: boolean;
 }
 
 export interface TabsProps {
@@ -67,6 +76,30 @@ export interface TabsProps {
 
 /** The tab drag this page started, for browsers that drop custom types from the drag data. */
 let pageDrag: { type: string; data: string } | null = null;
+
+/**
+ * Starts a page drag and forgets it when the drag ends anywhere: a drop elsewhere (the editor's
+ * pane body) can unmount the dragged tab, whose own `dragend` then never runs. The window's
+ * `drop` and `dragend` (capture, so no handler can stop them) clear it once the event is handled.
+ */
+function startPageDrag(drag: { type: string; data: string }): void {
+  pageDrag = drag;
+  if (typeof window === 'undefined') return;
+  const end = () => {
+    window.removeEventListener('drop', end, true);
+    window.removeEventListener('dragend', end, true);
+    setTimeout(() => {
+      if (pageDrag === drag) pageDrag = null;
+    }, 0);
+  };
+  window.addEventListener('drop', end, true);
+  window.addEventListener('dragend', end, true);
+}
+
+/** The page drag of a tab strip, for tests and browser checks (null when none is going on). */
+export function currentTabDrag(): { type: string; data: string } | null {
+  return pageDrag;
+}
 
 export const tabId = (idBase: string, id: string) => `${idBase}-tab-${id}`;
 export const tabPanelId = (idBase: string, id: string) => `${idBase}-panel-${id}`;
@@ -119,8 +152,9 @@ export function Tabs({
     const data = event.dataTransfer.getData(type);
     return data === '' && pageDrag?.type === type ? pageDrag.data : data;
   };
-  /** The tab under a drag event, or null beside the tabs. */
+  /** The tab under a drag event, or null beside the tabs (always null when drops are not positional). */
   const tabUnder = (event: DragEvent<HTMLElement>): string | null => {
+    if (drag?.positional === false) return null;
     for (const item of items) {
       const element = refs.current.get(item.id);
       if (element && event.target instanceof Node && element.contains(event.target)) return item.id;
@@ -183,7 +217,7 @@ export function Tabs({
                     draggable: true,
                     onDragStart: (event: DragEvent<HTMLDivElement>) => {
                       const data = drag.data(item.id);
-                      pageDrag = { type: drag.type, data };
+                      startPageDrag({ type: drag.type, data });
                       event.dataTransfer.setData(drag.type, data);
                       event.dataTransfer.effectAllowed = 'move';
                     },

@@ -127,7 +127,13 @@ describe('Undo of Move, Rename and Copy (P3.2.7)', { timeout: 60_000 }, () => {
     await transferItems(deps, ['/browser/a.X68'], '/folder');
     await deps.undo.run(deps.stack.peek() as UndoEntry, false);
     expect(deps.dialogs.shown).toEqual([
-      { title: 'Undo', text: cannotKeepQuestion('undo-copy', 'a.X68', false), icon: 'warning', buttons: ['Yes', 'No'] },
+      {
+        title: 'Undo',
+        text: cannotKeepQuestion('undo-copy', 'a.X68', false),
+        icon: 'warning',
+        buttons: ['Yes', 'No'],
+        defaultButton: 'No',
+      },
     ]);
     expect(cannotKeepQuestion('undo-copy', 'prog.X68', false)).toBe(
       'EASy68K cannot keep a copy of "prog.X68" in the Trash. Remove the copy anyway? This cannot be undone.',
@@ -151,6 +157,7 @@ describe('Undo of Move, Rename and Copy (P3.2.7)', { timeout: 60_000 }, () => {
             text: cannotKeepQuestion('undo-copy', 'p.X68', false),
             icon: 'warning',
             buttons: ['Yes', 'No'],
+            defaultButton: 'No',
           },
         ]);
         const left = await vfs.stat('/browser/b/p.X68');

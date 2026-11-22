@@ -12,8 +12,8 @@
 // fakes a test needs to put several stores (several windows) on one factory.
 
 // The layer rule lets fs/ import no npm package and gives only *.test.ts files the test
-// dependencies; this one file is test support (docs/requests/N0.md section 7 item 1, errata N3).
-// eslint-disable-next-line easy68k/layer-imports
+// dependencies; this one file is test support, allowed fake-indexeddb by name in eslint.config.js
+// (TEST_ONLY_FILE_PACKAGES; docs/requests/N0.md section 7 item 1, errata N3).
 import { IDBFactory, IDBKeyRange } from 'fake-indexeddb';
 import type { Clock, HistoryService, Scheduler, Settings, SettingsService, Vfs } from '../contracts';
 import { createHistoryStore, type HistoryDeps, type HistoryStore, type HistoryStoreOptions } from './history-db';

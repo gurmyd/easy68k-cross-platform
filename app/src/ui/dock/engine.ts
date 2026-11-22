@@ -329,7 +329,15 @@ export class DockEngine implements DockLive {
   stripFor(panels: readonly string[]): boolean {
     const locked = this.locked();
     if (needsStrip(panels, locked)) return true;
-    return this.mode === 'simulator' && this.narrow && this.isDefault() && panels.includes('output');
+    return this.narrowOutputStrip() && panels.includes('output');
+  }
+
+  /**
+   * The simulator's narrow default arrangement, in which the Output panel's group always shows its
+   * strip and its tab list keeps today's name `Tool panels`, also with Output alone (errata N1 6).
+   */
+  private narrowOutputStrip(): boolean {
+    return this.mode === 'simulator' && this.narrow && this.isDefault();
   }
 
   has(id: string): boolean {
@@ -845,13 +853,14 @@ export class DockEngine implements DockLive {
       (tabId) => isViewerId(panelOfTab(tabId) ?? ''),
     );
     // The tab list of the tool panels' group keeps today's name (`Tool panels`).
+    const narrowOutput = this.narrowOutputStrip();
     for (const strip of Array.from(root.querySelectorAll('.flexlayout__tabset'))) {
       const list = strip.querySelector('[role="tablist"]');
       if (!list) continue;
       const panels = Array.from(list.querySelectorAll('[role="tab"][id^="flexlayout-tabbutton-"]')).map(
         (tab) => panelOfTab(tab.id.slice('flexlayout-tabbutton-'.length)) ?? '',
       );
-      const label = groupLabel(panels);
+      const label = groupLabel(panels, narrowOutput);
       if (label === undefined) list.removeAttribute('aria-label');
       else if (list.getAttribute('aria-label') !== label) list.setAttribute('aria-label', label);
     }
@@ -873,23 +882,36 @@ export class DockEngine implements DockLive {
     const want = tabIdsInReadingOrder(model);
     const have = controller._orderedTabIds.filter((id) => want.includes(id));
     if (sameList(have, want)) return;
-    const active = this.element?.ownerDocument.activeElement as HTMLElement | null;
+    const owner = this.element?.ownerDocument;
+    // The element to give the focus back to is the one that held it last before the move took it:
+    // a focus request that lands between this call and the redraw (a panel just shown) wins over
+    // the element focused now.
+    let active = owner?.activeElement as HTMLElement | null | undefined;
+    const follow = (event: FocusEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && typeof target.focus === 'function') active = target;
+    };
+    owner?.addEventListener('focusin', follow, true);
     controller._orderedTabIds = [...want];
     controller.redrawLayout();
-    const view = this.element?.ownerDocument.defaultView;
-    if (active && view) {
-      view.requestAnimationFrame(() => {
-        const document = this.element?.ownerDocument;
-        if (
-          document &&
-          active.isConnected &&
-          document.activeElement !== active &&
-          (document.activeElement === document.body || document.activeElement === null)
-        ) {
-          active.focus({ preventScroll: true });
-        }
-      });
+    const view = owner?.defaultView;
+    if (!view) {
+      owner?.removeEventListener('focusin', follow, true);
+      return;
     }
+    view.requestAnimationFrame(() => {
+      owner?.removeEventListener('focusin', follow, true);
+      const document = this.element?.ownerDocument;
+      if (
+        active &&
+        document &&
+        active.isConnected &&
+        document.activeElement !== active &&
+        (document.activeElement === document.body || document.activeElement === null)
+      ) {
+        active.focus({ preventScroll: true });
+      }
+    });
   }
 
   /** The focus is in `panel`, on its tab, or on another tab of its group. */

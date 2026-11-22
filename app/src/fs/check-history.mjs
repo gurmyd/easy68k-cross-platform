@@ -13,9 +13,13 @@
 //     consistent (the totals are the sums of the records, every content is named by a version);
 //   - several windows (two pages of one browser): saving the same and different files at once 200
 //     times ends with totals equal to the sums of the records; deleting items of B / 6 at once, 50
-//     times each, never leaves the Trash half above B / 2; two pages restoring one item at once write
-//     the file from the Trash and leave the records consistent; the pass lock lets one page run the
+//     times each, never leaves the Trash half above B / 2; two pages restoring one item at once, on
+//     the one real browser file store they share, write the file from the Trash, take the item out
+//     of the Trash and leave the records consistent; the pass lock lets one page run the
 //     global pass at a time; deleteAll completes while a second page has the database open;
+//   - an opened folder with a real directory handle (the origin private file system's): its root is
+//     stored with the handle and found again with isSameEntry from another handle object, by a new
+//     store; another folder is not taken for it; a Trash item of it names the folder (folderName);
 //   - Chromium only: after a run like stress run (c) (1 MB files that do not compress; --full for
 //     the whole run of 1,000 saves, else 150), the ratio of the growth of estimate().usage to the
 //     counted bytes (P3.3.4, "Worst case": if it is above 2, B is divided by it); storage full, with
@@ -393,39 +397,62 @@ async function windows(context, name) {
     afterDeletes.problems.length === 0,
     afterDeletes.problems.join('; '),
   );
-  // Two pages restoring one item at once.
+  // Two pages restoring one item at once, on ONE file store: both pages mount the real browser
+  // store (its IndexedDB database is the origin's, shared by the pages), so the page that comes
+  // second finds the file the first one wrote, and its ask/guard('replace') runs against it.
+  for (const page of [a.page, b.page])
+    await page.evaluate((q) => window.__n3.setup({ files: 'browser', quota: q }), quota);
   const item = await a.page.evaluate(async () => {
     const { save, store, remover, text } = window.__n3;
     await save('/browser/r/one.X68', text('from the trash'));
     return (await store.guard('/browser/r/one.X68', 'delete', remover('/browser/r/one.X68'), async () => true)).item;
   });
-  // Page b mounts the same file store? No: each page has its own memory files. Restore in both at
-  // once; each writes into its own /browser, and the records are changed once.
+  const goneFirst = await b.page.evaluate(async () => (await window.__n3.vfs.stat('/browser/r/one.X68')) === null);
   const restores = await Promise.all(
     [a.page, b.page].map((page) =>
       page.evaluate(async (id) => {
-        const { store, vfs } = window.__n3;
+        const { store } = window.__n3;
+        const asked = [];
         const out = await store.restoreTrash(id, {
-          ask: async () => 'replace',
+          ask: async (path) => (asked.push(path), 'replace'),
           fallback: async () => null,
           confirm: async () => true,
         });
-        const stat = await vfs.stat('/browser/r/one.X68');
         return {
           restored: out.restored,
+          left: out.left,
+          lost: out.lost,
           gone: out.gone,
-          written: stat ? new TextDecoder().decode(await vfs.readFile('/browser/r/one.X68')) : null,
+          error: out.error ?? null,
+          asked,
         };
       }, item),
     ),
   );
+  // Both pages read the one file store.
+  const written = await Promise.all(
+    [a.page, b.page].map((page) =>
+      page.evaluate(async () => {
+        const { vfs } = window.__n3;
+        const stat = await vfs.stat('/browser/r/one.X68');
+        return stat ? new TextDecoder().decode(await vfs.readFile('/browser/r/one.X68')) : null;
+      }),
+    ),
+  );
   const consistent = await a.page.evaluate(() => window.__n3.consistent());
+  const leftInTrash = await a.page.evaluate(
+    async (id) => (await window.__n3.store.trashItems()).filter((i) => i.id === id).length,
+    item,
+  );
   check(
-    `${p} two pages restoring one item at once: the file is written from the Trash, the records stay consistent`,
-    restores.some((r) => r.written === 'from the trash') &&
-      restores.every((r) => r.written === null || r.written === 'from the trash') &&
+    `${p} two pages restoring one item at once on one file store: the file is written from the Trash, the item leaves the Trash, the records stay consistent`,
+    goneFirst &&
+      written.every((w) => w === 'from the trash') &&
+      restores.some((r) => r.restored.length === 1) &&
+      restores.every((r) => r.error === null) &&
+      leftInTrash === 0 &&
       consistent.problems.length === 0,
-    `${JSON.stringify(restores)} ${consistent.problems.join('; ')}`,
+    `deleted first: ${goneFirst}; both pages read ${JSON.stringify(written)}; ${JSON.stringify(restores)}; item in the Trash: ${leftInTrash}; ${consistent.problems.join('; ')}`,
   );
   // The pass lock: while page a holds it, page b's pass does nothing; then it runs.
   await b.page.evaluate(() =>
@@ -619,6 +646,98 @@ async function quotaError(context) {
 
 // ---- main ---------------------------------------------------------------------------------------------
 
+/**
+ * An opened folder with a real FileSystemDirectoryHandle (the origin private file system's, which
+ * has the same interface as a folder the student picks): its root is stored in the roots store with
+ * the handle, found again with isSameEntry from another handle object of the same folder (also by a
+ * new store that reads the handle back from IndexedDB, as a new page would), not found for another
+ * folder; and a Trash item of it names the folder (folderName) when it is not open.
+ */
+async function openedFolder(context, name) {
+  const p = `${name}:`;
+  const { page, errors } = await openPage(context);
+  await page.evaluate(() => window.__n3.setup({ files: 'memory' }));
+  const out = await page.evaluate(async () => {
+    let step = 'import';
+    try {
+      return await run();
+    } catch (error) {
+      return { failed: `${step}: ${error?.name}: ${error?.message}` };
+    }
+    async function run() {
+      const { FolderBackend } = await import('/src/fs/fsaccess-backend.ts');
+      let root;
+      try {
+        root = await navigator.storage.getDirectory();
+      } catch (error) {
+        return { noFolders: `navigator.storage.getDirectory(): ${error?.name}: ${error?.message}` };
+      }
+      step = 'getDirectoryHandle';
+      const lab = await root.getDirectoryHandle('lab', { create: true });
+      await root.getDirectoryHandle('other', { create: true });
+      const { vfs, store, remover, text } = window.__n3;
+      vfs.mount(new FolderBackend(lab, { mount: 'folder' }));
+      step = 'writeFile through FolderBackend';
+      await vfs.writeFile('/folder/prog.X68', text('in lab'));
+      step = 'the history';
+      await store.record('/folder/prog.X68', text('in lab'), 'saved', Date.now());
+      const kept = await store.versions('/folder/prog.X68');
+      const deleted = await store.guard('/folder/prog.X68', 'delete', remover('/folder/prog.X68'), async () => true);
+      const info = (items) => items.map((i) => ({ in: i.restorableInPlace, folder: i.folderName ?? null }));
+      vfs.unmount('folder');
+      const closed = info(await store.trashItems());
+      // Another handle object of the same folder, in a new store (a new page: the roots come from
+      // IndexedDB, with their handles).
+      await window.__n3.setup({ files: 'memory' });
+      const again = await (await navigator.storage.getDirectory()).getDirectoryHandle('lab');
+      window.__n3.vfs.mount(new FolderBackend(again, { mount: 'folder' }));
+      const reopened = info(await window.__n3.store.trashItems());
+      window.__n3.vfs.unmount('folder');
+      const other = await (await navigator.storage.getDirectory()).getDirectoryHandle('other');
+      window.__n3.vfs.mount(new FolderBackend(other, { mount: 'folder' }));
+      const otherFolder = info(await window.__n3.store.trashItems());
+      return { versions: kept.length, outcome: deleted.outcome, closed, reopened, otherFolder };
+    }
+  });
+  if (out.noFolders) {
+    // The test fixture is missing, not the store failing: Playwright's WebKit on Windows rejects
+    // navigator.storage.getDirectory() (UnknownError). The store's side is checked in Chromium.
+    note(
+      `${name}: this browser gives the page no origin private file system (${out.noFolders}); the opened-folder pass did not run`,
+    );
+    check(`${p} opened folder: no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+    await page.close();
+    return;
+  }
+  if (out.failed) {
+    check(`${p} opened folder (real directory handle) ran to the end`, false, out.failed);
+    await page.close();
+    return;
+  }
+  check(
+    `${p} opened folder (real directory handle): a version is kept and a delete goes to the Trash`,
+    out.versions === 1 && out.outcome === 'kept',
+    JSON.stringify(out),
+  );
+  check(
+    `${p} opened folder: not open, the item names the folder`,
+    out.closed.length === 1 && out.closed[0].in === false && out.closed[0].folder === 'lab',
+    JSON.stringify(out.closed),
+  );
+  check(
+    `${p} opened folder: the same folder through another handle, in a new store, is found with isSameEntry`,
+    out.reopened.length === 1 && out.reopened[0].in === true,
+    JSON.stringify(out.reopened),
+  );
+  check(
+    `${p} opened folder: another folder is not taken for it`,
+    out.otherFolder.length === 1 && out.otherFolder[0].in === false && out.otherFolder[0].folder === 'lab',
+    JSON.stringify(out.otherFolder),
+  );
+  check(`${p} opened folder: no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await page.close();
+}
+
 async function main() {
   const server = await createServer({
     configFile: join(appRoot, 'vite.config.ts'),
@@ -656,6 +775,7 @@ async function main() {
         };
         await pass('the scenario', (context) => scenario(context, name));
         await pass('several windows', (context) => windows(context, name));
+        await pass('opened folder', (context) => openedFolder(context, name));
         if (name === 'chromium') {
           await pass('run (c)', (context) => ratio(context));
           await pass('storage full', (context) => storageFull(context));

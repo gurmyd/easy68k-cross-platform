@@ -25,11 +25,20 @@
 // shows its message (icon `error`); a restore that wrote some of the item's files but not all ends
 // with `2 of 5 files were restored. ...` (P3.3.8).
 
-import type { DialogService, DocumentService, HistoryService, TrashItemInfo, VPath, Vfs } from '../../contracts';
-import { cannotKeepQuestion } from '../history/texts';
+import type {
+  DialogService,
+  DocumentService,
+  HistoryService,
+  MessageBoxRequest,
+  TrashItemInfo,
+  VPath,
+  Vfs,
+} from '../../contracts';
+import { cannotKeepQuestion, type CannotKeepCommand } from '../history/texts';
 import { basename, childPath, dirname, foldCase, mountOf } from '../paths/winpath';
 import {
   RESTORED_FOLDER,
+  UNKNOWN_FOLDER_NAME,
   existsQuestion,
   folderNotOpen,
   noLongerInTrash,
@@ -52,11 +61,27 @@ export interface RestoreFlowDeps {
   vfs?: Pick<Vfs, 'stat'>;
 }
 
+/**
+ * The question of P3.3.4 when no copy can be kept: titled with the command, `warning`, `Yes`, `No`,
+ * and No has the focus (`defaultButton`), so that a stray Enter does not do what cannot be undone.
+ */
+export function cannotKeepBox(
+  title: string,
+  command: CannotKeepCommand,
+  name: string,
+  isFolder: boolean,
+): MessageBoxRequest {
+  return {
+    title,
+    text: cannotKeepQuestion(command, name, isFolder),
+    icon: 'warning',
+    buttons: ['Yes', 'No'],
+    defaultButton: 'No',
+  };
+}
+
 /** The folder of My Programs that takes the files of an item whose store is not mounted (P3.3.8). */
 export const RESTORED_FALLBACK: VPath = `/browser/${RESTORED_FOLDER}`;
-
-/** The name of an opened folder that is not open now, when the store does not tell it. */
-const UNKNOWN_FOLDER_NAME = 'opened folder';
 
 /** True when two paths name one file: the browser store compares letter case folded (P4.3). */
 function samePath(a: VPath, b: VPath): boolean {
@@ -89,8 +114,7 @@ async function besideName(deps: RestoreFlowDeps, path: VPath): Promise<string> {
 function fallbackText(deps: RestoreFlowDeps, item: TrashItemInfo): string {
   const name = basename(item.path);
   if (item.path === '/folder' || item.path.startsWith('/folder/')) {
-    const folderName = (item as TrashItemInfo & { folderName?: string }).folderName ?? UNKNOWN_FOLDER_NAME;
-    return folderNotOpen(name, folderName);
+    return folderNotOpen(name, item.folderName ?? UNKNOWN_FOLDER_NAME);
   }
   return placeUnreachable(name, deps.placeShort(dirname(item.path)));
 }
@@ -141,12 +165,7 @@ export async function restoreWithQuestions(
         },
         confirm: async (path) => {
           if (toldCannotUndo.has(path)) return true;
-          const answer = await deps.dialogs.messageBox({
-            title,
-            text: cannotKeepQuestion('replace', basename(path), false),
-            icon: 'warning',
-            buttons: ['Yes', 'No'],
-          });
+          const answer = await deps.dialogs.messageBox(cannotKeepBox(title, 'replace', basename(path), false));
           return answer === 'Yes';
         },
         after: async (path) => {

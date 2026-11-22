@@ -13,7 +13,7 @@
 // prints its steps; EASY68K_N5_STEPS sets the steps per seed (default 60).
 
 import { describe, expect, it } from 'vitest';
-import type { Bytes, HistoryService, MessageBoxRequest, VPath } from '../../contracts';
+import type { Bytes, HistoryService, MessageBoxRequest, Vfs, VPath } from '../../contracts';
 import { CANNOT_BE_UNDONE } from '../../core/history/texts';
 import { basename, dirname, foldCase } from '../../core/paths/winpath';
 import { createMemoryHistoryService, historyDatabaseOf } from '../../fs/history-memory';
@@ -34,6 +34,28 @@ const MB = 1 << 20;
 
 interface Stats {
   [key: string]: number;
+}
+
+/**
+ * Every file and folder below a folder named .git (any letter case) in any store, with its bytes
+ * (a folder: 'dir'). A FILE named .git (a work tree's pointer) is not below one and is left out.
+ */
+async function belowGit(vfs: Vfs): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const walk = async (dir: VPath, inGit: boolean) => {
+    for (const entry of await vfs.list(dir).catch(() => [])) {
+      const path = `${dir}/${entry.name}` as VPath;
+      const git = inGit || (entry.kind === 'dir' && foldCase(entry.name) === foldCase('.git'));
+      if (entry.kind === 'dir') {
+        if (git) out.set(path, 'dir');
+        await walk(path, git);
+      } else if (inGit) {
+        out.set(path, Buffer.from(await vfs.readFile(path)).toString('base64'));
+      }
+    }
+  };
+  for (const backend of vfs.backends()) await walk(`/${backend.mount}` as VPath, false);
+  return out;
 }
 
 async function runSeed(seed: number, trace: string[], stats: Stats): Promise<string | null> {
@@ -178,6 +200,9 @@ async function runSeed(seed: number, trace: string[], stats: Stats): Promise<str
       async () => {
         // Mostly within one store (a move); now and then across stores (a copy) or at the repository.
         let items = someItems();
+        // Now and then a selection that names the repository's .git folder itself (the tree never
+        // lists it; a command given one must still refuse it).
+        if (chance(0.05)) items = [...items, pick(['/browser/repo/.git', '/browser/repo/.GIT'])];
         let into = pick([...folders, '/browser/repo/.git', '/browser/repo']);
         if (chance(0.7)) {
           const mount = (items[0] as VPath).split('/')[1] as string;
@@ -204,11 +229,19 @@ async function runSeed(seed: number, trace: string[], stats: Stats): Promise<str
       6,
       'rename',
       async () => {
-        const from = pick([...files(), '/browser/a', '/browser/repo', '/disk/lab']);
+        const from = pick([...files(), '/browser/a', '/browser/repo', '/disk/lab', '/browser/a/sub']);
         if (!(await model.vfs.stat(from).catch(() => null))) return `rename ${from}: gone`;
         if (await renameRefused(deps, from)) return `rename ${from}: refused`;
         const name = basename(from);
-        const to = chance(0.4) ? (name === name.toUpperCase() ? name.toLowerCase() : name.toUpperCase()) : `n${name}`;
+        // Now and then the name .git in some letter case: a folder must never become one (P1.1
+        // rule 2, verify round 2); a file may.
+        const to = chance(0.15)
+          ? pick(['.git', '.GIT', '.Git'])
+          : chance(0.4)
+            ? name === name.toUpperCase()
+              ? name.toLowerCase()
+              : name.toUpperCase()
+            : `n${name}`;
         try {
           const renamed = await renameChecked(model.vfs, from, to);
           await afterRename(deps, from, renamed);
@@ -278,6 +311,7 @@ async function runSeed(seed: number, trace: string[], stats: Stats): Promise<str
     }
     count(chosen[1]);
     const before = new Map(model.files);
+    const gitBefore = await belowGit(raw);
     lossAccepted = false;
     let line: string;
     try {
@@ -309,9 +343,15 @@ async function runSeed(seed: number, trace: string[], stats: Stats): Promise<str
         }
       }
     }
-    // Nothing below the repository's .git changed.
-    if (!(await raw.stat('/browser/repo/.git/HEAD').catch(() => null))) {
-      model.violations.push('a command of the Files panel removed or moved /browser/repo/.git/HEAD');
+    // Nothing below a folder named .git (any letter case, anywhere) was written, removed or made by
+    // the step: no file or folder there appeared, went or changed its bytes (P1.1 rule 2). No step
+    // of this test writes below .git on its own (save and program never pick such a path).
+    const gitAfter = await belowGit(raw);
+    const gitChanges = [...new Set([...gitBefore.keys(), ...gitAfter.keys()])].filter(
+      (p) => gitBefore.get(p) !== gitAfter.get(p),
+    );
+    if (gitChanges.length > 0) {
+      model.violations.push(`(P1.1 rule 2) the step changed below a .git folder: ${gitChanges.sort().join(', ')}`);
     }
     const violations = await checkHistoryInvariants(historyDatabaseOf(store as HistoryService), raw, model);
     if (violations.length > 0) return `step ${step} (${line}): ${violations.join('; ')}`;

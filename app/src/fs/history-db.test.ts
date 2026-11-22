@@ -1,7 +1,14 @@
 // The history store under Node, on fake-indexeddb with a fake clock and a memory Vfs
 // (ARCHITECTURE-PLUS P3.3, P4.4; the unit list of P5 N3). The model test is history-model.test.ts.
 
-import { IDBFactory } from 'fake-indexeddb';
+import {
+  IDBCursor as FakeIDBCursor,
+  IDBDatabase as FakeIDBDatabase,
+  IDBFactory,
+  IDBIndex as FakeIDBIndex,
+  IDBObjectStore as FakeIDBObjectStore,
+  IDBTransaction as FakeIDBTransaction,
+} from 'fake-indexeddb';
 import { describe, expect, it, vi } from 'vitest';
 import type { Bytes, HistoryState, SeenFile, Settings, SettingsService, VPath } from '../contracts';
 import { DAY, MB, MINUTE } from '../core/history/limits';
@@ -402,6 +409,28 @@ describe('guard (P3.3.4)', () => {
     expect(act).not.toHaveBeenCalled();
   });
 
+  it('an opened folder that is itself a .git folder: record keeps nothing, guard rejects without act', async () => {
+    // Open Folder... or a drop may choose a repository's .git folder: no segment of its paths says
+    // .git, but every file in it lies below one (P1.1 rule 2, P3.3.10; the gate, from N5's report).
+    const env = setup();
+    const folder = new MemoryBackend({ mount: 'folder', kind: 'fsaccess', label: '.GIT' });
+    Object.assign(folder, { rootHandle: { kind: 'directory', name: '.GIT' } });
+    env.vfs.mount(folder);
+    const h = env.make();
+    await env.vfs.writeFile('/folder/HEAD', text('ref: refs/heads/main'));
+    await env.vfs.mkdirp('/folder/refs');
+    await h.record('/folder/HEAD', text('ref: refs/heads/main'), 'saved', START);
+    await h.record('/folder/prog.X68', text('x'), 'saved', START);
+    expect((await dump(env.factory)).versions).toHaveLength(0);
+    const act = vi.fn(async () => {});
+    const confirm = vi.fn(yes);
+    await expect(h.guard('/folder/HEAD', 'delete', act, confirm)).rejects.toThrow(/git/i);
+    await expect(h.guard('/folder/refs', 'delete', act, confirm)).rejects.toThrow(/git/i);
+    await expect(h.guard('/folder/none.X68', 'replace', act, confirm)).rejects.toThrow(/git/i);
+    expect(act).not.toHaveBeenCalled();
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
   it('a copy of 20 MB is kept, one of 20 MB + 1 byte and an item above B / 2 call confirm', async () => {
     const env = setup();
     const h = env.make();
@@ -769,6 +798,32 @@ describe('moved and restore (P3.3.5)', () => {
     expect(out.restored).toEqual(['/browser/Restored/p.X68']);
     expect(decode(await env.vfs.readFile('/browser/Restored/p.X68'))).toBe('p');
   });
+
+  it('an item of an opened folder that is not open names the folder (P3.3.8, folderName)', async () => {
+    const env = setup();
+    const h = env.make();
+    env.vfs.mount(new MemoryBackend({ mount: 'folder', kind: 'fsaccess', label: 'Lab' }));
+    await save(env, h, '/folder/p.X68', text('p'));
+    await h.guard('/folder/p.X68', 'delete', remover(env, '/folder/p.X68'), yes);
+    const [open] = await h.trashItems();
+    expect(open?.restorableInPlace).toBe(true);
+    env.vfs.unmount('folder');
+    const [info] = await h.trashItems();
+    expect(info?.restorableInPlace).toBe(false);
+    expect(info?.folderName).toBe('Lab');
+    // restoreTrash hands the same name to fallback.
+    let offered: unknown;
+    await h.restoreTrash(info?.id ?? '', {
+      ...RESTORE_ALL,
+      fallback: async (item) => ((offered = item.folderName), null),
+    });
+    expect(offered).toBe('Lab');
+    // An item of the browser store has none.
+    await save(env, h, '/browser/q.X68', text('q'));
+    await h.guard('/browser/q.X68', 'delete', remover(env, '/browser/q.X68'), yes);
+    const browserItem = (await h.trashItems()).find((i) => i.path === '/browser/q.X68');
+    expect(browserItem && 'folderName' in browserItem).toBe(false);
+  });
 });
 
 describe('the halves never take room from each other (P3.3.4)', () => {
@@ -1031,39 +1086,59 @@ describe('states and the database (P3.3.5, P3.3.7, P4.4)', () => {
 
   it('a fake IndexedDB that fails any request issued after a non-IndexedDB await passes every operation', async () => {
     // fake-indexeddb ends a transaction as soon as control returns to the event loop with nothing
-    // pending, so any request after an await on something else (a timer, a hash) throws. The spy
-    // counts such failures across every member of the store.
+    // pending, so any request after an await on something else (a timer, a hash) throws
+    // TransactionInactiveError. Several members catch every error and resolve (moved, dropTrash,
+    // clearVersions, the global pass), so a rejection would not show such a failure: the spy is
+    // on fake-indexeddb itself and counts every request that throws and every transaction that
+    // aborts, whoever catches it; and each member's effect is checked as well.
     const env = setup();
-    const failures: string[] = [];
-    const h = env.make();
-    const watch = <T>(p: Promise<T>) =>
-      p.catch((e: unknown) => {
-        failures.push(String(e));
-        throw e;
-      });
-    await save(env, h, '/browser/d/a.X68', text('a'));
-    await save(env, h, '/browser/d/b.X68', text('b'));
-    await watch(h.versions('/browser/d/a.X68'));
-    await watch(h.guard('/browser/d/a.X68', 'replace', writer(env, '/browser/d/a.X68', text('A'), 'replace'), yes));
-    await watch(h.guard('/browser/d/a.X68', 'restore', writer(env, '/browser/d/a.X68', text('a'), 'restore'), yes));
-    for (const n of ['a', 'b']) {
-      await env.vfs.writeFile(`/browser/e/${n}.X68`, await env.vfs.readFile(`/browser/d/${n}.X68`));
-      await env.vfs.remove(`/browser/d/${n}.X68`);
+    const spy = spyOnIndexedDb();
+    try {
+      // The spy sees the failure it is there for: a request after a timer inside a transaction.
+      await expect(foreignAwaitInTransaction(env.factory)).rejects.toThrow();
+      expect(spy.failures.length).toBeGreaterThan(0);
+      spy.failures.length = 0;
+
+      const h = env.make();
+      await save(env, h, '/browser/d/a.X68', text('a'));
+      await save(env, h, '/browser/d/b.X68', text('b'));
+      expect((await h.versions('/browser/d/a.X68')).map((v) => v.reason)).toEqual(['saved']);
+      await h.guard('/browser/d/a.X68', 'replace', writer(env, '/browser/d/a.X68', text('A'), 'replace'), yes);
+      expect((await h.trashItems()).map((i) => i.cause)).toEqual(['replaced']);
+      await h.guard('/browser/d/a.X68', 'restore', writer(env, '/browser/d/a.X68', text('a'), 'restore'), yes);
+      expect((await h.versions('/browser/d/a.X68')).map((v) => v.reason)).toContain('before-restore');
+      for (const n of ['a', 'b']) {
+        await env.vfs.writeFile(`/browser/e/${n}.X68`, await env.vfs.readFile(`/browser/d/${n}.X68`));
+        await env.vfs.remove(`/browser/d/${n}.X68`);
+      }
+      await env.vfs.remove('/browser/d');
+      await h.moved('/browser/d', '/browser/e');
+      expect(await h.versions('/browser/d/b.X68')).toEqual([]);
+      expect((await h.versions('/browser/e/b.X68')).length).toBe(1);
+      const { item } = await h.guard('/browser/e', 'delete', remover(env, '/browser/e'), yes);
+      expect(item).toBeDefined();
+      expect(await env.vfs.stat('/browser/e/a.X68')).toBeNull();
+      const out = await h.restoreTrash(item ?? '', RESTORE_ALL);
+      expect(out.restored.sort()).toEqual(['/browser/e/a.X68', '/browser/e/b.X68']);
+      await h.globalPass();
+      expect((await h.versions('/browser/e/a.X68')).length).toBeGreaterThan(0);
+      await h.clearVersions();
+      expect(await h.versions('/browser/e/a.X68')).toEqual([]);
+      expect(await h.versions('/browser/e/b.X68')).toEqual([]);
+      expect((await h.trashItems()).length).toBeGreaterThan(0);
+      await h.dropTrash((await h.trashItems()).map((i) => i.id));
+      expect(await h.trashItems()).toEqual([]);
+      const usage = await h.usage();
+      expect([usage.versions, usage.trashItems, usage.trashBytes]).toEqual([0, 0, 0]);
+      // A plan that went on after its transaction ended issues its next request later (when its
+      // foreign await ends), after the member already resolved: let such stragglers run.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(spy.failures).toEqual([]);
+      expect(h.unavailableDetail()).toBeNull();
+      expect(h.unreadable()).toBe(0);
+    } finally {
+      spy.restore();
     }
-    await env.vfs.remove('/browser/d');
-    await watch(h.moved('/browser/d', '/browser/e'));
-    const { item } = await watch(h.guard('/browser/e', 'delete', remover(env, '/browser/e'), yes));
-    expect(item).toBeDefined();
-    await watch(h.restoreTrash(item ?? '', RESTORE_ALL));
-    await watch(h.globalPass());
-    await watch(h.clearVersions());
-    await watch(h.dropTrash((await h.trashItems()).map((i) => i.id)));
-    await watch(h.usage());
-    expect(failures).toEqual([]);
-    // And the changes really happened: each kept what it should.
-    expect((await dump(env.factory)).meta.find((m) => m.key === 'totals')).toBeDefined();
-    expect(h.unavailableDetail()).toBeNull();
-    expect(h.unreadable()).toBe(0);
   });
 
   it('the texts of P3.3.4, exactly', () => {
@@ -1137,4 +1212,84 @@ async function poke(factory: IDBFactory, store: string, fn: (store: IDBObjectSto
     tx.oncomplete = () => resolve();
   });
   db.close();
+}
+
+/**
+ * Counts, on fake-indexeddb's own classes, every request method that throws (an inactive
+ * transaction: TransactionInactiveError) and every transaction that aborts, whatever code catches
+ * the error afterwards.
+ */
+function spyOnIndexedDb(): { failures: string[]; restore(): void } {
+  const failures: string[] = [];
+  const undo: (() => void)[] = [];
+  const wrap = (proto: object, names: readonly string[], label: string) => {
+    for (const name of names) {
+      const own = proto as Record<string, unknown>;
+      const original = own[name];
+      if (typeof original !== 'function') continue;
+      own[name] = function (this: unknown, ...args: unknown[]) {
+        try {
+          return (original as (...a: unknown[]) => unknown).apply(this, args);
+        } catch (error) {
+          failures.push(`${label}.${name}: ${String(error)}`);
+          throw error;
+        }
+      };
+      undo.push(() => {
+        own[name] = original;
+      });
+    }
+  };
+  const requests = [
+    'get',
+    'getAll',
+    'getAllKeys',
+    'getKey',
+    'put',
+    'add',
+    'delete',
+    'clear',
+    'count',
+    'openCursor',
+    'openKeyCursor',
+  ];
+  wrap(FakeIDBObjectStore.prototype, [...requests, 'index'], 'IDBObjectStore');
+  wrap(FakeIDBIndex.prototype, requests, 'IDBIndex');
+  wrap(FakeIDBCursor.prototype, ['continue', 'advance', 'continuePrimaryKey', 'update', 'delete'], 'IDBCursor');
+  wrap(FakeIDBTransaction.prototype, ['objectStore'], 'IDBTransaction');
+  const dbProto = FakeIDBDatabase.prototype as unknown as { transaction: (...a: unknown[]) => IDBTransaction };
+  const transaction = dbProto.transaction;
+  dbProto.transaction = function (this: unknown, ...args: unknown[]) {
+    const tx = transaction.apply(this, args);
+    tx.addEventListener('abort', () => failures.push(`transaction aborted: ${String(tx.error)}`));
+    return tx;
+  };
+  undo.push(() => {
+    dbProto.transaction = transaction;
+  });
+  return {
+    failures,
+    restore: () => {
+      for (const step of undo.reverse()) step();
+    },
+  };
+}
+
+/** A transaction that issues a request after a timer: what the spy must see. */
+async function foreignAwaitInTransaction(factory: IDBFactory): Promise<void> {
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const r = factory.open('easy68k-history-spy-probe');
+    r.onupgradeneeded = () => r.result.createObjectStore('s');
+    r.onsuccess = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+  });
+  try {
+    const tx = db.transaction('s', 'readwrite');
+    const store = tx.objectStore('s');
+    store.put(1, 'a');
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    store.put(2, 'b'); // the transaction has committed by now: this throws
+  } finally {
+    db.close();
+  }
 }

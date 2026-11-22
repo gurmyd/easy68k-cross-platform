@@ -150,6 +150,10 @@ export interface MessageBoxRequest {
   text: string;
   icon: 'none' | 'information' | 'confirmation' | 'warning' | 'error';
   buttons: ('OK' | 'Cancel' | 'Yes' | 'No' | 'Replace' | 'Append')[];
+  /** The button that is the default and has the focus when the box opens, so that Enter presses
+   *  it (ARCHITECTURE-PLUS P3.3.4: "No has the focus"). Absent, or not one of `buttons`: the first
+   *  button, as before. Added by the stage of additions (docs/requests/N5-default-button.md). */
+  defaultButton?: MessageBoxRequest['buttons'][number];
 }
 /** Options of DialogService.toast. Added at gate I1 (docs/porting/errata/W1.md, entry 11). */
 export interface ToastOptions {

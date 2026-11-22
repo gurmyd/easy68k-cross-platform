@@ -223,7 +223,7 @@ describe('the keys of the Files tree (P1.3)', () => {
     ['Option+Space toggles (macOS)', key(' ', { altKey: true }), 'mac', { kind: 'toggle' }],
     [
       'Option+Space on a real Mac (key is a no-break space) toggles',
-      { ...key(' ', { altKey: true }), code: 'Space' },
+      { ...key('\u00a0', { altKey: true }), code: 'Space' },
       'mac',
       { kind: 'toggle' },
     ],

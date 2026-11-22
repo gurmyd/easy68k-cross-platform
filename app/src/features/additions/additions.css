@@ -14,6 +14,14 @@
   gap: var(--sp-2);
 }
 
+/* WebKit lays the legend of this flex-column fieldset out as wide as the group, which cuts the top
+   border out from the caption to the right corner; the legend is as wide as its caption (gate
+   finding; check-additions.mjs measures it). */
+.e68-additions__storage > .e68-groupbox__caption {
+  width: max-content;
+  max-width: 100%;
+}
+
 .e68-additions__figures {
   display: flex;
   flex-direction: column;

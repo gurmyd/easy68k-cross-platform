@@ -307,7 +307,7 @@ describe('restoreWithQuestions against the store (P3.3.8)', () => {
           title: 'Restore',
           text:
             mount === 'folder'
-              ? folderNotOpen('prog.X68', 'opened folder')
+              ? folderNotOpen('prog.X68', 'Lab') // the folder's own name, from the store (P3.3.8)
               : placeUnreachable('prog.X68', t.deps.placeShort(`/${mount}/lab` as VPath)),
           icon: 'confirmation',
           buttons: ['Yes', 'No'],
@@ -401,11 +401,13 @@ describe('restoreWithQuestions with a scripted restoreTrash', () => {
     });
     t.answers.push('Yes', 'No');
     await restoreWithQuestions(t.deps, [{ id: '1', path: '/browser/prog.X68' }], 'Restore');
+    // No has the focus (P3.3.4; MessageBoxRequest.defaultButton of docs/requests/N5-default-button.md).
     expect(t.boxes[1]).toEqual({
       title: 'Restore',
       text: cannotKeepQuestion('replace', 'prog.X68', false),
       icon: 'warning',
       buttons: ['Yes', 'No'],
+      defaultButton: 'No',
     });
   });
 

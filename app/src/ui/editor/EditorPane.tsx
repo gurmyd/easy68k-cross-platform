@@ -105,6 +105,9 @@ export function EditorPane({
   const accepting = twoPanes && dragging !== null && !pane.ids.includes(dragging);
   const drag = {
     type: DOCUMENT_DRAG_TYPE,
+    // A dropped document takes its place by the order of opening, as `Move to the Other Pane`
+    // does, not at the tab it was dropped on: the strip is outlined, no tab is marked.
+    positional: false,
     data: (id: string) => {
       onDragDocument?.(id);
       return documentDragData(token, id);

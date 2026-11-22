@@ -2,7 +2,7 @@
 //
 // The strip: the file's name, its size, `Actual Size` (pictures: a toggle with aria-pressed;
 // pressed = 1:1 with scroll bars, not pressed = scaled to fit), `Open as Text`, `Export` (web
-// only). Below it:
+// only; both left out of the strip while the notice shows them). Below it:
 //   - a picture: <img src="blob:..."> with alt = the file's name, centred on --c-surface; one that
 //     fails to decode shows the notice;
 //   - a PDF: an iframe whose src is the viewer's own `blob:` URL of type application/pdf, titled
@@ -67,6 +67,9 @@ export function ViewerPanel({ handle }: { handle: ViewerHandle }) {
   const pictureFailed = snapshot.kind === 'picture' && failedUrl !== null && failedUrl === snapshot.url;
   const showsPicture = snapshot.kind === 'picture' && !pictureFailed;
   const showsFrame = snapshot.kind === 'pdf' && actions.pdfViewerEnabled();
+  // The notice carries `Open as Text` and `Export` itself; the strip does not repeat them then, so
+  // that the tab holds one button of each name (errata N6 7).
+  const showsNotice = !showsPicture && !showsFrame;
 
   let body;
   if (showsPicture) {
@@ -104,8 +107,8 @@ export function ViewerPanel({ handle }: { handle: ViewerHandle }) {
         {showsPicture && (
           <Button size="small" caption={ACTUAL_SIZE} aria-pressed={actual} onClick={() => setActual((on) => !on)} />
         )}
-        <Button size="small" caption={OPEN_AS_TEXT} onClick={() => void actions.openAsText()} />
-        {actions.exportFile && <Button size="small" caption={EXPORT} onClick={actions.exportFile} />}
+        {!showsNotice && <Button size="small" caption={OPEN_AS_TEXT} onClick={() => void actions.openAsText()} />}
+        {!showsNotice && actions.exportFile && <Button size="small" caption={EXPORT} onClick={actions.exportFile} />}
       </div>
       {showsFrame && <p className="e68-viewer__hint">{actions.desktop ? PDF_HINT_DESKTOP : PDF_HINT_WEB}</p>}
       <div

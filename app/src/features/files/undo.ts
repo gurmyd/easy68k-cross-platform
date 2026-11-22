@@ -24,8 +24,17 @@ import {
   type TrashRef,
   type UndoEntry,
 } from './bulk';
-import { renameChecked } from './store';
-import { UNDO_TITLE, cannotMoveBackExists, cannotMoveBackGone, openInEditor, type UndoKind } from './texts';
+import { gitRefusalFor } from './git-guard';
+import { unchangedSince } from './move';
+import { displayPath, renameChecked } from './store';
+import {
+  UNDO_TITLE,
+  cannotMoveBackExists,
+  cannotMoveBackGone,
+  changedWhileMoving,
+  openInEditor,
+  type UndoKind,
+} from './texts';
 
 export const UNDO_LIMIT = 20;
 
@@ -183,6 +192,12 @@ async function undoMove(deps: FilesDeps, entry: Extract<UndoEntry, { kind: 'move
   }
   for (const [from, to] of entry.pairs) {
     const name = basename(from);
+    // Nothing is moved back into or out of a folder named .git (P1.1 rule 2, errata N5 entry 15).
+    const gitText = gitRefusalFor(vfs, [from, to]);
+    if (gitText !== null) {
+      await inform(deps, UNDO_TITLE, gitText);
+      continue;
+    }
     if (!(await exists(deps, to))) {
       await inform(deps, UNDO_TITLE, cannotMoveBackGone(name));
       continue;
@@ -192,8 +207,15 @@ async function undoMove(deps: FilesDeps, entry: Extract<UndoEntry, { kind: 'move
       continue;
     }
     try {
+      const before = await vfs.stat(to);
       const data = await vfs.readFile(to);
       await vfs.writeFile(from, data);
+      // The file changed after its bytes were taken: it stays, with the change (entry 16).
+      const seen = before ? { mtime: before.mtime, size: before.size, data } : undefined;
+      if (!(await unchangedSince(vfs, to, seen))) {
+        await inform(deps, UNDO_TITLE, changedWhileMoving(basename(to), displayPath(vfs, dirname(from)), true));
+        continue;
+      }
       await vfs.remove(to);
     } catch (error) {
       await showError(deps, UNDO_TITLE, error);
@@ -216,6 +238,11 @@ async function undoRename(deps: FilesDeps, entry: Extract<UndoEntry, { kind: 'mo
   if (!pair) return [];
   const [from, to] = pair;
   const name = basename(from);
+  const gitText = gitRefusalFor(vfs, [from, to]);
+  if (gitText !== null) {
+    await inform(deps, UNDO_TITLE, gitText);
+    return [];
+  }
   if (!(await exists(deps, to))) {
     await inform(deps, UNDO_TITLE, cannotMoveBackGone(name));
     return [];
@@ -255,6 +282,11 @@ async function undoRename(deps: FilesDeps, entry: Extract<UndoEntry, { kind: 'mo
 async function undoCopy(deps: FilesDeps, entry: Extract<UndoEntry, { kind: 'copy' }>): Promise<VPath[]> {
   const history: HistoryService | undefined = deps.history;
   for (const copy of entry.copies) {
+    const gitText = gitRefusalFor(deps.vfs, [copy]);
+    if (gitText !== null) {
+      await inform(deps, UNDO_TITLE, gitText);
+      continue;
+    }
     if (!(await exists(deps, copy))) continue;
     const tally: RemoveTally = { removed: 0, kept: 0 };
     if (!history) {

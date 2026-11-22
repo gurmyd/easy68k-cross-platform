@@ -1135,11 +1135,15 @@ async function reopenPart(browser, name, os, fx) {
 }
 
 /**
- * The commands of the stage of additions (ARCHITECTURE-PLUS P3.6). N0 declares them; each gets its
- * handler from a later package of the stage, and until then it must be disabled (P5 N0 acceptance).
- * They are the only ids allowed to be without a handler, and only while they report disabled.
+ * The nine commands of the stage of additions (ARCHITECTURE-PLUS P3.6). N0 declared them without
+ * handlers and this part let them be without one while they were disabled (errata N0 entry 9); every
+ * one has its handler now (the gate of the stage), so they are held to the rule of 9.5 like every
+ * other id, and this part also checks that all nine are command ids.
  */
 const PLUS_COMMANDS = [
+  'app.layout.move',
+  'app.layout.lock',
+  'app.layout.reset',
   'ed.window.splitRight',
   'ed.window.splitDown',
   'ed.window.unsplit',
@@ -1160,10 +1164,7 @@ async function commandsPart(browser, name, os) {
       ({ mode, plus }) => {
         const { commands, store } = window.__easy68k.ctx;
         const ids = commands.ids();
-        const unhandled = ids.filter((id) => !commands.hasHandler(id));
-        // a command of the stage whose package has not arrived yet: allowed while it is disabled
-        const pending = unhandled.filter((id) => plus.includes(id));
-        const missing = unhandled.filter((id) => !plus.includes(id) || commands.isEnabled(id));
+        const missing = ids.filter((id) => !commands.hasHandler(id));
         const ofMode = ids.filter((id) => [mode, 'app'].includes(commands.spec(id).mode));
         return {
           mode: store.getState().mode,
@@ -1171,18 +1172,13 @@ async function commandsPart(browser, name, os) {
           ofMode: ofMode.length,
           missing,
           missingOfMode: missing.filter((id) => ofMode.includes(id)),
-          pending,
+          plusNotIds: plus.filter((id) => !ids.includes(id)),
         };
       },
       { mode, plus: PLUS_COMMANDS },
     );
-    if (found.pending.length > 0) {
-      console.log(
-        `        ${mode}: commands of the stage without a handler yet, disabled: ${JSON.stringify(found.pending)}`,
-      );
-    }
     check(
-      `${p} in ${mode} mode every command id of the mode and of the application has a handler (a command of the stage without one is disabled)`,
+      `${p} in ${mode} mode every command id of the mode and of the application has a handler`,
       found.mode === mode && found.missingOfMode.length === 0,
       `${found.ofMode} ids of ${mode} and app; without a handler: ${JSON.stringify(found.missingOfMode)}`,
     );
@@ -1191,6 +1187,11 @@ async function commandsPart(browser, name, os) {
         `${p} no command id at all is without a handler`,
         found.missing.length === 0,
         `${found.all} ids; without a handler: ${JSON.stringify(found.missing)}`,
+      );
+      check(
+        `${p} the nine commands of the stage of additions (P3.6) are command ids, each with its handler`,
+        found.plusNotIds.length === 0 && PLUS_COMMANDS.every((id) => !found.missing.includes(id)),
+        `not ids: ${JSON.stringify(found.plusNotIds)}; without a handler: ${JSON.stringify(found.missing.filter((id) => PLUS_COMMANDS.includes(id)))}`,
       );
     }
   }

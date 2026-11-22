@@ -8,7 +8,15 @@ import type { HistoryService, HistoryUsage, MessageBoxRequest, TrashItemInfo } f
 import { readPlus } from '../../core/plus/settings';
 import { createFakePlatform, createTestApplication, type TestApplication } from '../../state/testing';
 import { feature } from './index';
-import { applyAdditions, changedSwitches, deleteEarlierVersions, emptyTrash, focusOf, showAdditions } from './actions';
+import {
+  applyAdditions,
+  changedSwitches,
+  deleteEarlierVersions,
+  emptyTrash,
+  focusOf,
+  serialActions,
+  showAdditions,
+} from './actions';
 import { countFiles, readFigures, storageLines, type StorageFigures } from './figures';
 import * as T from './texts';
 
@@ -471,5 +479,60 @@ describe('Delete Earlier Versions', () => {
     const app = withHistory(undefined);
     expect(await deleteEarlierVersions(app.ctx)).toBe('unavailable');
     expect(app.ctx.store.getState().dialogs.stack).toEqual([]);
+  });
+});
+
+describe('the Storage group runs one action at a time (serialActions)', () => {
+  it('a click while an action is finishing is not dropped: it runs next, the latest of several', async () => {
+    const order: string[] = [];
+    let release: () => void = () => {};
+    let refreshed = 0;
+    const run = serialActions<string>(
+      async (name) => {
+        order.push(`start ${name}`);
+        if (name === 'empty') await new Promise<void>((resolve) => (release = resolve));
+        order.push(`end ${name}`);
+      },
+      () => true,
+      () => void refreshed++,
+    );
+    const first = run('empty');
+    await tick();
+    // Clicks while Empty Trash finishes: the latest one runs after it.
+    void run('versions');
+    void run('versions-again');
+    expect(order).toEqual(['start empty']);
+    release();
+    await first;
+    expect(order).toEqual(['start empty', 'end empty', 'start versions-again', 'end versions-again']);
+    expect(refreshed).toBe(2);
+    // Afterwards a click runs at once.
+    await run('versions');
+    expect(order.slice(-2)).toEqual(['start versions', 'end versions']);
+  });
+
+  it('nothing queued runs once the dialog is gone, and a failure does not block the next click', async () => {
+    let alive = true;
+    const ran: string[] = [];
+    let release: () => void = () => {};
+    const run = serialActions<string>(
+      async (name) => {
+        ran.push(name);
+        if (name === 'slow') await new Promise<void>((resolve) => (release = resolve));
+        if (name === 'fails') throw new Error('store failed');
+      },
+      () => alive,
+    );
+    const first = run('slow');
+    await tick();
+    void run('queued');
+    alive = false;
+    release();
+    await first;
+    expect(ran).toEqual(['slow']);
+    alive = true;
+    await expect(run('fails')).rejects.toThrow('store failed');
+    await run('after');
+    expect(ran).toEqual(['slow', 'fails', 'after']);
   });
 });

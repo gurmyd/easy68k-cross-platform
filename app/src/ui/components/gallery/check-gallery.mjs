@@ -154,6 +154,12 @@ async function themePass(browser, name, theme) {
   await scan(page, `${name} ${theme} message box`);
   await page.screenshot({ path: join(outDir, `${name}-${theme}-messagebox.png`) });
   await page.keyboard.press('Escape');
+  // The question of ARCHITECTURE-PLUS P3.3.4 with No the default (MessageBoxRequest.defaultButton).
+  await page.locator('[data-testid=open-message-default-no]').click();
+  await page.waitForSelector('[role=alertdialog][aria-modal=true]');
+  await scan(page, `${name} ${theme} message box with defaultButton No`);
+  await page.screenshot({ path: join(outDir, `${name}-${theme}-messagebox-default-no.png`) });
+  await page.locator('[role=alertdialog][aria-modal=true] button', { hasText: /^No$/ }).click();
 
   // Narrow window.
   await page.setViewportSize({ width: 760, height: 900 });
@@ -760,6 +766,23 @@ async function keyboardPass(browser, name) {
   check(`${p} a Yes/No message box ignores Escape`, stillOpen === 1, `${stillOpen}`);
   await k('Enter');
   check(`${p} Enter presses the focused default button (Yes)`, (await output(page)).includes('Error: Yes'));
+  // MessageBoxRequest.defaultButton (docs/requests/N5-default-button.md): No is the default of the
+  // question of ARCHITECTURE-PLUS P3.3.4, has the focus, and Enter answers No.
+  await page.locator('[data-testid=open-message-default-no]').click();
+  await page.waitForSelector('[role=alertdialog][aria-modal=true]');
+  const focusedCaption = await page.evaluate(() => document.activeElement?.textContent ?? '');
+  check(
+    `${p} a message box with defaultButton No opens with the focus on No`,
+    focusedCaption === 'No',
+    `focus on "${focusedCaption}"`,
+  );
+  await k('Enter');
+  check(
+    `${p} Enter on a message box with defaultButton No answers No`,
+    (await output(page)).includes('Delete: No') &&
+      (await page.locator('[role=alertdialog][aria-modal=true]').count()) === 0,
+    await output(page),
+  );
 
   // Masked fields (hardware §2.1, sim-ui §4.4).
   const beeps = async () => Number(await page.locator('[data-testid=beep-count]').innerText());

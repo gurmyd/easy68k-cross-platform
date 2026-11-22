@@ -81,14 +81,19 @@ export function createCommandRegistry(deps: CommandRegistryDeps): CommandRegistr
     return found;
   };
 
-  const isEnabled = (id: CommandId): boolean => {
+  // `arg`: run() asks with the argument it was given, so that a command such as ed.file.history
+  // { path } is judged by that argument (docs/requests/N4-history-ui.md item 6); menus, toolbars
+  // and keys ask without one, as before.
+  const isEnabled = (id: CommandId, arg?: unknown): boolean => {
     spec(id);
     const handler = handlers.get(id);
     if (!handler) return false;
     if (!handler.enabled) return true;
     const ctx = deps.context();
     try {
-      return handler.enabled(ctx.store.getState(), ctx);
+      return arg === undefined
+        ? handler.enabled(ctx.store.getState(), ctx)
+        : handler.enabled(ctx.store.getState(), ctx, arg);
     } catch (error) {
       onError(id, error);
       return false;
@@ -110,7 +115,7 @@ export function createCommandRegistry(deps: CommandRegistryDeps): CommandRegistr
       spec(id);
       const handler = handlers.get(id);
       // allowInModal: only the open dialog's own code passes it (its Help button and F1).
-      if (!handler || (deps.isModalOpen() && options?.allowInModal !== true) || !isEnabled(id)) return;
+      if (!handler || (deps.isModalOpen() && options?.allowInModal !== true) || !isEnabled(id, arg)) return;
       let stopped = false;
       for (const observe of [...runObservers]) {
         try {

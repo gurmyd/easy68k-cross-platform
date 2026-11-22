@@ -27,9 +27,11 @@ import type {
   FileDialogs,
   FileSourceProvider,
   GlyphProvider,
+  HistoryService,
   LoadOptions,
   LoadOrigin,
   LogServiceApi,
+  MessageBoxRequest,
   NativeFileDialogs,
   OpenRequest,
   OutputDeviceDeps,
@@ -41,6 +43,7 @@ import type {
   SimHost,
   SimSession,
   SyncFiles,
+  TrashItemInfo,
   Vfs,
   VfsChange,
 } from '.';
@@ -720,6 +723,12 @@ const OPTIONAL_ADDITIONS = {
   documentServicePlus: true satisfies StillValidWithout<DocumentService, 'relocate' | 'onWritten' | 'fileTime'>,
   appSettingsPlus: true satisfies StillValidWithout<AppSettings, 'plus'>,
   appSettingsLayoutDock: true satisfies StillValidWithout<AppSettings['layout'], 'dock'>,
+  // the gate of the stage of additions (docs/requests/N5-default-button.md, N3-history-contract.md
+  // item 1, N4-history-ui.md items 1 and 3)
+  messageBoxDefaultButton: true satisfies StillValidWithout<MessageBoxRequest, 'defaultButton'>,
+  historyServiceProblems: true satisfies StillValidWithout<HistoryService, 'unreadable' | 'unavailableDetail'>,
+  trashItemFolderName: true satisfies StillValidWithout<TrashItemInfo, 'folderName'>,
+  documentServiceWithText: true satisfies StillValidWithout<DocumentService, 'newSourceWithText'>,
 };
 
 /** true when every member K of T is required (T without K is no longer a T). */

@@ -103,6 +103,7 @@ import {
 } from '../core/history/records';
 import type { HistoryTx, Keyed, TimeKey } from '../core/history/store';
 import { historySwitchOn } from '../core/history/switch';
+import { VERSION_NOT_KEPT, changedWhileReplacing, gitRefused } from '../core/history/texts';
 
 export interface HistoryDeps {
   vfs: Vfs;
@@ -474,7 +475,7 @@ async function walk(vfs: Vfs, path: VPath, files: SeenFile[], dirs: VPath[]): Pr
 }
 
 const NO_USAGE: HistoryUsage = { versions: 0, versionBytes: 0, trashItems: 0, trashBytes: 0, budget: 0 };
-const NO_VERSION = 'This version is no longer kept.';
+const NO_VERSION = VERSION_NOT_KEPT;
 
 /** A record() call waiting in the queue (P3.3.5). */
 interface Queued {
@@ -844,11 +845,26 @@ class Store implements HistoryStore {
   /** The place of `path` (P4.3), with the root of an opened folder; null when not tracked. */
   private async place(path: VPath): Promise<string | null> {
     if (!isVPath(path)) return null;
+    // Everything in an opened folder that is itself a .git folder lies below .git (P3.3.10).
+    if (this.storeIsGit(path)) return null;
     const { mount } = splitVPath(path);
     if (mount !== 'folder') return placeOf(path);
     const backend = this.deps.vfs.backends().find((b) => b.mount === 'folder');
     if (!backend) return null;
     return placeOf(path, await this.rootOf(backend));
+  }
+
+  /**
+   * True when the store of `path` is a folder of the student's computer that is itself named .git
+   * (any letter case): Open Folder... or a drop chose a repository's .git folder, so every path in
+   * it lies below .git although no segment of it says so (P1.1 rule 2, P3.3.10).
+   */
+  private storeIsGit(path: VPath): boolean {
+    const { mount } = splitVPath(path);
+    const backend = this.deps.vfs.backends().find((b) => b.mount === mount) as
+      { rootHandle?: { name?: unknown } | null } | undefined;
+    const name = backend?.rootHandle?.name;
+    return typeof name === 'string' && isGitName(name);
   }
 
   /** The rootId of a mounted folder, found with isSameEntry or made new (P3.3.5, P4.3). */
@@ -1007,7 +1023,7 @@ class Store implements HistoryStore {
     act: (seen: readonly SeenFile[]) => Promise<void>,
     confirm: () => Promise<boolean>,
   ): Promise<{ outcome: 'kept' | 'not-kept' | 'declined'; item?: string }> {
-    if (belowGit(path)) throw new Error(`"${path}" is in a .git folder: EASy68K changes nothing there.`);
+    if (belowGit(path) || this.storeIsGit(path)) throw new Error(gitRefused(path, 'below'));
     const stat = await this.deps.vfs.stat(path).catch(() => null);
     if (!stat) {
       // P3.3.4 step 1: nothing to keep and nothing to ask.
@@ -1015,13 +1031,13 @@ class Store implements HistoryStore {
       return { outcome: 'kept' };
     }
     if (stat.kind === 'dir' && isGitName(basename(path))) {
-      throw new Error(`"${path}" is a .git folder: EASy68K changes nothing there.`);
+      throw new Error(gitRefused(path, 'is'));
     }
     const seen: SeenFile[] = [];
     const dirs: VPath[] = [];
     await walk(this.deps.vfs, path, seen, dirs);
     if (seen.some((file) => belowGit(file.path)) || dirs.some((dir) => isGitName(basename(dir)) || belowGit(dir))) {
-      throw new Error(`"${path}" holds a Git repository: EASy68K changes nothing there.`);
+      throw new Error(gitRefused(path, 'holds'));
     }
     const startState = this.state();
     let kept: { item?: string } | null = null;
@@ -1285,7 +1301,7 @@ class Store implements HistoryStore {
     const mark = first.trash as NonNullable<FileRecord['trash']>;
     const files = group.records.filter(({ value }) => !value.dir).length;
     const kind = group.records.length === 1 && !first.dir && first.spelling === mark.path ? 'file' : 'dir';
-    return {
+    const info: TrashItemInfo = {
       id: group.item,
       deletedAt: mark.at,
       cause: mark.cause,
@@ -1295,6 +1311,23 @@ class Store implements HistoryStore {
       bytes,
       restorableInPlace: await this.inPlace(first.place),
     };
+    // The opened folder's name, for P3.3.8's `"prog.X68" was in the folder "Lab", which is not
+    // open.` (errata N3, "restoreTrash").
+    const folderName = first.place.startsWith('folder:') ? await this.rootName(first.place) : null;
+    if (folderName !== null) info.folderName = folderName;
+    return info;
+  }
+
+  /** The name the roots store keeps for the opened folder of `place` (`folder:<rootId>/...`). */
+  private async rootName(place: string): Promise<string | null> {
+    const slash = place.indexOf('/');
+    const id = place.slice('folder:'.length, slash < 0 ? undefined : slash);
+    try {
+      const records = await this.rootRecords(await this.database());
+      return records.find(([key]) => key === id)?.[1].name ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /** True when the store of `place` is mounted now, for an opened folder the same folder (P3.3.8). */
@@ -1459,7 +1492,7 @@ class Store implements HistoryStore {
               for (const file of seen) {
                 const now = await this.deps.vfs.stat(file.path);
                 if (!now || now.mtime !== file.mtime || now.size !== file.size) {
-                  throw new Error(`"${basename(file.path)}" changed while it was being replaced. It was not replaced.`);
+                  throw new Error(changedWhileReplacing(basename(file.path)));
                 }
               }
               await this.deps.vfs.writeFile(path, bytes);

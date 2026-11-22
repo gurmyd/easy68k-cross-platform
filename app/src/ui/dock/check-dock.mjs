@@ -35,13 +35,15 @@
 //              switches; collapsing the Output panel keeps its content mounted
 //   editor     the editor's message list is 5, 87, 7 px by the rule; a drag overrides it until the
 //              list changes; the Registers group follows its content after a font change
+//   frames     View > Memory, Stack and Log have focused their panel by the time the panel is in the
+//              page, with today's frames and with frames 130 ms late (GitHub's macOS runners)
 //   scan       axe (WCAG 2.0/2.1 A and AA) of each mode in both themes, locked and unlocked: no
 //              serious or critical finding; screenshots of both themes
 //
 // Prints "N of M checks passed" and exits non-zero on any failure or console error. Screenshots go
 // to build/dock-check (git-ignored) or --out.
 
-/* global console, process, document, window, getComputedStyle, Navigator, requestAnimationFrame, Element, Event, setTimeout */
+/* global console, process, document, window, getComputedStyle, Navigator, requestAnimationFrame, Element, Event, setTimeout, clearTimeout, MutationObserver */
 
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -652,6 +654,20 @@ async function boxesPass(browser, name) {
     JSON.stringify(narrowTabs),
   );
   await page.screenshot({ path: join(outDir, `${name}-simulator-narrow.png`) });
+  // Today's narrow strip is the tool strip, also with Output alone: its tab list is named Tool panels.
+  const shownTools = await page.evaluate(() =>
+    ['memory', 'stack', 'log', 'hardware', 'breakpoints'].filter((id) =>
+      window.__dock.panels.panelVisible(window.__dock.ctx, id),
+    ),
+  );
+  await hidePanels(page, shownTools);
+  screen = await screenOf(page);
+  check(
+    `${p} below 1100 px without tool panels: the Output tab list keeps today's name Tool panels`,
+    screen.tablists.some((list) => list.name === 'Tool panels' && same(list.tabs, ['Output'])),
+    JSON.stringify(screen.tablists),
+  );
+  await showPanels(page, shownTools);
   const narrowColumns = page.locator(
     '[data-e68-workspace="simulator"] [role=separator][aria-label="Resize the two columns"]',
   );
@@ -2061,6 +2077,86 @@ async function scanPass(browser, name) {
   }
 }
 
+// --- pass: few display frames ------------------------------------------------------------------------
+
+/** Delivers animation frames 130 ms late, as GitHub's macOS runners do at times (longest gaps of 133 ms). */
+function slowFrames() {
+  const raf = window.requestAnimationFrame.bind(window);
+  window.requestAnimationFrame = (callback) => setTimeout(() => raf(callback), 130);
+  window.cancelAnimationFrame = (id) => clearTimeout(id);
+}
+
+/**
+ * A View menu command focuses its panel when the panel is on screen, not one frame later: on a
+ * runner with few frames the panel was there for a frame without the focus, and check-memory-stack
+ * read `null` and `TEXTAREA` on macOS (run 45020779731). The focus is read as soon as the panel's
+ * content is in the page, once with today's frames and once with frames 130 ms late.
+ */
+async function framesPass(browser, name) {
+  const p = `${name}/frames:`;
+  for (const slow of [false, true]) {
+    const context = await newContext(browser);
+    if (slow) await context.addInitScript(slowFrames);
+    const { page, errors } = await openApp(context);
+    await setMode(page, 'simulator');
+    await settle(page);
+    const cases = [
+      ['sim.view.memory', 'memory'],
+      ['sim.view.stack', 'stack'],
+      ['sim.view.log', 'log'],
+    ];
+    for (const [command, panel] of cases) {
+      const seen = await page.evaluate(
+        async ([id, region]) => {
+          const describe = (el) =>
+            !el || el === document.body
+              ? String(el?.tagName ?? null)
+              : `${el.tagName}[${el.getAttribute('aria-label') ?? ''}] in ${el.closest('[data-e68-panel]')?.getAttribute('data-e68-panel') ?? '-'}`;
+          // The first moment the panel's content is in the page: a mutation observer, which runs
+          // before any later task (a check's poll, a frame) could look.
+          const first = new Promise((done) => {
+            const look = () => {
+              const content = document.querySelector(
+                `[data-e68-workspace="simulator"] [data-e68-panel="${region}"] [data-e68-panel-focus], [data-e68-workspace="simulator"] [data-e68-panel="${region}"] select`,
+              );
+              if (content && content.checkVisibility?.() !== false) {
+                observer.disconnect();
+                // The task that rendered the panel has ended: whatever a check reads now.
+                setTimeout(() => done(describe(document.activeElement)), 0);
+                return true;
+              }
+              return false;
+            };
+            const observer = new MutationObserver(look);
+            observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+          });
+          void window.__easy68k.ctx.commands.run(id);
+          return first;
+        },
+        [command, panel],
+      );
+      const ok =
+        panel === 'memory'
+          ? seen.startsWith('INPUT[Address]')
+          : panel === 'stack'
+            ? seen.startsWith('SELECT')
+            : seen.endsWith(' in log');
+      check(
+        `${p} ${slow ? 'frames 130 ms late' : "today's frames"}: View > ${panel} has focused its panel when the panel appears`,
+        ok,
+        seen,
+      );
+      await hidePanels(page, [panel]);
+    }
+    check(
+      `${p} ${slow ? 'frames 130 ms late' : "today's frames"}: no console or page errors`,
+      errors.length === 0,
+      errors.slice(0, 3).join(' | '),
+    );
+    await context.close();
+  }
+}
+
 // --- run -----------------------------------------------------------------------------------------
 
 const PASSES = {
@@ -2070,6 +2166,7 @@ const PASSES = {
   drags: (browser, name) => dragsPass(browser, name),
   program: (browser, name) => programPass(browser, name),
   editor: (browser, name) => editorPass(browser, name),
+  frames: (browser, name) => framesPass(browser, name),
   scan: (browser, name) => scanPass(browser, name),
 };
 

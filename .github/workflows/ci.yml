@@ -49,6 +49,7 @@
 #       history_ui    app/src/features/history/check-history-ui.mjs      N4
 #       viewer        app/src/features/viewer/check-viewer.mjs           N6
 #       status        app/src/ui/editor/check-status.mjs                 N8
+#       additions     app/src/features/additions/check-additions.mjs     N7
 #   check: packaging unit tests  tests/desktop/packaged/playwright.config.ts (project unit, DV3)
 #   check: documents           tools/check-docs.test.mjs            (npm run check:docs, DOC1)
 #   e2e-stability              as e2e, on a manual run (input e2e_stability) or a push of a v* tag (6.9 item 10, X1)
@@ -168,6 +169,7 @@ jobs:
       history_ui: ${{ steps.guards.outputs.history_ui }}
       viewer: ${{ steps.guards.outputs.viewer }}
       status: ${{ steps.guards.outputs.status }}
+      additions: ${{ steps.guards.outputs.additions }}
       e2e_stability: ${{ steps.guards.outputs.e2e_stability }}
       perf: ${{ steps.guards.outputs.perf }}
       perf_full: ${{ steps.guards.outputs.perf_full }}
@@ -242,6 +244,7 @@ jobs:
             history_ui      app/src/features/history/check-history-ui.mjs
             viewer          app/src/features/viewer/check-viewer.mjs
             status          app/src/ui/editor/check-status.mjs
+            additions       app/src/features/additions/check-additions.mjs
           '
           check_names=""
           browser_checks=false
@@ -1040,7 +1043,8 @@ jobs:
         timeout-minutes: 15
         run: npm run check:wave2
       # The stage of additions (ARCHITECTURE-PLUS P5), group `integration` (the shortest group):
-      # the history store on real IndexedDB and its dialogs.
+      # the history store on real IndexedDB, its dialogs, and the Port Additions dialog (its Empty
+      # Trash and storage figures; docs/requests/N7.md item 1). None needs engine/dist.
       - name: History store check (N3)
         if: ${{ !cancelled() && matrix.group == 'integration' && needs.plan.outputs.history == 'true' }}
         timeout-minutes: 15
@@ -1049,6 +1053,10 @@ jobs:
         if: ${{ !cancelled() && matrix.group == 'integration' && needs.plan.outputs.history_ui == 'true' }}
         timeout-minutes: 15
         run: npm run check:history-ui
+      - name: Port Additions dialog check (N7)
+        if: ${{ !cancelled() && matrix.group == 'integration' && needs.plan.outputs.additions == 'true' }}
+        timeout-minutes: 15
+        run: npm run check:additions
       - name: Upload the screenshots of the browser checks
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -1091,6 +1099,12 @@ jobs:
             build/X3/check/
             build/DV4/desktop-devices-check/
             build/Q1/a11y-check/
+            build/dock-check/
+            build/history-check/
+            build/history-ui-check/
+            build/viewer-check/
+            build/N8-plus/status-check/
+            build/N7-plus/additions-check/
           if-no-files-found: ignore
           retention-days: 14
 

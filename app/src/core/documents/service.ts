@@ -22,9 +22,11 @@
 //
 // The hooks of the stage of additions (ARCHITECTURE-PLUS P3.4.1, P4.4; package N6). None of them
 // changes anything for a caller that does not use it:
-//   - open(path, options): after the "already open" question and after the bytes are read, before
-//     they are decoded, the viewer (deps.viewer) is asked; when it wants the file it shows it and
-//     open returns null. { asText: true } skips that question (Open as Text).
+//   - open(path, options): once the bytes are read, before they are decoded, the viewer
+//     (deps.viewer) is asked; when it wants the file it shows it and open returns null, and a
+//     document of the same path that is open as text stays open (it is asked before the "already
+//     open" step: an Open never closes what a person has open; errata N6 12). { asText: true }
+//     skips that question (Open as Text).
 //   - relocate(from, to): open documents of a moved file or folder follow it, with text, modified
 //     state and revision unchanged; the modification time is taken from the new file, and the
 //     relocation listeners (onRelocated: the drafts) run before the promise resolves.
@@ -219,6 +221,30 @@ export class DocumentManager implements DocumentService {
     return state;
   }
 
+  /**
+   * ARCHITECTURE-PLUS P3.3.8 (`Open as New Document`): like newSource, but holding `text` ("\n" line
+   * ends) instead of the template, and modified, so that closing it asks whether to save it.
+   */
+  newSourceWithText(text: string): DocumentState {
+    const defaults = docDefaults(this.deps.settings);
+    const state = this.add(
+      {
+        path: null,
+        name: `untitled${++this.untitled}.x68`,
+        kind: 'source',
+        hasName: false,
+        ...defaults,
+        insertMode: true,
+      },
+      text,
+      null,
+      null,
+      true,
+    );
+    this.activate(state.id);
+    return state;
+  }
+
   open(path: VPath, options?: { asText?: boolean }): Promise<DocumentState | null> {
     const events: WrittenEvent[] = [];
     return this.announcing(this.openFile(path, options?.asText === true, events), events);
@@ -230,6 +256,20 @@ export class DocumentManager implements DocumentService {
     if (!stat || stat.kind !== 'file') {
       await dialogs.messageBox(fileAccessError());
       return null;
+    }
+    // ARCHITECTURE-PLUS P3.4.1: a file that is not text goes to the viewer (never with Open as Text).
+    // The viewer is asked before the "already open" step, so that a document of this path that is
+    // open as text (Open as Text) stays open: nothing a person has open is closed by an Open
+    // (errata N6 12). A file the viewer does not take goes on exactly as before; when no document of
+    // this path is open, the bytes read here are the ones loaded (one read, as before).
+    const viewer = asText ? undefined : this.deps.viewer;
+    let early: Bytes | null = null;
+    if (viewer) {
+      early = await vfs.readFile(path).catch(() => null);
+      if (early !== null && viewer.wants(path, early)) {
+        viewer.show(path, early);
+        return null;
+      }
     }
     // editor-ui §6.2 step 2: every document with exactly this path (case-sensitive), last first.
     let position: number | null = null;
@@ -247,20 +287,19 @@ export class DocumentManager implements DocumentService {
       this.discard(id);
     }
 
-    let bytes;
-    try {
-      bytes = await vfs.readFile(path);
-    } catch {
-      await dialogs.messageBox(loadFileError());
-      return null;
+    let bytes: Bytes;
+    if (early !== null && position === null) {
+      bytes = early;
+    } else {
+      // Read (again) after the "already open" step, as editor-ui §6.2 orders it.
+      try {
+        bytes = await vfs.readFile(path);
+      } catch {
+        await dialogs.messageBox(loadFileError());
+        return null;
+      }
     }
     const time = this.now();
-    // ARCHITECTURE-PLUS P3.4.1: a file that is not text goes to the viewer (never with Open as Text).
-    const viewer = this.deps.viewer;
-    if (!asText && viewer?.wants(path, bytes)) {
-      viewer.show(path, bytes);
-      return null;
-    }
     const loaded = this.load(path, bytes);
     events.push({ path, bytes, reason: 'opened', time });
     const state = this.add(

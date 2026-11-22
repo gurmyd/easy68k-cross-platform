@@ -2,11 +2,15 @@
 // "a table test").
 
 import { describe, expect, it } from 'vitest';
+// The real label of an opened folder, as FS2 builds it (a test may read fs; display.ts may not).
+import { folderLabel } from '../../fs/fsaccess-backend';
 import { placeShort, placeText, type PlaceLabels } from './display';
+import { FOLDER_LABEL_PREFIX } from './texts';
 
 const LABELS: PlaceLabels[] = [
   { mount: 'browser', label: 'My Programs', kind: 'browser' },
-  { mount: 'folder', label: 'Lab', kind: 'fsaccess' },
+  // The opened folder's label as its backend gives it (FS2's folderLabel); P3.2.5 names it "Lab".
+  { mount: 'folder', label: 'Folder: Lab', kind: 'fsaccess' },
   { mount: 'linked', label: 'Linked files', kind: 'fsaccess' },
   { mount: 'disk', label: 'This Mac', kind: 'disk' },
   { mount: 'memory', label: 'Memory', kind: 'memory' },
@@ -62,6 +66,28 @@ describe('placeText and placeShort (P3.2.5, P4.5)', () => {
       expect(placeText([], path, 'desktop')).toBe('Linked files');
       expect(placeShort([], path)).toBe('Linked files');
     }
+  });
+
+  it('leaves out the "Folder: " of the backend label, and only for the opened folder (docs/requests/N8-folder-place-text.md)', () => {
+    const real = folderLabel('Lab');
+    expect(real).toBe(`${FOLDER_LABEL_PREFIX}Lab`);
+    const labels: PlaceLabels[] = [
+      { mount: 'folder', label: real, kind: 'fsaccess' },
+      { mount: 'browser', label: 'Folder: odd', kind: 'browser' },
+    ];
+    for (const kind of ['web', 'desktop'] as const) {
+      const text = placeText(labels, '/folder/prog.X68', kind);
+      expect(text).toBe('Lab/prog.X68 - in the folder "Lab" on this computer');
+      expect(text).not.toContain('Folder:');
+      expect(placeText(labels, '/folder', kind)).toBe('Lab - on this computer');
+    }
+    expect(placeShort(labels, '/folder/sub/prog.X68')).toBe('Lab/sub/prog.X68');
+    // A folder whose own name starts with "Folder: " keeps it: only the backend's prefix goes.
+    expect(
+      placeText([{ mount: 'folder', label: folderLabel('Folder: x'), kind: 'fsaccess' }], '/folder/a', 'web'),
+    ).toBe('Folder: x/a - in the folder "Folder: x" on this computer');
+    // Another mount's label is shown as it is.
+    expect(placeShort(labels, '/browser/a.X68')).toBe('Folder: odd/a.X68');
   });
 
   it("follows the opened folder's own label", () => {

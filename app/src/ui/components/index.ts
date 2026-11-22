@@ -48,6 +48,7 @@ export type {
 } from './menu-model';
 export {
   MessageBox,
+  messageBoxDefaultIndex,
   messageBoxEscapeResult,
   type MessageBoxButton,
   type MessageBoxIcon,

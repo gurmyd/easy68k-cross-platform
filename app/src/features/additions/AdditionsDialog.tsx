@@ -8,13 +8,14 @@
 //
 // Owner: N7.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { DialogProps as FeatureDialogProps, PlusSettings } from '../../contracts';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import type { AppContext, DialogProps as FeatureDialogProps, PlusSettings } from '../../contracts';
 import { useAppContext } from '../../state/context';
 import { Button, Checkbox, Dialog, GroupBox } from '../../ui/components';
 import {
   deleteEarlierVersions,
   emptyTrash,
+  serialActions,
   type AdditionsDialogProps,
   type AdditionsDialogResult,
   type StorageOutcome,
@@ -32,12 +33,15 @@ import {
 } from './texts';
 import './additions.css';
 
+/** What a button of the Storage group does. */
+type Action = (ctx: AppContext) => Promise<StorageOutcome>;
+
 export function AdditionsDialog({ props, close }: FeatureDialogProps<AdditionsDialogProps, AdditionsDialogResult>) {
   const ctx = useAppContext();
   const [draft, setDraft] = useState<PlusSettings>(props.initial);
   const [figures, setFigures] = useState<StorageFigures | null>(null);
   const emptyTrashButton = useRef<HTMLButtonElement>(null);
-  const busy = useRef(false);
+  const deleteVersionsButton = useRef<HTMLButtonElement>(null);
 
   // Reads the figures; a request that arrives while a read runs is served by one more read after it.
   const reading = useRef<{ running: boolean; again: boolean; alive: boolean }>({
@@ -81,15 +85,20 @@ export function AdditionsDialog({ props, close }: FeatureDialogProps<AdditionsDi
     };
   }, [ctx, refresh]);
 
-  const act = async (action: (context: typeof ctx) => Promise<StorageOutcome>) => {
-    if (busy.current) return;
-    busy.current = true;
-    try {
-      await action(ctx);
-    } finally {
-      busy.current = false;
-      void refresh();
-    }
+  // A button acts at once (P3.5). A click that comes while the other action is still finishing
+  // (after its Yes, while the store works) is not dropped: it runs next (serialActions; gate
+  // finding: it used to be ignored without a sign).
+  const serial = useRef<((action: Action) => Promise<void>) | null>(null);
+  serial.current ??= serialActions<Action>(
+    (action) => action(ctx),
+    () => reading.current.alive,
+    () => void refresh(),
+  );
+  const act = (action: Action, button: RefObject<HTMLButtonElement | null>) => {
+    // WebKit does not focus a button it clicks; the question gives the focus back to the element
+    // that had it when it opened, which is to be the pressed button in every browser.
+    button.current?.focus();
+    return serial.current?.(action);
   };
 
   const lines = figures ? storageLines(figures) : [];
@@ -149,12 +158,13 @@ export function AdditionsDialog({ props, close }: FeatureDialogProps<AdditionsDi
               ref={emptyTrashButton}
               caption={EMPTY_TRASH_CAPTION}
               disabled={noHistory}
-              onClick={() => void act(emptyTrash)}
+              onClick={() => void act(emptyTrash, emptyTrashButton)}
             />
             <Button
+              ref={deleteVersionsButton}
               caption={DELETE_VERSIONS_CAPTION}
               disabled={noHistory}
-              onClick={() => void act(deleteEarlierVersions)}
+              onClick={() => void act(deleteEarlierVersions, deleteVersionsButton)}
             />
           </div>
         </GroupBox>

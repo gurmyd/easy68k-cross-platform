@@ -1,7 +1,10 @@
 # N5: a message box whose default button is not the first
 
-Status: open. For: the gate's contracts engineer (`app/src/contracts/features.ts`) and the owner of
-the kit's `MessageBox` and of the DialogService that renders it (W2, W3). Filed by N5.
+Status: done at the gate of the stage (N0 as contracts, kit and shell engineer):
+`MessageBoxRequest.defaultButton?` (a caption of `buttons`; absent or not one of them: the first),
+the kit's `messageBoxDefaultIndex`, `ui/shell/DialogHost.tsx` passing it on, and the gallery case
+"Message box: warning, No the default". A caller writes `defaultButton: 'No'` in its request.
+Filed by N5.
 
 ## What is wrong
 

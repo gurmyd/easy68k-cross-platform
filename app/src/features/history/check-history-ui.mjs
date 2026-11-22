@@ -369,6 +369,44 @@ async function dialogsPass(browser, name, theme, baseUrl) {
       kinds.map((r) => r.replace(/\s+/g, ' ')).join(' | '),
     );
 
+    // With the history switched off, Restore asks the question of P3.3.4 ("This cannot be
+    // undone."), and No has the focus: Enter answers No and nothing is written.
+    const setHistory = (on) =>
+      page.evaluate(
+        (on) =>
+          window.__easy68k.ctx.settings.update((s) => ({
+            ...s,
+            app: { ...s.app, plus: { ...s.app.plus, history: on } },
+          })),
+        on,
+      );
+    await setHistory(false);
+    await page.waitForFunction(() => window.__easy68k.ctx.history.state() === 'off', null, { timeout: STEP_TIMEOUT });
+    check(`${p} reached Restore with Tab (history off)`, await tabTo(page, isButton('Restore')));
+    await page.keyboard.press('Enter');
+    const offQuestion = page.locator('[role=alertdialog]');
+    await offQuestion.waitFor({ timeout: STEP_TIMEOUT });
+    const questionText = (await offQuestion.innerText()).replace(/\s+/g, ' ');
+    await page
+      .waitForFunction(() => document.activeElement?.textContent?.trim() === 'No', null, { timeout: 5_000 })
+      .catch(() => {});
+    const questionFocus = await page.evaluate(() => document.activeElement?.textContent?.trim() ?? null);
+    check(
+      `${p} history off: Restore asks the question of P3.3.4 and No has the focus`,
+      /cannot keep a copy of the current "prog\.X68"\. Restore the earlier version anyway\? This cannot be undone\./.test(
+        questionText,
+      ) && questionFocus === 'No',
+      `focus ${questionFocus}: ${questionText}`,
+    );
+    await page.keyboard.press('Enter');
+    await offQuestion.waitFor({ state: 'hidden', timeout: STEP_TIMEOUT });
+    check(
+      `${p} history off: Enter on the question answers No; the file is unchanged`,
+      (await readFile(page, '/browser/hist/prog.X68')) === V1,
+    );
+    await setHistory(true);
+    await page.waitForFunction(() => window.__easy68k.ctx.history.state() === 'ready', null, { timeout: STEP_TIMEOUT });
+
     // Open as New Document with Enter (the newest Saved version, V3).
     await tabTo(page, isGrid);
     await page.keyboard.press('Control+Home');

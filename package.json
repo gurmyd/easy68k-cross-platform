@@ -68,6 +68,7 @@
     "check:history-ui": "node app/src/features/history/check-history-ui.mjs",
     "check:viewer": "node app/src/features/viewer/check-viewer.mjs",
     "check:status": "node app/src/ui/editor/check-status.mjs",
+    "check:additions": "node app/src/features/additions/check-additions.mjs",
     "oracle:wine:build": "docker build -t easy68k-oracle-wine tests/oracle/wine",
     "oracle:wine:asm": "node tests/oracle/wine/asm/regenerate.mjs",
     "oracle:wine:sim": "node tests/oracle/wine/sim/regenerate.mjs",

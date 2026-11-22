@@ -130,9 +130,14 @@ export function needsStrip(panels: readonly string[], locked: boolean): boolean 
   return panels.length > 1 || panels.some((id) => isToolPanel(id) || isViewerId(id));
 }
 
-/** The accessible name of a group's tab list: today's `Tool panels` for the group of the tool panels. */
-export function groupLabel(panels: readonly string[]): string | undefined {
-  return panels.some(isToolPanel) ? TOOL_GROUP_LABEL : undefined;
+/**
+ * The accessible name of a group's tab list: today's `Tool panels` for the group of the tool panels,
+ * and, in the simulator's narrow default (`narrowOutputStrip`), for the Output panel's group even
+ * when no tool panel is shown: today that strip is the tool strip, with Output as its first tab.
+ */
+export function groupLabel(panels: readonly string[], narrowOutputStrip = false): string | undefined {
+  if (panels.some(isToolPanel)) return TOOL_GROUP_LABEL;
+  return narrowOutputStrip && panels.includes('output') ? TOOL_GROUP_LABEL : undefined;
 }
 
 export interface FlexJsonOptions {

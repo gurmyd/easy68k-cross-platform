@@ -116,7 +116,7 @@ describe('Move and Copy (P3.2.4)', { timeout: 60_000 }, () => {
     expect(outcome.mode).toBe('copy');
     expect(text(await vfs.readFile('/folder/demo/b.X68'))).toBe('B');
     expect(text(await vfs.readFile('/browser/demo/b.X68'))).toBe('B');
-    expect(deps.dialogs.toasts.map((t) => t.text)).toEqual(['Copied "demo" to Folder: Lab.']);
+    expect(deps.dialogs.toasts.map((t) => t.text)).toEqual(['Copied "demo" to Lab.']);
   });
 
   it('a folder that holds .git is not moved, copied or merged into', async () => {
@@ -192,6 +192,7 @@ describe('Move with Replace (P3.2.4, P3.3.4)', { timeout: 60_000 }, () => {
       text: cannotKeepQuestion('replace', 'prog.X68', false),
       icon: 'warning',
       buttons: ['Yes', 'No'],
+      defaultButton: 'No',
     });
     expect(outcome.done).toBe(false);
     expect(text(await vfs.readFile('/browser/demo/prog.X68'))).toBe('old');

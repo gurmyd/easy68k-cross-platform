@@ -195,6 +195,15 @@ export const MESSAGE_SAMPLES = [
   },
   { title: 'Warning', text: 'Breakpoint Limit Reached!', icon: 'warning', buttons: ['OK'] },
   { title: 'Error', text: 'File exists! OK to overwrite?', icon: 'error', buttons: ['Yes', 'No'] },
+  // MessageBoxRequest.defaultButton (the stage of additions, docs/requests/N5-default-button.md):
+  // the question of ARCHITECTURE-PLUS P3.3.4, where No has the focus and Enter answers No.
+  {
+    title: 'Delete',
+    text: 'EASy68K cannot keep a copy of "prog.X68" in the Trash. Delete it anyway? This cannot be undone.',
+    icon: 'warning',
+    buttons: ['Yes', 'No'],
+    defaultButton: 'No',
+  },
 ] as const;
 
 /** Rows of the editor's message list (2.2). */

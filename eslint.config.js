@@ -68,6 +68,14 @@ const TEST_FILE_PACKAGES = {
   [`${SRC}/engine/browser.test.ts`]: ['@playwright/test', 'vite'],
 };
 /**
+ * Development packages for single files that are not test files but are imported only by tests and
+ * state/testing.ts (which no production code imports): the history store over a fake IndexedDB
+ * (ARCHITECTURE-PLUS P4.4; docs/requests/N0.md section 7 item 1, N3-history-contract.md item 3).
+ */
+const TEST_ONLY_FILE_PACKAGES = {
+  [`${SRC}/fs/history-memory.ts`]: ['fake-indexeddb'],
+};
+/**
  * npm packages that only one folder of app/src may import (ARCHITECTURE-PLUS P2.4): the docking
  * library only in ui/dock/, the comparison view only in features/history/. Allowed there (its unit
  * tests included) and reported everywhere else.
@@ -170,6 +178,7 @@ function checkImport(fileFromRepo, spec, isTest) {
     }
     const allowed = layer ? layer.packages : RUNTIME_PACKAGES;
     if (allowed.some((pkg) => isPackage(clean, pkg))) return null;
+    if ((TEST_ONLY_FILE_PACKAGES[fileFromRepo] ?? []).some((pkg) => isPackage(clean, pkg))) return null;
     if (isTest && isTestPackage(clean)) return null;
     if (isTest && (TEST_FILE_PACKAGES[fileFromRepo] ?? []).some((pkg) => isPackage(clean, pkg))) return null;
     if (isTest) return 'unit tests may import the runtime dependencies, vitest, fake-indexeddb and node:*';

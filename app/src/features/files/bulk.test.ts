@@ -73,7 +73,12 @@ describe('Delete: the question (P3.2.2)', { timeout: 60_000 }, () => {
       const deps = filesTestDeps({ vfs, history: scriptedHistory(vfs), dialogs: scriptedDialogs(['No']) });
       const outcome = await deleteItems(deps, paths);
       expect(deps.dialogs.texts()).toEqual([expected]);
-      expect(deps.dialogs.shown[0]).toMatchObject({ title: 'Delete', icon: 'confirmation', buttons: ['Yes', 'No'] });
+      expect(deps.dialogs.shown[0]).toMatchObject({
+        title: 'Delete',
+        icon: 'confirmation',
+        buttons: ['Yes', 'No'],
+        defaultButton: 'No',
+      });
       expect(outcome.confirmed).toBe(false);
       for (const path of paths) expect(await vfs.stat(path)).not.toBeNull();
     }
@@ -169,6 +174,7 @@ describe('Delete: one guard per item, in the tree order (P3.2.2, P3.3.4)', { tim
       text: cannotKeepQuestion('delete', 'i3.X68', false),
       icon: 'warning',
       buttons: ['Yes', 'No'],
+      defaultButton: 'No',
     });
     expect(deps.dialogs.texts()[1]).toBe(
       'EASy68K cannot keep a copy of "i3.X68" in the Trash. Delete it anyway? This cannot be undone.',

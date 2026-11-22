@@ -6,7 +6,9 @@
 // DialogService.messageBox resolves to it.
 //
 // Keys follow a Windows message box: the first button is the default and
-// has the focus; Enter presses the focused button; Yes, No, Replace and
+// has the focus, unless defaultButton names another one (the stage of
+// additions: a caller passes MessageBoxRequest.defaultButton through
+// messageBoxDefaultIndex); Enter presses the focused button; Yes, No, Replace and
 // Append have their first letter as access key; Escape (and the close button)
 // answers Cancel when there is a Cancel button, OK when OK is the only button,
 // and is unavailable otherwise (a Yes / No question must be answered).
@@ -48,6 +50,18 @@ const ICON_NAMES = {
   warning: 'Warning',
   error: 'Error',
 } as const;
+
+/**
+ * The index of the default button for MessageBoxRequest.defaultButton (a caption): its position in
+ * `buttons`, or 0 (the first) when it is absent or not one of them.
+ */
+export function messageBoxDefaultIndex(
+  buttons: readonly MessageBoxButton[],
+  defaultButton: MessageBoxButton | undefined,
+): number {
+  const index = defaultButton === undefined ? -1 : buttons.indexOf(defaultButton);
+  return index < 0 ? 0 : index;
+}
 
 /** The answer of Escape and the close button, or null when the box has none. */
 export function messageBoxEscapeResult(buttons: readonly MessageBoxButton[]): MessageBoxButton | null {

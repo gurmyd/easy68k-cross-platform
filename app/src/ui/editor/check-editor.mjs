@@ -948,9 +948,37 @@ async function splitPass(browser, name) {
       window.__easy68k.ctx.store.getState().documents.items.map((doc) => window.__easy68k.ctx.documents.text(doc.id)),
     );
   const textBefore = await texts();
-  await tabIn(0, moved).dragTo(pane(1).locator('[role=tablist]'));
-  await afterDrag();
-  await page.waitForTimeout(300);
+  // Dropped onto a tab of the other pane's strip: the document takes its place by the order of
+  // opening, so while the drag is over that tab the strip is outlined and no tab is marked as an
+  // insertion point (the gate's finding: the mark promised a place the editor ignores).
+  {
+    const from = await tabIn(0, moved).boundingBox();
+    const onto = await pane(1).locator('[role=tab]').first().boundingBox();
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(from.x + from.width / 2 + 10, from.y + from.height / 2 + 5, { steps: 4 });
+    await page.mouse.move(onto.x + onto.width / 2, onto.y + onto.height / 2, { steps: 12 });
+    // A few moves over the tab itself: Playwright's emulated drag sends one dragover per move, and
+    // React shows the mark after the next one (with only the move that arrives, neither the strip's
+    // nor the pane's outline is drawn yet, in either browser).
+    await page.mouse.move(onto.x + onto.width / 2 + 6, onto.y + onto.height / 2, { steps: 6 });
+    await page.waitForTimeout(150);
+    const marks = await page.evaluate(() => {
+      const strip = document.querySelector('.e68-editor__pane[data-pane="1"] .e68-tabs');
+      return {
+        strip: strip?.getAttribute('data-e68-drop') ?? null,
+        tabs: [...(strip?.querySelectorAll('[role=tab][data-e68-drop]') ?? [])].length,
+      };
+    });
+    await page.mouse.up();
+    await afterDrag();
+    await page.waitForTimeout(300);
+    check(
+      `${p} over a tab of the other pane's strip: the strip is outlined, no tab is marked as a place`,
+      marks.strip === 'true' && marks.tabs === 0,
+      JSON.stringify(marks),
+    );
+  }
   check(
     `${p} a document tab dragged onto the other pane's strip moves the document there`,
     (await paneOf(moved)) === '1',
@@ -981,6 +1009,10 @@ async function splitPass(browser, name) {
     (await paneOf(moved)) === '0',
     `${moved} in pane ${await paneOf(moved)}`,
   );
+  // The drop on the body unmounted the dragged tab (its own dragend never ran): the strip's
+  // memory of the page's drag is cleared all the same.
+  const leftDrag = await page.evaluate(async () => (await import('/src/ui/components/Tabs.tsx')).currentTabDrag());
+  check(`${p} after a drop on a pane's body no tab drag is remembered`, leftDrag === null, JSON.stringify(leftDrag));
   // A drop on its own pane changes nothing, and no drop wrote into a document.
   const ownBefore = await tabs();
   await tabIn(0, moved).dragTo(pane(0).locator('.cm-content'));

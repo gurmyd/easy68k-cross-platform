@@ -203,10 +203,12 @@ test.describe('toolbar (editor-ui §3)', () => {
 });
 
 test.describe('context menus (editor-ui §4)', () => {
+  // The original's nine items come first, in their order, Reload File the last of them; the stage of
+  // additions puts its own items below them (the next test). The name is the parity matrix's row.
   test('the editor context menu holds the nine items of the original, Reload File last', async ({ app }) => {
     await app.content().click({ button: 'right' });
     const entries = await app.entriesOf(app.openMenuList);
-    expect(entries.map((e) => e.caption)).toEqual([
+    expect(entries.slice(0, 9).map((e) => e.caption)).toEqual([
       'Undo',
       'Redo',
       'Cut',
@@ -216,9 +218,27 @@ test.describe('context menus (editor-ui §4)', () => {
       'Comment Selection',
       'Uncomment Selection',
       'Reload File',
-      // ARCHITECTURE-PLUS P3.6, P5 N2: below a separator after the original's items.
-      'Earlier Versions...',
     ]);
+    // Everything after Reload File is an addition of the stage (ARCHITECTURE-PLUS P1.1 rule 3).
+    expect(entries.slice(9).map((e) => e.caption)).toEqual(['Earlier Versions...']);
+    await app.page.keyboard.press('Escape');
+    await expect(app.page.locator('[role=menu][data-e68-menu]')).toHaveCount(0);
+  });
+
+  test('below a separator after Reload File the context menu adds Earlier Versions... (ARCHITECTURE-PLUS P3.6)', async ({
+    app,
+  }) => {
+    await app.content().click({ button: 'right' });
+    const order = await app.openMenuList
+      .locator(':scope > [role^=menuitem], :scope > [role=separator]')
+      .evaluateAll((items) =>
+        items.map((item) =>
+          item.getAttribute('role') === 'separator'
+            ? '-'
+            : (item.querySelector('.e68-menu__caption')?.textContent ?? ''),
+        ),
+      );
+    expect(order.slice(order.indexOf('Reload File'))).toEqual(['Reload File', '-', 'Earlier Versions...']);
     await app.page.keyboard.press('Escape');
     await expect(app.page.locator('[role=menu][data-e68-menu]')).toHaveCount(0);
   });

@@ -736,7 +736,7 @@ async function uiPass(browser, name) {
       '/browser/demo/all.bin',
       Uint8Array.from({ length: 2048 }, (_, i) => i & 0xff),
     );
-    await vfs.writeFile('/browser/Ãœbung 1/PrÃ¼fung.X68', enc('x'));
+    await vfs.writeFile('/browser/Übung 1/Prüfung.X68', enc('x'));
     window.__filters = await import('/src/features/files/filters.ts');
   });
 
@@ -1763,6 +1763,30 @@ async function revealRow(page, path) {
 
 const row = (page, path) => page.locator(`${FILES} [role=treeitem][data-e68-path="${path}"]`);
 
+/**
+ * Clicks a row with `mod` held, as the key map's system delivers it. On a Mac the browser turns a
+ * Ctrl+click into a right click (a `contextmenu` after the pointer events), so the Windows key
+ * map's Ctrl+click, which no real Mac gives, would open the context menu over the tree; there it is
+ * dispatched as Windows delivers it (pointer events and a click with ctrlKey, no context menu).
+ * EASY68K_FILES_DISPATCH_CTRL=1 takes that path on any system, to check it where no Mac is.
+ */
+async function modClick(page, path, mod) {
+  const dispatch =
+    mod === 'Control' && (process.platform === 'darwin' || process.env.EASY68K_FILES_DISPATCH_CTRL === '1');
+  if (!dispatch) {
+    await row(page, path).click({ modifiers: [mod] });
+    return;
+  }
+  const target = row(page, path);
+  await target.scrollIntoViewIfNeeded();
+  const pointer = { button: 0, ctrlKey: true, pointerType: 'mouse', isPrimary: true, pointerId: 1 };
+  await target.dispatchEvent('pointerdown', { ...pointer, buttons: 1 });
+  await target.dispatchEvent('mousedown', { button: 0, buttons: 1, ctrlKey: true });
+  await target.dispatchEvent('pointerup', { ...pointer, buttons: 0 });
+  await target.dispatchEvent('mouseup', { button: 0, buttons: 0, ctrlKey: true });
+  await target.dispatchEvent('click', { button: 0, ctrlKey: true });
+}
+
 /** Drags the rows of `from` (as the panel's own drag) onto the row of `to`; `drop` false: hover only. */
 function syntheticDrag(page, from, to, { drop = true, hoverMs = 0 } = {}) {
   return page.evaluate(
@@ -1864,14 +1888,14 @@ async function selectionPass(browser, name, keys) {
     JSON.stringify(s),
   );
   check(`${p} a line says "3 items selected"`, s.count === '3 items selected', s.count);
-  await row(page, '/browser/sel/sub').click({ modifiers: [mod] });
+  await modClick(page, '/browser/sel/sub', mod);
   s = await treeState(page);
   check(
     `${p} ${mod}+click adds a row`,
     same(s.selected, ['sub', 'a.X68', 'b.X68', 'c.X68']),
     JSON.stringify(s.selected),
   );
-  await row(page, '/browser/sel/b.X68').click({ modifiers: [mod] });
+  await modClick(page, '/browser/sel/b.X68', mod);
   s = await treeState(page);
   check(`${p} ${mod}+click removes a row`, same(s.selected, ['sub', 'a.X68', 'c.X68']), JSON.stringify(s.selected));
   await page.screenshot({ path: join(outDir, `${name}-${keys}-multi-selection-light.png`) });
@@ -1964,6 +1988,26 @@ async function selectionPass(browser, name, keys) {
       );
     }
   }
+
+  // The question's No has the focus (P3.2.2): Enter answers No and deletes nothing.
+  await row(page, '/browser/sel/b.X68').click();
+  await page.locator(TREE).focus();
+  await page.keyboard.press('Delete');
+  const firstBox = page.locator('[role=alertdialog]').last();
+  await firstBox.waitFor({ timeout: 10_000 });
+  await page.waitForFunction(() => document.activeElement?.closest('[role=alertdialog]') !== null, null, {
+    timeout: 5_000,
+  });
+  const focusedButton = await page.evaluate(() => document.activeElement?.textContent?.trim() ?? null);
+  await page.keyboard.press('Enter');
+  await firstBox.waitFor({ state: 'detached', timeout: 10_000 });
+  await page.waitForTimeout(300);
+  const keptB = await exists(page, '/browser/sel/b.X68');
+  check(
+    `${p} in the Delete question No has the focus; Enter deletes nothing`,
+    focusedButton === 'No' && keptB,
+    `focused ${JSON.stringify(focusedButton)}; b.X68 still there ${keptB}`,
+  );
 
   // Delete, and the focus after it (P3.2.2): the row after the last deleted row.
   await row(page, '/browser/sel/b.X68').click();
@@ -2073,10 +2117,10 @@ async function dragAndStoragePass(browser, name) {
 
   // Drag to move, onto a folder row.
   await row(page, '/browser/drag/a.X68').click();
-  await row(page, '/browser/drag/b.X68').click({ modifiers: ['Control'] });
+  await modClick(page, '/browser/drag/b.X68', 'Control');
   await revealRow(page, '/browser/drag/into').catch(() => {});
   await row(page, '/browser/drag/a.X68').click();
-  await row(page, '/browser/drag/b.X68').click({ modifiers: ['Control'] });
+  await modClick(page, '/browser/drag/b.X68', 'Control');
   const moved = await syntheticDrag(page, '/browser/drag/b.X68', '/browser/drag/into');
   await waitForPaths(
     page,
@@ -2122,9 +2166,9 @@ async function dragAndStoragePass(browser, name) {
   const across = await syntheticDrag(page, '/browser/drag/into/a.X68', '/folder');
   await waitForPaths(page, ['/folder/a.X68']);
   check(
-    `${p} across stores the drag shows the copy cursor and "Copy to Folder: Lab"; the drop copies`,
+    `${p} across stores the drag shows the copy cursor and "Copy to Lab" (P3.2.5's name of the folder); the drop copies`,
     across.effect === 'copy' &&
-      across.title === 'Copy to Folder: Lab' &&
+      across.title === 'Copy to Lab' &&
       (await exists(page, '/folder/a.X68')) &&
       (await exists(page, '/browser/drag/into/a.X68')),
     JSON.stringify(across),
@@ -2413,7 +2457,7 @@ async function openedFolderPass(browser, name) {
   await nameDialog.waitFor();
   await nameDialog.getByRole('textbox').fill('c.X68');
   await page.keyboard.press('Enter');
-  await waitInPage(page, async () => {
+  const renamed = await waitInPage(page, async () => {
     const names = (await window.__easy68k.ctx.vfs.list('/folder/demo')).map((e) => e.name);
     return names.includes('c.X68') && !names.includes('b.X68');
   });
@@ -2422,8 +2466,11 @@ async function openedFolderPass(browser, name) {
   note(entries);
   check(
     `${p} a rename writes and removes only the files it names`,
-    onlyNamed(entries, ['Lab/demo/b.X68', 'Lab/demo/c.X68']),
-    JSON.stringify(entries),
+    renamed &&
+      onlyNamed(entries, ['Lab/demo/b.X68', 'Lab/demo/c.X68']) &&
+      entries.includes('remove Lab/demo/b.X68') &&
+      entries.some((e) => e.endsWith(' Lab/demo/c.X68')),
+    `renamed ${renamed}; ${JSON.stringify(entries)}`,
   );
   await revealRow(page, '/folder/demo/c.X68');
   await page.locator(TREE).focus();
@@ -2432,10 +2479,11 @@ async function openedFolderPass(browser, name) {
   await nameDialog.waitFor();
   await nameDialog.getByRole('textbox').fill('C.X68');
   await page.keyboard.press('Enter');
-  await waitInPage(page, async () => {
+  const caseRenamed = await waitInPage(page, async () => {
     const names = (await window.__easy68k.ctx.vfs.list('/folder/demo')).map((e) => e.name);
     return names.length === 1 && names[0] === 'C.X68';
   });
+  check(`${p} the change of letter case is made`, caseRenamed);
   await page.waitForTimeout(300);
   entries = await log();
   note(entries);
@@ -2470,6 +2518,58 @@ async function openedFolderPass(browser, name) {
       moveRefusal.includes('The folder "repo" holds a Git repository. Move it with your own tools.') &&
       entries.length === 0,
     `${refusal} | ${renameRefusal} | ${moveRefusal} | ${JSON.stringify(entries)}`,
+  );
+
+  // No name becomes .git (P1.1 rule 2, verify round 2 of N5): Rename of a folder to .git and .GIT,
+  // and New Folder .Git, are refused with the text of errata N5 entry 15 and asked again; Esc then
+  // leaves everything as it was, on the disk as in the tree.
+  const { gitNameRefused } = await page.evaluate(async () => {
+    const texts = await import('/src/features/files/texts.ts');
+    return { gitNameRefused: ['.git', '.GIT', '.Git'].map((n) => texts.gitNameRefused(n)) };
+  });
+  await revealRow(page, '/folder/other');
+  const gitAnswers = [];
+  for (const typed of ['.git', '.GIT']) {
+    await page.locator(TREE).focus();
+    await page.keyboard.press('F2');
+    nameDialog = page.getByRole('dialog', { name: 'Rename' });
+    await nameDialog.waitFor();
+    await nameDialog.getByRole('textbox').fill(typed);
+    await page.keyboard.press('Enter');
+    gitAnswers.push(await answerBox(page, 'OK'));
+    await nameDialog.waitFor(); // asked again
+    await page.keyboard.press('Escape');
+    await nameDialog.waitFor({ state: 'detached' });
+  }
+  await page.locator(FILES).getByRole('button', { name: 'New Folder...' }).click();
+  const folderDialog = page.getByRole('dialog', { name: 'New Folder' });
+  await folderDialog.waitFor();
+  await folderDialog.getByRole('textbox').fill('.Git');
+  await page.keyboard.press('Enter');
+  gitAnswers.push(await answerBox(page, 'OK'));
+  await folderDialog.waitFor();
+  await page.keyboard.press('Escape');
+  await folderDialog.waitFor({ state: 'detached' });
+  await page.waitForTimeout(300);
+  entries = await log();
+  note(entries);
+  const afterGit = await page.evaluate(async () => {
+    const { vfs } = window.__easy68k.ctx;
+    return {
+      other: (await vfs.list('/folder/other')).map((e) => e.name),
+      top: (await vfs.list('/folder')).map((e) => e.name).sort(),
+      rowShown: document.querySelector('[data-e68-panel="files"] [data-e68-path="/folder/other"]') !== null,
+    };
+  });
+  check(
+    `${p} Rename to .git or .GIT and New Folder .Git are refused with the text and asked again; nothing is written`,
+    gitAnswers.length === 3 &&
+      gitAnswers.every((t, i) => t.includes(gitNameRefused[i])) &&
+      entries.length === 0 &&
+      afterGit.rowShown &&
+      afterGit.other.length > 0 &&
+      !afterGit.top.some((n) => n.toLowerCase() === '.git'),
+    `${JSON.stringify(gitAnswers)} | ${JSON.stringify(entries)} | ${JSON.stringify(afterGit)}`,
   );
   check(`${p} no command wrote or removed a path below .git`, gitTouched.length === 0, JSON.stringify(gitTouched));
 
@@ -2602,7 +2702,14 @@ async function main() {
         for (const [label, pass] of passes) {
           if (onlyPass && !label.includes(onlyPass)) continue;
           console.log(`\n[${name}, ${label}]`);
-          await timedPass(`${name}, ${label}`, () => pass(browser, name));
+          // A pass that throws is reported with its name and the whole message (Playwright's call
+          // log says what was in the way), and the next pass still runs: a CI log of another
+          // system must be enough to find the cause.
+          try {
+            await timedPass(`${name}, ${label}`, () => pass(browser, name));
+          } catch (error) {
+            check(`${name}, ${label}: the pass ran to the end`, false, String(error?.stack ?? error).slice(0, 3000));
+          }
         }
       } catch (error) {
         check(`${name}: the pass ran to the end`, false, String(error?.stack ?? error).slice(0, 400));

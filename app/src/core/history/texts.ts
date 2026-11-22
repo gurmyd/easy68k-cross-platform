@@ -41,6 +41,18 @@ export function changedWhileRestoring(name: string): string {
   return `"${name}" changed while it was being restored. It was not restored.`;
 }
 
+/** P3.3.8, P4.4: `read(path, seq)` of a version that is gone (pruned since the list was shown). */
+export const VERSION_NOT_KEPT = 'This version is no longer kept.';
+
+/**
+ * P3.3.10, P1.1 rule 2: `guard` rejects, without calling `act`, a path below a `.git` folder
+ * (`below`), a `.git` folder itself (`is`) and a folder that holds one (`holds`) (errata N3).
+ */
+export function gitRefused(path: string, how: 'below' | 'is' | 'holds'): string {
+  const what = how === 'below' ? 'is in a .git folder' : how === 'is' ? 'is a .git folder' : 'holds a Git repository';
+  return `"${path}" ${what}: EASy68K changes nothing there.`;
+}
+
 /** P3.3.4: the toast, shown once per window when `state()` becomes `tight`; it stays until dismissed. */
 export const STORAGE_TIGHT_TOAST =
   "The browser's storage for this site is nearly full. To keep room for your files, EASy68K keeps no new earlier versions or Trash items until there is room again, and removes its oldest ones.";

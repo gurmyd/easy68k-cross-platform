@@ -81,6 +81,27 @@ describe('New (editor-ui §12.1)', () => {
     expect(t.store.getState().documents).toEqual({ items: [first, second], activeId: second.id });
   });
 
+  it('newSourceWithText (ARCHITECTURE-PLUS P3.3.8) makes the next untitled document with the text, modified', () => {
+    const t = setup();
+    t.settings.editor.tabType = TabType.Assembly;
+    t.settings.editor.fixedTabSize = 6;
+    const first = t.manager.newSource();
+    const doc = t.manager.newSourceWithText('  ORG $1000\n  END $1000\n');
+    expect(doc).toMatchObject({
+      name: 'untitled2.x68',
+      kind: 'source',
+      hasName: false,
+      path: null,
+      modified: true,
+      tabType: 0,
+      tabSize: 6,
+      insertMode: true,
+    });
+    expect(t.manager.text(doc.id)).toBe('  ORG $1000\n  END $1000\n');
+    expect(t.manager.text(first.id)).toBe(DEFAULT_TEMPLATE);
+    expect(t.store.getState().documents).toEqual({ items: [first, doc], activeId: doc.id });
+  });
+
   it('counts a text change in revision and modified, and undoing to the saved text clears modified', () => {
     const t = setup();
     const doc = t.manager.newSource();
@@ -647,19 +668,71 @@ describe('open asks the viewer (ARCHITECTURE-PLUS P3.4.1, P4.4)', () => {
     expect(t.asked.map((box) => box.title)).toEqual(['Error']);
   });
 
-  it('the "already open" question comes first: No keeps the document and the viewer is not asked', async () => {
+  // An Open never closes what a person has open (errata N6 12): a file open as text (Open as Text)
+  // that the viewer takes is shown in the viewer, and its text document stays as it is.
+  it('a file open as text that the viewer takes: an Open shows the viewer and keeps the document open', async () => {
+    const f = fakeViewer('.svg');
+    const t = setup({ viewer: f.viewer });
+    await t.vfs.writeFile('/browser/p.svg', bytes('<svg/>\r\n'));
+    const doc = (await t.manager.open('/browser/p.svg', { asText: true }))!;
+    const text = t.manager.text(doc.id);
+    expect(await t.manager.open('/browser/p.svg')).toBeNull();
+    expect(f.shown.map((entry) => entry.path)).toEqual(['/browser/p.svg']);
+    expect(t.manager.list().map((entry) => entry.id)).toEqual([doc.id]);
+    expect(t.manager.get(doc.id)).toEqual(doc);
+    expect(t.manager.text(doc.id)).toBe(text);
+    expect(t.asked).toEqual([]);
+  });
+
+  it('the same with unsaved changes: no question, the viewer shows the file, the changes stay', async () => {
     const f = fakeViewer('.pdf');
     const t = setup({ viewer: f.viewer });
     await t.vfs.writeFile('/browser/report.pdf', bytes('%PDF\r\n'));
     const doc = (await t.manager.open('/browser/report.pdf', { asText: true }))!;
     t.type(doc.id, 'X');
-    t.answers.push('No');
     expect(await t.manager.open('/browser/report.pdf')).toBeNull();
-    expect(t.asked.map((box) => box.text)).toEqual([
-      'report.pdf is already open. Do you want to discard changes and reopen?',
-    ]);
-    expect(f.asked).toEqual([]);
+    expect(t.asked).toEqual([]);
+    expect(f.shown.map((entry) => entry.path)).toEqual(['/browser/report.pdf']);
     expect(t.manager.get(doc.id)?.modified).toBe(true);
+    expect(t.manager.text(doc.id).startsWith('X')).toBe(true);
+  });
+
+  it('a text file that is already open: the "already open" question as before; Yes reads the file again', async () => {
+    const f = fakeViewer('.pdf');
+    const t = setup({ viewer: f.viewer });
+    await t.vfs.writeFile('/browser/p.X68', bytes('OLD\r\n'));
+    const doc = (await t.manager.open('/browser/p.X68'))!;
+    t.type(doc.id, 'X');
+    // No: the document stays, modified.
+    t.answers.push('No');
+    expect(await t.manager.open('/browser/p.X68')).toBeNull();
+    expect(t.manager.get(doc.id)?.modified).toBe(true);
+    // Yes, after the file changed: the new bytes, read after the question, replace it in its tab.
+    await t.vfs.writeFile('/browser/p.X68', bytes('NEW\r\n'));
+    t.answers.push('Yes');
+    const again = (await t.manager.open('/browser/p.X68'))!;
+    expect(t.asked.map((box) => box.text)).toEqual([
+      'p.X68 is already open. Do you want to discard changes and reopen?',
+      'p.X68 is already open. Do you want to discard changes and reopen?',
+    ]);
+    expect(t.manager.text(again.id).startsWith('NEW')).toBe(true);
+    expect(t.manager.list().map((entry) => entry.path)).toEqual(['/browser/p.X68']);
+    expect(f.shown).toEqual([]);
+  });
+
+  it('a file that is not open is read once, with or without a viewer', async () => {
+    for (const viewer of [undefined, fakeViewer('.pdf').viewer]) {
+      const t = setup(viewer ? { viewer } : {});
+      await t.vfs.writeFile('/browser/p.X68', bytes('A\r\n'));
+      let reads = 0;
+      const read = t.vfs.readFile.bind(t.vfs);
+      t.vfs.readFile = (path) => {
+        reads++;
+        return read(path);
+      };
+      await t.manager.open('/browser/p.X68');
+      expect(reads).toBe(1);
+    }
   });
 });
 

@@ -50,6 +50,10 @@ export interface DocumentService {
   active(): DocumentState | null;
   text(id: string): string; // lines separated by "\n"
   newSource(): DocumentState;
+  /** A new untitled source document holding `text` ("\n" line ends) instead of the template,
+   *  modified, with the Editor Options settings: P3.3.8's `Open as New Document` (the stage of
+   *  additions; optional, docs/requests/N4-history-ui.md item 1). */
+  newSourceWithText?(text: string): DocumentState;
   /** editor-ui §6.2 incl. the "already open" question. As before; with { asText: true } the viewer
    *  is not asked (ARCHITECTURE-PLUS P3.4.2, Open as Text). */
   open(path: VPath, options?: { asText?: boolean }): Promise<DocumentState | null>;

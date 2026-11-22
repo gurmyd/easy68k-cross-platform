@@ -378,20 +378,12 @@ async function linkedPass(browser, name) {
   );
   const folderShown = await statusText(page);
   const label = await page.evaluate(() => window.__easy68k.ctx.vfs.backends().find((b) => b.mount === 'folder')?.label);
-  if (folderShown === FOLDER_TEXT) note(`${p} the opened folder's status bar reads ${JSON.stringify(folderShown)}`);
-  else
-    note(
-      `${p} KNOWN (docs/requests/N8-folder-place-text.md): the opened folder's status bar reads ` +
-        `${JSON.stringify(folderShown)}, P3.2.5 gives ${JSON.stringify(FOLDER_TEXT)} (the folder's label is ${JSON.stringify(label)})`,
-    );
+  // The exact text of P3.2.5 (the backend's label is "Folder: Lab"; the place text leaves out the
+  // "Folder: ", docs/requests/N8-folder-place-text.md).
   check(
-    `${p} the opened folder's status bar names the file, the folder and "on this computer", not /folder/`,
-    typeof folderShown === 'string' &&
-      folderShown.includes('prog.X68') &&
-      folderShown.includes('Lab') &&
-      folderShown.endsWith(' on this computer') &&
-      !folderShown.includes('/folder/'),
-    JSON.stringify(folderShown),
+    `${p} the opened folder's status bar reads ${JSON.stringify(FOLDER_TEXT)}, never /folder/`,
+    folderShown === FOLDER_TEXT,
+    `${JSON.stringify(folderShown)} (the folder's label is ${JSON.stringify(label)})`,
   );
   await page.screenshot({ path: join(outDir, `${name}-folder-status.png`) });
 
