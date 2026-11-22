@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type {
   AppContext,
+  AppSettings,
   AppState,
   AsmOptions,
   AsmResult,
@@ -35,6 +36,7 @@ import type {
   Platform,
   RunController,
   SaveRequest,
+  ServiceFactories,
   SimEngine,
   SimHost,
   SimSession,
@@ -153,6 +155,21 @@ const EXPORTS: Record<string, string[]> = {
     'AppSettings',
     'Settings',
     'SettingsService',
+    // the stage of additions (ARCHITECTURE-PLUS P4.2)
+    'DockNode',
+    'DockParked',
+    'DockLayouts',
+    'PlusSettings',
+  ],
+  // the stage of additions (ARCHITECTURE-PLUS P4.4)
+  'history.ts': [
+    'VersionReason',
+    'VersionInfo',
+    'TrashItemInfo',
+    'HistoryUsage',
+    'SeenFile',
+    'HistoryState',
+    'HistoryService',
   ],
   'run.ts': [
     // 3.11.2
@@ -202,6 +219,8 @@ const EXPORTS: Record<string, string[]> = {
     'SimFileDialogResult',
     'LogFileExistsProps',
     'LogFileExistsResult',
+    // the stage of additions (ARCHITECTURE-PLUS P4.4)
+    'ViewerService',
   ],
   'platform.ts': [
     // 3.13
@@ -689,6 +708,15 @@ const OPTIONAL_ADDITIONS = {
     'openDroppedFolder' | 'linkFileHandle'
   >,
   fileDialogsLink: true satisfies StillValidWithout<FileDialogs, 'linkFileHandle'>,
+  // the stage of additions (ARCHITECTURE-PLUS P4.4: optional members only)
+  appContextPlus: true satisfies StillValidWithout<AppContext, 'history' | 'viewer'>,
+  serviceFactoriesPlus: true satisfies StillValidWithout<
+    ServiceFactories,
+    'createHistoryService' | 'createViewerService'
+  >,
+  documentServicePlus: true satisfies StillValidWithout<DocumentService, 'relocate' | 'onWritten' | 'fileTime'>,
+  appSettingsPlus: true satisfies StillValidWithout<AppSettings, 'plus'>,
+  appSettingsLayoutDock: true satisfies StillValidWithout<AppSettings['layout'], 'dock'>,
 };
 
 /** true when every member K of T is required (T without K is no longer a T). */
@@ -716,6 +744,8 @@ const WAVE_ONE_SIGNATURES = {
   // round 3 (entry 13)
   open: true satisfies Assignable<(path: string, origin: LoadOrigin) => Promise<void>, RunController['open']>,
   chooseFolder: true satisfies Assignable<(title: string) => Promise<string | null>, NativeFileDialogs['chooseFolder']>,
+  // the stage of additions (ARCHITECTURE-PLUS P4.4): DocumentService.open's optional options
+  documentOpen: true satisfies Assignable<(path: string) => Promise<null>, DocumentService['open']>,
 };
 const NEW_ARGUMENTS = {
   run: ['ed.help.help', 'options.htm', { allowInModal: true }] satisfies Parameters<CommandRegistry['run']>,
@@ -733,6 +763,9 @@ const NEW_ARGUMENTS = {
   openAsBefore: ['/browser/a.S68', 'open'] satisfies Parameters<RunController['open']>,
   chooseFolder: ['Copy the Examples to', '/disk/0/Users'] satisfies Parameters<NativeFileDialogs['chooseFolder']>,
   chooseFolderAsBefore: ['Copy the Examples to'] satisfies Parameters<NativeFileDialogs['chooseFolder']>,
+  // the stage of additions (ARCHITECTURE-PLUS P4.4)
+  documentOpen: ['/browser/report.pdf', { asText: true }] satisfies Parameters<DocumentService['open']>,
+  documentOpenAsBefore: ['/browser/prog.X68'] satisfies Parameters<DocumentService['open']>,
 };
 
 /** Where each addition is declared, as it is written in the contract file. */
@@ -761,6 +794,18 @@ const ADDED_DECLARATIONS: Record<string, string[]> = {
     // required since gate I2 (entry 14.5)
     'update(id: string, patch: DocumentPatch): void;',
     'selection(id: string): DocumentSelection | null;',
+    // the stage of additions (ARCHITECTURE-PLUS P4.4)
+    'open(path: VPath, options?: { asText?: boolean }): Promise<DocumentState | null>;',
+    'relocate?(from: VPath, to: VPath): Promise<void>;',
+    "onWritten?( listener: (event: { path: VPath; bytes: Bytes; reason: 'saved' | 'opened'; time: number }) => void, ): () => void;",
+    'fileTime?(id: string): number | null;',
+  ],
+  // the stage of additions (ARCHITECTURE-PLUS P4.2)
+  'settings.ts': [
+    'dock?: DockLayouts;',
+    'plus?: PlusSettings;',
+    'locked?: boolean;',
+    'parked?: Record<string, DockParked>;',
   ],
   'commands.ts': [
     'run(id: CommandId, arg?: unknown, options?: CommandRunOptions): Promise<void>;',
@@ -769,6 +814,13 @@ const ADDED_DECLARATIONS: Record<string, string[]> = {
   'features.ts': [
     'readonly build: BuildFacts;', // required since gate I2 (entry 14.5)
     'toast(text: string, action?: { label: string; run(): void }, options?: ToastOptions): void;',
+    // the stage of additions (ARCHITECTURE-PLUS P4.4)
+    'readonly history?: HistoryService;',
+    'readonly viewer?: ViewerService;',
+    'createHistoryService?(ctx: AppContext): HistoryService;',
+    'createViewerService?(ctx: AppContext): ViewerService;',
+    'wants(path: VPath, bytes: Bytes): boolean;',
+    'show(path: VPath, bytes: Bytes): void;',
   ],
   'store.ts': [
     'repaint?: { listing: number; breakpoints: number; memory: number; stack: number; stackRedraw?: number };',
@@ -798,7 +850,7 @@ describe('additions of gate I1 (errata W1.md, entry 11)', () => {
     for (const table of [OPTIONAL_ADDITIONS, WAVE_ONE_SIGNATURES, REQUIRED_SINCE_GATE_I2]) {
       for (const [name, ok] of Object.entries(table)) expect(ok, name).toBe(true);
     }
-    expect(Object.keys(NEW_ARGUMENTS)).toHaveLength(10);
+    expect(Object.keys(NEW_ARGUMENTS)).toHaveLength(12);
   });
 
   for (const [file, declarations] of Object.entries(ADDED_DECLARATIONS)) {

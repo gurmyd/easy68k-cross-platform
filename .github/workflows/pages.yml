@@ -102,6 +102,9 @@ jobs:
   deploy:
     name: deploy
     needs: [build]
+    # Only main is published: a manual run on another branch (the stage of additions on `plus`,
+    # ARCHITECTURE-PLUS P6.1) builds but publishes nothing.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

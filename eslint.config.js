@@ -16,6 +16,15 @@
 //   ui/shell/           features only through features/index.ts
 //   everywhere in app/src: npm packages only from the closed runtime list of 3.1
 //
+// The stage of additions (ARCHITECTURE-PLUS P2.4) adds:
+//   fs/                 also core/history
+//   features/history/   also the one file ui/editor/fonts.ts
+//   ui/dock/            a layer of its own: contracts/, core/, state/, commands/,
+//                       ui/components/, ui/shell/PanelRegion.tsx, ui/shell/SplitPane.tsx,
+//                       the runtime list and flexlayout-react
+//   FOLDER_PACKAGES     flexlayout-react only under ui/dock/, @codemirror/merge only
+//                       under features/history/; reported everywhere else
+//
 // The rule resolves every relative specifier against the importing file and
 // judges the folder it lands in, so `./../state/x`, `../../core/../features/b`
 // and a feature importing its own folder as `../<own>/x` are all judged by
@@ -58,6 +67,20 @@ const isTestPackage = (name) => name === 'vitest' || name === 'fake-indexeddb' |
 const TEST_FILE_PACKAGES = {
   [`${SRC}/engine/browser.test.ts`]: ['@playwright/test', 'vite'],
 };
+/**
+ * npm packages that only one folder of app/src may import (ARCHITECTURE-PLUS P2.4): the docking
+ * library only in ui/dock/, the comparison view only in features/history/. Allowed there (its unit
+ * tests included) and reported everywhere else.
+ */
+const FOLDER_PACKAGES = {
+  'flexlayout-react': 'ui/dock',
+  '@codemirror/merge': 'features/history',
+};
+/** Single files of other layers that a feature may import (ARCHITECTURE-PLUS P2.4). */
+const FEATURE_FILES = {
+  // the editor's font for the comparison of two versions
+  history: ['ui/editor/fonts'],
+};
 /** Features that are the user-interface halves of their own fs/ backends and may import fs/ (W3-layer-rule). */
 const FS_FEATURES = ['files', 'files-fsaccess'];
 /** The feature that registers the editor component of ui/editor/ and alone may import it (E2-layer-rule). */
@@ -85,7 +108,13 @@ function layerOf(file) {
     case 'engine':
       return { name: 'engine/', root: 'engine', allowed: ['contracts'], packages: [], engineModules: true };
     case 'fs':
-      return { name: 'fs/', root: 'fs', allowed: ['contracts', 'core/paths', 'core/codec'], packages: [] };
+      // core/history: the pure logic of fs/history-db.ts (ARCHITECTURE-PLUS P2.4, P5 N3)
+      return {
+        name: 'fs/',
+        root: 'fs',
+        allowed: ['contracts', 'core/paths', 'core/codec', 'core/history'],
+        packages: [],
+      };
     case 'features':
       if (second === undefined || !file.includes('/', 'features/'.length)) return undefined; // features/index.ts
       return {
@@ -100,10 +129,22 @@ function layerOf(file) {
           ...(FS_FEATURES.includes(second) ? ['fs'] : []),
           ...(EDITOR_FEATURES.includes(second) ? ['ui/editor'] : []),
         ],
+        files: FEATURE_FILES[second] ?? [],
         packages: RUNTIME_PACKAGES,
         feature: true,
       };
     case 'ui':
+      // ui/dock/ (ARCHITECTURE-PLUS P2.4): a layer of its own, with two files of ui/shell/; features
+      // never import it (they reach the dock through state/dock.ts).
+      if (second === 'dock') {
+        return {
+          name: 'ui/dock/',
+          root: 'ui/dock',
+          allowed: ['contracts', 'core', 'state', 'commands', 'ui/components'],
+          files: ['ui/shell/PanelRegion', 'ui/shell/SplitPane'],
+          packages: RUNTIME_PACKAGES,
+        };
+      }
       if (second !== 'shell') return undefined;
       return { name: 'ui/shell/', root: 'ui/shell', packages: RUNTIME_PACKAGES, shell: true };
     default:
@@ -119,6 +160,14 @@ function checkImport(fileFromRepo, spec, isTest) {
 
   // npm packages
   if (!clean.startsWith('.') && !clean.startsWith('/')) {
+    // A package of one folder: there (its tests too), and nowhere else (ARCHITECTURE-PLUS P2.4).
+    const folderPackage = Object.keys(FOLDER_PACKAGES).find((pkg) => isPackage(clean, pkg));
+    if (folderPackage) {
+      const folder = FOLDER_PACKAGES[folderPackage];
+      return within(file, folder)
+        ? null
+        : `${folderPackage} may be imported only under app/src/${folder}/ (ARCHITECTURE-PLUS P2.4)`;
+    }
     const allowed = layer ? layer.packages : RUNTIME_PACKAGES;
     if (allowed.some((pkg) => isPackage(clean, pkg))) return null;
     if (isTest && isTestPackage(clean)) return null;
@@ -154,9 +203,12 @@ function checkImport(fileFromRepo, spec, isTest) {
     return `features/<x>/ may not import another feature by path; use the AppContext services (3.12.3) ${DOC}`;
   }
   if (withinAny(to, layer.allowed)) return null;
+  // Single files a layer may import, with or without their extension (ARCHITECTURE-PLUS P2.4).
+  const files = layer.files ?? [];
+  if (files.includes(to.replace(/\.(?:tsx?|mts|m?js)$/, ''))) return null;
   return `${layer.name} may import only ${
     layer.allowed.length ? layer.allowed.map((name) => `${name}/`).join(', ') : 'its own files'
-  }${layer.engineModules ? ' and the engine modules' : ''} ${DOC}`;
+  }${files.length ? `, ${files.join(', ')}` : ''}${layer.engineModules ? ' and the engine modules' : ''} ${DOC}`;
 }
 
 /** The local plugin with the layer rule. */

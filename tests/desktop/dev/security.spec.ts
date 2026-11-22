@@ -58,6 +58,13 @@ test('the window loads app://easy68k/index.html with the web preferences of 7.6'
     webviewTag: false,
     backgroundThrottling: false,
   });
+  // ARCHITECTURE-PLUS P3.4.2, R5: the application window has Electron's PDF viewer, for the
+  // viewer's blob: frame. getLastWebPreferences() does not report `plugins` (Electron 45), so the
+  // effect is read in the page instead: Chromium reports the built-in viewer only while plugins are
+  // on (errata N0). The constant itself is checked in unit.spec.ts.
+  const pdfViewer = await desktop.page.evaluate(() => navigator.pdfViewerEnabled);
+  console.log(`app window: navigator.pdfViewerEnabled = ${String(pdfViewer)}`);
+  expect(pdfViewer).toBe(true);
 });
 
 test('the page has no require and no process, and exactly the documented bridge', async () => {

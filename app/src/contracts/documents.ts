@@ -3,7 +3,7 @@
 //
 // Owner: W1. Contracts import nothing but other contracts (3.1).
 
-import type { TabType } from './engine';
+import type { Bytes, TabType } from './engine';
 import type { VPath } from './fs';
 
 export type DocKind = 'source' | 'list';
@@ -50,7 +50,9 @@ export interface DocumentService {
   active(): DocumentState | null;
   text(id: string): string; // lines separated by "\n"
   newSource(): DocumentState;
-  open(path: VPath): Promise<DocumentState | null>; // editor-ui §6.2 incl. the "already open" question
+  /** editor-ui §6.2 incl. the "already open" question. As before; with { asText: true } the viewer
+   *  is not asked (ARCHITECTURE-PLUS P3.4.2, Open as Text). */
+  open(path: VPath, options?: { asText?: boolean }): Promise<DocumentState | null>;
   save(id: string): Promise<boolean>; // false = cancelled or failed
   saveAs(id: string): Promise<boolean>;
   reload(id: string): Promise<void>;
@@ -69,4 +71,24 @@ export interface DocumentService {
   /** The selection and caret of a document, for F1 in the editor (editor-ui §15.3). null for an
    *  unknown id. */
   selection(id: string): DocumentSelection | null;
+
+  /* ---- the stage of additions (ARCHITECTURE-PLUS P4.4): optional members ---- */
+
+  /** The file at `from` (or a folder `from` and everything below) is now at `to`: open documents
+   *  follow, with text, modified state and history unchanged; the recorded modification time is taken
+   *  from the new file, and the document's draft is rewritten at once (ARCHITECTURE-PLUS P3.2.4). */
+  relocate?(from: VPath, to: VPath): Promise<void>;
+
+  /** Called after each successful write by Save, Save As and Auto Save, with the exact bytes written
+   *  ('saved'), and after each open of a file as a document, with the bytes read ('opened')
+   *  (ARCHITECTURE-PLUS P3.3.3). Listeners run after the save's or open's promise has resolved, each
+   *  in its own try/catch, never awaited: a listener that throws never makes a save fail. `time` is
+   *  the clock when the bytes were written or read. */
+  onWritten?(
+    listener: (event: { path: VPath; bytes: Bytes; reason: 'saved' | 'opened'; time: number }) => void,
+  ): () => void;
+
+  /** The file's modification time recorded at open or the last save; null for a new document
+   *  (exists as DocumentManager.fileTime). */
+  fileTime?(id: string): number | null;
 }

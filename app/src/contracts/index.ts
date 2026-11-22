@@ -9,6 +9,7 @@ export * from './documents';
 export * from './engine';
 export * from './features';
 export * from './fs';
+export * from './history';
 export * from './host';
 export * from './platform';
 export * from './run';

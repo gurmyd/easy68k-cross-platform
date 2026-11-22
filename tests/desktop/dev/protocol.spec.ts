@@ -247,6 +247,9 @@ test('a help page loads under app:// and in the help window', async () => {
     ).getLastWebPreferences();
     return {
       javascript: prefs?.['javascript'],
+      // ARCHITECTURE-PLUS R5 (content windows keep plugins off) is not observable here:
+      // getLastWebPreferences() does not report `plugins` in Electron 45, and with JavaScript off
+      // the page cannot be asked. unit.spec.ts checks CONTENT_WEB_PREFERENCES (errata N0).
       preload: prefs?.['preload'] ?? null,
       visible: help.isVisible(),
     };

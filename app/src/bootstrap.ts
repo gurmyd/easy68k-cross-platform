@@ -9,9 +9,10 @@
 //
 // Services are created in the order of 3.12.3:
 //
-//   platform, settings, store, commands, dialogs, vfs (+ backends), fileDialogs, documents, asm,
-//   devices, sim
+//   platform, settings, store, commands, dialogs, vfs (+ backends), fileDialogs, history, viewer,
+//   documents, asm, devices, sim
 //
+// (history and viewer: ARCHITECTURE-PLUS P4.4; each is undefined when its factory is absent.)
 // Four of them come from features, through factories with fixed names (state/services.ts). A
 // factory receives the context while it is still being filled: it may keep it, but reading a
 // service that comes later in the order throws a clear error instead of returning undefined.
@@ -85,7 +86,8 @@ export interface BootstrapEnv {
 }
 
 /** The order in which services appear on the context (3.12.3), for the error message. */
-const SERVICE_ORDER = 'platform, settings, store, commands, dialogs, vfs, fileDialogs, documents, asm, devices, sim';
+const SERVICE_ORDER =
+  'platform, settings, store, commands, dialogs, vfs, fileDialogs, history, viewer, documents, asm, devices, sim';
 
 const CONTEXT_KEYS: readonly (keyof AppContext)[] = [
   'platform',
@@ -99,6 +101,8 @@ const CONTEXT_KEYS: readonly (keyof AppContext)[] = [
   'vfs',
   'editorExtensions',
   'fileDialogs',
+  'history',
+  'viewer',
   'documents',
   'asm',
   'devices',
@@ -200,6 +204,9 @@ export function bootstrap(env: BootstrapEnv): Application {
   set('editorExtensions', createEditorExtensionRegistry());
 
   set('fileDialogs', factories.createFileDialogs(ctx));
+  // ARCHITECTURE-PLUS P4.4: before documents, whose deps take ctx.viewer when the service is built.
+  set('history', factories.createHistoryService?.(ctx));
+  set('viewer', factories.createViewerService?.(ctx));
   set('documents', factories.createDocumentService(ctx));
   set('asm', env.asm);
   set('devices', { audio: factories.createAudioBackend(ctx) });

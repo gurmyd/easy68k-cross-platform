@@ -13,8 +13,9 @@
 import type { CommandHandler, CommandId, CommandRegistry } from './commands';
 import type { AudioBackend, Clock, Scheduler } from './devices';
 import type { DocumentService, DocumentState } from './documents';
-import type { AsmEngine, SimEngine } from './engine';
+import type { AsmEngine, Bytes, SimEngine } from './engine';
 import type { CachedSyncFilesDeps, FileDialogs, SyncFiles, Vfs, VPath } from './fs';
+import type { HistoryService } from './history';
 import type { SimHost } from './host';
 import type { Platform } from './platform';
 import type { SimSession } from './run';
@@ -58,6 +59,20 @@ export interface AppContext {
    *  Added at gate I1 as an optional member; required since gate I2 (errata W1.md entry 14.5):
    *  the bootstrap and createTestApplication fill it. */
   readonly build: BuildFacts;
+  /** ARCHITECTURE-PLUS P3.3. Absent in tests that do not need it. */
+  readonly history?: HistoryService;
+  /** ARCHITECTURE-PLUS P3.4. Absent in tests that do not need it. */
+  readonly viewer?: ViewerService;
+}
+
+/** The viewer of files that are not text (ARCHITECTURE-PLUS P3.4, P4.4); AppContext.viewer. */
+export interface ViewerService {
+  /** True when `path` with these bytes is to be shown by the viewer: the `viewer` switch is on, the
+   *  table of P3.4.1 says so, and `dockOf(ctx).acceptsTransient()` is true. */
+  wants(path: VPath, bytes: Bytes): boolean;
+  /** Opens or selects the viewer of `path`; reaches the dock only through state/dock.ts, and only
+   *  when called, never while the factory runs. */
+  show(path: VPath, bytes: Bytes): void;
 }
 export interface PanelSpec {
   id: string;
@@ -112,6 +127,10 @@ export interface ServiceFactories {
   createAudioBackend(ctx: AppContext): AudioBackend;
   /** features/run (owner SH8) */
   createSimSession(ctx: AppContext, env: SimSessionEnv): SimSession;
+  /** fs/history-db.ts (N3), ARCHITECTURE-PLUS P4.4 */
+  createHistoryService?(ctx: AppContext): HistoryService;
+  /** features/viewer (N6), ARCHITECTURE-PLUS P4.4 */
+  createViewerService?(ctx: AppContext): ViewerService;
 }
 
 /* ------------------------------------------------------------------ dialogs (3.12.4) */

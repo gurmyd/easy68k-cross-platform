@@ -91,6 +91,9 @@ const EDITOR_MENUS = trim(`
   C&lose File | - | Cmd+W (desktop only)
   ---
   E&xit | - | Cmd+Q (desktop only)
+  ---
+  Earlier &Versions...
+  Tras&h...
 &Edit
   &Undo | Ctrl+Z | Cmd+Z, Ctrl+Z
   &Redo | Ctrl+Alt+Z | Shift+Cmd+Z, Ctrl+Option+Z
@@ -114,6 +117,8 @@ const EDITOR_MENUS = trim(`
   &Editor Options... | - | Cmd+, (desktop only)
   ---
   Import/Export Settings...
+  ---
+  Port Ad&ditions...
 &Window
   &Arrange
   &Cascade
@@ -121,6 +126,14 @@ const EDITOR_MENUS = trim(`
   &Tile Vertically
   &Minimize All
   <documents>
+  ---
+  Mo&ve Panel To...
+  Split Editor &Right
+  Split Editor &Down
+  Close &Split
+  ---
+  Loc&k Layout [check]
+  R&eset Layout
 &Help
   Hel&p
   ---
@@ -167,6 +180,10 @@ const SIM_MENUS = trim(`
   &EASyBIN
   ---
   &Log
+  ---
+  Mo&ve Panel To...
+  Loc&k Layout [check]
+  Reset La&yout
 &Options
   Source Window Font...
   Output Window Font...
@@ -196,6 +213,8 @@ const SIM_MENUS = trim(`
   ---
   Import/Export Settings...
   Execution Speed...
+  ---
+  Port Ad&ditions...
 &Help
   &Sim68K Help
   &About Sim68K
@@ -291,6 +310,89 @@ describe('menus equal section 1.3', () => {
       '1920x1080',
       '1920x1200',
     ]);
+  });
+});
+
+/** The commands the stage of additions puts into the menus (ARCHITECTURE-PLUS P3.6). */
+const PLUS_COMMANDS: ReadonlySet<string> = new Set([
+  'app.layout.move',
+  'app.layout.lock',
+  'app.layout.reset',
+  'ed.window.splitRight',
+  'ed.window.splitDown',
+  'ed.window.unsplit',
+  'ed.file.history',
+  'app.files.trash',
+  'app.additions.options',
+]);
+
+/** The number of nodes of each menu before the stage of additions (the tables of 1.0). */
+const ORIGINAL_NODES: Record<string, number> = {
+  'editor.file': 12,
+  'editor.edit': 14,
+  'editor.project': 1,
+  'editor.options': 5,
+  'editor.window': 6,
+  'editor.help': 6,
+  'simulator.file': 8,
+  'simulator.search': 3,
+  'simulator.run': 13,
+  'simulator.view': 8,
+  'simulator.options': 19,
+  'simulator.help': 5,
+  'easybin.file': 9,
+  'easybin.help': 5,
+};
+
+describe('the stage of additions keeps the original menus (ARCHITECTURE-PLUS P1.1 rule 3, P3.1.4)', () => {
+  it('the original items and the document list keep their indexes; additions follow below a separator', () => {
+    for (const mode of ['editor', 'simulator', 'easybin'] as const) {
+      for (const menu of menuTables(mode)) {
+        const original = ORIGINAL_NODES[menu.id];
+        expect(original, menu.id).toBeDefined();
+        const before = menu.items.slice(0, original);
+        const added = menu.items.slice(original);
+        // Nothing of the stage before the end of the original items.
+        expect(
+          before.filter((node) => node.type === 'command' && PLUS_COMMANDS.has(node.id)),
+          menu.id,
+        ).toEqual([]);
+        if (added.length === 0) continue;
+        // After them: a separator, then only additions and separators.
+        expect(added[0], menu.id).toEqual({ type: 'separator' });
+        for (const node of added) {
+          expect(node.type === 'separator' || (node.type === 'command' && PLUS_COMMANDS.has(node.id)), menu.id).toBe(
+            true,
+          );
+        }
+      }
+    }
+    const windowMenu = menuTables('editor').find((menu) => menu.id === 'editor.window')?.items ?? [];
+    expect(windowMenu.findIndex((node) => node.type === 'documents')).toBe(5);
+    expect(windowMenu.slice(0, 5).map((node) => (node.type === 'command' ? node.id : node.type))).toEqual([
+      'ed.window.arrange',
+      'ed.window.cascade',
+      'ed.window.tileH',
+      'ed.window.tileV',
+      'ed.window.minimizeAll',
+    ]);
+  });
+
+  it('every command of the stage is in a menu and has no key (P1.3)', () => {
+    const inMenus = new Set<string>();
+    const collect = (nodes: readonly MenuNode[]) => {
+      for (const node of nodes) {
+        if (node.type === 'command') inMenus.add(node.id);
+        if (node.type === 'submenu') collect(node.items);
+      }
+    };
+    for (const mode of ['editor', 'simulator', 'easybin'] as const)
+      for (const menu of menuTables(mode)) collect(menu.items);
+    for (const id of PLUS_COMMANDS) {
+      expect(inMenus.has(id), id).toBe(true);
+      expect(id in KEYS, id).toBe(false);
+      expect(COMMAND_SPECS[id as KnownCommandId].keys, id).toEqual({ win: [], mac: [] });
+    }
   });
 });
 

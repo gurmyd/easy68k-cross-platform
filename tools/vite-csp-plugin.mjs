@@ -24,7 +24,7 @@ export const CSP_DIRECTIVES = Object.freeze([
   "media-src 'self' blob:",
   "connect-src 'self' https://api.github.com",
   "worker-src 'self'",
-  "frame-src 'self'",
+  "frame-src 'self' blob:",
   "manifest-src 'self'",
   "base-uri 'none'",
   "form-action 'none'",
