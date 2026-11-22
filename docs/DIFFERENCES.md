@@ -33,7 +33,9 @@ program can notice. If your program or your course depends on one of them, read 
   opened; the file name task 58 returns looks like `/browser/demo/data.txt` instead of `C:\...`.
   (Note 46, parts SH6, FS2 and DV2.) In the Mac app, on a disk that tells letter case apart (not
   the default on a Mac), a name that leaves the program's folders with `..` and comes back in
-  another letter case is not found (part W1).
+  another letter case is not found (part W1). A read right after a write on one file, or a write
+  right after a read, without a seek between them, gives other results than in the original: a
+  defect of the port, not repaired yet (part 5).
 - **Serial port and network** (TRAP #15 tasks 40-43 and 100-107) work only in the Mac app. In a
   browser they return the original's "not available" results (note 37).
 - **The Output window** is at most 4096 x 4096 pixels (part SH1), and Windows' system colours are
@@ -42,6 +44,12 @@ program can notice. If your program or your course depends on one of them, read 
   positions but not quite its pixels (part SH3). The default font, Fixedsys, is exact.
 - **Execution logs**: a listing line that contains `%` is written as it is (the original printed
   garbage there), and the date in the header is always in the US format (part U4, note 42).
+- **Assembling.** Three rare sources assemble differently (part T1): an `IFxx` block whose
+  condition is a symbol defined further down, with `SET` or `MACRO` lines inside; a macro body line
+  with a printf conversion such as `%d`; and a structured `ENDI` with nothing open. A statement
+  with an undefined symbol (an error) gets defined bytes, mostly zeros, where the original wrote
+  whatever was in memory (part E5). Two sources that make the original crash (a macro line longer
+  than 255 characters, a macro that calls itself without end) get an error message instead.
 
 ## How this page is organised
 
@@ -445,11 +453,13 @@ original in every case below unless the row says otherwise. DOC1 merges this fil
 | The window while double buffering is off | drawn separately from the back buffer, each call a second time. `LineTo` on the window starts at the window canvas's own pen position, and a flood fill reads the window's own pixel, so the window can show something else than the back buffer (after an input prompt moved the window pen; while the window is partly covered) | the screen shows the back buffer | one picture (ARCHITECTURE.md 3.4 rule 9; trap15-b §4.1, task 89) | No. Task 83 reads the back buffer in the original too. The picture on screen can differ in those two rare cases |
 | The input prompt (`_`) and its erasing blank | painted on the window and left there until something is drawn over the cell or Windows repaints the window | a cell laid over the picture, removed at the next drawing call, task 94 or mode 16 | ARCHITECTURE.md 3.5.3 | No (task 83 never sees the prompt in either) |
 | Size of the surface | any size up to 65535 x 65535 that Windows grants | each side at most 4096 (`MAX_SURFACE`) | memory; ARCHITECTURE.md 2.5 | Yes: task 33 with `D1.L = 0` then returns the clamped size |
-| Ellipses and lines of a pen 2 or more pixels wide (until SH2 delivers) | GDI's shapes | stubs: an ideal ellipse; the band of a wide line without its round caps. A zero-length line and a one-point ellipse already draw GDI's dot at every pen width | wave order (ARCHITECTURE.md 9.2, 9.4) | Yes, pixel by pixel, until wave 2 |
 
 No longer a difference: the round dots of pens wider than 14 pixels. They were a plain disc until
 gate I1; they are now GDI's dots, measured for every pen width 2-255
-(`docs/porting/errata/SH1.md` entry 14).
+(`docs/porting/errata/SH1.md` entry 14). Nor are ellipses and lines of pens 2 or more pixels wide,
+which SH1 drew with stand-ins until SH2 delivered them in wave 2: they follow GDI's rules now, and
+the few wide-pen ellipses that are not yet Windows' pixels are listed by SH2
+(`docs/differences/SH2.md`).
 
 ### Differences introduced by SH3 (text screen, fonts, output device)
 
@@ -467,9 +477,10 @@ What differs is listed here. DOC1 merges this file into `docs/DIFFERENCES.md`.
 | Where | Original | Port | Why |
 |---|---|---|---|
 | Task 95 (text at a pixel position) with the bytes `$01`-`$08`, `$0B`, `$0E`-`$1B`, in Fixedsys or Courier (every size and style) | Windows draws them from a fallback font, and what it draws depends on the Windows: Windows 11 (10.0.26300) a narrow box with coloured ClearType edges in a cell 4 pixels wide in the default font (5 for `$02`, which shows nothing); Windows Server 10.0.26100 other, unsmoothed shapes in a cell 6 pixels wide (12 for `$01`). The rest of the text moves left by what the cell is narrower | An empty cell of the font's own character width in the fill colour, as for a space (with underline or strike-out the line has the length Windows 11 gives it); the letters after it stay on the character grid | The two Windows draw 72 of T2's 90 captured texts with these bytes differently, so there is no one picture to copy (ARCHITECTURE.md 6.5.3 as corrected, erratum T2 25). Where both draw the same picture (16 texts), the port draws it too. `$09`, `$0A`, `$0D`, `$1C`-`$1F` are as in the original, the thin bar of a text of them alone included, and so is `$0C` except in the row about `$0C` below |
-| Task 95 in Fixedsys or Courier: the byte `$80` in a text that also has `$7F`, `$86`, `$87`, `$88`, `$98`, an undefined byte (`$81 $8D $8F $90 $9D`) or a zero-width byte (`$09 $0A $0D $1C`-`$1F`) | Windows draws a euro sign there, from a fallback font, smoothed with ClearType, in a cell of that glyph's width (7 pixels in the default font, where `$80` alone is the font's 8-pixel block) | The cell has Windows' width (measured for every size and style), so the pen and everything after it are Windows'; the cell itself is blank in the fill colour | The euro sign's pixels are ClearType output, whose colours depend on the text and fill colours and on the user's font-smoothing settings (ARCHITECTURE.md 6.5.3 as corrected, errata T2 26 and SH3 32). Final run (22 November 2026): in the 30 such texts of T2's `text-control` and the 1,400 of `text-path-euro` the pen and every pixel outside the euro sign are Windows' |
-| Task 95 in Fixedsys or Courier: `$0C` in a text that also has `$7F`, `$86`, `$87`, `$88`, `$98`, an undefined byte or a zero-width byte | `$0C` is drawn as an arrow from a fallback font, smoothed with ClearType, in a cell whose width depends on its neighbours (Fixedsys 9: `$0C "[" $86` gives `$0C` 10 pixels, `$0C "A" $86` 8) | The font's own `$0C` glyph in a cell of the font's width | Not modelled (gate I3, item 3b and review R4; errata T2 27 and SH3 33): the glyph is smoothed output of a font the project does not ship, and how a second Windows draws it is not known yet. In T2's suite `text-path-formfeed` (640 texts, captured on Windows 11 10.0.26300) no picture is Windows' and the pen is Windows' in 400; Windows' cell is wider in most of the others (the pen 1 to 45 pixels short, gate I3 item 3b) |
-| The pen position after task 95 with the bytes `$01`-`$08`, `$0B`, `$0E`-`$1B` (what a program sees through the next line or text drawn from the pen) | Each byte moves the pen by the font's character width, except in some texts that also have a byte of `$80` or above, where its width is the fallback font's, which differs between Windows | The font's character width always | The pen is Windows' in all 85 of T2's 90 texts in which the two captured Windows agree; in the other 5 (Courier 0 and 19, Fixedsys 30, each with a byte of `$80` or above) the two Windows are 4 to 9 pixels apart and the port is 1 to 5 pixels further right than either (run of 22 November 2026, `check-text.mjs`: pens 85 of 85 where they agree, 85 of 90 in all) |
+| Task 95 in Fixedsys or Courier: the byte `$80` in a text that also has `$7F`, `$86`, `$87`, `$88`, `$98`, an undefined byte (`$81 $8D $8F $90 $9D`) or a zero-width byte (`$09 $0A $0D $1C`-`$1F`) | Windows draws a euro sign there, from a fallback font, smoothed with ClearType, in a cell of that glyph's width (7 pixels in the default font, where `$80` alone is the font's 8-pixel block). In Fixedsys that width is always the same. In Courier it depends on what the program drew before, so the same program can place the text after a euro sign a few pixels differently from run to run (Courier 10: the euro sign 5 or 8 pixels wide; `$80 $86` in Courier 19: 25 or 30; in Courier 199: 185 or 150) | The cell has one of Windows' widths, measured for every size and style: in Courier the width Windows gives when the sizes are met in increasing order (the one it gives again in another process and twice in one run), so the pen and everything after it are Windows' in that history; the cell itself is blank in the fill colour | The euro sign's pixels are ClearType output of a font the project cannot ship, whose colours follow the text and fill colours and, by its colour fringes, presumably the user's font-smoothing settings (both captured Windows draw it alike; ARCHITECTURE.md 6.5.3 as corrected, signed off by the architect on 22 November 2026; errata T2 26 and SH3 32). Windows' width in Courier has no one value (6.5.3 decision 3 (b), erratum T2 29: of 1,753 euro texts captured in 31 histories, in reverse order of size 585 pens differ, each alone in a new process 207, and one random order differently from run to run), and the order in which a program meets the sizes cannot be known, so the port takes one of Windows' values on purpose. Where Windows' pen is the same in every history (every text in Fixedsys; in Courier 386 of the 800 of `text-path-euro` and 6 of the 15 of `text-control`), the port's pen and every pixel outside the euro sign are Windows' (run of 22 November 2026: `text-control` 21 of 21, `text-path-euro` 986 of 986, `golden/text-path-euro-pens.json` 1,125 of 1,125). `text-path-euro` has been captured on one Windows (10.0.26300) only |
+| Task 95 in Fixedsys or Courier: `$0C` in a text that also has `$7F`, `$86`, `$87`, `$88`, `$98`, an undefined byte or a zero-width byte | `$0C` is drawn as an arrow from a fallback font, smoothed with ClearType, in a cell whose width depends on its neighbours (Fixedsys 9: `$0C "[" $86` gives `$0C` 10 pixels, `$0C "A" $86` 8) | The font's own `$0C` glyph in a cell of the font's width | Not modelled (gate I3, item 3b and review R4; errata T2 27 and SH3 33): the glyph is smoothed output of a font the project does not ship, and how a second Windows draws it is not known yet. In T2's suite `text-path-formfeed` (640 texts, captured on Windows 11 10.0.26300) no picture is Windows' and the pen is Windows' in 400; Windows' cell is wider in most of the others (the pen 1 to 45 pixels short, gate I3 item 3b). Windows draws these texts the same whatever it drew before (gate I3 item 3c, erratum T2 28); whether a second Windows does is not yet captured (ARCHITECTURE.md 6.5.3 as corrected) |
+| Task 95 in Courier: `"@"` in a text that also has `$7F`, `$86`, `$87`, `$88`, `$98`, an undefined byte or a zero-width byte | What Windows draws depends on what the program drew before: the same text comes out in the font's own `"@"` after texts of smaller sizes, and in other pictures - with another cell width and, when the text also has a byte of `$80` or above, another pen position (Courier 71 plain `"@" $81`: the pen moves 60 or 88 pixels; Courier 140 plain: 75 or 155) - after larger ones or as the first text of the program | The font's own `"@"`, always: what Windows draws in the first case | Windows gives no one answer for such a text (ARCHITECTURE.md 6.5.3 as corrected, decision 3 (b); errata T2 28 and SH3 34): of 2,333 texts captured in order of size and again in reverse order, all were drawn differently, and 59 of 106 alone in a fresh program. Where Windows' pen is the same whatever came before (the texts without a byte of `$80` or above), the port's is the same: 1,000 of 1,000 |
+| The pen position after task 95 with the bytes `$01`-`$08`, `$0B`, `$0E`-`$1B` (what a program sees through the next line or text drawn from the pen) | Each byte moves the pen by the font's character width, except in a text that also has a byte of `$80` or above (Windows' text path), where its width is the fallback font's, which differs between Windows | The font's character width always | The pen is Windows' in all 85 of T2's 90 `text-control` texts in which the two captured Windows agree; in the other 5 (Courier 0 and 19, Fixedsys 30, each with a byte of `$80` or above) the two Windows are 4 to 9 pixels apart and the port is 1 to 5 pixels further right than either (run of 22 November 2026, `check-text.mjs`: pens 85 of 85 where they agree, 85 of 90 in all). In a text that also has a byte of `$80` or above the port's pen is Windows' only rarely: in 12 of 320 such texts of an independent random sample, and in 0 of the 480 of T2's suite `text-path-fallback` (Windows 11 10.0.26300, where these pens are the same whatever was drawn before; erratum T2 29). Whether a second Windows gives the same pens is not yet captured; the `windows-oracles` job of CI compares them (6.5.3 decision 3: if it does, the port must give them) |
 | Task 21 with a colour whose top byte is not 0 (`D1.L` above `$00FFFFFF`) | A Windows system colour (bit 31) or an entry of the stock palette (bit 24), as for pens and fills | The same rule, and the same colours as Windows in the ten cases T2 captured; the system colours are those of a default Windows 11 desktop, whatever the user's theme | The system colours of a desktop with another theme are not known to a browser (errata SH3.md entry 17) |
 | Task 95 in Courier New, Lucida Console or Consolas: the byte `$7F` | Drawn from a fallback font, with that font's width in the background box (always) and for the pen (in a text that also has a byte of `$80` or above) | The widths and the pen are Windows' (measured per size); the glyph is blank | The fallback glyph is anti-aliased and machine dependent |
 | Task 95 (or a character written at the cursor) in Courier New, Lucida Console or Consolas: a text whose only drawn bytes are `$7F` | The background box has the height of the fallback font's cell, which in some sizes differs by one row from the font's own (Courier New 8, Lucida Console 10) | The box has the font's own cell height; its width and the pen are Windows' | That height was not measured (errata T2 section 2); 12 of T2's 72 such references differ in that one row, all in those two fonts |
@@ -1112,15 +1123,36 @@ list with evidence is `tests/conformance/sim/MISMATCHES.md`; the owners are in
 
 #### Seen only under Wine: results that wait for a run on Windows
 
-The official program was run only under Wine 8.0 (the oracle image). For these six programs the
-port's `result.bin` differs from the golden, and each is listed in
-`tests/conformance/sim/known-differences.json` with `unconfirmed`. Which one is right is settled by
-running the six on real Windows: `docs/porting/windows-confirmation.md` part A has the steps (one
-session, about ten minutes) and the lines to read. Until then the port keeps its behaviour and the
-suite passes because the six are listed. A listed difference is not a met criterion: while any of
-them stands, ARCHITECTURE.md 6.9 item 2 ("every self-reporting program produces the golden result
-file") does not hold. a58 is almost certainly the port's difference and a51 and a52 most likely
-are, so those three need the port's repair rather than the Windows run (owner SH6).
+The official program was run only under Wine 8.0 (the oracle image). For the programs below the
+port's `result.bin` differed from the golden. Their state today:
+
+- **Defects of the port, with a repair pending: `a51` and `a52`.** A read right after a write on
+  one file, or a write right after a read, without a seek between them: C leaves both undefined, and
+  what happens is decided by the Borland C run-time inside `SIM68K.exe`, which behaves the same
+  under Wine as on Windows. So the official answer is known, and the port differs from it: a
+  student's program that reads right after writing without a seek, or writes right after reading,
+  gets other results than in the original. Cause: the port's file streams do not yet follow the
+  original's run-time in sequences that C leaves undefined; a repair of the simulator engine exists
+  on a branch and waits for measurements in the official program before it is merged. By the
+  architect's ruling of 22 November 2026 the two **count against 6.9 item 2** until the port
+  imitates the run-time's stream state. They are listed in
+  `tests/conformance/sim/known-differences.json` without `unconfirmed`, and they are not part of
+  the Windows session (a person who runs them there anyway loses nothing).
+- **Not yet confirmed against the original: `a53` and `b19`.** Each is listed in
+  `known-differences.json` with `unconfirmed`, because only the official program on real Windows
+  can say whether the golden is the original's answer or Wine's. The port keeps its behaviour until
+  then; `docs/porting/windows-confirmation.md` part A has the steps (one session) and the lines to
+  read. By the architect's decision of 22 November 2026 (erratum T3, ARCHITECTURE.md 6.9) such a
+  program does not count against 6.9 item 2, and it counts as an open verification item of item 11
+  (`docs/DIFFERENCES.md` part 4). For a53 the engine work that repairs a51 and a52 explains the
+  failing close by the run-time itself, but that part is read from the program's code and not yet
+  measured; b19 is most likely Wine's.
+- **`a58`: the port's difference, repaired.** It produces its golden and has left
+  `known-differences.json` and the Windows session.
+- **`b06`: settled by measurement on Windows.** The GDI calls the original makes were measured on
+  Windows 11: the golden is Wine's, and the port draws what Windows draws. It stays listed in
+  `known-differences.json` as an accepted difference with that cause (the golden cannot be replaced
+  without the official program on real Windows), and it has left the Windows session.
 
 ##### `trap15-a/a51-files-read-after-write` (owner SH6)
 
@@ -1130,12 +1162,12 @@ are, so those three need the port's repair rather than the Windows run (owner SH
   `D0=00000001` (end of file); lines 4 and 6: golden `D2=00000001`, port `D2=00000005`; line 5 (the
   bytes read back): golden `41 EE EE EE EE ...` (the file holds one byte, `A`), port
   `41 42 43 44 45 EE ...` (`ABCDE`).
-- Why Wine is a suspect at all: it is not the main one. C leaves a read right after a write without
-  a seek undefined; what happens is decided by the Borland run-time inside `SIM68K.exe`, which is
-  the same under Wine and on Windows. Wine only answers the run-time's `ReadFile`, `WriteFile` and
-  `SetFilePointer` calls, and the result (a write that lands short) is the kind of thing a stream
-  state machine does with an ordinary file system. The difference is most likely the port's; the
-  Windows run confirms it.
+- Why Wine is not the cause: C leaves a read right after a write without a seek undefined; what
+  happens is decided by the Borland run-time inside `SIM68K.exe`, which is the same under Wine and
+  on Windows. Wine only answers the run-time's `ReadFile`, `WriteFile` and `SetFilePointer` calls,
+  and the result (a write that lands short) is the kind of thing a stream state machine does with
+  an ordinary file system. The golden is the original's answer; the difference is the port's
+  (counts against 6.9 item 2; a repair of the engine waits on a branch, see above).
 
 ##### `trap15-a/a52-files-write-after-read` (owner SH6)
 
@@ -1143,8 +1175,8 @@ are, so those three need the port's repair rather than the Windows run (owner SH
   seek**, close, read the file back.
 - Differs: line 7 only (the file after the close): golden `41 42 43 44 45` (unchanged; the write
   reported success, D0.W = 0), port `41 42 43 58 45` (`ABCXE`).
-- Why Wine is a suspect: as for a51, the run-time's stream state decides; Wine's part is the file
-  system calls. Most likely the port's difference.
+- Why Wine is not the cause: as for a51, the run-time's stream state decides; Wine's part is the
+  file system calls. The port's difference (counts against 6.9 item 2; repair pending, as for a51).
 
 ##### `trap15-a/a53-files-past-end-then-read` (owner SH6)
 
@@ -1157,7 +1189,9 @@ are, so those three need the port's repair rather than the Windows run (owner SH
 - Why Wine is a suspect: here more than for a51 and a52. A failing `fclose` means a `WriteFile` (the
   flush of the buffer) or a `CloseHandle` failed, after a `SetFilePointer` past the end of the file.
   On Windows a write past the end extends the file with zeros; that a Win32 call fails here is the
-  one point where Wine's answer, not the run-time, may decide the result.
+  one point where Wine's answer, not the run-time, may decide the result. The engine work that
+  repairs a51 and a52 explains the failing close by the run-time itself; that is read from the
+  program's code and not yet measured, so a53 stays unconfirmed and stays in the Windows session.
 
 ##### `trap15-a/a58-files-devices` (owner SH6; repaired, no longer listed)
 
@@ -1204,8 +1238,9 @@ are, so those three need the port's repair rather than the Windows run (owner SH
   -1, -16 follow the same rule (docs/porting/errata/SH1.md entry 17 has the whole table). The port
   draws what Windows draws, so the entry stays in `known-differences.json` with the cause "Wine's
   SetROP2 differs from Windows'; measured on Windows 11 with the capture program". The golden cannot
-  be regenerated without the official program on real Windows (docs/porting/windows-confirmation.md
-  part A); once b06 has run there, its result replaces the golden and the entry goes.
+  be regenerated without the official program on real Windows; if b06 is ever run there, its result
+  replaces the golden and the entry goes. That run is no longer part of the session of
+  `docs/porting/windows-confirmation.md`: the measurement has settled the question.
 
 ##### `trap15-b/b19-net-send-uninitialised` (owner W1)
 
@@ -1522,34 +1557,175 @@ this part, with the browser and its version.
 ## 4. Not yet confirmed against the original
 
 The behaviour of the original was worked out from its source code and checked by running the
-official EASy68K v5.16.1 under Wine. Some details cannot be settled that way; the specifications
-mark them UNVERIFIED and the port does what the specification recommends. Until they are confirmed
-on real Windows (decision O-2 in `docs/ARCHITECTURE.md`, section 10.2), they are listed here as not
-yet confirmed:
+official EASy68K v5.16.1 under Wine (`docs/porting/ground-truth.md` section 4). Under Wine the
+Borland run-time inside the official programs is the real one; the file system, the drawing (GDI),
+the keyboard and the network are Wine's. Some details cannot be settled that way, and the
+specifications mark them UNVERIFIED. Every such item that has not been confirmed since is listed
+below, one row each: where the item is stated, what is not confirmed, what the port does, and how
+it could be confirmed. Where the one session on real Windows settles it (decision O-2 in
+`docs/ARCHITECTURE.md`, section 10.2), the row names the part of
+[`docs/porting/windows-confirmation.md`](porting/windows-confirmation.md) that does ("Windows
+session, part A"). A confirmed item leaves this list: `docs/porting/errata/DOC1.md` entry 9 says by
+which test or capture each item that left it was confirmed (among them how Windows draws ellipses,
+R-2, settled by the GDI capture of 6.5.2), and where a confirmation showed that the port differs,
+the difference is in part 2 above.
 
-- the open items of `docs/porting/trap15-tasks-0-59.md` section 12 (TRAP #15 tasks 0 to 59), among
-  them whether the font of task 21 survives Rewind and Reload (part SH3 above);
-- the open items of `docs/porting/trap15-tasks-60-up.md` section 15 (drawing, sound, keyboard and
-  mouse), among them how Windows draws ellipses (R-2), the flood fill's drawing mode (part SH1) and
-  what DirectMusic does with two slots loaded from one file (part SH5);
-- `docs/porting/hardware.md` section 12 (the hardware window), `docs/porting/sim-core.md` section 13
-  (the simulator core), `docs/porting/assembler.md` section 12 (the assembler),
-  `docs/porting/editor-ui.md` section 22 item 12 and the rows of the quirk register in
-  `docs/porting/sim-ui.md` section 19 that are marked UNVERIFIED;
-- the model of the C library's file buffer (512 bytes, written when a file is closed or the
-  simulator ends; `docs/ARCHITECTURE.md` 3.8.4, risk R-21) for the unusual cases the test programs
-  have not covered;
-- the cases the conformance suite records as unconfirmed in
-  `tests/conformance/sim/known-differences.json`, with the evidence in
-  `tests/conformance/sim/MISMATCHES.md`;
-- the original's own speed on a Windows PC, which has not been measured (decision O-1;
-  `docs/porting/speed.md` section 5): the default of 1,000,000 instructions per second is an
-  estimate.
+### TRAP #15 tasks 0 to 59 (`docs/porting/trap15-tasks-0-59.md` section 12)
+
+| Item | Not confirmed | What the port does | How it could be confirmed |
+|---|---|---|---|
+| 4 | Whether the output window's own canvas returns to the Options font after a Rewind or Reload that follows a task 21 font change | Every reset restores the Options font, colour and cell size for the whole output (the spec's recommendation) | On Windows: task 21 with red and another font, Rewind, then task 6 and task 11 (get position), as item 4 describes |
+| 6 | Task 4 (read a number) with a value outside the signed 32-bit range: Borland's `atoi` may wrap or clamp | The engine's C library reads the digits in 32 bits, so the value wraps modulo 2^32 | Type `4294967295` and `99999999999` into task 4 in the official simulator (possible under Wine too, because the run-time is Borland's) |
+| 10 | Task 41 with a baud index of 15 to 255: what the malformed settings string does to the port | The Mac app keeps the port's current line settings and returns 0 (`core/sim-host/serial/desktop.ts`); the web version has no serial ports | A serial adapter on Windows: task 41 with index 15, then send at the old rate |
+| 12 | How long one unit of task 23 lasts on Windows (10 ms, or one timer tick of about 15.6 ms) | One unit is 10 ms (ARCHITECTURE.md 4.4.2) | On Windows: task 8 (time), task 23 with 100 units, task 8 again |
+| 13 | Keys the original's framework takes before the program: plain Tab, and the simulator's shortcuts while the Output window has the focus, also when their command is disabled | Plain Tab and Shift+Tab give no key-down and no character (the key-up is delivered); the eleven shortcuts and Ctrl+F, Ctrl+G are taken and not delivered, whether or not their command is enabled, until task 24 switches the eleven off (ARCHITECTURE.md 2.9.4) | Windows session, part C (`tests/conformance/windows-confirm/keys-tab-f-keys.X68`) |
+| 13 (erratum SH4 10) | Whether the original's framework (VCL) hands a typed character with the value 0 (Windows makes it of Ctrl+Shift+2 on a US keyboard) to the program | Ctrl+Shift+2 types the character `$00`, and tasks 2 and 5 receive it like any character (`charFromKey`; erratum SH4 10) | Windows session, part A ("The key Ctrl+Shift+2": a six-line program with task 5, one minute) |
+| 15 | That `fclose(NULL)` in task 59 (a file that does not exist) is harmless in the Borland run-time | The engine skips the call (engine/sim/PATCHES.md P27); the result code is the original's | Task 59 on a missing file in the official simulator (possible under Wine too) |
+| 16 | What `OnActivate` covers: when the task 19 key table is cleared | The table is cleared whenever the Output panel gets the focus, also when the browser window comes back from another program (part SH4 above) | On Windows: hold a key, switch to another program and back, read task 19 |
+| §3.1 (in the text) | Which pen task 96 reads after text output: the window canvas's pen, which text moves only while double buffering is off and which the blinking input prompt moves | The same: task 96 reads the window's pen; text output moves it only while double buffering is off, and the input prompt, drawn on the window, moves it | Windows session, part C (`gdi-text.X68` reads the pen after task 95); a run with a prompt before task 96 |
+
+### TRAP #15 tasks 60 and up (`docs/porting/trap15-tasks-60-up.md` section 15)
+
+| Item | Not confirmed | What the port does | How it could be confirmed |
+|---|---|---|---|
+| V4 | The drawing mode a flood fill (task 89) uses when the mode is not Copy: the original's canvas may combine through the mode last used | Always the current mode (part SH1 above) | The test of V4 on Windows: mode 14, draw a line, flood fill at once, read back; again with a task 23 delay before the fill |
+| V6 | Whether DirectX looping is sticky, and whether DirectMusic's loader cache makes two slots loaded from one file (or task 73 and a slot) one sound | One decoded sound per slot; looping stays on for a slot until it is reloaded or the simulator is reset (erratum SH5 3; part SH5 above) | Listening, on Windows, to the test of V6 (task 74, task 77 loop, stop, task 75; one file in two slots) |
+| V10 | That Tab never reaches the key-down interrupt, and that only the left mouse button captures the mouse | Tab raises no key-down interrupt; only the left button captures (`core/sim-host/input/mouse.ts`) | Windows session, part C (`keys-tab-f-keys.X68`) for Tab; for the mouse, a mouse-up interrupt and a right-button drag out of the window |
+| V14 | `PlaySound` with a file that exists but is not a WAVE file | A sound of length 0: `D0.W = 1`, nothing is heard (part SH5 above; Windows may play its default sound) | Task 70 with a text file renamed `.wav`, on Windows |
+| V14 | Task 33 with a size larger than the desktop | Each side is clamped to 4096 (part SH1 above) | Task 33 with `D1.L = $FFFFFFFF` on Windows, then task 33 with 0 to read the size |
+| V14 | Winsock: a second `connect` on a TCP connection still pending (task 100, and the retry inside tasks 102 and 106) | The Mac app waits up to 5 seconds in steps of 500 ms, as Net.cpp reads, then returns 0 with the connection pending (erratum DV4 8) | Check C5 of `docs/MANUAL-TEST-MAC.md`, on Windows |
+| V14 | Winsock: calls made before task 100 or 101 (send, close, local address) | `$276D0001` (WSANOTINITIALISED), in the web version and in the Mac app (erratum DV4 6); program b19 below | Windows session, part A (b19) |
+| V14 | Winsock: a receive on an unbound UDP socket, and a send on a TCP server's listening socket | `$27260001` (WSAEINVAL) and `$27490001` (WSAENOTCONN) (errata DV4 6 and 7) | A program on Windows that makes these calls and writes D0 to a file |
+| V14 | Whether a relative sound file name that exists only in a later current folder loads (DirectMusic's search folder is set at start-up) | Relative names are resolved against the folder of the loaded `.S68` | On Windows: task 58 to change the folder, then task 74 with a name found only there |
+| §12.2 (in the text) | Task 107 over TCP: the address written to (A2), which Winsock does not fill in for TCP | The Mac app writes what the socket record already held: the server's address for a client; for a server the address of its last send, or `0.0.0.0` | A TCP client and server on Windows, each showing (A2) after task 107 |
+
+Item V8 (drawing modes 18 to 255) is no longer open: the GDI calls the original makes were measured
+on Windows 11, and program b06 differs from its golden only because Wine's `SetROP2` differs from
+Windows' (part T3 above).
+
+### The hardware window (`docs/porting/hardware.md` section 12)
+
+These rest on the behaviour of Borland's framework (VCL) and of Win32. They concern what the
+Hardware panel shows and how a person types into it.
+
+| Item | Not confirmed | What the port does | How it could be confirmed |
+|---|---|---|---|
+| V1 | How the masked address fields react to single keystrokes (always six characters, blank `0`, padding) | The component kit's masked field: six characters, a cleared position shows `0`, typing overwrites, a value set by the program is padded with `0` on the right (erratum W2 7) | Typing into the address fields of the official Hardware window |
+| V3 | `TTimer`: an interval of 0 never fires; changing the interval of a running timer restarts it; enabling an enabled timer does nothing | The same rules (ARCHITECTURE.md 4.5.3; erratum SH7 2) | Auto interrupts on Windows with intervals changed while running |
+| V6 | When `OnShow` fires: on every change from hidden to visible, and not when a visible window is shown again | The switch byte is cleared only when the panel changes from hidden to visible (erratum SH7 4) | Task 32 showing the window twice, reading the switch byte each time |
+| V9 | Speed buttons cannot take the focus; a push button captures the mouse, so its release arrives when the mouse button is let go outside it | The IRQ and Reset buttons can take the focus (part SH7 above); a held push button keeps the pointer and is released wherever the mouse button is let go | Dragging off a push button in the official window and reading its byte |
+| V10 | The level list is an editable combo box whose text can be typed | A list of the seven levels and an empty item; nothing can be typed (part SH7 above) | Typing into the list of the official window |
+| V11 | A short number assigned to the Auto Interval field is right-justified and filled with `0` | The same: `250` shows as `00000250` (component kit) | Task 32 with an interval of 250 ms while that level is selected |
+| V12 | When an address field's `OnExit` fires (another control of the window gets the focus; not a speed button, not another window) | An address field commits on Enter and when the focus moves to another control of the panel, but not to the IRQ and Reset buttons (part SH7 above) | Typing an address, then clicking IRQ, then another window, in the official window |
+| U1 | What the eight-digit Auto Interval field does with an interval above 99,999,999 | It keeps the first eight digits (`engine/sim/shim/hardware.cpp`), and that value goes back into the level's timer | Task 32 with an interval of 123,456,789 ms for the selected level |
+| U2 | What a person sees when the bus-error vector itself lies in a faulting range (an endless recursion) | After 1000 levels the engine stops with `ERROR: An exception occurred in routine 'exec_inst'.` and trace mode (engine/sim/PATCHES.md, 11.9) | The program of hardware 4.4 item 3, on Windows |
+| U3 | Whether pasting letters that are not hex digits into an address field raises a conversion error | A paste keeps only the hexadecimal digits; nothing else reaches the field (component kit) | Paste `xyz` from the context menu into an address field of the official window |
+| U4 | Whether Backspace in an address field deletes | It clears the position before the caret, without a beep (part W2 above) | Backspace in an address field of the official window |
+| U5 | Whether a key-up that reaches a push button whose key-down went elsewhere sets its bit | Nothing happens; only a press the button itself received is released | Tab onto a push button while a key is held, release the key, read the byte |
+| §9.2 item 8 (in the text) | How Windows resolves a push button whose release never arrives (the window loses the focus while it is held) | Every held button is released when the pointer is cancelled, the window loses the focus or the page is hidden (part SH7 above) | Hold a push button, switch to another program, read the byte |
+
+### The simulator core (`docs/porting/sim-core.md` section 13)
+
+| Item | Not confirmed | What the port does | How it could be confirmed |
+|---|---|---|---|
+| 1 | Whether Borland's `catch (...)` catches access violations and stack overflows, and what the user then sees | Access violations cannot occur; an endless recursion of exceptions ends after 1000 levels in the original's handler: the box `ERROR: An exception occurred in routine 'exec_inst'.` and trace mode (engine/sim/PATCHES.md, 11.9) | As hardware U2 above, on Windows |
+| 2 | What a long access at `$FFFFFE` reads beyond the 16 MB of memory | Zero bytes (64 KB of zero-filled padding; engine/sim/PATCHES.md, 11.4) | Not meaningfully: the original reads whatever follows its memory block |
+| 4 | The cycles `MOVEA` adds with an illegal source mode (a read past the end of a table) | 4 for `.W`, 0 for `.L` (engine/sim/PATCHES.md P15) | Task 31 after such an instruction in the official simulator (possible under Wine too, which runs the Borland code) |
+| 7 | `fclose(NULL)` in the Borland run-time | As item 15 of tasks 0 to 59 above | As item 15 above |
+| 8 | The real duration of `Sleep(10)`, and the original's speed | One task 23 unit is 10 ms; the default speed of 1,000,000 instructions per second is an estimate (decision O-1) | Windows session, part B (speed); item 12 of tasks 0 to 59 above |
+| 9 | Whether the shortcut of a disabled menu command (F7 while running) still reaches its handler | The key is taken and the disabled command does not run (ARCHITECTURE.md 2.9.4, rule 2) | Windows session, part C (`keys-tab-f-keys.X68`) |
+| 10 | Which serial, network and sound calls block, and for how long | None blocks the window; task 100 over TCP waits up to 5 seconds while the window stays usable (check N4 of the manual list); sounds play on while the program runs | On Windows, with a serial adapter, a network and sounds |
+| 12 | The VCL's locale-aware comparison of hexadecimal strings (which listing row an address belongs to) | An approximation of the Windows order (digits before letters, letters without regard to case), exact for hexadecimal strings (engine/sim/PATCHES.md) | Execution logs, made on Windows, of programs whose listings have unusual lines |
+
+### The assembler (`docs/porting/assembler.md` section 12)
+
+| Item | Not confirmed | What the port does | How it could be confirmed |
+|---|---|---|---|
+| 4 | `BFINS Dn,(d,An){o:w}` followed by a label: a phase error in the real program? | Pass 1 sizes the instruction without its extension words, so every later label gets a phase error (engine/asm/PATCHES.md P7) | A checklist program run through the Wine oracle (the assembler's code is the original's there) |
+| 8 | How Borland's `<ctype.h>` classifies bytes `$80` and above (accented letters in labels) | No class: such a byte in a label or mnemonic gives `Invalid syntax`, or `Illegal symbol` when the byte begins a label; inside quotes and comments it passes (engine/asm/PATCHES.md, shim decisions) | A label with `É`, through the Wine oracle |
+| 10 | The deepest INCLUDE nesting (open files) | At most 47 files open; an INCLUDE of itself ends after 43 levels with `Unable to access specified file` (engine/asm/PATCHES.md, shim decisions) | A file that includes itself, through the Wine oracle |
+| §9.2 (in the text) | `INT_MIN / -1` and `INT_MIN \ -1` in an expression | `ERROR: An exception occurred in routine 'eval'.` (engine/asm/PATCHES.md P12, as Borland's handler of the divide fault would report it) | `DC.L $80000000/-1` in the official assembler on Windows |
+
+Items 9 and 11 of that list are decisions, not questions.
+
+### The editor (`docs/porting/editor-ui.md` section 22 item 12, and the text)
+
+| Item | Not confirmed | What the port does | How it could be confirmed |
+|---|---|---|---|
+| Bare LF (§6.7) | How the original's RichEdit shows a file whose lines end in LF alone | A lone LF and a lone CR each end a line (`core/documents/format.ts`) | The RichEdit spot check (check C2 of `docs/MANUAL-TEST-MAC.md`) |
+| Shift+Tab with Real Tabs on (§8.2) | What Shift+Tab does when Real Tabs is on (probably a tab character) | The same as with Real Tabs off: the blanks before the caret back to the previous stop are deleted (note 12 above; erratum E2 4) | Shift+Tab in the official editor with Real Tabs on |
+| Default extension (§6.4) | The extension Windows appends in Save As when the typed name has none (the original's `DefaultExt` is malformed) | `.X68`, when the first filter is selected (the spec's recommendation; erratum FS1 9) | Save As `test` in the official editor |
+| Toolbar hints (§3) | Whether the toolbar's hints show the shortcut, for example `Cut (Ctrl+X)` | The hint with the platform's shortcut appended | Pointing at the toolbar of the official editor |
+| Replace dialog (§13) | Which of its three default buttons Enter presses while a text box has the focus | `Find Next` | Enter in the Replace dialog of the official editor |
+| Default preset (§17, line 57 of `settings.dat`) | The syntax preset selected when no settings file exists | None (`-1`), as in the shipped `settings.dat` | The official editor started without `settings.dat` |
+| Tab stops (§8.3, in the text) | How the RichEdit treats the Assembly stops that are out of ascending order, and the spacing beyond the 20th stop | Stops at columns 12, 20 and 44, then every fixed tab size, without a limit (errata E2 4 and 5) | Tab characters at the end of a long line in the official editor, with Assembly tabs |
+| Match whole word only (§14.2, erratum E6 4) | Which characters the RichEdit counts as word characters | Letters (Unicode, so `é` is one), digits and `_` | Find `D0` with Match whole word only in `D0.L`, `D0@` and `éD0` |
+| The Find box and a line break (erratum E6 5) | What the one-line `TEdit` shows when the selection holds a line break | The first line of the selection | Select two lines, then Find, in the official editor |
+
+### The simulator window (`docs/porting/sim-ui.md` section 19, the rows marked UNVERIFIED)
+
+| Item | Not confirmed | What the port does | How it could be confirmed |
+|---|---|---|---|
+| Q9 | Pause during Auto Trace leaves Run, Step and Trace disabled until a second Pause | They are enabled at once (note 24 above; part SH8) | Pause during Auto Trace in the official simulator |
+| Q18 | The cycle counter, shown with a 32-bit conversion of a 64-bit value | The low 32 bits, as Win32 prints them: the display wraps at 4,294,967,296 (engine/sim/PATCHES.md P28) | A program that runs more than 2^32 cycles in the official simulator |
+| Q26 | The buttons of the boxes opened with the VCL value `mbOK` (perhaps Abort, Retry, Ignore) | A box with OK, under the title `Error` | Run To Cursor on a row without an address, in the official simulator |
+
+### EASyBIN (`docs/porting/easybin.md` section 22 item 3)
+
+| Item | Not confirmed | What the port does | How it could be confirmed |
+|---|---|---|---|
+| §4.1 | That the VCL keeps all eight digits when the program puts an eight-digit text into a six-digit mask edit | The field holds the eight digits and reads them all, as the spec describes | `EASyBIN.exe` on Windows, with an S-record without data |
+| §9 | That setting `ItemIndex` in New fires `OnClick` | It does: the split becomes 0 and the digits `1 2 3` disappear | New in `EASyBIN.exe` after choosing a split |
+| §5.3 | The glyph Courier New draws for `$7F` | `□` (part B1 above) | A byte `$7F` in the memory view of `EASyBIN.exe` |
+| §10.3 | Borland's `sscanf` with a sign or `0x` inside an S-record line | The C standard: an optional sign and `0x` are accepted within the field width | An S-record file with such a line, opened in `EASyBIN.exe` |
+
+### Conformance programs whose official result was seen only under Wine
+
+By the architect's decision of 22 November 2026 (erratum T3; `docs/ARCHITECTURE.md` 6.9), a
+program whose golden is in doubt because Wine's own behaviour is suspected is listed here and in
+`tests/conformance/sim/known-differences.json` (`unconfirmed`), with the evidence in
+`tests/conformance/sim/MISMATCHES.md` and the details in part T3 above. The Windows session, part
+A, settles both.
+
+Two programs that were listed here are not in doubt: `a51` and `a52` (a read right after a write,
+a write right after a read, without a seek). The C run-time that decides them is inside the
+official simulator and behaves the same under Wine, so the official answer is known and the port
+differs from it. They are a defect of the port, listed in part 5 below.
+
+| Program | Golden (official program under Wine) | What the port does |
+|---|---|---|
+| `trap15-a/a53-files-past-end-then-read` | After a write 20 bytes past the end and a read, the close fails (`D0.W = 2`) and the file keeps five bytes | The close succeeds; the file has 26 bytes, the gap filled with zeros |
+| `trap15-b/b19-net-send-uninitialised` | Tasks 102 and 106 before any task 100 or 101 give `$27360001` (WSAENOTSOCK) | `$276D0001` (WSANOTINITIALISED), what Windows Sockets documents for every call made before start-up |
+
+### Two measurements
+
+- **The C library's file buffer** (512 bytes, written when a file is closed or the simulator ends;
+  `docs/ARCHITECTURE.md` 3.8.4, risk R-21): measured under Wine with the official program, whose
+  Borland run-time is the real one there; `tests/conformance/windows-confirm/stdio-buffer.X68`
+  repeats the measurement on Windows (Windows session, part C). The port follows the Wine
+  measurement.
+- **The original's own speed** on a Windows PC (decision O-1; `docs/porting/speed.md` section 5):
+  not measured. The default of 1,000,000 instructions per second is an estimate. Windows session,
+  part B.
 
 ## 5. Known limitations
 
 These are not decisions: they are things the project knows of and has not repaired or proven yet.
 They stay here until they are.
+
+- **A read right after a write on one file, or a write right after a read, without a seek
+  between them, gives other results than in the original.** This is a defect of the port. C leaves
+  such a sequence undefined, and the original's C run-time (inside the official simulator) does
+  something definite with it: after writing `ABCDE`, a read of 4 bytes succeeds and the file then
+  holds one byte; a write right after a read reports success and changes nothing. The port's file
+  streams do not follow the run-time there yet: the read is at end of file and the file holds
+  `ABCDE`; the write lands at the read position. A student's program that reads right after
+  writing without a seek, or writes right after reading, therefore gets other results than in the
+  original. A program that seeks (task 55) between a write and a read, as C asks, is not
+  affected: the conformance programs that do so give the official results. A repair of the simulator engine exists on a branch and waits for measurements in the
+  official program before it is merged. (Conformance programs `trap15-a/a51` and `a52`, part T3;
+  they count against item 2 of the definition of done in `docs/ARCHITECTURE.md` 6.9 until the
+  repair is in.)
 
 - **Nobody has used the port on a real Mac yet.** Everything is tested automatically on GitHub's
   macOS, Linux and Windows machines, but the checks only a person can make
@@ -1578,7 +1754,9 @@ They stay here until they are.
   been made since the correction. The last one (run 44988194975, 22 November 2026, under the old
   rule) measured the engine alone at 32.05 million instructions per second, `Maximum` at
   150.4 million (60 Hz) and 158.9 million (120 Hz) in 10 seconds, and frame intervals of 17.4 ms
-  (60 Hz) and 8.8 ms (120 Hz). On a Windows PC the same day, with the corrected check (not judged
+  (60 Hz) and 8.8 ms (120 Hz). By those figures the corrected rule holds there (150.4 million is
+  94 % of the engine's 160.3 million in 5 seconds), but only a run of the corrected check on the
+  final commit shows it. On a Windows PC the same day, with the corrected check (not judged
   there), `Maximum` reached 144.9 to 224.6 million, 84.4 to 92.2 % of the engine alone; the run at
   84.4 % would miss the 85 % (`docs/porting/speed.md` 4.2, 4.6). The program's own results and
   timing are not affected either way.

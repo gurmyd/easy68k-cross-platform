@@ -129,6 +129,12 @@ export const SUITES: readonly { readonly name: string; readonly machine: boolean
     about:
       "task 95 strings with $0C on Windows' text path in the raster faces: a fallback-font glyph with ClearType, not modelled; reported, not required (gate I3, review R4)",
   },
+  {
+    name: 'text-path-fallback',
+    machine: true,
+    about:
+      "task 95 strings with a byte of $01-$08 $0B $0E-$1B and a byte of $80 or above on Windows' text path in the raster faces: glyphs from a fallback font, not modelled; captured for the pens a second Windows gives (gate I3, item 3d)",
+  },
 ];
 
 // ---------------------------------------------------------------------------------------------
@@ -1145,7 +1151,9 @@ function textOutlineItalic(): GdiCase[] {
  * clip edge, next to ordinary characters; italic itemization (every byte before and after $86 and
  * $88, and longer strings of the item classes); texts of undefined bytes only; control texts ($7F
  * with undefined bytes and punctuation: the extra cell and the italic overhang, review R4 of gate
- * I3, erratum T2 27). Not in it: $0C on the path (suite text-path-formfeed), the fallback-font bytes.
+ * I3, erratum T2 27; and without $7F, gate I3 item 3c, erratum T2 28). Not in it: $0C on the path
+ * (suite text-path-formfeed), the fallback-font bytes, and "@" in Courier, whose picture on the path
+ * depends on what was drawn before (golden/text-path-at-pens.json holds the pens that do not).
  */
 function textPath(): GdiCase[] {
   const suite = 'text-path';
@@ -1251,7 +1259,9 @@ function textPath(): GdiCase[] {
   ] as const)
     for (const s of [0x86, 0x88])
       for (let b = 0x20; b <= 0xff; b++) {
-        if (b === 0x80) continue;
+        // Not $80 (text-path-euro), nor "@" in Courier: what Windows draws for it on the path depends on
+        // what the process drew before (gate I3 item 3c, erratum T2 28; docs/differences/SH3.md).
+        if (b === 0x80 || (b === 0x40 && name === 'Courier')) continue;
         put(name, size, 2, 2, 2, [b, s], 48, 24);
         put(name, size, 2, 2, 2, [s, b], 48, 24);
       }
@@ -1287,8 +1297,80 @@ function textPath(): GdiCase[] {
   ] as const)
     for (let style = 0; style < 5; style++)
       for (const bytes of CONTROL_TEXT_STRINGS) put(name, size, style, 6, 2, [...bytes], 200, 80);
+  // Control texts without $7F (gate I3 item 3c, erratum T2 28), at a size of each kind of cell, every
+  // style; drawn at x = 5 so that the cases above stay apart.
+  for (const [name, size, width, height] of [
+    ['Fixedsys', 9, 120, 40],
+    ['Fixedsys', 0, 120, 40],
+    ['Fixedsys', 20, 220, 60],
+    ['Fixedsys', 85, 400, 140],
+    ['Courier', 10, 120, 40],
+    ['Courier', 12, 120, 40],
+    ['Courier', 45, 360, 80],
+    ['Courier', 67, 420, 100],
+  ] as const)
+    for (let style = 0; style < 5; style++)
+      for (const bytes of CONTROL_TEXT_STRINGS_WITHOUT_DEL)
+        put(name, size, style, 5, 2, [...bytes], width + 30 * Math.max(0, bytes.length - 4), height);
+  // The cases of review R4 of gate I3 (its list g1) that the rule of erratum T2 27 drew wrongly.
+  for (const [name, size, style, bytes] of [
+    ['Fixedsys', 85, 0, [0x7d, 0x97, 0x90]],
+    ['Fixedsys', 116, 2, [0x90, 0x97, 0x86]],
+    ['Courier', 67, 2, [0x8d, 0x82, 0x21]],
+    ['Courier', 45, 0, [0x9d, 0x92, 0x90]],
+    ['Courier', 9, 0, [0x95, 0x90, 0x9d]],
+    ['Fixedsys', 54, 2, [0x86, 0x81, 0x86]],
+  ] as const)
+    put(name, size, style, 5, 2, [...bytes], 200, 140);
   return cases;
 }
+
+/**
+ * Strings of text-path for control texts without $7F, and their neighbours that are not control texts
+ * (gate I3 item 3c, erratum T2 28): the failing strings of review R4 of gate I3 (its list g4), the
+ * strict alternation of one punctuation byte and one control, digits, runs without punctuation, the
+ * neutrals of every kind, and longer texts with several runs.
+ */
+export const CONTROL_TEXT_STRINGS_WITHOUT_DEL: readonly (readonly number[])[] = [
+  [0x95, 0x81, 0x81],
+  [0x81, 0x86, 0x81],
+  [0x7d, 0x97, 0x81],
+  [0x86, 0x81, 0x86],
+  [0x81, 0x82, 0x21],
+  [0x90, 0x86, 0x90],
+  [0x95, 0x90, 0x90],
+  [0x7d, 0x97, 0x90],
+  [0x97, 0x81],
+  [0x86, 0x81],
+  [0x81, 0x86],
+  [0x20, 0x81],
+  [0x86, 0x86, 0x81],
+  [0x20, 0x86, 0x81],
+  [0x86, 0x20, 0x81],
+  [0x86, 0x81, 0x81],
+  [0x86, 0x81, 0x86, 0x81],
+  [0x81, 0x86, 0x81, 0x86],
+  [0x86, 0x81, 0x86, 0x81, 0x86],
+  [0x81, 0x86, 0x81, 0x86, 0x81],
+  [0x86, 0x7f, 0x86, 0x81],
+  [0x7f, 0x86, 0x7f, 0x86],
+  [0x7f, 0x86, 0x86],
+  [0x86, 0x7f, 0x86],
+  [0x7f, 0x86, 0x20],
+  [0x86, 0x31, 0x81],
+  [0x31, 0x86, 0x81],
+  [0x86, 0x81, 0x20],
+  [0x81, 0x20, 0x86],
+  [0x86, 0x2c, 0x81],
+  [0xa0, 0x86, 0x81],
+  [0x86, 0x7e, 0x81],
+  [0x86, 0x5b, 0x81, 0x9d],
+  [0x8d, 0x8f, 0x95, 0x7f, 0x5b, 0x87, 0x9d],
+  [0x91, 0x9d, 0xa0, 0x82, 0x81],
+  [0x95, 0xa0, 0x8f, 0x8d, 0x91, 0x90],
+  [0x86, 0x81, 0x41],
+  [0x86, 0x81, 0xb2],
+];
 
 /**
  * Strings of text-path for control texts (erratum T2 27): $7F with undefined bytes, punctuation and
@@ -1385,6 +1467,60 @@ export const FORMFEED_STRINGS: readonly (readonly number[])[] = [
   [0x0c, 0x1f],
 ];
 
+/**
+ * The suite text-path-fallback (gate I3, item 3d; erratum T2 29): a byte Windows draws from a
+ * fallback font ($01-$08 $0B $0E-$1B, FALLBACK_BYTES) together with a byte of $80 or above, so that
+ * the text takes Windows' text path. The port does not model these texts (docs/differences/SH3.md);
+ * on the Windows of the references their pens are the same from run to run. Machine-dependent, like
+ * text-control: the glyphs differ between two Windows. It exists so that the GDI capture of another
+ * Windows (the windows-oracles job of CI) says whether that Windows gives the same pens (run.mjs
+ * prints the line "text-path-fallback: ... pens equal the committed references"). Nothing requires it.
+ */
+function textPathFallback(): GdiCase[] {
+  const suite = 'text-path-fallback';
+  const cases: GdiCase[] = [];
+  for (const [name, list] of [
+    ['Fixedsys', [9, 18]],
+    ['Courier', [10, 12, 19, 36]],
+  ] as const)
+    for (const size of list)
+      for (let style = 0; style < 5; style++)
+        for (const bytes of FALLBACK_PATH_STRINGS)
+          cases.push({
+            id: `${suite}-${pad(cases.length)}`,
+            suite,
+            width: 260,
+            height: 80,
+            ops: [
+              { op: 'font', name, size, style },
+              { op: 'fill', color: 0x0000ff },
+              { op: 'fontcolor', color: 0x00ff00 },
+              { op: 'text', x: 6, y: 2, bytes: [...bytes] },
+            ],
+          });
+  return cases;
+}
+
+/** Strings of text-path-fallback: a fallback-font byte next to each kind of byte of $80 or above. */
+export const FALLBACK_PATH_STRINGS: readonly (readonly number[])[] = [
+  [0x01, 0x86],
+  [0x86, 0x01],
+  [0x08, 0x88],
+  [0x0b, 0x98],
+  [0x81, 0x0b, 0x98],
+  [0x0e, 0xe9],
+  [0x41, 0x1b, 0x86],
+  [0x02, 0x7f, 0x81],
+  [0x05, 0x95],
+  [0x1a, 0xb2],
+  [0x86, 0x03, 0x41],
+  [0x07, 0x0d, 0x86],
+  [0x10, 0x87, 0x10],
+  [0x0b, 0xa0],
+  [0x18, 0x5b, 0x88],
+  [0x04, 0xc4, 0x20],
+];
+
 /** Italic strings of text-path: neutrals next to item classes, controls, superscripts, $A0-$FF. */
 export const ITEMIZATION_STRINGS: readonly (readonly number[])[] = [
   [0x41, 0x5b, 0x86],
@@ -1478,7 +1614,10 @@ export const UNDEFINED_STRINGS: readonly (readonly number[])[] = [
  * The suite text-path-euro (gate I3, item 3b): $80 in texts that take Windows' text path, in the
  * raster faces at the sizes of the text suites, every style. Windows draws the euro sign there from
  * a fallback font with ClearType (README.md, "Windows' text path"): its width and everything outside
- * its ink are compared, its pixels are font-smoothed and depend on the machine's settings.
+ * its ink are compared, its pixels are font-smoothed and depend on the machine's settings. In Courier
+ * its width depends on what the process drew before (erratum T2 29); the references were captured in
+ * the order run.mjs captures every suite, and golden/text-path-euro-pens.json says which of their
+ * pens Windows gives in every history (tests/oracle/gdi-capture/histories.mjs).
  */
 function textPathEuro(): GdiCase[] {
   const suite = 'text-path-euro';
@@ -1554,6 +1693,7 @@ export function generateCases(): GdiCase[] {
     ...textPath(),
     ...textPathEuro(),
     ...textPathFormfeed(),
+    ...textPathFallback(),
   ];
 }
 

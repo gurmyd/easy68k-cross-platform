@@ -514,7 +514,16 @@ model; the port keeps the rule of the ordinary case. `docs/differences/SH3.md` l
   glyph of no width plus the overhang; Fixedsys 9 plain: 8 pixels instead of none), in 1,610 of the
   2,560 raster font, size and style combinations the reviewer probed, as Windows does (`text-path`
   has `$81` alone in 6 fonts x 5 styles); and the zero-width bytes, at the sizes of the bar, now draw
-  the bar. Every other byte `$20`-`$FF` draws at the cursor exactly what it drew before.
+  the bar. _Corrected again in gate I3 round 4_ (second review of text drawing, R4-2, probe
+  `build/review-R4-text-drawing-2/probe/single.test.ts`): the list missed the outline faces. In the
+  fixed-pitch outline faces (Courier New, Lucida Console, Consolas), the echo of line input of a
+  zero-width byte (`$09 $0A $0D $1C`-`$1F`) used to paint the byte's cell (Courier New 15: a glyph
+  12 x 22) and now paints nothing (a `textOut` with an empty glyph list, the pen unchanged), in all
+  270 of the combinations of those faces the reviewer probed; that is what Windows' task 95 draws
+  (`text-outline-zero` holds the single zero-width bytes, 336 of 336 equal). Every other byte
+  `$20`-`$FF` draws at the cursor exactly what it drew before (the reviewer's probe: 4,290
+  combinations, 1,986,270 `textOut` calls on each side, none different in calls, pixels, overlay,
+  pen or shadow array).
 - Font data: `metrics.ts` reads `raster.textPath` (optional; a file without it gives the old
   behaviour), `FontSet` and `AtlasGlyphProvider` answer `zeroWidthBar(font)` and
   `euroInTextPath(font)`, two optional members of the module's own `FallbackGlyphs` (the contract's
@@ -556,3 +565,77 @@ model; the port keeps the rule of the ordinary case. `docs/differences/SH3.md` l
   suite. Digests: `text-path` `79c949dc` -> `1c4d5b75` (1,440 cases more), `text-path-formfeed`
   `8245a757` (new); `text`, `text-outline`, `text-outline-zero`, `text-outline-glyphs`,
   `text-control` (`ca729b7d`) and `text-path-euro` unchanged.
+
+### 34. Control texts without `$7F`; `"@"` in Courier recorded; what item 3 holds (gate I3, item 3c; erratum T2 28)
+
+- **Repaired:** the second review of text drawing (R4-2) found texts of undefined bytes and
+  punctuation without `$7F` drawn wrongly (Fixedsys 9 plain `$95 $81 $81`: Windows' box 16 pixels,
+  the port's 8; also `$81 $86 $81`, `$7D $97 $81`, and the italic overhang of `$86 $81 $86` and
+  `$81 $82 $21`). Entry 33's `controlText` asked for `$7F` only because every list it was fitted on
+  had one. T2 measured the class with alphabets that do not all have `$7F` (erratum T2 28: 191,410
+  texts over every size class and style of both raster faces), and `controlText` in
+  `text-screen.ts` now states the general rule: controls (`$7F`, undefined bytes), punctuation and
+  neutrals only, no digit; a control and a byte that is not an undefined byte; every run of
+  punctuation and neutrals with a punctuation byte; and no strict alternation of one such byte and
+  one control with as many of each. What a program sees changes only in such texts of task 95: the
+  width of the box, and in italic its overhang; the pen never changes. A character written or echoed
+  at the cursor is one byte, and one byte gains nothing from the rule: an undefined byte alone is no
+  control text, a punctuation byte alone has no control, and `$7F` alone is one but has neither an
+  undefined byte at its end nor an overhang to lose - the text screen proper draws what it drew.
+- Evidence: the port equals Windows in every pixel and pen in all of T2's lists (a1-a7, 191,410
+  texts) and in a8, 12,000 random path texts over every byte but those of 6.5.3's recorded
+  differences at random raster sizes, styles and order (12,000 of 12,000). The reviewer's g4 is 690
+  of 690 (was 602), g1 2,489 of 2,500 (was 2,483; the 11 others are `"@"` in Courier). Tests: the
+  1,526 new `text-path` cases at x = 5 in `gdi-references.test.ts`, with six spot checks of Windows'
+  box; with entry 33's rule 494 of the 10,459 `text-path` cases differ.
+- **Recorded, not modelled:** `"@"` on the text path in Courier. Windows draws it differently
+  depending on what the process drew before (erratum T2 28: the same 2,333 texts in reverse order all
+  differ in their pictures, alone in a fresh process 59 of 106), so there is no one Windows picture;
+  6.5.3 as corrected (decision 3 (b)) lists it as a difference. What Windows gives in every history,
+  the pen of such a text without a byte of `$80` or above, the port gives too: 1,000 of 1,000
+  (`golden/text-path-at-pens.json`, a test of its own). The port draws the face's own `"@"`, which is
+  what Windows draws in the histories in order of size (2,423 of 2,423).
+- **What item 3 of 6.9 holds for text, under the architect's decision of 22 November 2026** (this
+  replaces item 3b's report's "item 3 now holds for the text of the raster faces"):
+  - every pixel and the pen equal Windows for every text of the raster faces made only of bytes the
+    face draws itself, off the text path (`text`, 2,132 of 2,132);
+  - on the text path, every pixel and the pen equal Windows wherever Windows is deterministic and
+    draws from the face (the bar, itemization, undefined bytes, control texts): `text-path` 10,459
+    of 10,459, and the 132 `text-control` texts without a fallback-font byte or the euro sign;
+  - recorded differences (`docs/differences/SH3.md`), with the pen required where Windows' pen is
+    the same on both captured builds and from run to run: the bytes `$01-$08 $0B $0E-$1B` (pens 85
+    of 85, and every pixel in the 16 texts both builds draw alike), the euro sign's glyph on the
+    path (pen and every other pixel: `text-control` 30 of 30, `text-path-euro` 1,400 of 1,400),
+    `$0C` on the path (captured on one build only: pens 400 of 640 reported, not yet required), and
+    `"@"` in Courier on the path (its stable pens 1,000 of 1,000);
+  - the outline faces as 6.5.3 says: cell rectangles and pens (`text-outline`, `text-outline-zero`),
+    pens of visible glyphs (`text-outline-glyphs`).
+
+### 35. The euro sign's width in Courier depends on history: only its stable pens are required (gate I3, item 3d; erratum T2 29)
+
+- **Corrected record, no change to the port.** The third review of the text drawing found that on
+  the text path in Courier the width Windows gives the euro sign `$80`, and so the pen, depends on
+  what the process drew before, as `"@"` does (erratum T2 29: one Courier 127 euro text drawn first
+  changes 378 of the 1,400 pens of `text-path-euro`; `$80 $86` alone in a new process differs from
+  the capture in order of size at 117 of 200 Courier sizes; Fixedsys never). Entry 34's "pen and
+  every other pixel: `text-control` 30 of 30, `text-path-euro` 1,400 of 1,400" is true of the
+  references, which were captured in order of size, but not of Windows in every history. The port's
+  widths (`metrics.json` `raster.textPath.fallbackEuro`) are Windows' in that history, on purpose
+  (T2 29), and `text-screen.ts` is unchanged.
+- **Tests** (`gdi-references.test.ts`): `text-path-euro` requires the pen and every pixel outside
+  the euro sign for the 986 cases whose pen Windows gives in every history
+  (`golden/text-path-euro-pens.json`: all 600 in Fixedsys, 386 of 800 in Courier) and reports the
+  other 414; `text-control` requires 21 of its 30 euro texts and reports the 9 Courier rows in
+  plain, underline and strike-out; a new test holds the port to all 1,125 pens of
+  `text-path-euro-pens.json`; a new reported test prints the port against T2's new suite
+  `text-path-fallback` (0 of 480 pens: the fallback-font bytes with a byte of `$80` or above on the
+  path are not modelled; whether a second Windows gives the same pens is not yet captured).
+  `check-text.mjs` splits its two euro groups the same way: 78 checks instead of 76, every digest
+  unchanged.
+- **What item 3 holds for text** (entry 34's list, the euro sign corrected): the euro sign's glyph
+  on the path is a recorded difference, with the pen and every other pixel required where Windows'
+  pen is the same in every history - `text-control` 21 of 21, `text-path-euro` 986 of 986,
+  `golden/text-path-euro-pens.json` 1,125 of 1,125; the rest (`text-control` 9, `text-path-euro`
+  414) follows Windows' capture in order of size and is decision 3 (b). `text-path-euro` was
+  captured on one Windows build; the second build's capture decides whether its 986 pens stay
+  required (T2 29 says which line of the `windows-oracles` job to read).

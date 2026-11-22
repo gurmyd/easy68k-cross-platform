@@ -167,6 +167,7 @@ async function captureCases(exe, out) {
   );
   const machine = new Map(SUITES.map((s) => [s.name, s.machine]));
   const suites = [...new Set(cases.map((c) => c.suite))];
+  comparePensOfOneBuild(cases, pens);
   for (const suite of suites) {
     const packed = cases
       .filter((c) => c.suite === suite)
@@ -179,6 +180,50 @@ async function captureCases(exe, out) {
       packContent,
       !isMachine || all,
       isMachine ? 'depends on the machine (theme or font smoothing)' : undefined,
+    );
+  }
+}
+
+// The suites of Windows' text path captured on one Windows build only (erratum T2 29). Machine-
+// dependent, so their packs are not compared; but decision 3 of 6.5.3 turns on whether another
+// Windows gives the same pens, so their pens are compared with the committed references and printed
+// in the report (one line per suite). Nothing here fails the run: a person reads the lines.
+const ONE_BUILD_SUITES = ['text-path-euro', 'text-path-fallback', 'text-path-formfeed'];
+const onePensLines = [];
+function comparePensOfOneBuild(cases, pens) {
+  const pinnedFile = join(GOLDEN, 'text-path-euro-pens.json');
+  const pinned = existsSync(pinnedFile)
+    ? new Set(JSON.parse(readFileSync(pinnedFile, 'utf8')).cases.map((c) => c.slice(0, 4).join('|')))
+    : new Set();
+  const hex = (bytes) => bytes.map((b) => b.toString(16).padStart(2, '0')).join('');
+  for (const suite of ONE_BUILD_SUITES) {
+    const file = join(GOLDEN, `${suite}.pixpack.gz`);
+    const list = cases.filter((c) => c.suite === suite);
+    if (!existsSync(file) || list.length === 0) continue;
+    const committed = new Map(decodePack(readFileSync(file)).cases.map((c) => [c.id, c.pen]));
+    let equal = 0;
+    let pinnedCount = 0;
+    let pinnedEqual = 0;
+    const differing = [];
+    for (const c of list) {
+      const [mine, theirs] = [pens.get(c.id), committed.get(c.id)];
+      const same = mine !== undefined && theirs !== undefined && mine[0] === theirs[0] && mine[1] === theirs[1];
+      const font = c.ops.find((o) => o.op === 'font');
+      const text = c.ops.find((o) => o.op === 'text');
+      const isPinned = pinned.has([font.name, font.size, font.style, hex(text.bytes)].join('|'));
+      if (same) equal++;
+      else differing.push(`${c.id} ${theirs?.join(',')} -> ${mine?.join(',')}${isPinned ? ' (pinned)' : ''}`);
+      if (isPinned) {
+        pinnedCount++;
+        if (same) pinnedEqual++;
+      }
+    }
+    onePensLines.push(
+      `  ${suite}: ${equal} of ${list.length} pens equal the committed references` +
+        (suite === 'text-path-euro'
+          ? `; of the ${pinnedCount} pinned in golden/text-path-euro-pens.json, ${pinnedEqual} equal`
+          : '') +
+        (differing.length ? `; differing (committed -> this capture): ${differing.slice(0, 8).join('; ')}` : ''),
     );
   }
 }
@@ -524,6 +569,13 @@ async function main() {
           ? `; ${otherFontOnly.filter((l) => !l.startsWith(' ')).length} apart from the other-font bytes)`
           : ')'),
       ...verdict.lines,
+      ...(onePensLines.length
+        ? [
+            '',
+            'Pens of the text-path suites captured on one Windows build only (erratum T2 29; machine-dependent, not judged here, read by a person):',
+            ...onePensLines,
+          ]
+        : []),
       ...(details.length
         ? [
             '',

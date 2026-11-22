@@ -304,7 +304,10 @@ best). The 4096 x 4096 surface passed again (longest frame after Run 100 ms, R-1
 
 **What O-1 decided** (recommended default, accepted by the owner): the official `SIM68K.exe` may be
 run on real Windows hardware once, **by the owner**, in Windows Sandbox or a disposable virtual
-machine, with `tests/perf/calibrate.X68`. Until then `DEFAULT_IPS` = 1,000,000.
+machine, with `tests/perf/calibrate.X68`. Until then `DEFAULT_IPS` = 1,000,000. The measurement is
+part B of the one Windows session in
+[`docs/porting/windows-confirmation.md`](windows-confirmation.md#b-the-speed-of-the-original), which
+also says what to copy to the Windows PC and what to send back.
 
 **Steps for the owner** (about five minutes):
 

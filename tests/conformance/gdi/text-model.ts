@@ -128,26 +128,35 @@ export function severalItems(bytes: readonly number[]): boolean {
 }
 
 /**
- * Whether a string on the text path is a control text (gate I3 review R4, erratum T2 27): it has $7F
- * and an undefined byte, no letter, euro sign, superscript or zero-width byte, and its other bytes
- * (punctuation and neutrals) form at most one run between the controls, or two runs that start and
- * end the string; every run has a punctuation byte. Such a string keeps the whole italic overhang,
- * and one that ends with an undefined byte has a box one cell wider in plain, bold and italic.
+ * Whether a string on the text path is a control text (errata T2 27 and T2 28). It is one when
+ * - it is made of controls ($7F, the undefined bytes), punctuation and neutrals only: no letter, digit,
+ *   euro sign, superscript, zero-width byte or other byte below $20;
+ * - it has a control, and a byte that is not an undefined byte;
+ * - each of its runs of punctuation and neutrals has a punctuation byte;
+ * - and it does not alternate byte by byte between one punctuation-or-neutral byte and one control
+ *   with as many of each ($86 $81, $7F $86 $7F $86; $86 $7F $86 and $86 $86 $81 are control texts).
+ * Such a string keeps the whole italic overhang, and one that ends with an undefined byte has a box
+ * one cell of the face wider in plain, bold and italic (not in underline or strike-out). Measured with
+ * T2's capture program on about 210,000 texts over every size class and style of both raster faces
+ * (gate I3, item 3c).
  */
 export function controlText(bytes: readonly number[]): boolean {
   const kinds = bytes.map(itemClass);
-  if (!kinds.includes('del') || !kinds.includes('undefined')) return false;
-  if (kinds.some((k) => k === 'latin' || k === 'euro' || k === 'superscript' || k === 'zero-width')) return false;
+  if (kinds.some((k) => k !== 'del' && k !== 'undefined' && k !== 'punctuation' && k !== 'neutral')) return false;
+  if (bytes.some((b) => b >= 0x30 && b <= 0x39)) return false;
+  const control = kinds.map((k) => k === 'del' || k === 'undefined');
+  if (!control.includes(true) || kinds.every((k) => k === 'undefined')) return false;
   const runs: { from: number; to: number; punctuation: boolean }[] = [];
   kinds.forEach((k, i) => {
-    if (CONTROL_CLASSES.includes(k)) return;
+    if (control[i]) return;
     const last = runs[runs.length - 1];
     if (last && last.to === i) last.to = i + 1;
     else runs.push({ from: i, to: i + 1, punctuation: false });
     if (k === 'punctuation') (runs[runs.length - 1] as { punctuation: boolean }).punctuation = true;
   });
   if (runs.some((r) => !r.punctuation)) return false;
-  return runs.length <= 1 || (runs.length === 2 && runs[0]?.from === 0 && runs[1]?.to === bytes.length);
+  const alternating = bytes.length % 2 === 0 && control.every((c, i) => i === 0 || c !== control[i - 1]);
+  return !alternating;
 }
 
 /** Whether $7F takes the fallback glyph's width in this outline-face string (see textExtent). */

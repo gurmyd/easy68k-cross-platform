@@ -203,23 +203,30 @@ describe('judgeFrames', () => {
     expect(judgeFrames([frames(1, 4), frames(0, 5), frames(1, 4)]).ok).toBe(false);
   });
 
-  it('judges windows with too few frames at the default by the floor alone, and says so', () => {
+  // Review R4 of gate I3, and gate I3 round 4: 2 frames against 5 is a loss of 60 %, which the floor
+  // alone let pass under a caption that speaks of the 70 % share. A pair with too few frames at the
+  // default cannot show the share, so it does not pass, and the verdict says what was judged.
+  it('does not pass windows with too few frames at the default to judge a share, and says so', () => {
     const verdict = judgeFrames([frames(3, 5), frames(2, 4), frames(3, 5)]);
-    expect(verdict.ok).toBe(true);
+    expect(verdict.ok).toBe(false);
     expect(verdict.notes.join(' ')).toContain('3 of 3 pairs had fewer than 6 frames');
-    expect(verdict.detail).toContain('too few at the default for a share');
+    expect(verdict.notes.join(' ')).toContain('the frames could not be judged, a failure');
+    expect(verdict.detail).toContain('too few at the default to judge');
+    const lost = judgeFrames([frames(2, 5), frames(2, 5), frames(2, 5)]);
+    expect(lost.ok).toBe(false);
+    expect(lost.detail).toMatch(
+      /^0 of 3 pairs kept at least 70 % of the default's frame rate, 3 had too few frames at the default to judge \(counted as not kept\)/,
+    );
   });
 
-  // Review R4 of gate I3: 2 frames against 5 is a loss of 60 %, which the floor alone lets pass; the
-  // detail must not then claim that the pairs kept the share.
-  it('does not count a pair passed by the floor as one that kept the share', () => {
-    const verdict = judgeFrames([frames(2, 5), frames(2, 5), frames(2, 5)]);
-    expect(verdict.ok).toBe(true);
-    expect(verdict.detail).toMatch(
-      /^0 of 3 pairs kept at least 70 % of the default's frame rate, 3 passed by the floor of 4 per second alone/,
+  it('counts a pair with too few frames at the default as one that did not keep the share', () => {
+    const mixed = judgeFrames([frames(30, 30), frames(2, 5), frames(29, 30)]);
+    expect(mixed.ok).toBe(true);
+    expect(mixed.detail).toMatch(
+      /^2 of 3 pairs kept at least 70 % [^:]*, 1 had too few frames at the default to judge/,
     );
-    const mixed = judgeFrames([frames(30, 30), frames(2, 5), frames(10, 30)]);
-    expect(mixed.detail).toMatch(/^1 of 3 pairs kept at least 70 % [^:]*, 1 passed by the floor/);
+    expect(judgeFrames([frames(30, 30), frames(2, 5), frames(10, 30)]).ok).toBe(false);
+    expect(judgeFrames([frames(30, 30), frames(5, 5), frames(5, 5)]).ok).toBe(false);
   });
 
   it('frameWindowMs: no second measurement when every default window has enough frames', () => {

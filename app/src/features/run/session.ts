@@ -244,6 +244,7 @@ export function createSimSession(ctx: AppContext, env: SimSessionEnv, options: S
       );
     },
     report,
+    cursorRow: () => ctx.store.getState().sim.selectedRow,
   };
 
   const session: ComposedSession = composeSession({

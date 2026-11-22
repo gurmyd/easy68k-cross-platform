@@ -31,8 +31,10 @@
 //     captured Windows agree (pens; pictures where those agree too; erratum T2 25), the other cases
 //     of text-control and the suites text-path and text-path-euro (Windows' Unicode text path; gate
 //     I3, item 3b) equal Windows pixel for pixel and pen for pen but the smoothed euro sign
-//     (erratum T2 26), and the numbers of the whole of text-control and of text-path-formfeed ($0C on
-//     the text path, not modelled; erratum T2 27) are printed and not required;
+//     (erratum T2 26) - for the euro sign where Windows gives its width whatever it drew before
+//     (golden/text-path-euro-pens.json; erratum T2 29) - and the numbers of the whole of text-control,
+//     of the history-dependent euro texts and of text-path-formfeed ($0C on the text path, not
+//     modelled; erratum T2 27) are printed and not required;
 //   - the page had no console or page error.
 //
 // The page is a blank one of the script's own (not the application), so the check does not depend
@@ -152,6 +154,11 @@ async function loadReferences() {
       return { case: c, image: decodePix(packed.pix), pen: packed.pen };
     });
   }
+  // The pens of texts with $80 on the path that Windows gives in every history (erratum T2 29).
+  const pinned = JSON.parse(readFileSync(join(gdiDir, 'golden', 'text-path-euro-pens.json'), 'utf8'));
+  references.euroPens = new Map(
+    pinned.cases.map(([face, size, style, hex, pen]) => [`${face}|${size}|${style}|${hex}`, pen]),
+  );
   // The same text-control cases as a second Windows drew them (10.0.26100, GitHub's runner; erratum
   // T2 25): for the bytes Windows draws from a fallback font, 6.5.3 holds the port to what both agree on.
   const runner = decodePack(
@@ -317,6 +324,14 @@ async function main() {
     );
     const others = control.filter((r) => !fallback.includes(r));
     const hasEuro = (r) => replay.euroInk(r.case, fonts) !== null;
+    // A case of one text whose pen Windows gives in every history (golden/text-path-euro-pens.json;
+    // gdi-references.test.ts checks that those pens are the committed references').
+    const euroHeld = (r) => {
+      const font = fontOf(r);
+      const text = r.case.ops.find((o) => o.op === 'text');
+      const hex = text.bytes.map((b) => b.toString(16).padStart(2, '0')).join('');
+      return references.euroPens.has(`${font.name}|${font.size}|${font.style}|${hex}`);
+    };
     const onRunner = (r) => references.runner.get(r.case.id);
     const samePen = (r) => onRunner(r).pen[0] === r.pen[0] && onRunner(r).pen[1] === r.pen[1];
     const samePicture = (r) =>
@@ -384,10 +399,16 @@ async function main() {
         true,
       ],
       [
-        'text-control: the other cases with $80 on the text path, the pen and every pixel but the smoothed euro sign (6.5.3, erratum T2 26)',
-        others.filter(hasEuro),
+        'text-control: the other cases with $80 on the text path, the pen and every pixel but the smoothed euro sign, where Windows gives that pen in every history (6.5.3, errata T2 26 and T2 29)',
+        others.filter((r) => hasEuro(r) && euroHeld(r)),
         'but-euro',
         true,
+      ],
+      [
+        'text-control: the other cases with $80 on the text path whose pen depends on what Windows drew before (Courier; reported, not required)',
+        others.filter((r) => hasEuro(r) && !euroHeld(r)),
+        'but-euro',
+        false,
       ],
       [
         "text-path: Windows' text path (the zero-width bar, italic itemization, undefined bytes, control texts), every pixel and the pen",
@@ -396,10 +417,16 @@ async function main() {
         true,
       ],
       [
-        'text-path-euro: $80 on the text path, the pen and every pixel but the smoothed euro sign',
-        references['text-path-euro'],
+        'text-path-euro: $80 on the text path, the pen and every pixel but the smoothed euro sign, where Windows gives that pen in every history (erratum T2 29)',
+        references['text-path-euro'].filter(euroHeld),
         'but-euro',
         true,
+      ],
+      [
+        'text-path-euro: the Courier texts whose pen depends on what Windows drew before, against the capture in order of size (reported, not required)',
+        references['text-path-euro'].filter((r) => !euroHeld(r)),
+        'but-euro',
+        false,
       ],
       [
         'text-path-formfeed: $0C on the text path, every pixel and the pen (a smoothed fallback glyph, not modelled: a known difference, reported, not required; erratum T2 27)',

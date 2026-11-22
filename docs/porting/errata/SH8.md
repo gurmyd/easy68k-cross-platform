@@ -195,6 +195,85 @@ entry 28 and the lines marked "Gate I1, round 2" in its second round.
   `files.recoverJournal()`) is the first step of `controller.start()`, before the first engine is
   created. Every load waits for the start (entry 21), so no program sees its files earlier.
 
+### 47. A run command given during a load is carried out when the load ends (4.7 steps 1 and 3, 4.8)
+
+Architect's decision of 22 November 2026, on the finding of the fixup round before the release
+candidate (`build/gate3/fixup-report.json`).
+
+- Says: 4.7 step 3, "From here until step 10 ... every simulator command is disabled"; step 1, "A
+  request that arrives while the phase is `loading` is ignored"; 4.8's availability table, Run, Run
+  To Cursor, Auto Trace, Step Over, Trace Into "`menuState == 0` and the phase is not `loading`",
+  Pause and Rewind "the phase is not `loading`".
+- Problem: the person assembles, chooses Execute while a program runs, answers OK to `Caution`
+  and presses F9. During the load `sim.run.run` reported itself disabled and the key dispatcher
+  cancelled the key: the new program sat there, Stopped, 0 cycles. Measured with
+  `check-run.mjs --pass "run key during a load"` on the code before this entry: F9 in the same task
+  as the click on OK and at once after it lost in Chromium and WebKit, and 10 and 50 ms after OK
+  lost in WebKit; the toolbar's Run button at once, 10 and 50 ms after OK lost in WebKit and in the
+  task after the click in Chromium; Run > Run from the menu lost in WebKit (the load lasts 24 to 65
+  ms in Chromium and 158 to 221 ms in WebKit on the development PC, longer on a slow one). In the
+  original the load is one synchronous call, and Windows delivers a key or click given meanwhile
+  from its message queue when the call returns: F9 runs the new program.
+- Does (`core/run/controller.ts`, `features/run/commands.ts`):
+  - While a load is under way, and from the moment the `Caution` question is answered until the
+    load begins (`keepsCommands`; the dialog closes in one task and the controller hears the answer
+    a few microtasks later, so a key in that task would otherwise find the old program's commands
+    busy), the controller **keeps** Run, Run To Cursor, Step Over, Trace Into, Auto Trace, Pause,
+    Rewind and Reload instead of refusing them, and `finishLoading` (the code that ends every load)
+    carries them out in the order given, each as if it were given at that moment. No timer and no
+    polling.
+  - Each kept command meets the state the original's would meet when its queue delivers it: a Run
+    after the load runs the new program; a second Run then finds the commands busy and does
+    nothing; Trace Into twice traces two instructions; a Run followed by Pause runs and pauses.
+    Pause and Rewind alone act on the program just loaded, as the original's queued key does
+    (Pause: `cmdPause`, Stopped; Rewind: the program at its start, which it already is). Reload
+    loads the program again, and what was given after it waits for the end of that second load.
+    Run To Cursor reads the selected row when it is carried out (`ControllerUi.cursorRow`), as the
+    original's handler reads the listing's selection when its message is delivered; after Execute
+    that is no row (a cold start selects none, 3.3.2), so it shows `Invalid Run-To-Cursor
+    Selection`. A run command is a user gesture, so audio is unlocked when it is kept.
+  - A load that fails drops what was kept, as the original would run nothing: the `.S68` cannot be
+    read, no engine could be created, a host part failed, or the engine failed (the recovery of
+    4.8 ends with nothing carried out; during the recovery nothing is kept).
+  - A second Execute during the load of the first: the original starts a new simulator process for
+    each Execute, and a key given before it went to the first one's window, never to the second.
+    Here the second program replaces the first, so what was kept for the first is dropped; the
+    second Execute itself is kept and loaded when the first load has ended (no `Caution` question:
+    the first program is then idle), and what was given after it is carried out on the second
+    program. It is not dropped when the first load fails, being the next program's. Before this
+    entry a second Execute during a load was ignored (step 1); `open()` resolves when its load has
+    ended.
+  - On Cancel what was given after the answer is carried out at once, on the program that stays
+    (a running program's commands are busy, so a Run does nothing; an idle one runs). After
+    `confirmLoad()` (a dropped file in a browser) it is carried out at once too: the caller's
+    `open(..., { confirmed: true })` follows after the file has been copied, and the controller
+    cannot know that it will.
+  - Open, Open Data and Close stay disabled and ignored during a load, as written: the decision
+    names the run commands, and a File menu command needs a dialog the person cannot reach in
+    that fraction of a second.
+  - What the commands show: while commands are kept, Run, Run To Cursor, Auto Trace, Step Over,
+    Trace Into, Pause, Rewind and Reload are **enabled** in the web menu bar and the toolbar (their
+    `enabled` answers true), because a key or click given then is accepted. That is right: a
+    disabled button cannot be clicked at all (a disabled HTML button receives no click), so showing
+    them disabled would lose the click the decision keeps; in the original the window is not
+    repainted during the synchronous load, and the click queued on a button that looked disabled
+    acts when it is delivered. In the same task as the click on OK the toolbar still shows the old
+    program's state (a running program: Run disabled) until the page renders, which a person's
+    next click always follows. The desktop app's native menu (`commands/native-menu.ts`, owned by
+    W3/DV2) greys every item during a load by its own phase check. Its accelerators are only shown
+    (`desktop/src/menu.ts`: the page's key dispatcher handles every key that is not a role chord),
+    so F9 reaches the page and is kept there too; what that menu cannot take during the fraction of
+    a second of the load is a click on its greyed item, which a person cannot open and reach in that
+    time. Not run in the desktop app in this round.
+  - A command given while no load is under way behaves exactly as before.
+- Tests: `core/run/controller.kept.test.ts` (each of the five run commands, Pause, Rewind and
+  Reload kept and carried out; two in order; a failed load for two causes; a second Execute,
+  including after a failed first load; a command between OK and the load; Cancel; dispose);
+  `controller.load.test.ts` (Reload twice now loads twice); `features/run/session.test.ts` (the
+  enabling during a load, a Run given through the registry, Run To Cursor after an Execute);
+  `check-run.mjs --pass "run key during a load"` in Chromium and WebKit.
+- Proposed text: a correction note under 4.7 (made in this round; see there).
+
 ## Engine failure (4.8)
 
 ### 13. Where the opcode comes from, and when the cold start begins
@@ -705,6 +784,27 @@ entry 28 and the lines marked "Gate I1, round 2" in its second round.
   always takes the second measurement (`build/SH3-R4/make-long-copy.mjs`, not in the tree),
   `--pass run`: 82 of 82; both browsers print "measured again in windows of 1000 ms" and judge 60
   to 65 frames per window (98 to 101 %).
+
+### 46. judgeFrames: a pair too short to judge does not pass (gate I3 round 4; entries 44 and 45)
+
+- Problem (left by entry 45, a reviewer's minor point): a pair with fewer than `MIN_JUDGED_FRAMES`
+  frames at the default still passed by the floor of 4 per second alone, so a large loss (2 frames
+  at Maximum against 5 at the default, 60 %) passed the check, and the check's caption, "the page
+  keeps its frames ... (at least 70 % of the default speed's frame rate in the same pair, in most of
+  three pairs)", claimed a share that was never judged. Entry 45 only made the detail count such
+  pairs apart.
+- Does: such a pair cannot show that the page kept its frames, so it does not pass. `ok` is true
+  only when a majority of the pairs kept the share (and the floor), which is exactly what the
+  caption says. The detail reads "K of N pairs kept at least 70 % of the default's frame rate, U had
+  too few frames at the default to judge (counted as not kept): ..."; a note says so, and when no
+  pair could be judged the failure says "the frames could not be judged". `check-run.mjs` keeps its
+  second measurement in longer windows (`frameWindowMs`, up to 4 s), so this fails only where the
+  page has fewer than 1.5 frames per second at the default speed even in 4 s windows; such a page
+  also fails the floor at Maximum in practice.
+- Evidence: `run-verdicts.test.ts` 26 tests (the reviewer's 2-against-5 pairs fail with the new
+  detail; one short pair among two kept ones passes as 2 of 3; one short pair with one lossy pair
+  fails); `node app/src/features/run/check-run.mjs --browser all` on 2026-11-22: 116 of 116, both
+  browsers "3 of 3 pairs kept at least 70 %" (Chromium 97 to 101 %, WebKit 98 to 103 %).
 
 ### 28. A session or controller disposed before it starts stays inert (3.12.3, 4.7.1)
 

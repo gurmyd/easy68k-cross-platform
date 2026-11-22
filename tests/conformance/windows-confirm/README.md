@@ -33,14 +33,19 @@ official program under Wine and the difference is marked `unconfirmed` in
 `../sim/known-differences.json`. Compare each Windows `result.bin` with the golden in
 `../sim/golden/<suite>/`:
 
-- `../sim/trap15-b/b06-modes-above-15.X68` (drawing modes 18-23, trap15-b V8). Under Wine it draws
-  the copy mode for all of them (`docs/porting/errata/T3.md` F6).
-- `../sim/trap15-a/a51-files-read-after-write.X68`, `a52-files-write-after-read.X68`,
-  `a53-files-past-end-then-read.X68` (reads and writes on one stream without a seek between them,
-  F7).
-- `../sim/trap15-a/a58-files-devices.X68` (the device name `NUL`, F8).
+- `../sim/trap15-a/a53-files-past-end-then-read.X68` (a write past the end of the file, then a read
+  without a seek; under Wine the close fails, F7).
+- `../sim/trap15-b/b19-net-send-uninitialised.X68` (tasks 102 and 106 before any network task;
+  under Wine another error code, `docs/porting/errata/T3.md` entry 13).
 
-The steps for one Windows session that runs these five, the speed measurement of
+The others that differ under Wine need no Windows run: `b06` (drawing modes 18-23) was settled by
+measuring its GDI calls on Windows 11 and is an accepted difference; `a58` (the device `NUL`) was
+the port's and is repaired; `a51` and `a52` (a read right after a write, a write right after a
+read, without a seek) have a known official answer, because the C run-time that decides it is
+inside `SIM68K.exe` and behaves the same under Wine, so they are defects of the port with a repair
+pending (`docs/differences/T3.md`). Running them on Windows anyway does no harm.
+
+The steps for one Windows session that runs these two, the speed measurement of
 `docs/porting/speed.md` section 5 and the three programs above: `docs/porting/windows-confirmation.md`.
 
 If the Windows result equals the golden, the owner named in `known-differences.json` repairs the

@@ -178,6 +178,49 @@ export function judgeMaximum(runs, engineRate) {
   };
 }
 
+/**
+ * "What the engine alone executes in 5 s" (6.9 item 9 as corrected; erratum P1 13): the engine,
+ * without the governor, called back to back for LIMITS.maximumEngineSeconds in total. `calls` are
+ * those calls, each { steps, ms } (instructions executed and the call's duration); the caller makes
+ * them until their durations add up to at least that time. The figure is their total, scaled to
+ * exactly LIMITS.maximumEngineSeconds (`inWindow`), and `rate` the same per second; `bestBurst` and
+ * `medianBurst` are the fastest and the median call's rate, printed for information only. (Before
+ * gate I3 round 4 the figure was the best of five calls of about 20 ms times 5 s: one lucky call
+ * set a figure that no 5 s reach; those calls ranged from 28 to 53 million per second on one PC.)
+ */
+export function engineAloneFigure(calls) {
+  const steps = calls.reduce((sum, call) => sum + call.steps, 0);
+  const ms = calls.reduce((sum, call) => sum + call.ms, 0);
+  const rate = ms > 0 ? steps / (ms / 1000) : Number.NaN;
+  const bursts = calls.filter((call) => call.ms > 0).map((call) => call.steps / (call.ms / 1000));
+  return {
+    calls: calls.length,
+    steps,
+    ms,
+    rate,
+    inWindow: rate * LIMITS.maximumEngineSeconds,
+    complete: ms >= LIMITS.maximumEngineSeconds * 1000,
+    bestBurst: bursts.length > 0 ? Math.max(...bursts) : Number.NaN,
+    medianBurst: bursts.length > 0 ? percentile(bursts, 50) : Number.NaN,
+  };
+}
+
+/**
+ * The engine-alone figure the Maximum verdict uses: the best (highest rate) of several 5 s blocks
+ * (engineAloneFigure each), one measured before the Maximum runs and one after them, so that both
+ * sides of the share are a best of several on a loaded machine (review of gate I3 round 5; before,
+ * one block against the best of up to three Maximum runs made the share easier to reach). Only
+ * complete blocks count while there is one; a block without a finite rate never counts. Returns
+ * { ...the chosen block, blocks: the rates of all blocks, in order } or null when none counts.
+ */
+export function bestEngineAlone(blocks) {
+  const usable = blocks.filter((block) => Number.isFinite(block.rate) && block.rate > 0);
+  const pool = usable.some((block) => block.complete) ? usable.filter((block) => block.complete) : usable;
+  if (pool.length === 0) return null;
+  const best = pool.reduce((a, b) => (b.rate > a.rate ? b : a));
+  return { ...best, blocks: blocks.map((block) => block.rate) };
+}
+
 /** Time to assemble: the fastest run counts. */
 export function judgeAssembly(runs) {
   return judgeBest(runs, { value: (run) => run.ms, better: 'lower', limit: LIMITS.assemblyMs, unit: 'ms', digits: 0 });

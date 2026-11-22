@@ -18,9 +18,16 @@ The first version is being prepared. What the repository holds today:
 
 - The original EASy68K v5.16.1 assembler and simulator, compiled to WebAssembly from the original
   C++ sources with a documented set of patches (`engine/asm/PATCHES.md`, `engine/sim/PATCHES.md`).
-- Checked against the official EASy68K v5.16.1 for Windows run under Wine: 420 of 420 error-free
-  test programs assemble to byte-identical listing and S-record files, and 9 of 9 execution logs
-  match.
+- Checked against the official EASy68K v5.16.1 for Windows run under Wine (`npm run
+  test:conformance`). Assembler: every test file with default options and 30 files with each of
+  the eight options switched alone; of 801 runs with an official result, 654 are byte-identical,
+  143 identical once the bytes of statements with an undefined symbol are masked, and 4 differ for
+  recorded causes (part T1 of `docs/DIFFERENCES.md`, which also lists the 6 runs the official
+  program gives no result for). Simulator: 172 of 178 self-reporting programs and 31 of 32
+  execution logs (126,427 instructions) give the official result; the 7 others are listed in
+  `docs/DIFFERENCES.md`: 3 accepted, 2 defects of the port with a repair pending (a read right
+  after a write, or a write right after a read, on one file without a seek), and 2 not yet
+  confirmed on real Windows.
 
 ### The application
 
@@ -49,6 +56,11 @@ The first version is being prepared. What the repository holds today:
 - Light and dark themes; installable as an app from the browser; works offline after the first
   visit; several windows at once.
 - Import and export of the original's settings files `settings.dat` and `sim68K.dat`.
+- A program's file tasks treat the name `NUL` as Windows' null device (nothing is written, a read is
+  at end of file), as measured on Windows 11.
+- Cut, Copy and Paste in the editor from the keys, the Edit menu, the toolbar and the context menu,
+  tested in the engines of Chrome and Safari; with another program they are a step of the manual
+  list.
 
 ### The macOS app
 
@@ -76,3 +88,8 @@ The first version is being prepared. What the repository holds today:
 - [README.md](README.md), [docs/USER-GUIDE.md](docs/USER-GUIDE.md),
   [docs/DIFFERENCES.md](docs/DIFFERENCES.md), [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md),
   [docs/MANUAL-TEST-MAC.md](docs/MANUAL-TEST-MAC.md).
+- Part 4 of `docs/DIFFERENCES.md` lists each detail of the original that is not yet confirmed, one
+  row each, with what the port does and how it could be confirmed; the one session on real Windows
+  that would settle several of them is described in `docs/porting/windows-confirmation.md`.
+- The manual list has a test program for every sound task (70 to 77), loops included, and steps
+  for Cut, Copy and Paste with another program and for installing the web version from Chrome.

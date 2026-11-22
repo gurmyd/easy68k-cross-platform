@@ -224,3 +224,112 @@ errata up to date.
   at 84.4 % of the engine alone that would miss the 85 %).
 - **Help page:** the tree regenerated with `tools/import-help.mjs --out build/DOC1/help` equals
   `app/public/help` byte for byte after `Port/differences.htm` was copied.
+
+## 9. The documents brought into line with the evidence for the release candidate (22 November 2026)
+
+### Part 4 of `docs/DIFFERENCES.md`: one row per open item (6.9 item 11)
+
+- **How it is produced.** Part 4 is written by hand in `docs/DIFFERENCES.md`;
+  `tools/make-differences.mjs` rebuilds parts 1 and 2 only and keeps the introduction and parts 3
+  to 5 as they are, so the part stays producible: edit it in place, then run the tool.
+- **What changed.** The part named whole spec sections and gave one chosen behaviour for all of
+  them. It now has one row per open item, in a table per spec list: where the item is stated, what
+  is not confirmed, what the port does, and how it could be confirmed (naming the part of
+  `docs/porting/windows-confirmation.md` where the one Windows session settles it). Added: the four
+  items of easybin §22 item 3, which no part named; the statements marked as not confirmed that no
+  spec list carries (assembler §9.2 `INT_MIN / -1`; editor-ui §8.3, two statements on tab stops;
+  editor-ui §14.2 and erratum E6 4, word characters; erratum E6 5, the Find box and a line break;
+  hardware §9.2 item 8; trap15-a §3.1, the pen task 96 reads; trap15-b §12.2, the TCP receive
+  address); the conformance programs whose golden is unconfirmed (decision of the architect,
+  erratum T3 14: a51, a52, a53, b19, as `tests/conformance/sim/known-differences.json` lists them
+  today). Each row's "what the port does" was read from the code or the engine's patch list, not
+  from the spec's recommendation alone.
+- **Removed, because confirmed** (the test or capture that confirmed each):
+  - trap15-a §12 items 1, 2 and 3 (cell sizes, bold, `Lucida Sans Typerwriter` and size 0): the GDI
+    capture, `app/public/fonts/metrics.json`, erratum T2 3; check:text "raster faces 2132 of 2132".
+  - trap15-a item 5 (`TextOut` moves the pen, the brush as background): the GDI capture, suite
+    `text` (pens and backgrounds, 2132 of 2132).
+  - trap15-a item 7 (control-code glyphs in Fixedsys) and trap15-b V13 (other Windows): the GDI
+    capture, suite `text-control`, measured on Windows 11 and Windows Server 10.0.26100
+    (`tests/oracle/gdi-capture/other-windows.json`); the port differs, part SH3.
+  - trap15-a item 8 = sim-core 13.5 (tasks 0 and 1 with a negative count): the official program
+    under Wine, golden `trap15-a/a55`; the port differs, part T3.
+  - trap15-a item 9 (task 21 colours with a top byte): the GDI capture, the text colour forms
+    (erratum SH3 17).
+  - trap15-a item 11 (one file in two slots): Wine, golden `trap15-a/a56`.
+  - trap15-a item 14 (task 54 with `D2 = 0`, task 53 wrap): Wine, goldens `trap15-a/a31`, `a32`
+    (errata T3 F3, F4).
+  - trap15-b V8 (modes 18 to 255): the GDI calls of task 92 measured on Windows 11 with the capture
+    program (`tests/conformance/gdi/golden/modes.json`, erratum SH1 17); b06's golden is Wine's.
+  - trap15-b V11 (wide lines and wide-pen ellipses): the GDI capture, wide lines 2000 of 2000, dots
+    254 of 254, wide-pen ellipses 496 of 500; the 4 that differ are in part SH2 (new).
+  - trap15-b V12, "how Windows draws ellipses (R-2)": the GDI capture, 8192 of 8192 and 3000 of
+    3000 ellipses every pixel equal (6.5.2).
+  - sim-core 13.3 = sim-ui Q23 (`%` in log lines): Wine, golden `logs/l14-percent-in-listing`; the
+    port differs, part T3.
+  - sim-core 13.6 (the Borland lvalue cast of BTST and its family): Wine, golden
+    `instructions/g-btst`.
+  - sim-core 13.11 (the example log line): Wine, the execution-log goldens.
+  - assembler 12.1 (the `opParse` regressions): Wine, golden `checklist/quirk-03`.
+  - assembler 12.2 (`fprintf` with `%`), 12.3 (a terminator with nothing open), 12.6 (a macro line
+    longer than 255 characters) and 12.7 (macro recursion): Wine, goldens `checklist/macro-09`,
+    `dir-16`, `stc-03` and the crashes of `macro-10`, `macro-13` (golden/REPORT.md); the port
+    differs in each, now in part T1 (new), which 6.9 item 1 asks for (erratum T1 26).
+  - assembler 12.5 (bytes for an undefined symbol): Wine, 56 runs equal only after masking
+    (erratum T1 6); the port differs, parts E5 and T1.
+  - assembler 12.12 (a 33-character local label): Wine, golden `checklist/line-07`.
+  - erratum E1 2 (`Error in LoadFile()` for a short trailer line): the official editor under Wine
+    shows that box for `richedit/s21_trailer_short_tab_size.X68` (errata T1 16 and 17; part T1,
+    "Runs without an official result").
+- **The judge** `tests/integration/rc/item-11-unverified.mjs` (I3's) exits 1 after this change,
+  for one reason only: its table `CARRIED` marks the ten statements above that no spec list carries
+  with `null` ("in no list"), so it prints them as in neither place whatever `DIFFERENCES.md` says.
+  Every other condition holds: the heading is there, part 4 names every spec list, and no list item
+  is in neither place (0). Nine of the ten are now rows of part 4; the tenth, erratum E1 2, is
+  confirmed (above). The judge's author must change those ten rows of `CARRIED` and `ERRATA`.
+  The spec lists themselves were not edited (marking the confirmed items there is the architect's
+  part; adding rows to them would also change the counts the judge checks).
+
+### The differences
+
+- Merged into `docs/DIFFERENCES.md` with the tool: the fragments T1 (new), SH2 (new), U2, T3, SH3,
+  SH6, FS1, DV4 as they are today. Changed by DOC1 at their owners' request: `docs/differences/SH1.md`
+  (the row "until SH2 delivers" is replaced by a sentence that SH2 delivered), and the introduction
+  of "Seen only under Wine" in `docs/differences/T3.md` (a51, a52, a53, b19 not yet confirmed;
+  a58 repaired; b06 settled by measurement and out of the Windows session).
+- The introduction of `docs/DIFFERENCES.md` names the assembler's differences among what can change
+  a program's results; part 5 says that the figures of the last performance run meet the corrected
+  rule but that only a run of the corrected check shows it.
+- `docs/porting/windows-confirmation.md` (links and lists only): part A lists four programs
+  (a58 and b06 left it), and the page links to part 4 of `docs/DIFFERENCES.md`.
+  `docs/porting/speed.md` section 5 links to its part B.
+- `docs/requests/T1-assembler-md-dir-11.md` applied to `docs/porting/assembler.md` (the notes under
+  §9.3.9 and §9.3.4, word for word as asked).
+
+### The manual list (6.9 item 12)
+
+- A1 step 3: after Help > Examples... the folder is selected but closed; the step now says to open
+  it first. The same in `docs/USER-GUIDE.md`.
+- The Caution box that Execute shows while a test program still runs is described, with its text.
+- A fourth test program, **sound**, plays every sound task (70 to 77) in steps the person advances
+  with Space, with what must be heard at each step, including the two cases of SH5 section 7 that
+  were left out (a loop after SIMHALT, stopped by Rewind; task 77 on a looping slot): checks S7, S8.
+  It is saved in `Examples` so that it finds the examples' sound files. Tried in the production
+  build in Chromium and WebKit: it assembles with 0 errors and 0 warnings and runs through its nine
+  steps to the halt; whether the sounds are heard is the person's part.
+- P4 and X5 (Cut, Copy and Paste with TextEdit or Notepad, as the engineer of item 5 proposed; X4
+  was taken, so the Windows row is X5), D10 (Paste from the menu, toolbar and context menu in the
+  Mac app), I1 (Chrome offers to install the web version), the report form's fields for them, and
+  what becomes of a failing shortcut (an entry of part 3 of `docs/DIFFERENCES.md`).
+- The head of the list says what must exist first: the web version, and for the Mac app's checks a
+  published release or pre-release, which does not exist.
+- The times of part A were rebalanced so that its six parts still add up to twenty minutes.
+
+## 10. Cut, Copy and Paste with another program (architect's decision, 6.8)
+
+- Said: 6.8, "Paste into a task 2 prompt with Cmd+V in Safari, Chrome and the desktop app, and with
+  Shift+Insert in Chrome on Windows; Paste from the editor's menu, toolbar and context menu in each
+  (note 45)."
+- Decided (architect, 22 November 2026; written down as a correction note under 6.8): the item
+  gains the words "Cut, Copy and Paste between the editor and another program, in each browser and
+  in the desktop app". The manual list covers them with P4, X5 and D10.

@@ -121,6 +121,8 @@ export interface SessionUi {
   /** A cold start has put the panels' own state back to its start (3.3.2, last row of the table). */
   resetPanels(): void;
   report(what: string, error: unknown): void;
+  /** The listing row selected now, -1 = none: read by a Run To Cursor kept during a load. */
+  cursorRow?(): number;
 }
 
 export interface SessionEnv {
@@ -431,6 +433,7 @@ export function composeSession(env: SessionEnv): ComposedSession {
       displayName: (path) => ui.displayName(path),
       commandLine: () => ui.commandLine(),
       report: (what, error) => ui.report(what, error),
+      ...(ui.cursorRow ? { cursorRow: () => ui.cursorRow?.() ?? -1 } : {}),
     },
     // The two things a user can change without the controller hearing of it (4.7.1, last paragraph).
     partsUntouched: () =>

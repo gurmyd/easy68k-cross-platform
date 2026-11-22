@@ -47,7 +47,8 @@
 #   check: packaging unit tests  tests/desktop/packaged/playwright.config.ts (project unit, DV3)
 #   check: documents           tools/check-docs.test.mjs            (npm run check:docs, DOC1)
 #   e2e-stability              as e2e, on a manual run (input e2e_stability) or a push of a v* tag (6.9 item 10, X1);
-#                              --repeat-each=20 split by --shard: Chromium in 2 jobs, WebKit in 4
+#                              --repeat-each=20 split by --shard: Chromium in 2 jobs, WebKit in 4;
+#                              each shard ends after --global-timeout (120 min) if a browser hangs
 #   perf                       tests/perf/check-perf.mjs (npm run check:perf, P1): the functional parts on
 #                              every push; every part, with the thresholds of 6.9 item 9 judged in
 #                              Chromium on ubuntu-latest, on a manual run or a push of a v* tag
@@ -540,19 +541,29 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  # 6.9 item 10 and X1's acceptance: the end-to-end suites pass 20 times in a row on ubuntu-latest
-  # in each browser (docs/requests/X1-ci.md item 2). The plan runs it on a manual run (input
-  # e2e_stability, ticked by default) and on the push of a v* tag, never on the weekly schedule.
-  # One browser's 20 repetitions no longer fit one job: with the simulator's suites (tests/e2e/sim)
-  # they took about 76 min in Chromium and about 184 min in WebKit on GitHub (gate I3 round 3), and
-  # one repetition takes 150-155 s (Chromium) and 318-358 s (WebKit) on the development PC. So each
-  # browser's run is split with Playwright's --shard: Chromium in 2 jobs, WebKit in 4, each with
-  # --repeat-each=20, so that every shard is expected to take about 40-50 min and the limit of 180
-  # still catches a hang. Playwright 1.65 shards the repeated tests, not the files: every shard runs
-  # every test of the suite, 20/n times (10 in each Chromium shard, 5 in each WebKit shard), so the
-  # shards of one browser together run every test exactly 20 times and take about equal time
-  # (`npx playwright test --config tests/playwright.config.ts --list --project webkit
-  # --repeat-each=20 --shard=1/4` shows a shard's list). One failure in any shard fails the item.
+  # 6.9 item 10 and X1's acceptance: the end-to-end suites pass 20 times (--repeat-each=20) on
+  # ubuntu-latest in each browser with no failure (docs/requests/X1-ci.md item 2). The plan runs it
+  # on a manual run (input e2e_stability, ticked by default) and on the push of a v* tag, never on
+  # the weekly schedule. One browser's 20 repetitions no longer fit one job: with the simulator's
+  # suites (tests/e2e/sim) they took about 76 min in Chromium and about 184 min in WebKit on GitHub
+  # (gate I3 round 3), and one repetition takes 150-155 s (Chromium) and 318-358 s (WebKit) on the
+  # development PC. So each browser's run is split with Playwright's --shard: Chromium in 2 jobs,
+  # WebKit in 4, each with --repeat-each=20, so that every shard is expected to take about 40-50 min.
+  # What the shards do: Playwright 1.65 shards the repeated tests, not the files. Every test of the
+  # suite is run 20 times in each browser, and those 20 runs are spread over the shards of its
+  # browser: 10 in each of the 2 Chromium shards, 5 in each of the 4 WebKit shards (`npx playwright
+  # test --config tests/playwright.config.ts --list --project webkit --repeat-each=20 --shard=1/4`
+  # shows a shard's list; the shards of a browser together are exactly the unsharded list). They are
+  # not 20 runs one after the other in one process, and they were not that before the split either
+  # (the workers ran them in parallel, in no fixed order). What item 10 asks is shown all the same:
+  # every test runs 20 times in each browser on ubuntu-latest, and one failure in any of the six jobs
+  # fails the item (errata W0.md entry 11).
+  # --global-timeout=7200000 (120 min): a hang of one browser (seen once on the development PC: a
+  # WebKit worker stopped answering between two tests, where neither the test limit of 120 s nor
+  # Playwright ended it) ends the shard with a failure and its report after 120 min instead of
+  # stalling it until the job's limit of 180, which would upload nothing. 120 min is about 2.6 times
+  # the longest expected shard (WebKit, 184 / 4 = 46 min) and 3 times Chromium's (76 / 2 = 38 min),
+  # and leaves the job about 60 min for the install, the build and the upload (errata W0.md entry 11).
   e2e-stability:
     name: e2e stability (ubuntu-latest, ${{ matrix.browser }}, 20 repetitions, shard ${{ matrix.shard }} of ${{ matrix.shards }})
     needs: [plan, engines]
@@ -614,7 +625,7 @@ jobs:
         run: npm run build
       # The dot reporter keeps the log of 20 repetitions short; the HTML report is uploaded on failure.
       - name: End-to-end tests, 20 repetitions, shard ${{ matrix.shard }} of ${{ matrix.shards }}
-        run: npm run test:e2e -- --project ${{ matrix.browser }} --repeat-each=20 --shard=${{ matrix.shard }}/${{ matrix.shards }} --reporter=dot,html
+        run: npm run test:e2e -- --project ${{ matrix.browser }} --repeat-each=20 --shard=${{ matrix.shard }}/${{ matrix.shards }} --global-timeout=7200000 --reporter=dot,html
       - name: Upload the Playwright report
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

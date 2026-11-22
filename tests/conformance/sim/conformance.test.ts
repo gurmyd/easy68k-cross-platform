@@ -9,7 +9,8 @@
 //
 //   npx vitest run --config tests/conformance/sim/vitest.config.ts
 //   EASY68K_SIM_ONLY=trap15-a      only programs whose id contains the text
-//   EASY68K_SIM_REPORT=1           also write MISMATCHES.md
+//   EASY68K_SIM_REPORT=1           also write MISMATCHES.md (formatted by Prettier); without it, a
+//                                  whole run checks that the committed file is what it would write
 //   EASY68K_SIM_REPORT_JSON=<path> also write the mismatches as data (owner, program, official and
 //                                  port lines; compare.ts mismatchRecords)
 //   EASY68K_CONFORMANCE_PARTS=doubles  ProgramFiles and LogService doubles (doubles.ts) instead of
@@ -19,6 +20,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 import { join } from 'node:path';
+import { format, resolveConfig } from 'prettier';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   differingLines,
@@ -182,18 +184,52 @@ describe.skipIf(!enginesBuilt || manifest === null)(
       );
     }
 
-    afterAll(() => {
-      const pending = Object.entries(known)
+    const pendingEntries = () =>
+      Object.entries(known)
         .filter(([key]) => {
           const [id = '', recipe = ''] = key.split('|');
           // Listed but without an official result yet (not: skipped because of the doubles).
           return skipped.includes(`${id}:${recipe}`) && manifest?.programs[id]?.recipes[recipe]?.status !== 'ok';
         })
         .map(([key, entry]) => ({ key, known: entry }));
-      const parts =
-        partsMode({}) === 'final'
-          ? 'the classes at their final paths'
-          : 'ProgramFiles and LogService doubles (doubles.ts), every other part at its final path';
+    const partsText = () =>
+      partsMode({}) === 'final'
+        ? 'the classes at their final paths'
+        : 'ProgramFiles and LogService doubles (doubles.ts), every other part at its final path';
+    // The report as committed: rendered, then formatted by the repository's Prettier configuration
+    // (format:check reads the file, so it is written formatted).
+    const report = async () =>
+      format(
+        renderMismatchReport(mismatches, {
+          programs: programs.length,
+          runs: compared,
+          equal,
+          skipped,
+          parts: partsText(),
+          metrics: "Wine's cells (harness.ts WINE_CELLS)",
+          pending: pendingEntries(),
+        }),
+        { ...((await resolveConfig(REPORT_PATH)) ?? {}), filepath: REPORT_PATH },
+      );
+
+    // MISMATCHES.md is generated (EASY68K_SIM_REPORT=1) and committed; this keeps it from going stale
+    // (gate I3 round 4: it lacked b19 and b20 and showed old texts). Judged only on a whole run with
+    // the classes at their final paths, the run the committed file describes; it runs after every
+    // program above (the tests of a file run in order).
+    it.skipIf(Boolean(only) || partsMode({}) !== 'final' || process.env.EASY68K_SIM_REPORT === '1')(
+      'MISMATCHES.md is what this run writes (regenerate it with EASY68K_SIM_REPORT=1)',
+      async () => {
+        const committed = existsSync(REPORT_PATH) ? readFileSync(REPORT_PATH, 'utf8').replace(/\r\n/g, '\n') : '';
+        expect(
+          committed === (await report()),
+          'tests/conformance/sim/MISMATCHES.md is stale: run EASY68K_SIM_REPORT=1 npx vitest run --config tests/conformance/sim/vitest.config.ts and commit it',
+        ).toBe(true);
+      },
+    );
+
+    afterAll(async () => {
+      const pending = pendingEntries();
+      const parts = partsText();
       const jsonPath = process.env.EASY68K_SIM_REPORT_JSON;
       if (jsonPath) {
         const data = {
@@ -208,18 +244,7 @@ describe.skipIf(!enginesBuilt || manifest === null)(
         writeFileSync(jsonPath, `${JSON.stringify(data, null, 2)}\n`);
       }
       if (process.env.EASY68K_SIM_REPORT !== '1') return;
-      writeFileSync(
-        REPORT_PATH,
-        renderMismatchReport(mismatches, {
-          programs: programs.length,
-          runs: compared,
-          equal,
-          skipped,
-          parts,
-          metrics: "Wine's cells (harness.ts WINE_CELLS)",
-          pending,
-        }),
-      );
+      writeFileSync(REPORT_PATH, await report());
     });
   },
 );

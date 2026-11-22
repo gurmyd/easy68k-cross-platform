@@ -159,37 +159,39 @@ export const FROZEN_FPS = 4;
  *     passes), and one that takes most of the frame is caught (40 ms: 40 %); WebKit catches both
  *     (56 to 78 % and 28 to 34 %; errata SH8.md entries 44 and 45).
  *   - A pair whose default window had fewer than MIN_JUDGED_FRAMES frames (under 12 per second in
- *     half a second) is too short for a share, where one frame is a sixth or more: it is judged by
- *     the floor alone, the detail counts it as passed by the floor, not as keeping the share, and a
- *     note says so. check-run.mjs avoids such pairs: it measures the frames again in windows of
- *     frameWindowMs(pairs) when one occurs. A frozen page (under FROZEN_FPS at Maximum) fails in
- *     every pair.
- *   - A majority of the pairs must pass. A loss of frames that the product causes is systematic
- *     (Maximum fills the engine's budget in every window) and shows in every pair; a runner's
- *     hiccup in one window, either way, decides nothing alone.
+ *     half a second) is too short for a share, where one frame is a sixth or more: it cannot show
+ *     that the page kept its frames, so it does not pass (gate I3 round 4: before, such a pair
+ *     passed by the floor alone, and 2 frames against 5, a loss of 60 %, passed a verdict whose
+ *     caption speaks of the 70 % share). The detail counts it apart and a note says so.
+ *     check-run.mjs avoids such pairs: it measures the frames again in windows of
+ *     frameWindowMs(pairs) when one occurs, long enough for MIN_JUDGED_FRAMES down to 1.5 frames
+ *     per second at the default. A frozen page (under FROZEN_FPS at Maximum) fails in every pair.
+ *   - A majority of the pairs must keep the share. A loss of frames that the product causes is
+ *     systematic (Maximum fills the engine's budget in every window) and shows in every pair; a
+ *     runner's hiccup in one window, either way, decides nothing alone.
+ * So `ok` means exactly what check-run.mjs's caption says: in most of the pairs the page had at
+ * Maximum at least FRAME_KEEP_SHARE of the default speed's frame rate (and FROZEN_FPS).
  */
 export function judgeFrames(pairs) {
   const fps = (run) => (run.ms > 0 ? run.frames / (run.ms / 1000) : 0);
   const share = (pair) => (fps(pair.normal) > 0 ? fps(pair.max) / fps(pair.normal) : Infinity);
   const judged = (pair) => pair.normal.frames >= MIN_JUDGED_FRAMES;
   const frozen = (pair) => fps(pair.max) < FROZEN_FPS;
-  const passes = (pair) => !frozen(pair) && (!judged(pair) || share(pair) >= FRAME_KEEP_SHARE);
+  const keeps = (pair) => judged(pair) && !frozen(pair) && share(pair) >= FRAME_KEEP_SHARE;
   const describe = (pair) =>
     `${pair.max.frames} frames in ${Math.round(pair.max.ms)} ms at Maximum (${fps(pair.max).toFixed(1)}/s) ` +
     `against ${pair.normal.frames} in ${Math.round(pair.normal.ms)} ms at the default ` +
     `(${fps(pair.normal).toFixed(1)}/s): ` +
     `${Number.isFinite(share(pair)) ? `${Math.round(100 * share(pair))} %` : 'no frames at the default'}` +
-    `${judged(pair) ? '' : ', too few at the default for a share'}${passes(pair) ? '' : ' - short'}`;
-  const passing = pairs.filter(passes).length;
-  const kept = pairs.filter((pair) => judged(pair) && passes(pair)).length;
-  const byFloor = passing - kept;
-  const ok = pairs.length > 0 && 2 * passing > pairs.length;
-  const notes = [];
+    `${judged(pair) ? '' : ', too few at the default to judge'}${keeps(pair) ? '' : ' - short'}`;
+  const kept = pairs.filter(keeps).length;
   const unjudged = pairs.filter((pair) => !judged(pair)).length;
+  const ok = pairs.length > 0 && 2 * kept > pairs.length;
+  const notes = [];
   if (unjudged > 0)
     notes.push(
       `${unjudged} of ${pairs.length} pairs had fewer than ${MIN_JUDGED_FRAMES} frames at the default speed, too ` +
-        `few for a share: judged by the floor of ${FROZEN_FPS} frames per second alone.`,
+        `few to judge a share: they count as pairs that did not keep it.`,
     );
   if (!ok) {
     const frozenPairs = pairs.filter(frozen).length;
@@ -199,8 +201,10 @@ export function judgeFrames(pairs) {
           `the page froze, a failure.`,
       );
     notes.push(
-      `only ${passing} of ${pairs.length} pairs kept ${Math.round(100 * FRAME_KEEP_SHARE)} % of the default ` +
-        `speed's frame rate at Maximum: the engine took the page's frames, a failure.`,
+      `only ${kept} of ${pairs.length} pairs kept ${Math.round(100 * FRAME_KEEP_SHARE)} % of the default ` +
+        `speed's frame rate at Maximum` +
+        `${unjudged > 0 ? ` (${unjudged} could not be judged)` : ''}: ` +
+        `${unjudged === pairs.length ? 'the frames could not be judged, a failure.' : "the engine took the page's frames, a failure."}`,
     );
   }
   return {
@@ -208,7 +212,7 @@ export function judgeFrames(pairs) {
     detail:
       `${kept} of ${pairs.length} pairs kept at least ${Math.round(100 * FRAME_KEEP_SHARE)} % of the ` +
       `default's frame rate` +
-      `${byFloor > 0 ? `, ${byFloor} passed by the floor of ${FROZEN_FPS} per second alone (too few frames at the default for a share)` : ''}` +
+      `${unjudged > 0 ? `, ${unjudged} had too few frames at the default to judge (counted as not kept)` : ''}` +
       `: ${pairs.map(describe).join(' | ')}`,
     notes,
   };
@@ -221,7 +225,8 @@ export const MAX_FRAME_WINDOW_MS = 4000;
  * How long the windows of a second frame measurement must be so that every default-speed window has
  * MIN_JUDGED_FRAMES frames: null when every pair of `pairs` already has them; otherwise twice the
  * time the slowest default window needs for them, at least 1000 ms and at most MAX_FRAME_WINDOW_MS
- * (a page with fewer frames than that is judged by the floor). Only `frames` and `ms` are read.
+ * (a page with fewer frames than that cannot be judged, and judgeFrames fails it). Only `frames`
+ * and `ms` are read.
  */
 export function frameWindowMs(pairs) {
   const short = pairs.filter((pair) => pair.normal.frames < MIN_JUDGED_FRAMES);

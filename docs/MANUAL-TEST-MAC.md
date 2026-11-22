@@ -6,16 +6,35 @@ you hear, what a real keyboard sends, what Safari itself (not its test engine) d
 list is for a person with a Mac. Nobody has worked through it yet.
 
 You do not need to know anything about how the port is built. You need a Mac, Safari, Chrome, and
-about **twenty minutes for part A**, the core of this list: a student with a Mac can do it in one
+about **thirty minutes for part A**, the core of this list: a student with a Mac can do it in one
 sitting. **Parts B and C are optional**: they need more time, other equipment (a printer, a serial
-adapter, a second keyboard layout, a Windows PC) or the Mac app, which has not been released yet; do
-whatever of them you can. Every check says what to do and what you should see. If you see something
-else, that is exactly what we want to know.
+adapter, a second keyboard layout, a Windows PC) or the Mac app; do whatever of them you can. Every
+check says what to do and what you should see. If you see something else, that is exactly what we
+want to know.
+
+**What must exist before you start.**
+
+- Part A and most of part B need only the web version (below) and a network connection for the
+  first visit. For a report on a release candidate, test the web version as it is after the
+  commit the candidate names (the web version is rebuilt from the main branch a few minutes after
+  every change, so write the date and time of your test into the report).
+- The checks marked "Mac app" (B3, B6, the app rows D6 to D10 and F2) need **a download of the
+  macOS app**. None exists yet: there is no release and no pre-release. The project's owner has to
+  publish one (with the `.dmg` and `.zip` for Apple silicon and Intel) at
+  <https://github.com/gurmyd/easy68k-cross-platform/releases> before anyone can do those checks.
+- Part C needs a Windows PC and the project owner's permission.
 
 **How to report.** Copy the report form at the end of this page, fill it in as you go, and post it as
 an issue on <https://github.com/gurmyd/easy68k-cross-platform/issues> with the title
 `Manual test report`. A photo or screenshot of anything odd helps (Shift+Cmd+4 takes a screenshot of
 an area). Do not include anything personal.
+
+**What happens with a check that fails.** Nothing of what you report is lost: a maintainer reads
+each report and answers in the issue. A check that shows the application doing something wrong
+becomes an issue of its own. A shortcut that a browser keeps for itself (a cell of A2 that is not
+**ok**) is not a defect the page can repair: the maintainer adds it to part 3 of
+`docs/DIFFERENCES.md` ("Shortcuts a browser does not give up"), with the browser, its version and
+what happened, and that page then tells every user which menu entry to use instead.
 
 **Words used here.**
 
@@ -45,6 +64,12 @@ Source File in Editor mode, delete the text in the new document (Cmd+A, then Del
 from this page and paste it with Cmd+V. Then press F9 (or Cmd+B) to assemble, click **Execute** in the
 window that opens, and press F9 again to run it. Each program was tried in the application before it
 was put here.
+
+**echo** and **keys** never end by themselves. If one of them is still running (or waiting for a
+key) when you click Execute for the next program, a box `Caution` asks first:
+`The current debug environment will be lost, click OK to continue.` That is the original's
+question, and it is expected: click **OK**, and the new program replaces the old one (Cancel keeps
+the old one).
 
 **echo** reads a line you type and shows it again:
 
@@ -169,15 +194,174 @@ SUM     DC.B    'Sum: ',0
         END     START
 ```
 
-## Part A: twenty minutes with a Mac
+## A fourth test program: sound
 
-The times in the headings add up to twenty minutes. If you have less time, do A1, A2 and A6 first.
+**sound** plays the sound files of the examples with every sound task, TRAP #15 tasks 70 to 77, one
+step after the other. Before each step it writes what you should hear; you press a key for the next
+step. It needs the examples' sound files, so it must be saved in the folder `Examples`:
 
-### A1. A first program in Safari (2 minutes)
+1. Choose Help > Examples... once (it puts the folder `Examples` into My Programs).
+2. File > New X68 Source File, delete the text (Cmd+A, then Delete), copy the program below from
+   this page and paste it with Cmd+V.
+3. File > Save As..., double-click the folder `Examples` in the list (the box `Look in:` then
+   says `Examples`), type `sound.X68` into `File name:` and click **Save**.
+4. Press F9, click **Execute**, press F9 again, and click into the Output panel (black, on the
+   right) so that it gets your keys. Each step ends with `Press Space.`; press the space bar for
+   the next one.
+
+```
+* sound: TRAP #15 tasks 70 to 77 one after the other (docs/MANUAL-TEST-MAC.md, B14)
+        ORG     $1000
+START   LEA     STEP1,A1        standard player, tasks 70, 71, 72, 76
+        BSR     SAY
+        LEA     ONE,A1
+PLAY70  MOVE.W  #70,D0          task 70: play 1.wav
+        TRAP    #15
+        TST.W   D0              0 = the player is busy: try again
+        BEQ     PLAY70
+        LEA     ZERO,A1
+        MOVE.B  #0,D1
+        MOVE.W  #71,D0          task 71: 0.wav into slot 0
+        TRAP    #15
+PLAY72  MOVE.B  #0,D1
+        MOVE.W  #72,D0          task 72: play slot 0
+        TRAP    #15
+        TST.W   D0
+        BEQ     PLAY72
+        LEA     ROGER,A1
+        MOVE.B  #1,D1
+        MOVE.W  #71,D0          task 71: roger.wav into slot 1
+        TRAP    #15
+PLAY76  MOVE.B  #1,D1
+        CLR.L   D2              command 0: play once
+        MOVE.W  #76,D0          task 76
+        TRAP    #15
+        TST.W   D0
+        BEQ     PLAY76
+        BSR     WAIT
+
+        LEA     STEP2,A1        DirectX player, tasks 73, 74, 75, 77
+        BSR     SAY
+        LEA     CHIME,A1
+        MOVE.W  #73,D0          task 73: play chime.wav
+        TRAP    #15
+        BSR     WAIT
+        LEA     STEP3,A1
+        BSR     SAY
+        LEA     ROGER,A1
+        MOVE.B  #2,D1
+        MOVE.W  #74,D0          task 74: roger.wav into slot 2
+        TRAP    #15
+        MOVE.B  #2,D1
+        MOVE.W  #75,D0          task 75: play slot 2
+        TRAP    #15
+        BSR     WAIT
+        LEA     STEP4,A1
+        BSR     SAY
+        MOVE.B  #2,D1
+        CLR.L   D2              command 0: play once
+        MOVE.W  #77,D0          task 77
+        TRAP    #15
+        BSR     WAIT
+
+        LEA     STEP5,A1        a loop, stopped, and started again
+        BSR     SAY
+        LEA     TICK,A1
+        MOVE.B  #3,D1
+        MOVE.W  #74,D0          task 74: tick.wav into slot 3
+        TRAP    #15
+        MOVE.B  #3,D1
+        MOVEQ   #1,D2           command 1: loop
+        MOVE.W  #77,D0
+        TRAP    #15
+        BSR     WAIT
+        LEA     STEP6,A1
+        BSR     SAY
+        MOVE.B  #3,D1
+        MOVEQ   #2,D2           command 2: stop this slot
+        MOVE.W  #77,D0
+        TRAP    #15
+        BSR     WAIT
+        LEA     STEP7,A1
+        BSR     SAY
+        MOVE.B  #3,D1
+        MOVE.W  #75,D0          task 75 on the slot that looped
+        TRAP    #15
+        BSR     WAIT
+        LEA     STEP8,A1
+        BSR     SAY
+        MOVE.B  #3,D1
+        MOVEQ   #3,D2           command 3: stop all
+        MOVE.W  #77,D0
+        TRAP    #15
+        BSR     WAIT
+
+        LEA     STEP9,A1        two loops that outlive the program
+        BSR     SAY
+        LEA     TOCK,A1
+        MOVE.B  #4,D1
+        MOVE.W  #71,D0          task 71: tock.wav into slot 4
+        TRAP    #15
+        MOVE.B  #4,D1
+        MOVEQ   #1,D2           command 1: loop
+        MOVE.W  #76,D0          task 76
+        TRAP    #15
+        MOVE.B  #3,D1
+        MOVEQ   #1,D2           command 1: loop
+        MOVE.W  #77,D0          task 77
+        TRAP    #15
+        LEA     LAST,A1
+        BSR     SAY
+        SIMHALT
+
+SAY     MOVE.W  #13,D0          the text at A1 and a new line
+        TRAP    #15
+        RTS
+WAIT    LEA     PRESS,A1
+        MOVE.W  #14,D0
+        TRAP    #15
+        MOVE.W  #5,D0           wait for a key (it is shown)
+        TRAP    #15
+        LEA     CRLF,A1
+        MOVE.W  #14,D0
+        TRAP    #15
+        RTS
+
+STEP1   DC.B    '1. You hear one, zero, roger, each once, in this order.',0
+STEP2   DC.B    '2. You hear the chime once.',0
+STEP3   DC.B    '3. You hear roger once.',0
+STEP4   DC.B    '4. You hear roger once more.',0
+STEP5   DC.B    '5. You hear tick, again and again.',0
+STEP6   DC.B    '6. The ticking stops at once.',0
+STEP7   DC.B    '7. Tick again and again, or only once: write down which.',0
+STEP8   DC.B    '8. Silence.',0
+STEP9   DC.B    '9. You hear tock and tick, again and again.',0
+LAST    DC.B    'The program halts now. Both loops go on. Press Shift+F2.',0
+PRESS   DC.B    '   Press Space.',0
+CRLF    DC.B    $D,$A,0
+ONE     DC.B    '1.wav',0
+ZERO    DC.B    '0.wav',0
+ROGER   DC.B    'roger.wav',0
+CHIME   DC.B    'chime.wav',0
+TICK    DC.B    'tick.wav',0
+TOCK    DC.B    'tock.wav',0
+        END     START
+```
+
+## Part A: half an hour with a Mac
+
+The times in the headings add up to about half an hour (27 minutes), counted as a person does the
+steps: pasting and assembling the test programs, each row in every browser it names. If you have
+less time, do A1, A2 and A6 first.
+
+### A1. A first program in Safari (3 minutes)
 
 1. Open the web version in Safari.
-2. Help > Examples... The Files panel opens on the left with a folder `Examples`.
-3. Double-click `tutorial1.X68`. It opens in the editor.
+2. Help > Examples... The Files panel opens on the left with a folder `Examples`, selected but
+   closed.
+3. Open the folder: click the small arrow in front of `Examples` (or click `Examples` and press
+   the Right arrow key).
+   Its files appear below it. Double-click `tutorial1.X68`. It opens in the editor.
 4. Press F9 (or Cmd+B). A window `Assembler Status - tutorial1.X68` says 0 warnings and 0 errors.
 5. Click **Execute**. The application switches to Simulator mode with the program loaded.
 6. Press F9. The Output panel shows four lines: `D1 contains: 8`, `D2 contains: 520`,
@@ -185,13 +369,16 @@ The times in the headings add up to twenty minutes. If you have less time, do A1
 
 Repeat steps 1 to 6 in Chrome.
 
-### A2. Shortcuts the browser must leave to the page (6 minutes)
+### A2. Shortcuts the browser must leave to the page (8 minutes)
 
 A web page can ask the browser not to act on a key, and this application does for the keys below.
 Whether a real browser obeys cannot be tested automatically. For each row, prepare what the column
 "Before" says, press the key, and write in the table what happened: **ok** if the application did
 what the row says and the browser did nothing of its own; otherwise what you saw (for example "the
-page reloaded" or "Safari's own Save dialog").
+page reloaded" or "Safari's own Save dialog"). A cell that is not **ok** is not your mistake and
+not a failed test of yours: it is exactly the finding this table is for. Write down what you saw;
+the maintainers add it to part 3 of `docs/DIFFERENCES.md` (see "What happens with a check that
+fails" above).
 
 Preparation: do A1 first. For Editor rows, click into the text of `tutorial1.X68`. For Simulator
 rows, use the program as A1 left it (Execute again if it has halted). The F keys need Fn on most
@@ -236,17 +423,19 @@ Use Safari unless the row says otherwise.
 | M10 | Run **keys**, click into the Output panel, hold Cmd, press and release A, then release Cmd | While Cmd is held the line may say `A down: FF`; after you release Cmd the last line says `A down: 0` (the A key does not stay down) |
 | M11 | Only with a numeric keypad: run **keys**, press the keypad digits 0 to 9 | Codes `60` to `69` (or the codes of the arrow keys if the keypad is in navigation mode); write down what you see |
 
-### A4. Paste (2 minutes)
+### A4. Cut, Copy and Paste (4 minutes)
 
 | # | Do | Expected |
 |---|---|---|
 | P1 | Copy the text `HELLO` from anywhere. Run **echo**, click into the Output panel, press Cmd+V, then Return | `You typed:   HELLO` (in Safari and in Chrome) |
 | P2 | Editor: Edit > Paste in the menu | Safari shows a small `Paste` button next to the pointer; click it and the text is pasted. Chrome asks once for permission to see the clipboard; after Allow it pastes. If the browser refuses, a message says `Press Cmd+V to paste` |
 | P3 | Editor: the Paste button of the toolbar, and Paste in the menu of a right-click (Ctrl+click) into the text | The same as P2 |
+| P4 | Editor, in Safari and in Chrome: type a line with a tab in it (Options > Editor Options..., Real Tabs on, or paste one), select it, Edit > Copy, then the Copy button of the toolbar, then Cmd+C, each time followed by Cmd+V into TextEdit. Then Edit > Cut and Cmd+V into TextEdit again, and Cmd+Z in the editor. Last, copy two lines in TextEdit and paste them into the editor with Cmd+V | TextEdit gets the selected text each time, the tab kept; Cut removes it from the editor and Cmd+Z brings it back; the two lines from TextEdit arrive as two lines |
 
-### A5. Sound (3 minutes)
+### A5. Sound (4 minutes)
 
-Use the examples (Help > Examples...), speakers or headphones on.
+Use the examples (Help > Examples...), speakers or headphones on. The program **sound**, which
+plays every sound task in turn, is part B14.
 
 | # | Do | Expected |
 |---|---|---|
@@ -256,7 +445,7 @@ Use the examples (Help > Examples...), speakers or headphones on.
 | S4 | Run `graphicSound.X68` and switch to another tab at once; come back after five seconds | The program has halted; no sound plays late in a burst |
 | S5 | Reload the page, open `graphicSound.X68`, and do everything with the keyboard only (F9, Return on Execute, F9) | The sound is heard (a key press is enough to let a page play sound) |
 
-### A6. Recording what your keyboard sends (3 minutes)
+### A6. Recording what your keyboard sends (4 minutes)
 
 The keyboard tests of this project use key presses recorded from real keyboards. None has been
 recorded yet. This step records yours. It does not use the application.
@@ -391,6 +580,7 @@ type `xattr -dr com.apple.quarantine ` and then drag the app onto the Terminal w
 | D7 | Run **echo** in the app, Cmd+V into the prompt | As P1 |
 | D8 | Run **keys** in the app, full screen with Option+Return, press Esc | The program shows code `1B` and the panel stays full screen (in Safari, Esc leaves full screen instead: see F2) |
 | D9 | Simulator mode: Options > Serial Ports... (with a USB serial adapter plugged in, if you have one). Add Port, type `COM4` twice as a name | The dialog lists the ports set up (none at first) and offers `Detected devices...` with your adapter (`/dev/cu.<something>`); with no adapter it says `No serial devices were found on this computer.` With a name twice, the second Name field says `com4 is in the list twice.` under it, the rows stay aligned and OK is greyed. Cancel changes nothing |
+| D10 | In the app's editor: Edit > Paste, then the Paste button of the toolbar, then Paste in the right-click menu of the text, with a word copied in TextEdit; then P4 in the app | The word is pasted each time, with no question and no message (the app reads the clipboard itself); P4's results as in the browsers |
 
 ### B4. Full screen, display and trackpad
 
@@ -467,6 +657,7 @@ Cmd: only rows K1 to K4, K6, K8, K10, K12, K14 and K15 apply, and in K13 press F
 |---|---|---|
 | X1 | Chrome on Windows: run **echo**, copy `HELLO`, click into the Output panel, Shift+Insert, Enter | `You typed:   HELLO` |
 | X2 | Chrome on Windows: Paste from the editor's Edit menu, its toolbar and its right-click menu | As P2 |
+| X5 | Chrome on Windows: P4 with Ctrl+C, Ctrl+X, Ctrl+V and Ctrl+Z, and Notepad instead of TextEdit | As P4 |
 | X3 | Record the keyboard as in A6, in Chrome and in Firefox, pressing for each keyboard and layout you have: **Windows or Linux, US**: Ctrl+O, Ctrl+S, Ctrl+Z, Ctrl+Alt+Z, Ctrl+Alt+C, Ctrl+Alt+U, Ctrl+Alt+O, Ctrl+O with Caps Lock, F9, Ctrl+F9, Shift+F4, F1, Insert, Shift+Insert, Ctrl+Shift+. (period), Ctrl+Shift+, (comma), Alt+Enter, Alt + the keypad's Enter, Alt+F, A. **the same, numeric keypad**: NumLock off: 0, Shift+0, . (Del), 1 to 9, Ctrl+7; NumLock on: 0, Ctrl+1, . (decimal), +. **Windows, German (QWERTZ)**: Ctrl + the key labelled Z, Ctrl + the key labelled Y, Ctrl+Alt + the keys labelled Z, Y, C and U, AltGr+Q, AltGr+E, Ctrl+Shift+. (period). **Windows, French (AZERTY)**: Ctrl + the key labelled A, Ctrl + the key labelled Z, Ctrl + the key labelled M, Ctrl+Alt + the keys labelled A, Z and W, AltGr + the key labelled 0 (types @). **Windows, Russian**: Ctrl + the positions of O, S, Z and F of a US keyboard, Ctrl+Alt + the C position, F7. **Windows, Greek**: Ctrl + the positions of F, G and P of a US keyboard. | Send the console output with Windows, browser and keyboard versions. Do not press Ctrl+W, Ctrl+N, Ctrl+T, Ctrl+F4 or Ctrl+Tab |
 
 A layout can be recorded without its keyboard: add it in the system's settings, switch to it and
@@ -491,6 +682,22 @@ tests, but the engines are built on Linux only, and the type check and lint run 
 |---|---|---|
 | B12 | On a Mac with Git and Node.js 24 (and the Xcode command line tools), run the commands of the README's section "For contributors: build and test" one after the other, exactly as written, then `npm run typecheck`, `npm run lint` and `npm run test:conformance` | Every command ends without an error; `npm test` and `npm run test:conformance` say that every test passed. Write down the first command that failed and its last lines |
 
+### B13. Installing the web version from Chrome (2 minutes)
+
+| # | Do | Expected |
+|---|---|---|
+| I1 | Open the web version in Chrome on the Mac and wait until the editor shows. Look at the right end of the address bar, or open Chrome's menu (the three dots) > Cast, save and share | Chrome offers to install it (an install icon in the address bar, or the menu entry `Install EASy68K...` or `Install page as app...`). After Install it opens in a window of its own, named EASy68K, and can be started again from the Dock or Launchpad. Write down the exact words Chrome used. (Uninstall it afterwards from its window's menu if you like.) |
+
+### B14. Every sound task in turn (8 minutes)
+
+Use Safari or Chrome, speakers or headphones on. It needs the fourth test program, **sound**,
+saved in `Examples` as its section says (about three minutes).
+
+| # | Do | Expected |
+|---|---|---|
+| S7 | Run **sound** (the fourth test program, saved in `Examples` as it says) and press Space after each step, up to step 8 | Each step sounds as its line says: 1 "one", "zero", "roger", each once, in this order, not overlapping; 2 the chime; 3 "roger"; 4 "roger" again; 5 tick, repeating; 6 the ticking stops at once; 7 tick repeating again (the port keeps a slot looping until it is loaded again or the program is reset; write down what you hear); 8 silence |
+| S8 | Go on with Space to step 9, wait until the program has halted (status bar `Halted`), listen for five seconds, then press Shift+F2 (Rewind Program) | After the halt tock and tick go on repeating; Shift+F2 stops both at once |
+
 ## Part C (optional): on real Windows, once (for the project's maintainers)
 
 These need the official EASy68K on a real Windows PC, which the project's rules allow only once and
@@ -499,7 +706,7 @@ Sandbox or a throw-away virtual machine.
 
 | # | Do | Expected |
 |---|---|---|
-| C1 | Run the programs in `tests/conformance/windows-confirm/` in the official SIM68K.exe | Each writes its findings to a file; they settle the UNVERIFIED items of `docs/porting/trap15-tasks-0-59.md` section 12 and `docs/porting/trap15-tasks-60-up.md` section 15 that Wine cannot (drawing, key handling, sound, the `fwrite`/`fread` edge cases and the C library's file buffer of `docs/ARCHITECTURE.md` 3.8.4) |
+| C1 | Run the programs in `tests/conformance/windows-confirm/` in the official SIM68K.exe | Each writes its findings to a file; they settle UNVERIFIED items of `docs/porting/trap15-tasks-0-59.md` section 12 and `docs/porting/trap15-tasks-60-up.md` section 15 that Wine cannot: how text is drawn and where it leaves the pen (`gdi-text.X68`), which keys reach a program (`keys-tab-f-keys.X68`) and the C library's file buffer of `docs/ARCHITECTURE.md` 3.8.4 (`stdio-buffer.X68`). The edge cases of reading and writing files were measured under Wine already (`docs/DIFFERENCES.md` part 4); `docs/porting/windows-confirmation.md` is the whole session |
 | C2 | The RichEdit spot check of `docs/ARCHITECTURE.md` 6.2.2 | The official assembler gives the same output on Windows as under Wine for the flagged files |
 | C3 | The speed measurement for `DEFAULT_IPS` with `tests/perf/calibrate.X68` (decision O-1; the steps are in `docs/porting/speed.md` section 5) | A measured instruction rate of the original |
 | C4 | A program that calls TRAP #15 task 100 with the host name `255.255.255.255` written as text (A2 pointing to it) | D0 = 0 (the name is accepted) or D0 = 8 (not found). Write down which: the port gives 0 (`docs/porting/errata/DV4.md` entry 14) |
@@ -515,10 +722,10 @@ Sandbox or a throw-away virtual machine.
 |---|---|
 | First launch of the downloaded app: the Gatekeeper dialogs and the way through them, on the two most recent macOS versions, Apple silicon and Intel | D1, D2 |
 | Double-click on `.X68`, `.L68`, `.S68` in Finder; icons; the app in the Dock; Cmd+Q with unsaved work | D3, D4, D5 |
-| Sound: tasks 70-77 audible, in order, loops stop on reset | S1-S5, D6 |
+| Sound: tasks 70-77 audible, in order, loops stop on reset | S1-S5, S7, S8, D6 |
 | Browser shortcut table (Safari, Chrome, Edge on macOS; Chrome, Edge on Windows) | A2 (K1-K15), B10 |
 | Keyboard on a real MacBook: function keys with and without Fn; Shift+F2..F5; the Option chords Ctrl+Option+Z, C, U and O; Option+Return; Touch Bar; a non-US layout (dead keys and Option characters into task 2, the key position for task 19); a held letter repeats with no accent menu; a key released while Cmd is held does not stay down; keypad digits | M1-M11, L1-L4 |
-| Paste into a task 2 prompt with Cmd+V in Safari, Chrome and the app, with Shift+Insert in Chrome on Windows; Paste from the editor's menu, toolbar and context menu | P1-P3, D7, X1, X2 |
+| Paste into a task 2 prompt with Cmd+V in Safari, Chrome and the app, with Shift+Insert in Chrome on Windows; Paste from the editor's menu, toolbar and context menu in each; Cut, Copy and Paste between the editor and another program, in each browser and in the app (the words of erratum DOC1 10) | P1-P4, D7, D10, X1, X2, X5 |
 | Full screen on the built-in display and an external monitor; Esc in Chrome, the app and Safari; sharpness on Retina; trackpad tap, right-click and drag | M7, F1-F4, D8 |
 | Printing a source file and task 10 output on a real printer | R1, R2 |
 | A serial adapter with tasks 40-43; two windows, and two machines on a LAN, with the network tasks | N1-N4, D9 |
@@ -533,7 +740,7 @@ And what the parts of the port left for a person:
 |---|---|
 | `docs/requests/W3-key-recording.md` (keys recorded from real keyboards) | A6, X3 |
 | `docs/porting/errata/SH4.md` entry 21 (dead keys, input methods, key repeat, the accent menu) | L1, L2, L4, M9 |
-| `docs/porting/errata/SH5.md` section 7 (what is heard), items 1-4, 7 and 8; items 5 and 6 (a loop after SIMHALT, task 77 on a looping slot) need a test program that has not been written and tried yet, so they are not in this list | S1-S6, D6 |
+| `docs/porting/errata/SH5.md` section 7 (what is heard), items 1-8: items 5 and 6 (a loop after SIMHALT, task 77 on a looping slot) with the test program **sound** | S1-S8, D6 |
 | `docs/porting/errata/FS2.md`, "Manual checks" (real folders) | G1-G10 |
 | `docs/requests/W2-dialog-focus-followups.md` (Safari with a person at the keyboard, a real input method) | V5, L4 |
 | `docs/porting/errata/DV3.md` entries 11 and 21, `docs/differences/DV3.md` (the exact first-start messages, Cmd+Q, XProtect) | D1, D2, D5 |
@@ -544,6 +751,7 @@ And what the parts of the port left for a person:
 | `docs/porting/errata/X3.md` entry 6 (a real Safari's canvas keeps colours exact; whole-program pictures against the original) | W5, W6, C6 |
 | `docs/porting/errata/DOC1.md` (the README's build steps followed literally on a Mac) | B12 |
 | `docs/porting/errata/W2.md` entry 7 (Backspace in the SR field of the original) | C7 |
+| `docs/ARCHITECTURE.md` 6.9 item 7 (the app installs in Chromium: that a real Chrome offers it) | I1 |
 
 ## Report form
 
@@ -579,13 +787,15 @@ A2 shortcuts (ok, or what happened):
   K14 Ctrl+G    Safari:      Chrome:      Edge:
   K15 Ctrl+R    Safari:      Chrome:      Edge:
 A3 keyboard: M1:   M2:   M3:   M4:   M5:   M6:   M7:   M8:   M9:   M10:   M11:
-A4 paste: P1 Safari:   P1 Chrome:   P2 Safari:   P2 Chrome:   P3:
+A4 cut, copy, paste: P1 Safari:   P1 Chrome:   P2 Safari:   P2 Chrome:   P3:   P4 Safari:   P4 Chrome:
 A5 sound: S1:   S2:   S3:   S4:   S5:
 A6 key recording: attached yes/no
 B1 layouts (which layout): L1:   L2:   L3:   L4:
 B2 Safari: W0:   W1:   W2:   W3:   W4:   W5 (both sums):   W6 (sum):   W7 (device, version):
-B3 Mac app (exact first-start message, which way worked): D1:   D2:   D3:   D4:   D5:   D6:   D7:   D8:   D9:
+B3 Mac app (exact first-start message, which way worked): D1:   D2:   D3:   D4:   D5:   D6:   D7:   D8:   D9:   D10:
 B7 VoiceOver and keyboard only: V1:   V2:   V3:   V4:   V5:   V6:   V7:   V8:   V9:
+B13 Chrome install (its exact words): I1:
+B14 sound program (browser): S7 (step 7: looping or once?):   S8:
 Other parts of B (any you did):
 Anything else you noticed:
 ```

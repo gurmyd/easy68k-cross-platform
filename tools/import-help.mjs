@@ -27,7 +27,10 @@
 //      allow-scripts). A page that, after these changes, holds a script element, an inline event
 //      handler attribute, a javascript: address, a refresh, or a link to an address of the site
 //      outside the help folder (the application's own page, say) is refused: the import stops
-//      with exit code 1 and names the page (pageRefusals). Links to other sites stay as they are.
+//      with exit code 1 and names the page (pageRefusals). Tags are read as the HTML tokenizer
+//      reads them, and svg, math, iframe, object, embed, form, base (other than target="_self"),
+//      srcdoc, data: addresses and escaped separators are refused too (pageRefusals lists them).
+//      Links to other sites stay as they are; each must open in a new tab (target="_blank").
 //   3. Files. Everything the pages use is copied byte for byte (images, style sheets, the Quick
 //      Reference PDF). The build files of the help project (help.chm, help.hhp, ez68k.*, compiler
 //      logs, Thumbs.db, the folder of program icons) are not copied; no page refers to them
@@ -272,18 +275,207 @@ export function insertPolicy(html) {
   return at === 0 ? `${HELP_PAGE_POLICY}${eol}${after}` : `${before}${eol}${HELP_PAGE_POLICY}${after}`;
 }
 
-/** Character references decoded, as the browser reads an attribute value (enough to see `javascript:`). */
-function decodeCharacterReferences(text) {
-  return text
-    .replace(/&#x([0-9a-f]+);?/gi, (_, hex) => String.fromCodePoint(Number.parseInt(hex, 16)))
-    .replace(/&#(\d+);?/g, (_, dec) => String.fromCodePoint(Number(dec)))
-    .replace(/&(colon|tab|newline);/gi, (_, name) => ({ colon: ':', tab: '\t', newline: '\n' })[name.toLowerCase()])
-    .replace(/&amp;/gi, '&');
+/**
+ * The named character references this script reads (the ones an address could be spelt with:
+ * punctuation, separators, white space). A browser knows over two thousand; an address attribute
+ * that holds any other one cannot be judged here and is refused (pageRefusals).
+ */
+const NAMED_REFERENCES = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+  colon: ':',
+  semi: ';',
+  comma: ',',
+  period: '.',
+  sol: '/',
+  bsol: '\\',
+  percnt: '%',
+  num: '#',
+  quest: '?',
+  excl: '!',
+  equals: '=',
+  plus: '+',
+  commat: '@',
+  lowbar: '_',
+  lpar: '(',
+  rpar: ')',
+  tab: '\t',
+  newline: '\n',
+};
+
+/**
+ * Character references decoded in one pass, as the browser reads an attribute value: numeric
+ * ones (a value the HTML parser replaces gives U+FFFD) and NAMED_REFERENCES, with or without the
+ * semicolon. `unknown` is true when a named reference outside that list was met (it is left as
+ * written).
+ */
+export function decodeCharacterReferences(text) {
+  let unknown = false;
+  const decoded = text.replace(/&(?:#[xX]([0-9a-fA-F]+)|#(\d+)|([A-Za-z][A-Za-z0-9]*));?/g, (whole, hex, dec, name) => {
+    if (name !== undefined) {
+      const value = NAMED_REFERENCES[name.toLowerCase()];
+      if (value === undefined) unknown = true;
+      return value ?? whole;
+    }
+    const code = hex !== undefined ? Number.parseInt(hex, 16) : Number(dec);
+    const replaced = code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff);
+    return replaced ? '�' : String.fromCodePoint(code);
+  });
+  return { text: decoded, unknown };
 }
 
-/** The attributes of a tag that name an address. */
-const ADDRESS_ATTRIBUTE =
-  /\s(href|src|background|action|formaction|data|poster|lowsrc|dynsrc|longdesc|cite)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/gi;
+/** The HTML tokenizer's white space (a CR is a line feed after the input stream's preprocessing). */
+const HTML_SPACE = /[\t\n\f\r ]/;
+
+/**
+ * The tag that starts at `html[start]` (a `<` followed by a letter, or by `/` and a letter), read
+ * the way the HTML tokenizer reads it: the tag name, then attributes, each name ending at white
+ * space, `/`, `>` or `=`, and a new name starting after white space, after a `/` and right after a
+ * closing quote (`<a href="x"onclick=y>`, `<img src="x"/onerror=y>`, `<body/onload=y>`). Values
+ * are quoted (up to the same quote, `>` included) or unquoted (up to white space or `>`, a `/` or a
+ * quote included). Returns { name, endTag, attributes: [{ name, value }], text }, names in lower
+ * case, values as written (null for an attribute without one). A tag that the input ends inside is
+ * read up to the end (the browser drops it; reading it anyway only finds more).
+ */
+export function readTag(html, start) {
+  let i = start + 1;
+  const endTag = html[i] === '/';
+  if (endTag) i++;
+  let name = '';
+  while (i < html.length && !HTML_SPACE.test(html[i]) && html[i] !== '/' && html[i] !== '>') name += html[i++];
+  const attributes = [];
+  let attribute = null;
+  let quote = '';
+  let state = 'before-name';
+  for (; i < html.length; i++) {
+    const c = html[i];
+    if (state === 'before-name') {
+      if (HTML_SPACE.test(c) || c === '/') continue;
+      if (c === '>') break;
+      attribute = { name: c.toLowerCase(), value: null };
+      attributes.push(attribute);
+      state = 'name';
+    } else if (state === 'name') {
+      if (c === '=') state = 'before-value';
+      else if (HTML_SPACE.test(c) || c === '/' || c === '>') {
+        state = 'after-name';
+        i--;
+      } else attribute.name += c.toLowerCase();
+    } else if (state === 'after-name') {
+      if (HTML_SPACE.test(c)) continue;
+      if (c === '/') state = 'before-name';
+      else if (c === '=') state = 'before-value';
+      else if (c === '>') break;
+      else {
+        state = 'before-name';
+        i--;
+      }
+    } else if (state === 'before-value') {
+      if (HTML_SPACE.test(c)) continue;
+      if (c === '>') break;
+      attribute.value = '';
+      if (c === '"' || c === "'") {
+        quote = c;
+        state = 'quoted';
+      } else {
+        state = 'unquoted';
+        i--;
+      }
+    } else if (state === 'quoted') {
+      if (c === quote) state = 'after-quoted';
+      else attribute.value += c;
+    } else if (state === 'unquoted') {
+      if (HTML_SPACE.test(c)) state = 'before-name';
+      else if (c === '>') break;
+      else attribute.value += c;
+    } else {
+      // after a quoted value: white space, '/' and anything else start the next name
+      if (c === '>') break;
+      state = 'before-name';
+      if (!HTML_SPACE.test(c) && c !== '/') i--;
+    }
+  }
+  return { name: name.toLowerCase(), endTag, attributes, text: html.slice(start, Math.min(i + 1, html.length)) };
+}
+
+/**
+ * Every tag of a page: one for every `<` followed by a letter or by `/` and a letter, wherever it
+ * stands - in a comment, in the text of a style or title element, inside an attribute value - each
+ * read on its own from its `<` (readTag). The browser reads only some of these as tags (it ends a
+ * comment at `-->` and also at `--!>`, and reads no markup in a style element); reading all of
+ * them finds every tag the browser reads, whatever its context, and possibly more.
+ */
+function tagsOf(html) {
+  const tags = [];
+  for (let i = html.indexOf('<'); i >= 0; i = html.indexOf('<', i + 1)) {
+    if (/^<\/?[A-Za-z]/.test(html.slice(i, i + 3))) tags.push(readTag(html, i));
+  }
+  return tags;
+}
+
+/** Elements that run script, show another document, send a form or carry a foreign namespace. */
+const REFUSED_ELEMENTS = new Set([
+  'script',
+  'svg',
+  'math',
+  'iframe',
+  'frame',
+  'frameset',
+  'object',
+  'embed',
+  'applet',
+  'portal',
+  'fencedframe',
+  'form',
+  'isindex',
+]);
+
+/** http-equiv values a page may have: the declarations of type, language and policy. */
+const ALLOWED_HTTP_EQUIV = new Set(['content-type', 'content-language', 'content-security-policy']);
+
+/** The attributes that name an address (the URL attributes of HTML, and the old ones). */
+const ADDRESS_ATTRIBUTES = new Set([
+  'href',
+  'src',
+  'srcset',
+  'imagesrcset',
+  'background',
+  'action',
+  'formaction',
+  'data',
+  'poster',
+  'lowsrc',
+  'dynsrc',
+  'longdesc',
+  'cite',
+  'ping',
+  'manifest',
+  'codebase',
+  'archive',
+  'classid',
+  'usemap',
+  'icon',
+  'profile',
+  'itemid',
+  'xlink:href',
+  'xml:base',
+]);
+
+/** The addresses an address attribute names: one, or a list for srcset, ping and archive. */
+function addressesOf(name, value) {
+  if (name === 'srcset' || name === 'imagesrcset')
+    return value
+      .split(',')
+      .map((candidate) => candidate.trim().split(/[\t\n\f\r ]+/)[0] ?? '')
+      .filter((address) => address !== '');
+  if (name === 'ping' || name === 'archive') return value.split(/[\t\n\f\r ,]+/).filter((address) => address !== '');
+  return [value];
+}
+
 /** Schemes of addresses on other sites (they open in a new tab, as they always did). */
 const OTHER_SITE = /^(https?|mailto|ftp|news):/i;
 
@@ -297,44 +489,117 @@ const OTHER_SITE = /^(https?|mailto|ftp|news):/i;
 export function addressKind(file, value) {
   // As the URL parser reads it: tabs and line ends removed, C0 controls and spaces trimmed at the ends.
   const address = decodeCharacterReferences(value)
-    .replace(/[\t\n\r]/g, '')
+    .text.replace(/[\t\n\r]/g, '')
     // eslint-disable-next-line no-control-regex -- the C0 controls are what the URL parser trims
     .replace(/^[\x00-\x20]+|[\x00-\x20]+$/g, '');
   if (address === '' || address.startsWith('#')) return 'help';
   if (/^[\\/]{2}/.test(address)) return 'other-site';
+  // A special scheme without "//" after it ("https:../index.html"): the URL parser reads the rest
+  // relative to the page when the page has the same scheme, so on this site it may name a file
+  // outside the help folder. Judged by that reading; where it stays in the folder, the address may
+  // still name another site (a page served with the other scheme), so it counts as one.
+  const special = /^(https?|ftp|wss?):(?![\\/]{2})/i.exec(address);
+  if (special) {
+    const relative = addressKind(file, address.slice(special[0].length));
+    return relative === 'help' ? 'other-site' : relative;
+  }
   if (OTHER_SITE.test(address)) return 'other-site';
   if (/^[a-z][a-z0-9+.-]*:/i.test(address)) return 'scheme';
+  // The path as a server may read it: a server that decodes %2F (GitHub Pages does) reads
+  // "..%2Findex.html" as "../index.html". An escaped separator, dot or percent sign, an escape
+  // that does not decode, or a control character: an address that leaves the folder as far as
+  // this script can tell (gate I3 round 4).
+  const path = address.replace(/[?#].*$/s, '');
+  // eslint-disable-next-line no-control-regex -- a control character has no place in a help address
+  if (/%(2f|5c|2e|25|00)/i.test(path) || /[\x00-\x1f\x7f]/.test(path)) return 'encoded';
+  let decoded;
+  try {
+    decoded = decodeURIComponent(path);
+  } catch {
+    return 'encoded';
+  }
   const folder = file.includes('/') ? `${file.slice(0, file.lastIndexOf('/') + 1)}` : '';
   const page = new URL(folder.split('/').map(encodeURIComponent).join('/'), 'https://site.invalid/help/');
-  const url = new URL(address.replace(/\\/g, '/'), page);
-  return url.origin === 'https://site.invalid' && url.pathname.startsWith('/help/') ? 'help' : 'outside';
+  const inHelp = (spelling) => {
+    const url = new URL(spelling.replace(/\\/g, '/'), page);
+    return url.origin === 'https://site.invalid' && url.pathname.startsWith('/help/');
+  };
+  // Both readings must stay in the folder: the address as written and as the server decodes it.
+  return inHelp(path) && inHelp(decoded.split('/').map(encodeURIComponent).join('/')) ? 'help' : 'outside';
 }
 
+/** An event handler attribute's name (`onload`, `OnError`, ...). */
+const HANDLER_NAME = /^on[a-z]/i;
 /**
- * What a page holds that the Help frame must never get (erratum H1 11), after the import's own
- * changes: a script element, an inline event handler attribute, a javascript: address (or another
- * scheme that is not a web or mail address), a refresh that navigates, and an address of this site
- * outside the help folder. Each finding names the tag. Empty for a page that may be imported.
+ * An event handler attribute however it is written, read more widely than the tokenizer: `on...=`
+ * after white space, a slash or a quote, also where the tokenizer sees part of a value (so that
+ * `<img src=x.gif/onerror=go()>`, an unquoted src a browser does not read as a handler, is refused
+ * too: the import cannot tell what a page meant).
+ */
+const HANDLER_ANYWHERE = /[\s/"']on[a-z]+\s*=/i;
+
+/**
+ * What a page holds that the Help frame must never get (erratum H1 11; gate I3 round 4), after the
+ * import's own changes. Every tag is read as the HTML tokenizer reads it, wherever it stands
+ * (tagsOf, readTag), and refused for:
+ *   - an element that runs script, shows another document, sends a form or carries a foreign
+ *     namespace (REFUSED_ELEMENTS: script, svg, math, iframe, frame, object, embed, form, ...);
+ *   - an event handler attribute (a name `on...`, after white space, a slash or a closing quote;
+ *     HANDLER_ANYWHERE also outside the tokenizer's reading) and a srcdoc attribute;
+ *   - a base element other than `<base target="_self">` (eight pages of the original have that);
+ *   - a meta element whose http-equiv is not content-type, content-language or
+ *     content-security-policy (a refresh above all);
+ *   - `javascript:` or `vbscript:` anywhere in the tag, character references read;
+ *   - an address (ADDRESS_ATTRIBUTES) with a scheme that is not a web or mail address (javascript:,
+ *     data:, blob:, ...), with a named character reference the script cannot read, with an escaped
+ *     separator, dot or percent sign, or of this site outside the help folder (addressKind);
+ *   - a link (a, area) to another site that would open in the frame: it must have target="_blank".
+ * Each finding names the tag. Empty for a page that may be imported.
  */
 export function pageRefusals(file, html) {
   const found = [];
-  const withoutComments = html.replace(/<!--[\s\S]*?-->/g, '');
-  if (/<script\b/i.test(withoutComments)) found.push('a script element');
-  for (const match of withoutComments.matchAll(/<[A-Za-z][^>]*>/g)) {
-    const tag = match[0];
-    const short = tag.length > 80 ? `${tag.slice(0, 77)}...` : tag;
-    if (/\son[a-z]+\s*=/i.test(tag)) found.push(`an event handler attribute in ${short}`);
-    if (/^<meta\b/i.test(tag) && /http-equiv\s*=\s*["']?refresh/i.test(tag)) found.push(`a refresh in ${short}`);
+  const add = (text) => {
+    if (!found.includes(text)) found.push(text);
+  };
+  for (const tag of tagsOf(html)) {
+    const short = tag.text.length > 80 ? `${tag.text.slice(0, 77)}...` : tag.text;
+    if (!tag.endTag && tag.name === 'script') add('a script element');
+    else if (!tag.endTag && REFUSED_ELEMENTS.has(tag.name)) add(`a ${tag.name} element in ${short}`);
+    const names = tag.attributes.map((attribute) => attribute.name);
+    if (names.some((name) => HANDLER_NAME.test(name)) || HANDLER_ANYWHERE.test(tag.text))
+      add(`an event handler attribute in ${short}`);
+    if (names.includes('srcdoc')) add(`a srcdoc attribute in ${short}`);
+    const value = (name) => decodeCharacterReferences(tag.attributes.find((a) => a.name === name)?.value ?? '').text;
+    if (!tag.endTag && tag.name === 'base') {
+      const onlySelf = names.length === 1 && names[0] === 'target' && value('target').trim().toLowerCase() === '_self';
+      if (!onlySelf) add(`a base element other than <base target="_self"> in ${short}`);
+    }
+    if (!tag.endTag && tag.name === 'meta' && names.includes('http-equiv')) {
+      const equiv = value('http-equiv').trim().toLowerCase();
+      if (equiv === 'refresh') add(`a refresh in ${short}`);
+      else if (!ALLOWED_HTTP_EQUIV.has(equiv)) add(`a meta element with http-equiv="${equiv}" in ${short}`);
+    }
     // Anywhere in the tag (an address attribute, a style's url(), ...), character references read.
-    const javascript = /javascript:/i.test(decodeCharacterReferences(tag).replace(/[\t\n\r]/g, ''));
-    if (javascript) found.push(`a javascript: address in ${short}`);
-    for (const attribute of tag.matchAll(ADDRESS_ATTRIBUTE)) {
-      const value = attribute[2] ?? attribute[3] ?? attribute[4] ?? '';
-      const kind = addressKind(file, value);
-      if (kind === 'scheme') {
-        if (!javascript) found.push(`an address with a scheme the frame may not show in ${short}`);
-      } else if (kind === 'outside') {
-        found.push(`a link to an address of this site outside the help folder in ${short}`);
+    const script = /(java|vb)script:/i.test(decodeCharacterReferences(tag.text).text.replace(/[\t\n\r]/g, ''));
+    if (script) add(`a javascript: address in ${short}`);
+    for (const attribute of tag.attributes) {
+      if (!ADDRESS_ATTRIBUTES.has(attribute.name) || attribute.value === null) continue;
+      if (decodeCharacterReferences(attribute.value).unknown) {
+        add(`an address with a character reference the import cannot read in ${short}`);
+        continue;
+      }
+      for (const address of addressesOf(attribute.name, decodeCharacterReferences(attribute.value).text)) {
+        const kind = addressKind(file, address);
+        if (kind === 'scheme') {
+          if (!script) add(`an address with a scheme the frame may not show in ${short}`);
+        } else if (kind === 'encoded') {
+          add(`an address with an escaped slash, backslash, dot or percent sign in ${short}`);
+        } else if (kind === 'outside') {
+          add(`a link to an address of this site outside the help folder in ${short}`);
+        } else if (kind === 'other-site' && attribute.name === 'href' && (tag.name === 'a' || tag.name === 'area')) {
+          if (value('target').trim().toLowerCase() !== '_blank')
+            add(`a link to another site that would open in the frame (no target="_blank") in ${short}`);
+        }
       }
     }
   }

@@ -10,7 +10,8 @@
 //    on a manual run (unless its input is unticked) and on the push of a v* tag, not on every push,
 //    pull request or the weekly schedule. The plan step's script is run with bash, as on GitHub.
 //    The job itself is split into shards per browser (Chromium 2, WebKit 4), every shard with
-//    --repeat-each=20 (gate I3 round 3): its matrix, command, limit and names are checked too.
+//    --repeat-each=20 (gate I3 round 3): its matrix, command, limit and names are checked too, and
+//    the global limit that ends a shard whose browser hangs (gate I3 round 4).
 // 3. The other guards of the plan job that depend on the event or on the push's changes (gate I3
 //    preparation): perf and perf_full (6.9 item 9), readme (DOC1 item 3) and desktop-dev, which
 //    also runs when only tests/desktop/dev changed (DV2-desktop-dev-paths.md).
@@ -351,8 +352,20 @@ describe('ci.yml: the e2e-stability job is split into shards (6.9 item 10, gate 
     expect(text).toMatch(/^ {4}timeout-minutes: 180$/m);
     const runs = job.filter((line) => /^ {8}run: npm run test:e2e /.test(line));
     expect(runs).toEqual([
-      '        run: npm run test:e2e -- --project ${{ matrix.browser }} --repeat-each=20 --shard=${{ matrix.shard }}/${{ matrix.shards }} --reporter=dot,html',
+      '        run: npm run test:e2e -- --project ${{ matrix.browser }} --repeat-each=20 --shard=${{ matrix.shard }}/${{ matrix.shards }} --global-timeout=7200000 --reporter=dot,html',
     ]);
+  });
+
+  // Gate I3 round 4: a hang of one browser (a WebKit worker that stopped answering between two tests
+  // on the development PC, which neither the test limit nor Playwright ended) must end the shard
+  // with a failure and its report, not stall it until the job's limit, which uploads nothing.
+  it('ends a shard after a global limit well above its expected time and well below the job limit', () => {
+    const limit = /--global-timeout=(\d+)/.exec(text);
+    expect(limit, 'the Playwright command has --global-timeout').not.toBeNull();
+    const minutes = Number(limit?.[1]) / 60_000;
+    const longestShard = Math.max(76 / 2, 184 / 4); // measured unsharded minutes / shards (gate I3 round 3)
+    expect(minutes).toBeGreaterThanOrEqual(2.5 * longestShard);
+    expect(minutes).toBeLessThanOrEqual(180 - 45); // time left for install, build and the report upload
   });
 
   it('names each job and its report artifact by browser and shard', () => {

@@ -9,9 +9,13 @@ machine) covers every part.
 
 | Part | What it settles | Who acts on the answer | Time |
 | ---- | --------------- | ---------------------- | ---- |
-| [A](#a-six-conformance-programs) | six conformance programs whose official result was seen only under Wine (`unconfirmed` in `tests/conformance/sim/known-differences.json`) | T3 (golden or entry), then SH6, SH1 or W1 | 10 min |
+| [A](#a-two-conformance-programs-and-one-key) | two conformance programs whose official result was seen only under Wine (`unconfirmed` in `tests/conformance/sim/known-differences.json`), and one key (Ctrl+Shift+2) | T3 (golden or entry), then SH6, W1 or SH4 | 7 min |
 | [B](#b-the-speed-of-the-original) | the original's instructions per second (decision O-1) | SH8, W1, DOC1 | 5 min |
 | [C](#c-the-other-windows-only-questions) | the three programs of `tests/conformance/windows-confirm` (6.8) | T3 | 5 min, optional |
+
+Every item that is not yet confirmed against the original is listed, each with what the port does
+and how it could be confirmed, in [`docs/DIFFERENCES.md`](../DIFFERENCES.md) part 4 ("Not yet
+confirmed against the original"); the entries there that this session settles name its part.
 
 ## What to copy to the Windows PC
 
@@ -23,11 +27,7 @@ machine) covers every part.
 
    ```
    C:\confirm\dumplib.X68                                 <- tests\conformance\sim\dumplib.X68
-   C:\confirm\a51\a51-files-read-after-write.X68          <- tests\conformance\sim\trap15-a\
-   C:\confirm\a52\a52-files-write-after-read.X68          <- tests\conformance\sim\trap15-a\
    C:\confirm\a53\a53-files-past-end-then-read.X68        <- tests\conformance\sim\trap15-a\
-   C:\confirm\a58\a58-files-devices.X68                   <- tests\conformance\sim\trap15-a\
-   C:\confirm\b06\b06-modes-above-15.X68                  <- tests\conformance\sim\trap15-b\
    C:\confirm\b19\b19-net-send-uninitialised.X68          <- tests\conformance\sim\trap15-b\
    C:\confirm\speed\calibrate.X68                         <- tests\perf\calibrate.X68
    C:\confirm\wc\...                                      <- tests\conformance\windows-confirm\* (part C)
@@ -35,26 +35,38 @@ machine) covers every part.
 
    Copy the `.X68` files as they are (they have CR LF line ends; do not let an editor change them).
 
-## A. Six conformance programs
+## A. Two conformance programs and one key
 
-For each of the six folders, in any order:
+Four programs that were in this part have left it: `a58` (the device `NUL`) was the port's
+difference and is repaired; `b06` (drawing modes 18-23) was settled by measuring the GDI calls on
+Windows 11; and `a51` and `a52` (a read right after a write, a write right after a read, without a
+seek) need no Windows run, because the C run-time that decides them is inside `SIM68K.exe` and
+behaves the same under Wine: they are defects of the port with a repair pending
+(`docs/differences/T3.md`, "Seen only under Wine"). If you run `a51` or `a52` anyway, in the same
+way as below, nothing is lost: send their folders with the others.
+
+For each of the two folders, in either order:
 
 1. Start `EDIT68K.exe`, File > Open, choose the program (for example
-   `C:\confirm\a51\a51-files-read-after-write.X68`).
+   `C:\confirm\a53\a53-files-past-end-then-read.X68`).
 2. Project > Assemble Source (F9). The assembler reports no errors; close its window with
-   **Execute**: `SIM68K.exe` starts with the program loaded and `C:\confirm\a51` as its current
+   **Execute**: `SIM68K.exe` starts with the program loaded and `C:\confirm\a53` as its current
    folder.
-3. In `SIM68K.exe` check that Options > Enable Exceptions is **off** (none of the six uses
-   exceptions), then press Run (F9). The program runs for a few seconds and ends with
-   `Execution halted` in the message area. Close `SIM68K.exe`.
+3. In `SIM68K.exe` check that Options > Enable Exceptions is **off** (neither program uses
+   exceptions), then press Run (F9). The program runs for a few seconds and stops at its
+   `SIMHALT`. The official program shows no box and adds **no line** to the message area when a
+   program halts (`docs/porting/sim-ui.md` 9.12), and its status bar stays empty (7.3). You can tell
+   that it has ended because Run, Step Over and Trace Into are greyed out (only Pause, Rewind
+   Program, Reload and Close stay available; 3.6) and the PC field shows the address after the
+   `SIMHALT`. Close `SIM68K.exe`.
 4. The folder now holds `result.bin` (and the files the program made). Nothing else is needed.
 
-Then zip `C:\confirm\a51`, `a52`, `a53`, `a58`, `b06` and `b19` (the whole folders) and send the zip
-back. T3 compares each `result.bin` with the golden `tests/conformance/sim/golden/<suite>/<name>.result.bin`
-(the official result under Wine) and with the port's result:
+Then zip `C:\confirm\a53` and `b19` (the whole folders) and send the zip back. T3 compares each
+`result.bin` with the golden `tests/conformance/sim/golden/<suite>/<name>.result.bin` (the official
+result under Wine) and with the port's result:
 
 - **Windows result = golden**: Wine is not the cause; the difference is the port's. The owner in
-  `known-differences.json` (SH6 for a51-a58, SH1 for b06, W1 for b19) repairs the port, T3 removes the
+  `known-differences.json` (SH6 for a53, W1 for b19) repairs the port, T3 removes the
   `unconfirmed` mark now and the entry when the repair lands.
 - **Windows result = the port's**: the golden was Wine's. T3 replaces the golden with the Windows
   result (committed as the golden, the Windows version in the commit message) and removes the
@@ -67,18 +79,35 @@ golden holds, "port" what the port writes today.
 
 | Program | Line of `result.bin` | Wine (golden) | Port | What the line is |
 | ------- | -------------------- | ------------- | ---- | ---------------- |
-| a51 | 2 | `D0=00000000` | `D0=00000001` | task 53 (read 4 bytes) right after writing `ABCDE`, no seek: success or end of file |
-| a51 | 5 | `000010A0: 41 EE EE ...` | `000010A0: 41 42 43 44 45 EE ...` | what a new stream reads from the file after the close: 1 byte or all 5 |
-| a52 | 7 | `000010CC: 41 42 43 44 45 ...` | `000010CC: 41 42 43 58 45 ...` | the file after write `ABCDE`, seek 1, read 2, write `X`, close: unchanged or `ABCXE` |
 | a53 | 2 | `D0=00000000` | `D0=00000001` | task 53 right after a write 20 bytes past the end |
 | a53 | 3 | `D0=00000002` | `D0=00000000` | task 56 (close) of that stream: fails or succeeds |
 | a53 | 5 | `D2=00000005` | `D2=0000001A` | bytes a new stream reads: 5 (`ABCDE`) or 26 (`ABCDE`, 20 zeros, `X`) |
-| a58 | 6 | `D0=00000001` | `D0=00000000` | task 53 on `NUL` after writing 3 bytes to it: end of file or the 3 bytes back |
-| b06 | 1-6 | `D0=000000FF` on every line | `D0=00FFFFFF` (lines 1, 3, 4, 5, 6), `D0=00FFFF00` (line 2) | the pixel a red pen draws on black in mode 20, 22, 18, 19, 21, 23: red (the copy mode kept) or white / the inverse |
 | b19 | 1, 2 | `D0=27360001` | `D0=276D0001` | task 102 and task 106 before any network task: "not a socket" (Wine) or "Winsock not initialised" (the Winsock documentation) |
 
 What each difference is, and why Wine is or is not the suspect: `docs/differences/T3.md`
 ("Seen only under Wine").
+
+**The key Ctrl+Shift+2 (one minute).** On a US keyboard Windows makes the character `$00` of
+Ctrl+Shift+2; whether the original's framework hands that character to a program is not confirmed
+(`docs/porting/errata/SH4.md` entry 10; `docs/DIFFERENCES.md` part 4). The port delivers it like any
+character. In `EDIT68K.exe`, File > New, type this program (the spaces before the words matter),
+save it as `C:\confirm\key\key.X68`, assemble it and Execute it, press Run (F9), click into the
+Output window and press **Ctrl+Shift+2** once:
+
+```
+        ORG     $1000
+START   CLR.L   D1
+        MOVE.B  #5,D0       read one character into D1
+        TRAP    #15
+        MOVE.B  #3,D0       show D1 as a number
+        TRAP    #15
+        SIMHALT
+        END     START
+```
+
+Write down what the Output window shows: `0` (the character reached the program, as in the port)
+or nothing (then press `A`: the window shows `65`, and the character `$00` never arrived). Send the
+answer with the zip. If it was nothing, SH4 stops delivering `$00` for Ctrl+Shift+2.
 
 ## B. The speed of the original
 

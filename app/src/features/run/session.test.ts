@@ -394,25 +394,48 @@ describe.skipIf(!enginesBuilt)(
       ]).toEqual([true, true, true, true]);
     });
 
-    it('disables every simulator command while a load is in progress', async () => {
+    it('disables Open and Close while a load is in progress; the commands the controller keeps stay enabled', async () => {
       let release: () => void = () => {};
       const gate = new Promise<void>((resolve) => (release = resolve));
       await start({ files: { setCurrentDir: () => gate } });
       const loading = open('counter');
       await settle();
       expect(sim().phase).toBe('loading');
-      for (const id of [
-        ...RUN_COMMANDS,
-        'sim.run.pause',
-        'sim.run.rewind',
-        'sim.run.reload',
-        'sim.file.open',
-        'sim.file.close',
-      ]) {
-        expect(enabled(id), id).toBe(false);
+      for (const id of ['sim.file.open', 'sim.file.openData', 'sim.file.close']) expect(enabled(id), id).toBe(false);
+      // Errata SH8.md entry 47: a run command given during the load is kept, not refused.
+      for (const id of [...RUN_COMMANDS, 'sim.run.pause', 'sim.run.rewind', 'sim.run.reload']) {
+        expect(enabled(id), id).toBe(true);
       }
+      await app.ctx.commands.run('sim.run.run');
+      expect(sim().phase).toBe('loading');
+      expect(app.ctx.sim.engine.stepCount).toBe(0);
       release();
       await loading;
+      // The load has ended, and the Run given during it is carried out on the program it loaded.
+      expect(sim().phase).toBe('running');
+      expect(app.ctx.sim.engine.getRegister(Reg.D0)).toBeGreaterThan(0);
+      expect(enabled('sim.run.run')).toBe(false); // busy, as after any Run
+    });
+
+    it('a Run To Cursor kept during an Execute reads the row selected when the load has ended', async () => {
+      await start();
+      await open('counter');
+      await app.ctx.commands.run('sim.run.run');
+      // Execute while it runs: OK on the Caution question, then Run To Cursor at once.
+      app.ctx.store.setState((state) => ({ ...state, sim: { ...state.sim, selectedRow: 5 } }));
+      const loading = app.ctx.sim.controller.open(`${DIR}/counter.S68`, 'execute');
+      await settle();
+      expect(boxes().map((box) => box.request.title)).toEqual([CAUTION_TITLE]);
+      // OK and the key in one moment: the answer has not reached the controller yet.
+      app.dialogs.close(boxes()[0]!.key, 'OK');
+      expect(enabled('sim.run.runToCursor')).toBe(true);
+      void app.ctx.commands.run('sim.run.runToCursor');
+      expect(app.ctx.sim.controller.phase).toBe('running'); // the old program, held
+      await loading;
+      await settle();
+      // The cold start selected no row: the original's handler, run after the load, finds none.
+      expect(sim().selectedRow).toBe(-1);
+      expect(boxes().map((box) => box.request.text)).toEqual(['Invalid Run-To-Cursor Selection']);
       expect(sim().phase).toBe('idle');
     });
 

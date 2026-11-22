@@ -29,10 +29,13 @@
 //   - the status bar says Halted after a halt, and Stopped once Rewind or Pause has made Run
 //     available again;
 //   - its hidden live region announces only the settled states: Halted, Stopped, Auto trace; not
-//     the waits of a program that reads keys, nor a Trace Into step (errata SH8.md entry 43).
+//     the waits of a program that reads keys, nor a Trace Into step (errata SH8.md entry 43);
+//   - F9, the toolbar's Run button and the menu's Run given while Execute's load is under way (at
+//     once after OK on the Caution question, even in the same task, and 10, 50 and 150 ms later)
+//     run the new program when the load has ended (errata SH8.md entry 47).
 //
 //     --pass <title> runs one pass only (run, start-up arguments, no display frames, stack,
-//     announcements).
+//     announcements, run key during a load).
 //
 // Screenshots go to build/SH8/run-check (git-ignored). Exit code 0 = everything passed. The page
 // object `window.__easy68k` that the script uses exists in development builds only (main.tsx).
@@ -47,7 +50,7 @@
 // grant (both were missed on the macOS runners of CI, whose Chromium fires timers 20 to 100 ms late
 // and delivers frames 120 ms apart, while WebKit there was exact).
 
-/* global console, process, document, window, performance, setTimeout, Event, MutationObserver -- the browser globals are used inside page.evaluate() callbacks, which run in the page */
+/* global console, process, document, window, performance, setTimeout, Event, MutationObserver, KeyboardEvent, Element -- the browser globals are used inside page.evaluate() callbacks, which run in the page */
 
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -1257,6 +1260,191 @@ async function announcePass(browser, name, programs) {
   await context.close();
 }
 
+/**
+ * A run command given while Execute's load is under way (errata SH8.md entry 47; the architect's
+ * decision of 22 November 2026). A program runs; Execute of another asks the Caution question; OK;
+ * then F9, the toolbar's Run button or the menu's Run at once and after a few milliseconds. In the
+ * original the load is one synchronous call and Windows delivers the key or click when it returns,
+ * so the new program runs every time. The load lasts tens of milliseconds in Chromium and a few
+ * hundred in WebKit on a fast PC (more on a slow one), so the early keys land inside it; each trial
+ * prints the phase the controller was in when the key or click arrived.
+ */
+async function loadKeyPass(browser, name, programs) {
+  const p = `${name}: during a load:`;
+  const { context, page, errors } = await openApp(browser);
+  await prepare(page, programs);
+  const box = page.locator('[role=alertdialog]');
+  // What the controller was doing at each F9 and each click of the Run button or menu item.
+  await page.evaluate(() => {
+    window.__sh8Arrivals = [];
+    const note = (what) => {
+      const { controller } = window.__easy68k.ctx.sim;
+      window.__sh8Arrivals.push({ what, phase: controller.phase, kept: controller.keepsCommands });
+    };
+    window.addEventListener('keydown', (event) => event.key === 'F9' && note('F9'), { capture: true });
+    window.addEventListener(
+      'click',
+      (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        if (target?.closest('[data-command="sim.run.run"]')) note('toolbar');
+        else if (target?.closest('[role=menu] [role^=menuitem]')) note('menu');
+      },
+      { capture: true },
+    );
+  });
+
+  /** `counter` runs; Execute of `hello` asks the Caution question. */
+  const executeWhileRunning = async () => {
+    await page.evaluate(() =>
+      window.__easy68k.ctx.sim.controller.open('/browser/check/counter.S68', 'open', { confirmed: true }),
+    );
+    await page.evaluate(() => window.__easy68k.ctx.commands.run('sim.run.run'));
+    await waitForPhase(page, 'running');
+    await page.evaluate(() => {
+      const regions = [...document.querySelectorAll('[data-e68-panel="listing"]')];
+      regions.find((region) => region.closest('[hidden]') === null)?.focus({ preventScroll: true });
+      window.__sh8Arrivals.length = 0;
+      window.__sh8Load = window.__easy68k.ctx.sim.controller.open('/browser/check/hello.S68', 'execute');
+    });
+    await box.waitFor({ timeout: UI_TIMEOUT });
+  };
+  /** After the load: did `hello` run (it prints and halts at once)? */
+  const outcome = async () => {
+    await page.evaluate(() => window.__sh8Load);
+    const ran = await page
+      .waitForFunction(
+        () => {
+          const state = window.__easy68k.ctx.store.getState().sim;
+          return state.program?.path === '/browser/check/hello.S68' && state.halted && state.menuState === 1;
+        },
+        undefined,
+        { timeout: 3000 },
+      )
+      .then(
+        () => true,
+        () => false,
+      );
+    return page.evaluate((hasRun) => {
+      const { ctx } = window.__easy68k;
+      const state = ctx.store.getState().sim;
+      return {
+        ran: hasRun,
+        program: state.program?.path?.split('/').pop() ?? null,
+        phase: state.phase,
+        steps: ctx.sim.engine.stepCount >>> 0,
+        arrivals: window.__sh8Arrivals.map((a) => `${a.what}@${a.phase}${a.kept ? '(kept)' : ''}`),
+      };
+    }, ran);
+  };
+  const told = (result, extra = '') =>
+    `${result.ran ? 'ran' : 'did NOT run'}: ${result.program}, ${result.phase}, ${result.steps} instructions; arrived ${result.arrivals.join(', ') || 'nothing'}${extra}`;
+  const loadPhases = [];
+
+  // 1. F9 dispatched in the same task as the click on OK: the answer has not reached the controller.
+  {
+    await executeWhileRunning();
+    const atClick = await page.evaluate(() => {
+      const ok = [...document.querySelectorAll('[role=alertdialog] button')].find((b) => b.textContent.trim() === 'OK');
+      ok.click();
+      const target = document.activeElement ?? document.body;
+      const init = { key: 'F9', code: 'F9', keyCode: 120, which: 120, bubbles: true, cancelable: true };
+      target.dispatchEvent(new KeyboardEvent('keydown', init));
+      target.dispatchEvent(new KeyboardEvent('keyup', init));
+      return window.__easy68k.ctx.dialogs.isModalOpen();
+    });
+    const result = await outcome();
+    loadPhases.push(...result.arrivals);
+    check(`${p} F9 in the same task as the click on OK runs the new program`, result.ran && !atClick, told(result));
+  }
+
+  // 2. F9 pressed at once (the next task) and 10, 50 and 150 ms after the click on OK.
+  for (const delay of [0, 10, 50, 150]) {
+    await executeWhileRunning();
+    await box.getByRole('button', { name: 'OK' }).click({ noWaitAfter: true });
+    if (delay > 0) await page.waitForTimeout(delay);
+    await page.keyboard.press('F9');
+    const result = await outcome();
+    loadPhases.push(...result.arrivals);
+    check(`${p} F9 ${delay === 0 ? 'at once' : `${delay} ms`} after OK runs the new program`, result.ran, told(result));
+  }
+
+  // 3. The toolbar's Run button clicked at once and 10, 50 and 150 ms after OK. `force`: a click on a
+  //    button that is disabled at that moment must be lost, not waited for.
+  const runButton = toolbarButton(page, 'sim.run.run');
+  for (const delay of [0, 10, 50, 150]) {
+    await executeWhileRunning();
+    await box.getByRole('button', { name: 'OK' }).click({ noWaitAfter: true });
+    if (delay > 0) await page.waitForTimeout(delay);
+    const enabledAtClick = await runButton.isEnabled();
+    await runButton.click({ force: true, noWaitAfter: true });
+    const result = await outcome();
+    loadPhases.push(...result.arrivals);
+    check(
+      `${p} the toolbar's Run button ${delay === 0 ? 'at once' : `${delay} ms`} after OK runs the new program`,
+      result.ran,
+      told(result, `; the button was ${enabledAtClick ? 'enabled' : 'disabled'} when clicked`),
+    );
+  }
+
+  //    And in the task right after the click on OK (a timer of 0 ms in the page), which lands inside
+  //    the load in both browsers. In the same task as that click the button still shows the old
+  //    program's state (running: Run disabled), as the original's toolbar does until it repaints.
+  {
+    await executeWhileRunning();
+    const enabledAtClick = await page.evaluate(async () => {
+      const ok = [...document.querySelectorAll('[role=alertdialog] button')].find((b) => b.textContent.trim() === 'OK');
+      ok.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const button = [...document.querySelectorAll('.e68-shell [role=toolbar] [data-command="sim.run.run"]')].find(
+        (element) => element.closest('[hidden]') === null,
+      );
+      const enabled = !button.disabled && button.getAttribute('aria-disabled') !== 'true';
+      button.click();
+      return enabled;
+    });
+    const result = await outcome();
+    loadPhases.push(...result.arrivals);
+    check(
+      `${p} the toolbar's Run button in the task after the click on OK runs the new program`,
+      result.ran,
+      told(result, `; the button was ${enabledAtClick ? 'enabled' : 'disabled'} when clicked`),
+    );
+  }
+
+  // 4. Run > Run from the menu bar, as fast as two clicks can follow OK.
+  {
+    await executeWhileRunning();
+    await box.getByRole('button', { name: 'OK' }).click({ noWaitAfter: true });
+    await page
+      .locator('.e68-shell__menubar [role=menuitem]:visible', { hasText: /^Run$/ })
+      .first()
+      .click({ force: true, noWaitAfter: true });
+    const item = page.locator('[role=menu][data-e68-menu] [role^=menuitem]', { hasText: /^Run(?! To)/ }).first();
+    await item.waitFor({ timeout: UI_TIMEOUT });
+    const enabledAtClick = (await item.getAttribute('aria-disabled')) !== 'true';
+    await item.click({ force: true, noWaitAfter: true });
+    const result = await outcome();
+    loadPhases.push(...result.arrivals);
+    check(
+      `${p} Run > Run from the menu right after OK runs the new program`,
+      result.ran,
+      told(result, `; the item was ${enabledAtClick ? 'enabled' : 'disabled'} when clicked`),
+    );
+    await page.keyboard.press('Escape').catch(() => {});
+  }
+
+  // The trials are worth something only if some arrived during the load.
+  const during = loadPhases.filter((arrival) => arrival.includes('@loading') || arrival.includes('(kept)'));
+  check(
+    `${p} some of the keys and clicks arrived while the load was under way`,
+    during.length > 0,
+    `${during.length} of ${loadPhases.length}: ${loadPhases.join(', ')}`,
+  );
+  await page.screenshot({ path: join(outDir, `${name}-run-key-during-load.png`) });
+  check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await context.close();
+}
+
 // --- run ----------------------------------------------------------------------------------------
 
 async function main() {
@@ -1296,6 +1484,7 @@ async function main() {
           ['no display frames', noFramesPass],
           ['stack', stackPass],
           ['announcements', announcePass],
+          ['run key during a load', loadKeyPass],
         ]) {
           if (onlyPass !== null && title !== onlyPass) continue;
           console.log(`\n[${name}, ${title}]`);

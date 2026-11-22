@@ -1,6 +1,6 @@
 # Request T1 to the owner of docs/porting/assembler.md: two notes of T1 with a wrong cause
 
-Status: open (2026-11-22).
+Status: done (DOC1, 22 November 2026): both notes of `docs/porting/assembler.md` (§9.3.9 and §9.3.4) replaced word for word as asked below; erratum DOC1 9.
 
 ## Why
 

@@ -64,6 +64,19 @@ export declare function judgeMaximum(
   runs: readonly { steps: number }[],
   engineRate: number,
 ): BestVerdict & { floorOk: boolean; shareOk: boolean; share: number };
+export declare function engineAloneFigure(calls: readonly { steps: number; ms: number }[]): {
+  calls: number;
+  steps: number;
+  ms: number;
+  rate: number;
+  inWindow: number;
+  complete: boolean;
+  bestBurst: number;
+  medianBurst: number;
+};
+export declare function bestEngineAlone<T extends { rate: number; complete: boolean }>(
+  blocks: readonly T[],
+): (T & { blocks: number[] }) | null;
 export declare function judgeAssembly(runs: readonly { ms: number }[]): BestVerdict;
 export declare function judgeCalibrate(
   report: CalibrateReport,

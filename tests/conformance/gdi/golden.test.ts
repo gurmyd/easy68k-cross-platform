@@ -831,6 +831,38 @@ describe('text references against the font data', () => {
     const l = layoutText(metrics, { name: 'Fixedsys', size: 9, style: 0 }, [65, 66]);
     expect([l.boxWidth, l.cellHeight, l.extent]).toEqual([16, 15, 16]);
   });
+
+  it('"@" on the text path in Courier: the pen where Windows gives the same in every history (golden/text-path-at-pens.json; erratum T2 28)', () => {
+    const doc = JSON.parse(readFileSync(new URL('./golden/text-path-at-pens.json', import.meta.url), 'utf8')) as {
+      cases: [number, number, string, number][];
+    };
+    expect(doc.cases.length).toBe(1000);
+    const wrong: string[] = [];
+    for (const [size, style, hex, pen] of doc.cases) {
+      const bytes = (hex.match(/../g) ?? []).map((h) => parseInt(h, 16));
+      expect(bytes).toContain(0x40);
+      expect(bytes.every((b) => b < 0x80)).toBe(true);
+      const extent = layoutText(metrics, { name: 'Courier', size, style }, bytes).extent;
+      if (extent !== pen) wrong.push(`Courier ${size} ${STYLE_NAMES[style]} ${hex}: ${extent}, Windows ${pen}`);
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it('$80 on the text path: the pen where Windows gives the same in every history (golden/text-path-euro-pens.json; erratum T2 29)', () => {
+    const doc = JSON.parse(readFileSync(new URL('./golden/text-path-euro-pens.json', import.meta.url), 'utf8')) as {
+      cases: [string, number, number, string, number][];
+    };
+    // every Fixedsys text of the list, and the Courier texts whose euro width does not depend on history
+    expect(doc.cases.length).toBe(1125);
+    const wrong: string[] = [];
+    for (const [name, size, style, hex, pen] of doc.cases) {
+      const bytes = (hex.match(/../g) ?? []).map((h) => parseInt(h, 16));
+      expect(bytes).toContain(0x80);
+      const extent = layoutText(metrics, { name, size, style }, bytes).extent;
+      if (extent !== pen) wrong.push(`${name} ${size} ${STYLE_NAMES[style]} ${hex}: ${extent}, Windows ${pen}`);
+    }
+    expect(wrong).toEqual([]);
+  });
 });
 
 describe('outline atlases (app/public/fonts/scalable)', () => {

@@ -17,7 +17,9 @@
 //     requesting page was loaded with (a navigation is always answered by the active version and
 //     records which version the new page has). A page that is still open when a newer version
 //     takes over therefore keeps receiving the files of its own build. Everything else goes to
-//     the network untouched.
+//     the network untouched - except the navigation of a frame (the Help panel's): it is answered
+//     only with a page of the help folder from the cache, judged by its decoded path, and every
+//     other one gets a network error, never the network (helpFramePath; erratum H1 11).
 //   - A new version waits until the page asks it to take over (message `easy68k-skip-waiting`,
 //     sent when the user presses `Reload` in the update notice). It never takes over by itself,
 //     and the first installation does not claim the page that registered it: that page keeps
@@ -74,9 +76,10 @@ export const cacheNameFor = (version: string): string => `${VERSION_CACHE_PREFIX
 export const HELP_FOLDER = 'help/';
 
 /**
- * A navigation of a frame (an iframe, or a frame of a frameset). The worker answers it only below
- * the help folder; any other one gets a network error (erratum H1 11), so the Help panel's frame
- * cannot load the application or any other page of the site, whatever a link in it says.
+ * A navigation of a frame (an iframe, or a frame of a frameset). The worker answers it only with a
+ * file of the help folder that it holds itself, never from the network; any other one gets a network
+ * error (erratum H1 11, DV1 entry on the help frame), so the Help panel's frame cannot load the
+ * application or any other page of the site, whatever a link in it says or a server makes of it.
  */
 export function isFrameNavigation(request: Request): boolean {
   return request.mode === 'navigate' && (request.destination === 'iframe' || request.destination === 'frame');
@@ -157,6 +160,30 @@ function decodedPath(path: string): string {
   }
 }
 
+/**
+ * The path of a frame navigation below the help folder, decoded and checked, or null when the
+ * path is not one the frame may be given: it fails to decode; an escape made a separator (`%2F`,
+ * `%5C`), a dot segment, an empty segment, a `%` (double encoding), a backslash or a control
+ * character; or it does not start with the help folder. `raw` is the still-encoded path relative to
+ * the scope, as the URL parser left it (it has already resolved the plain `.` and `..` segments and
+ * their `%2E` spellings).
+ */
+export function helpFramePath(raw: string): string | null {
+  let path: string;
+  try {
+    path = decodeURIComponent(raw);
+  } catch {
+    return null;
+  }
+  const segments = path.split('/');
+  if (segments.length !== raw.split('/').length) return null; // %2F made a separator
+  if (segments.some((segment) => segment === '' || segment === '.' || segment === '..')) return null;
+  // eslint-disable-next-line no-control-regex -- a control character has no place in a help address
+  if (/[\\%\u0000-\u001f\u007f]/.test(path)) return null;
+  if (`${segments[0]}/` !== HELP_FOLDER || segments.length < 2) return null;
+  return path;
+}
+
 async function mapLimit<T>(items: readonly T[], limit: number, run: (item: T) => Promise<void>): Promise<void> {
   let next = 0;
   const worker = async () => {
@@ -211,15 +238,22 @@ export class Easy68kServiceWorker {
     return this.byPath.get(path) ?? null;
   }
 
-  /** True for an address of this site below the help folder (`<scope>help/...`). */
-  inHelpFolder(address: string): boolean {
+  /**
+   * The entry of the help folder that a frame navigation asks for, judged by its decoded and
+   * normalised path (helpFramePath); null for every other address, including a help address that
+   * is not in the build.
+   */
+  helpEntryForFrame(request: Request): PrecacheEntry | null {
+    if (request.method !== 'GET') return null;
     let url: URL;
     try {
-      url = new URL(address);
+      url = new URL(request.url);
     } catch {
-      return false;
+      return null;
     }
-    return url.origin === this.scopeUrl.origin && url.pathname.startsWith(`${this.scopeUrl.pathname}${HELP_FOLDER}`);
+    if (url.origin !== this.scopeUrl.origin || !url.pathname.startsWith(this.scopeUrl.pathname)) return null;
+    const path = helpFramePath(url.pathname.slice(this.scopeUrl.pathname.length));
+    return path === null ? null : (this.byPath.get(path) ?? null);
   }
 
   // ---- install
@@ -358,7 +392,13 @@ export class Easy68kServiceWorker {
   respond(request: Request, clientId: string, resultingClientId: string): Promise<Response> | null {
     // A frame can show Help and nothing else (erratum H1 11): in WebKit the Help frame has
     // allow-scripts, so a page of this site without the help pages' policy must never load in it.
-    if (isFrameNavigation(request) && !this.inHelpFolder(request.url)) return Promise.resolve(Response.error());
+    // A frame navigation is therefore answered only from this worker's own copy of the help folder
+    // and never from the network: a server that decodes `%2F` (GitHub Pages does) would answer
+    // help/..%2Findex.html with the application's page.
+    if (isFrameNavigation(request)) {
+      const help = this.helpEntryForFrame(request);
+      return help ? this.answerFrame(help, resultingClientId) : Promise.resolve(Response.error());
+    }
     const entry = this.entryFor(request);
     if (!entry) return null;
     return this.answer(request, entry, request.mode === 'navigate' ? '' : clientId, resultingClientId);
@@ -380,6 +420,13 @@ export class Easy68kServiceWorker {
       if (current) return current;
     }
     return this.scope.fetch(request);
+  }
+
+  /** A help page for a frame: from the active version's cache only; an error when it is not there. */
+  private async answerFrame(entry: PrecacheEntry, resultingClientId: string): Promise<Response> {
+    if (resultingClientId) await this.recordNavigation(resultingClientId);
+    const cached = await (await this.scope.caches.open(this.cacheName)).match(this.entryUrl(entry));
+    return cached ?? Response.error();
   }
 
   private async recordNavigation(clientId: string): Promise<void> {

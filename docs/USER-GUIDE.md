@@ -31,7 +31,8 @@ it does the same, and in Safari you can add it to the Dock (below) so that it op
 1. Open the web version. You see the **Editor** with an empty document `untitled1.x68`.
 2. Choose **Help > Examples...**. The **Files** panel opens on the left with a folder `Examples` that
    holds the official example programs.
-3. Double-click `tutorial1.X68`. It opens in a tab of the editor.
+3. Open the folder: click the small arrow in front of `Examples`. Then double-click
+   `tutorial1.X68`. It opens in a tab of the editor.
 4. Press **F9** (on a Mac also **Cmd+B**), or choose Project > Assemble Source.... The window
    `Assembler Status` shows the number of warnings and errors. The listing `tutorial1.L68` and the
    program `tutorial1.S68` are written next to the source.

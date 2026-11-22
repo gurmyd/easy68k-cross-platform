@@ -4,6 +4,14 @@
 measures with the committed references (`--write` updates them instead). Windows only; it needs the
 MSVC build tools (`vcvars64.bat`, found with vswhere or through `VCVARS64`).
 
+`node tests/oracle/gdi-capture/histories.mjs` repeats, in about ten minutes, the evidence that
+Windows' text path in Courier depends on what the process drew before (errata T2 28 and 29; below,
+"Windows' text path"): it writes the lists (`--lists euro,at,fallback`), runs the capture program on
+each in order of size, reversed, shuffled, after another text, twice in one run and each case alone
+in a new process (`--fresh`, `--repeat`), and prints how many pens and pictures differ and which are
+the same in every history; `--lists euro --fresh all --repeat 3 --write` writes
+`golden/text-path-euro-pens.json`. A tool for a person on Windows; CI does not run it.
+
 The program re-measures on real Windows what `docs/porting/trap15-tasks-60-up.md` says about GDI
 and writes the references that the port's drawing surface (SH1, SH2) and text screen (SH3) are
 held to. It draws only into memory device contexts holding a 32-bit DIB section, never creates a
@@ -202,7 +210,9 @@ fallback font. Measured with this program (errata T2 entry 26; gate I3, item 3b)
 - **The euro sign.** `$80` (the faces' default character, drawn as their block) comes from the
   fallback font on the path: a ClearType euro sign, with that glyph's width in the box and in
   TextWidth. `text-path.tsv` has TextWidth(`$80 $86`) - TextWidth(`$86`) for every raster size and
-  style; `metrics.json` `raster.textPath.fallbackEuro`.
+  style; `metrics.json` `raster.textPath.fallbackEuro`. In Courier that width depends on what the
+  process drew before (below); `fonts` measures it in one process in order of size (Fixedsys 0-255,
+  then Courier 0-255), and that history's values are the ones `fallbackEuro` holds.
 - **At least one cell.** On the path the box is at least one cell of the face wide (a text of
   undefined bytes only; the euro sign alone).
 - **Italic.** On the path, a text cut into two or more items loses the italic overhang of all but
@@ -210,18 +220,46 @@ fallback font. Measured with this program (errata T2 entry 26; gate I3, item 3b)
   neighbours; letters and Latin-1 (with `$83 $88 $8A $8C $8E $98 $9A $9C $9E $9F`), general
   punctuation (`$82 $84-$87 $89 $8B $91-$97 $99 $9B`), the superscripts `$B2 $B3 $B9` and the euro
   are classes of their own; control bytes are items no neutral joins.
-- **Control texts** (errata T2 entry 27; review R4 of gate I3). A text with `$7F` and an undefined
-  byte and no letter, euro sign, superscript or zero-width byte, whose other bytes form at most one
-  run of punctuation and neutrals between the controls (or two runs, at its two ends), each with a
-  punctuation byte, keeps the whole italic overhang; ending with an undefined byte, its box is one
-  cell wider in plain, bold and italic (`$7F $81` fills two cells, `$7F $81 "A"` two as usual).
-  `controlText` in `text-model.ts`.
+- **Control texts** (errata T2 entries 27 and 28; review R4 of gate I3, gate I3 item 3c). A text is
+  a control text when it is made of controls (`$7F`, the undefined bytes), punctuation and neutrals
+  only (no letter, digit, euro sign, superscript, zero-width byte or other byte below `$20`), has a
+  control and a byte that is not an undefined byte, each of its runs of punctuation and neutrals has
+  a punctuation byte, and it does not alternate byte by byte between one punctuation-or-neutral byte
+  and one control with as many of each. It keeps the whole italic overhang; ending with an
+  undefined byte, its box is one cell wider in plain, bold and italic (Fixedsys 9: `$95 $81 $81`
+  and `$7F $81` fill two cells, `$97 $81` and `$86 $81 $86 $81` the usual one and two, `$86 "1" $81`
+  two). `controlText` in `text-model.ts`; measured on about 210,000 texts over every size class and
+  style of both faces.
 
 The suite `text-path` (not machine-dependent) holds these strings; `text-path-euro` holds `$80` on
 the path and is machine-dependent, because the euro sign is ClearType output. `text-path-formfeed`
 (machine-dependent, reported and not required) holds `$0C` on the path: an arrow from a fallback
 font with ClearType, with a width that depends on its item (10 pixels in a punctuation item in
-Fixedsys 9, 8 next to a letter), which the port does not model.
+Fixedsys 9, 8 next to a letter), which the port does not model. `text-path-fallback`
+(machine-dependent, reported and not required) holds the bytes `$01-$08 $0B $0E-$1B` with a byte
+of `$80` or above on the path, which the port does not model either (erratum T2 29).
+
+`text-path-euro`, `text-path-formfeed` and `text-path-fallback` have been captured on one Windows
+only. Their packs are not compared on another Windows, but their pens decide what 6.5.3 requires,
+so `run.mjs` ends its report with one line per suite, "`<suite>: N of M pens equal the committed
+references`" (for `text-path-euro` also how many of the pens pinned in `text-path-euro-pens.json`
+are equal), under "Pens of the text-path suites captured on one Windows build only". These lines
+never fail the run; erratum T2 29 says what follows from them.
+
+**`"@"` and the euro sign's width on the path in Courier depend on what the process drew before**
+(errata T2 28 and T2 29). `"@"`: the same
+case gives other pictures and, with a byte of `$80` or above, other pens when the cases before it
+change: in order of size, again, twice in one run and after another list the captures agree; in
+reverse order every one of 2,333 such Courier texts is drawn differently, and alone in a fresh
+process 59 of 106. So no reference of it holds pictures: `golden/text-path-at-pens.json` keeps only
+the pens Windows gives in every history (the 1,000 texts without a byte of `$80` or above), and
+`text-path` has no `"@"` in Courier. The euro sign in Courier: after one Courier 127 euro text 378
+of the 1,400 pens of `text-path-euro` differ, and `$80 $86` alone in a new process differs from the
+capture in order of size at 117 of 200 Courier sizes; one random order does not even give the same
+pens from run to run. `golden/text-path-euro-pens.json` keeps the 1,125 euro pens that are the same
+in all 31 histories of `histories.mjs` (every Fixedsys text; 386 of the 800 Courier texts of
+`text-path-euro`). Fixedsys `"@"`, the Fixedsys euro sign, `$0C` and the bytes of
+`text-path-fallback` on the path do not depend on history.
 
 In the outline faces GDI widens the opaque cell by the first and last glyph's ink overhang (1-2
 pixels at 8-18 pt, more at large sizes) and draws the TrueType underline below the cell. The port's

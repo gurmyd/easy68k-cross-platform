@@ -115,39 +115,47 @@ function severalItems(text: Bytes): boolean {
 }
 
 /**
- * Whether a text on Windows' text path is a "control text": it has $7F and an undefined byte, no
- * zero-width byte, and between its controls ($7F, the undefined bytes, the other bytes below $20)
- * either at most one run of other bytes, or two runs of which one starts the text and the other ends
- * it; each run is made of punctuation and neutrals and has a punctuation byte. Measured with T2's
- * capture program (gate I3 review R4, erratum T2 27; about 16,000 texts, `$01` and `$0C` not among
- * them): such a text keeps the whole italic overhang, and when it ends with an undefined byte its
- * box is one cell of the face wider, in plain, bold and italic (not in underline or strike-out).
- * Fixedsys 9 italic: $7F $81 $86 keeps the overhang, $7F $81 "A" and $7F $81 " " do not; $86 $7F
- * $81 $86 keeps it, $7F $86 $81 $86 does not. A letter, the euro sign, a superscript or a zero-width
- * byte makes the text an ordinary text of the path.
+ * Whether a text on Windows' text path is a "control text". It is one when
+ * - it is made of controls ($7F and the undefined bytes), punctuation and neutrals only: no letter,
+ *   digit, euro sign, superscript, zero-width byte or other byte below $20;
+ * - it has a control, and a byte that is not an undefined byte;
+ * - each of its runs of punctuation and neutrals has a punctuation byte;
+ * - and it does not alternate byte by byte between one punctuation-or-neutral byte and one control,
+ *   with as many of each.
+ * Such a text keeps the whole italic overhang, and when it ends with an undefined byte its box is one
+ * cell of the face wider, in plain, bold and italic (not in underline or strike-out). Measured with
+ * T2's capture program (errata T2 27 and T2 28; about 210,000 texts over every size class and style
+ * of both raster faces). Fixedsys 9: $95 $81 $81 is 16 pixels wide (a control text ending with an
+ * undefined byte), $97 $81 is 8 (it alternates), $86 " " $81 is 24 and " " $86 $81 too, but $86 "1"
+ * $81 is 16 (a digit) and $7F " " $81 is 16 (a run without punctuation). $7F $81 $86 keeps the italic
+ * overhang, $7F $81 "A" and $7F $86 $7F $86 do not.
  */
 function controlText(text: Bytes): boolean {
-  let del = false;
-  let undefinedByte = false;
-  const runs: { start: number; end: number; punctuation: boolean }[] = [];
+  let control = false;
+  let notUndefined = false;
+  let alternates = text.length % 2 === 0;
+  let previous: boolean | null = null;
+  let run: { punctuation: boolean } | null = null; // the run of punctuation and neutrals being read
   for (let i = 0; i < text.length; i++) {
-    const kind = itemClass(text[i] as number);
-    if (kind === 'latin' || kind === 'euro' || kind === 'superscript' || kind === 'zeroWidth') return false;
-    if (kind === 'del') del = true;
-    else if (kind === 'undefined') undefinedByte = true;
-    else if (kind !== 'control') {
-      // Punctuation or a neutral: it starts a run or continues the one before it.
-      const run = runs.at(-1);
-      if (run && run.end === i) run.end = i + 1;
-      else runs.push({ start: i, end: i + 1, punctuation: false });
-      if (kind === 'punctuation') (runs.at(-1) as { punctuation: boolean }).punctuation = true;
+    const byte = text[i] as number;
+    const kind = itemClass(byte);
+    if (kind !== 'del' && kind !== 'undefined' && kind !== 'punctuation' && kind !== 'neutral') return false;
+    if (byte >= 0x30 && byte <= 0x39) return false; // digits
+    const isControl = kind === 'del' || kind === 'undefined';
+    if (isControl) {
+      control = true;
+      if (run && !run.punctuation) return false;
+      run = null;
+    } else {
+      run ??= { punctuation: false };
+      if (kind === 'punctuation') run.punctuation = true;
     }
+    if (kind !== 'undefined') notUndefined = true;
+    if (previous === isControl) alternates = false;
+    previous = isControl;
   }
-  if (!del || !undefinedByte || runs.some((run) => !run.punctuation)) return false;
-  if (runs.length <= 1) return true;
-  return (
-    runs.length === 2 && (runs[0] as { start: number }).start === 0 && (runs[1] as { end: number }).end === text.length
-  );
+  if (run && !run.punctuation) return false;
+  return control && notUndefined && !alternates;
 }
 
 /** A glyph without ink: `advance` pixels of the opaque box and nothing else. */
@@ -489,11 +497,14 @@ export class TextScreen implements TextScreenApi {
    *   the overhang of all but the first glyph: the box is the wider of the advances and the first
    *   glyph with an advance plus the overhang. (Every text with a zero-width byte is cut so, and so
    *   is one with $7F and another drawn byte.)
-   * - Control texts (`controlText`: $7F and an undefined byte with little else) keep the whole italic
+   * - Control texts (`controlText`: controls with punctuation and little else) keep the whole italic
    *   overhang, and one that ends with an undefined byte has one more cell in plain, bold and italic.
    *
    * Not modelled: $0C on the path, which Windows draws from a fallback font with ClearType and a
-   * width that depends on its item (docs/differences/SH3.md; the GDI suite text-path-formfeed).
+   * width that depends on its item (docs/differences/SH3.md; the GDI suite text-path-formfeed); and
+   * "@" on the path in Courier, which Windows draws differently depending on what the process drew
+   * before (erratum T2 28): the port draws the face's own "@", whose pen Windows gives in every
+   * history when the text has no byte of $80 or above.
    *
    * The box travels as glyph advances (the surface fills exactly those), so what it has beyond the
    * drawn glyphs is one more glyph without ink. `shift` is where the box starts, relative to the
