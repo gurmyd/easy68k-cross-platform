@@ -4,16 +4,31 @@
 // The tree's state and keyboard rules are in tree-model.ts, the actions in actions.ts.
 // Owner: FS1.
 
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type MouseEvent } from 'react';
 import type { AppContext, VPath } from '../../contracts';
 import { splitVPath } from '../../core/paths/winpath';
 import { onStorageStateChange, storageProblem } from '../../fs/browser-backend';
 import { useAppContext } from '../../state/context';
-import { ContextMenu, Icon, IconButton, Menu, Toolbar, type MenuEntry } from '../../ui/components';
+import { Button, ContextMenu, Icon, IconButton, Menu, Toolbar, type MenuEntry } from '../../ui/components';
 import { deletePath, exportPath, folderFor, importInto, newFolder, renamePath } from './actions';
 import { downloadBytes, importItemsOf, pickFiles } from './browser-io';
 import { registerFilesRevealer, requestReveal } from './reveal';
 import { BROWSER_ROOT, locations } from './store';
+import {
+  STORAGE_NOTICE_DISMISS_CAPTION,
+  STORAGE_NOTICE_EXPORT_CAPTION,
+  STORAGE_NOTICE_IMPORT_CAPTION,
+  STORAGE_NOTICE_INSTALLED_TEXT,
+  STORAGE_NOTICE_LABEL,
+  STORAGE_NOTICE_TAB_TEXT,
+  acknowledgeStorageNotice,
+  readNoticeEnvironment,
+  storageNoticeAcknowledged,
+  storageNoticeKind,
+  storeEmptyAtStart,
+  storeKindOf,
+  type StorageNoticeKind,
+} from './storage-notice';
 import { FilesTreeModel, type TreeRow } from './tree-model';
 import './files.css';
 
@@ -64,13 +79,40 @@ export function FilesPanel() {
 
   const target = () => model?.selected ?? null;
 
-  const doImport = (folder: boolean) => {
+  // The Safari storage notice (R-10; storage-notice.ts). It takes no focus and blocks nothing.
+  const acknowledged = useSyncExternalStore(
+    (listener) => ctx.settings.subscribe(listener),
+    () => storageNoticeAcknowledged(ctx),
+  );
+  const [environment] = useState(readNoticeEnvironment);
+  const [storeEmpty, setStoreEmpty] = useState<boolean | null>(null);
+  const storeKind = storeKindOf(browser);
+  const wantsEmptiness = environment.installed && storeKind !== 'none' && storeKind !== 'memory';
+  useEffect(() => {
+    if (!wantsEmptiness) return;
+    let live = true;
+    void storeEmptyAtStart(ctx).then((empty) => {
+      if (live) setStoreEmpty(empty);
+    });
+    return () => {
+      live = false;
+    };
+  }, [ctx, wantsEmptiness]);
+  const notice: StorageNoticeKind = storageNoticeKind({
+    platform: ctx.platform.kind,
+    ...environment,
+    store: storeKind,
+    storeEmpty: storeEmpty === true,
+    acknowledged,
+  });
+
+  const doImport = (folder: boolean, into?: VPath) => {
     // The chooser must open inside the click: start it before anything is awaited.
     const picking = pickFiles({ multiple: true, folder });
     void (async () => {
       const files = await picking;
       if (!files) return;
-      const dir = await folderFor(ctx, target(), fallbackDir);
+      const dir = into ?? (await folderFor(ctx, target(), fallbackDir));
       const result = await importInto(ctx, dir, importItemsOf(files));
       if (result && model) await model.reveal(result.written[0] ?? dir);
     })();
@@ -219,6 +261,46 @@ export function FilesPanel() {
           <Icon name="warning" size={14} />
           <span>{problem}</span>
         </p>
+      )}
+      {notice && (
+        <div
+          role="note"
+          aria-label={STORAGE_NOTICE_LABEL}
+          className="e68-files__notice"
+          data-e68-storage-notice={notice}
+        >
+          <p className="e68-files__notice-text">
+            {notice === 'tab' ? STORAGE_NOTICE_TAB_TEXT : STORAGE_NOTICE_INSTALLED_TEXT}
+          </p>
+          <div className="e68-files__notice-buttons">
+            {notice === 'tab' ? (
+              <Button
+                size="small"
+                tabIndex={0}
+                caption={STORAGE_NOTICE_EXPORT_CAPTION}
+                onClick={() => void exportPath(ctx, BROWSER_ROOT, (name, bytes) => downloadBytes(name, bytes))}
+              />
+            ) : (
+              <Button
+                size="small"
+                tabIndex={0}
+                caption={STORAGE_NOTICE_IMPORT_CAPTION}
+                onClick={() => doImport(false, BROWSER_ROOT)}
+              />
+            )}
+            <Button
+              size="small"
+              tabIndex={0}
+              caption={STORAGE_NOTICE_DISMISS_CAPTION}
+              onClick={(event) => {
+                // The button goes with the notice: the keyboard continues in the tree, not on the page.
+                const hadFocus = event.currentTarget.contains(document.activeElement);
+                acknowledgeStorageNotice(ctx);
+                if (hadFocus) treeRef.current?.focus();
+              }}
+            />
+          </div>
+        </div>
       )}
       <div
         ref={treeRef}

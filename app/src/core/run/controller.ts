@@ -224,6 +224,21 @@ export interface RepaintCounts {
 const ALL_PANELS = RepaintBit.Listing | RepaintBit.Breakpoints | RepaintBit.Memory | RepaintBit.Stack;
 
 /** The governor's figures, for tests and for the performance package. */
+/** The command that set execution going last: a Trace Into step, Auto Trace, or any other run command. */
+export type StopCause = 'run' | 'trace' | 'autoTrace';
+
+/**
+ * The last time execution stopped (the phase became 'idle' in `stop()`), for the status bar's
+ * announcement (errata SH8.md entry 43). `count` grows by one with every stop; `after` is the run
+ * command that set execution going; `wasRunning` is false when nothing was executing at that moment
+ * (a Trace Into step or an Auto Trace tick, which are synchronous, or a Pause while stopped).
+ */
+export interface StopRecord {
+  readonly count: number;
+  readonly after: StopCause;
+  readonly wasRunning: boolean;
+}
+
 export interface GovernorReading {
   allowance: number;
   frameInterval: number;
@@ -299,6 +314,9 @@ export class SimRunController implements RunController {
    */
   private edgeGap = 0;
   private recovering = false;
+  /** The run command that set execution going last, and the last stop (`lastStop`). */
+  private runCause: StopCause = 'run';
+  private stopNow: StopRecord = { count: 0, after: 'run', wasRunning: false };
   private disposed = false;
   private startup: Promise<void> | null = null;
 
@@ -348,6 +366,10 @@ export class SimRunController implements RunController {
   /** Entries posted and not yet delivered. */
   get queueLength(): number {
     return this.queue.length;
+  }
+  /** The last stop of execution (StopRecord); a new object at every stop. */
+  get lastStop(): StopRecord {
+    return this.stopNow;
   }
 
   subscribe(listener: () => void): () => void {
@@ -742,6 +764,7 @@ export class SimRunController implements RunController {
 
   run(): void {
     this.runCommand(() => {
+      this.runCause = 'run';
       this.call((engine) => engine.cmdRun());
       this.deps.ui.resumeAudio();
       this.setPhase('running');
@@ -759,6 +782,7 @@ export class SimRunController implements RunController {
       return;
     }
     this.runCommand(() => {
+      this.runCause = 'run';
       this.call((engine) => engine.cmdRunToCursor(row));
       this.deps.ui.resumeAudio();
       this.setPhase('running');
@@ -768,6 +792,7 @@ export class SimRunController implements RunController {
 
   stepOver(): void {
     this.runCommand(() => {
+      this.runCause = 'run';
       this.call((engine) => engine.cmdStepOver());
       this.deps.ui.resumeAudio();
       this.setPhase('running');
@@ -777,6 +802,7 @@ export class SimRunController implements RunController {
 
   traceInto(): void {
     this.runCommand(() => {
+      this.runCause = 'trace';
       const status = this.call((engine) => engine.cmdTraceInto());
       this.deps.ui.resumeAudio();
       this.handleStatus(status);
@@ -785,6 +811,7 @@ export class SimRunController implements RunController {
 
   autoTrace(): void {
     this.runCommand(() => {
+      this.runCause = 'autoTrace';
       this.call((engine) => engine.cmdAutoTrace());
       this.deps.ui.resumeAudio();
     });
@@ -1117,9 +1144,14 @@ export class SimRunController implements RunController {
    */
   private stop(): void {
     const flags = this.live ? this.peek((engine) => engine.state()) : null;
+    const wasRunning = this.phaseNow !== 'idle';
     if (flags?.fileDialogOpen) this.setPhase('waitHost');
     else if (flags?.alertOpen && this.alertList.some((alert) => alert.fromEngine)) this.setPhase('waitAlert');
-    else this.setPhase('idle');
+    else {
+      this.setPhase('idle');
+      this.stopNow = { count: this.stopNow.count + 1, after: this.runCause, wasRunning };
+      this.dirty = true;
+    }
     try {
       this.deps.lifecycle.stopped();
     } catch (error) {

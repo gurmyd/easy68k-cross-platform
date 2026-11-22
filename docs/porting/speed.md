@@ -37,7 +37,9 @@ measured as well; on ubuntu-latest they are what 6.9 calls "60 Hz".
 
 **Judging.** The thresholds of 6.9 item 9 are judged in Chromium on Linux, where 6.9 sets them; on
 Windows, macOS and in WebKit the check prints "would pass" or "would MISS" (errata P1.md entry 2).
-What the program observes and the 4096 x 4096 surface are judged everywhere. Each timed figure is the
+What the program observes (calibrate's whole blocks and its division, the pixels of the 4096 x 4096
+surface) is judged everywhere; calibrate's rate of 1,000,000 per second at the default speed is a
+threshold like the others, judged in Chromium on Linux only. Each timed figure is the
 best of up to three runs (30-second windows: two), and every run is printed: a run on a busy machine
 can only be slower, so the best run is the figure of the machine.
 
@@ -161,6 +163,12 @@ frame gives on ubuntu-latest (the check prints both the figure and "the engine a
 `Maximum` exists for long computations (4.5.6), and the interface's half of the frame is what keeps
 the window usable while one runs.
 
+**Since the time-bounded sub-slice** (errata SH8.md entry 40, round before gate I3) the figures of
+this PC at a quiet moment are above the threshold (section 4.6: 236.9 million in 10 s with the
+simulated 60 Hz source, 248.0 million at 120 Hz, best of three runs). These are figures of a Windows
+PC, not of ubuntu-latest: 6.9 item 9 is decided there, by the performance job of a manual CI run,
+and this document does not claim it. The proposal above stands until that run has been read.
+
 ### 4.3 TaskDuration (6.9: < 4.5 s in 30 s at the default speed)
 
 At the default speed the engine needs about 1,000,000 / 23,000,000 = 4 % of a core, 1.3 s of 30 s.
@@ -219,6 +227,44 @@ roughly 150 to 600 ms, varies with the load). The original repaints its resized 
 in one `WM_PAINT` as well, so this is the counterpart of a call it blocks in, and it happens once per
 resize. P1 proposes no action under R-13 and records the figure for I3.
 
+### 4.6 Figures after the time-bounded sub-slice (round before gate I3)
+
+The same PC as section 2, 2026-11-22, `engine/dist` unchanged, the application of the main tree
+with errata SH8.md entry 40 (a sub-slice bounded by time as well as by count). The PC was **far
+quieter** than in section 2: CPU load (all cores, as Windows reports it) 11 % before run A, 21 %
+before run B and 66 % at the end of run B, when other work on the PC had started; run C came later,
+after the other checks of the round. Run A: `node tests/perf/check-perf.mjs --browser chromium`
+(every part, "24 of 24 checks passed"); run B, minutes later: the same with `--only maximum --only
+frames` ("10 of 10"); run C: `npm run check:perf -- --browser all` ("42 of 42"). Logs:
+`build/DOC1/perf1.log`, `perf2.log` and `checks/perf.log` (git-ignored). On Windows nothing of 6.9
+item 9 is judged ("would pass" or "would MISS" is printed). **None of these is a figure of
+ubuntu-latest**, where 6.9 item 9 is decided.
+
+| 6.9 item 9, Chromium | Threshold | Run A | Run B | Run C | Best |
+|---|---|---|---|---|---|
+| `stepCount` at `Maximum` in 10 s, simulated 60 Hz | >= 200,000,000 | 233,073,332 | 236,878,626 | 227,756,095 | 236,878,626 |
+| the same, simulated 120 Hz | - | 242,033,433 | 217,842,298 | 247,961,267 | 247,961,267 |
+| the engine alone, `run(1,000,000)`, best of 5 | - | 54,644,809 per second | 54,644,809 | 51,546,392 | - |
+| frame intervals while `draw.X68` runs, simulated 60 Hz: p95 | < 20 ms | 17.8 ms | 17.7 ms | 18.0 ms | 17.7 ms |
+| the same, simulated 120 Hz: p95 | < 12 ms | 11.0 ms | 11.7 ms | 11.2 ms | 11.0 ms |
+| the same, display (60 Hz): p95 | < 20 ms | 16.7 ms | 16.8 ms | 16.8 ms | 16.7 ms |
+| `draw.X68`, one `engine.run()` call: p95 / longest (60 Hz, 120 Hz, display) | - | 3.5 / 5.4, 2.4 / 5.2, 3.1 / 5.3 ms | 4.2 / 5.8, 4.5 / 6.6, 4.7 / 6.5 ms | 3.3 / 7.6, 3.1 / 5.1, 3.8 / 5.5 ms | - |
+| TaskDuration over 30 s of `spin.X68`, default speed: simulated 60 Hz, 120 Hz, display | < 4.5 s | 0.99, 1.17, 1.65 s | - | 0.85, 0.97, 1.38 s | - |
+| `calibrate.X68` at the default speed, by its own clock | 1,000,000 (2 %) | 999,180 per second (-0.08 %) | - | 1,000,180 (+0.02 %) | - |
+| `calibrate.X68` at `Maximum`, by its own clock | - | 21,263,826 per second | - | 21,633,893 | - |
+| assembling `GFX.X68` / `MAIN.X68` under Node | < 1 s | 155 / 164 ms | - | - | - |
+
+WebKit in run C, for information (6.9 item 9 does not judge it): `Maximum` 145,847,087 (60 Hz) and
+187,813,779 (120 Hz) in 10 s, the engine alone 25,641,026 per second; frame p95 31.0 ms with both
+simulated sources (its timers on Windows, errata P1.md entry 10) and 13.0 ms with the display's
+frames.
+
+What changed against section 3: the engine alone is more than twice as fast as in run 2 (51.5 to
+54.6 against 23.4 million per second), which says how much of section 3's shortfall was the load of
+that day; and with the bound, a drawing program's calls stay under 8 ms and the frames no longer
+overrun (at 120 Hz the p95 of 11.0 to 11.7 ms is under the 12 ms, where section 3 had 17.0 ms at
+best). The 4096 x 4096 surface passed again (longest frame after Run 100 ms, R-13).
+
 ## 5. The original's speed (decision O-1)
 
 **What O-1 decided** (recommended default, accepted by the owner): the official `SIM68K.exe` may be
@@ -271,7 +317,7 @@ that keeps time with task 23 or task 8 behaves the same at any setting.
 | To | What | Section |
 |---|---|---|
 | SH8 | Bound each sub-slice by the remaining time budget, not only by instructions (taken up in the round before gate I3: errata SH8.md entry 40) | 4.1 |
-| Architect | 6.9's `Maximum` threshold: 200 million in 10 s needs an engine of 40 million per second; measured 22 to 28 million. Lower it (proposal: 100 million) or give `Maximum` more of the frame | 4.2 |
+| Architect | 6.9's `Maximum` threshold: 200 million in 10 s needs an engine of 40 million per second; measured 22 to 28 million under load. Lower it (proposal: 100 million) or give `Maximum` more of the frame. On the quieter PC after the time-bounded sub-slice: 237 million (60 Hz) and 248 million (120 Hz), best of three runs (4.6); decide after reading the manual CI run's performance job on ubuntu-latest | 4.2, 4.6 |
 | SH8, SH4 | Publish and present only when something changed, so that TaskDuration does not grow with the frame rate | 4.3 |
 | Architect | Say at which frame rate the TaskDuration threshold applies (P1 judges it at 60 Hz) | 4.3 |
 | Owner, then SH8 and W1 | Measure the original with `calibrate.X68`; until then `DEFAULT_IPS` = 1,000,000 | 5 |

@@ -627,10 +627,13 @@ jobs:
   # 6.9 item 9 (docs/requests/P1-perf-scripts.md): tests/perf/check-perf.mjs in the real application,
   # one browser per job, on the three systems. On a push only the parts a program observes are run
   # (calibrate: the program's own clock at the default speed and at Maximum; surface: a 4096 x 4096
-  # surface resized, cleared, filled and presented), each judged everywhere. On a manual run and on
-  # a v* tag every part runs with --judge auto: the wall-clock thresholds of 6.9 item 9 are judged in
-  # Chromium on ubuntu-latest, where 6.9 sets them, and printed with "would pass" or "would MISS"
-  # elsewhere (erratum P1 1 and 2). perf.json, with every figure of the run, is uploaded every time.
+  # surface resized, cleared, filled and presented). What the program observes (its counts and
+  # divisions, the surface's pixels) is judged on every system; the default-speed rate of 1,000,000
+  # per second is judged only in Chromium on ubuntu-latest (--judge auto) and printed with "would
+  # pass" or "would MISS" elsewhere. On a manual run and on a v* tag every part runs with
+  # --judge auto: the wall-clock thresholds of 6.9 item 9 are judged in Chromium on ubuntu-latest,
+  # where 6.9 sets them, and printed with "would pass" or "would MISS" elsewhere (erratum P1 1
+  # and 2). perf.json, with every figure of the run, is uploaded every time.
   perf:
     name: perf (${{ matrix.os }}, ${{ matrix.browser }})
     needs: [plan, engines]

@@ -35,7 +35,9 @@ The first version is being prepared. What the repository holds today:
   the execution speed.
 - EASyBIN: open, edit and save S-records and binary files.
 - Files: the browser keeps the files ("My Programs", with Import and Export as `.zip`); Chrome and
-  Edge can also work in a folder of the computer.
+  Edge can also work in a folder of the computer. In Safari (and every browser on an iPhone or
+  iPad) a notice in the Files panel explains that Safari deletes the programs after seven days
+  without a visit and that an app added to the Dock has its own files, with Export... and Got it.
 - The original's help pages and example programs; Help > Differences from EASy68K.
 - Light and dark themes; installable as an app from the browser; works offline after the first
   visit; several windows at once.
@@ -55,7 +57,12 @@ The first version is being prepared. What the repository holds today:
 
 - Listed in part 5 of [docs/DIFFERENCES.md](docs/DIFFERENCES.md): among them, nobody has tried the
   port on a real Mac yet, Firefox is not tested, and a folder holding a large Git repository can
-  crowd a program's own files out of what it may open in the web version.
+  crowd a program's own files out of what it may open in the web version, the help pages stay
+  empty without a network in Safari's test engine, and the speed at `Maximum` and the frame rate
+  while a program draws are decided only by the performance job of a manual test run on GitHub's
+  Linux machine (on a Windows PC at a quieter moment, 22 November 2026: 237 and 248 million
+  instructions in 10 s at `Maximum` with 60 Hz and 120 Hz frames, against the 200 million asked
+  for; `docs/porting/speed.md` 4.6).
 
 ### Documentation
 

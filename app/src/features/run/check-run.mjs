@@ -27,7 +27,12 @@
 //   - a page that gets no display frames at all still runs its program at its speed and keeps
 //     delays exact (4.5.5);
 //   - the status bar says Halted after a halt, and Stopped once Rewind or Pause has made Run
-//     available again.
+//     available again;
+//   - its hidden live region announces only the settled states: Halted, Stopped, Auto trace; not
+//     the waits of a program that reads keys, nor a Trace Into step (errata SH8.md entry 43).
+//
+//     --pass <title> runs one pass only (run, start-up arguments, no display frames, stack,
+//     announcements).
 //
 // Screenshots go to build/SH8/run-check (git-ignored). Exit code 0 = everything passed. The page
 // object `window.__easy68k` that the script uses exists in development builds only (main.tsx).
@@ -42,7 +47,7 @@
 // grant (both were missed on the macOS runners of CI, whose Chromium fires timers 20 to 100 ms late
 // and delivers frames 120 ms apart, while WebKit there was exact).
 
-/* global console, process, document, window, performance, setTimeout, Event -- the browser globals are used inside page.evaluate() callbacks, which run in the page */
+/* global console, process, document, window, performance, setTimeout, Event, MutationObserver -- the browser globals are used inside page.evaluate() callbacks, which run in the page */
 
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -69,6 +74,8 @@ const option = (name, fallback) => {
   return index >= 0 && args[index + 1] ? args[index + 1] : fallback;
 };
 const browserChoice = option('--browser', 'all');
+/** --pass <title>: only that pass (for example --pass announcements); default all of them. */
+const onlyPass = option('--pass', null);
 const outDir = resolve(option('--out', join(repoRoot, 'build', 'SH8', 'run-check')));
 mkdirSync(outDir, { recursive: true });
 
@@ -118,6 +125,18 @@ const SOURCES = {
     '        TRAP    #15',
     '        SIMHALT',
     "TEXT:   DC.B    'HELLO FROM THE RUN CHECK',0",
+    '        END     START',
+  ],
+  // Reads six keys with task 5, one after the other, and halts.
+  keys: [
+    '        ORG     $1000',
+    'START:  MOVEQ   #0,D2',
+    'LOOP:   MOVEQ   #5,D0',
+    '        TRAP    #15',
+    '        ADDQ.L  #1,D2',
+    '        CMPI.L  #6,D2',
+    '        BNE     LOOP',
+    '        SIMHALT',
     '        END     START',
   ],
   // Sets the stack pointer, then TRAP #15 task 32 with D1 = 0 (show the Hardware window): one
@@ -1114,6 +1133,123 @@ async function stackPass(browser, name, programs) {
   await context.close();
 }
 
+/**
+ * What the status bar tells a screen reader (2.11; announce.ts; errata SH8.md entry 43): only the
+ * settled states - a halt, a stop, the start and end of Auto Trace - and nothing for the states a
+ * program passes through (Running, Waiting for input, Waiting) or for a Trace Into step, whose new
+ * line the Listing tells. Every change of a live region of the status bar is recorded in the page:
+ * a new text, or a new element with the same text (a second "Halted" is read again).
+ */
+async function announcePass(browser, name, programs) {
+  const p = `${name}:`;
+  const { context, page, errors } = await openApp(browser);
+  await prepare(page, programs);
+  await page.evaluate(() => {
+    window.__said = [];
+    const regions = () =>
+      [...document.querySelectorAll('footer.e68-statusbar [role=status], footer.e68-statusbar [aria-live]')].filter(
+        (element) => element.getAttribute('aria-live') !== 'off',
+      );
+    const last = new Map();
+    new MutationObserver((records) => {
+      for (const region of regions()) {
+        const text = region.textContent.trim();
+        const added = records.some(
+          (record) => region.contains(record.target) && record.type === 'childList' && record.addedNodes.length > 0,
+        );
+        if (text !== '' && (text !== last.get(region) || added)) window.__said.push(text);
+        last.set(region, text);
+      }
+    }).observe(document.querySelector('footer.e68-statusbar'), { childList: true, subtree: true, characterData: true });
+  });
+  const said = () => page.evaluate(() => window.__said.splice(0));
+  /** Long enough for an announcement to come: its settling time is 0.5 s, its gap 1 s. */
+  const quiet = () => page.waitForTimeout(1600);
+  const trace = async () => {
+    const before = (await sim(page)).regsRevision;
+    await page.evaluate(() => window.__easy68k.ctx.commands.run('sim.run.traceInto'));
+    await page.waitForFunction((rev) => window.__easy68k.ctx.store.getState().sim.regsRevision > rev, before, {
+      timeout: UI_TIMEOUT,
+    });
+    await page.waitForTimeout(250);
+  };
+
+  await load(page, 'hello');
+  await quiet();
+  await said();
+  await trace(); // LEA
+  await trace(); // MOVEQ #13,D0
+  await trace(); // TRAP #15: prints the line
+  await quiet();
+  const traced = await said();
+  check(`${p} three Trace Into steps announce nothing`, traced.length === 0, JSON.stringify(traced));
+  await trace(); // SIMHALT
+  await quiet();
+  const tracedHalt = await said();
+  check(
+    `${p} the Trace Into step that halts announces Halted, once`,
+    JSON.stringify(tracedHalt) === '["Halted"]',
+    JSON.stringify(tracedHalt),
+  );
+
+  await load(page, 'keys');
+  await quiet();
+  await said();
+  const output = page
+    .locator('[data-e68-workspace="simulator"] [data-e68-panel="output"] [data-e68-panel-focus]')
+    .first();
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('sim.run.run'));
+  const phases = [];
+  for (let i = 0; i < 6; i++) {
+    await waitForPhase(page, 'waitInput');
+    phases.push((await statusText(page)).split(' | ')[0]);
+    await page.waitForTimeout(150);
+    await output.focus();
+    await page.keyboard.press('k');
+  }
+  await waitForHalt(page);
+  await quiet();
+  const keyed = await said();
+  check(
+    `${p} a program that reads six keys says nothing while it waits for them, then Halted once`,
+    JSON.stringify(keyed) === '["Halted"]' && phases.every((text) => text === 'Waiting for input'),
+    `announced ${JSON.stringify(keyed)}; the visible cell said ${JSON.stringify([...new Set(phases)])} at the waits`,
+  );
+
+  await load(page, 'counter');
+  await quiet();
+  await said();
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('sim.run.run'));
+  await waitForPhase(page, 'running');
+  await page.waitForTimeout(800);
+  const runningSaid = await said();
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('sim.run.pause'));
+  await quiet();
+  const paused = await said();
+  check(
+    `${p} a running program says nothing; Pause announces Stopped, once`,
+    runningSaid.length === 0 && JSON.stringify(paused) === '["Stopped"]',
+    `while running ${JSON.stringify(runningSaid)}, after Pause ${JSON.stringify(paused)}`,
+  );
+  const visible = await statusText(page);
+  check(`${p} the visible cell still says the state: Stopped`, visible.startsWith('Stopped | PC='), visible);
+  await page.screenshot({ path: join(outDir, `${name}-status-after-pause.png`) });
+
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('sim.run.autoTrace'));
+  await page.waitForTimeout(2500); // about a dozen ticks
+  const autoSaid = await said();
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('sim.run.pause'));
+  await quiet();
+  const autoEnd = await said();
+  check(
+    `${p} Auto Trace announces itself once, not at every tick, and Stopped when paused`,
+    JSON.stringify(autoSaid) === '["Auto trace"]' && JSON.stringify(autoEnd) === '["Stopped"]',
+    `during ${JSON.stringify(autoSaid)}, after Pause ${JSON.stringify(autoEnd)}`,
+  );
+  check(`${p} announcements: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await context.close();
+}
+
 // --- run ----------------------------------------------------------------------------------------
 
 async function main() {
@@ -1152,7 +1288,9 @@ async function main() {
           ['start-up arguments', startupPass],
           ['no display frames', noFramesPass],
           ['stack', stackPass],
+          ['announcements', announcePass],
         ]) {
+          if (onlyPass !== null && title !== onlyPass) continue;
           console.log(`\n[${name}, ${title}]`);
           try {
             await pass(browser, name, programs);

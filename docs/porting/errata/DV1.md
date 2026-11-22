@@ -186,3 +186,10 @@ launch queue has its consumer:
   checks the opened document, its status line and that Save writes back. Not tried: a real
   installation and a double-click in a file manager (on the manual list; Playwright cannot install
   an app).
+
+## 14. Help offline in WebKit is not the service worker's (second round before I3)
+
+The worker precaches all 242 help files and answers them offline (a `fetch()` of `help/main.htm`
+from the page: 200 from the worker; a frame without sandbox or with `allow-scripts`: loads offline
+in WebKit). WebKit simply never asks the worker for a frame sandboxed without `allow-scripts`. No
+change to `sw.ts`; the decision is the help frame's (H1 errata, `docs/requests/H1-help-offline-webkit.md`).

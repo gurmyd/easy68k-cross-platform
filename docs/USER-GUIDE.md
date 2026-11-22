@@ -138,6 +138,16 @@ anywhere. This has consequences you should know:
   (or right-click > Export...). A folder, or the whole of My Programs, is saved as a `.zip` in your
   Downloads folder. **Import...** brings files or such a `.zip` back, for example into the Dock app.
 
+In Safari (and in any browser on an iPhone or iPad) the Files panel says this itself. From the first
+start a short notice above My Programs reads: `Safari deletes the programs kept here after seven days
+without a visit to this page. "Add to Dock" makes a separate app that starts with its own, empty My
+Programs. Use Export... here to save them all as a .zip, and Import... in the app to bring them
+over.` Its **Export...** button saves the whole of My Programs as `My Programs.zip`; **Got it**
+hides the notice in this browser for good. In the Dock app, while its My Programs is still empty,
+the notice reads `This app keeps its own programs, separate from Safari's: use Import... to bring
+over programs you exported in Safari.`, with **Import...** and **Got it**. Other browsers and the
+Mac app show no notice.
+
 Other ways to work with files:
 
 - **Open a file from your computer**: File > Open File..., then `From this computer...`. In Chrome

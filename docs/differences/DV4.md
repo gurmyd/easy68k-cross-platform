@@ -7,10 +7,9 @@ the original's own "not available" result (note 37 of 1.4), unchanged.
 ## Serial ports (tasks 40-43)
 
 - **Port names.** Windows names serial ports `COM1`, `COM2`, ...; a Mac names them
-  `/dev/cu.<something>`. A program still opens `COM4` with task 40: the Serial Ports dialog (to be
-  reached from Simulator mode's Options menu, docs/requests/DV4-serial-ports-command.md) says which
-  device each name stands for
-  (`AppSettings.serialPortMap`). A name with no device gives result 2, as a COM port that does not
+  `/dev/cu.<something>`. A program still opens `COM4` with task 40: the Serial Ports dialog
+  (Options > Serial Ports... in Simulator mode, desktop app only) says which device each name
+  stands for (`AppSettings.serialPortMap`). A name with no device gives result 2, as a COM port that does not
   exist does. Names are compared without regard to letter case.
 - **Task 42 does not wait.** The original waits up to `count + 1` ms (plus the inter-character
   timeout) for bytes that have not arrived yet; the port returns at once with what has arrived

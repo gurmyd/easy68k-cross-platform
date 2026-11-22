@@ -32,6 +32,30 @@
   line-height: var(--lh-body);
 }
 
+/* The Safari storage notice (R-10, storage-notice.ts): above the tree, takes no focus, blocks nothing. */
+.e68-files__notice {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-accent-soft);
+  color: var(--c-text);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+}
+
+.e68-files__notice-text {
+  margin: 0;
+}
+
+.e68-files__notice-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
 .e68-files__tree {
   flex: 1 1 auto;
   min-height: 0;

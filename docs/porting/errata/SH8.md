@@ -587,7 +587,48 @@ entry 28 and the lines marked "Gate I1, round 2" in its second round.
   an `alertdialog` (U4), announced by its role. Tests: `StatusBar.test.tsx` (one status region, the
   run cell); `node tests/a11y/check-a11y.mjs --only structure`: "a halt is announced by a live
   region" passes in Chromium and WebKit, both key maps and both themes (the live regions said
-  `Halted`).
+  `Halted`). Replaced by entry 43: the cell is no longer the live region.
+
+### 43. Only settled run states are announced, from a hidden region (2.11; review of f17e78a)
+
+- Problem (review of f17e78a): the live cell of entry 42 announced every state it passed through.
+  Reproduced with the new pass "announcements" of `check-run.mjs` on the status bar of f17e78a
+  (Chromium): a program that reads six keys with task 5 made the region say `Waiting for input`,
+  and a running program said `Running`, besides the `Halted` and `Stopped` that matter. Measured
+  rather than assumed: a Trace Into step did **not** announce `Stopped` there (the step is
+  synchronous, the cell's text never changed), and Auto Trace's ticks did not flip the cell either;
+  the review's claim for those two did not hold, the one for the waits did.
+- Decided list (2.11 names "a halt"; sim-ui §9 lists what ends execution: SIMHALT, task 9, STOP,
+  the errors of 7.2 with exceptions off, breakpoints, Pause, Run To Cursor, Step Over, the end of
+  Auto Trace):
+  - `Halted`: after every halt, also one reached with Trace Into.
+  - `Stopped`: after a run that stopped without a halt (a breakpoint, Run To Cursor, Step Over, Pause
+    or Rewind of a running program, Pause of Auto Trace). Not after a Trace Into step: the Listing
+    moves its selection to the new line, which a screen reader reads already. Not after Pause or
+    Rewind while nothing was running.
+  - `Auto trace`: once, when Auto Trace starts; not at its ticks.
+  - Not announced: `Running`, `Waiting for input`, `Waiting`, `Loading` (passing states). Errors
+    are not announced here: the engine's error texts go to the Messages panel, whose own polite log
+    region reads them, and message boxes are `alertdialog`s; the stop that follows says `Halted` or
+    `Stopped`.
+- Does: the visible cell (`data-e68-status="run"`) is unchanged in look and text but has no role.
+  A hidden `e68-sr` span with `role="status"` (`data-e68-run-announce`, `StatusBar.tsx`) gets the
+  words; each announcement is a new element, so a second `Halted` is read again. The decision is
+  `features/run/announce.ts` (`stopAnnouncement`, `RunAnnouncer`), fed by a new, additive member of
+  the controller, `SimRunController.lastStop` (`{ count, after: 'run' | 'trace' | 'autoTrace',
+  wasRunning }`, set in `stop()` when the phase becomes idle). A stop is judged 0.5 s after it
+  (`ANNOUNCE_SETTLE_MS`) by the state of that moment, so a program that runs again at once says
+  nothing; two announcements are at least 1 s apart (`ANNOUNCE_MIN_GAP_MS`), so Step Over held
+  down is told at most once a second.
+- Tests: `announce.test.ts` (virtual time: a halt once; a key-reading loop of 200 waits says
+  nothing; Trace steps say nothing, the halting one `Halted`; Pause `Stopped`; a run restarted before
+  it settles says nothing; Auto Trace once and `Stopped` at its end; never two within 1 s),
+  `controller.commands.test.ts` ("records every stop with the command that set execution going"),
+  `StatusBar.test.tsx` (one status region, hidden; the cells are not live). Browser:
+  `node app/src/features/run/check-run.mjs --pass announcements` (7 checks per browser, 14 of 14 in
+  Chromium and WebKit; the same pass against f17e78a's status bar failed 2 of 7 as above), and the
+  audit's "a halt is announced by a live region" (`tests/a11y`, `--only structure`) passes with the
+  hidden region and fails without it.
 
 ### 28. A session or controller disposed before it starts stays inert (3.12.3, 4.7.1)
 

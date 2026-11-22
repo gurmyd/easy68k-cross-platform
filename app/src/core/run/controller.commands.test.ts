@@ -264,6 +264,43 @@ describe.skipIf(!enginesBuilt)('the commands of 4.8 (needs engine/dist)', { time
     expect(kit.controller.phase).toBe('running');
   });
 
+  // The status bar announces settled states only (features/run/announce.ts, errata SH8.md entry 43).
+  it('records every stop with the command that set execution going (lastStop)', async () => {
+    await start();
+    await kit.open(calls);
+    const { controller } = kit;
+    let count = controller.lastStop.count;
+    const next = () => {
+      expect(controller.lastStop.count).toBe(++count);
+      return { after: controller.lastStop.after, wasRunning: controller.lastStop.wasRunning };
+    };
+    controller.traceInto(); // MOVEQ #1,D1: synchronous, from idle to idle
+    expect(next()).toEqual({ after: 'trace', wasRunning: false });
+    controller.stepOver(); // BSR SUB: runs the subroutine
+    kit.time.advance(50);
+    expect(next()).toEqual({ after: 'run', wasRunning: true });
+    controller.run();
+    kit.time.advance(50);
+    expect(controller.lastStop.count).toBe(count); // still running: no stop
+    controller.pause();
+    expect(next()).toEqual({ after: 'run', wasRunning: true });
+    controller.pause(); // nothing runs
+    expect(next()).toEqual({ after: 'run', wasRunning: false });
+    controller.autoTrace();
+    kit.time.advance(500);
+    expect(controller.lastStop.after).toBe('autoTrace'); // each tick is a stop
+    count = controller.lastStop.count;
+    controller.pause();
+    expect(next()).toEqual({ after: 'autoTrace', wasRunning: false });
+
+    await kit.open(halting);
+    count = controller.lastStop.count;
+    controller.run();
+    kit.time.advance(50);
+    expect(controller.snapshot.halted).toBe(true);
+    expect(next()).toEqual({ after: 'run', wasRunning: true });
+  });
+
   it('Rewind resets the registers and goes back to the start address', async () => {
     await start();
     await kit.open(counter);

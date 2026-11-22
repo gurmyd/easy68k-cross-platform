@@ -1,5 +1,6 @@
-// The simulator's status bar as markup: the run-state cell is a polite live region, so that a halt
-// is announced (ARCHITECTURE.md 2.11; finding Q1-5 of docs/integration/rc.md).
+// The simulator's status bar as markup: a hidden polite region announces the settled run states
+// (ARCHITECTURE.md 2.11; finding Q1-5 of docs/integration/rc.md; announce.ts, errata SH8.md entry
+// 43); the visible run-state cell is not a live region.
 //
 // Owner: SH8.
 
@@ -26,11 +27,11 @@ function render(): string {
 }
 
 describe('SimStatusBar', () => {
-  it('the run-state cell, and only it, is a status region (polite), so a halt is announced', () => {
+  it('one hidden polite status region announces; the visible cells, the run state among them, do not', () => {
     const html = render();
-    expect(html).toMatch(/<span class="e68-statusbar__cell" data-e68-status="run" role="status">[^<]+<\/span>/);
-    // The other cells change on every step (PC) or only by the user's own action: not announced.
+    expect(html).toMatch(/<span class="e68-statusbar__cell" data-e68-status="run">[^<]+<\/span>/);
+    expect(html).toContain('<span class="e68-sr" role="status" data-e68-run-announce=""></span>');
     expect(html.match(/role="status"/g)).toHaveLength(1);
-    expect(html).not.toContain('aria-live="assertive"');
+    expect(html).not.toContain('aria-live');
   });
 });

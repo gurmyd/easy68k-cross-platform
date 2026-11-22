@@ -1,7 +1,7 @@
 // Browser check of work package FS1: the browser store, the file dialogs, the Files panel, drops,
 // export and import (ARCHITECTURE.md 9.2, FS1 acceptance). Owner: FS1.
 //
-//   node app/src/features/files/check-files.mjs [--browser chromium|webkit|all] [--out <dir>]
+//   node app/src/features/files/check-files.mjs [--browser chromium|webkit|all] [--out <dir>] [--pass <text>]
 //
 // Starts the Vite dev server of app/ on a free port and drives the real application in headless
 // Chromium and WebKit (Playwright). It checks what unit tests under Node cannot show:
@@ -27,6 +27,11 @@
 //     (python's zipfile, unzip or bsdtar, whichever exists) and that parses back with every byte;
 //     a whole-store export imports through Import... into an empty store with every byte equal;
 //   - an accessibility scan (axe-core) of the Files panel and the dialogs, in both themes;
+//   - the Safari storage notice (R-10), with ?storage-notice=1: in WebKit at the first start, its
+//     Export... downloads the whole store, Got it hides it for good (reloads, other windows), the
+//     installed app's variant with an empty store and its Import..., both themes, Tab order and
+//     names; never in Chromium, never under automation without the parameter, and the panel's
+//     layout without it is the one it always had;
 //   - no console errors.
 //
 // Screenshots go to build/FS1/files-check (git-ignored). Exit code 0 = everything passed.
@@ -53,6 +58,8 @@ const option = (name, fallback) => {
   return index >= 0 && args[index + 1] ? args[index + 1] : fallback;
 };
 const browserChoice = option('--browser', 'all');
+/** --pass <text>: run only the passes whose label contains it (while working; CI runs them all). */
+const onlyPass = option('--pass', '');
 const outDir = resolve(option('--out', join(repoRoot, 'build', 'FS1', 'files-check')));
 mkdirSync(outDir, { recursive: true });
 
@@ -191,7 +198,7 @@ async function newContext(browser, options = {}) {
   return context;
 }
 
-async function openApp(context, { expectErrors = false } = {}) {
+async function openApp(context, { expectErrors = false, query = '' } = {}) {
   const page = await context.newPage();
   page.setDefaultTimeout(60_000);
   page.setDefaultNavigationTimeout(180_000);
@@ -200,7 +207,7 @@ async function openApp(context, { expectErrors = false } = {}) {
     if (message.type() === 'error') errors.push(message.text());
   });
   page.on('pageerror', (error) => errors.push(String(error)));
-  await page.goto(baseUrl);
+  await page.goto(`${baseUrl}${query}`);
   await page.waitForSelector('.e68-shell');
   await page.waitForFunction(() => window.__easy68k !== undefined);
   await page.waitForSelector('[data-e68-panel="files"] [role=tree]');
@@ -1314,6 +1321,332 @@ async function uiPass(browser, name) {
   await fresh.close();
 }
 
+// ---- the Safari storage notice (R-10) ---------------------------------------------------------------
+
+const NOTICE = '[data-e68-panel="files"] [role=note]';
+/** Shows the notice under automation as for a person (storage-notice.ts STORAGE_NOTICE_PARAM). */
+const NOTICE_QUERY = '?storage-notice=1';
+
+/** The page runs as the installed app: `(display-mode: standalone)` matches (Playwright cannot install). */
+function pretendInstalled() {
+  const original = window.matchMedia.bind(window);
+  window.matchMedia = (query) => {
+    if (!/display-mode:\s*standalone/.test(query)) return original(query);
+    return {
+      matches: true,
+      media: query,
+      onchange: null,
+      addListener() {},
+      removeListener() {},
+      addEventListener() {},
+      removeEventListener() {},
+      dispatchEvent: () => false,
+    };
+  };
+}
+
+/** Where the parts of the Files panel are, in CSS pixels (rounded), and the notice's own box. */
+function filesGeometry(page) {
+  return page.evaluate(() => {
+    const box = (selector) => {
+      const element = document.querySelector(selector);
+      if (!element) return null;
+      const r = element.getBoundingClientRect();
+      return {
+        top: Math.round(r.top),
+        left: Math.round(r.left),
+        width: Math.round(r.width),
+        height: Math.round(r.height),
+      };
+    };
+    return {
+      panel: box('[data-e68-panel="files"] .e68-files'),
+      strip: box('[data-e68-panel="files"] .e68-files__strip'),
+      tree: box('[data-e68-panel="files"] [role=tree]'),
+      notice: box('[data-e68-panel="files"] [role=note]'),
+    };
+  });
+}
+
+/** What the notice shows and says, and what the product's constants are (read in the page). */
+function noticeFacts(page) {
+  return page.evaluate(async () => {
+    const texts = await import('/src/features/files/storage-notice.ts');
+    const note = document.querySelector('[data-e68-panel="files"] [role=note]');
+    const tree = document.querySelector('[data-e68-panel="files"] [role=tree]');
+    return {
+      constants: {
+        tab: texts.STORAGE_NOTICE_TAB_TEXT,
+        installed: texts.STORAGE_NOTICE_INSTALLED_TEXT,
+        label: texts.STORAGE_NOTICE_LABEL,
+      },
+      shown: note !== null,
+      kind: note?.getAttribute('data-e68-storage-notice') ?? null,
+      label: note?.getAttribute('aria-label') ?? null,
+      text: note?.querySelector('p')?.textContent ?? null,
+      buttons: note ? [...note.querySelectorAll('button')].map((b) => b.textContent.trim()) : [],
+      above: note && tree ? note.getBoundingClientRect().bottom <= tree.getBoundingClientRect().top + 0.5 : false,
+      focusInside: note ? note.contains(document.activeElement) : false,
+      seen: window.__easy68k.ctx.settings.get().app.storageNoticeSeen ?? null,
+    };
+  });
+}
+
+/** A description of the focused element, for the Tab order. */
+function focusedName(page) {
+  return page.evaluate(() => {
+    const element = document.activeElement;
+    if (!element) return 'none';
+    if (element.getAttribute('role') === 'tree') return 'tree';
+    const inNote = element.closest('[role=note]') !== null;
+    const name = element.getAttribute('aria-label') ?? element.textContent.trim();
+    return `${inNote ? 'notice ' : ''}${element.tagName.toLowerCase()} ${name}`.slice(0, 60);
+  });
+}
+
+/**
+ * R-10: the notice above the tree, in WebKit only, under automation only with storage-notice=1; its
+ * Export... downloads the whole store, Got it hides it for this browser (also after a reload); the
+ * installed app with an empty store shows the other variant with Import...; both themes; reachable
+ * with Tab and named; the panel's layout without the notice is the one it always had.
+ */
+async function storageNoticePass(browser, name) {
+  const p = `${name}: storage notice:`;
+  const safariEngine = name === 'webkit';
+
+  // Without the parameter, automation hides the notice: every other check sees the panel it saw.
+  progress('without the parameter');
+  const plainContext = await newContext(browser);
+  const plain = await openApp(plainContext);
+  await plain.page.waitForTimeout(500);
+  const plainGeometry = await filesGeometry(plain.page);
+  check(
+    `${p} without storage-notice=1 an automated browser sees no notice`,
+    plainGeometry.notice === null && (await plain.page.locator(NOTICE).count()) === 0,
+    JSON.stringify(plainGeometry.notice),
+  );
+  check(`${p} plain page: no console errors`, plain.errors.length === 0, plain.errors.slice(0, 3).join(' | '));
+  await plainContext.close();
+
+  progress('first start with the parameter');
+  const context = await newContext(browser);
+  const opened = await openApp(context, { query: NOTICE_QUERY });
+  const { page } = opened;
+  if (!safariEngine) {
+    await page.waitForTimeout(1000);
+    const geometry = await filesGeometry(page);
+    check(
+      `${p} with storage-notice=1 Chromium shows no notice (only Safari's engine has the rule)`,
+      geometry.notice === null,
+      JSON.stringify(geometry.notice),
+    );
+    check(
+      `${p} the Files panel's layout is unchanged when the notice is absent`,
+      same(geometry, plainGeometry),
+      `${JSON.stringify(geometry)} vs ${JSON.stringify(plainGeometry)}`,
+    );
+    check(`${p} no console errors`, opened.errors.length === 0, opened.errors.slice(0, 3).join(' | '));
+    await context.close();
+    return;
+  }
+
+  await page.locator(NOTICE).waitFor({ timeout: 15_000 });
+  const first = await noticeFacts(page);
+  check(
+    `${p} shown at the first start, above the tree, with the tab text and Export... and Got it`,
+    first.kind === 'tab' &&
+      first.text === first.constants.tab &&
+      same(first.buttons, ['Export...', 'Got it']) &&
+      first.above,
+    JSON.stringify({ kind: first.kind, buttons: first.buttons, above: first.above, text: first.text }),
+  );
+  check(
+    `${p} named for a screen reader (role note, "${first.constants.label}") and takes no focus`,
+    first.label === first.constants.label && !first.focusInside,
+    `label ${JSON.stringify(first.label)}, focus inside: ${first.focusInside}, focused: ${await focusedName(page)}`,
+  );
+  await page.screenshot({ path: join(outDir, `${name}-storage-notice-light.png`) });
+  await page
+    .locator('[data-e68-panel="files"]')
+    .screenshot({ path: join(outDir, `${name}-storage-notice-panel-light.png`) });
+  await scan(page, `${name} light Files panel with the storage notice`);
+
+  // Keyboard: from the strip, Tab reaches Export... and Got it, then the tree; Shift+Tab goes back.
+  progress('keyboard');
+  await page.locator('[data-e68-panel="files"] .e68-files__strip button').first().focus();
+  const order = [await focusedName(page)];
+  for (let i = 0; i < 8 && order[order.length - 1] !== 'tree'; i++) {
+    await page.keyboard.press('Tab');
+    order.push(await focusedName(page));
+  }
+  const exportAt = order.indexOf('notice button Export...');
+  const gotItAt = order.indexOf('notice button Got it');
+  const treeAt = order.indexOf('tree');
+  check(
+    `${p} Tab from the strip reaches Export..., then Got it, then the tree`,
+    exportAt > 0 && gotItAt === exportAt + 1 && treeAt === gotItAt + 1,
+    order.join(' > '),
+  );
+  await page.keyboard.press('Shift+Tab');
+  const back = await focusedName(page);
+  check(`${p} Shift+Tab from the tree goes back to Got it`, back === 'notice button Got it', back);
+
+  // Export...: the whole store as "My Programs.zip", with every file's bytes.
+  progress('export');
+  const files = {
+    'top.X68': [42, 32, 116, 111, 112, 13, 10],
+    'kept/prog.X68': Array.from({ length: 300 }, (_, i) => (i * 7) & 0xff),
+  };
+  await page.evaluate(async (entries) => {
+    const { vfs } = window.__easy68k.ctx;
+    for (const [rel, bytes] of Object.entries(entries)) {
+      if (rel.includes('/')) await vfs.mkdirp(`/browser/${rel.slice(0, rel.lastIndexOf('/'))}`);
+      await vfs.writeFile(`/browser/${rel}`, new Uint8Array(bytes));
+    }
+  }, files);
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.locator(NOTICE).getByRole('button', { name: 'Export...' }).click(),
+  ]);
+  const zipPath = join(outDir, `${name}-notice-store.zip`);
+  await download.saveAs(zipPath);
+  const suggested = download.suggestedFilename();
+  const { readZip } = await import(new URL('../../fs/zip.ts', import.meta.url).href);
+  const parsed = await readZip(new Uint8Array(readFileSync(zipPath)));
+  const zipped = Object.fromEntries(
+    parsed.entries.filter((entry) => !entry.path.endsWith('/')).map((entry) => [entry.path, Array.from(entry.data)]),
+  );
+  check(
+    `${p} Export... downloads the whole store as a .zip with every file's bytes`,
+    (suggested === 'My Programs.zip' || (process.platform === 'linux' && suggested === 'My_Programs.zip')) &&
+      same(Object.keys(zipped).sort(), Object.keys(files).sort()) &&
+      Object.entries(files).every(([rel, bytes]) => same(zipped[rel], bytes)),
+    `${suggested}: ${JSON.stringify(Object.keys(zipped))}`,
+  );
+  check(`${p} the notice stays after Export... (only Got it hides it)`, (await page.locator(NOTICE).count()) === 1);
+
+  // Dark theme.
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('app.theme.set', 'dark'));
+  await page.waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'dark');
+  await page
+    .locator('[data-e68-panel="files"]')
+    .screenshot({ path: join(outDir, `${name}-storage-notice-panel-dark.png`) });
+  await scan(page, `${name} dark Files panel with the storage notice`);
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('app.theme.set', 'light'));
+  await page.waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'light');
+
+  // Got it: hidden, remembered, the panel's layout as without the notice, and after a reload too.
+  progress('got it');
+  await page.locator(NOTICE).getByRole('button', { name: 'Got it' }).focus();
+  await page.keyboard.press('Enter');
+  await page.locator(NOTICE).waitFor({ state: 'detached', timeout: 10_000 });
+  const after = await filesGeometry(page);
+  const seen = await page.evaluate(() => window.__easy68k.ctx.settings.get().app.storageNoticeSeen);
+  const focusAfter = await focusedName(page);
+  check(
+    `${p} Got it hides the notice, remembers it and leaves the keyboard in the tree`,
+    after.notice === null && seen === true && focusAfter === 'tree',
+    `seen ${seen}, focus ${focusAfter}`,
+  );
+  check(
+    `${p} without the notice the panel has the layout of a page that never showed it`,
+    same(after, plainGeometry),
+    `${JSON.stringify(after)} vs ${JSON.stringify(plainGeometry)}`,
+  );
+  await page.reload();
+  await page.waitForSelector('[data-e68-panel="files"] [role=tree]');
+  await page.waitForFunction(() => window.__easy68k !== undefined);
+  await page.waitForTimeout(1000);
+  check(`${p} not shown again after a reload once acknowledged`, (await page.locator(NOTICE).count()) === 0);
+  const second = await openApp(context, { query: NOTICE_QUERY });
+  await second.page.waitForTimeout(1000);
+  check(`${p} nor in another window of the same browser`, (await second.page.locator(NOTICE).count()) === 0);
+  check(
+    `${p} no console errors`,
+    opened.errors.length === 0 && second.errors.length === 0,
+    [...opened.errors, ...second.errors].slice(0, 3).join(' | '),
+  );
+  await context.close();
+
+  // The installed app with an empty store: the other variant; Import... brings the .zip over.
+  progress('installed app');
+  const installedContext = await newContext(browser);
+  await installedContext.addInitScript(pretendInstalled);
+  const installed = await openApp(installedContext, { query: NOTICE_QUERY });
+  await installed.page.locator(NOTICE).waitFor({ timeout: 15_000 });
+  const inApp = await noticeFacts(installed.page);
+  check(
+    `${p} installed app, empty store: one sentence with Import... and Got it`,
+    inApp.kind === 'installed' &&
+      inApp.text === inApp.constants.installed &&
+      same(inApp.buttons, ['Import...', 'Got it']) &&
+      inApp.above &&
+      !inApp.focusInside,
+    JSON.stringify({ kind: inApp.kind, buttons: inApp.buttons, text: inApp.text }),
+  );
+  await installed.page
+    .locator('[data-e68-panel="files"]')
+    .screenshot({ path: join(outDir, `${name}-storage-notice-installed-light.png`) });
+  await scan(installed.page, `${name} light Files panel with the installed app's notice`);
+  await installed.page.evaluate(() => window.__easy68k.ctx.commands.run('app.theme.set', 'dark'));
+  await installed.page.waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'dark');
+  await installed.page
+    .locator('[data-e68-panel="files"]')
+    .screenshot({ path: join(outDir, `${name}-storage-notice-installed-dark.png`) });
+  await scan(installed.page, `${name} dark Files panel with the installed app's notice`);
+  const [chooser] = await Promise.all([
+    installed.page.waitForEvent('filechooser'),
+    installed.page.locator(NOTICE).getByRole('button', { name: 'Import...' }).click(),
+  ]);
+  await chooser.setFiles(zipPath);
+  let brought = {};
+  for (let i = 0; i < 40; i++) {
+    brought = await storeContents(installed.page);
+    if ('/browser/kept/prog.X68' in brought && '/browser/top.X68' in brought) break;
+    await installed.page.waitForTimeout(250);
+  }
+  check(
+    `${p} installed app: Import... brings the exported .zip into its own store with every byte`,
+    brought['/browser/top.X68'] === files['top.X68'].join(',') &&
+      brought['/browser/kept/prog.X68'] === files['kept/prog.X68'].join(','),
+    JSON.stringify(Object.keys(brought)),
+  );
+  check(
+    `${p} installed app: the notice stays after the import until Got it`,
+    (await installed.page.locator(NOTICE).count()) === 1,
+  );
+  await installed.page.reload();
+  await installed.page.waitForSelector('[data-e68-panel="files"] [role=tree]');
+  await installed.page.waitForTimeout(1000);
+  check(
+    `${p} installed app: a store with programs shows no notice after a reload`,
+    (await installed.page.locator(NOTICE).count()) === 0,
+  );
+  check(
+    `${p} installed app: no console errors`,
+    installed.errors.length === 0,
+    installed.errors.slice(0, 3).join(' | '),
+  );
+  await installedContext.close();
+
+  // The installed app's Got it is remembered too (the store stays empty, so only that hides it).
+  progress('installed app, got it');
+  const emptyContext = await newContext(browser);
+  await emptyContext.addInitScript(pretendInstalled);
+  const empty = await openApp(emptyContext, { query: NOTICE_QUERY });
+  await empty.page.locator(NOTICE).waitFor({ timeout: 15_000 });
+  await empty.page.locator(NOTICE).getByRole('button', { name: 'Got it' }).click();
+  await empty.page.locator(NOTICE).waitFor({ state: 'detached', timeout: 10_000 });
+  await empty.page.reload();
+  await empty.page.waitForSelector('[data-e68-panel="files"] [role=tree]');
+  await empty.page.waitForTimeout(1000);
+  check(
+    `${p} installed app: Got it is remembered with the store still empty`,
+    (await empty.page.locator(NOTICE).count()) === 0 && Object.keys(await storeContents(empty.page)).length === 0,
+  );
+  await emptyContext.close();
+}
+
 /** Lists and tests a .zip with whatever archive tool this system has. */
 function archiveToolCheck(zipPath) {
   const attempts = [
@@ -1375,8 +1708,10 @@ async function main() {
           ['full storage', name === 'chromium' ? quotaPass : injectedQuotaPass],
           ['a page killed in the middle of a write', killPass],
           ['dialogs, panel, drop, export, import', uiPass],
+          ['the Safari storage notice', storageNoticePass],
         ];
         for (const [label, pass] of passes) {
+          if (onlyPass && !label.includes(onlyPass)) continue;
           console.log(`\n[${name}, ${label}]`);
           await timedPass(`${name}, ${label}`, () => pass(browser, name));
         }

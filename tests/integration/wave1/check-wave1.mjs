@@ -462,9 +462,24 @@ async function studentPart(browser, name, os, fx) {
     /Imported 2 files/.test(imported),
     imported,
   );
+  // The toast comes when the import is done; the panel lists the store again after that, so the
+  // rows are awaited (as the shipped examples are above), not counted at the toast.
+  const bothListed = await Promise.all(
+    ['tutorial1.S68', 'tutorial1.L68'].map((name) =>
+      filesRow(page, name)
+        .first()
+        .waitFor({ timeout: STEP_TIMEOUT })
+        .then(
+          () => true,
+          () => false,
+        ),
+    ),
+  );
+  const rowCounts = [await filesRow(page, 'tutorial1.S68').count(), await filesRow(page, 'tutorial1.L68').count()];
   check(
     `${p} both files are in the Files panel`,
-    (await filesRow(page, 'tutorial1.S68').count()) === 1 && (await filesRow(page, 'tutorial1.L68').count()) === 1,
+    bothListed.every(Boolean) && rowCounts[0] === 1 && rowCounts[1] === 1,
+    `rows: tutorial1.S68 ${rowCounts[0]}, tutorial1.L68 ${rowCounts[1]}`,
   );
 
   // --- Simulator: File > Open

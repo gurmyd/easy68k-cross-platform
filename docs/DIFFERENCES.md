@@ -328,6 +328,12 @@ None of these changes what a student's program can observe.
   application is shown and the Files panel says that My Programs is still opening; what is opened
   or saved meanwhile waits for the storage (at most 20 s, after which the session keeps files in
   memory and says so).
+- **A notice about Safari's storage rules (an addition; risk R-10).** In Safari, and in every
+  browser on an iPhone or iPad, the Files panel shows a short notice above the tree from the first
+  start: Safari deletes the programs kept in the browser after seven days without a visit, and an
+  app made with "Add to Dock" starts with its own, empty My Programs. It offers Export... (the whole
+  store as a `.zip`) and `Got it`, which hides it for good in that browser. The Dock app shows, while
+  its store is empty, one sentence with Import.... The desktop app and other browsers show none.
 - **A full or blocked browser storage is reported.** The original writes to the disk and shows the
   run-time library's error. The port says in plain words that the file was not saved and that
   nothing saved before is lost, or that the browser keeps no files at all (some private windows).
@@ -1097,10 +1103,9 @@ the original's own "not available" result (note 37 of 1.4), unchanged.
 #### Serial ports (tasks 40-43)
 
 - **Port names.** Windows names serial ports `COM1`, `COM2`, ...; a Mac names them
-  `/dev/cu.<something>`. A program still opens `COM4` with task 40: the Serial Ports dialog (to be
-  reached from Simulator mode's Options menu, docs/requests/DV4-serial-ports-command.md) says which
-  device each name stands for
-  (`AppSettings.serialPortMap`). A name with no device gives result 2, as a COM port that does not
+  `/dev/cu.<something>`. A program still opens `COM4` with task 40: the Serial Ports dialog
+  (Options > Serial Ports... in Simulator mode, desktop app only) says which device each name
+  stands for (`AppSettings.serialPortMap`). A name with no device gives result 2, as a COM port that does not
   exist does. Names are compared without regard to letter case.
 - **Task 42 does not wait.** The original waits up to `count + 1` ms (plus the inter-character
   timeout) for bytes that have not arrived yet; the port returns at once with what has arrived
@@ -1269,19 +1274,23 @@ They stay here until they are.
   holds only the course's files, or open the program's own sub-folder. The Mac app reads the disk
   directly and is not affected. (The repair, taking the files of `.git` last, is described in
   `docs/ARCHITECTURE-PLUS.md` P3.3.10, package N8, and is not built yet.)
-- **Safari's storage rules are not explained in the application.** Safari may delete a website's
-  files after seven days without a visit, and a web app added to the Dock has its own, empty store.
-  The application asks the browser to keep its files, but it does not yet show the notice the
-  design asks for (risk R-10 of `docs/ARCHITECTURE.md`). The user guide explains both rules; export
-  your programs regularly (Files panel, Export...).
-- **Speed at `Maximum`.** The design asks for 200 million instructions in 10 seconds at the
-  `Maximum` setting; measured in Chromium on a busy Windows PC it was 106 to 140 million
-  (`docs/porting/speed.md` 4.2). Programs run correctly, only less fast than intended.
-- **A program that draws without pause on a 120 Hz display.** While such a program runs, the
-  window's frames come about every 17 ms instead of the 12 ms the design asks for at 120 Hz
-  (`docs/porting/speed.md` 4.1); the program's own results and timing are not affected.
+- **The help pages without a network in Safari's engine.** After the first visit the application
+  works without a network in every tested browser, and so do the help pages in Chrome's engine. In
+  the test engine of Safari (WebKit) the help pane stays empty offline: WebKit does not let the
+  stored copy answer for a help frame that may run no scripts. Whether Safari itself does the same
+  has not been seen (`docs/MANUAL-TEST-MAC.md` step W1); the repair waits for a decision
+  (`docs/requests/H1-help-offline-webkit.md`).
+- **Speed at `Maximum`, and frames while a program draws, are not proven yet.** The design asks
+  for 200 million instructions in 10 seconds at the `Maximum` setting and, while a program draws
+  without pause, frames whose 95th percentile is under 20 ms at 60 Hz and under 12 ms at 120 Hz,
+  all in Chrome's engine on GitHub's Linux machine. That is decided by the performance job of a
+  manual test run there, which the release-candidate check reads. On a busy Windows PC
+  (21 November 2026) `Maximum` reached 106 to 121 million and the 120 Hz frames 17 ms; since a
+  slice of the simulator is bounded by time as well as by count, the same PC at a quieter moment (22
+  November 2026) gave 237 million (60 Hz) and 248 million (120 Hz) and 11.0 ms (`docs/porting/speed.md` 4.2, 4.6). The
+  program's own results and timing are not affected either way.
 - **Screen readers have not been tried.** The accessibility checks look at the page's structure;
-  nobody has used the port with VoiceOver or NVDA yet. Open findings of the automatic audit are
-  listed in `docs/integration/rc.md`.
+  nobody has used the port with VoiceOver or NVDA yet. The automatic audit has no open finding
+  today: `docs/integration/rc.md` records the six it found and how each was repaired.
 - **Serial ports** (Mac app) were tested with a simulated serial line, never with a real USB serial
   adapter.
