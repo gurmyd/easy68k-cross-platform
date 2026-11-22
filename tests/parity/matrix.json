@@ -3318,6 +3318,125 @@
         }
       ],
       "note": "The desktop dialog test opens the dialog through the feature (openSerialPortsDialog), not through the menu, and edits the map; the native menu test shows the item in the Options menu; the browser test shows it last in the Options menu, below a separator after Execution Speed..., greyed."
+    },
+    {
+      "section": "1.5",
+      "original": "`Move Panel To...` (stage of additions, `ARCHITECTURE-PLUS.md` P3.1.4, P3.6)",
+      "id": "`app.layout.move` (arg: `{ panel? }`)",
+      "status": "+",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/plus/layout.spec.ts",
+          "test": "panels moved in Editor mode and in Simulator mode are where they were put after a reload"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/plus/offline.spec.ts",
+          "test": "panels moved in both modes survive a reload with the network cut"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/plus/layout.spec.ts",
+          "test": "Reset Layout puts today's arrangement back after a reload, keeps the panels' visibility and the lock"
+        }
+      ],
+      "note": "Every move of these tests is made through Move Panel To... (Window menu in Editor mode, View menu in Simulator mode), as a student without a mouse makes it (tests/e2e/plus/arrangement.ts)."
+    },
+    {
+      "section": "1.5",
+      "original": "`Split Editor Right`, `Split Editor Down`, `Close Split` (P3.1.4)",
+      "id": "`ed.window.splitRight`, `ed.window.splitDown`, `ed.window.unsplit`",
+      "status": "+",
+      "verifiedBy": [
+        {
+          "kind": "unit",
+          "file": "app/src/features/editor/commands.test.ts",
+          "test": "Split Editor Right / Down and Close Split drive the layout and the panes of the window"
+        },
+        {
+          "kind": "unit",
+          "file": "app/src/ui/editor/split.test.ts",
+          "test": "enabled: Split while a document is open, Close Split while there are two panes"
+        }
+      ],
+      "note": "No end-to-end test of tests/e2e/plus runs the split commands; the unit tests of N2 run them on the real command handlers and the pane model."
+    },
+    {
+      "section": "1.5",
+      "original": "`Lock Layout` (a check item), `Reset Layout` (Simulator: `Reset Layout` with another access key) (P3.1.4)",
+      "id": "`app.layout.lock`, `app.layout.reset`",
+      "status": "+",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/plus/layout.spec.ts",
+          "test": "Reset Layout puts today's arrangement back after a reload, keeps the panels' visibility and the lock"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/plus/layout.spec.ts",
+          "test": "panels moved in Editor mode and in Simulator mode are where they were put after a reload"
+        }
+      ],
+      "note": "The Reset test chooses Window > Reset Layout and checks that Lock Layout stays checked; the move test checks that Lock Layout is on by default and that a move keeps it. No test turns the lock off."
+    },
+    {
+      "section": "1.5",
+      "original": "`Earlier Versions...` (P3.3.3)",
+      "id": "`ed.file.history` (arg: `{ path? }`)",
+      "status": "+",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/plus/history.spec.ts",
+          "test": "a student imports a folder, views its PDF, saves three times, deletes by mistake and gets everything back"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/plus/history.spec.ts",
+          "test": "a restore from Earlier Versions in one window offers a reload in the other, which then shows the restored text"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/plus/history.spec.ts",
+          "test": "two windows: a save in one shows a new version in the other's open Earlier Versions dialog"
+        }
+      ],
+      "note": "The tests open Earlier Versions... from the Files panel's context menu (tests/e2e/fixtures/plus.ts, openEarlierVersions)."
+    },
+    {
+      "section": "1.5",
+      "original": "`Trash...` (P3.3.3)",
+      "id": "`app.files.trash`",
+      "status": "+",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/plus/history.spec.ts",
+          "test": "a student imports a folder, views its PDF, saves three times, deletes by mistake and gets everything back"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/plus/offline.spec.ts",
+          "test": "the long scenario works with the network cut"
+        }
+      ],
+      "note": "The tests open Trash... with the Files panel's strip button (tests/e2e/fixtures/plus.ts, openTrash)."
+    },
+    {
+      "section": "1.5",
+      "original": "`Port Additions...` (P3.5)",
+      "id": "`app.additions.options` (arg: `{ group?: 'storage' }`)",
+      "status": "+",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/plus/viewer.spec.ts",
+          "test": "with the viewer switched off in Port Additions, a PDF opens as text, as in the original"
+        }
+      ],
+      "note": "The test chooses Options > Port Additions... in Editor mode and switches the viewer off."
     }
   ]
 }
