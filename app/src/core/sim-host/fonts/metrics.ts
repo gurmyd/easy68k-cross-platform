@@ -12,6 +12,7 @@
 //
 //   "faceKinds": ["raster", "outline", ...]          parallel to "faces"
 //   "raster": { "atlases": [...], "cells": [...] }   how Windows makes every raster cell (see RasterRules)
+//   "raster": { ..., "textPath": {...} }            what Windows' Unicode text path draws (RasterTextPath)
 //
 // and, next to the atlases, `scalable/index.json`, the list of the outline faces' atlases
 // (parseOutlineIndex). A browser cannot list a folder, so these lists are how the provider learns
@@ -96,9 +97,23 @@ export interface RasterCell {
   lineExceptions: Readonly<Record<number, number>>;
 }
 
+/**
+ * What Windows' Unicode text path does in the raster faces that the atlases cannot say (T2's
+ * `raster.textPath`, measured by tests/oracle/gdi-capture for every raster size and style), by
+ * requested font name, style and point size.
+ */
+export interface RasterTextPath {
+  /** The height of the bar a text of zero-width bytes only may be drawn as; absent where there is none. */
+  zeroWidthBar: ReadonlyMap<string, ReadonlyMap<FontStyle, ReadonlyMap<number, number>>>;
+  /** The width of $80 on the text path, drawn from a fallback font; absent or null where not measured. */
+  fallbackEuro: ReadonlyMap<string, ReadonlyMap<FontStyle, readonly (number | null)[]>>;
+}
+
 export interface RasterRules {
   atlases: readonly RasterAtlasInfo[];
   cells: readonly RasterCell[];
+  /** Absent in a file written before T2 measured it. */
+  textPath?: RasterTextPath;
 }
 
 export interface MetricTable {
@@ -269,7 +284,45 @@ function parseRaster(value: unknown, fail: (m: string) => never): RasterRules {
       lineExceptions,
     };
   });
-  return { atlases, cells };
+  const rules: RasterRules = { atlases, cells };
+  if (value['textPath'] !== undefined) rules.textPath = parseTextPath(value['textPath'], fail);
+  return rules;
+}
+
+/** `raster.textPath`: { zeroWidthBar: { name: { style: { size: height } } }, fallbackEuro: { name: { style: [256 widths or null] } } }. */
+function parseTextPath(value: unknown, fail: (m: string) => never): RasterTextPath {
+  if (!isObject(value)) fail('"raster.textPath" must be an object');
+  const byNameAndStyle = <T>(key: string, read: (entry: unknown, where: string) => T) => {
+    const raw = value[key] ?? {};
+    if (!isObject(raw)) fail(`"raster.textPath.${key}" must map font names to styles`);
+    const names = new Map<string, Map<FontStyle, T>>();
+    for (const [name, styles] of Object.entries(raw)) {
+      if (!isObject(styles)) fail(`"raster.textPath.${key}.${name}" must map styles`);
+      const map = new Map<FontStyle, T>();
+      for (const [styleKey, entry] of Object.entries(styles)) {
+        const where = `"raster.textPath.${key}.${name}.${styleKey}"`;
+        map.set(styleOfKey(styleKey) ?? fail(`${where}: not a style`), read(entry, where));
+      }
+      names.set(name, map);
+    }
+    return names;
+  };
+  const zeroWidthBar = byNameAndStyle('zeroWidthBar', (entry, where) => {
+    if (!isObject(entry)) fail(`${where} must map point sizes to heights`);
+    const sizes = new Map<number, number>();
+    for (const [size, height] of Object.entries(entry)) {
+      if (!/^\d+$/.test(size) || Number(size) >= POINT_SIZES || !isCount(height))
+        fail(`${where} must map point sizes to heights`);
+      sizes.set(Number(size), height);
+    }
+    return sizes;
+  });
+  const fallbackEuro = byNameAndStyle('fallbackEuro', (entry, where) => {
+    if (!Array.isArray(entry) || entry.length !== POINT_SIZES || !entry.every((w) => w === null || isCount(w)))
+      fail(`${where} must give ${POINT_SIZES} widths (or null), one per point size`);
+    return entry as (number | null)[];
+  });
+  return { zeroWidthBar, fallbackEuro };
 }
 
 /**

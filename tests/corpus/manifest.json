@@ -3,7 +3,7 @@
  "oracle": {
   "program": "official EDIT68K.exe v5.16.1 under Wine in Docker (tests/oracle/wine)",
   "wine": "wine-8.0 (Debian 8.0~repack-4)",
-  "generated": "2026-11-21"
+  "generated": "2026-11-22"
  },
  "programs": [
   {
@@ -444,6 +444,16 @@
     "richedit-sensitive"
    ],
    "runs": {
+    "default": {
+     "options": {},
+     "status": "ok",
+     "received": "19a8203f4d188b5f98bacd0523039ead7f6f3230345bf5ed13874fb15fa110b4",
+     "errors": 3,
+     "warnings": 0,
+     "l68": "353d5cc410859d3e8e14b1b35628cf041adf6cd44a6572462159fb1532254e24",
+     "s68": "c4e7c155cf79decb07071b4f4f59bc16f8a04e5119f80545de820d89c5535731",
+     "golden": true
+    },
     "nocre": {
      "options": {
       "crossReference": false
@@ -749,6 +759,102 @@
    "runs": {
     "default": {
      "options": {},
+     "status": "ok",
+     "received": "d551f8d5d8a6df89287d5def5295f8ca9d93aea523366b1163fc584a3190c947",
+     "errors": 1,
+     "warnings": 3,
+     "l68": "928d2e11d2c92f9e88af4cf6f8c6724f0f3a6a83bbf37cdc752b2c330cb8c2ec",
+     "s68": "49b2ffdef52b12d5359905cd47980ef515bfad90d7be44bb68ee5b6e3d551fa2",
+     "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "d551f8d5d8a6df89287d5def5295f8ca9d93aea523366b1163fc584a3190c947",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "49b2ffdef52b12d5359905cd47980ef515bfad90d7be44bb68ee5b6e3d551fa2",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "d551f8d5d8a6df89287d5def5295f8ca9d93aea523366b1163fc584a3190c947",
+     "errors": 1,
+     "warnings": 3,
+     "l68": "928d2e11d2c92f9e88af4cf6f8c6724f0f3a6a83bbf37cdc752b2c330cb8c2ec",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "d551f8d5d8a6df89287d5def5295f8ca9d93aea523366b1163fc584a3190c947",
+     "errors": 1,
+     "warnings": 3,
+     "l68": "14a0394676dfcf60014e5b22af12015809a9c82e865aba94b1d2003fcaad1e95",
+     "s68": "49b2ffdef52b12d5359905cd47980ef515bfad90d7be44bb68ee5b6e3d551fa2",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "d551f8d5d8a6df89287d5def5295f8ca9d93aea523366b1163fc584a3190c947",
+     "errors": 1,
+     "warnings": 3,
+     "l68": "5da5c1620818082fb997c703971e258d60f1333339f6295d8e933b3976e2aa1d",
+     "s68": "49b2ffdef52b12d5359905cd47980ef515bfad90d7be44bb68ee5b6e3d551fa2",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "d551f8d5d8a6df89287d5def5295f8ca9d93aea523366b1163fc584a3190c947",
+     "errors": 1,
+     "warnings": 3,
+     "l68": "928d2e11d2c92f9e88af4cf6f8c6724f0f3a6a83bbf37cdc752b2c330cb8c2ec",
+     "s68": "49b2ffdef52b12d5359905cd47980ef515bfad90d7be44bb68ee5b6e3d551fa2",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "d551f8d5d8a6df89287d5def5295f8ca9d93aea523366b1163fc584a3190c947",
+     "errors": 1,
+     "warnings": 3,
+     "l68": "928d2e11d2c92f9e88af4cf6f8c6724f0f3a6a83bbf37cdc752b2c330cb8c2ec",
+     "s68": "49b2ffdef52b12d5359905cd47980ef515bfad90d7be44bb68ee5b6e3d551fa2",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "d551f8d5d8a6df89287d5def5295f8ca9d93aea523366b1163fc584a3190c947",
+     "errors": 1,
+     "warnings": 3,
+     "l68": "c242ddfc5d50f827d1b536345fb0e14ca2d7a4c8c80f3997eb64b873905a90e8",
+     "s68": "49b2ffdef52b12d5359905cd47980ef515bfad90d7be44bb68ee5b6e3d551fa2",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
      "status": "ok",
      "received": "d551f8d5d8a6df89287d5def5295f8ca9d93aea523366b1163fc584a3190c947",
      "errors": 1,
@@ -1318,6 +1424,16 @@
     "richedit-sensitive"
    ],
    "runs": {
+    "default": {
+     "options": {},
+     "status": "ok",
+     "received": "cfa30f20589ff75a4b510acf39773b7eed975fc8764fcb702481e005de20cde5",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "a3677821255c770759368a7bd8edcbff746ba2e69eb8b9300fff04d2b48f3b3a",
+     "s68": "565bd97566cf157f75f2362238014f5d85e329ee2405296a70822d2e64780fa9",
+     "golden": true
+    },
     "mex": {
      "options": {
       "macrosExpanded": true
@@ -1519,6 +1635,97 @@
      "s68": "56306141d00c196f8377418b9159cc35caca60435ff990ea3e57c2683445c969",
      "undefinedSymbols": true,
      "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "01c0d4ab3a9f6536094bfb0e14197ed38ee4fc51b9a342e7224a4fe79da32110",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "56306141d00c196f8377418b9159cc35caca60435ff990ea3e57c2683445c969",
+     "undefinedSymbols": true,
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "01c0d4ab3a9f6536094bfb0e14197ed38ee4fc51b9a342e7224a4fe79da32110",
+     "errors": 2,
+     "warnings": 0,
+     "l68": "e126ca6008b8dcef845a99519e5a0a3b31dc0bf9045ae2aaf74051948546e2a9",
+     "s68": null,
+     "undefinedSymbols": true,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "01c0d4ab3a9f6536094bfb0e14197ed38ee4fc51b9a342e7224a4fe79da32110",
+     "errors": 2,
+     "warnings": 0,
+     "l68": "e126ca6008b8dcef845a99519e5a0a3b31dc0bf9045ae2aaf74051948546e2a9",
+     "s68": "56306141d00c196f8377418b9159cc35caca60435ff990ea3e57c2683445c969",
+     "undefinedSymbols": true,
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "01c0d4ab3a9f6536094bfb0e14197ed38ee4fc51b9a342e7224a4fe79da32110",
+     "errors": 2,
+     "warnings": 0,
+     "l68": "a3ee502cc628f494f668cde30e5a74e20abec6048d1cf219897d62ca5444daa2",
+     "s68": "56306141d00c196f8377418b9159cc35caca60435ff990ea3e57c2683445c969",
+     "undefinedSymbols": true,
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "01c0d4ab3a9f6536094bfb0e14197ed38ee4fc51b9a342e7224a4fe79da32110",
+     "errors": 2,
+     "warnings": 0,
+     "l68": "e126ca6008b8dcef845a99519e5a0a3b31dc0bf9045ae2aaf74051948546e2a9",
+     "s68": "56306141d00c196f8377418b9159cc35caca60435ff990ea3e57c2683445c969",
+     "undefinedSymbols": true,
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "01c0d4ab3a9f6536094bfb0e14197ed38ee4fc51b9a342e7224a4fe79da32110",
+     "errors": 2,
+     "warnings": 0,
+     "l68": "e126ca6008b8dcef845a99519e5a0a3b31dc0bf9045ae2aaf74051948546e2a9",
+     "s68": "56306141d00c196f8377418b9159cc35caca60435ff990ea3e57c2683445c969",
+     "undefinedSymbols": true,
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "01c0d4ab3a9f6536094bfb0e14197ed38ee4fc51b9a342e7224a4fe79da32110",
+     "errors": 2,
+     "warnings": 0,
+     "l68": "e126ca6008b8dcef845a99519e5a0a3b31dc0bf9045ae2aaf74051948546e2a9",
+     "s68": "56306141d00c196f8377418b9159cc35caca60435ff990ea3e57c2683445c969",
+     "undefinedSymbols": true,
+     "golden": true
     }
    }
   },
@@ -1560,6 +1767,16 @@
     "richedit-sensitive"
    ],
    "runs": {
+    "default": {
+     "options": {},
+     "status": "ok",
+     "received": "92ce32594e43fcf36f720575d2de3c7777cef6dc3c9905231981635683da9e8a",
+     "errors": 4,
+     "warnings": 0,
+     "l68": "f5934c2d2b640f89d2f0b9df02a3a220d071c24f1235d52814cf37e038ee6270",
+     "s68": "1a47422fe8214706d447b178841ee6fc3c350c68fdd25f98b2ab3654851cdf76",
+     "golden": true
+    },
     "mex": {
      "options": {
       "macrosExpanded": true
@@ -1569,6 +1786,90 @@
      "errors": 4,
      "warnings": 0,
      "l68": "8c87e0b6293d619ab8d0885fffb38b8701105bc80895422ed314c2eced3bf514",
+     "s68": "1a47422fe8214706d447b178841ee6fc3c350c68fdd25f98b2ab3654851cdf76",
+     "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "92ce32594e43fcf36f720575d2de3c7777cef6dc3c9905231981635683da9e8a",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "1a47422fe8214706d447b178841ee6fc3c350c68fdd25f98b2ab3654851cdf76",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "92ce32594e43fcf36f720575d2de3c7777cef6dc3c9905231981635683da9e8a",
+     "errors": 4,
+     "warnings": 0,
+     "l68": "f5934c2d2b640f89d2f0b9df02a3a220d071c24f1235d52814cf37e038ee6270",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "92ce32594e43fcf36f720575d2de3c7777cef6dc3c9905231981635683da9e8a",
+     "errors": 4,
+     "warnings": 0,
+     "l68": "f5934c2d2b640f89d2f0b9df02a3a220d071c24f1235d52814cf37e038ee6270",
+     "s68": "1a47422fe8214706d447b178841ee6fc3c350c68fdd25f98b2ab3654851cdf76",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "92ce32594e43fcf36f720575d2de3c7777cef6dc3c9905231981635683da9e8a",
+     "errors": 4,
+     "warnings": 0,
+     "l68": "42ef8ef2b649888cedec69279bccc180616b60edb8bd34914292e806aefeb5a6",
+     "s68": "1a47422fe8214706d447b178841ee6fc3c350c68fdd25f98b2ab3654851cdf76",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "92ce32594e43fcf36f720575d2de3c7777cef6dc3c9905231981635683da9e8a",
+     "errors": 4,
+     "warnings": 0,
+     "l68": "f5934c2d2b640f89d2f0b9df02a3a220d071c24f1235d52814cf37e038ee6270",
+     "s68": "1a47422fe8214706d447b178841ee6fc3c350c68fdd25f98b2ab3654851cdf76",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "92ce32594e43fcf36f720575d2de3c7777cef6dc3c9905231981635683da9e8a",
+     "errors": 4,
+     "warnings": 0,
+     "l68": "f5934c2d2b640f89d2f0b9df02a3a220d071c24f1235d52814cf37e038ee6270",
+     "s68": "1a47422fe8214706d447b178841ee6fc3c350c68fdd25f98b2ab3654851cdf76",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "92ce32594e43fcf36f720575d2de3c7777cef6dc3c9905231981635683da9e8a",
+     "errors": 4,
+     "warnings": 0,
+     "l68": "f5934c2d2b640f89d2f0b9df02a3a220d071c24f1235d52814cf37e038ee6270",
      "s68": "1a47422fe8214706d447b178841ee6fc3c350c68fdd25f98b2ab3654851cdf76",
      "golden": true
     }
@@ -1587,6 +1888,16 @@
     "richedit-sensitive"
    ],
    "runs": {
+    "default": {
+     "options": {},
+     "status": "ok",
+     "received": "1d9b426cb8e66f67ebe32d002bbafed41b3caa74b4063ffe0149b0155c8093fb",
+     "errors": 1,
+     "warnings": 0,
+     "l68": "43e26de3d3ccbb919dd2e4184f7066523b22b549dff67d2e3aa9cb652fde2cf0",
+     "s68": "8d7abf32c5c791d320e6efde489eea514c76dffc0b051b0eb8beafb85cbbbca6",
+     "golden": true
+    },
     "mex": {
      "options": {
       "macrosExpanded": true
@@ -1664,6 +1975,16 @@
     "richedit-sensitive"
    ],
    "runs": {
+    "default": {
+     "options": {},
+     "status": "ok",
+     "received": "6a3175b739c87e8c09369251c40f241da161b788715c39422a16cfcdfad8a249",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "2a707fd06ddab0ac841d1c3a9f026730c0a5e9f2dc8982ffe9d72f4f372e31a5",
+     "s68": "30cd343f3ad241ceef8c629bd46352a663827c7f3f992d8ed82f41759e3a7d50",
+     "golden": true
+    },
     "mex": {
      "options": {
       "macrosExpanded": true
@@ -1673,6 +1994,90 @@
      "errors": 0,
      "warnings": 0,
      "l68": "313898d638a7884e1f26c150e2ac0de6fbc7c27f2ab8ff5dde59cc6364ded310",
+     "s68": "30cd343f3ad241ceef8c629bd46352a663827c7f3f992d8ed82f41759e3a7d50",
+     "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "6a3175b739c87e8c09369251c40f241da161b788715c39422a16cfcdfad8a249",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "30cd343f3ad241ceef8c629bd46352a663827c7f3f992d8ed82f41759e3a7d50",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "6a3175b739c87e8c09369251c40f241da161b788715c39422a16cfcdfad8a249",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "2a707fd06ddab0ac841d1c3a9f026730c0a5e9f2dc8982ffe9d72f4f372e31a5",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "6a3175b739c87e8c09369251c40f241da161b788715c39422a16cfcdfad8a249",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "2a707fd06ddab0ac841d1c3a9f026730c0a5e9f2dc8982ffe9d72f4f372e31a5",
+     "s68": "30cd343f3ad241ceef8c629bd46352a663827c7f3f992d8ed82f41759e3a7d50",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "6a3175b739c87e8c09369251c40f241da161b788715c39422a16cfcdfad8a249",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "7694d565f5b37af5b5ca502a6d4c9fe11b1be0a3710d9f59332bbc213b0d7d9a",
+     "s68": "30cd343f3ad241ceef8c629bd46352a663827c7f3f992d8ed82f41759e3a7d50",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "6a3175b739c87e8c09369251c40f241da161b788715c39422a16cfcdfad8a249",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "2a707fd06ddab0ac841d1c3a9f026730c0a5e9f2dc8982ffe9d72f4f372e31a5",
+     "s68": "30cd343f3ad241ceef8c629bd46352a663827c7f3f992d8ed82f41759e3a7d50",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "6a3175b739c87e8c09369251c40f241da161b788715c39422a16cfcdfad8a249",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "2a707fd06ddab0ac841d1c3a9f026730c0a5e9f2dc8982ffe9d72f4f372e31a5",
+     "s68": "30cd343f3ad241ceef8c629bd46352a663827c7f3f992d8ed82f41759e3a7d50",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "6a3175b739c87e8c09369251c40f241da161b788715c39422a16cfcdfad8a249",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "2a707fd06ddab0ac841d1c3a9f026730c0a5e9f2dc8982ffe9d72f4f372e31a5",
      "s68": "30cd343f3ad241ceef8c629bd46352a663827c7f3f992d8ed82f41759e3a7d50",
      "golden": true
     }
@@ -1725,6 +2130,102 @@
      "l68": "ec62513a79d4386831403004d4722beff30f3ca199320f25ac8703ddc90f22af",
      "s68": "8ffede66d7fdf04ef1dda04dcf13f498bfc6294d897b6da3539cadc272594405",
      "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "52f4598b4d0efc63deb6603cc3b6fb0114e387b3a33190126039403907cfac4b",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "8ffede66d7fdf04ef1dda04dcf13f498bfc6294d897b6da3539cadc272594405",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "52f4598b4d0efc63deb6603cc3b6fb0114e387b3a33190126039403907cfac4b",
+     "errors": 3,
+     "warnings": 1,
+     "l68": "ec62513a79d4386831403004d4722beff30f3ca199320f25ac8703ddc90f22af",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "52f4598b4d0efc63deb6603cc3b6fb0114e387b3a33190126039403907cfac4b",
+     "errors": 3,
+     "warnings": 1,
+     "l68": "ed403069639596af1912cec810eef9e827e03a399e1bc3a3b5122e33ea870516",
+     "s68": "8ffede66d7fdf04ef1dda04dcf13f498bfc6294d897b6da3539cadc272594405",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "52f4598b4d0efc63deb6603cc3b6fb0114e387b3a33190126039403907cfac4b",
+     "errors": 3,
+     "warnings": 1,
+     "l68": "cfff57c3afb25de86fc72aa4eff03053bca46547220dea340dbd7faf3c58fc1a",
+     "s68": "8ffede66d7fdf04ef1dda04dcf13f498bfc6294d897b6da3539cadc272594405",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "52f4598b4d0efc63deb6603cc3b6fb0114e387b3a33190126039403907cfac4b",
+     "errors": 3,
+     "warnings": 1,
+     "l68": "0fd0d7e9d01439528749a61bd31d470540c974447eacf0ab4ac279afe21a9034",
+     "s68": "8ffede66d7fdf04ef1dda04dcf13f498bfc6294d897b6da3539cadc272594405",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "52f4598b4d0efc63deb6603cc3b6fb0114e387b3a33190126039403907cfac4b",
+     "errors": 3,
+     "warnings": 1,
+     "l68": "ec62513a79d4386831403004d4722beff30f3ca199320f25ac8703ddc90f22af",
+     "s68": "8ffede66d7fdf04ef1dda04dcf13f498bfc6294d897b6da3539cadc272594405",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "52f4598b4d0efc63deb6603cc3b6fb0114e387b3a33190126039403907cfac4b",
+     "errors": 3,
+     "warnings": 1,
+     "l68": "ec62513a79d4386831403004d4722beff30f3ca199320f25ac8703ddc90f22af",
+     "s68": "8ffede66d7fdf04ef1dda04dcf13f498bfc6294d897b6da3539cadc272594405",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "52f4598b4d0efc63deb6603cc3b6fb0114e387b3a33190126039403907cfac4b",
+     "errors": 3,
+     "warnings": 1,
+     "l68": "ec62513a79d4386831403004d4722beff30f3ca199320f25ac8703ddc90f22af",
+     "s68": "8ffede66d7fdf04ef1dda04dcf13f498bfc6294d897b6da3539cadc272594405",
+     "golden": true
     }
    }
   },
@@ -1766,6 +2267,16 @@
     "richedit-sensitive"
    ],
    "runs": {
+    "default": {
+     "options": {},
+     "status": "ok",
+     "received": "e97335fa1ed485f244b5bff81858e76a4bf6e35568800476bc43278f9cc706b6",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "b75512edea945e0304676ae1f69f12fa302d945a74669e37a9997b37bf87bdf4",
+     "s68": "f16821e607cf4a61e6ee9f95862333959d50aa337b16a45f7f8f9e39b484f0ed",
+     "golden": true
+    },
     "mex": {
      "options": {
       "macrosExpanded": true
@@ -1818,6 +2329,16 @@
     "richedit-sensitive"
    ],
    "runs": {
+    "default": {
+     "options": {},
+     "status": "ok",
+     "received": "1f38f19b82ec03b4e88d001e014155dce358adad34119a0478da5c440f92d893",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "f540b273dcd29e3d3e9e2f0496187669948fe556653e775b85f50092c43b82a3",
+     "s68": "7a67d6aeb833e6706a3d68632571b6f0603dbba167bb75e2a1b81704835b053f",
+     "golden": true
+    },
     "mex+sex": {
      "options": {
       "macrosExpanded": true,
@@ -1828,6 +2349,102 @@
      "errors": 0,
      "warnings": 0,
      "l68": "67162b5d5ca132942717ffefc5b66840b4cc42ed964b5055b3b3993daf57ebb2",
+     "s68": "7a67d6aeb833e6706a3d68632571b6f0603dbba167bb75e2a1b81704835b053f",
+     "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "1f38f19b82ec03b4e88d001e014155dce358adad34119a0478da5c440f92d893",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "7a67d6aeb833e6706a3d68632571b6f0603dbba167bb75e2a1b81704835b053f",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "1f38f19b82ec03b4e88d001e014155dce358adad34119a0478da5c440f92d893",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "f540b273dcd29e3d3e9e2f0496187669948fe556653e775b85f50092c43b82a3",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "1f38f19b82ec03b4e88d001e014155dce358adad34119a0478da5c440f92d893",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "f540b273dcd29e3d3e9e2f0496187669948fe556653e775b85f50092c43b82a3",
+     "s68": "7a67d6aeb833e6706a3d68632571b6f0603dbba167bb75e2a1b81704835b053f",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "1f38f19b82ec03b4e88d001e014155dce358adad34119a0478da5c440f92d893",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "ec98c8140a0ee7611e6aff9de2cc306144a961a98aa6b811ca7079e9c8f5a5ad",
+     "s68": "7a67d6aeb833e6706a3d68632571b6f0603dbba167bb75e2a1b81704835b053f",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "1f38f19b82ec03b4e88d001e014155dce358adad34119a0478da5c440f92d893",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "c256f9d3e1a0cbf781a8699d0c426fdb740843ce87d7e93c936c42652ddcefc5",
+     "s68": "7a67d6aeb833e6706a3d68632571b6f0603dbba167bb75e2a1b81704835b053f",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "1f38f19b82ec03b4e88d001e014155dce358adad34119a0478da5c440f92d893",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "f540b273dcd29e3d3e9e2f0496187669948fe556653e775b85f50092c43b82a3",
+     "s68": "7a67d6aeb833e6706a3d68632571b6f0603dbba167bb75e2a1b81704835b053f",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "1f38f19b82ec03b4e88d001e014155dce358adad34119a0478da5c440f92d893",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "f540b273dcd29e3d3e9e2f0496187669948fe556653e775b85f50092c43b82a3",
+     "s68": "7a67d6aeb833e6706a3d68632571b6f0603dbba167bb75e2a1b81704835b053f",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "1f38f19b82ec03b4e88d001e014155dce358adad34119a0478da5c440f92d893",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "f540b273dcd29e3d3e9e2f0496187669948fe556653e775b85f50092c43b82a3",
      "s68": "7a67d6aeb833e6706a3d68632571b6f0603dbba167bb75e2a1b81704835b053f",
      "golden": true
     }
@@ -1908,6 +2525,16 @@
     "richedit-sensitive"
    ],
    "runs": {
+    "default": {
+     "options": {},
+     "status": "ok",
+     "received": "8906421182ab0d0f58a5b0715de1f0151f4c24795637e85281cdca183f8a0cf1",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "769bec5849bcbd50e1a096364eda32d48e0c50aab17c5bfeffa58b4034034000",
+     "s68": "c430d142d0473e7efd5b50c2af27ca265f25aa738661db4090893fbb564563fe",
+     "golden": true
+    },
     "mex": {
      "options": {
       "macrosExpanded": true
@@ -1999,6 +2626,102 @@
    "runs": {
     "default": {
      "options": {},
+     "status": "ok",
+     "received": "bcfe9c59dca1ea8a76a9a58fdc1bba558d6fcc30e1e8f4cb5dc148fc29a94428",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "602c2efb2e63b52e17891dc020418851d30fa88b8d5c218a44f6811ef585a1c4",
+     "s68": "c0a3a48098afbc822af249e46e00b14be88b1a5058ed24d0c413c582e392030c",
+     "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "bcfe9c59dca1ea8a76a9a58fdc1bba558d6fcc30e1e8f4cb5dc148fc29a94428",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "c0a3a48098afbc822af249e46e00b14be88b1a5058ed24d0c413c582e392030c",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "bcfe9c59dca1ea8a76a9a58fdc1bba558d6fcc30e1e8f4cb5dc148fc29a94428",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "602c2efb2e63b52e17891dc020418851d30fa88b8d5c218a44f6811ef585a1c4",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "bcfe9c59dca1ea8a76a9a58fdc1bba558d6fcc30e1e8f4cb5dc148fc29a94428",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "602c2efb2e63b52e17891dc020418851d30fa88b8d5c218a44f6811ef585a1c4",
+     "s68": "c0a3a48098afbc822af249e46e00b14be88b1a5058ed24d0c413c582e392030c",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "bcfe9c59dca1ea8a76a9a58fdc1bba558d6fcc30e1e8f4cb5dc148fc29a94428",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "41417a08ba960dafe086e01fe181bcc6f1c52f953b8f528956c8e183d56fd341",
+     "s68": "c0a3a48098afbc822af249e46e00b14be88b1a5058ed24d0c413c582e392030c",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "bcfe9c59dca1ea8a76a9a58fdc1bba558d6fcc30e1e8f4cb5dc148fc29a94428",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "602c2efb2e63b52e17891dc020418851d30fa88b8d5c218a44f6811ef585a1c4",
+     "s68": "c0a3a48098afbc822af249e46e00b14be88b1a5058ed24d0c413c582e392030c",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "bcfe9c59dca1ea8a76a9a58fdc1bba558d6fcc30e1e8f4cb5dc148fc29a94428",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "16deaf9d163944661eb001acade782469a0f32d921b8a5046daf87bfaa608ee3",
+     "s68": "c0a3a48098afbc822af249e46e00b14be88b1a5058ed24d0c413c582e392030c",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "bcfe9c59dca1ea8a76a9a58fdc1bba558d6fcc30e1e8f4cb5dc148fc29a94428",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "602c2efb2e63b52e17891dc020418851d30fa88b8d5c218a44f6811ef585a1c4",
+     "s68": "c0a3a48098afbc822af249e46e00b14be88b1a5058ed24d0c413c582e392030c",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
      "status": "ok",
      "received": "bcfe9c59dca1ea8a76a9a58fdc1bba558d6fcc30e1e8f4cb5dc148fc29a94428",
      "errors": 0,
@@ -2113,6 +2836,16 @@
     "richedit-sensitive"
    ],
    "runs": {
+    "default": {
+     "options": {},
+     "status": "ok",
+     "received": "942046c1497564d48d09bbc6820173357bccb5f032f64ec8ab860c284a363ad1",
+     "errors": 1,
+     "warnings": 0,
+     "l68": "571c97bd20dec007469e861192860a865f34586542446fdf756c118df6aefa9e",
+     "s68": "4c4a59883433324bb9150925b73462f5646268c3eb007f3a29641ca3b87540b5",
+     "golden": true
+    },
     "nolist": {
      "options": {
       "generateListing": false
@@ -3159,6 +3892,102 @@
      "l68": "1200d4aaddcbf078aa1276576076cfdd247ad6a9ba57f75fc5daf6fd68930a2c",
      "s68": "cf9c3c8504b388b703f1b8732c0c3c64563e4869982e248bf19bf85dfd45fef2",
      "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "040462f0964cd6dbd5e92f676039fe72103f1ece23c9c198587362e98fffa394",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "cf9c3c8504b388b703f1b8732c0c3c64563e4869982e248bf19bf85dfd45fef2",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "040462f0964cd6dbd5e92f676039fe72103f1ece23c9c198587362e98fffa394",
+     "errors": 1,
+     "warnings": 1,
+     "l68": "1200d4aaddcbf078aa1276576076cfdd247ad6a9ba57f75fc5daf6fd68930a2c",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "040462f0964cd6dbd5e92f676039fe72103f1ece23c9c198587362e98fffa394",
+     "errors": 1,
+     "warnings": 1,
+     "l68": "5713c0ed8f92552f48f02d2fe63951823af72c7dc0b18820be345327ef14993b",
+     "s68": "cf9c3c8504b388b703f1b8732c0c3c64563e4869982e248bf19bf85dfd45fef2",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "040462f0964cd6dbd5e92f676039fe72103f1ece23c9c198587362e98fffa394",
+     "errors": 1,
+     "warnings": 1,
+     "l68": "515d96dae6138eec598d14fae45bd5dc332345017444e0b3d3ac8d292f7ffa16",
+     "s68": "cf9c3c8504b388b703f1b8732c0c3c64563e4869982e248bf19bf85dfd45fef2",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "040462f0964cd6dbd5e92f676039fe72103f1ece23c9c198587362e98fffa394",
+     "errors": 1,
+     "warnings": 1,
+     "l68": "1200d4aaddcbf078aa1276576076cfdd247ad6a9ba57f75fc5daf6fd68930a2c",
+     "s68": "cf9c3c8504b388b703f1b8732c0c3c64563e4869982e248bf19bf85dfd45fef2",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "040462f0964cd6dbd5e92f676039fe72103f1ece23c9c198587362e98fffa394",
+     "errors": 1,
+     "warnings": 1,
+     "l68": "1200d4aaddcbf078aa1276576076cfdd247ad6a9ba57f75fc5daf6fd68930a2c",
+     "s68": "cf9c3c8504b388b703f1b8732c0c3c64563e4869982e248bf19bf85dfd45fef2",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "040462f0964cd6dbd5e92f676039fe72103f1ece23c9c198587362e98fffa394",
+     "errors": 1,
+     "warnings": 1,
+     "l68": "1200d4aaddcbf078aa1276576076cfdd247ad6a9ba57f75fc5daf6fd68930a2c",
+     "s68": "cf9c3c8504b388b703f1b8732c0c3c64563e4869982e248bf19bf85dfd45fef2",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "040462f0964cd6dbd5e92f676039fe72103f1ece23c9c198587362e98fffa394",
+     "errors": 1,
+     "warnings": 1,
+     "l68": "1200d4aaddcbf078aa1276576076cfdd247ad6a9ba57f75fc5daf6fd68930a2c",
+     "s68": "cf9c3c8504b388b703f1b8732c0c3c64563e4869982e248bf19bf85dfd45fef2",
+     "golden": true
     }
    }
   },
@@ -3275,6 +4104,16 @@
     "richedit-sensitive"
    ],
    "runs": {
+    "default": {
+     "options": {},
+     "status": "ok",
+     "received": "63558a28331a60e5c65077597041e8de10fd41e2c442db7087e8a94aa3d91941",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "bf333cb8148b1f970be1b5605fa0d2b5a679c82ad343258a24214c431cb4e3c7",
+     "s68": "9593f2c176eabf919fa45949423ee7cfc428bc78bad689c159637d6a5fed7064",
+     "golden": true
+    },
     "nobit": {
      "options": {
       "bitFieldInstructions": false
@@ -3285,6 +4124,90 @@
      "warnings": 0,
      "l68": "d9478b82af381dec1420366824f893a42959b3f444b1820c4d39b696a9317eac",
      "s68": "1c02343f21b13890954b37860045535b7697ae1c18956b1f1afafb43e26f995e",
+     "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "63558a28331a60e5c65077597041e8de10fd41e2c442db7087e8a94aa3d91941",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "9593f2c176eabf919fa45949423ee7cfc428bc78bad689c159637d6a5fed7064",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "63558a28331a60e5c65077597041e8de10fd41e2c442db7087e8a94aa3d91941",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "bf333cb8148b1f970be1b5605fa0d2b5a679c82ad343258a24214c431cb4e3c7",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "63558a28331a60e5c65077597041e8de10fd41e2c442db7087e8a94aa3d91941",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "bf333cb8148b1f970be1b5605fa0d2b5a679c82ad343258a24214c431cb4e3c7",
+     "s68": "9593f2c176eabf919fa45949423ee7cfc428bc78bad689c159637d6a5fed7064",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "63558a28331a60e5c65077597041e8de10fd41e2c442db7087e8a94aa3d91941",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "3651bc7b0ce79fd8e77bd283a30643499a7462e554dbb1070c02a5b0fa017fee",
+     "s68": "9593f2c176eabf919fa45949423ee7cfc428bc78bad689c159637d6a5fed7064",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "63558a28331a60e5c65077597041e8de10fd41e2c442db7087e8a94aa3d91941",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "bf333cb8148b1f970be1b5605fa0d2b5a679c82ad343258a24214c431cb4e3c7",
+     "s68": "9593f2c176eabf919fa45949423ee7cfc428bc78bad689c159637d6a5fed7064",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "63558a28331a60e5c65077597041e8de10fd41e2c442db7087e8a94aa3d91941",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "bf333cb8148b1f970be1b5605fa0d2b5a679c82ad343258a24214c431cb4e3c7",
+     "s68": "9593f2c176eabf919fa45949423ee7cfc428bc78bad689c159637d6a5fed7064",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "63558a28331a60e5c65077597041e8de10fd41e2c442db7087e8a94aa3d91941",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "bf333cb8148b1f970be1b5605fa0d2b5a679c82ad343258a24214c431cb4e3c7",
+     "s68": "9593f2c176eabf919fa45949423ee7cfc428bc78bad689c159637d6a5fed7064",
      "golden": true
     }
    }
@@ -3302,6 +4225,16 @@
     "richedit-sensitive"
    ],
    "runs": {
+    "default": {
+     "options": {},
+     "status": "ok",
+     "received": "0e2f6f3c3067989ffb089ea02204e0643a47f5bdade8d32b291cafe6618f9bc3",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "6b387f5ab01623c49aa456efb2f86473d5d31da61e47ea19caaa16add888d585",
+     "s68": "cfefeddef8cddfd178e9c2254726a4b677a25b3bef7455d8fa1618094f7c2a8e",
+     "golden": true
+    },
     "nobit": {
      "options": {
       "bitFieldInstructions": false
@@ -3312,6 +4245,212 @@
      "warnings": 0,
      "l68": "6b387f5ab01623c49aa456efb2f86473d5d31da61e47ea19caaa16add888d585",
      "s68": "cfefeddef8cddfd178e9c2254726a4b677a25b3bef7455d8fa1618094f7c2a8e",
+     "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "0e2f6f3c3067989ffb089ea02204e0643a47f5bdade8d32b291cafe6618f9bc3",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "cfefeddef8cddfd178e9c2254726a4b677a25b3bef7455d8fa1618094f7c2a8e",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "0e2f6f3c3067989ffb089ea02204e0643a47f5bdade8d32b291cafe6618f9bc3",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "6b387f5ab01623c49aa456efb2f86473d5d31da61e47ea19caaa16add888d585",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "0e2f6f3c3067989ffb089ea02204e0643a47f5bdade8d32b291cafe6618f9bc3",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "6b387f5ab01623c49aa456efb2f86473d5d31da61e47ea19caaa16add888d585",
+     "s68": "cfefeddef8cddfd178e9c2254726a4b677a25b3bef7455d8fa1618094f7c2a8e",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "0e2f6f3c3067989ffb089ea02204e0643a47f5bdade8d32b291cafe6618f9bc3",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "ba02b81b3ae244bde7f6dcf27a77f9e31fb3f41eff6a31c6950d3b4e5f82238d",
+     "s68": "cfefeddef8cddfd178e9c2254726a4b677a25b3bef7455d8fa1618094f7c2a8e",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "0e2f6f3c3067989ffb089ea02204e0643a47f5bdade8d32b291cafe6618f9bc3",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "6b387f5ab01623c49aa456efb2f86473d5d31da61e47ea19caaa16add888d585",
+     "s68": "cfefeddef8cddfd178e9c2254726a4b677a25b3bef7455d8fa1618094f7c2a8e",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "0e2f6f3c3067989ffb089ea02204e0643a47f5bdade8d32b291cafe6618f9bc3",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "6b387f5ab01623c49aa456efb2f86473d5d31da61e47ea19caaa16add888d585",
+     "s68": "cfefeddef8cddfd178e9c2254726a4b677a25b3bef7455d8fa1618094f7c2a8e",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "0e2f6f3c3067989ffb089ea02204e0643a47f5bdade8d32b291cafe6618f9bc3",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "6b387f5ab01623c49aa456efb2f86473d5d31da61e47ea19caaa16add888d585",
+     "s68": "cfefeddef8cddfd178e9c2254726a4b677a25b3bef7455d8fa1618094f7c2a8e",
+     "golden": true
+    }
+   }
+  },
+  {
+   "id": "checklist/size-04-every-bit-field-mnemonic-with-each-operand-form",
+   "set": "conformance",
+   "origin": "written for this project (tests/conformance/asm): every bit-field mnemonic with each operand form, with and without Assemble Bit Field Instructions",
+   "licence": "GPL-2.0-or-later",
+   "file": "checklist/programs/size-04-every-bit-field-mnemonic-with-each-operand-form/prog.X68",
+   "root": "checklist/programs/size-04-every-bit-field-mnemonic-with-each-operand-form",
+   "sha256": "57d457ad833f220ff8479ea82e07dd9e6182af00e05f91982307ccb469236217",
+   "bytes": 539,
+   "flags": [
+    "richedit-sensitive"
+   ],
+   "runs": {
+    "default": {
+     "options": {},
+     "status": "ok",
+     "received": "57d457ad833f220ff8479ea82e07dd9e6182af00e05f91982307ccb469236217",
+     "errors": 1,
+     "warnings": 0,
+     "l68": "e50b55e887b6c87d3ff41e864c9f021c6ef525242fff366e249b5eb78f948212",
+     "s68": "d4a32ecfe70e9ca87afb2f98323fa8cdd91bbc2e3f2a63fae771b61cad83b5dd",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "57d457ad833f220ff8479ea82e07dd9e6182af00e05f91982307ccb469236217",
+     "errors": 15,
+     "warnings": 0,
+     "l68": "ba0b8ea7a71a615de60e40c2a446a1ec8469ae82e312708f051bfc4a2e32dfc6",
+     "s68": "cd41ed3c6582b67dc9fb4344878a10a07827beb72a42c91cbbd2158e44b2edc2",
+     "undefinedSymbols": true,
+     "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "57d457ad833f220ff8479ea82e07dd9e6182af00e05f91982307ccb469236217",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "d4a32ecfe70e9ca87afb2f98323fa8cdd91bbc2e3f2a63fae771b61cad83b5dd",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "57d457ad833f220ff8479ea82e07dd9e6182af00e05f91982307ccb469236217",
+     "errors": 1,
+     "warnings": 0,
+     "l68": "e50b55e887b6c87d3ff41e864c9f021c6ef525242fff366e249b5eb78f948212",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "57d457ad833f220ff8479ea82e07dd9e6182af00e05f91982307ccb469236217",
+     "errors": 1,
+     "warnings": 0,
+     "l68": "e50b55e887b6c87d3ff41e864c9f021c6ef525242fff366e249b5eb78f948212",
+     "s68": "d4a32ecfe70e9ca87afb2f98323fa8cdd91bbc2e3f2a63fae771b61cad83b5dd",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "57d457ad833f220ff8479ea82e07dd9e6182af00e05f91982307ccb469236217",
+     "errors": 1,
+     "warnings": 0,
+     "l68": "c972c05dc0f61f88772e53cdda022045169525648f9e0a4f967bf0b3cf26361f",
+     "s68": "d4a32ecfe70e9ca87afb2f98323fa8cdd91bbc2e3f2a63fae771b61cad83b5dd",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "57d457ad833f220ff8479ea82e07dd9e6182af00e05f91982307ccb469236217",
+     "errors": 1,
+     "warnings": 0,
+     "l68": "e50b55e887b6c87d3ff41e864c9f021c6ef525242fff366e249b5eb78f948212",
+     "s68": "d4a32ecfe70e9ca87afb2f98323fa8cdd91bbc2e3f2a63fae771b61cad83b5dd",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "57d457ad833f220ff8479ea82e07dd9e6182af00e05f91982307ccb469236217",
+     "errors": 1,
+     "warnings": 0,
+     "l68": "e50b55e887b6c87d3ff41e864c9f021c6ef525242fff366e249b5eb78f948212",
+     "s68": "d4a32ecfe70e9ca87afb2f98323fa8cdd91bbc2e3f2a63fae771b61cad83b5dd",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "57d457ad833f220ff8479ea82e07dd9e6182af00e05f91982307ccb469236217",
+     "errors": 1,
+     "warnings": 0,
+     "l68": "e50b55e887b6c87d3ff41e864c9f021c6ef525242fff366e249b5eb78f948212",
+     "s68": "d4a32ecfe70e9ca87afb2f98323fa8cdd91bbc2e3f2a63fae771b61cad83b5dd",
      "golden": true
     }
    }
@@ -3329,6 +4468,16 @@
     "richedit-sensitive"
    ],
    "runs": {
+    "default": {
+     "options": {},
+     "status": "ok",
+     "received": "99ab3a29d54a4627eb203dca692d4930412a46dad303cd2b3f32c38163afc18c",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "65e2647ee9bf122a7fe55cfde4ba2247291a726e279cd257d0f743f518c5b9b2",
+     "s68": "b3074840819990b540d5bca1c207d4bcde958a45f9b5e116b6bbfde37080f624",
+     "golden": true
+    },
     "sex": {
      "options": {
       "structuredExpanded": true
@@ -3338,6 +4487,90 @@
      "errors": 0,
      "warnings": 1,
      "l68": "6133a15e06acb56818ab8e36df185bd2576508fb207ed9cfdd59b3eac00f39d2",
+     "s68": "b3074840819990b540d5bca1c207d4bcde958a45f9b5e116b6bbfde37080f624",
+     "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "99ab3a29d54a4627eb203dca692d4930412a46dad303cd2b3f32c38163afc18c",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "b3074840819990b540d5bca1c207d4bcde958a45f9b5e116b6bbfde37080f624",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "99ab3a29d54a4627eb203dca692d4930412a46dad303cd2b3f32c38163afc18c",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "65e2647ee9bf122a7fe55cfde4ba2247291a726e279cd257d0f743f518c5b9b2",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "99ab3a29d54a4627eb203dca692d4930412a46dad303cd2b3f32c38163afc18c",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "70093b5a9a1a10a0d24268390794aa0a1cbf5178875b54e91c0c24dd29537057",
+     "s68": "b3074840819990b540d5bca1c207d4bcde958a45f9b5e116b6bbfde37080f624",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "99ab3a29d54a4627eb203dca692d4930412a46dad303cd2b3f32c38163afc18c",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "1f73fa87f03386cc29b1d9d880f71cce51e61c63c09917e90e691a73a00d759d",
+     "s68": "b3074840819990b540d5bca1c207d4bcde958a45f9b5e116b6bbfde37080f624",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "99ab3a29d54a4627eb203dca692d4930412a46dad303cd2b3f32c38163afc18c",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "65e2647ee9bf122a7fe55cfde4ba2247291a726e279cd257d0f743f518c5b9b2",
+     "s68": "b3074840819990b540d5bca1c207d4bcde958a45f9b5e116b6bbfde37080f624",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "99ab3a29d54a4627eb203dca692d4930412a46dad303cd2b3f32c38163afc18c",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "65e2647ee9bf122a7fe55cfde4ba2247291a726e279cd257d0f743f518c5b9b2",
+     "s68": "b3074840819990b540d5bca1c207d4bcde958a45f9b5e116b6bbfde37080f624",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "99ab3a29d54a4627eb203dca692d4930412a46dad303cd2b3f32c38163afc18c",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "65e2647ee9bf122a7fe55cfde4ba2247291a726e279cd257d0f743f518c5b9b2",
      "s68": "b3074840819990b540d5bca1c207d4bcde958a45f9b5e116b6bbfde37080f624",
      "golden": true
     }
@@ -3356,6 +4589,16 @@
     "richedit-sensitive"
    ],
    "runs": {
+    "default": {
+     "options": {},
+     "status": "ok",
+     "received": "5a565366cad4353d96dfbb7558a65e17c4af2034b369fcb875b9b54b8ac7dc63",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "412f788178e16a39f50cfcf38110cdb918d1e6a6a42296eb20471bcfa3f9a493",
+     "s68": "e0483d3088a5638afb3d398a6b6216d3d09f5d0f03eaecc0b1d9bec09867f601",
+     "golden": true
+    },
     "sex": {
      "options": {
       "structuredExpanded": true
@@ -3365,6 +4608,90 @@
      "errors": 0,
      "warnings": 0,
      "l68": "8c55510b3fb8d65ec82dd32bfda084d999088d132d2ed83ae181c3455ffa5025",
+     "s68": "e0483d3088a5638afb3d398a6b6216d3d09f5d0f03eaecc0b1d9bec09867f601",
+     "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "5a565366cad4353d96dfbb7558a65e17c4af2034b369fcb875b9b54b8ac7dc63",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "e0483d3088a5638afb3d398a6b6216d3d09f5d0f03eaecc0b1d9bec09867f601",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "5a565366cad4353d96dfbb7558a65e17c4af2034b369fcb875b9b54b8ac7dc63",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "412f788178e16a39f50cfcf38110cdb918d1e6a6a42296eb20471bcfa3f9a493",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "5a565366cad4353d96dfbb7558a65e17c4af2034b369fcb875b9b54b8ac7dc63",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "412f788178e16a39f50cfcf38110cdb918d1e6a6a42296eb20471bcfa3f9a493",
+     "s68": "e0483d3088a5638afb3d398a6b6216d3d09f5d0f03eaecc0b1d9bec09867f601",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "5a565366cad4353d96dfbb7558a65e17c4af2034b369fcb875b9b54b8ac7dc63",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "e2382ffabb816b238a1fe0d0910548ac31b9e171ad3e481679f4f56f099e0269",
+     "s68": "e0483d3088a5638afb3d398a6b6216d3d09f5d0f03eaecc0b1d9bec09867f601",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "5a565366cad4353d96dfbb7558a65e17c4af2034b369fcb875b9b54b8ac7dc63",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "412f788178e16a39f50cfcf38110cdb918d1e6a6a42296eb20471bcfa3f9a493",
+     "s68": "e0483d3088a5638afb3d398a6b6216d3d09f5d0f03eaecc0b1d9bec09867f601",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "5a565366cad4353d96dfbb7558a65e17c4af2034b369fcb875b9b54b8ac7dc63",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "412f788178e16a39f50cfcf38110cdb918d1e6a6a42296eb20471bcfa3f9a493",
+     "s68": "e0483d3088a5638afb3d398a6b6216d3d09f5d0f03eaecc0b1d9bec09867f601",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "5a565366cad4353d96dfbb7558a65e17c4af2034b369fcb875b9b54b8ac7dc63",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "412f788178e16a39f50cfcf38110cdb918d1e6a6a42296eb20471bcfa3f9a493",
      "s68": "e0483d3088a5638afb3d398a6b6216d3d09f5d0f03eaecc0b1d9bec09867f601",
      "golden": true
     }
@@ -3409,6 +4736,17 @@
     "richedit-sensitive"
    ],
    "runs": {
+    "default": {
+     "options": {},
+     "status": "ok",
+     "received": "d0be0f57bea08954ebd6df157151be172d30a9a0cec0cd37f0fecb8ca18f10f0",
+     "errors": 1,
+     "warnings": 0,
+     "l68": "890599ba9e6e13c1bc46e6dbbc30804141b3a49a46aea182e2234d5af41a2fe1",
+     "s68": "662235e801aecc24ae40b30dd394926383c8fdaddfcf433507efcc7cc2626754",
+     "undefinedSymbols": true,
+     "golden": true
+    },
     "sex": {
      "options": {
       "structuredExpanded": true
@@ -3418,6 +4756,97 @@
      "errors": 1,
      "warnings": 0,
      "l68": "a6e7c84a72e149dec5ab7fe52121f092799a28d264182793afb99b8dc5a89511",
+     "s68": "662235e801aecc24ae40b30dd394926383c8fdaddfcf433507efcc7cc2626754",
+     "undefinedSymbols": true,
+     "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "d0be0f57bea08954ebd6df157151be172d30a9a0cec0cd37f0fecb8ca18f10f0",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "662235e801aecc24ae40b30dd394926383c8fdaddfcf433507efcc7cc2626754",
+     "undefinedSymbols": true,
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "d0be0f57bea08954ebd6df157151be172d30a9a0cec0cd37f0fecb8ca18f10f0",
+     "errors": 1,
+     "warnings": 0,
+     "l68": "890599ba9e6e13c1bc46e6dbbc30804141b3a49a46aea182e2234d5af41a2fe1",
+     "s68": null,
+     "undefinedSymbols": true,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "d0be0f57bea08954ebd6df157151be172d30a9a0cec0cd37f0fecb8ca18f10f0",
+     "errors": 1,
+     "warnings": 0,
+     "l68": "890599ba9e6e13c1bc46e6dbbc30804141b3a49a46aea182e2234d5af41a2fe1",
+     "s68": "662235e801aecc24ae40b30dd394926383c8fdaddfcf433507efcc7cc2626754",
+     "undefinedSymbols": true,
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "d0be0f57bea08954ebd6df157151be172d30a9a0cec0cd37f0fecb8ca18f10f0",
+     "errors": 1,
+     "warnings": 0,
+     "l68": "3a94c3870424e6c0c9dfac3130a96f53e76f305ed31e990b868a6c073d81c19b",
+     "s68": "662235e801aecc24ae40b30dd394926383c8fdaddfcf433507efcc7cc2626754",
+     "undefinedSymbols": true,
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "d0be0f57bea08954ebd6df157151be172d30a9a0cec0cd37f0fecb8ca18f10f0",
+     "errors": 1,
+     "warnings": 0,
+     "l68": "890599ba9e6e13c1bc46e6dbbc30804141b3a49a46aea182e2234d5af41a2fe1",
+     "s68": "662235e801aecc24ae40b30dd394926383c8fdaddfcf433507efcc7cc2626754",
+     "undefinedSymbols": true,
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "d0be0f57bea08954ebd6df157151be172d30a9a0cec0cd37f0fecb8ca18f10f0",
+     "errors": 1,
+     "warnings": 0,
+     "l68": "890599ba9e6e13c1bc46e6dbbc30804141b3a49a46aea182e2234d5af41a2fe1",
+     "s68": "662235e801aecc24ae40b30dd394926383c8fdaddfcf433507efcc7cc2626754",
+     "undefinedSymbols": true,
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "d0be0f57bea08954ebd6df157151be172d30a9a0cec0cd37f0fecb8ca18f10f0",
+     "errors": 1,
+     "warnings": 0,
+     "l68": "890599ba9e6e13c1bc46e6dbbc30804141b3a49a46aea182e2234d5af41a2fe1",
      "s68": "662235e801aecc24ae40b30dd394926383c8fdaddfcf433507efcc7cc2626754",
      "undefinedSymbols": true,
      "golden": true
@@ -3558,6 +4987,102 @@
      "errors": 0,
      "warnings": 0,
      "l68": "d1ba2075208aeaf9e1b10a22a24ca2315eb3df5be10d0279bd380efbf2365527",
+     "s68": "215cf643f4571e141b034db710ea2a3849b3d824ef7f4356aed116ea78b45514",
+     "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "2ad5c77267f3640f00010233fed93de9c0a0b74f2f8b5bb0e9b54473978903f5",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "215cf643f4571e141b034db710ea2a3849b3d824ef7f4356aed116ea78b45514",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "2ad5c77267f3640f00010233fed93de9c0a0b74f2f8b5bb0e9b54473978903f5",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "d5f468364bec9b0627d821212a87a96531029da9dd9cf26752e1535ab01a722b",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "2ad5c77267f3640f00010233fed93de9c0a0b74f2f8b5bb0e9b54473978903f5",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "d5f468364bec9b0627d821212a87a96531029da9dd9cf26752e1535ab01a722b",
+     "s68": "215cf643f4571e141b034db710ea2a3849b3d824ef7f4356aed116ea78b45514",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "2ad5c77267f3640f00010233fed93de9c0a0b74f2f8b5bb0e9b54473978903f5",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "33025cf306564ed204152aed77e07f5dac8da31a83949405db01a8624a23e67a",
+     "s68": "215cf643f4571e141b034db710ea2a3849b3d824ef7f4356aed116ea78b45514",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "2ad5c77267f3640f00010233fed93de9c0a0b74f2f8b5bb0e9b54473978903f5",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "d5f468364bec9b0627d821212a87a96531029da9dd9cf26752e1535ab01a722b",
+     "s68": "215cf643f4571e141b034db710ea2a3849b3d824ef7f4356aed116ea78b45514",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "2ad5c77267f3640f00010233fed93de9c0a0b74f2f8b5bb0e9b54473978903f5",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "d5f468364bec9b0627d821212a87a96531029da9dd9cf26752e1535ab01a722b",
+     "s68": "215cf643f4571e141b034db710ea2a3849b3d824ef7f4356aed116ea78b45514",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "2ad5c77267f3640f00010233fed93de9c0a0b74f2f8b5bb0e9b54473978903f5",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "d1ba2075208aeaf9e1b10a22a24ca2315eb3df5be10d0279bd380efbf2365527",
+     "s68": "215cf643f4571e141b034db710ea2a3849b3d824ef7f4356aed116ea78b45514",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "2ad5c77267f3640f00010233fed93de9c0a0b74f2f8b5bb0e9b54473978903f5",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "d5f468364bec9b0627d821212a87a96531029da9dd9cf26752e1535ab01a722b",
      "s68": "215cf643f4571e141b034db710ea2a3849b3d824ef7f4356aed116ea78b45514",
      "golden": true
     }
@@ -3795,6 +5320,102 @@
      "l68": "d5a18df8f878acb3b090dc283e9d1ee80fc051f8303cb59eede3731ddd5a6e4d",
      "s68": "656055742d9682d31dca8b1f88e0246e1a359113a9bff49ce2484221bce0255e",
      "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "00412e3a3c0f9b21fd24e9814683b22dd977999f12d745660e95119f4fef4a6a",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "656055742d9682d31dca8b1f88e0246e1a359113a9bff49ce2484221bce0255e",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "00412e3a3c0f9b21fd24e9814683b22dd977999f12d745660e95119f4fef4a6a",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "d5a18df8f878acb3b090dc283e9d1ee80fc051f8303cb59eede3731ddd5a6e4d",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "00412e3a3c0f9b21fd24e9814683b22dd977999f12d745660e95119f4fef4a6a",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "d5a18df8f878acb3b090dc283e9d1ee80fc051f8303cb59eede3731ddd5a6e4d",
+     "s68": "656055742d9682d31dca8b1f88e0246e1a359113a9bff49ce2484221bce0255e",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "00412e3a3c0f9b21fd24e9814683b22dd977999f12d745660e95119f4fef4a6a",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "f434a74259b411ad37cb027cc6c1cd5552eebb1bb7f262191ea2eabf88955fc5",
+     "s68": "656055742d9682d31dca8b1f88e0246e1a359113a9bff49ce2484221bce0255e",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "00412e3a3c0f9b21fd24e9814683b22dd977999f12d745660e95119f4fef4a6a",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "d5a18df8f878acb3b090dc283e9d1ee80fc051f8303cb59eede3731ddd5a6e4d",
+     "s68": "656055742d9682d31dca8b1f88e0246e1a359113a9bff49ce2484221bce0255e",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "00412e3a3c0f9b21fd24e9814683b22dd977999f12d745660e95119f4fef4a6a",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "d5a18df8f878acb3b090dc283e9d1ee80fc051f8303cb59eede3731ddd5a6e4d",
+     "s68": "656055742d9682d31dca8b1f88e0246e1a359113a9bff49ce2484221bce0255e",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "00412e3a3c0f9b21fd24e9814683b22dd977999f12d745660e95119f4fef4a6a",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "d5a18df8f878acb3b090dc283e9d1ee80fc051f8303cb59eede3731ddd5a6e4d",
+     "s68": "656055742d9682d31dca8b1f88e0246e1a359113a9bff49ce2484221bce0255e",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "00412e3a3c0f9b21fd24e9814683b22dd977999f12d745660e95119f4fef4a6a",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "d5a18df8f878acb3b090dc283e9d1ee80fc051f8303cb59eede3731ddd5a6e4d",
+     "s68": "656055742d9682d31dca8b1f88e0246e1a359113a9bff49ce2484221bce0255e",
+     "golden": true
     }
    }
   },
@@ -3954,6 +5575,102 @@
      "l68": "36a128a1a6d4fb963b7ee593d649f73b74beb8c8c3568c17eddc0b1fc98497f4",
      "s68": "8cd24a4d4a28c0905e506588e6577c71c1d38fa384f425a449fb0a1679dc2b9b",
      "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "ae83bc36f41c0a7e21c9f507fe4f0c8f17ec39f01ccdcdce498ce84ba58cb7e1",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "8cd24a4d4a28c0905e506588e6577c71c1d38fa384f425a449fb0a1679dc2b9b",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "ae83bc36f41c0a7e21c9f507fe4f0c8f17ec39f01ccdcdce498ce84ba58cb7e1",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "36a128a1a6d4fb963b7ee593d649f73b74beb8c8c3568c17eddc0b1fc98497f4",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "ae83bc36f41c0a7e21c9f507fe4f0c8f17ec39f01ccdcdce498ce84ba58cb7e1",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "d58582098054501f02b940e324831a2421cec83051f0d97ac1039ffcb70c2658",
+     "s68": "8cd24a4d4a28c0905e506588e6577c71c1d38fa384f425a449fb0a1679dc2b9b",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "ae83bc36f41c0a7e21c9f507fe4f0c8f17ec39f01ccdcdce498ce84ba58cb7e1",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "446ad20dc89318fdb078a72f345c84881517ea1480324ef8c645f61a6c09c9d5",
+     "s68": "8cd24a4d4a28c0905e506588e6577c71c1d38fa384f425a449fb0a1679dc2b9b",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "ae83bc36f41c0a7e21c9f507fe4f0c8f17ec39f01ccdcdce498ce84ba58cb7e1",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "36a128a1a6d4fb963b7ee593d649f73b74beb8c8c3568c17eddc0b1fc98497f4",
+     "s68": "8cd24a4d4a28c0905e506588e6577c71c1d38fa384f425a449fb0a1679dc2b9b",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "ae83bc36f41c0a7e21c9f507fe4f0c8f17ec39f01ccdcdce498ce84ba58cb7e1",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "36a128a1a6d4fb963b7ee593d649f73b74beb8c8c3568c17eddc0b1fc98497f4",
+     "s68": "8cd24a4d4a28c0905e506588e6577c71c1d38fa384f425a449fb0a1679dc2b9b",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "ae83bc36f41c0a7e21c9f507fe4f0c8f17ec39f01ccdcdce498ce84ba58cb7e1",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "36a128a1a6d4fb963b7ee593d649f73b74beb8c8c3568c17eddc0b1fc98497f4",
+     "s68": "8cd24a4d4a28c0905e506588e6577c71c1d38fa384f425a449fb0a1679dc2b9b",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "ae83bc36f41c0a7e21c9f507fe4f0c8f17ec39f01ccdcdce498ce84ba58cb7e1",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "36a128a1a6d4fb963b7ee593d649f73b74beb8c8c3568c17eddc0b1fc98497f4",
+     "s68": "8cd24a4d4a28c0905e506588e6577c71c1d38fa384f425a449fb0a1679dc2b9b",
+     "golden": true
     }
    }
   },
@@ -3992,6 +5709,102 @@
      "errors": 0,
      "warnings": 0,
      "l68": "b9adac92b7f9051f4374ba0496ef904f36df2a492e059b6a02e4205a1e0c52dd",
+     "s68": "deb99e60be958167e20e1b94a3acd9986cd10c838f6221ec16c3bf6cccd8b5e1",
+     "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "f5d3c3a4ffe7dd18bbfca4fb2b35024c706541752a2d26de60c133a61ec306c8",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "deb99e60be958167e20e1b94a3acd9986cd10c838f6221ec16c3bf6cccd8b5e1",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "f5d3c3a4ffe7dd18bbfca4fb2b35024c706541752a2d26de60c133a61ec306c8",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "63d20e87defe08cb3f4a0ebdb4d9694e60250a346d64729b2f51fc5495ebb620",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "f5d3c3a4ffe7dd18bbfca4fb2b35024c706541752a2d26de60c133a61ec306c8",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "63d20e87defe08cb3f4a0ebdb4d9694e60250a346d64729b2f51fc5495ebb620",
+     "s68": "deb99e60be958167e20e1b94a3acd9986cd10c838f6221ec16c3bf6cccd8b5e1",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "f5d3c3a4ffe7dd18bbfca4fb2b35024c706541752a2d26de60c133a61ec306c8",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "eef0648fbd1d7322cb1bfe8b5656511035172d9497d071ba347e852d555a859b",
+     "s68": "deb99e60be958167e20e1b94a3acd9986cd10c838f6221ec16c3bf6cccd8b5e1",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "f5d3c3a4ffe7dd18bbfca4fb2b35024c706541752a2d26de60c133a61ec306c8",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "b9adac92b7f9051f4374ba0496ef904f36df2a492e059b6a02e4205a1e0c52dd",
+     "s68": "deb99e60be958167e20e1b94a3acd9986cd10c838f6221ec16c3bf6cccd8b5e1",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "f5d3c3a4ffe7dd18bbfca4fb2b35024c706541752a2d26de60c133a61ec306c8",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "63d20e87defe08cb3f4a0ebdb4d9694e60250a346d64729b2f51fc5495ebb620",
+     "s68": "deb99e60be958167e20e1b94a3acd9986cd10c838f6221ec16c3bf6cccd8b5e1",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "f5d3c3a4ffe7dd18bbfca4fb2b35024c706541752a2d26de60c133a61ec306c8",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "63d20e87defe08cb3f4a0ebdb4d9694e60250a346d64729b2f51fc5495ebb620",
+     "s68": "deb99e60be958167e20e1b94a3acd9986cd10c838f6221ec16c3bf6cccd8b5e1",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "f5d3c3a4ffe7dd18bbfca4fb2b35024c706541752a2d26de60c133a61ec306c8",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "63d20e87defe08cb3f4a0ebdb4d9694e60250a346d64729b2f51fc5495ebb620",
      "s68": "deb99e60be958167e20e1b94a3acd9986cd10c838f6221ec16c3bf6cccd8b5e1",
      "golden": true
     }
@@ -4350,6 +6163,102 @@
      "l68": "5e23e7f90dc682a2e65b335cbcaa7627fbcca3a37d0b58be59260cca75998d96",
      "s68": "8cd24a4d4a28c0905e506588e6577c71c1d38fa384f425a449fb0a1679dc2b9b",
      "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "61a281243051f90bd85ed63001683c2efcfa03853f32ac9fbd8360411d2e761e",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "8cd24a4d4a28c0905e506588e6577c71c1d38fa384f425a449fb0a1679dc2b9b",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "61a281243051f90bd85ed63001683c2efcfa03853f32ac9fbd8360411d2e761e",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "5e23e7f90dc682a2e65b335cbcaa7627fbcca3a37d0b58be59260cca75998d96",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "61a281243051f90bd85ed63001683c2efcfa03853f32ac9fbd8360411d2e761e",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "10281f44120be3ea1b7bdd92f65337dd8f3fc0afc5acbdc28519f77e756fffb8",
+     "s68": "8cd24a4d4a28c0905e506588e6577c71c1d38fa384f425a449fb0a1679dc2b9b",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "61a281243051f90bd85ed63001683c2efcfa03853f32ac9fbd8360411d2e761e",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "bbba7ce1d05db3d59f315087a3e6e4382c370883bb79d15af5b8f69911caa042",
+     "s68": "8cd24a4d4a28c0905e506588e6577c71c1d38fa384f425a449fb0a1679dc2b9b",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "61a281243051f90bd85ed63001683c2efcfa03853f32ac9fbd8360411d2e761e",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "5e23e7f90dc682a2e65b335cbcaa7627fbcca3a37d0b58be59260cca75998d96",
+     "s68": "8cd24a4d4a28c0905e506588e6577c71c1d38fa384f425a449fb0a1679dc2b9b",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "61a281243051f90bd85ed63001683c2efcfa03853f32ac9fbd8360411d2e761e",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "5e23e7f90dc682a2e65b335cbcaa7627fbcca3a37d0b58be59260cca75998d96",
+     "s68": "8cd24a4d4a28c0905e506588e6577c71c1d38fa384f425a449fb0a1679dc2b9b",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "61a281243051f90bd85ed63001683c2efcfa03853f32ac9fbd8360411d2e761e",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "5e23e7f90dc682a2e65b335cbcaa7627fbcca3a37d0b58be59260cca75998d96",
+     "s68": "8cd24a4d4a28c0905e506588e6577c71c1d38fa384f425a449fb0a1679dc2b9b",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "61a281243051f90bd85ed63001683c2efcfa03853f32ac9fbd8360411d2e761e",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "5e23e7f90dc682a2e65b335cbcaa7627fbcca3a37d0b58be59260cca75998d96",
+     "s68": "8cd24a4d4a28c0905e506588e6577c71c1d38fa384f425a449fb0a1679dc2b9b",
+     "golden": true
     }
    }
   },
@@ -4675,6 +6584,102 @@
      "l68": "ebd26cd6317f886a9c7a1eb4321d81df4a7c6428709cb95752ed19186c6052e9",
      "s68": "f0f06b7f711800ad031458e06b21bd9e6ed7b06feebb2b54cada9f6e9c8fa8b9",
      "golden": false
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "bef65c3010e5943c25efb34f66a9b3df2b55a37090ad984f645fdeb05d1aef09",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "f0f06b7f711800ad031458e06b21bd9e6ed7b06feebb2b54cada9f6e9c8fa8b9",
+     "golden": false
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "bef65c3010e5943c25efb34f66a9b3df2b55a37090ad984f645fdeb05d1aef09",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "4185d05192af8ec2928bc84a3897008f0d503ab1213ccef9782d2032c602a120",
+     "s68": null,
+     "golden": false
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "bef65c3010e5943c25efb34f66a9b3df2b55a37090ad984f645fdeb05d1aef09",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "4185d05192af8ec2928bc84a3897008f0d503ab1213ccef9782d2032c602a120",
+     "s68": "f0f06b7f711800ad031458e06b21bd9e6ed7b06feebb2b54cada9f6e9c8fa8b9",
+     "golden": false
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "bef65c3010e5943c25efb34f66a9b3df2b55a37090ad984f645fdeb05d1aef09",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "4854f87bb509d5397628f5a00d3275372c7c9ba7fdf8230db822fdacdb6650ba",
+     "s68": "f0f06b7f711800ad031458e06b21bd9e6ed7b06feebb2b54cada9f6e9c8fa8b9",
+     "golden": false
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "bef65c3010e5943c25efb34f66a9b3df2b55a37090ad984f645fdeb05d1aef09",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "4185d05192af8ec2928bc84a3897008f0d503ab1213ccef9782d2032c602a120",
+     "s68": "f0f06b7f711800ad031458e06b21bd9e6ed7b06feebb2b54cada9f6e9c8fa8b9",
+     "golden": false
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "bef65c3010e5943c25efb34f66a9b3df2b55a37090ad984f645fdeb05d1aef09",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "4185d05192af8ec2928bc84a3897008f0d503ab1213ccef9782d2032c602a120",
+     "s68": "f0f06b7f711800ad031458e06b21bd9e6ed7b06feebb2b54cada9f6e9c8fa8b9",
+     "golden": false
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "bef65c3010e5943c25efb34f66a9b3df2b55a37090ad984f645fdeb05d1aef09",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "ebd26cd6317f886a9c7a1eb4321d81df4a7c6428709cb95752ed19186c6052e9",
+     "s68": "f0f06b7f711800ad031458e06b21bd9e6ed7b06feebb2b54cada9f6e9c8fa8b9",
+     "golden": false
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "bef65c3010e5943c25efb34f66a9b3df2b55a37090ad984f645fdeb05d1aef09",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "4185d05192af8ec2928bc84a3897008f0d503ab1213ccef9782d2032c602a120",
+     "s68": "f0f06b7f711800ad031458e06b21bd9e6ed7b06feebb2b54cada9f6e9c8fa8b9",
+     "golden": false
     }
    }
   },
@@ -4753,6 +6758,102 @@
      "errors": 0,
      "warnings": 1,
      "l68": "f4f7f229c79787c6c4a88010fc6a278805210d4203d6ed5868c309722adfeef8",
+     "s68": "5108b69a894df1d1ab85e9d8ce3bfb04038f49a7338c2d11c1716e9c5dbea9ef",
+     "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "2ae1d3ccce3d5e0ba39cbf4a2baf0dbb5ab5ae7c0c832fec31949874bf48c3ae",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "5108b69a894df1d1ab85e9d8ce3bfb04038f49a7338c2d11c1716e9c5dbea9ef",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "2ae1d3ccce3d5e0ba39cbf4a2baf0dbb5ab5ae7c0c832fec31949874bf48c3ae",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "734fb2bdf41c49824194633bccb883693f8ce2d7e4a3e5f9a05e5ed103e0481c",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "2ae1d3ccce3d5e0ba39cbf4a2baf0dbb5ab5ae7c0c832fec31949874bf48c3ae",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "a6ad520ec99b665d4a3512617468f97394a85378efa0681faf6fe438b67a0525",
+     "s68": "5108b69a894df1d1ab85e9d8ce3bfb04038f49a7338c2d11c1716e9c5dbea9ef",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "2ae1d3ccce3d5e0ba39cbf4a2baf0dbb5ab5ae7c0c832fec31949874bf48c3ae",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "328499119ebca75d248b6cec22710486f3e8b163e5a4429942281a42d990a761",
+     "s68": "5108b69a894df1d1ab85e9d8ce3bfb04038f49a7338c2d11c1716e9c5dbea9ef",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "2ae1d3ccce3d5e0ba39cbf4a2baf0dbb5ab5ae7c0c832fec31949874bf48c3ae",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "734fb2bdf41c49824194633bccb883693f8ce2d7e4a3e5f9a05e5ed103e0481c",
+     "s68": "5108b69a894df1d1ab85e9d8ce3bfb04038f49a7338c2d11c1716e9c5dbea9ef",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "2ae1d3ccce3d5e0ba39cbf4a2baf0dbb5ab5ae7c0c832fec31949874bf48c3ae",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "734fb2bdf41c49824194633bccb883693f8ce2d7e4a3e5f9a05e5ed103e0481c",
+     "s68": "5108b69a894df1d1ab85e9d8ce3bfb04038f49a7338c2d11c1716e9c5dbea9ef",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "2ae1d3ccce3d5e0ba39cbf4a2baf0dbb5ab5ae7c0c832fec31949874bf48c3ae",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "f4f7f229c79787c6c4a88010fc6a278805210d4203d6ed5868c309722adfeef8",
+     "s68": "5108b69a894df1d1ab85e9d8ce3bfb04038f49a7338c2d11c1716e9c5dbea9ef",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "2ae1d3ccce3d5e0ba39cbf4a2baf0dbb5ab5ae7c0c832fec31949874bf48c3ae",
+     "errors": 0,
+     "warnings": 1,
+     "l68": "734fb2bdf41c49824194633bccb883693f8ce2d7e4a3e5f9a05e5ed103e0481c",
      "s68": "5108b69a894df1d1ab85e9d8ce3bfb04038f49a7338c2d11c1716e9c5dbea9ef",
      "golden": true
     }
@@ -5041,6 +7142,110 @@
      "s68": "be5037ce5c6eeb5bc26589fe90006665d0763b0414daac5f153ed14d2e141129",
      "undefinedSymbols": true,
      "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "1f98a80d19afdd93e98def1e2a05ded40c4eb0fd3aea5f84a5c07d42ffae592c",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "be5037ce5c6eeb5bc26589fe90006665d0763b0414daac5f153ed14d2e141129",
+     "undefinedSymbols": true,
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "1f98a80d19afdd93e98def1e2a05ded40c4eb0fd3aea5f84a5c07d42ffae592c",
+     "errors": 28,
+     "warnings": 1,
+     "l68": "89a4b4f9f62953f30084400b74507c26a0f316f4beed1ee3fbcec419d6e19bc1",
+     "s68": null,
+     "undefinedSymbols": true,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "1f98a80d19afdd93e98def1e2a05ded40c4eb0fd3aea5f84a5c07d42ffae592c",
+     "errors": 28,
+     "warnings": 1,
+     "l68": "ac1565a5699747ff951aadbdf47b38dddb210d057a52cf0fbda10f0048403dab",
+     "s68": "be5037ce5c6eeb5bc26589fe90006665d0763b0414daac5f153ed14d2e141129",
+     "undefinedSymbols": true,
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "1f98a80d19afdd93e98def1e2a05ded40c4eb0fd3aea5f84a5c07d42ffae592c",
+     "errors": 28,
+     "warnings": 1,
+     "l68": "e939f11e3c6d3d50c28427892bb6bb5cd3c9b2ab8e188f2037b45f0219ec8e47",
+     "s68": "be5037ce5c6eeb5bc26589fe90006665d0763b0414daac5f153ed14d2e141129",
+     "undefinedSymbols": true,
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "1f98a80d19afdd93e98def1e2a05ded40c4eb0fd3aea5f84a5c07d42ffae592c",
+     "errors": 28,
+     "warnings": 1,
+     "l68": "89a4b4f9f62953f30084400b74507c26a0f316f4beed1ee3fbcec419d6e19bc1",
+     "s68": "be5037ce5c6eeb5bc26589fe90006665d0763b0414daac5f153ed14d2e141129",
+     "undefinedSymbols": true,
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "1f98a80d19afdd93e98def1e2a05ded40c4eb0fd3aea5f84a5c07d42ffae592c",
+     "errors": 28,
+     "warnings": 1,
+     "l68": "89a4b4f9f62953f30084400b74507c26a0f316f4beed1ee3fbcec419d6e19bc1",
+     "s68": "be5037ce5c6eeb5bc26589fe90006665d0763b0414daac5f153ed14d2e141129",
+     "undefinedSymbols": true,
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "1f98a80d19afdd93e98def1e2a05ded40c4eb0fd3aea5f84a5c07d42ffae592c",
+     "errors": 28,
+     "warnings": 1,
+     "l68": "a96925b00e0c6358ba3ac0f1767f7b0bdca08e023d957255225bc2ab09e715ea",
+     "s68": "be5037ce5c6eeb5bc26589fe90006665d0763b0414daac5f153ed14d2e141129",
+     "undefinedSymbols": true,
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "1f98a80d19afdd93e98def1e2a05ded40c4eb0fd3aea5f84a5c07d42ffae592c",
+     "errors": 28,
+     "warnings": 1,
+     "l68": "89a4b4f9f62953f30084400b74507c26a0f316f4beed1ee3fbcec419d6e19bc1",
+     "s68": "be5037ce5c6eeb5bc26589fe90006665d0763b0414daac5f153ed14d2e141129",
+     "undefinedSymbols": true,
+     "golden": true
     }
    }
   },
@@ -5238,6 +7443,102 @@
      "l68": "26d5514b4111fe4cc212805242de055aa93c7cb03d191450ddfb72657d9c6b62",
      "s68": "db80ca8d02ea3e1bcf112d865cc8e03f2eee6ee9994189c60f09a8fff26797c9",
      "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "3074636427d235fc6e6aca9256cc1db01c282d58214aa43d799a2c5d385fbcd7",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "db80ca8d02ea3e1bcf112d865cc8e03f2eee6ee9994189c60f09a8fff26797c9",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "3074636427d235fc6e6aca9256cc1db01c282d58214aa43d799a2c5d385fbcd7",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "4c0e761cf2b4da1196f810f3db64f6d81c66f2598745b1603efa29a7b2b26984",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "3074636427d235fc6e6aca9256cc1db01c282d58214aa43d799a2c5d385fbcd7",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "4c0e761cf2b4da1196f810f3db64f6d81c66f2598745b1603efa29a7b2b26984",
+     "s68": "db80ca8d02ea3e1bcf112d865cc8e03f2eee6ee9994189c60f09a8fff26797c9",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "3074636427d235fc6e6aca9256cc1db01c282d58214aa43d799a2c5d385fbcd7",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "c1b82cd4a953766b72505cbdcfc9f6a37df321b50f16c91b55044a203cbf4f94",
+     "s68": "db80ca8d02ea3e1bcf112d865cc8e03f2eee6ee9994189c60f09a8fff26797c9",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "3074636427d235fc6e6aca9256cc1db01c282d58214aa43d799a2c5d385fbcd7",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "4c0e761cf2b4da1196f810f3db64f6d81c66f2598745b1603efa29a7b2b26984",
+     "s68": "db80ca8d02ea3e1bcf112d865cc8e03f2eee6ee9994189c60f09a8fff26797c9",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "3074636427d235fc6e6aca9256cc1db01c282d58214aa43d799a2c5d385fbcd7",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "ca0c44ba49447cb6f6ff7330d0c5ac62b8926e6a3d2869371be0bf5bb94ad788",
+     "s68": "db80ca8d02ea3e1bcf112d865cc8e03f2eee6ee9994189c60f09a8fff26797c9",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "3074636427d235fc6e6aca9256cc1db01c282d58214aa43d799a2c5d385fbcd7",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "7d7b1b96a1a3e99de4b97751ff964775c9bb7a4ff5169bc52480fc1342a8bdfa",
+     "s68": "db80ca8d02ea3e1bcf112d865cc8e03f2eee6ee9994189c60f09a8fff26797c9",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "3074636427d235fc6e6aca9256cc1db01c282d58214aa43d799a2c5d385fbcd7",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "4c0e761cf2b4da1196f810f3db64f6d81c66f2598745b1603efa29a7b2b26984",
+     "s68": "db80ca8d02ea3e1bcf112d865cc8e03f2eee6ee9994189c60f09a8fff26797c9",
+     "golden": true
     }
    }
   },
@@ -5275,6 +7576,102 @@
      "l68": "cfab8c5dd8c1c20cd2a511b762045f3b91c15b4b86806e38e03af61a4cbeb3cc",
      "s68": "922820743b7a3227da5836d2d3fa7234d34a1f118b6ec8b35942dc0761ef719d",
      "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "f1c7e589e9639c26df3ffb406d226f75f3c6d18cfbf70dbfeebac9ef30c92b3a",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "922820743b7a3227da5836d2d3fa7234d34a1f118b6ec8b35942dc0761ef719d",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "f1c7e589e9639c26df3ffb406d226f75f3c6d18cfbf70dbfeebac9ef30c92b3a",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "a8d5c7867ea71c9da0b5ace43a7e1101a6d3011f4dbd9d11940e0fcd10ea7c82",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "f1c7e589e9639c26df3ffb406d226f75f3c6d18cfbf70dbfeebac9ef30c92b3a",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "a8d5c7867ea71c9da0b5ace43a7e1101a6d3011f4dbd9d11940e0fcd10ea7c82",
+     "s68": "922820743b7a3227da5836d2d3fa7234d34a1f118b6ec8b35942dc0761ef719d",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "f1c7e589e9639c26df3ffb406d226f75f3c6d18cfbf70dbfeebac9ef30c92b3a",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "54de1868f2be6d32901a9889891469d2602957c284fcd2bebb018707a2c98e93",
+     "s68": "922820743b7a3227da5836d2d3fa7234d34a1f118b6ec8b35942dc0761ef719d",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "f1c7e589e9639c26df3ffb406d226f75f3c6d18cfbf70dbfeebac9ef30c92b3a",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "0f1ceec3d6b4499b9202b3bdb790f7548f1b4ef91b51ba9173d1d5ae0f67e9ad",
+     "s68": "922820743b7a3227da5836d2d3fa7234d34a1f118b6ec8b35942dc0761ef719d",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "f1c7e589e9639c26df3ffb406d226f75f3c6d18cfbf70dbfeebac9ef30c92b3a",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "261cdde4c162bd6a658b15f5311b5abbb203cf7b1017648148726ed08e9b9335",
+     "s68": "922820743b7a3227da5836d2d3fa7234d34a1f118b6ec8b35942dc0761ef719d",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "f1c7e589e9639c26df3ffb406d226f75f3c6d18cfbf70dbfeebac9ef30c92b3a",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "a8d5c7867ea71c9da0b5ace43a7e1101a6d3011f4dbd9d11940e0fcd10ea7c82",
+     "s68": "922820743b7a3227da5836d2d3fa7234d34a1f118b6ec8b35942dc0761ef719d",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "f1c7e589e9639c26df3ffb406d226f75f3c6d18cfbf70dbfeebac9ef30c92b3a",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "a8d5c7867ea71c9da0b5ace43a7e1101a6d3011f4dbd9d11940e0fcd10ea7c82",
+     "s68": "922820743b7a3227da5836d2d3fa7234d34a1f118b6ec8b35942dc0761ef719d",
+     "golden": true
     }
    }
   },
@@ -5310,6 +7707,102 @@
      "errors": 0,
      "warnings": 0,
      "l68": "e8fa1d6bca6dbcb4f79448512b3689244c3d95527457b425a8e080a04042ea49",
+     "s68": "71e2bc80b134d928e48bbbd5cefa5fa3fbcdd3e1a622ce05a2589a478974c8d5",
+     "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "2d49f97cd06c144eb06a19fcab19280ce2b96526f8ae0da6e7b0736b07225ddf",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "71e2bc80b134d928e48bbbd5cefa5fa3fbcdd3e1a622ce05a2589a478974c8d5",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "2d49f97cd06c144eb06a19fcab19280ce2b96526f8ae0da6e7b0736b07225ddf",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "2f854e4980ea7841903cc4d64084445334dbe749a980533af1b4533ebdaed0df",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "2d49f97cd06c144eb06a19fcab19280ce2b96526f8ae0da6e7b0736b07225ddf",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "2f854e4980ea7841903cc4d64084445334dbe749a980533af1b4533ebdaed0df",
+     "s68": "71e2bc80b134d928e48bbbd5cefa5fa3fbcdd3e1a622ce05a2589a478974c8d5",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "2d49f97cd06c144eb06a19fcab19280ce2b96526f8ae0da6e7b0736b07225ddf",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "5be17de2d1307f6562c7e7203270be2a2e42cc75ce0c3ec80e943778e00f158d",
+     "s68": "71e2bc80b134d928e48bbbd5cefa5fa3fbcdd3e1a622ce05a2589a478974c8d5",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "2d49f97cd06c144eb06a19fcab19280ce2b96526f8ae0da6e7b0736b07225ddf",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "8f9bf5ac7705574614c0e23ed73d1301a9942b753213a259592b983cf3d2284e",
+     "s68": "71e2bc80b134d928e48bbbd5cefa5fa3fbcdd3e1a622ce05a2589a478974c8d5",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "2d49f97cd06c144eb06a19fcab19280ce2b96526f8ae0da6e7b0736b07225ddf",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "d929963830da69c88f9073b50aeaa7b5313e877a8da048b560f0a9828840320f",
+     "s68": "71e2bc80b134d928e48bbbd5cefa5fa3fbcdd3e1a622ce05a2589a478974c8d5",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "2d49f97cd06c144eb06a19fcab19280ce2b96526f8ae0da6e7b0736b07225ddf",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "4dbc1a54fdce9165ab99ad4480f43b84e0148391f2e4822fd6876d0c09edee0b",
+     "s68": "71e2bc80b134d928e48bbbd5cefa5fa3fbcdd3e1a622ce05a2589a478974c8d5",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "2d49f97cd06c144eb06a19fcab19280ce2b96526f8ae0da6e7b0736b07225ddf",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "2f854e4980ea7841903cc4d64084445334dbe749a980533af1b4533ebdaed0df",
      "s68": "71e2bc80b134d928e48bbbd5cefa5fa3fbcdd3e1a622ce05a2589a478974c8d5",
      "golden": true
     }
@@ -5386,6 +7879,102 @@
      "l68": "a8f57da8f045ba2f6df24b365c43fa141da46b8a25a554310c797752cb22f9e2",
      "s68": "b5865f24709c9582aff2a547d459e4c75f29fc0967bcf07e80478462976e5962",
      "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "c319e658cfb8f1813b57a5f118453a9158328a742b651291f72d01dc8114344c",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "b5865f24709c9582aff2a547d459e4c75f29fc0967bcf07e80478462976e5962",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "c319e658cfb8f1813b57a5f118453a9158328a742b651291f72d01dc8114344c",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "94bab251a078e0d9d3ad0525ae1c125cee31e9aa095d7502bb88a264e302bfea",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "c319e658cfb8f1813b57a5f118453a9158328a742b651291f72d01dc8114344c",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "94bab251a078e0d9d3ad0525ae1c125cee31e9aa095d7502bb88a264e302bfea",
+     "s68": "b5865f24709c9582aff2a547d459e4c75f29fc0967bcf07e80478462976e5962",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "c319e658cfb8f1813b57a5f118453a9158328a742b651291f72d01dc8114344c",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "7355a99eb0f614adbf01c61b9dcf7b13cac7f103745207141fc3b4103eb202b0",
+     "s68": "b5865f24709c9582aff2a547d459e4c75f29fc0967bcf07e80478462976e5962",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "c319e658cfb8f1813b57a5f118453a9158328a742b651291f72d01dc8114344c",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "94bab251a078e0d9d3ad0525ae1c125cee31e9aa095d7502bb88a264e302bfea",
+     "s68": "b5865f24709c9582aff2a547d459e4c75f29fc0967bcf07e80478462976e5962",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "c319e658cfb8f1813b57a5f118453a9158328a742b651291f72d01dc8114344c",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "0065718c64eaa8b384d3fce9b241810a60719865b2a83dff444eb60101d0b12b",
+     "s68": "b5865f24709c9582aff2a547d459e4c75f29fc0967bcf07e80478462976e5962",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "c319e658cfb8f1813b57a5f118453a9158328a742b651291f72d01dc8114344c",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "fc24e5f848dce2a3289dfe693a636696e35a5223237aed14d297157f0f06ed9d",
+     "s68": "b5865f24709c9582aff2a547d459e4c75f29fc0967bcf07e80478462976e5962",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "c319e658cfb8f1813b57a5f118453a9158328a742b651291f72d01dc8114344c",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "94bab251a078e0d9d3ad0525ae1c125cee31e9aa095d7502bb88a264e302bfea",
+     "s68": "b5865f24709c9582aff2a547d459e4c75f29fc0967bcf07e80478462976e5962",
+     "golden": true
     }
    }
   },
@@ -5423,6 +8012,102 @@
      "errors": 0,
      "warnings": 0,
      "l68": "90646c3088ad744827e288625042987b6fe055f3b42bfb94dbecaa18cb05d731",
+     "s68": "322b4b83fb953881db90cf732b3d5b56d9b539f1939ac47f774d13eaa08c6022",
+     "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "08895e88a35f1e6df6a1f280dc0702167367c7fa8d13ece09b9cd6662d1ff4f4",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "322b4b83fb953881db90cf732b3d5b56d9b539f1939ac47f774d13eaa08c6022",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "08895e88a35f1e6df6a1f280dc0702167367c7fa8d13ece09b9cd6662d1ff4f4",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "59a86138137b3d4dfcdb09c51f3c852795d58396e33288deb8ce67019a3f7022",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "08895e88a35f1e6df6a1f280dc0702167367c7fa8d13ece09b9cd6662d1ff4f4",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "59a86138137b3d4dfcdb09c51f3c852795d58396e33288deb8ce67019a3f7022",
+     "s68": "322b4b83fb953881db90cf732b3d5b56d9b539f1939ac47f774d13eaa08c6022",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "08895e88a35f1e6df6a1f280dc0702167367c7fa8d13ece09b9cd6662d1ff4f4",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "b349e425c6602e78cd25408833fb4ad4ac029d6e6d682382bf452c8e7689b5a3",
+     "s68": "322b4b83fb953881db90cf732b3d5b56d9b539f1939ac47f774d13eaa08c6022",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "08895e88a35f1e6df6a1f280dc0702167367c7fa8d13ece09b9cd6662d1ff4f4",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "59a86138137b3d4dfcdb09c51f3c852795d58396e33288deb8ce67019a3f7022",
+     "s68": "322b4b83fb953881db90cf732b3d5b56d9b539f1939ac47f774d13eaa08c6022",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "08895e88a35f1e6df6a1f280dc0702167367c7fa8d13ece09b9cd6662d1ff4f4",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "66309b3f83022cdfdd2a4353aebf7aa5b747edb2f3b0e1199e43732be828038e",
+     "s68": "322b4b83fb953881db90cf732b3d5b56d9b539f1939ac47f774d13eaa08c6022",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "08895e88a35f1e6df6a1f280dc0702167367c7fa8d13ece09b9cd6662d1ff4f4",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "42d440ff309574808dfbf38d546be5a1687621bbfacd0e1eaba87e45ff963519",
+     "s68": "322b4b83fb953881db90cf732b3d5b56d9b539f1939ac47f774d13eaa08c6022",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "08895e88a35f1e6df6a1f280dc0702167367c7fa8d13ece09b9cd6662d1ff4f4",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "59a86138137b3d4dfcdb09c51f3c852795d58396e33288deb8ce67019a3f7022",
      "s68": "322b4b83fb953881db90cf732b3d5b56d9b539f1939ac47f774d13eaa08c6022",
      "golden": true
     }
@@ -5538,6 +8223,102 @@
      "errors": 0,
      "warnings": 0,
      "l68": "bf666ac32bf8c2ba818e3f38eeef95dfcc0709e1ede54e14d80ea4ca23fa00ad",
+     "s68": "da243c1a16a98f6ab47a816056ae32e13483d6f82243b54eaa709049ebd733c2",
+     "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "851f262a0ba1eee40ec6c6c4bffc4b32fbfc51d8cc4d3c3e2992fee0cbf29c94",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "da243c1a16a98f6ab47a816056ae32e13483d6f82243b54eaa709049ebd733c2",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "851f262a0ba1eee40ec6c6c4bffc4b32fbfc51d8cc4d3c3e2992fee0cbf29c94",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "dbb97b922d36e4cfa9caafbba23ea8f96cf9054c5e9531125dad906bf08b3256",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "851f262a0ba1eee40ec6c6c4bffc4b32fbfc51d8cc4d3c3e2992fee0cbf29c94",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "dbb97b922d36e4cfa9caafbba23ea8f96cf9054c5e9531125dad906bf08b3256",
+     "s68": "da243c1a16a98f6ab47a816056ae32e13483d6f82243b54eaa709049ebd733c2",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "851f262a0ba1eee40ec6c6c4bffc4b32fbfc51d8cc4d3c3e2992fee0cbf29c94",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "5c5de2c8adffb8e54dba19282433d161253f1b273786139ff8f5af81f4a3b8d9",
+     "s68": "da243c1a16a98f6ab47a816056ae32e13483d6f82243b54eaa709049ebd733c2",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "851f262a0ba1eee40ec6c6c4bffc4b32fbfc51d8cc4d3c3e2992fee0cbf29c94",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "dbb97b922d36e4cfa9caafbba23ea8f96cf9054c5e9531125dad906bf08b3256",
+     "s68": "da243c1a16a98f6ab47a816056ae32e13483d6f82243b54eaa709049ebd733c2",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "851f262a0ba1eee40ec6c6c4bffc4b32fbfc51d8cc4d3c3e2992fee0cbf29c94",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "dbb97b922d36e4cfa9caafbba23ea8f96cf9054c5e9531125dad906bf08b3256",
+     "s68": "da243c1a16a98f6ab47a816056ae32e13483d6f82243b54eaa709049ebd733c2",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "851f262a0ba1eee40ec6c6c4bffc4b32fbfc51d8cc4d3c3e2992fee0cbf29c94",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "bf666ac32bf8c2ba818e3f38eeef95dfcc0709e1ede54e14d80ea4ca23fa00ad",
+     "s68": "da243c1a16a98f6ab47a816056ae32e13483d6f82243b54eaa709049ebd733c2",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
+     "status": "ok",
+     "received": "851f262a0ba1eee40ec6c6c4bffc4b32fbfc51d8cc4d3c3e2992fee0cbf29c94",
+     "errors": 0,
+     "warnings": 0,
+     "l68": "dbb97b922d36e4cfa9caafbba23ea8f96cf9054c5e9531125dad906bf08b3256",
      "s68": "da243c1a16a98f6ab47a816056ae32e13483d6f82243b54eaa709049ebd733c2",
      "golden": true
     }
@@ -5773,6 +8554,102 @@
    "runs": {
     "default": {
      "options": {},
+     "status": "ok",
+     "received": "6eeffa7256b7b192a48292036bec20946e1e219f0932ccd475b288ca7519acd1",
+     "errors": 4,
+     "warnings": 0,
+     "l68": "e114a5fa9428c7a781915c28959c6cc3c38b50eefded7e9cf733a3d2e5c9fd40",
+     "s68": "c3fb1d7cd2e59ff191d6c2e77cd98f53e681bf86f04c27126f34feb13812eb06",
+     "golden": true
+    },
+    "nolist": {
+     "options": {
+      "generateListing": false
+     },
+     "status": "ok",
+     "received": "6eeffa7256b7b192a48292036bec20946e1e219f0932ccd475b288ca7519acd1",
+     "errors": null,
+     "warnings": null,
+     "l68": null,
+     "s68": "c3fb1d7cd2e59ff191d6c2e77cd98f53e681bf86f04c27126f34feb13812eb06",
+     "golden": true
+    },
+    "nosrec": {
+     "options": {
+      "generateSRecord": false
+     },
+     "status": "ok",
+     "received": "6eeffa7256b7b192a48292036bec20946e1e219f0932ccd475b288ca7519acd1",
+     "errors": 4,
+     "warnings": 0,
+     "l68": "e114a5fa9428c7a781915c28959c6cc3c38b50eefded7e9cf733a3d2e5c9fd40",
+     "s68": null,
+     "golden": true
+    },
+    "nowar": {
+     "options": {
+      "showWarnings": false
+     },
+     "status": "ok",
+     "received": "6eeffa7256b7b192a48292036bec20946e1e219f0932ccd475b288ca7519acd1",
+     "errors": 4,
+     "warnings": 0,
+     "l68": "e114a5fa9428c7a781915c28959c6cc3c38b50eefded7e9cf733a3d2e5c9fd40",
+     "s68": "c3fb1d7cd2e59ff191d6c2e77cd98f53e681bf86f04c27126f34feb13812eb06",
+     "golden": true
+    },
+    "nocre": {
+     "options": {
+      "crossReference": false
+     },
+     "status": "ok",
+     "received": "6eeffa7256b7b192a48292036bec20946e1e219f0932ccd475b288ca7519acd1",
+     "errors": 4,
+     "warnings": 0,
+     "l68": "221b8eb567cc3675481683d3ec5303835b21793e7aa63b930bee28b8fc6be400",
+     "s68": "c3fb1d7cd2e59ff191d6c2e77cd98f53e681bf86f04c27126f34feb13812eb06",
+     "golden": true
+    },
+    "mex": {
+     "options": {
+      "macrosExpanded": true
+     },
+     "status": "ok",
+     "received": "6eeffa7256b7b192a48292036bec20946e1e219f0932ccd475b288ca7519acd1",
+     "errors": 4,
+     "warnings": 0,
+     "l68": "e114a5fa9428c7a781915c28959c6cc3c38b50eefded7e9cf733a3d2e5c9fd40",
+     "s68": "c3fb1d7cd2e59ff191d6c2e77cd98f53e681bf86f04c27126f34feb13812eb06",
+     "golden": true
+    },
+    "sex": {
+     "options": {
+      "structuredExpanded": true
+     },
+     "status": "ok",
+     "received": "6eeffa7256b7b192a48292036bec20946e1e219f0932ccd475b288ca7519acd1",
+     "errors": 4,
+     "warnings": 0,
+     "l68": "e114a5fa9428c7a781915c28959c6cc3c38b50eefded7e9cf733a3d2e5c9fd40",
+     "s68": "c3fb1d7cd2e59ff191d6c2e77cd98f53e681bf86f04c27126f34feb13812eb06",
+     "golden": true
+    },
+    "cex": {
+     "options": {
+      "constantsExpanded": true
+     },
+     "status": "ok",
+     "received": "6eeffa7256b7b192a48292036bec20946e1e219f0932ccd475b288ca7519acd1",
+     "errors": 4,
+     "warnings": 0,
+     "l68": "dffbd10f2b6ad71e19288eb680c3eb3cad473a522a1389df22699ad2391d08ce",
+     "s68": "c3fb1d7cd2e59ff191d6c2e77cd98f53e681bf86f04c27126f34feb13812eb06",
+     "golden": true
+    },
+    "nobit": {
+     "options": {
+      "bitFieldInstructions": false
+     },
      "status": "ok",
      "received": "6eeffa7256b7b192a48292036bec20946e1e219f0932ccd475b288ca7519acd1",
      "errors": 4,

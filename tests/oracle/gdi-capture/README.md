@@ -22,6 +22,7 @@ cell followed by `MoveTo(x + TextWidth, y)`. Fonts are created as `TFont.GetHand
 | `tests/conformance/gdi/golden/<suite>.pixpack.gz` | one `.pix` (6.5.3) per case of `tests/conformance/gdi/cases.ts`, packed per suite (format in `pix.ts`), with GDI's pen position after each case                                                                     |
 | `tests/conformance/gdi/golden/spots.json`         | spot values: system colours, stock palette, colour forms, the 16 operations, raw ROP2 values 0-255, dots of widths 0-14, task 95 control bytes                                                                      |
 | `tests/conformance/gdi/golden/nibs.json`          | the nib of every pen width 2-255 and the widened paths of a few tie directions (below, "Pen nibs")                                                                                                                  |
+| `tests/conformance/gdi/golden/modes.json`         | what `SetROP2` does with the words task 92 passes for modes above 15 and with raw values 0-32 and a few large ones (errata SH1.md entry 17)                                                                         |
 | `app/public/fonts/metrics.json`                   | the metric table of 3.5.1 (6.5.3 format) and the raster rules (below)                                                                                                                                               |
 | `app/public/fonts/bitmap/*.bin`                   | raster atlases (origin: `app/public/fonts/bitmap/README.md`)                                                                                                                                                        |
 | `tools/fonts-src/windows-outline-metrics.tsv`     | for `tools/make-font-atlases.mjs`: cells, ascents, advances, underline and strike-out of the outline faces at the atlas sizes, and the width of `$7F` in a string with a byte of `$80` or above (`delInHighString`) |
@@ -31,7 +32,9 @@ page, `LOGPIXELSY`, and the font-smoothing settings (`SPI_GETFONTSMOOTHING`, typ
 orientation). The atlas formats (6.5.3) have no room for it; `metrics.json` lists the raster atlases
 and carries their `capturedOn`, and the outline atlases are drawn from `windows-outline-metrics.tsv`,
 whose first line holds it. Inside `build/gdi-capture/run/` the program also leaves the raw `.pix`
-files, `metrics.tsv`, `atlases.tsv` and `raster-rules.tsv`, which are useful when a comparison fails.
+files, `metrics.tsv`, `atlases.tsv`, `raster-rules.tsv` and `text-path.tsv`, which are useful when a
+comparison fails. The program and its build are started with `windowsHide`: no console window
+appears on the desktop.
 
 ## What is compared
 
@@ -177,6 +180,48 @@ script itemization:
   measured at every raster size: 29 Fixedsys sizes from 19 to 104 pt, 52 Courier sizes from 3 to
   145 pt; some strings of several zero-width bytes fill the cell there, others do not). The suite
   `text` holds a lone `$0D` at every raster size, which keeps the list exact.
+
+The suite `text-control` keeps them (its case numbers are referred to elsewhere), but since gate I3
+(item 3b) `text-model.ts` and the port's text screen model most of them by the rules of the next
+section; `app/src/core/sim-host/text/gdi-references.test.ts` holds the text screen to
+`text-control`, `text-path` and `text-path-euro`.
+
+## Windows' text path
+
+For a text with a zero-width byte, `$7F`, an undefined byte or `$86 $87 $88 $98`, Windows'
+`ExtTextOutA` and `GetTextExtentPoint32A` lay the text out with Uniscribe (the complex-script path):
+it cuts the text into items by script and takes characters the face has no glyph for from a
+fallback font. Measured with this program (errata T2 entry 26; gate I3, item 3b), in the raster faces:
+
+- **The bar.** At the sizes of `ZERO_WIDTH_BAR_SIZES`, in plain, bold and italic (never underline or
+  strike-out), a text of zero-width bytes only that has an odd number of bytes or two `$1F` in a
+  row is the opaque box of a glyph of no width: 3 pixels wide from x - 1, as high as the fallback
+  font's cell (a height per face cell, e.g. Fixedsys 30 → 29, Courier 16 → 15). Any other such text
+  fills the first byte's cell. `fonts` writes `text-path.tsv` (the bar of a lone `$0D` at every
+  raster size and style) and `run.mjs` puts it into `metrics.json` `raster.textPath.zeroWidthBar`.
+- **The euro sign.** `$80` (the faces' default character, drawn as their block) comes from the
+  fallback font on the path: a ClearType euro sign, with that glyph's width in the box and in
+  TextWidth. `text-path.tsv` has TextWidth(`$80 $86`) - TextWidth(`$86`) for every raster size and
+  style; `metrics.json` `raster.textPath.fallbackEuro`.
+- **At least one cell.** On the path the box is at least one cell of the face wide (a text of
+  undefined bytes only; the euro sign alone).
+- **Italic.** On the path, a text cut into two or more items loses the italic overhang of all but
+  its first glyph. Items: neutral bytes (space, digits, ASCII punctuation, `$A0`) join their
+  neighbours; letters and Latin-1 (with `$83 $88 $8A $8C $8E $98 $9A $9C $9E $9F`), general
+  punctuation (`$82 $84-$87 $89 $8B $91-$97 $99 $9B`), the superscripts `$B2 $B3 $B9` and the euro
+  are classes of their own; control bytes are items no neutral joins.
+- **Control texts** (errata T2 entry 27; review R4 of gate I3). A text with `$7F` and an undefined
+  byte and no letter, euro sign, superscript or zero-width byte, whose other bytes form at most one
+  run of punctuation and neutrals between the controls (or two runs, at its two ends), each with a
+  punctuation byte, keeps the whole italic overhang; ending with an undefined byte, its box is one
+  cell wider in plain, bold and italic (`$7F $81` fills two cells, `$7F $81 "A"` two as usual).
+  `controlText` in `text-model.ts`.
+
+The suite `text-path` (not machine-dependent) holds these strings; `text-path-euro` holds `$80` on
+the path and is machine-dependent, because the euro sign is ClearType output. `text-path-formfeed`
+(machine-dependent, reported and not required) holds `$0C` on the path: an arrow from a fallback
+font with ClearType, with a width that depends on its item (10 pixels in a punctuation item in
+Fixedsys 9, 8 next to a letter), which the port does not model.
 
 In the outline faces GDI widens the opaque cell by the first and last glyph's ink overhang (1-2
 pixels at 8-18 pt, more at large sizes) and draws the TrueType underline below the cell. The port's

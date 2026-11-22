@@ -44,6 +44,7 @@
     "check:text": "node app/src/core/sim-host/text/check-text.mjs",
     "check:output": "node app/src/features/output/check-output.mjs",
     "check:hardware": "node app/src/features/hardware/check-hardware.mjs",
+    "check:stop-buttons": "node tests/conformance/sim/check-stop-buttons.mjs",
     "check:run": "node app/src/features/run/check-run.mjs",
     "check:sim-main": "node app/src/features/sim-main/check-sim-main.mjs",
     "check:pwa": "node app/src/features/pwa/check-pwa.mjs",

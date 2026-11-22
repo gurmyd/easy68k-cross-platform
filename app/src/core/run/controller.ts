@@ -223,7 +223,6 @@ export interface RepaintCounts {
 /** Every panel a RepaintBit names. */
 const ALL_PANELS = RepaintBit.Listing | RepaintBit.Breakpoints | RepaintBit.Memory | RepaintBit.Stack;
 
-/** The governor's figures, for tests and for the performance package. */
 /** The command that set execution going last: a Trace Into step, Auto Trace, or any other run command. */
 export type StopCause = 'run' | 'trace' | 'autoTrace';
 
@@ -239,6 +238,7 @@ export interface StopRecord {
   readonly wasRunning: boolean;
 }
 
+/** The governor's figures, for tests and for the performance package. */
 export interface GovernorReading {
   allowance: number;
   frameInterval: number;

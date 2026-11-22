@@ -4,9 +4,10 @@
 // reference files that the port's drawing surface (SH1, SH2) and text screen (SH3) are held to.
 //
 //   gdi-capture.exe cases <case-list.txt> <out-dir>   one .pix per case + pen.txt
-//   gdi-capture.exe fonts <out-dir>                   metrics.tsv, outline.tsv, raster atlases
+//   gdi-capture.exe fonts <out-dir>                   metrics.tsv, outline.tsv, raster atlases, text-path.tsv
 //   gdi-capture.exe spots <out-dir>                   spots.json (colours, ROP2, dots, ...)
 //   gdi-capture.exe nibs <out-dir>                    nibs.json (the polygons of the wide pens)
+//   gdi-capture.exe modes <out-dir>                   modes.json (SetROP2 with values above 15)
 //   gdi-capture.exe info                              the machine settings line, on stdout
 //
 // The program draws ONLY into memory device contexts holding a 32-bit top-down DIB section. It
@@ -177,6 +178,27 @@ static std::vector<uint8_t> encodePix(const Canvas& c) {
 
 // TPenMode -> ROP2 word, the table at $005270B4 (trap15-b 5.4).
 static const int PEN_MODES[16] = {1, 16, 11, 6, 13, 4, 14, 5, 12, 3, 15, 2, 9, 8, 7, 10};
+
+// The 256 words at $005270B4 in SIM68K.exe v5.16.1 (.data, file offset $125EB4): PenModes[0-15]
+// and what follows it, which TCanvas.CreatePen reads for a pen mode of 18-255 (trap15-b 5.4).
+// Read from reference/official-extracted/SIM68K.exe; used by the "modesAbove15" spot values only.
+static const uint16_t PEN_MODE_WORDS[256] = {
+    1, 16, 11, 6, 13, 4, 14, 5, 12, 3, 15, 2, 9, 8, 7, 10,
+    0, 0, 0, 0, 0, 0, 772, 37008, 772, 37008, 0, 0, 128, 0, 32768, 0,
+    32896, 0, 0, 128, 128, 128, 32768, 128, 32896, 128, 49344, 192, 255, 0, 65280, 0,
+    65535, 0, 0, 255, 255, 255, 65280, 255, 65535, 255, 0, 0, 0, 0, 0, 0,
+    37556, 72, 36865, 37008, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 21, 0,
+    2, 0, 3, 0, 20, 0, 512, 0, 2, 0, 16, 0, 4, 0, 128, 0,
+    256, 0, 1, 0, 32, 0, 8, 0, 64, 0, 0, 0, 1, 0, 2, 0,
+    0, 0, 0, 128, 1, 0, 6, 0, 3, 0, 4, 0, 7, 0, 3, 0,
+    1, 0, 7, 0, 3, 0, 0, 0, 2, 0, 0, 0, 1, 0, 32646, 0,
+    32761, 0, 32651, 0, 32650, 0, 32648, 0, 32762, 0, 32763, 0, 32764, 0, 32765, 0,
+    32767, 0, 32766, 0, 32514, 0, 32516, 0, 32644, 0, 32642, 0, 32645, 0, 32643, 0,
+    32640, 0, 32513, 0, 32515, 0, 32512, 0, 2, 0, 0, 0, 1, 0, 0, 0,
+    17310, 81, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    53592, 71, 36864, 37008, 151, 87, 0, 0, 0, 128, 0, 0, 2, 0, 1, 0,
+    36864, 37008, 0, 0, 0, 37008, 1, 0, 2, 0, 4, 0, 8, 0, 16, 0,
+    256, 0, 512, 0, 1024, 0, 2048, 0, 4096, 0, 8192, 0, 16384, 0, 32768, 0};
 
 /** Mode 0-255 as set by task 92 -> the mode 0-15 it behaves as (trap15-b 5.4, exception table). */
 static int effectiveMode(int mode) {
@@ -849,6 +871,56 @@ static int runFonts(const std::string& outDir) {
   writeText(outDir + "\\atlases.tsv", atlasLog);
   writeText(outDir + "\\raster-rules.tsv", rulesLog);
   std::printf("%d raster atlases written (%d cells captured because no rule reproduces them)\n", atlasCount, captured);
+
+  // 4. Windows' text path in the raster faces (README.md, "Windows' text path"). For every raster
+  //    size and style of the two raster names of task 21:
+  //    - bar: what TextOut paints for "\r" alone, opaque, at x = 8. Either the first byte's cell
+  //      (written "-") or, at some requested sizes, a bar 3 pixels wide from x - 1 that is the
+  //      opaque box of a glyph of no width from the font Windows falls back to; then its height.
+  //    - euro: the width of $80 in a text that takes the path (here "$80 $86"): Windows draws it
+  //      from a fallback font (the euro sign) instead of the face's block, with that glyph's width.
+  //      Measured as TextWidth($80 $86) - TextWidth($86).
+  std::string textPath = "# name\tsize\tstyle\tbar\teuro\n";
+  for (const char* name : {"Fixedsys", "Courier"}) {
+    for (int size = 0; size < 256; size++) {
+      for (int style = 0; style < 5; style++) {
+        VclFont f;
+        f.name = name;
+        f.size = size;
+        f.style = style;
+        Measured m = measure(dc, f);
+        if (!m.raster) continue;
+        Canvas c(m.colWidth * 2 + 40, m.rowHeight + 8);
+        HFONT hf = createVclFont(f);
+        HBRUSH br = CreateSolidBrush(RGB(255, 0, 0));
+        HGDIOBJ oldFont = SelectObject(c.dc, hf);
+        HGDIOBJ oldBrush = SelectObject(c.dc, br);
+        SetTextColor(c.dc, RGB(0, 255, 0));
+        SetBkColor(c.dc, RGB(255, 0, 0));
+        SetBkMode(c.dc, OPAQUE);
+        ExtTextOutA(c.dc, 8, 0, 0, nullptr, "\r", 1, nullptr);
+        SelectObject(c.dc, oldFont);
+        SelectObject(c.dc, oldBrush);
+        DeleteObject(hf);
+        DeleteObject(br);
+        c.flush();
+        int left = c.width, right = -1, bottom = -1;
+        for (int y = 0; y < c.height; y++)
+          for (int x = 0; x < c.width; x++)
+            if (c.bbggrr(x, y)) {
+              left = std::min(left, x);
+              right = std::max(right, x);
+              bottom = std::max(bottom, y);
+            }
+        std::string bar = "-";
+        if (left == 7 && right == 9) bar = fmt("%d", bottom + 1);
+        else if (left != 8) fail("a lone carriage return paints neither its cell nor a bar: ", name);
+        int euro = stringExtent(dc, f, "\x80\x86", 2) - stringExtent(dc, f, "\x86", 1);
+        textPath += fmt("%s\t%d\t%s\t%s\t%d\n", name, size, style ? STYLE_KEYS[style] : "-", bar.c_str(), euro);
+      }
+    }
+  }
+  writeText(outDir + "\\text-path.tsv", textPath);
   writeText(outDir + "\\fonts-info.json", "{\"capturedOn\": " + machineSettingsJson() + "}\n");
   std::printf("metric table and outline measurements written\n");
   return 0;
@@ -856,6 +928,101 @@ static int runFonts(const std::string& outDir) {
 
 // ---------------------------------------------------------------------------------------------
 // spots: the spot values of trap15-b, measured directly
+
+// Drawing modes above 15 (trap15-b 5.4; tests/conformance/sim trap15-b/b06-modes-above-15, which
+// Wine draws differently): what SetROP2 does with a value, done as SIM68K.exe does it for task 92
+// and then task 82 (pixel) or task 85 (line). A pen PS_SOLID width 1, red (COLORREF $0000FF), is
+// selected; the previous ROP2 is R2_COPYPEN (task 92 with 4 before); SetROP2(value) gives its
+// return value and GetLastError, GetROP2 what the device context holds afterwards. Then SetPixel
+// at (1, 1) (TCanvas.SetPixel), and MoveToEx(3, 1), LineTo(6, 1), SetPixel(6, 1) (simIOu.cpp's
+// LineTo with its end-point pixel), first on black, then on $336699. "as" is the operation 1-16
+// the line body on $336699 matches, 0 for none.
+static std::string ropValueJson(long long value) {
+  std::string out;
+  const uint32_t backgrounds[2] = {0x000000, 0x336699};
+  uint32_t results[17] = {};
+  for (int r = 1; r <= 16; r++) {
+    Canvas c(8, 3);
+    c.fillAll(0x336699);
+    LOGPEN lp = {PS_SOLID, {1, 0}, RGB(0xFF, 0, 0)};
+    HPEN pen = CreatePenIndirect(&lp);
+    HGDIOBJ old = SelectObject(c.dc, pen);
+    SetROP2(c.dc, r);
+    MoveToEx(c.dc, 3, 1, nullptr);
+    LineTo(c.dc, 6, 1);
+    SelectObject(c.dc, old);
+    DeleteObject(pen);
+    c.flush();
+    results[r] = c.bbggrr(4, 1);
+  }
+  int returned = 0, after = 0;
+  DWORD error = 0;
+  uint32_t drawn[2][3] = {};
+  for (int b = 0; b < 2; b++) {
+    Canvas c(8, 3);
+    c.fillAll(backgrounds[b]);
+    LOGPEN lp = {PS_SOLID, {1, 0}, RGB(0xFF, 0, 0)};
+    HPEN pen = CreatePenIndirect(&lp);
+    HGDIOBJ old = SelectObject(c.dc, pen);
+    SetROP2(c.dc, R2_COPYPEN);
+    SetLastError(0);
+    returned = SetROP2(c.dc, int(value));
+    error = GetLastError();
+    after = GetROP2(c.dc);
+    SetPixel(c.dc, 1, 1, RGB(0xFF, 0, 0));
+    MoveToEx(c.dc, 3, 1, nullptr);
+    LineTo(c.dc, 6, 1);
+    SetPixel(c.dc, 6, 1, RGB(0xFF, 0, 0));
+    SelectObject(c.dc, old);
+    DeleteObject(pen);
+    c.flush();
+    drawn[b][0] = c.bbggrr(1, 1);
+    drawn[b][1] = c.bbggrr(4, 1);
+    drawn[b][2] = c.bbggrr(6, 1);
+  }
+  int as = 0;
+  for (int k = 1; k <= 16 && !as; k++)
+    if (results[k] == drawn[1][1]) as = k;
+  out += fmt("\"returned\": %d, \"error\": %lu, \"after\": %d, \"as\": %d, ", returned, (unsigned long)error, after, as);
+  out += fmt("\"onBlack\": {\"pixel\": %u, \"line\": %u, \"end\": %u}, ", drawn[0][0], drawn[0][1], drawn[0][2]);
+  out += fmt("\"onColour\": {\"pixel\": %u, \"line\": %u, \"end\": %u}", drawn[1][0], drawn[1][1], drawn[1][2]);
+  return out;
+}
+
+static std::string modesAbove15Json() {
+  std::string json = "  \"modesAbove15\": {\n    \"setRop2\": [";
+  std::vector<long long> values;
+  for (int v = 0; v <= 32; v++) values.push_back(v);
+  for (long long v : {48LL, 128LL, 255LL, 256LL, 257LL, 772LL, 4096LL, 32768LL, 32896LL, 37008LL, 65535LL, 65536LL,
+                      65540LL, 2147483647LL, -1LL, -16LL})
+    values.push_back(v);
+  bool first = true;
+  for (long long v : values) {
+    json += fmt("%s\n      {\"value\": %lld, %s}", first ? "" : ",", v, ropValueJson(v).c_str());
+    first = false;
+  }
+  // Task 92 with a mode value: PEN_MODE_WORDS[mode] goes to SetROP2 (16 and 17 switch double
+  // buffering and are not pen modes).
+  json += "\n    ],\n    \"task92\": [";
+  first = true;
+  for (int mode : {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14,  15,  18,  19,  20,  21, 22,
+                   23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 44, 64, 66, 128, 158, 200, 209, 222, 255}) {
+    json += fmt("%s\n      {\"mode\": %d, \"word\": %u, %s}", first ? "" : ",", mode, unsigned(PEN_MODE_WORDS[mode]),
+                ropValueJson(PEN_MODE_WORDS[mode]).c_str());
+    first = false;
+  }
+  json += "\n    ]\n  }\n";
+  return json;
+}
+
+/** modes.json: the cases above, with the machine they were measured on. */
+static int runModes(const std::string& outDir) {
+  ensureDir(outDir);
+  std::string json = "{\n  \"capturedOn\": " + machineSettingsJson() + ",\n" + modesAbove15Json() + "}\n";
+  writeText(outDir + "\\modes.json", json);
+  std::printf("drawing modes above 15 written\n");
+  return 0;
+}
 
 static int runSpots(const std::string& outDir) {
   ensureDir(outDir);
@@ -1110,8 +1277,9 @@ int main(int argc, char** argv) {
   if (argc == 3 && std::strcmp(argv[1], "fonts") == 0) return runFonts(argv[2]);
   if (argc == 3 && std::strcmp(argv[1], "spots") == 0) return runSpots(argv[2]);
   if (argc == 3 && std::strcmp(argv[1], "nibs") == 0) return runNibs(argv[2]);
+  if (argc == 3 && std::strcmp(argv[1], "modes") == 0) return runModes(argv[2]);
   std::fprintf(stderr,
                "usage: gdi-capture cases <case-list> <out-dir> | fonts <out-dir> | spots <out-dir> | nibs <out-dir> | "
-               "info\n");
+               "modes <out-dir> | info\n");
   return 1;
 }

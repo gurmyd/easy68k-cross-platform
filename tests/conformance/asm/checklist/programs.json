@@ -41,6 +41,7 @@
       "spec": "3.1.3",
       "from": "engine/asm/test/cases.mjs",
       "runs": [
+        {},
         {
           "macrosExpanded": true
         }
@@ -129,6 +130,7 @@
       "spec": "2, 3.2",
       "from": "engine/asm/test/cases.mjs",
       "runs": [
+        {},
         {
           "bitFieldInstructions": false
         }
@@ -140,6 +142,7 @@
       "spec": "2, 5.4",
       "from": "engine/asm/test/cases.mjs",
       "runs": [
+        {},
         {
           "bitFieldInstructions": false
         }
@@ -291,6 +294,7 @@
       "spec": "3.4",
       "from": "engine/asm/test/cases.mjs",
       "runs": [
+        {},
         {
           "crossReference": false
         }
@@ -456,6 +460,7 @@
       "spec": "3.6",
       "from": "engine/asm/test/cases.mjs",
       "runs": [
+        {},
         {
           "macrosExpanded": true
         }
@@ -467,6 +472,7 @@
       "spec": "3.6",
       "from": "engine/asm/test/cases.mjs",
       "runs": [
+        {},
         {
           "macrosExpanded": true
         }
@@ -492,6 +498,7 @@
       "spec": "3.6",
       "from": "engine/asm/test/cases.mjs",
       "runs": [
+        {},
         {
           "macrosExpanded": true
         }
@@ -524,6 +531,7 @@
       "spec": "9.3.4, P5",
       "from": "engine/asm/test/cases.mjs",
       "runs": [
+        {},
         {
           "macrosExpanded": true
         }
@@ -542,6 +550,7 @@
       "spec": "3.6",
       "from": "engine/asm/test/cases.mjs",
       "runs": [
+        {},
         {
           "macrosExpanded": true,
           "structuredExpanded": true
@@ -554,6 +563,7 @@
       "spec": "3.7",
       "from": "engine/asm/test/cases.mjs",
       "runs": [
+        {},
         {
           "structuredExpanded": true
         }
@@ -565,6 +575,7 @@
       "spec": "3.7",
       "from": "engine/asm/test/cases.mjs",
       "runs": [
+        {},
         {
           "structuredExpanded": true
         }
@@ -583,6 +594,7 @@
       "spec": "3.7",
       "from": "engine/asm/test/cases.mjs",
       "runs": [
+        {},
         {
           "structuredExpanded": true
         }
@@ -685,6 +697,7 @@
       "spec": "2",
       "from": "engine/asm/test/cases.mjs",
       "runs": [
+        {},
         {
           "generateListing": false
         },
@@ -769,6 +782,7 @@
       "spec": "3.6",
       "from": "T1",
       "runs": [
+        {},
         {
           "macrosExpanded": true
         }
@@ -1104,6 +1118,18 @@
         },
         {
           "generateSRecord": false
+        }
+      ]
+    },
+    {
+      "id": "size-04-every-bit-field-mnemonic-with-each-operand-form",
+      "title": "every bit-field mnemonic with each operand form, with and without Assemble Bit Field Instructions",
+      "spec": "2, 3.2",
+      "from": "T1",
+      "runs": [
+        {},
+        {
+          "bitFieldInstructions": false
         }
       ]
     }

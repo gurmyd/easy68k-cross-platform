@@ -1,0 +1,35 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:59:50 AM
+
+00000000                             1  * Every bit-field mnemonic with each form of {offset:width}; switched off by
+00000000                             2  * Assemble Bit Field Instructions they are all invalid opcodes (assembler 2)
+00001000                             3      ORG $1000
+00001000  EAC0 0000                  4  START   BFCHG   D0{0:32}
+00001004  ECD0 0143                  5      BFCLR   (A0){#5:#3}
+00001008  EBE9 2848 0004             6      BFEXTS  (4,A1){D1:8},D2
+0000100E  E9F8 37C1 2000             7      BFEXTU  $2000{31:1},D3
+00001014  EDC4 7966                  8      BFFFO   D4{D5:D6},D7
+00001018  EFD2 10C4                  9      BFINS   D1,(A2){3:4}
+0000101C  EFC3 2008                 10      BFINS   D2,D3{0:8}
+00001020  EEF9 01E0 12345678        11      BFSET   $12345678{7:D0}
+00001028  E8F4 009E 10FA            12      BFTST   (-6,A4,D1.W){2:30}
+0000102E  E8FA 0042 0006            13      BFTST   (LOOP,PC){1:2}
+00001034                            14  * spaces after { and around :
+00001034  E8C0 0084                 15      BFTST   D0{ 2 : 4}
+00001038                            16  * width 33 is not a bit field
+Line 17 ERROR: Invalid bitfield
+00001038                            17      BFTST   D0{2:33}
+00001038  E9C0 1084                 18  LOOP    BFEXTU  D0{2:4},D1
+0000103C  60FA                      19      BRA LOOP
+0000103E                            20      END START
+
+1 error detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+LOOP                1038
+START               1000

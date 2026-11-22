@@ -733,6 +733,30 @@ describe('appendFile takes the size before from what the Vfs knows', () => {
     expect(str(await vfs.readFile('/memory/log.txt'))).toBe('rewritten by someone elsede');
   });
 
+  // Gate I3 round 2 review: two windows over one store, whose change reports arrive late (as a
+  // BroadcastChannel's do). Until another window's report arrives this Vfs cannot know of its
+  // change: `at` is what this window knew, and a listener must confirm the size after the append
+  // (contracts/fs.ts VfsChange.appended; errata W1.md entry 17), as CachedSyncFiles.applyAppend does.
+  it("another window's change whose report arrives late: `at` is what this window knew; the size after the append tells", async () => {
+    const { vfs, backend, seen } = await counting();
+    await vfs.appendFile('/memory/log.txt', text('abc')); // a new file: asks, at 0
+    await backend.writeFile('log.txt', text('')); // another window empties it; its report is on the way
+    await vfs.appendFile('/memory/log.txt', text('d')); // this window still knows 3: no stat
+    expect(backend.stats).toBe(1);
+    const late = seen.filter((c) => c.origin === 'local').at(-1);
+    expect(late?.appended?.at).toBe(3); // stale: the file was 0 bytes long just before
+    // The rule of the contract: apply only when the copy is `at` bytes long AND the file is now
+    // `at + data.length` long. Here the stat after the append says 1, not 4: the listener reads the file.
+    const after = await vfs.stat('/memory/log.txt');
+    expect(after?.size).toBe(1);
+    expect(after?.size).not.toBe((late?.appended?.at ?? 0) + (late?.appended?.data.length ?? 0));
+    // The report arrives: from now on this path's size is asked before every append, and is exact.
+    backend.emitExternal({ rel: 'log.txt', kind: 'write' });
+    await vfs.appendFile('/memory/log.txt', text('e'));
+    expect(seen.filter((c) => c.origin === 'local').at(-1)?.appended?.at).toBe(1);
+    expect(str(await vfs.readFile('/memory/log.txt'))).toBe('de');
+  });
+
   it('a change reported while an append is in progress leaves `appended` out', async () => {
     const { vfs, backend, seen } = await counting({ 'log.txt': 'a' });
     await vfs.appendFile('/memory/log.txt', text('b'));

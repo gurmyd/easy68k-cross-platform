@@ -37,10 +37,13 @@ None of these changes what a student's program can observe.
   memory and says so).
 - **A notice about Safari's storage rules (an addition; risk R-10).** In Safari, and in every
   browser on an iPhone or iPad, the Files panel shows a short notice above the tree from the first
-  start: Safari deletes the programs kept in the browser after seven days without a visit, and an
-  app made with "Add to Dock" starts with its own, empty My Programs. It offers Export... (the whole
-  store as a `.zip`) and `Got it`, which hides it for good in that browser. The Dock app shows, while
-  its store is empty, one sentence with Import.... The desktop app and other browsers show none.
+  start: the browser may delete the programs kept in it after seven days without a visit, and an
+  app made with "Add to Dock" or "Add to Home Screen" starts with its own, empty My Programs. It
+  offers Export... (the whole store as a `.zip`) and `Got it`, which hides it for good in that
+  browser. The Dock or Home Screen app shows, while its store is empty, one sentence with
+  Import.... When the Files panel is hidden, or the visit starts in Simulator mode, the same text
+  appears as a note at the first file written into the browser, until `Got it` or the note is
+  closed. The desktop app and other browsers show none.
 - **A full or blocked browser storage is reported.** The original writes to the disk and shows the
   run-time library's error. The port says in plain words that the file was not saved and that
   nothing saved before is lost, or that the browser keeps no files at all (some private windows).

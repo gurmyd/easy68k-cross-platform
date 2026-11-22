@@ -1,0 +1,152 @@
+00000000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:52:44 AM
+
+00000000                             1  ; =============================================================================
+00000000                             2  ; GAME CONSTANTS
+00000000                             3  ; =============================================================================
+00000000                             4  
+00000000                             5  ; --- VICTORY/DEFEAT CONSTANTS ------------------------------------------------
+00000000  =000000F6                  6  TOTALPELLETS              EQU     246        ; MAX PELLETS
+00000000  =00000006                  7  MAX_MODE_SWITCH           EQU     6          ; MAX SWITCHES
+00000000                             8  
+00000000                             9  ; --- FPS RELATED CONSTANTS ---------------------------------------------------
+00000000  =00000090                 10  FPS_TO_REACH              EQU     144
+00000000  =00000006                 11  DELAY                     EQU     1000/FPS_TO_REACH
+00000000                            12  
+00000000                            13  ; --- COLOR RELATED CONSTANTS -------------------------------------------------
+00000000  =00000000                 14  BLACK                     EQU     $00000000  ; BLACK COLOR
+00000000  =00FFFFFF                 15  WHITE                     EQU     $00FFFFFF  ; WHITE COLOR
+00000000  =0000FBFF                 16  YELLOW                    EQU     $0000FBFF  ; YELLOW COLOR
+00000000  =00FF0000                 17  BLUE                      EQU     $00FF0000  ; BLUE COLOR
+00000000  =000000FF                 18  RED                       EQU     $000000FF  ; RED COLOR
+00000000  =008B0000                 19  DARK_BLUE                 EQU     $008B0000  ; DARK BLUE COLOR
+00000000  =00CBC0FF                 20  PINK                      EQU     $00CBC0FF  ; PINK COLOR
+00000000  =00005AFF                 21  ORANGE                    EQU     $00005AFF  ; ORANGE COLOR
+00000000  =008DDA6E                 22  LIGHT_BLUE                EQU     $008DDA6E  ; LIGHT BLUE COLOR
+00000000                            23  
+00000000                            24  ; --- PAC-MAN RELATED CONSTANTS -----------------------------------------------
+00000000  =00000002                 25  PACMAN_SPEED              EQU     2
+00000000  =00000010                 26  PACRAD                    EQU     16         ; PACMAN DIAMETER!
+00000000  =00000198                 27  PAC_START_X               EQU     408        ; START X COORDINATE
+00000000  =000001F0                 28  PAC_START_Y               EQU     496        ; START Y COORDINATE
+00000000                            29  
+00000000                            30  ; --- BLINKY RELATED CONSTANTS ------------------------------------------------
+00000000  =00000198                 31  BLINKY_START_X            EQU     408        ; START X COORDINATE
+00000000  =00000130                 32  BLINKY_START_Y            EQU     304        ; START Y COORDINATE
+00000000  =00000210                 33  BLINKY_HOME_X             EQU     528        ; BLINKY X HOME
+00000000  =00000010                 34  BLINKY_HOME_Y             EQU     16         ; BLINKY Y HOME
+00000000                            35  
+00000000                            36  ; --- PINKY RELATED CONSTANTS -------------------------------------------------
+00000000  =00000198                 37  PINKY_START_X             EQU     408        ; START X COORDINATE
+00000000  =00000170                 38  PINKY_START_Y             EQU     368        ; START Y COORDINATE
+00000000  =000000E0                 39  PINKY_HOME_X              EQU     224        ; PINKY X HOME
+00000000  =00000010                 40  PINKY_HOME_Y              EQU     16         ; PINKY Y HOME
+00000000                            41  
+00000000                            42  ; --- INKY RELATED CONSTANTS --------------------------------------------------
+00000000  =00000178                 43  INKY_START_X              EQU     376        ; START X COORDINATE
+00000000  =00000170                 44  INKY_START_Y              EQU     368        ; START Y COORDINATE
+00000000  =00000270                 45  INKY_HOME_X               EQU     624        ; INKY X HOME
+00000000  =00000270                 46  INKY_HOME_Y               EQU     624        ; INKY Y HOME
+00000000                            47  
+00000000                            48  ; --- CLYDE RELATED CONSTANTS -------------------------------------------------
+00000000  =000001B8                 49  CLYDE_START_X             EQU     440        ; START X COORDINATE
+00000000  =00000170                 50  CLYDE_START_Y             EQU     368        ; START Y COORDINATE
+00000000  =000000D0                 51  CLYDE_HOME_X              EQU     208        ; CLYDE X HOME
+00000000  =00000240                 52  CLYDE_HOME_Y              EQU     576        ; CLYDE Y HOME
+00000000                            53  
+00000000                            54  ; --- MAP RELATED CONSTANTS ---------------------------------------------------
+00000000  =00000020                 55  MAPWITH                   EQU     32         ; MAP WIDTH
+00000000  =0000001F                 56  MAPHIGH                   EQU     31         ; MAP HEIGHT
+00000000  =00000010                 57  CELSIZE                   EQU     16         ; CELL SIZE
+00000000  =00000090                 58  MAP_START_X               EQU     144        ; MAP START X COORDINATE
+00000000  =00000070                 59  MAP_START_Y               EQU     112        ; MAP START Y COORDINATE
+00000000  =000000C0                 60  PORTAL_LEFT_X             EQU     192        ; LEFT PORTAL COORDINATE
+00000000  =00000270                 61  PORTAL_RIGHT_X            EQU     624        ; RIGHT PORTAL COORDINATE
+00000000                            62  
+00000000                            63  ; --- STATE RELATED CONSTANTS -------------------------------------------------
+00000000  =FFFFFFFF                 64  STANONE                   EQU     -1         ; NON-EXISTENT STATE NUMBER
+00000000  =000005DC                 65  INSMAXTM                  EQU     1500        ; INSTRUCTIONS MAX TIMER
+00000000                            66  
+00000000                            67  ; --- GAME RELATED CONSTANTS --------------------------------------------------
+00000000  =000003E8                 68  CHASE                     EQU     1000       ; CHASE MAX TIMER
+00000000  =0000015E                 69  SCATER                    EQU     350        ; SCATTER MAX TIMER
+00000000  =0000012C                 70  FRIGHTENED                EQU     300        ; FRIGHTENED MAX TIMER
+00000000                            71  
+00000000                            72  
+00000000                            73  
+00000000                            74  
+00000000                            75  
+00000000                            76  
+00000000                            77  
+00000000                            78  
+00000000                            79  
+00000000                            80  
+00000000                            81  
+00000000                            82  
+00000000                            83  
+00000000                            84  
+00000000                            85  
+00000000                            86  
+00000000                            87  
+00000000                            88  
+00000000                            89  
+00000000                            90  
+00000000                            91  
+00000000                            92  
+00000000                            93  
+00000000                            94  
+Line 95 WARNING: END directive missing, starting address not set
+
+No errors detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+BLACK               0
+BLINKY_HOME_X       210
+BLINKY_HOME_Y       10
+BLINKY_START_X      198
+BLINKY_START_Y      130
+BLUE                FF0000
+CELSIZE             10
+CHASE               3E8
+CLYDE_HOME_X        D0
+CLYDE_HOME_Y        240
+CLYDE_START_X       1B8
+CLYDE_START_Y       170
+DARK_BLUE           8B0000
+DELAY               6
+FPS_TO_REACH        90
+FRIGHTENED          12C
+INKY_HOME_X         270
+INKY_HOME_Y         270
+INKY_START_X        178
+INKY_START_Y        170
+INSMAXTM            5DC
+LIGHT_BLUE          8DDA6E
+MAPHIGH             1F
+MAPWITH             20
+MAP_START_X         90
+MAP_START_Y         70
+MAX_MODE_SWITCH     6
+ORANGE              5AFF
+PACMAN_SPEED        2
+PACRAD              10
+PAC_START_X         198
+PAC_START_Y         1F0
+PINK                CBC0FF
+PINKY_HOME_X        E0
+PINKY_HOME_Y        10
+PINKY_START_X       198
+PINKY_START_Y       170
+PORTAL_LEFT_X       C0
+PORTAL_RIGHT_X      270
+RED                 FF
+SCATER              15E
+STANONE             FFFFFFFF
+TOTALPELLETS        F6
+WHITE               FFFFFF
+YELLOW              FBFF

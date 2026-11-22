@@ -111,6 +111,24 @@ export const SUITES: readonly { readonly name: string; readonly machine: boolean
     about:
       'as text-outline, in italic: how far the slanted ink widens the cell (gate I1 review round 2); the ink outside the cell is smoothed',
   },
+  {
+    name: 'text-path',
+    machine: false,
+    about:
+      "task 95 strings on Windows' Unicode text path in the raster faces that every captured Windows draws the same: zero-width bytes only (the bar), italic itemization, undefined bytes (gate I3, item 3b)",
+  },
+  {
+    name: 'text-path-euro',
+    machine: true,
+    about:
+      "task 95 strings with $80 on Windows' text path in the raster faces: the euro sign from a fallback font, with ClearType (gate I3, item 3b)",
+  },
+  {
+    name: 'text-path-formfeed',
+    machine: true,
+    about:
+      "task 95 strings with $0C on Windows' text path in the raster faces: a fallback-font glyph with ClearType, not modelled; reported, not required (gate I3, review R4)",
+  },
 ];
 
 // ---------------------------------------------------------------------------------------------
@@ -741,8 +759,9 @@ export const FALLBACK_PRONE_BYTES: readonly number[] = [0x0c, 0x40, 0x80];
  * at every size at which the face is a raster face (Fixedsys 0-121, Courier 0-199; above that
  * Windows substitutes Arial) with each of $09 $0A $0D $1C $1F alone: the bar sizes are the same for
  * every byte and style. Some strings of two or more zero-width bytes fill the cell at these sizes
- * ($0D $0A, $09 $09), others do not ($1E $0D $1F in Courier 12); all of them go to text-control
- * here. The suite `text` holds the single byte $0D at every raster size (barSweep below), so a size
+ * ($0D $0A, $09 $09), others do not ($1E $0D $1F in Courier 12): a string with an odd number of
+ * bytes or two $1F in a row is the bar (gate I3, item 3b; README.md "Windows' text path"; the suite
+ * text-path). All of them go to text-control here, which text-model.ts does not model. The suite `text` holds the single byte $0D at every raster size (barSweep below), so a size
  * missing here fails golden.test.ts.
  */
 export const ZERO_WIDTH_BAR_SIZES: Readonly<Record<string, readonly number[]>> = {
@@ -1118,6 +1137,399 @@ function textOutlineItalic(): GdiCase[] {
   return cases;
 }
 
+/**
+ * The suite text-path (gate I3, item 3b): Windows' Unicode text path in the raster faces, for the
+ * classes of text-control that every captured Windows draws the same and SH3 models (README.md,
+ * "Windows' text path"): texts of zero-width bytes only (the bar), every style at every raster size
+ * and every string of one to three such bytes in every order, longer ones, at the left edge and the
+ * clip edge, next to ordinary characters; italic itemization (every byte before and after $86 and
+ * $88, and longer strings of the item classes); texts of undefined bytes only; control texts ($7F
+ * with undefined bytes and punctuation: the extra cell and the italic overhang, review R4 of gate
+ * I3, erratum T2 27). Not in it: $0C on the path (suite text-path-formfeed), the fallback-font bytes.
+ */
+function textPath(): GdiCase[] {
+  const suite = 'text-path';
+  const r = rng(SEED + 20);
+  const cases: GdiCase[] = [];
+  const add = (width: number, height: number, ops: GdiOp[]) =>
+    cases.push({ id: `${suite}-${pad(cases.length)}`, suite, width, height, ops });
+  const put = (name: string, size: number, style: number, x: number, y: number, bytes: number[], w = 80, h = 40) =>
+    add(w, h, [
+      { op: 'font', name, size, style },
+      { op: 'fill', color: 0x0000ff },
+      { op: 'fontcolor', color: 0x00ff00 },
+      { op: 'text', x, y, bytes },
+    ]);
+  const Z = ZERO_WIDTH_BYTES;
+  // A lone $0D at every raster size, in every style, with room for the whole cell.
+  for (const [name, limit] of Object.entries(RASTER_SIZE_LIMIT))
+    for (let size = 0; size <= limit; size++)
+      for (let style = 0; style < 5; style++) put(name, size, style, 3, 2, [13], 48 + size, 40 + 2 * size);
+  // Every string of one to three zero-width bytes at a bar size of each face, plain, bold, italic.
+  const upToThree: number[][] = [];
+  for (const a of Z) {
+    upToThree.push([a]);
+    for (const b of Z) {
+      upToThree.push([a, b]);
+      for (const c of Z) upToThree.push([a, b, c]);
+    }
+  }
+  for (const [name, size] of [
+    ['Fixedsys', 24],
+    ['Courier', 12],
+  ] as const)
+    for (let style = 0; style < 3; style++) for (const bytes of upToThree) put(name, size, style, 6, 2, bytes);
+  // Four bytes: every string with two $1F in a row, and every sixteenth of the others.
+  let others = 0;
+  for (const a of Z)
+    for (const b of Z)
+      for (const c of Z)
+        for (const d of Z) {
+          const bytes = [a, b, c, d];
+          const separators = bytes.some((v, i) => v === 31 && bytes[i + 1] === 31);
+          if (separators || others++ % 16 === 0) put('Fixedsys', 24, 0, 6, 2, bytes, 120, 40);
+        }
+  // Five to eight bytes, random.
+  for (let length = 5; length <= 8; length++)
+    for (let i = 0; i < 20; i++) {
+      const bytes = Array.from({ length }, () => r.pick(Z));
+      put('Fixedsys', 24, 0, 6, 2, bytes, 160, 40);
+      put('Courier', 12, 2, 6, 2, [...bytes], 120, 40);
+    }
+  // Every pair at two other bar sizes.
+  for (const [name, size] of [
+    ['Fixedsys', 36],
+    ['Courier', 60],
+  ] as const)
+    for (const a of Z) for (const b of Z) put(name, size, 0, 6, 2, [a, b], 160, 100);
+  // At the left edge and at the clip edge.
+  for (const [name, size] of [
+    ['Fixedsys', 24],
+    ['Courier', 12],
+  ] as const)
+    for (const style of [0, 2])
+      for (const [x, y] of [
+        [0, 0],
+        [1, 0],
+        [-1, 0],
+        [-2, 3],
+        [38, 2],
+        [39, 2],
+        [40, 2],
+        [41, 2],
+        [5, -3],
+        [5, 30],
+        [5, 38],
+      ] as const)
+        for (const bytes of [[13], [10, 13], [30, 13, 31], [13, 10]]) put(name, size, style, x, y, bytes, 40, 40);
+  // Next to ordinary characters.
+  for (const [name, size] of [
+    ['Fixedsys', 24],
+    ['Courier', 12],
+  ] as const)
+    for (let style = 0; style < 3; style++)
+      for (const z of Z)
+        for (const bytes of [
+          [65, z],
+          [z, 65],
+          [65, z, 66],
+          [z, z, 65],
+          [0xe9, z],
+          [z, 0x7f],
+        ])
+          put(name, size, style, 6, 2, bytes, 100, 40);
+  // Where there is no bar: one and two bytes.
+  for (const [name, size] of [
+    ['Fixedsys', 9],
+    ['Courier', 10],
+  ] as const)
+    for (const bytes of upToThree.filter((s) => s.length <= 2)) put(name, size, 0, 6, 2, bytes, 48, 24);
+  // Italic itemization: every byte but $80 before and after $86 and $88.
+  for (const [name, size] of [
+    ['Fixedsys', 9],
+    ['Courier', 10],
+  ] as const)
+    for (const s of [0x86, 0x88])
+      for (let b = 0x20; b <= 0xff; b++) {
+        if (b === 0x80) continue;
+        put(name, size, 2, 2, 2, [b, s], 48, 24);
+        put(name, size, 2, 2, 2, [s, b], 48, 24);
+      }
+  // Italic itemization with three and more bytes: neutrals, controls and the item classes.
+  for (const [name, size] of [
+    ['Fixedsys', 9],
+    ['Fixedsys', 18],
+    ['Courier', 10],
+    ['Courier', 36],
+  ] as const)
+    for (const bytes of ITEMIZATION_STRINGS) put(name, size, 2, 2, 2, [...bytes], 160, 60);
+  // Texts of undefined bytes only, alone and with zero-width bytes and others.
+  for (const [name, size] of [
+    ['Fixedsys', 9],
+    ['Fixedsys', 18],
+    ['Fixedsys', 24],
+    ['Courier', 10],
+    ['Courier', 12],
+    ['Courier', 36],
+  ] as const)
+    for (let style = 0; style < 5; style++)
+      for (const bytes of UNDEFINED_STRINGS) put(name, size, style, 3, 2, [...bytes], 160, 60);
+  // Control texts (erratum T2 27), every style, at the sizes of text-path-euro's first fonts.
+  for (const [name, size] of [
+    ['Fixedsys', 9],
+    ['Fixedsys', 0],
+    ['Fixedsys', 18],
+    ['Fixedsys', 24],
+    ['Courier', 10],
+    ['Courier', 12],
+    ['Courier', 36],
+    ['Courier', 0],
+  ] as const)
+    for (let style = 0; style < 5; style++)
+      for (const bytes of CONTROL_TEXT_STRINGS) put(name, size, style, 6, 2, [...bytes], 200, 80);
+  return cases;
+}
+
+/**
+ * Strings of text-path for control texts (erratum T2 27): $7F with undefined bytes, punctuation and
+ * neutrals, and the bytes that make a text an ordinary text of the path again.
+ */
+export const CONTROL_TEXT_STRINGS: readonly (readonly number[])[] = [
+  [0x7f, 0x81],
+  [0x7f, 0x8d],
+  [0x7f, 0x8f],
+  [0x7f, 0x90],
+  [0x7f, 0x9d],
+  [0x7f, 0x81, 0x81],
+  [0x7f, 0x81, 0x8d, 0x90],
+  [0x7f, 0x7f, 0x81],
+  [0x81, 0x7f, 0x81],
+  [0x7f, 0x81, 0x7f],
+  [0x7f, 0x81, 0x7f, 0x81],
+  [0x81, 0x7f],
+  [0x81, 0x7f, 0x7f],
+  [0x7f, 0x81, 0x86],
+  [0x7f, 0x86, 0x81],
+  [0x86, 0x7f, 0x81],
+  [0x86, 0x20, 0x7f, 0x81],
+  [0x20, 0x86, 0x7f, 0x81],
+  [0x7f, 0x5b, 0x91, 0x81],
+  [0x7f, 0x81, 0x20, 0x86],
+  [0x86, 0x7f, 0x81, 0x86],
+  [0x91, 0x81, 0x7f, 0x87],
+  [0x7f, 0x86, 0x81, 0x86],
+  [0x86, 0x7f, 0x86, 0x81],
+  [0x7f, 0x81, 0x41],
+  [0x41, 0x7f, 0x81],
+  [0x7f, 0x81, 0x20],
+  [0x20, 0x7f, 0x81],
+  [0x7f, 0x20, 0x7f, 0x81],
+  [0x7f, 0x0d, 0x81],
+  [0x7f, 0x81, 0x0d],
+  [0x7f, 0x81, 0xb2],
+  [0x7f, 0xb2, 0x7f, 0x81],
+  [0x7f, 0x81, 0xe9],
+  [0x7f, 0x81, 0x88],
+  [0x7f, 0x41, 0x81],
+];
+
+/**
+ * The suite text-path-formfeed (review R4 of gate I3, erratum T2 27): $0C on Windows' text path in
+ * the raster faces. Windows draws it there from a fallback font, with ClearType, in a cell whose
+ * width depends on the item it falls into; the port does not model it (docs/differences/SH3.md).
+ * Machine-dependent: the glyph is smoothed, and how a second Windows draws it was never captured.
+ * check-text.mjs reports how many the port draws as Windows does; nothing requires it.
+ */
+function textPathFormfeed(): GdiCase[] {
+  const suite = 'text-path-formfeed';
+  const cases: GdiCase[] = [];
+  for (const [name, list] of [
+    ['Fixedsys', [9, 0, 18, 24]],
+    ['Courier', [10, 12, 15, 36]],
+  ] as const)
+    for (const size of list)
+      for (let style = 0; style < 5; style++)
+        for (const bytes of FORMFEED_STRINGS)
+          cases.push({
+            id: `${suite}-${pad(cases.length)}`,
+            suite,
+            width: 200,
+            height: 80,
+            ops: [
+              { op: 'font', name, size, style },
+              { op: 'fill', color: 0x0000ff },
+              { op: 'fontcolor', color: 0x00ff00 },
+              { op: 'text', x: 6, y: 2, bytes: [...bytes] },
+            ],
+          });
+  return cases;
+}
+
+/** Strings of text-path-formfeed: $0C next to each kind of byte that sends a text down the path. */
+export const FORMFEED_STRINGS: readonly (readonly number[])[] = [
+  [0x0c, 0x86],
+  [0x86, 0x0c],
+  [0x0c, 0x0c, 0x86],
+  [0x0c, 0x41, 0x86],
+  [0x41, 0x0c, 0x86],
+  [0x0c, 0x5b, 0x86],
+  [0x0c, 0x20, 0x87],
+  [0x0c, 0x88],
+  [0x0c, 0x98],
+  [0x0c, 0x7f],
+  [0x7f, 0x0c],
+  [0x0c, 0x81],
+  [0x0c, 0x0d],
+  [0x0c, 0x0d, 0xe9],
+  [0x0c, 0x09],
+  [0x0c, 0x1f],
+];
+
+/** Italic strings of text-path: neutrals next to item classes, controls, superscripts, $A0-$FF. */
+export const ITEMIZATION_STRINGS: readonly (readonly number[])[] = [
+  [0x41, 0x5b, 0x86],
+  [0x5b, 0x86, 0x41],
+  [0x5b, 0x28, 0x86],
+  [0x41, 0x86, 0x41],
+  [0x86, 0x41, 0x86],
+  [0xb9, 0xb2, 0x86],
+  [0xb2, 0xb2],
+  [0xb2, 0xb3],
+  [0xb9, 0xb2],
+  [0x41, 0xb9, 0x88],
+  [0x41, 0xb9],
+  [0xb9, 0x41, 0x86],
+  [0x5b, 0x7f],
+  [0x7f, 0x5b],
+  [0x7f, 0x7f],
+  [0x5b, 0x7f, 0x5b],
+  [0x7f, 0x7f, 0x41],
+  [0x41, 0x81],
+  [0x81, 0x41],
+  [0x5b, 0x81, 0x86],
+  [0x81, 0x8d],
+  [0x81, 0x81],
+  [0x81, 0x5b],
+  [0x5b, 0x81],
+  [0x81, 0x86],
+  [0x81, 0x86, 0x41],
+  [0x81, 0x41, 0x86],
+  [0x41, 0x86, 0x81],
+  [0x86, 0x81],
+  [0x86, 0x86],
+  [0x86, 0x91],
+  [0x91, 0x86],
+  [0x86, 0x5b, 0x41],
+  [0x41, 0x5b, 0x86, 0x5b],
+  [0x88, 0x41, 0x42],
+  [0x41, 0x88, 0x42],
+  [0x88, 0x86],
+  [0xe9, 0x88],
+  [0xe9, 0x86],
+  [0x86, 0xe9],
+  [0x41, 0xe9, 0x86],
+  [0x2e, 0x86],
+  [0x86, 0x2e],
+  [0x2e, 0x2e, 0x86],
+  [0x20, 0x86],
+  [0x86, 0x20],
+  [0xa0, 0x86],
+  [0x41, 0x20, 0x86],
+  [0x41, 0x0d, 0x42],
+  [0x5b, 0x0d],
+  [0x0d, 0x5b],
+  [0x0d, 0x41],
+  [0x7f, 0x0d, 0x7f],
+  [0x41, 0x09, 0x42, 0x86],
+  [0x31, 0x86],
+  [0x41, 0x31, 0x86],
+  [0x86, 0x31, 0x41],
+  [0xd7, 0x86],
+  [0xf7, 0x86],
+  [0xab, 0x86],
+  [0xbf, 0x88],
+  [0xa1, 0x88],
+  [0xa2, 0x86],
+  [0xa9, 0x86],
+  [0xb0, 0x86],
+  [0xb7, 0x86],
+  [0xb4, 0x88],
+  [0x99, 0x88],
+  [0x85, 0x88],
+];
+
+/** Strings of undefined bytes in text-path ($7F with an undefined byte: CONTROL_TEXT_STRINGS). */
+export const UNDEFINED_STRINGS: readonly (readonly number[])[] = [
+  [0x81],
+  [0x8d],
+  [0x9d],
+  [0x81, 0x81],
+  [0x81, 0x8d],
+  [0x8f, 0x90, 0x9d],
+  [0x81, 0x0d],
+  [0x0d, 0x81],
+  [0x81, 0x41],
+  [0x41, 0x81],
+  [0x81, 0x7f],
+  [0x41, 0x81, 0x42],
+];
+
+/**
+ * The suite text-path-euro (gate I3, item 3b): $80 in texts that take Windows' text path, in the
+ * raster faces at the sizes of the text suites, every style. Windows draws the euro sign there from
+ * a fallback font with ClearType (README.md, "Windows' text path"): its width and everything outside
+ * its ink are compared, its pixels are font-smoothed and depend on the machine's settings.
+ */
+function textPathEuro(): GdiCase[] {
+  const suite = 'text-path-euro';
+  const cases: GdiCase[] = [];
+  const sizes: [string, readonly number[]][] = [
+    ['Fixedsys', [9, 0, 18, 30, 72, 24]],
+    ['Courier', [10, 12, 15, 19, 20, 36, 0, 8]],
+  ];
+  for (const [name, list] of sizes)
+    for (const size of list)
+      for (let style = 0; style < 5; style++)
+        for (const bytes of EURO_STRINGS)
+          cases.push({
+            id: `${suite}-${pad(cases.length)}`,
+            suite,
+            width: 360,
+            height: 150,
+            ops: [
+              { op: 'font', name, size, style },
+              { op: 'fill', color: 0x0000ff },
+              { op: 'fontcolor', color: 0x00ff00 },
+              { op: 'text', x: 6, y: 2, bytes: [...bytes] },
+            ],
+          });
+  return cases;
+}
+
+/** Strings of text-path-euro: $80 next to every kind of byte that sends a text down the text path. */
+export const EURO_STRINGS: readonly (readonly number[])[] = [
+  [0x80],
+  [0x80, 0x86],
+  [0x86, 0x80],
+  [0x80, 0x87],
+  [0x80, 0x88],
+  [0x80, 0x98],
+  [0x80, 0x7f],
+  [0x7f, 0x80],
+  [0x80, 0x0d],
+  [0x0d, 0x80],
+  [0x80, 0x41],
+  [0x41, 0x80, 0x86],
+  [0x80, 0x80, 0x86],
+  [0x80, 0x0d, 0xe9],
+  [0x80, 0x81],
+  [0x80, 0x81, 0x86],
+  [0x80, 0x09, 0x41],
+  [0x41, 0x86, 0x80, 0x42],
+  [0x80, 0x5b, 0x86],
+  [0x80, 0xe9, 0x86],
+];
+
 /** Every case of 6.5.1 and 6.5.3, in suite order. Deterministic. */
 export function generateCases(): GdiCase[] {
   return [
@@ -1139,6 +1551,9 @@ export function generateCases(): GdiCase[] {
     ...textOutlineZero(),
     ...textOutline(true),
     ...textOutlineItalic(),
+    ...textPath(),
+    ...textPathEuro(),
+    ...textPathFormfeed(),
   ];
 }
 

@@ -130,3 +130,103 @@ export function judgeMaximum(pairs) {
   }
   return { ok, detail: pairs.map(describe).join(' | '), notes };
 }
+
+/** "Keeps its frames": at Maximum the page has at least this share of the default speed's frame rate. */
+export const FRAME_KEEP_SHARE = 0.7;
+/** A default-speed window with fewer display frames than this is too short to judge a share by. */
+export const MIN_JUDGED_FRAMES = 6;
+/** Fewer frames per second than this at Maximum is a frozen page, whatever the default had. */
+export const FROZEN_FPS = 4;
+
+/**
+ * The verdict on the page's display frames at `Maximum`, over the same pairs `{ normal, max }` that
+ * judgeMaximum judges (only `frames` and `ms` of each window are used).
+ *
+ * What 4.2 promises: the engine takes at most half of each frame's time (8 ms, or half the frame
+ * interval), so on a display that delivers its frames the program at Maximum costs the page no
+ * frame. How many frames a browser delivers is the machine's (Chromium on GitHub's macOS runner
+ * about 15 per second whatever the program does; errata SH8.md entry 44), so the verdict compares
+ * each Maximum window with the default-speed window just before it, on the same page, the same
+ * machine and the same load, where the engine takes almost none of the frame:
+ *   - a pair passes when Maximum's frame rate is at least FRAME_KEEP_SHARE of the default's and at
+ *     least FROZEN_FPS. A page that keeps its frames measures about 1; a window counts its frames
+ *     to plus or minus one, so with MIN_JUDGED_FRAMES or more at the default a kept page measures
+ *     at least 5/6 to 5/7 (the macOS runner's worst pair: 7 against 9, 78 %). On a display that
+ *     delivers its frames, an engine that overruns the frame halves the rate or worse, at most 4/6
+ *     (67 %) even at the fewest frames judged; so 0.7 lies between the two. Headless Chromium's
+ *     frames are not tied to a display: there an engine that overruns the frame a little loses
+ *     only about a quarter of them (a 20 ms busy wait after each engine.run: 76 to 79 %, which
+ *     passes), and one that takes most of the frame is caught (40 ms: 40 %); WebKit catches both
+ *     (56 to 78 % and 28 to 34 %; errata SH8.md entries 44 and 45).
+ *   - A pair whose default window had fewer than MIN_JUDGED_FRAMES frames (under 12 per second in
+ *     half a second) is too short for a share, where one frame is a sixth or more: it is judged by
+ *     the floor alone, the detail counts it as passed by the floor, not as keeping the share, and a
+ *     note says so. check-run.mjs avoids such pairs: it measures the frames again in windows of
+ *     frameWindowMs(pairs) when one occurs. A frozen page (under FROZEN_FPS at Maximum) fails in
+ *     every pair.
+ *   - A majority of the pairs must pass. A loss of frames that the product causes is systematic
+ *     (Maximum fills the engine's budget in every window) and shows in every pair; a runner's
+ *     hiccup in one window, either way, decides nothing alone.
+ */
+export function judgeFrames(pairs) {
+  const fps = (run) => (run.ms > 0 ? run.frames / (run.ms / 1000) : 0);
+  const share = (pair) => (fps(pair.normal) > 0 ? fps(pair.max) / fps(pair.normal) : Infinity);
+  const judged = (pair) => pair.normal.frames >= MIN_JUDGED_FRAMES;
+  const frozen = (pair) => fps(pair.max) < FROZEN_FPS;
+  const passes = (pair) => !frozen(pair) && (!judged(pair) || share(pair) >= FRAME_KEEP_SHARE);
+  const describe = (pair) =>
+    `${pair.max.frames} frames in ${Math.round(pair.max.ms)} ms at Maximum (${fps(pair.max).toFixed(1)}/s) ` +
+    `against ${pair.normal.frames} in ${Math.round(pair.normal.ms)} ms at the default ` +
+    `(${fps(pair.normal).toFixed(1)}/s): ` +
+    `${Number.isFinite(share(pair)) ? `${Math.round(100 * share(pair))} %` : 'no frames at the default'}` +
+    `${judged(pair) ? '' : ', too few at the default for a share'}${passes(pair) ? '' : ' - short'}`;
+  const passing = pairs.filter(passes).length;
+  const kept = pairs.filter((pair) => judged(pair) && passes(pair)).length;
+  const byFloor = passing - kept;
+  const ok = pairs.length > 0 && 2 * passing > pairs.length;
+  const notes = [];
+  const unjudged = pairs.filter((pair) => !judged(pair)).length;
+  if (unjudged > 0)
+    notes.push(
+      `${unjudged} of ${pairs.length} pairs had fewer than ${MIN_JUDGED_FRAMES} frames at the default speed, too ` +
+        `few for a share: judged by the floor of ${FROZEN_FPS} frames per second alone.`,
+    );
+  if (!ok) {
+    const frozenPairs = pairs.filter(frozen).length;
+    if (frozenPairs > 0)
+      notes.push(
+        `${frozenPairs} of ${pairs.length} pairs had fewer than ${FROZEN_FPS} frames per second at Maximum: ` +
+          `the page froze, a failure.`,
+      );
+    notes.push(
+      `only ${passing} of ${pairs.length} pairs kept ${Math.round(100 * FRAME_KEEP_SHARE)} % of the default ` +
+        `speed's frame rate at Maximum: the engine took the page's frames, a failure.`,
+    );
+  }
+  return {
+    ok,
+    detail:
+      `${kept} of ${pairs.length} pairs kept at least ${Math.round(100 * FRAME_KEEP_SHARE)} % of the ` +
+      `default's frame rate` +
+      `${byFloor > 0 ? `, ${byFloor} passed by the floor of ${FROZEN_FPS} per second alone (too few frames at the default for a share)` : ''}` +
+      `: ${pairs.map(describe).join(' | ')}`,
+    notes,
+  };
+}
+
+/** The longest frame window check-run.mjs measures, in ms. */
+export const MAX_FRAME_WINDOW_MS = 4000;
+
+/**
+ * How long the windows of a second frame measurement must be so that every default-speed window has
+ * MIN_JUDGED_FRAMES frames: null when every pair of `pairs` already has them; otherwise twice the
+ * time the slowest default window needs for them, at least 1000 ms and at most MAX_FRAME_WINDOW_MS
+ * (a page with fewer frames than that is judged by the floor). Only `frames` and `ms` are read.
+ */
+export function frameWindowMs(pairs) {
+  const short = pairs.filter((pair) => pair.normal.frames < MIN_JUDGED_FRAMES);
+  if (short.length === 0) return null;
+  const slowest = Math.min(...short.map((pair) => (pair.normal.ms > 0 ? pair.normal.frames / pair.normal.ms : 0)));
+  const needed = slowest > 0 ? (2 * MIN_JUDGED_FRAMES) / slowest : Infinity;
+  return Math.round(Math.min(MAX_FRAME_WINDOW_MS, Math.max(1000, needed)));
+}

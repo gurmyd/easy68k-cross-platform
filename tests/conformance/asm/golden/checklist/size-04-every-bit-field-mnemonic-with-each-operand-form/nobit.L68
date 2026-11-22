@@ -1,0 +1,47 @@
+00000000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:59:24 AM
+
+00000000                             1  * Every bit-field mnemonic with each form of {offset:width}; switched off by
+00000000                             2  * Assemble Bit Field Instructions they are all invalid opcodes (assembler 2)
+00001000                             3      ORG $1000
+Line 4 ERROR: Invalid opcode
+00001000                             4  START   BFCHG   D0{0:32}
+Line 5 ERROR: Invalid opcode
+00001000                             5      BFCLR   (A0){#5:#3}
+Line 6 ERROR: Invalid opcode
+00001000                             6      BFEXTS  (4,A1){D1:8},D2
+Line 7 ERROR: Invalid opcode
+00001000                             7      BFEXTU  $2000{31:1},D3
+Line 8 ERROR: Invalid opcode
+00001000                             8      BFFFO   D4{D5:D6},D7
+Line 9 ERROR: Invalid opcode
+00001000                             9      BFINS   D1,(A2){3:4}
+Line 10 ERROR: Invalid opcode
+00001000                            10      BFINS   D2,D3{0:8}
+Line 11 ERROR: Invalid opcode
+00001000                            11      BFSET   $12345678{7:D0}
+Line 12 ERROR: Invalid opcode
+00001000                            12      BFTST   (-6,A4,D1.W){2:30}
+Line 13 ERROR: Invalid opcode
+00001000                            13      BFTST   (LOOP,PC){1:2}
+00001000                            14  * spaces after { and around :
+Line 15 ERROR: Invalid opcode
+00001000                            15      BFTST   D0{ 2 : 4}
+00001000                            16  * width 33 is not a bit field
+Line 17 ERROR: Invalid opcode
+00001000                            17      BFTST   D0{2:33}
+Line 18 ERROR: Invalid opcode
+00001000                            18  LOOP    BFEXTU  D0{2:4},D1
+Line 19 ERROR: Undefined symbol
+00001000  6000 AD14                 19      BRA LOOP
+Line 20 ERROR: Undefined symbol
+00001004                            20      END START
+
+15 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------

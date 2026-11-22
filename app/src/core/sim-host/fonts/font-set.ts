@@ -124,6 +124,10 @@ interface ResolvedFont {
   delInHighText: Glyph | null;
   /** A fixed-pitch outline face (see `FallbackGlyphs.monospacedOutline`). */
   monospacedOutline: boolean;
+  /** See `FallbackGlyphs.zeroWidthBar`; 0 for none. */
+  zeroWidthBar: number;
+  /** See `FallbackGlyphs.euroInTextPath`. */
+  euroInTextPath: Glyph | null;
   make(ch: number): Glyph;
   glyphs: (Glyph | undefined)[];
 }
@@ -238,6 +242,14 @@ export class FontSet implements GlyphProvider, FallbackGlyphs {
     return this.resolve(font).monospacedOutline;
   }
 
+  zeroWidthBar(font: FontSpec): number {
+    return this.resolve(font).zeroWidthBar;
+  }
+
+  euroInTextPath(font: FontSpec): Glyph | null {
+    return this.resolve(font).euroInTextPath;
+  }
+
   /** The path of the atlas a font's glyphs come from, or null when the set has none for its face.
    *  For tests and for diagnosis. */
   atlasOf(font: FontSpec): string | null {
@@ -275,6 +287,13 @@ export class FontSet implements GlyphProvider, FallbackGlyphs {
       const stored = rule?.atlas ? this.byPath.get(rule.atlas) : undefined;
       const native = rule ? this.byPath.get(rule.native) : undefined;
       const overhang = rasterOverhang(style, cell.rowHeight);
+      // What Windows' Unicode text path draws in this font (T2's raster.textPath), by the name the
+      // table has the request under.
+      const textPath = this.table.raster?.textPath;
+      const tableName = this.tableName(name) ?? this.fallbackName;
+      const zeroWidthBar = textPath?.zeroWidthBar.get(tableName)?.get(style)?.get(size) ?? 0;
+      const euroWidth = textPath?.fallbackEuro.get(tableName)?.get(style)?.[size] ?? null;
+      const euroInTextPath = euroWidth === null ? null : blankGlyph(euroWidth, cell.rowHeight);
       // The rule from the native atlas comes first: it is what T2 checked against Windows for every
       // cell, also for the bytes an atlas stores empty. A stored atlas of the cell serves when the
       // native one is not there.
@@ -285,6 +304,8 @@ export class FontSet implements GlyphProvider, FallbackGlyphs {
           source: native.path,
           delInHighText: null,
           monospacedOutline: false,
+          zeroWidthBar,
+          euroInTextPath,
           glyphs: [],
           make: (ch) => ruledGlyph(native, rule, style, ch),
         };
@@ -296,6 +317,8 @@ export class FontSet implements GlyphProvider, FallbackGlyphs {
           source: stored.path,
           delInHighText: null,
           monospacedOutline: false,
+          zeroWidthBar,
+          euroInTextPath,
           glyphs: [],
           make: (ch) => atlasGlyph(stored, ch),
         };
@@ -320,6 +343,8 @@ export class FontSet implements GlyphProvider, FallbackGlyphs {
         source: null,
         delInHighText: null,
         monospacedOutline: false,
+        zeroWidthBar: 0,
+        euroInTextPath: null,
         glyphs: [],
         make: () => empty,
       };
@@ -345,6 +370,8 @@ export class FontSet implements GlyphProvider, FallbackGlyphs {
       source: source.path,
       delInHighText,
       monospacedOutline: !this.rasterFaces.has(entry.face) && fixedPitch(source.atlas),
+      zeroWidthBar: 0,
+      euroInTextPath: null,
       glyphs: [],
       make: (ch) => {
         const glyph = fittedGlyph(source, cell, ch, emRatio);
@@ -356,6 +383,12 @@ export class FontSet implements GlyphProvider, FallbackGlyphs {
 
 const rasterKey = (face: number, style: FontStyle, width: number, height: number) =>
   `${face}/${style}/${width}x${height}`;
+
+/** A glyph without ink: `advance` pixels of the opaque cell, `height` rows high. */
+function blankGlyph(advance: number, height: number): Glyph {
+  const width = Math.max(1, advance);
+  return { advance, width, height, coverage: new Uint8Array(width * height) };
+}
 
 function sameFont(a: FontSpec, b: FontSpec): boolean {
   return (

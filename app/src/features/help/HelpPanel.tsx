@@ -4,10 +4,22 @@
 // pressed, the original's contents tree (contents.hhc) with a text filter over the page titles.
 // The rest is the page, in a sandboxed frame: no scripts run in it, but it keeps its own origin so
 // that the panel can read which page it shows (to keep the title, the contents tree and the history
-// in step). Links to other pages navigate the frame; links to the web open in a new tab.
+// in step). Links to other pages navigate the frame; links to the web open in a new tab. In WebKit
+// under the service worker the sandbox has allow-scripts, because WebKit sends the frame's
+// navigations to no worker otherwise (Help offline); the pages' own policy forbids every script
+// there (core/help/engine.ts, erratum H1 11).
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react';
-import { helpUrl, targetOfUrl, treeKeyAction, visibleRows, type NodeKey } from '../../core/help';
+import {
+  engineOf,
+  helpFrameSandbox,
+  helpUrl,
+  targetOfUrl,
+  treeKeyAction,
+  visibleRows,
+  type HelpFrameEnvironment,
+  type NodeKey,
+} from '../../core/help';
 import { useAppContext } from '../../state/context';
 import { hidePanel } from '../../state/panels';
 import { IconButton, TextField, Toolbar } from '../../ui/components';
@@ -153,6 +165,18 @@ function HelpContents({ controller }: { controller: HelpController }) {
   );
 }
 
+/** What the frame's sandbox depends on, read from the browser (helpFrameSandbox decides). */
+function readFrameEnvironment(platform: 'web' | 'desktop'): HelpFrameEnvironment {
+  if (typeof navigator === 'undefined') return { platform, engine: 'other', controlled: false };
+  let controlled: boolean;
+  try {
+    controlled = (navigator.serviceWorker?.controller ?? null) !== null;
+  } catch {
+    controlled = false;
+  }
+  return { platform, engine: engineOf(navigator.vendor), controlled };
+}
+
 /** The sandboxed frame that shows the page. */
 function HelpFrame({ controller }: { controller: HelpController }) {
   const state = useHelpState(controller);
@@ -177,8 +201,16 @@ function HelpFrame({ controller }: { controller: HelpController }) {
 
   const onLoad = useCallback(() => {
     const element = frame.current;
-    const doc = element?.contentDocument;
-    const location = element?.contentWindow?.location.href;
+    // An error page (a navigation the service worker refused, erratum H1 11; a page that failed to
+    // load) is not of this origin: its document and address cannot be read, and nothing is noted.
+    let doc: Document | null | undefined;
+    let location: string | undefined;
+    try {
+      doc = element?.contentDocument;
+      location = element?.contentWindow?.location.href;
+    } catch {
+      return;
+    }
     if (!doc || location === undefined) return;
     const target = targetOfUrl(controller.base, location);
     if (target) controller.noteLoaded(target, doc.title);
@@ -190,13 +222,18 @@ function HelpFrame({ controller }: { controller: HelpController }) {
     // import-help.mjs) and opens in a new tab, which the sandbox allows (allow-popups).
   }, [controller]);
 
+  // Decided once, when the frame is created (a sandbox change would apply to the next navigation
+  // only): allow-scripts in WebKit under a service worker only, erratum H1 11.
+  const ctx = useAppContext();
+  const sandbox = useRef(helpFrameSandbox(readFrameEnvironment(ctx.platform.kind)));
+
   return (
     <iframe
       ref={frame}
       className="e68-help__frame"
       title={state.title === '' ? 'Help page' : `Help: ${state.title}`}
       src={initial.current}
-      sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+      sandbox={sandbox.current}
       onLoad={onLoad}
     />
   );

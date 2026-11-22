@@ -216,3 +216,18 @@ export function sourceFlags(source: Uint8Array): CorpusFlag[] {
   if (/^(?:[^\s*;]\S*)?[ \t]+(?:INCLUDE|INCBIN)\b/im.test(text)) flags.push('needs-include');
   return flags;
 }
+
+/** The fixed subset of 6.9 item 1: programs assembled with each assembler option switched alone. */
+export interface OptionSubset {
+  about: string;
+  /** The labels of the single-option runs (SINGLE_OPTION_SETS of tests/oracle/wine/asm/settings.ts). */
+  options: string[];
+  /** The programs, by manifest id, each with why it is in the subset. */
+  files: { id: string; why: string }[];
+}
+
+export const OPTION_SUBSET_PATH = join(REPO, 'tests', 'corpus', 'option-subset.json');
+
+export function loadOptionSubset(path: string = OPTION_SUBSET_PATH): OptionSubset {
+  return JSON.parse(readFileSync(path, 'utf8')) as OptionSubset;
+}

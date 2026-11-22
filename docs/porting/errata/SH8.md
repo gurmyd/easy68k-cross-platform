@@ -630,6 +630,82 @@ entry 28 and the lines marked "Gate I1, round 2" in its second round.
   audit's "a halt is announced by a live region" (`tests/a11y`, `--only structure`) passes with the
   hidden region and fails without it.
 
+### 44. The frames check of check-run.mjs compares Maximum with the default speed (4.2; CI run 44999787233 of 4bd5f68)
+
+- Problem: "the page keeps its frames while the program runs at Maximum" counted
+  `requestAnimationFrame` callbacks for half a second at Maximum and asked for more than 15 per
+  second, an absolute figure. On GitHub's macOS runner (job "browser-checks (macos-latest,
+  simulator)") Chromium printed 11 and failed; it had passed there with 23 two runs earlier and
+  failed with 12 on another branch. The Maximum check of the same run shows why: the half-second
+  windows had 8 and 7, 8 and 9, 9 and 8 frames (Maximum, default), so that Chromium delivers about
+  15 frames per second whatever the program does, at the default speed (engine 10 of 63 ms) as at
+  Maximum (engine 63 of 69 ms). WebKit there: 60 per second, 30 and 29 frames per window. The
+  threshold judged the runner.
+- What the check is for: 4.2 gives the engine at most half of each frame's time (8 ms, or half the
+  interval), so running at Maximum takes no frame from a page whose display delivers them. That is
+  a comparison with the same page on the same machine while the engine takes almost no time.
+- Does: `judgeFrames` (`run-verdicts.mjs`) judges the frames of the three pairs of windows that the
+  Maximum check (entry 41) already measures back to back; the separate frame count is gone, and
+  nothing the Maximum check proves changed. A pair passes when Maximum's frame rate is at least
+  70 % of the default's in the same pair (`FRAME_KEEP_SHARE`) and at least 4 per second
+  (`FROZEN_FPS`, a frozen page). Two of the three pairs must pass. The line prints per pair both
+  counts, both window lengths, both rates and the share, so that the CI log alone tells the runner
+  from the product.
+  - Why 70 %: a window counts a steady stream of frames to plus or minus one, so with 6 frames or
+    more at the default (`MIN_JUDGED_FRAMES`, 12 per second) a page that keeps its frames measures
+    at least 5/6 to 5/7 (83 to 71 %), and the macOS runner's worst pair was 7 against 9 (78 %). An
+    engine that overruns the frame halves the rate on a display bound to its refresh (WebKit
+    here), which at the fewest frames judged is at most 4 of 6 (67 %). 70 % lies between.
+  - Why a majority, not the best pair: a loss the product causes is systematic (Maximum fills the
+    engine's budget in every window) and shows in every pair. The best pair would let one window
+    the runner disturbed in the product's favour (a stall in a default window) pass a real loss; a
+    majority keeps one disturbed window, either way, from deciding alone.
+  - Too few frames: a pair whose default window had fewer than 6 frames cannot carry a share (one
+    frame is a sixth or more); it is judged by the floor alone, and a note says how many pairs were.
+    A page frozen at Maximum fails in every case.
+- Evidence on this PC (Windows, loaded): `npm run check:run`, 116 of 116; Chromium 31/30, 30/30,
+  30/30 frames (103, 100, 102 %), WebKit 29/26, 22/26, 25/24 (112, 85, 107 %). That it can still
+  fail: a scratch copy of the script (`build/SH8-frames/make-busy-copy.mjs`, not in the tree) makes
+  the page busy-wait after every `engine.run` call in the Maximum windows. 40 ms: Chromium 13 of 30
+  frames (40, 41, 40 %), WebKit 9 to 12 of 30 to 32 (28 to 34 %), both fail ("the engine took the
+  page's frames"). 20 ms (a call longer than the 16.7 ms frame): WebKit 17/29, 16/26, 17/21 (56, 60,
+  78 %), fails 1 of 3; Chromium, whose headless frames are not bound to a refresh, kept 25 of 30
+  (76 to 79 %) and passed: a loss of a quarter is within the rule, a loss of a third or more is not.
+  12 ms (the call still fits in the frame): no frame lost in either browser, rightly a pass.
+  Estimate for the macOS runner from run 44999787233: Chromium 114, 89 and 113 %, WebKit about
+  100 %: a pass. Only the next CI run on macos-latest shows the real figures there. Tests:
+  `run-verdicts.test.ts` ("judgeFrames": the runner's Chromium and WebKit figures, this PC's, a page
+  that loses most or half of its frames, a frozen page, too few frames at the default, the majority,
+  windows of different lengths).
+
+### 45. judgeFrames: pairs passed by the floor, and longer windows (review R4 of gate I3; entry 44)
+
+- Problem (found by the review): below `MIN_JUDGED_FRAMES` frames at the default only the floor of
+  4 per second applied, and the detail still said that every passing pair "kept at least 70 % of
+  the default's frame rate". `judgeFrames` of three pairs of 2 frames at Maximum against 5 at the
+  default (a loss of 60 %) passed with "3 of 3 pairs kept at least 70 %". The doc comment's "an
+  engine that overruns the frame halves the rate or worse" also did not hold for headless
+  Chromium, where entry 44's own 20 ms busy wait passed at 76 to 79 %.
+- Does: (1) the detail counts the two kinds apart: "K of N pairs kept at least 70 % ..., F passed by
+  the floor of 4 per second alone (too few frames at the default for a share)". (2) The cause is a
+  window too short for the machine's frame rate, so `check-run.mjs` now measures the frames again
+  when a default window had fewer than 6: three new pairs of windows `frameWindowMs(pairs)` long,
+  twice the time the slowest such window needs for 6 frames, at least 1 s and at most 4 s
+  (`MAX_FRAME_WINDOW_MS`), and judges those; a note says so. A page with fewer than 1.5 frames
+  per second at the default still has fewer than 6 in 4 s and is judged by the floor, and the detail
+  says so. The
+  Maximum check keeps its half-second pairs. (3) The doc comment states what entry 44 measured:
+  on a display bound to its refresh (WebKit) an overrunning engine halves the rate; headless
+  Chromium loses only about a quarter at 20 ms (passes) and 60 % at 40 ms (fails).
+- Evidence: `run-verdicts.test.ts`, 26 tests (3 new: the reviewer's figures give "0 of 3 pairs
+  kept ..., 3 passed by the floor"; `frameWindowMs` gives null, 1000, 1200, 2000 and 4000 ms where
+  it should; in 1.2 s windows the reviewer's page of 10 frames per second that loses 60 % fails).
+  `check-run.mjs --browser all` on this PC: 116 of 116, the line unchanged in form ("3 of 3 pairs
+  kept ...": Chromium 60/60 per second, WebKit 62/63), no second measurement. A scratch copy that
+  always takes the second measurement (`build/SH3-R4/make-long-copy.mjs`, not in the tree),
+  `--pass run`: 82 of 82; both browsers print "measured again in windows of 1000 ms" and judge 60
+  to 65 frames per window (98 to 101 %).
+
 ### 28. A session or controller disposed before it starts stays inert (3.12.3, 4.7.1)
 
 - Says: nothing about a session that is disposed before its start. The session starts in the

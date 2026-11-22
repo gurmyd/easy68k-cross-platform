@@ -67,6 +67,21 @@ interface ClientRecord {
 
 export const cacheNameFor = (version: string): string => `${VERSION_CACHE_PREFIX}${version}`;
 
+/**
+ * The folder of the help pages below the scope: the only addresses a frame is given (core/help's
+ * HELP_FOLDER; this file imports nothing, so the value is repeated, and sw.test.ts compares them).
+ */
+export const HELP_FOLDER = 'help/';
+
+/**
+ * A navigation of a frame (an iframe, or a frame of a frameset). The worker answers it only below
+ * the help folder; any other one gets a network error (erratum H1 11), so the Help panel's frame
+ * cannot load the application or any other page of the site, whatever a link in it says.
+ */
+export function isFrameNavigation(request: Request): boolean {
+  return request.mode === 'navigate' && (request.destination === 'iframe' || request.destination === 'frame');
+}
+
 /** Content types for files whose response has none (a server that sends no type). */
 const CONTENT_TYPES: Record<string, string> = {
   html: 'text/html; charset=utf-8',
@@ -194,6 +209,17 @@ export class Easy68kServiceWorker {
     // A navigation to the scope itself is the application page, whatever the query (?open=...).
     if (path === '' && request.mode === 'navigate') return this.byPath.get('index.html') ?? null;
     return this.byPath.get(path) ?? null;
+  }
+
+  /** True for an address of this site below the help folder (`<scope>help/...`). */
+  inHelpFolder(address: string): boolean {
+    let url: URL;
+    try {
+      url = new URL(address);
+    } catch {
+      return false;
+    }
+    return url.origin === this.scopeUrl.origin && url.pathname.startsWith(`${this.scopeUrl.pathname}${HELP_FOLDER}`);
   }
 
   // ---- install
@@ -330,6 +356,9 @@ export class Easy68kServiceWorker {
    * page that asks; `resultingClientId` the page a navigation creates.
    */
   respond(request: Request, clientId: string, resultingClientId: string): Promise<Response> | null {
+    // A frame can show Help and nothing else (erratum H1 11): in WebKit the Help frame has
+    // allow-scripts, so a page of this site without the help pages' policy must never load in it.
+    if (isFrameNavigation(request) && !this.inHelpFolder(request.url)) return Promise.resolve(Response.error());
     const entry = this.entryFor(request);
     if (!entry) return null;
     return this.answer(request, entry, request.mode === 'navigate' ? '' : clientId, resultingClientId);

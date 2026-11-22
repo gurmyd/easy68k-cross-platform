@@ -22,6 +22,12 @@
 //      ..\Helpv1_4\main.htm).
 //      The four links of the original that leave the help (three web addresses and the Quick
 //      Reference PDF) and have no target get target="_blank" (see fixPage).
+//   2a. No script. Every page's head starts with HELP_PAGE_POLICY, a Content-Security-Policy
+//      meta element with script-src 'none' (erratum H1 11: in WebKit the Help frame has
+//      allow-scripts). A page that, after these changes, holds a script element, an inline event
+//      handler attribute, a javascript: address, a refresh, or a link to an address of the site
+//      outside the help folder (the application's own page, say) is refused: the import stops
+//      with exit code 1 and names the page (pageRefusals). Links to other sites stay as they are.
 //   3. Files. Everything the pages use is copied byte for byte (images, style sheets, the Quick
 //      Reference PDF). The build files of the help project (help.chm, help.hhp, ez68k.*, compiler
 //      logs, Thumbs.db, the folder of program icons) are not copied; no page refers to them
@@ -236,6 +242,116 @@ function fixSitemap(text, index, note) {
   });
 }
 
+/* ------------------------------------------------------------------ no script in a help page */
+
+/**
+ * The policy every page's head starts with (erratum H1 11, ARCHITECTURE.md 7.6): in WebKit the Help
+ * frame's sandbox has allow-scripts (WebKit sends the navigations of a frame without it to no
+ * service worker, so Help could not be offline), and this policy keeps every script out of the
+ * page all the same: no script element, no event handler attribute and no javascript: address runs.
+ */
+export const HELP_PAGE_POLICY = `<meta http-equiv="Content-Security-Policy" content="script-src 'none'">`;
+
+/**
+ * Puts HELP_PAGE_POLICY in front of everything else in the page's head: right after `<head>`, or,
+ * in a page without a head tag (two of the original's), after the doctype, comments and `<html>`
+ * that may come first, where the parser opens the head itself. Nothing else changes.
+ */
+export function insertPolicy(html) {
+  const eol = html.includes('\r\n') ? '\r\n' : '\n';
+  const head = /<head\b[^>]*>/i.exec(html);
+  let at;
+  if (head) at = head.index + head[0].length;
+  else {
+    const lead = /^(?:\uFEFF)?(?:\s+|<!--[\s\S]*?-->|<!doctype\b[^>]*>|<html\b[^>]*>)*/i.exec(html);
+    at = lead ? lead[0].length : 0;
+  }
+  const before = html.slice(0, at);
+  const after = html.slice(at);
+  // After a tag on the same line, the policy gets a line of its own; at the very start it is the first line.
+  return at === 0 ? `${HELP_PAGE_POLICY}${eol}${after}` : `${before}${eol}${HELP_PAGE_POLICY}${after}`;
+}
+
+/** Character references decoded, as the browser reads an attribute value (enough to see `javascript:`). */
+function decodeCharacterReferences(text) {
+  return text
+    .replace(/&#x([0-9a-f]+);?/gi, (_, hex) => String.fromCodePoint(Number.parseInt(hex, 16)))
+    .replace(/&#(\d+);?/g, (_, dec) => String.fromCodePoint(Number(dec)))
+    .replace(/&(colon|tab|newline);/gi, (_, name) => ({ colon: ':', tab: '\t', newline: '\n' })[name.toLowerCase()])
+    .replace(/&amp;/gi, '&');
+}
+
+/** The attributes of a tag that name an address. */
+const ADDRESS_ATTRIBUTE =
+  /\s(href|src|background|action|formaction|data|poster|lowsrc|dynsrc|longdesc|cite)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/gi;
+/** Schemes of addresses on other sites (they open in a new tab, as they always did). */
+const OTHER_SITE = /^(https?|mailto|ftp|news):/i;
+
+/**
+ * Where an address of a help page points, for the frame's rule (erratum H1 11): 'help' (a file of
+ * the help folder, or a fragment), 'other-site' (a web or mail address, or a network-path
+ * reference), 'outside' (an address of this site outside the help folder: the application, a file of
+ * the build) or 'scheme' (javascript:, data:, blob:, file: and any other scheme).
+ * `file` is the page, relative to the help folder.
+ */
+export function addressKind(file, value) {
+  // As the URL parser reads it: tabs and line ends removed, C0 controls and spaces trimmed at the ends.
+  const address = decodeCharacterReferences(value)
+    .replace(/[\t\n\r]/g, '')
+    // eslint-disable-next-line no-control-regex -- the C0 controls are what the URL parser trims
+    .replace(/^[\x00-\x20]+|[\x00-\x20]+$/g, '');
+  if (address === '' || address.startsWith('#')) return 'help';
+  if (/^[\\/]{2}/.test(address)) return 'other-site';
+  if (OTHER_SITE.test(address)) return 'other-site';
+  if (/^[a-z][a-z0-9+.-]*:/i.test(address)) return 'scheme';
+  const folder = file.includes('/') ? `${file.slice(0, file.lastIndexOf('/') + 1)}` : '';
+  const page = new URL(folder.split('/').map(encodeURIComponent).join('/'), 'https://site.invalid/help/');
+  const url = new URL(address.replace(/\\/g, '/'), page);
+  return url.origin === 'https://site.invalid' && url.pathname.startsWith('/help/') ? 'help' : 'outside';
+}
+
+/**
+ * What a page holds that the Help frame must never get (erratum H1 11), after the import's own
+ * changes: a script element, an inline event handler attribute, a javascript: address (or another
+ * scheme that is not a web or mail address), a refresh that navigates, and an address of this site
+ * outside the help folder. Each finding names the tag. Empty for a page that may be imported.
+ */
+export function pageRefusals(file, html) {
+  const found = [];
+  const withoutComments = html.replace(/<!--[\s\S]*?-->/g, '');
+  if (/<script\b/i.test(withoutComments)) found.push('a script element');
+  for (const match of withoutComments.matchAll(/<[A-Za-z][^>]*>/g)) {
+    const tag = match[0];
+    const short = tag.length > 80 ? `${tag.slice(0, 77)}...` : tag;
+    if (/\son[a-z]+\s*=/i.test(tag)) found.push(`an event handler attribute in ${short}`);
+    if (/^<meta\b/i.test(tag) && /http-equiv\s*=\s*["']?refresh/i.test(tag)) found.push(`a refresh in ${short}`);
+    // Anywhere in the tag (an address attribute, a style's url(), ...), character references read.
+    const javascript = /javascript:/i.test(decodeCharacterReferences(tag).replace(/[\t\n\r]/g, ''));
+    if (javascript) found.push(`a javascript: address in ${short}`);
+    for (const attribute of tag.matchAll(ADDRESS_ATTRIBUTE)) {
+      const value = attribute[2] ?? attribute[3] ?? attribute[4] ?? '';
+      const kind = addressKind(file, value);
+      if (kind === 'scheme') {
+        if (!javascript) found.push(`an address with a scheme the frame may not show in ${short}`);
+      } else if (kind === 'outside') {
+        found.push(`a link to an address of this site outside the help folder in ${short}`);
+      }
+    }
+  }
+  return found;
+}
+
+/** Stops the import with the page's name when the page holds anything pageRefusals finds. */
+function refuseUnsafe(file, html) {
+  const found = pageRefusals(file, html);
+  if (found.length > 0) {
+    const error = new Error(`${file}: refused, the page holds ${found.join('; ')}`);
+    error.refusedPage = file;
+    throw error;
+  }
+  return html;
+}
+
 /* ------------------------------------------------------------------ generated pages */
 
 const escapeHtml = (text) =>
@@ -334,6 +450,7 @@ function differencesPage(differencesFile) {
     '<!DOCTYPE html>',
     '<html lang="en">',
     '<head>',
+    HELP_PAGE_POLICY,
     META_CHARSET,
     `<title>${escapeHtml(title)}</title>`,
     '<link href="../edit68k.css" rel="stylesheet" type="text/css">',
@@ -374,6 +491,10 @@ Changes made to the originals (nothing else is changed):
   - four links get target="_blank" (excode.htm, quickStart.htm, GNU General Public License.htm,
     Quick Reference.htm: the three web addresses and the PDF), because the frame that shows the
     pages cannot open a PDF or another site itself.
+  - every page starts its head with <meta http-equiv="Content-Security-Policy"
+    content="script-src 'none'">, so that no script can run in it; the import refuses a page with
+    a script, an event handler attribute, a javascript: address or a link to an address of the
+    site outside this folder.
 
 Added: EASy68KQuickRef.pdf (copied from the help project because Quick Reference.htm links to it),
 Port/differences.htm (the port's list of differences, rendered from docs/DIFFERENCES.md),
@@ -405,7 +526,7 @@ export function importHelp({ source, out, differences }) {
     let output = bytes;
     if (TEXT_PAGE.test(file)) {
       const html = decodeWindows1252(bytes, file);
-      output = Buffer.from(fixPage(declareUtf8(html), file, index, pageNote), 'utf8');
+      output = Buffer.from(refuseUnsafe(file, insertPolicy(fixPage(declareUtf8(html), file, index, pageNote))), 'utf8');
     } else if (SITEMAP.test(file)) {
       const note = { rewritten: 0, missing: [] };
       const text = decodeWindows1252(bytes, file);
@@ -430,6 +551,7 @@ export function importHelp({ source, out, differences }) {
     'Reference/ATTRIBUTION.txt': ATTRIBUTION,
   };
   for (const [file, text] of Object.entries(extra)) {
+    if (TEXT_PAGE.test(file)) refuseUnsafe(file, text); // the rendered Differences page too
     mkdirSync(dirname(join(out, file)), { recursive: true });
     writeFileSync(join(out, file), text.replace(/\r\n/g, '\n'));
   }
@@ -460,7 +582,15 @@ export function importHelp({ source, out, differences }) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const options = parseArgs(process.argv.slice(2));
-  const { manifest, excluded } = importHelp(options);
+  let imported;
+  try {
+    imported = importHelp(options);
+  } catch (error) {
+    // A refused page (erratum H1 11) or any other failure: the message names the file; exit 1.
+    console.error(`import-help: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
+  const { manifest, excluded } = imported;
   const r = manifest.rewrittenReferences;
   console.log(`import-help: ${manifest.files.length} files -> ${options.out}`);
   console.log(

@@ -1015,3 +1015,106 @@ describe.skipIf(!enginesBuilt)('the commands of the Options and View menus', () 
     SLOW,
   );
 });
+
+// Added by T3 in round I3 (ARCHITECTURE.md 6.9 item 2, trap15-a §13 Input, the F6/F9 item): the
+// value task 19 returns for F6 and F9 while the key is held, before and after task 24.
+describe.skipIf(!enginesBuilt)('task 19 on F6 and F9, before and after task 24 (trap15-a §13)', () => {
+  /** Polls task 19 for F6 ($75) into $3000 and for F9 ($78) into $3004, for ever. */
+  const pollProgram = (keyCommandsOff: boolean) => [
+    '        ORG     $1000',
+    'START:',
+    ...(keyCommandsOff ? ['        MOVEQ   #1,D1', '        MOVEQ   #24,D0', '        TRAP    #15'] : []),
+    'LOOP:   MOVE.L  #$75,D1',
+    '        MOVEQ   #19,D0',
+    '        TRAP    #15',
+    '        MOVE.L  D1,$3000',
+    '        MOVE.L  #$78,D1',
+    '        MOVEQ   #19,D0',
+    '        TRAP    #15',
+    '        MOVE.L  D1,$3004',
+    '        BRA     LOOP',
+    '        END     START',
+  ];
+  const long = (r: Rig, address: number) =>
+    ((r.byte(address) << 24) | (r.byte(address + 1) << 16) | (r.byte(address + 2) << 8) | r.byte(address + 3)) >>> 0;
+
+  /** A value the program never writes: a poll that ran since the poke replaces it. */
+  const SENTINEL = [0x5a, 0x5a, 0x5a, 0x5a];
+
+  /** Pokes the sentinel over both results, lets the program run and asserts that it polled again. */
+  const pollsAgain = (r: Rig, what: string) => {
+    r.poke(0x3000, SENTINEL);
+    r.poke(0x3004, SENTINEL);
+    r.settle();
+    expect(r.controller.phase, what).toBe('running');
+    expect(long(r, 0x3000), `${what}: $3000 was polled again`).not.toBe(0x5a5a5a5a);
+    expect(long(r, 0x3004), `${what}: $3004 was polled again`).not.toBe(0x5a5a5a5a);
+  };
+
+  it(
+    'key commands enabled: F6 runs Pause and the program never sees $FF, not even when it runs again while F6 is held',
+    async () => {
+      const r = await rig(pollProgram(false));
+      pollsAgain(r, 'before F6');
+      expect(long(r, 0x3000)).toBe(0);
+      const f6 = key('F6', 'F6');
+      expect(r.down(f6)).toEqual({ kind: 'command', id: 'sim.run.pause', ran: true });
+      expect(f6.prevented).toBe(true);
+      r.settle();
+      expect(r.commandsRun).toEqual(['sim.run.pause']);
+      expect(r.controller.phase).toBe('idle');
+      // F6 is still held: Run again, and the program's polls of F6 still read $00.
+      r.run();
+      pollsAgain(r, 'F6 held, after Run');
+      expect(long(r, 0x3000)).toBe(0);
+      r.up(key('F6', 'F6'));
+      r.settle();
+      expect(long(r, 0x3000)).toBe(0);
+    },
+    SLOW,
+  );
+
+  it(
+    'key commands enabled: F9 while the program runs (Run disabled, as the dispatcher has it) runs nothing and task 19 reads $00 while it is held',
+    async () => {
+      const r = await rig(pollProgram(false));
+      pollsAgain(r, 'before F9');
+      // While a program runs, the run feature reports Run disabled.
+      r.disabledCommands.add('sim.run.run');
+      const f9 = key('F9', 'F9');
+      expect(r.down(f9)).toEqual({ kind: 'command', id: 'sim.run.run', ran: false });
+      expect(f9.prevented).toBe(true);
+      for (let poll = 0; poll < 3; poll++) {
+        pollsAgain(r, `F9 held, poll ${poll}`);
+        expect(long(r, 0x3004), `F9 held, poll ${poll}`).toBe(0);
+      }
+      expect(r.commandsRun).toEqual([]);
+      r.up(key('F9', 'F9'));
+      pollsAgain(r, 'after F9');
+      expect(long(r, 0x3004)).toBe(0);
+    },
+    SLOW,
+  );
+
+  it(
+    'after task 24 with D1 = 1: F6 does not pause and task 19 gives $000000FF while it is held; F9 the same',
+    async () => {
+      const r = await rig(pollProgram(true));
+      expect(r.engine.state().keyCommandsDisabled).toBe(true);
+      expect(r.down(key('F6', 'F6'))).toEqual({ kind: 'program', cancelled: true, then: null });
+      r.settle();
+      expect(r.commandsRun).not.toContain('sim.run.pause');
+      expect(long(r, 0x3000)).toBe(0x000000ff);
+      r.up(key('F6', 'F6'));
+      r.settle();
+      expect(long(r, 0x3000)).toBe(0);
+      expect(r.down(key('F9', 'F9'))).toEqual({ kind: 'program', cancelled: true, then: null });
+      r.settle();
+      expect(long(r, 0x3004)).toBe(0x000000ff);
+      r.up(key('F9', 'F9'));
+      r.settle();
+      expect(long(r, 0x3004)).toBe(0);
+    },
+    SLOW,
+  );
+});

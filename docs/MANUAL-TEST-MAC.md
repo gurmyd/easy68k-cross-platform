@@ -313,13 +313,14 @@ example French, or U.S. International - PC, or ABC - Extended). Switch to it wit
 
 | # | Do | Expected |
 |---|---|---|
-| W0 | First, in Safari > Settings > Privacy > Manage Website Data..., remove the site of the web version if it is listed. Open the web version | Above `My Programs` in the Files panel a notice says: `Safari deletes the programs kept here after seven days without a visit to this page. "Add to Dock" makes a separate app that starts with its own, empty My Programs. Use Export... here to save them all as a .zip, and Import... in the app to bring them over.` Click its **Export...**: `My Programs.zip` is downloaded. Click **Got it**: the notice goes, and it does not come back when you reload the page. (Chrome shows no such notice) |
-| W1 | Open the web version, wait until it shows the editor. Switch Wi-Fi off. Reload the page. Then Help > Help, and click two links in the help page | The application loads and works (assemble tutorial1) without a network. Write down whether the help page shows and its links work: the test engine shows an empty help frame offline (`docs/requests/H1-help-offline-webkit.md`) |
-| W2 | Safari > File > Add to Dock... (macOS 14 Sonoma or later), then open EASy68K from the Dock | It opens in a window of its own. Its Files panel (My Programs) is empty: a Dock app has its own storage. That is Apple's rule, not a defect. Above the empty My Programs a notice says: `This app keeps its own programs, separate from Safari's: use Import... to bring over programs you exported in Safari.`, with **Import...** and **Got it** (leave it; W4 uses Import...) |
+| W0 | First, in Safari > Settings > Privacy > Manage Website Data..., remove the site of the web version if it is listed. Open the web version | Above `My Programs` in the Files panel a notice says: `This browser may delete the programs kept here after seven days without a visit to this page. An app made with "Add to Dock" or "Add to Home Screen" starts with its own, empty My Programs. Use Export... in the Files panel to save them all as a .zip, and Import... in the app to bring them over.` Click its **Export...**: `My Programs.zip` is downloaded. Click **Got it**: the notice goes, and it does not come back when you reload the page. (Chrome shows no such notice) |
+| W1 | Open the web version, wait until it shows the editor, close the tab and open the web version again (the second visit is the one the stored copy serves). Switch Wi-Fi off. Reload the page. Then Help > Help, click two links from one help page to another, and Help > Differences from EASy68K | The application loads and works (assemble tutorial1) without a network. The help pages show, their links lead to the other help pages, and the Differences page shows, all with Wi-Fi off (Playwright's WebKit is not Safari: this is the only test of it in Safari itself; erratum H1 11) |
+| W2 | Safari > File > Add to Dock... (macOS 14 Sonoma or later), then open EASy68K from the Dock | It opens in a window of its own. Its Files panel (My Programs) is empty: a Dock app has its own storage. That is Apple's rule, not a defect. Above the empty My Programs a notice says: `This app keeps its own programs, apart from the browser's: Import... in the Files panel brings over programs exported there.`, with **Import...** and **Got it** (leave it; W4 uses Import...) |
 | W3 | In the Safari tab: click `My Programs` in the Files panel, then the Export... button of the panel | A file `My Programs.zip` is downloaded |
 | W4 | In the Dock app: Import... in the Files panel, choose that `My Programs.zip` | The files of the Safari tab appear in the Dock app |
 | W5 | Safari > File > New Private Window, open the web version, run **fonts**. Then close the private window, open a new one and run it again | `Sum: B4818F4C` both times (Safari changes some pictures in private windows to stop tracking; this checks that the application's text is not affected) |
 | W6 | Normal Safari window: run **fonts** | `Sum: B4818F4C` |
+| W7 | Only if you have an iPhone or iPad at hand (it is not tested anywhere else): open the web version in Safari there, after removing its website data (Settings > Apps > Safari > Advanced > Website Data). Then Share > Add to Home Screen, and open it from the Home Screen | In Safari, the Files panel (left; the toolbar button at the far left shows it) has the notice of W0, word for word. The Home Screen app has an empty My Programs with the notice of W2, word for word. Write down the device and its iOS or iPadOS version |
 
 ### B3. The Mac app (only once a release exists)
 
@@ -582,7 +583,7 @@ A4 paste: P1 Safari:   P1 Chrome:   P2 Safari:   P2 Chrome:   P3:
 A5 sound: S1:   S2:   S3:   S4:   S5:
 A6 key recording: attached yes/no
 B1 layouts (which layout): L1:   L2:   L3:   L4:
-B2 Safari: W0:   W1:   W2:   W3:   W4:   W5 (both sums):   W6 (sum):
+B2 Safari: W0:   W1:   W2:   W3:   W4:   W5 (both sums):   W6 (sum):   W7 (device, version):
 B3 Mac app (exact first-start message, which way worked): D1:   D2:   D3:   D4:   D5:   D6:   D7:   D8:   D9:
 B7 VoiceOver and keyboard only: V1:   V2:   V3:   V4:   V5:   V6:   V7:   V8:   V9:
 Other parts of B (any you did):

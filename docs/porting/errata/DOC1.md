@@ -202,3 +202,25 @@ errata up to date.
 - **Open items of entry 6:** P1 9 is taken up by SH8 (errata SH8.md entry 40). W2 7 cannot be
   measured with the Wine oracle, whose recipes do not drive the simulator's window; it is check C7
   of the manual list now. The others stand.
+
+## 8. Third round of repairs before the release candidate (closing the round)
+
+- **Configuration files changed by the engineer closing the round.** `tests/conformance/sim/check-stop-buttons.mjs`
+  (T3) was in the tree without its CI entries, so `npm run lint` failed in
+  `tests/lint/ci-workflow.test.ts` ("... is in the plan step's table"). The round's task lets the
+  closing engineer edit any tracked file, and the request `docs/requests/T3-check-stop-buttons.md`
+  named every line, so it was applied as written: root `package.json` `check:stop-buttons`;
+  `ci.yml` header table, `plan` output, guards table, a step after the SH7 step in group
+  `simulator` (guarded by both engines), screenshot paths. The request's status line says so. The
+  `e2e_stability` input's description in `ci.yml` now says six shards instead of "20 times in a
+  row ... about 1.5 hours".
+- **Documents brought up to date:** part 5 of `docs/DIFFERENCES.md` (the `Maximum` rule as
+  corrected, erratum P1 13, with the figures of run 44988194975 and of this PC; the Help-offline
+  bullet was already removed by H1), `CHANGELOG.md` (the storage notice's texts, Help offline in
+  WebKit, the corrected rule), `docs/USER-GUIDE.md` (the Home Screen; help pages offline),
+  `docs/CONTRIBUTING.md` (what a manual CI run adds: the performance job and the stability job in
+  six shards), `docs/MANUAL-TEST-MAC.md` (an optional step W7 for an iPhone or iPad, which nothing
+  else tests), `docs/porting/speed.md` 4.6 (the figures of this round, among them one Chromium run
+  at 84.4 % of the engine alone that would miss the 85 %).
+- **Help page:** the tree regenerated with `tools/import-help.mjs --out build/DOC1/help` equals
+  `app/public/help` byte for byte after `Port/differences.htm` was copied.

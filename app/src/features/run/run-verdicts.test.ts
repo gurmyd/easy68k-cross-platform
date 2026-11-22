@@ -8,11 +8,17 @@ import {
 } from '../../core/run/governor';
 import {
   BUSY_SHARE,
+  FRAME_KEEP_SHARE,
+  FROZEN_FPS,
   MAXIMUM_FACTOR,
+  MAX_FRAME_WINDOW_MS,
+  MIN_JUDGED_FRAMES,
   SLICE_BUDGET_MS,
   SLICE_FRAME_SHARE,
   budgetFor,
   judgeDelays,
+  frameWindowMs,
+  judgeFrames,
   judgeMaximum,
   judgeRate,
   type MaximumPair,
@@ -141,6 +147,109 @@ describe('judgeMaximum', () => {
     ]);
     expect(verdict.ok).toBe(false);
     expect(verdict.notes.join(' ')).toContain('no single pair');
+  });
+});
+
+describe('judgeFrames', () => {
+  /** A pair of half-second windows: `max` frames at Maximum, `normal` at the default speed just before. */
+  const frames = (max: number, normal: number, ms = 500) => ({
+    normal: { frames: normal, ms },
+    max: { frames: max, ms },
+  });
+
+  it('has the thresholds that the errata entry explains', () => {
+    expect(FRAME_KEEP_SHARE).toBe(0.7);
+    expect(MIN_JUDGED_FRAMES).toBe(6);
+    expect(FROZEN_FPS).toBe(4);
+  });
+
+  // CI run 44999787233 (4bd5f68), macos-latest, Chromium: about 15 frames per second at either speed;
+  // the old absolute rule (more than 15 per second) failed it with 11.
+  it('passes the macOS runner figures of Chromium, about 15 frames per second at both speeds', () => {
+    const verdict = judgeFrames([frames(8, 7), frames(8, 9), frames(9, 8)]);
+    expect(verdict.ok).toBe(true);
+    expect(verdict.notes).toEqual([]);
+    expect(verdict.detail).toBe(
+      "3 of 3 pairs kept at least 70 % of the default's frame rate: " +
+        '8 frames in 500 ms at Maximum (16.0/s) against 7 in 500 ms at the default (14.0/s): 114 % | ' +
+        '8 frames in 500 ms at Maximum (16.0/s) against 9 in 500 ms at the default (18.0/s): 89 % | ' +
+        '9 frames in 500 ms at Maximum (18.0/s) against 8 in 500 ms at the default (16.0/s): 113 %',
+    );
+  });
+
+  it('passes the macOS runner figures of WebKit, 60 frames per second', () => {
+    expect(judgeFrames([frames(30, 29), frames(29, 30), frames(30, 30)]).ok).toBe(true);
+  });
+
+  // npm run check:run on this PC (Windows, loaded by other engineers), 2026-11-22.
+  it("passes this PC's figures (Windows, loaded)", () => {
+    expect(judgeFrames([frames(31, 30), frames(30, 30), frames(30, 30)]).ok).toBe(true); // Chromium
+    expect(judgeFrames([frames(29, 26), frames(22, 26), frames(25, 24)]).ok).toBe(true); // WebKit
+  });
+
+  it('fails a page that loses most of its frames at Maximum, and one that loses half', () => {
+    const verdict = judgeFrames([frames(8, 30), frames(9, 31), frames(7, 30)]);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.notes.join(' ')).toContain('took the page');
+    // An engine that overruns each frame halves the rate; at the fewest frames judged that is 4 of 6.
+    expect(judgeFrames([frames(15, 30), frames(16, 30), frames(15, 31)]).ok).toBe(false);
+    expect(judgeFrames([frames(4, 6), frames(4, 6), frames(4, 6)]).ok).toBe(false);
+  });
+
+  it('fails a frozen page, also when the default had too few frames to judge a share', () => {
+    const verdict = judgeFrames([frames(0, 30), frames(1, 30), frames(0, 29)]);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.notes.join(' ')).toContain('froze');
+    expect(judgeFrames([frames(1, 4), frames(0, 5), frames(1, 4)]).ok).toBe(false);
+  });
+
+  it('judges windows with too few frames at the default by the floor alone, and says so', () => {
+    const verdict = judgeFrames([frames(3, 5), frames(2, 4), frames(3, 5)]);
+    expect(verdict.ok).toBe(true);
+    expect(verdict.notes.join(' ')).toContain('3 of 3 pairs had fewer than 6 frames');
+    expect(verdict.detail).toContain('too few at the default for a share');
+  });
+
+  // Review R4 of gate I3: 2 frames against 5 is a loss of 60 %, which the floor alone lets pass; the
+  // detail must not then claim that the pairs kept the share.
+  it('does not count a pair passed by the floor as one that kept the share', () => {
+    const verdict = judgeFrames([frames(2, 5), frames(2, 5), frames(2, 5)]);
+    expect(verdict.ok).toBe(true);
+    expect(verdict.detail).toMatch(
+      /^0 of 3 pairs kept at least 70 % of the default's frame rate, 3 passed by the floor of 4 per second alone/,
+    );
+    const mixed = judgeFrames([frames(30, 30), frames(2, 5), frames(10, 30)]);
+    expect(mixed.detail).toMatch(/^1 of 3 pairs kept at least 70 % [^:]*, 1 passed by the floor/);
+  });
+
+  it('frameWindowMs: no second measurement when every default window has enough frames', () => {
+    expect(frameWindowMs([frames(8, 7), frames(8, 6), frames(9, 8)])).toBeNull();
+    expect(frameWindowMs([])).toBeNull();
+  });
+
+  it('frameWindowMs: windows long enough for twice MIN_JUDGED_FRAMES at the slowest short default window', () => {
+    // 5 frames in 500 ms: 10 per second, so 12 frames take 1200 ms.
+    expect(frameWindowMs([frames(2, 5), frames(8, 7), frames(9, 8)])).toBe(1200);
+    // 3 frames in 500 ms: 6 per second, 12 frames take 2000 ms.
+    expect(frameWindowMs([frames(2, 5), frames(2, 3)])).toBe(2000);
+    // never shorter than a second, never longer than MAX_FRAME_WINDOW_MS
+    expect(frameWindowMs([frames(5, 5, 100)])).toBe(1000);
+    expect(frameWindowMs([frames(0, 0)])).toBe(MAX_FRAME_WINDOW_MS);
+    expect(frameWindowMs([frames(1, 1)])).toBe(MAX_FRAME_WINDOW_MS);
+    // with such windows a page of 10 frames per second is judged by its share
+    const longer = judgeFrames([frames(4, 12, 1200), frames(5, 12, 1200), frames(4, 12, 1200)]);
+    expect(longer.ok).toBe(false);
+    expect(longer.notes.join(' ')).toContain('took the page');
+  });
+
+  it('needs a majority of the pairs: one disturbed pair decides nothing alone', () => {
+    expect(judgeFrames([frames(30, 30), frames(10, 30), frames(29, 30)]).ok).toBe(true);
+    expect(judgeFrames([frames(30, 30), frames(10, 30), frames(9, 30)]).ok).toBe(false);
+    expect(judgeFrames([]).ok).toBe(false);
+  });
+
+  it('compares rates, so a window that a late timer made longer is not short of frames', () => {
+    expect(judgeFrames([frames(30, 30, 500)].map((pair) => ({ ...pair, max: { frames: 36, ms: 600 } }))).ok).toBe(true);
   });
 });
 

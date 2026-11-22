@@ -20,11 +20,12 @@
 //
 // Owner: SH3.
 
-import type { Glyph, GlyphProvider, Scheduler } from '../../../contracts';
+import type { FontSpec, Glyph, GlyphProvider, Scheduler } from '../../../contracts';
+import type { FallbackGlyphs } from '../fonts/types';
 import { OutputDevice } from '../io';
 import { Surface } from '../surface/surface';
 import { hashPixels } from './testing';
-import { TASK21_FONT_NAMES, TextScreen } from './text-screen';
+import { onTextPath, TASK21_FONT_NAMES, TextScreen } from './text-screen';
 
 /** One operation of a case: the drawing methods of the surface, a font, a font colour, a text. */
 export type ReplayOp =
@@ -318,9 +319,51 @@ export function fontOfCase(c: ReplayCase): { name: string; size: number; style: 
 export const isProportionalName = (name: string): boolean =>
   name === TASK21_FONT_NAMES[5] || name === TASK21_FONT_NAMES[7];
 
+const ZERO_WIDTH = [0x09, 0x0a, 0x0d, 0x1c, 0x1d, 0x1e, 0x1f];
+
+/**
+ * The pixels of the euro sign Windows draws from a fallback font, with ClearType, for $80 in a text
+ * on its Unicode text path in a raster face (text-screen.ts `layout`; 6.5.3 as corrected, erratum
+ * T2 26): for each such $80 its cell, one column more on the left and the style overhang more on
+ * the right, where the smoothed ink of that glyph lies (measured: at most one column left of the
+ * cell, the bold or italic slant right of it). A predicate for those pixels, or null when the case
+ * has none. Needs a provider that knows the euro's width (`euroInTextPath`).
+ */
+export function euroInk(c: ReplayCase, glyphs: GlyphProvider): ((x: number, y: number) => boolean) | null {
+  const fallback = glyphs as GlyphProvider & Partial<FallbackGlyphs>;
+  let font = { name: 'Fixedsys', size: 9, style: 0 };
+  const zones: [number, number, number, number][] = [];
+  for (const o of c.ops) {
+    if (o.op === 'font') font = o;
+    if (o.op !== 'text' || !o.bytes.includes(0x80) || !onTextPath(o.bytes)) continue;
+    const spec: FontSpec = {
+      name: font.name,
+      size: font.size,
+      bold: font.style === 1,
+      italic: font.style === 2,
+      underline: font.style === 3,
+      strikeOut: font.style === 4,
+    };
+    const euro = fallback.euroInTextPath?.(spec) ?? null;
+    if (!euro) continue;
+    const height = glyphs.metrics(spec).rowHeight;
+    const overhang = glyphs.textOverhang?.(spec) ?? 0;
+    let x = o.x;
+    for (const b of o.bytes) {
+      if (o.bytes.length >= 2 && ZERO_WIDTH.includes(b)) continue;
+      const advance = b === 0x80 ? euro.advance : glyphs.glyph(spec, b).advance;
+      if (b === 0x80) zones.push([x - 1, o.y, x + advance + overhang, o.y + height]);
+      x += advance;
+    }
+  }
+  if (zones.length === 0) return null;
+  return (x, y) => zones.some(([left, top, right, bottom]) => x >= left && x < right && y >= top && y < bottom);
+}
+
 /**
  * Replays every case and compares it with its reference.
  * - `pixels`: every pixel must be equal (the raster faces);
+ * - `but-euro`: every pixel but those of `euroInk` (the smoothed euro sign of the text path);
  * - `cells`: every pixel but those of `outsideTheBoxes` (the outline faces: cell rectangles);
  * - `pens`: the picture is not looked at.
  * The pen position is compared in every mode.
@@ -328,15 +371,18 @@ export const isProportionalName = (name: string): boolean =>
 export function scoreReplays(
   references: readonly ReferenceCase[],
   glyphs: GlyphProvider,
-  how: 'pixels' | 'cells' | 'pens',
+  how: 'pixels' | 'but-euro' | 'cells' | 'pens',
 ): Score {
   const score: Score = { cases: references.length, equal: 0, picturesEqual: 0, pensEqual: 0, differences: [] };
   for (const reference of references) {
     const replay = replayCase(reference.case, glyphs);
-    const difference =
-      how === 'pens'
-        ? null
-        : compareReplay(replay, reference.image, how === 'cells' ? outsideTheBoxes(replay.boxes) : undefined);
+    const ignore =
+      how === 'cells'
+        ? outsideTheBoxes(replay.boxes)
+        : how === 'but-euro'
+          ? (euroInk(reference.case, glyphs) ?? undefined)
+          : undefined;
+    const difference = how === 'pens' ? null : compareReplay(replay, reference.image, ignore);
     const penEqual = replay.pen[0] === reference.pen[0] && replay.pen[1] === reference.pen[1];
     if (!difference) score.picturesEqual++;
     if (penEqual) score.pensEqual++;

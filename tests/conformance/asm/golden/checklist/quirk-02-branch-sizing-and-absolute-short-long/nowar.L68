@@ -1,0 +1,34 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:58:33 AM
+
+00001000                             1      ORG $1000
+00001000  4E71                       2  B   NOP
+00001002  60FC                       3      BRA B
+00001004  6000 000C                  4      BRA F
+00001008  6008                       5      BRA.S F
+0000100A  6000 FFF4                  6      BRA.L B
+Line 7 ERROR: Branch instruction displacement is out of range or invalid
+0000100E  6000                       7      BRA.S N
+00001010  4E71                       8  N   NOP
+00001012  4E71                       9  F   NOP
+00001014  3038 1234                 10      MOVE.W $1234,D0
+00001018  3039 00012345             11      MOVE.W $12345,D0
+0000101E  3038 8000                 12      MOVE.W $FFFF8000,D0
+00001022  3039 00001234             13      MOVE.W $1234.L,D0
+00001028  3038 2345                 14      MOVE.W $12345.W,D0
+0000102C  3039 00001032             15      MOVE.W FWD2,D0
+00001032  4E71                      16  FWD2    NOP
+00001034                            17      END $1000
+
+1 error detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+B                   1000
+F                   1012
+FWD2                1032
+N                   1010

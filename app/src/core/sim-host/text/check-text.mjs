@@ -26,8 +26,13 @@
 //   - a canvas that received the pixels with putImageData gives them back with getImageData
 //     unchanged (what the Output panel does with them);
 //   - the raster-face cases (suite text) equal Windows pixel for pixel and pen for pen, the
-//     outline-face cases in their cell rectangles and pen positions; the numbers of the suite of
-//     machine-dependent strings (text-control) are printed and not required;
+//     outline-face cases in their cell rectangles and pen positions; in the suite text-control the
+//     bytes Windows draws from a fallback font ($01-$08 $0B $0E-$1B) equal Windows wherever the two
+//     captured Windows agree (pens; pictures where those agree too; erratum T2 25), the other cases
+//     of text-control and the suites text-path and text-path-euro (Windows' Unicode text path; gate
+//     I3, item 3b) equal Windows pixel for pixel and pen for pen but the smoothed euro sign
+//     (erratum T2 26), and the numbers of the whole of text-control and of text-path-formfeed ($0C on
+//     the text path, not modelled; erratum T2 27) are printed and not required;
 //   - the page had no console or page error.
 //
 // The page is a blank one of the script's own (not the application), so the check does not depend
@@ -81,7 +86,16 @@ const RUNS = [
   ['real-engine', 'the engine scenario, real surface and fonts'],
 ];
 /** The text suites of the GDI capture. */
-const SUITES = ['text', 'text-outline', 'text-outline-zero', 'text-outline-glyphs', 'text-control'];
+const SUITES = [
+  'text',
+  'text-outline',
+  'text-outline-zero',
+  'text-outline-glyphs',
+  'text-control',
+  'text-path',
+  'text-path-euro',
+  'text-path-formfeed',
+];
 
 const PAGE_PATH = '__check-text.html';
 const PAGE = `<!doctype html>
@@ -138,8 +152,19 @@ async function loadReferences() {
       return { case: c, image: decodePix(packed.pix), pen: packed.pen };
     });
   }
+  // The same text-control cases as a second Windows drew them (10.0.26100, GitHub's runner; erratum
+  // T2 25): for the bytes Windows draws from a fallback font, 6.5.3 holds the port to what both agree on.
+  const runner = decodePack(
+    new Uint8Array(readFileSync(join(gdiDir, 'golden', 'windows-10.0.26100', 'text-control.pixpack.gz'))),
+  );
+  references.runner = new Map(
+    runner.cases.map((packed) => [packed.id, { image: decodePix(packed.pix), pen: packed.pen }]),
+  );
   return references;
 }
+
+/** The bytes Windows draws, in the raster faces, from a fallback font ($01-$08, $0B, $0E-$1B; cases.ts FALLBACK_BYTES). */
+const FALLBACK_BYTES = [1, 2, 3, 4, 5, 6, 7, 8, 11, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27];
 
 /**
  * Runs everything in the page: loads the fonts with fetch, runs the four scenarios, shows them in
@@ -286,6 +311,16 @@ async function main() {
       reference.case.ops.some(
         (o) => o.op === 'text' && o.bytes.includes(0x7f) && o.bytes.every((b) => b === 0x7f || ZERO_WIDTH.includes(b)),
       );
+    const control = references['text-control'];
+    const fallback = control.filter((r) =>
+      r.case.ops.some((o) => o.op === 'text' && o.bytes.some((b) => FALLBACK_BYTES.includes(b))),
+    );
+    const others = control.filter((r) => !fallback.includes(r));
+    const hasEuro = (r) => replay.euroInk(r.case, fonts) !== null;
+    const onRunner = (r) => references.runner.get(r.case.id);
+    const samePen = (r) => onRunner(r).pen[0] === r.pen[0] && onRunner(r).pen[1] === r.pen[1];
+    const samePicture = (r) =>
+      onRunner(r).image.pixels.every((p, i) => (p & 0xffffff) === (r.image.pixels[i] & 0xffffff));
     const groups = [
       ['text: raster faces, every pixel and the pen position', references.text, 'pixels', true],
       [
@@ -325,11 +360,60 @@ async function main() {
         true,
       ],
       [
-        'text-control: strings Windows draws from a fallback font (machine-dependent; reported, not required)',
-        references['text-control'],
+        'text-control: the bytes $01-$08 $0B $0E-$1B, pen positions where the two captured Windows agree (6.5.3, erratum T2 25)',
+        fallback.filter(samePen),
+        'pens',
+        true,
+      ],
+      [
+        'text-control: the bytes $01-$08 $0B $0E-$1B, every pixel and the pen where the two captured Windows draw the same',
+        fallback.filter((r) => samePen(r) && samePicture(r)),
+        'pixels',
+        true,
+      ],
+      [
+        `text-control: the bytes $01-$08 $0B $0E-$1B, all ${fallback.length} cases (the two Windows draw ${fallback.filter((r) => !samePicture(r)).length} of them differently; reported, not required)`,
+        fallback,
         'pixels',
         false,
       ],
+      [
+        "text-control: the other cases (drawn the same by both captured Windows; Windows' text path, gate I3 item 3b), every pixel and the pen",
+        others.filter((r) => !hasEuro(r)),
+        'pixels',
+        true,
+      ],
+      [
+        'text-control: the other cases with $80 on the text path, the pen and every pixel but the smoothed euro sign (6.5.3, erratum T2 26)',
+        others.filter(hasEuro),
+        'but-euro',
+        true,
+      ],
+      [
+        "text-path: Windows' text path (the zero-width bar, italic itemization, undefined bytes, control texts), every pixel and the pen",
+        references['text-path'],
+        'pixels',
+        true,
+      ],
+      [
+        'text-path-euro: $80 on the text path, the pen and every pixel but the smoothed euro sign',
+        references['text-path-euro'],
+        'but-euro',
+        true,
+      ],
+      [
+        'text-path-formfeed: $0C on the text path, every pixel and the pen (a smoothed fallback glyph, not modelled: a known difference, reported, not required; erratum T2 27)',
+        references['text-path-formfeed'],
+        'pixels',
+        false,
+      ],
+      [
+        'text-path-formfeed: $0C on the text path, pen positions (reported, not required)',
+        references['text-path-formfeed'],
+        'pens',
+        false,
+      ],
+      ['text-control: all cases, every pixel (reported, not required)', control, 'pixels', false],
     ];
     for (const [name, cases, how, required] of groups) {
       const score = replay.scoreReplays(cases, fonts, how);

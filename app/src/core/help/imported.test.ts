@@ -10,6 +10,8 @@ import { KEYWORDS, UNREACHABLE_CONTEXTS } from './keywords';
 import { ENTRY_PAGES } from './context';
 import { flattenSitemap, parseLocal, parseSitemap } from './sitemap';
 import { classifyLink } from './urls';
+// @ts-expect-error -- plain JavaScript module without type declarations
+import { pageRefusals } from '../../../../tools/import-help.mjs';
 
 const HELP = new URL('../../../public/help/', import.meta.url);
 const read = (path: string): Buffer => readFileSync(new URL(path.split('/').map(encodeURIComponent).join('/'), HELP));
@@ -135,6 +137,38 @@ describe('the imported help folder', { timeout: 60_000 }, () => {
     }
     expect(leaving).toBeGreaterThanOrEqual(7);
     expect(manifest.blankTargetsAdded).toBe(4); // the original has the other ones
+  });
+
+  it('starts the head of every page with the policy script-src none, and no page holds a script (erratum H1 11)', () => {
+    const POLICY = `<meta http-equiv="Content-Security-Policy" content="script-src 'none'">`;
+    // Every .htm and .html file below the folder, from the folder's own listing (not the manifest).
+    const pages = listing().filter((file) => /\.html?$/i.test(file));
+    expect(pages).toEqual(PAGES);
+    expect(pages.length).toBe(161);
+    for (const page of pages) {
+      const html = text(page);
+      // What may come before the first element of the head: the doctype, comments, white space and
+      // the html and head start tags (in a page without a head tag the parser opens the head at the
+      // first element; nothing that would start the body may come first).
+      const lead = /^(?:\s+|<!--[\s\S]*?-->|<!doctype\b[^>]*>|<html\b[^>]*>|<head\b[^>]*>)*/i.exec(html)?.[0] ?? '';
+      expect(html.slice(lead.length, lead.length + POLICY.length), page).toBe(POLICY);
+      expect(html.split(POLICY).length - 1, page).toBe(1);
+      // None of the three, with comments removed and character references read.
+      const markup = html.replace(/<!--[\s\S]*?-->/g, '');
+      expect(markup, page).not.toMatch(/<script\b/i);
+      for (const tag of markup.matchAll(/<[A-Za-z][^>]*>/g)) {
+        expect(tag[0], page).not.toMatch(/\son[a-z]+\s*=/i);
+        const decoded = tag[0]
+          .replace(/&#x([0-9a-f]+);?/gi, (_, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)))
+          .replace(/&#(\d+);?/g, (_, dec: string) => String.fromCodePoint(Number(dec)))
+          .replace(/[\t\n\r]/g, '');
+        expect(decoded, page).not.toMatch(/javascript:/i);
+      }
+    }
+  });
+
+  it('gives the import no reason to refuse a page: no link leaves the help folder for the site', () => {
+    for (const page of PAGES) expect(pageRefusals(page, text(page)), page).toEqual([]);
   });
 
   it('contains no script and nothing that fetches from another address', () => {

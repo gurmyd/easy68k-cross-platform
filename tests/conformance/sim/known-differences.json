@@ -8,19 +8,19 @@
     "owner": "SH6",
     "summary": "Task 53 right after a task 54 on the same stream, without a seek (C leaves it undefined): the original's Borland run-time gives D0.W = 0 and D2 = 4 for a 4-byte read after writing 'ABCDE' (4 bytes of its buffer land in memory), and after the close the file holds 1 byte; the port commits the 5 bytes before the read (ARCHITECTURE.md 3.8.4), gives D0.W = 1 (end of file), and the file holds 'ABCDE'.",
     "evidence": "golden/trap15-a/a51-files-read-after-write.result.bin lines 2, 4-6 (also the T3 review probe v4); docs/porting/errata/T3.md F7",
-    "unconfirmed": "run a51 on Windows (6.8; the C library is the Borland one inside SIM68K.exe, only the file system below it is Wine's). If Windows agrees, SH6 imitates the Borland stream state for a read that follows a write without a seek; if it does not, the golden is replaced by the Windows result."
+    "unconfirmed": "Seen only under Wine 8.0. Wine is not the main suspect: the stream state is the Borland run-time's inside SIM68K.exe, the same on Windows; Wine only answers its ReadFile/WriteFile/SetFilePointer calls (docs/differences/T3.md, \"Seen only under Wine\"). Steps (one Windows session settles all five): docs/porting/windows-confirmation.md part A; the deciding lines are in its table. Windows = golden (line 2 D0=00000000, line 5 \"41 EE EE\"): SH6 imitates the Borland stream state for a read that follows a write without a seek. Windows = port (D0=00000001, \"41 42 43 44 45\"): the golden is replaced by the Windows result."
   },
   "trap15-a/a52-files-write-after-read|report|result": {
     "owner": "SH6",
     "summary": "Task 54 right after a task 53 on the same stream, without a seek (write 'ABCDE', seek to 1, read 2, write 'X'): the original reports success (D0.W = 0) but the file is unchanged ('ABCDE') after the close; the port writes at the read position and the file is 'ABCXE'.",
     "evidence": "golden/trap15-a/a52-files-write-after-read.result.bin line 7 (also the T3 review probe v5); docs/porting/errata/T3.md F7",
-    "unconfirmed": "run a52 on Windows (6.8). If Windows agrees, SH6 drops a write that follows a read without a seek as the Borland run-time does."
+    "unconfirmed": "Seen only under Wine 8.0. Wine is not the main suspect, as for a51 (the Borland run-time's stream state decides). Steps (one Windows session settles all five): docs/porting/windows-confirmation.md part A; the deciding lines are in its table. Windows = golden (line 7 \"41 42 43 44 45\"): SH6 drops a write that follows a read without a seek. Windows = port (\"41 42 43 58 45\"): the golden is replaced."
   },
   "trap15-a/a53-files-past-end-then-read|report|result": {
     "owner": "SH6",
     "summary": "Write 'ABCDE', seek to 25, write 'X', then task 53 without a seek: the original's read gives D0.W = 0 (port: 1, end of file), its close gives D0.W = 2 (port: 0), a new stream then reads only 'ABCDE' (5 bytes; port: 26, the gap as zeros and 'X'), and task 57 on the file fails with 2 (the first stream is still open; port: 0).",
     "evidence": "golden/trap15-a/a53-files-past-end-then-read.result.bin lines 2, 3, 5-8 (also the T3 review probe v1); docs/porting/errata/T3.md F7",
-    "unconfirmed": "run a53 on Windows (6.8). If Windows agrees, SH6 imitates the failed close and the lost bytes."
+    "unconfirmed": "Seen only under Wine 8.0. Wine is a real suspect here: the close fails (D0.W = 2), i.e. a WriteFile or CloseHandle failed after a SetFilePointer past the end of the file, which Windows answers by extending the file with zeros. Steps (one Windows session settles all five): docs/porting/windows-confirmation.md part A; the deciding lines are in its table. Windows = golden (line 2 D0=0, line 3 D0=2, line 5 D2=5): SH6 imitates the failed close and the lost bytes. Windows = port (1, 0, $1A): the golden is replaced."
   },
   "trap15-a/a55-task0-negative-count-first|outlog|outlog": {
     "owner": "engine",
@@ -28,16 +28,22 @@
     "evidence": "golden/trap15-a/a55-task0-negative-count-first.OutLog.txt lines 3-4 (255 A + $C0), 5-6 (255 A); T4's probe d1probe4; docs/porting/errata/T3.md F1",
     "unconfirmed": "the residue byte depends on the Borland code that ran before the TRAP, so Windows may print another byte or none; nothing to imitate either way."
   },
-  "trap15-a/a58-files-devices|report|result": {
-    "owner": "SH6",
-    "summary": "The Windows device name NUL (trap15-a 13 Files, SH6 errata entry 8, item 8): in the official program task 52 on NUL, a write of 3 bytes, the close, task 59 and task 51 all give D0.W = 0 as in the port, but the read of 3 bytes after task 51 gives D0.W = 1 (end of file: NUL is a device that swallows what is written); the port creates an ordinary file NUL and reads back the 3 bytes (D0.W = 0).",
-    "evidence": "golden/trap15-a/a58-files-devices.result.bin line 6; docs/porting/errata/T3.md F8",
-    "unconfirmed": "Wine maps NUL to its null device as Windows does; run a58 on Windows (6.8) to confirm. If Windows agrees, SH6 treats NUL as an empty sink (the other device names, CON, PRN, AUX, COM1-9, LPT1-9, were not measured)."
-  },
   "trap15-b/b06-modes-above-15|report|result": {
     "owner": "SH1",
-    "summary": "Drawing modes 18-23 (trap15-b 15 V8): under Wine the official program draws the red pixel unchanged for every one of them (Wine's SetROP2 refuses the values the table yields and keeps the copy mode); the port follows trap15-b 5.4 (mode 20 gives white, mode 22 the inverse of the pen, ...).",
-    "evidence": "golden/trap15-b/b06-modes-above-15.result.bin lines 1-6; docs/porting/errata/T3.md F6",
-    "unconfirmed": "run b06 on Windows (tests/conformance/windows-confirm/README.md). If Windows draws the pen unchanged as Wine does, SH1 (surface, the ROP2 table of trap15-b 5.4) changes modes 18-23 to keep the copy mode; if Windows follows trap15-b's table, this entry is a property of Wine and is removed by regenerating the golden on Windows."
+    "summary": "Wine's SetROP2 differs from Windows'; measured on Windows 11 with the capture program. Drawing modes 18-23 (trap15-b 15 V8): task 92 passes SetROP2 the word PenModes[mode] of SIM68K.exe (0 for 18-21, 772 for 22, 37008 for 23). Under Wine SetROP2 refuses every value outside 1-16 and keeps the copy mode, so the golden has the red pixel unchanged for every mode. Windows 11 (10.0.26300, tests/oracle/gdi-capture, tests/conformance/gdi/golden/modes.json) refuses nothing: it keeps the low byte (GetROP2 reads 0, 4, 144) and draws ((byte - 1) AND 15) + 1, i.e. white for 20, 18, 19, 21, 23 and the inverse of the pen for 22, which is what the port draws (00FFFFFF; 00FFFF00 on line 2).",
+    "evidence": "golden/trap15-b/b06-modes-above-15.result.bin lines 1-6; tests/conformance/gdi/golden/modes.json (modesAbove15.task92); app/src/core/sim-host/surface/modes.gdi.test.ts; docs/porting/errata/SH1.md (drawing modes above 15); docs/porting/errata/T3.md F6",
+    "unconfirmed": "The golden is Wine's and cannot be regenerated without the official SIM68K.exe on real Windows (docs/porting/windows-confirmation.md part A, b06). The GDI calls it makes were measured on Windows 11 and agree with the port; once b06 has run on Windows, its result replaces the golden and this entry is removed."
+  },
+  "trap15-b/b19-net-send-uninitialised|report|result": {
+    "owner": "W1",
+    "summary": "Tasks 102 and 106 before any task 100 or 101 (Winsock not started, the socket never created): the official program under Wine gives D0.L = $27360001 for both (WSAENOTSOCK 10038 << 16 + NET_ERROR: Wine's sendto checks the socket handle 0 before anything else) and keeps D1; the port's NullNet gives $276D0001 (WSANOTINITIALISED 10093, what trap15-b 12.2 and 12.4 expect) and keeps D1. Every other byte agrees.",
+    "evidence": "golden/trap15-b/b19-net-send-uninitialised.result.bin lines 1-2; Net.cpp netSendData (sendto, then (WSAGetLastError() << 16) + 1); docs/differences/T3.md \"Seen only under Wine\"; docs/porting/errata/T3.md entry 13",
+    "unconfirmed": "Seen only under Wine 8.0, and Wine is the likely cause: in the same state Wine's closesocket and gethostbyname report WSANOTINITIALISED (b18 lines 1, 3, 4; b17), so only sendto skips the start-up check; Windows Sockets documents WSANOTINITIALISED for every call made before WSAStartup. Steps: docs/porting/windows-confirmation.md part A (line 1 and 2 of b19). Windows = golden (D0=27360001): W1 changes NULL_NET_NO_SOCKET for tasks 102 and 106 to $27360001. Windows = port (D0=276D0001): the golden is replaced by the Windows result and the entry removed."
+  },
+  "trap15-b/b20-net-receive-port-uninitialised|report|result": {
+    "owner": "W1",
+    "summary": "Accepted difference. Task 107 before any task 100 or 101 returns D0.L = 0 and no bytes in both, with the buffers untouched; the high word of D1 is the sender's port, which nothing set: the original passes an uninitialised local (simIOu.cpp receivePortNet, 'unsigned short portNum;') and gave D1 = $02660000 here ($00210000 in a probe with other calls before it: stack residue); the port gives D1 = 0 (trap15-b 12.2: 'PORT: return 0 there'; NullNet.receivePortNet).",
+    "evidence": "golden/trap15-b/b20-net-receive-port-uninitialised.result.bin line 1; docs/differences/T3.md \"Task 107 before any network task\"; docs/porting/errata/T3.md entry 13",
+    "unconfirmed": "the residue depends on the Borland code that ran before the call, so Windows may give another value; nothing to imitate either way."
   }
 }

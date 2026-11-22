@@ -35,10 +35,17 @@ The first version is being prepared. What the repository holds today:
   the execution speed.
 - EASyBIN: open, edit and save S-records and binary files.
 - Files: the browser keeps the files ("My Programs", with Import and Export as `.zip`); Chrome and
-  Edge can also work in a folder of the computer. In Safari (and every browser on an iPhone or
-  iPad) a notice in the Files panel explains that Safari deletes the programs after seven days
-  without a visit and that an app added to the Dock has its own files, with Export... and Got it.
-- The original's help pages and example programs; Help > Differences from EASy68K.
+  Edge can also work in a folder of the computer. In Safari on a Mac and in every browser on an
+  iPhone or iPad, a notice in the Files panel (`About keeping your programs`) says that the browser
+  may delete the programs after seven days without a visit and that an app made with "Add to Dock"
+  or "Add to Home Screen" starts with its own, empty My Programs, with Export... and Got it; when the
+  Files panel is not on the screen, the same text appears as a note at the first save into My
+  Programs. In such an app, while its My Programs is empty, a notice points to Import....
+- The original's help pages and example programs; Help > Differences from EASy68K. After the first
+  visit the help pages, their links and the Differences page also show without a network, in
+  Safari's engine too (tested in Playwright's WebKit; real Safari is a step of
+  `docs/MANUAL-TEST-MAC.md`). Every help page carries a rule that forbids scripts, and the offline
+  copy gives the help panel only pages of the help folder (erratum H1 11).
 - Light and dark themes; installable as an app from the browser; works offline after the first
   visit; several windows at once.
 - Import and export of the original's settings files `settings.dat` and `sim68K.dat`.
@@ -56,13 +63,13 @@ The first version is being prepared. What the repository holds today:
 ### Known limitations
 
 - Listed in part 5 of [docs/DIFFERENCES.md](docs/DIFFERENCES.md): among them, nobody has tried the
-  port on a real Mac yet, Firefox is not tested, and a folder holding a large Git repository can
-  crowd a program's own files out of what it may open in the web version, the help pages stay
-  empty without a network in Safari's test engine, and the speed at `Maximum` and the frame rate
-  while a program draws are decided only by the performance job of a manual test run on GitHub's
-  Linux machine (on a Windows PC at a quieter moment, 22 November 2026: 237 and 248 million
-  instructions in 10 s at `Maximum` with 60 Hz and 120 Hz frames, against the 200 million asked
-  for; `docs/porting/speed.md` 4.6).
+  port on a real Mac yet, Firefox is not tested, a folder holding a large Git repository can
+  crowd a program's own files out of what it may open in the web version, and the speed at
+  `Maximum` and the frame rate while a program draws are decided only by the performance job of a
+  manual test run on GitHub's Linux machine, which has not run since the rule for `Maximum` was
+  corrected (at least 100 million instructions in 10 s and at least 85 % of what the engine alone
+  executes in 5 s in the same job, instead of 200 million; erratum P1 13, `docs/porting/speed.md`
+  4.2).
 
 ### Documentation
 

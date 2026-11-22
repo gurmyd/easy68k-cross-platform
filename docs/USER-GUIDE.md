@@ -132,21 +132,25 @@ anywhere. This has consequences you should know:
   Mac app do not see them.
 - Clearing the browser's website data deletes them. A private window keeps nothing after it closes.
 - **Safari deletes a website's files after seven days in which you did not open it**, unless you
-  added it to the Dock. And a web app added to the Dock has its **own, separate** files: My Programs
-  is empty there at first.
+  added it to the Dock (on an iPhone or iPad, to the Home Screen, where every browser follows the
+  same rule). And a web app added to the Dock or the Home Screen has its **own, separate** files:
+  My Programs is empty there at first.
 - So **make a copy regularly**: select a file or a folder in the Files panel and click Export...
   (or right-click > Export...). A folder, or the whole of My Programs, is saved as a `.zip` in your
   Downloads folder. **Import...** brings files or such a `.zip` back, for example into the Dock app.
 
 In Safari (and in any browser on an iPhone or iPad) the Files panel says this itself. From the first
-start a short notice above My Programs reads: `Safari deletes the programs kept here after seven days
-without a visit to this page. "Add to Dock" makes a separate app that starts with its own, empty My
-Programs. Use Export... here to save them all as a .zip, and Import... in the app to bring them
-over.` Its **Export...** button saves the whole of My Programs as `My Programs.zip`; **Got it**
-hides the notice in this browser for good. In the Dock app, while its My Programs is still empty,
-the notice reads `This app keeps its own programs, separate from Safari's: use Import... to bring
-over programs you exported in Safari.`, with **Import...** and **Got it**. Other browsers and the
-Mac app show no notice.
+start a short notice above My Programs reads: `This browser may delete the programs kept here after
+seven days without a visit to this page. An app made with "Add to Dock" or "Add to Home Screen"
+starts with its own, empty My Programs. Use Export... in the Files panel to save them all as a .zip,
+and Import... in the app to bring them over.` Its **Export...** button saves the whole of My
+Programs as `My Programs.zip`; **Got it** hides the notice in this browser for good. If the Files
+panel is hidden, or you start in Simulator mode, the same text appears as a note in the corner when
+the first file is saved into My Programs, with **Got it**. In the app made with "Add to Dock" (on an
+iPhone or iPad, "Add to Home Screen"), while its My Programs is still empty, the notice reads `This
+app keeps its own programs, apart from the browser's: Import... in the Files panel brings over
+programs exported there.`, with **Import...** and **Got it**. Other browsers and the Mac app show no
+notice.
 
 Other ways to work with files:
 
@@ -176,9 +180,9 @@ in, as on Windows, but not the rest of the disk. A file name it is shown by the 
 - **Safari on a Mac** (macOS 14 Sonoma or later): File > Add to Dock.... Remember that the Dock app
   has its own files (above).
 
-After the first visit, the web version also works without a network connection. When a new version
-has been published, a message says `A new version is available. Reload`; the page never reloads by
-itself while a program is running or a document has changes.
+After the first visit, the web version also works without a network connection, the help pages
+included. When a new version has been published, a message says `A new version is available.
+Reload`; the page never reloads by itself while a program is running or a document has changes.
 
 ## Shortcuts that differ from the original
 

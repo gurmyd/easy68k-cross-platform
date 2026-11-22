@@ -26,6 +26,7 @@
 #       text          app/src/core/sim-host/text/check-text.mjs          SH3
 #       output        app/src/features/output/check-output.mjs           SH4
 #       hardware      app/src/features/hardware/check-hardware.mjs       SH7
+#       stop_buttons  tests/conformance/sim/check-stop-buttons.mjs       T3
 #       run           app/src/features/run/check-run.mjs                 SH8
 #       sim-main      app/src/features/sim-main/check-sim-main.mjs       U1
 #       pwa           app/src/features/pwa/check-pwa.mjs                 DV1
@@ -45,7 +46,8 @@
 #       a11y          tests/a11y/check-a11y.mjs                          Q1 (group accessibility)
 #   check: packaging unit tests  tests/desktop/packaged/playwright.config.ts (project unit, DV3)
 #   check: documents           tools/check-docs.test.mjs            (npm run check:docs, DOC1)
-#   e2e-stability              as e2e, on a manual run (input e2e_stability) or a push of a v* tag (6.9 item 10, X1)
+#   e2e-stability              as e2e, on a manual run (input e2e_stability) or a push of a v* tag (6.9 item 10, X1);
+#                              --repeat-each=20 split by --shard: Chromium in 2 jobs, WebKit in 4
 #   perf                       tests/perf/check-perf.mjs (npm run check:perf, P1): the functional parts on
 #                              every push; every part, with the thresholds of 6.9 item 9 judged in
 #                              Chromium on ubuntu-latest, on a manual run or a push of a v* tag
@@ -67,7 +69,7 @@
 # windows-oracles (with only the comparison step) + readme. A manual run
 # (workflow_dispatch) runs everything a push would, plus the comparison, the
 # whole performance check and, unless its input is unticked, the 20-repetition
-# stability job; the README job only when its input is ticked. The engines come from the reusable workflow
+# stability jobs (six shards); the README job only when its input is ticked. The engines come from the reusable workflow
 # engines.yml as the artifact "engine-dist"; a job downloads it when it exists.
 # A job that has it sets EASY68K_REQUIRE_ENGINES=1 when the artifact holds both
 # engines, so that a test that needs engine/dist fails there instead of
@@ -92,7 +94,7 @@ on:
   workflow_dispatch:
     inputs:
       e2e_stability:
-        description: 'Also run the end-to-end suites 20 times in a row on ubuntu-latest (6.9 item 10; about 1.5 hours)'
+        description: 'Also run the end-to-end suites 20 times on ubuntu-latest, split into 6 shards (Chromium 2, WebKit 4; 6.9 item 10; about 40-50 minutes per shard)'
         type: boolean
         default: true
       readme:
@@ -140,6 +142,7 @@ jobs:
       text: ${{ steps.guards.outputs.text }}
       output: ${{ steps.guards.outputs.output }}
       hardware: ${{ steps.guards.outputs.hardware }}
+      stop_buttons: ${{ steps.guards.outputs.stop_buttons }}
       run: ${{ steps.guards.outputs.run }}
       sim_main: ${{ steps.guards.outputs.sim_main }}
       pwa: ${{ steps.guards.outputs.pwa }}
@@ -209,6 +212,7 @@ jobs:
             text            app/src/core/sim-host/text/check-text.mjs
             output          app/src/features/output/check-output.mjs
             hardware        app/src/features/hardware/check-hardware.mjs
+            stop_buttons    tests/conformance/sim/check-stop-buttons.mjs
             run             app/src/features/run/check-run.mjs
             sim_main        app/src/features/sim-main/check-sim-main.mjs
             pwa             app/src/features/pwa/check-pwa.mjs
@@ -539,16 +543,30 @@ jobs:
   # 6.9 item 10 and X1's acceptance: the end-to-end suites pass 20 times in a row on ubuntu-latest
   # in each browser (docs/requests/X1-ci.md item 2). The plan runs it on a manual run (input
   # e2e_stability, ticked by default) and on the push of a v* tag, never on the weekly schedule.
-  # Measured in run 44948457389: 56 min (Chromium) and 94 min (WebKit) for the 20 repetitions;
-  # the limit of 180 leaves room for about twice the longer.
+  # One browser's 20 repetitions no longer fit one job: with the simulator's suites (tests/e2e/sim)
+  # they took about 76 min in Chromium and about 184 min in WebKit on GitHub (gate I3 round 3), and
+  # one repetition takes 150-155 s (Chromium) and 318-358 s (WebKit) on the development PC. So each
+  # browser's run is split with Playwright's --shard: Chromium in 2 jobs, WebKit in 4, each with
+  # --repeat-each=20, so that every shard is expected to take about 40-50 min and the limit of 180
+  # still catches a hang. Playwright 1.65 shards the repeated tests, not the files: every shard runs
+  # every test of the suite, 20/n times (10 in each Chromium shard, 5 in each WebKit shard), so the
+  # shards of one browser together run every test exactly 20 times and take about equal time
+  # (`npx playwright test --config tests/playwright.config.ts --list --project webkit
+  # --repeat-each=20 --shard=1/4` shows a shard's list). One failure in any shard fails the item.
   e2e-stability:
-    name: e2e stability (ubuntu-latest, ${{ matrix.browser }}, 20 repetitions)
+    name: e2e stability (ubuntu-latest, ${{ matrix.browser }}, 20 repetitions, shard ${{ matrix.shard }} of ${{ matrix.shards }})
     needs: [plan, engines]
     if: needs.plan.outputs.e2e_stability == 'true'
     strategy:
       fail-fast: false
       matrix:
-        browser: [chromium, webkit]
+        include:
+          - { browser: chromium, shard: 1, shards: 2 }
+          - { browser: chromium, shard: 2, shards: 2 }
+          - { browser: webkit, shard: 1, shards: 4 }
+          - { browser: webkit, shard: 2, shards: 4 }
+          - { browser: webkit, shard: 3, shards: 4 }
+          - { browser: webkit, shard: 4, shards: 4 }
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
@@ -595,13 +613,13 @@ jobs:
       - name: Production build
         run: npm run build
       # The dot reporter keeps the log of 20 repetitions short; the HTML report is uploaded on failure.
-      - name: End-to-end tests, 20 repetitions
-        run: npm run test:e2e -- --project ${{ matrix.browser }} --repeat-each=20 --reporter=dot,html
+      - name: End-to-end tests, 20 repetitions, shard ${{ matrix.shard }} of ${{ matrix.shards }}
+        run: npm run test:e2e -- --project ${{ matrix.browser }} --repeat-each=20 --shard=${{ matrix.shard }}/${{ matrix.shards }} --reporter=dot,html
       - name: Upload the Playwright report
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-report-stability-${{ matrix.browser }}
+          name: playwright-report-stability-${{ matrix.browser }}-shard-${{ matrix.shard }}-of-${{ matrix.shards }}
           path: |
             tests/playwright-report/
             tests/test-results/
@@ -945,6 +963,10 @@ jobs:
         if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.hardware == 'true' }}
         timeout-minutes: 15
         run: npm run check:hardware
+      - name: STOP buttons check (T3, hardware 21)
+        if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.stop_buttons == 'true' && needs.engines.outputs.available == 'asm sim' }}
+        timeout-minutes: 15
+        run: npm run check:stop-buttons
       - name: Run check (SH8)
         if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.run == 'true' && needs.engines.outputs.available == 'asm sim' }}
         timeout-minutes: 15
@@ -1030,6 +1052,8 @@ jobs:
             build/text-check/
             build/output-check/
             build/SH7/hardware-check/
+            build/T3/stop-buttons/
+            !build/T3/stop-buttons/vite-cache/
             build/SH8/run-check/
             build/U1/sim-main-check/
             build/U2/check/

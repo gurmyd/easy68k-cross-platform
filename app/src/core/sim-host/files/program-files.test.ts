@@ -16,7 +16,7 @@ import { CachedSyncFiles } from '../../../fs/sync/cached';
 import { MemorySyncFiles } from '../../../fs/sync/memory';
 import { createVfs } from '../../../fs/vfs';
 import { fromBase64, parseJournal, toBase64, applyEntryBytes } from './journal';
-import { ProgramFiles, STDIO_BUFFER, programPathOf } from './program-files';
+import { ProgramFiles, STDIO_BUFFER, deviceOf, programPathOf } from './program-files';
 
 const text = (s: string): Bytes => Uint8Array.from(s, (c) => c.charCodeAt(0));
 const str = (b: Bytes | null | undefined): string | null => (b ? String.fromCharCode(...b) : null);
@@ -522,5 +522,109 @@ describe('ProgramFiles: exitNow() and recoverJournal()', () => {
     expect(toBase64(text('OK'))).toBe('T0s=');
     expect(str(applyEntryBytes(text('0123456789'), { size: 6, at: 2, data: toBase64(text('xy')) }))).toBe('01xy45');
     expect([...applyEntryBytes(null, { size: 4, at: 3, data: toBase64(text('z')) })]).toEqual([0, 0, 0, 0x7a]);
+  });
+});
+
+// Windows device names (errata SH6.md entry 14), as Windows 11 10.0.26300 reads them: measured with
+// GetFullPathNameW, RtlIsDosDeviceName_U and CreateFileA (build/SH6-devices/devnames.ps1 of that
+// round), and the official SIM68K.exe for NUL (trap15-a/a58, a61).
+describe('ProgramFiles: Windows devices', () => {
+  const NUL_NAMES = ['NUL', 'nul', 'nUl', 'NUL ', 'NUL.', 'NUL..', 'NUL:', 'NUL :', 'NUL::', 'NUL. .'];
+  const NUL_PATHS = ['.\\NUL', './nul', '..\\NUL', 'sub\\NUL', 'sub/..\\NUL', '\\NUL', '/NUL', 'C:\\NUL', 'C:NUL'];
+  const NUL_DEVICE_PATHS = ['\\\\.\\NUL', '\\\\?\\nul'];
+  const OTHERS = ['CON', 'con', 'CON:', 'con ', 'PRN', 'prn.', 'AUX', 'aux ', 'COM1', 'com9', 'COM1 .', 'LPT1', 'lpt9'];
+  const OTHERS_HIGH = ['COM\u00b9', 'LPT\u00b2', 'COM\u00b3', 'CONIN$', 'CONOUT$'];
+  const ORDINARY = ['NUL.txt', 'nul.dat.x', 'NUL .txt', 'NULL', 'NUL1', ' NUL', 'NUL\\.', 'NUL:x', 'con.txt', '.\\CON'];
+  const ORDINARY_TOO = ['sub\\COM1', 'COM1.txt', 'LPT1.log', 'COM0', 'LPT0', 'COM10', 'CLOCK$', 'aux.c', '\\CON'];
+
+  it('deviceOf follows what Windows 11 measured', () => {
+    for (const n of [...NUL_NAMES, ...NUL_PATHS, ...NUL_DEVICE_PATHS]) expect(deviceOf(n), n).toBe('nul');
+    for (const n of [...OTHERS, ...OTHERS_HIGH]) expect(deviceOf(n), n).toBe('other');
+    for (const n of [...ORDINARY, ...ORDINARY_TOO]) expect(deviceOf(n), n).toBeNull();
+    // A folder part that cannot exist: the open fails as for any bad name.
+    expect(deviceOf('a<b\\NUL')).toBeNull();
+  });
+
+  it('NUL opens in every mode, swallows writes, reads at end of file, seeks, closes; nothing is created', async () => {
+    const { files, view } = await harness({ '/memory/demo/a.txt': 'a' });
+    for (const n of [...NUL_NAMES, ...NUL_PATHS, ...NUL_DEVICE_PATHS]) {
+      for (const mode of [FileMode.Create, FileMode.Update, FileMode.Read]) {
+        const handle = files.fileOpen(name(n), mode);
+        expect(handle, `${n} mode ${mode}`).toBeGreaterThan(0);
+        expect(files.fileWrite(handle, text('abc')), n).toBe(mode === FileMode.Read ? -1 : 3);
+        expect(files.fileSeek(handle, 0, 0)).toBe(0);
+        expect(files.fileRead(handle, 3)).toEqual(new Uint8Array(0));
+        expect(files.fileSeek(handle, 5, 0)).toBe(5);
+        expect(files.fileRead(handle, 3)).toEqual(new Uint8Array(0));
+        expect(files.fileSeek(handle, -1, 0)).toBe(-1);
+        expect(files.fileClose(handle)).toBe(true);
+        expect(files.fileClose(handle)).toBe(false);
+      }
+      expect(files.fileRemove(name(n)), n).toBe(false);
+      expect(files.read(name(n)), n).toBeNull();
+    }
+    expect(files.unsaved).toBe(false);
+    expect(view.paths()).toEqual(['/memory/demo/a.txt']);
+  });
+
+  it('handles of NUL come from the same counter and are never reused', async () => {
+    const { files } = await harness({ '/memory/demo/a.txt': 'a' });
+    const a = files.fileOpen(name('a.txt'), FileMode.Read);
+    const n = files.fileOpen(name('NUL'), FileMode.Update);
+    const b = files.fileOpen(name('a.txt'), FileMode.Read);
+    expect([a, n, b]).toEqual([a, a + 1, a + 2]);
+    expect(files.fileClose(n)).toBe(true);
+    expect(files.fileOpen(name('nul'), FileMode.Create)).toBe(a + 3);
+    expect(str(files.fileRead(b, 5))).toBe('a'); // the real stream is untouched
+  });
+
+  it('a file named NUL that exists (a Mac disk) is not reached: the program gets the device', async () => {
+    const { files, view } = await harness({ '/disk/Users/me/demo/NUL': 'kept', '/disk/Users/me/demo/sub/nul': 'too' }, [
+      '/disk/Users/me/demo',
+    ]);
+    for (const n of ['NUL', 'nul.', 'sub\\NUL', '/Users/me/demo/NUL']) {
+      const handle = files.fileOpen(name(n), FileMode.Create);
+      expect(handle, n).toBeGreaterThan(0);
+      expect(files.fileRead(handle, 10)).toEqual(new Uint8Array(0));
+      expect(files.fileWrite(handle, text('gone'))).toBe(4);
+      expect(files.fileClose(handle)).toBe(true);
+      expect(files.fileRemove(name(n))).toBe(false);
+    }
+    await files.exit();
+    expect(str(view.get('/disk/Users/me/demo/NUL'))).toBe('kept');
+    expect(str(view.get('/disk/Users/me/demo/sub/nul'))).toBe('too');
+  });
+
+  it('the other devices do not open (a PC without that port), and no file of their name is made or removed', async () => {
+    const { files, view } = await harness({ '/memory/demo/CON': 'old file', '/memory/demo/sub/x': 'x' });
+    for (const n of [...OTHERS, ...OTHERS_HIGH]) {
+      for (const mode of [FileMode.Create, FileMode.Update, FileMode.Read])
+        expect(files.fileOpen(name(n), mode), n).toBe(0);
+      expect(files.fileRemove(name(n)), n).toBe(false);
+      expect(files.read(name(n)), n).toBeNull();
+    }
+    expect(view.paths().sort()).toEqual(['/memory/demo/CON', '/memory/demo/sub/x']);
+    // Names Windows 11 reads as ordinary files stay ordinary files.
+    for (const n of ['NUL.txt', 'con.txt', 'COM1.txt', 'sub\\COM1', 'COM0']) {
+      const handle = files.fileOpen(name(n), FileMode.Create);
+      expect(handle, n).toBeGreaterThan(0);
+      expect(files.fileClose(handle)).toBe(true);
+      expect(files.fileRemove(name(n)), n).toBe(true);
+    }
+  });
+
+  it('the browser store gets nothing either (a cached view over the Vfs)', async () => {
+    const storage = new MemoryBackend();
+    await storage.mkdirp('demo');
+    await storage.writeFile('demo/a.txt', text('a'));
+    const { vfs, view, files } = cachedProgramFiles(storage, { text: null });
+    await files.setCurrentDir('/memory/demo');
+    const handle = files.fileOpen(name('NUL'), FileMode.Create);
+    expect(files.fileWrite(handle, text('abc'))).toBe(3);
+    expect(files.fileClose(handle)).toBe(true);
+    expect(files.fileOpen(name('CON'), FileMode.Create)).toBe(0);
+    await files.exit();
+    await view.settled();
+    expect((await vfs.list('/memory/demo')).map((entry) => entry.name)).toEqual(['a.txt']);
   });
 });

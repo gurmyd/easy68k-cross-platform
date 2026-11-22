@@ -1,13 +1,23 @@
 // The import script tools/import-help.mjs: its pure functions, and (where the original sources are
 // present: they are git-ignored reference material) a complete import twice into scratch folders.
 
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error -- plain JavaScript module without type declarations
-import { declareUtf8, fixReference, importHelp, renderMarkdown } from '../../../../tools/import-help.mjs';
+import {
+  HELP_PAGE_POLICY,
+  addressKind,
+  declareUtf8,
+  fixReference,
+  importHelp,
+  insertPolicy,
+  pageRefusals,
+  renderMarkdown,
+  // @ts-expect-error -- plain JavaScript module without type declarations
+} from '../../../../tools/import-help.mjs';
 
 type Reference = { value: string; rewritten: boolean; missing: string | null } | null;
 
@@ -97,6 +107,122 @@ describe('declareUtf8', () => {
       '<meta http-equiv="Content-Type" content="text/html; charset=utf-8">\n<title>x</title>\n',
     );
   });
+});
+
+describe('no script in a help page (erratum H1 11)', () => {
+  const POLICY = `<meta http-equiv="Content-Security-Policy" content="script-src 'none'">`;
+
+  it('the policy is script-src none, put first in the head, with the page\u2019s own line end', () => {
+    expect(HELP_PAGE_POLICY).toBe(POLICY);
+    expect(insertPolicy('<html>\r\n<head>\r\n<meta charset>\r\n')).toBe(
+      `<html>\r\n<head>\r\n${POLICY}\r\n<meta charset>\r\n`,
+    );
+    expect(insertPolicy('<HTML><HEAD><TITLE>x</TITLE>')).toBe(`<HTML><HEAD>\n${POLICY}<TITLE>x</TITLE>`);
+    // A page without a head tag (excode.htm, Quick Reference.htm): first in the document.
+    expect(insertPolicy('<meta charset>\r\n<title>x</title>')).toBe(`${POLICY}\r\n<meta charset>\r\n<title>x</title>`);
+    expect(insertPolicy('<!DOCTYPE html>\n<html>\n<title>x</title>')).toBe(
+      `<!DOCTYPE html>\n<html>\n\n${POLICY}<title>x</title>`,
+    );
+  });
+
+  it('refuses a script element, an event handler, a javascript: address and a refresh', () => {
+    expect(pageRefusals('a.htm', '<p>text</p>')).toEqual([]);
+    expect(pageRefusals('a.htm', '<p>x</p><SCRIPT src="x.js"></SCRIPT>')).toEqual(['a script element']);
+    expect(pageRefusals('a.htm', '<body onload="go()">')[0]).toMatch(/^an event handler attribute in <body/);
+    expect(pageRefusals('a.htm', '<img src=x.gif OnError=go()>')[0]).toMatch(/^an event handler attribute/);
+    expect(pageRefusals('a.htm', '<a href="javascript:go()">')).toEqual([
+      'a javascript: address in <a href="javascript:go()">',
+    ]);
+    expect(pageRefusals('a.htm', '<a href=" JaVaScRiPt:go()">')).toHaveLength(1);
+    expect(pageRefusals('a.htm', '<a href="jav&#x09;ascript&#58;go()">')).toHaveLength(1);
+    expect(pageRefusals('a.htm', '<a href="&#106;avascript:go()">')).toHaveLength(1);
+    expect(pageRefusals('a.htm', '<p style="background:url(javascript:go())">')).toHaveLength(1);
+    expect(pageRefusals('a.htm', '<meta http-equiv="refresh" content="0;url=main.htm">')[0]).toMatch(/^a refresh/);
+    // A comment is not markup; text about these things is text.
+    expect(pageRefusals('a.htm', '<!-- <script>x</script> --><p>Use onclick= or javascript: in a page</p>')).toEqual(
+      [],
+    );
+    // The policy element itself passes.
+    expect(pageRefusals('a.htm', insertPolicy('<head><title>x</title>'))).toEqual([]);
+  });
+
+  it('refuses a link to an address of the site outside the help folder; other sites stay', () => {
+    expect(addressKind('main.htm', 'options.htm')).toBe('help');
+    expect(addressKind('Directives/org.htm', '../options.htm#top')).toBe('help');
+    expect(addressKind('Directives/org.htm', '..\\Quick%20Reference.htm')).toBe('help');
+    expect(addressKind('main.htm', 'GNU General Public License.htm')).toBe('help');
+    expect(addressKind('main.htm', '#top')).toBe('help');
+    expect(addressKind('main.htm', '../index.html')).toBe('outside');
+    expect(addressKind('main.htm', '..')).toBe('outside');
+    expect(addressKind('main.htm', '../')).toBe('outside');
+    expect(addressKind('Directives/org.htm', '../../index.html')).toBe('outside');
+    expect(addressKind('main.htm', '/index.html')).toBe('outside');
+    expect(addressKind('main.htm', '\\index.html')).toBe('outside');
+    expect(addressKind('main.htm', '../Helpv1_4/main.htm')).toBe('outside');
+    expect(addressKind('main.htm', '../helpx/main.htm')).toBe('outside');
+    expect(addressKind('main.htm', 'http://www.easy68k.com/')).toBe('other-site');
+    expect(addressKind('main.htm', 'https://github.com/x')).toBe('other-site');
+    expect(addressKind('main.htm', 'mailto:a@b.c')).toBe('other-site');
+    expect(addressKind('main.htm', '//example.org/x')).toBe('other-site');
+    expect(addressKind('main.htm', 'javascript:go()')).toBe('scheme');
+    expect(addressKind('main.htm', 'data:text/html,x')).toBe('scheme');
+    expect(addressKind('main.htm', 'blob:x')).toBe('scheme');
+    expect(pageRefusals('main.htm', '<a href="../index.html">the app</a>')).toEqual([
+      'a link to an address of this site outside the help folder in <a href="../index.html">',
+    ]);
+    expect(pageRefusals('main.htm', '<img src="/assets/x.png">')).toHaveLength(1);
+    expect(pageRefusals('main.htm', '<a href="http://www.easy68k.com/" target="_blank">site</a>')).toEqual([]);
+  });
+
+  it('the script stops with exit code 1 and the name of a refused page', () => {
+    const root = mkdtempSync(join(tmpdir(), 'easy68k-help-refuse-'));
+    try {
+      const source = join(root, 'src');
+      mkdirSync(join(source, 'sub'), { recursive: true });
+      writeFileSync(
+        join(source, 'main.htm'),
+        '<html><head><title>ok</title></head><body><a href="sub/bad.htm">x</a></body></html>',
+      );
+      writeFileSync(
+        join(source, 'sub', 'bad.htm'),
+        '<html><head><title>bad</title></head><body><a href="../../index.html">app</a></body></html>',
+      );
+      const script = fileURLToPath(new URL('../../../../tools/import-help.mjs', import.meta.url));
+      const run = spawnSync(
+        process.execPath,
+        [script, '--source', source, '--out', join(root, 'out'), '--differences', join(root, 'none.md')],
+        { encoding: 'utf8' },
+      );
+      expect(run.status).toBe(1);
+      expect(run.stderr).toContain(
+        'sub/bad.htm: refused, the page holds a link to an address of this site outside the help folder',
+      );
+      writeFileSync(
+        join(source, 'sub', 'bad.htm'),
+        '<html><head><title>bad</title></head><body onload="x()"></body></html>',
+      );
+      const again = spawnSync(
+        process.execPath,
+        [script, '--source', source, '--out', join(root, 'out'), '--differences', join(root, 'none.md')],
+        { encoding: 'utf8' },
+      );
+      expect(again.status).toBe(1);
+      expect(again.stderr).toContain('sub/bad.htm: refused, the page holds an event handler attribute');
+      writeFileSync(
+        join(source, 'sub', 'bad.htm'),
+        '<html><head><title>fine</title></head><body><p>fine</p></body></html>',
+      );
+      const fine = spawnSync(
+        process.execPath,
+        [script, '--source', source, '--out', join(root, 'out'), '--differences', join(root, 'none.md')],
+        { encoding: 'utf8' },
+      );
+      expect(fine.status, fine.stderr).toBe(0);
+      expect(readFileSync(join(root, 'out', 'sub', 'bad.htm'), 'utf8')).toContain(`<head>\n${POLICY}`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 60_000);
 });
 
 describe('renderMarkdown (the differences page)', () => {

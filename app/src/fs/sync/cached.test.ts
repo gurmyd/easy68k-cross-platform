@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Bytes, Scheduler, SnapshotLimits, Vfs, VPath } from '../../contracts';
+import {
+  DEFAULT_SNAPSHOT_LIMITS,
+  type Bytes,
+  type Scheduler,
+  type SnapshotLimits,
+  type Vfs,
+  type VPath,
+} from '../../contracts';
 import { SYNC_FILES_CONTRACT_CASES } from '../backend-contract';
 import { MemoryBackend } from '../memory-backend';
 import { createVfs, fsError } from '../vfs';
@@ -203,6 +210,41 @@ describe('CachedSyncFiles: the limits', () => {
     scheduler.runTimers();
     expect(messages).toHaveLength(3);
   });
+
+  // Found by another package's verifier with a differential probe (gate I3 round 3): revalidate()
+  // read every new file through reload(), which checked the byte limits only.
+  it('revalidate() and the changes others report load no more files than prepare() (maxFiles)', async () => {
+    const { view, vfs, backend, messages, scheduler } = await setup();
+    for (let i = 0; i < 50; i++) await vfs.writeFile(`/memory/demo/prog${String(i).padStart(2, '0')}.x68`, text('p'));
+    for (let i = 0; i < 3000; i++) await vfs.writeFile(`/memory/demo/other/f${String(i).padStart(4, '0')}`, text('o'));
+    await view.prepare('/memory/demo');
+    const loaded = () => {
+      let count = 0;
+      for (let i = 0; i < 50; i++) if (view.stat(`/memory/demo/prog${String(i).padStart(2, '0')}.x68`)) count++;
+      for (let i = 0; i < 3000; i++) if (view.stat(`/memory/demo/other/f${String(i).padStart(4, '0')}`)) count++;
+      return count;
+    };
+    expect(loaded()).toBe(DEFAULT_SNAPSHOT_LIMITS.maxFiles);
+    scheduler.runTimers();
+    const named = messages.length;
+    expect(named).toBe(50 + 3000 - DEFAULT_SNAPSHOT_LIMITS.maxFiles);
+    await view.revalidate();
+    expect(loaded()).toBe(DEFAULT_SNAPSHOT_LIMITS.maxFiles);
+    // A file added behind the Vfs's back, and one another window adds, are beyond the limit too.
+    await backend.writeFile('demo/late.txt', text('l'));
+    await backend.externalWrite('demo/other2.txt', text('w'));
+    await view.whenCurrent();
+    await view.revalidate();
+    expect(view.stat('/memory/demo/late.txt')).toBeNull();
+    expect(view.stat('/memory/demo/other2.txt')).toBeNull();
+    scheduler.runTimers();
+    expect(messages.slice(named)).toEqual([
+      unavailableMessage('/memory/demo/other2.txt', 'too-many'),
+      unavailableMessage('/memory/demo/late.txt', 'too-many'),
+    ]);
+    // Every file is named once, whatever revalidate() finds again.
+    expect(new Set(messages).size).toBe(messages.length);
+  }, 60_000);
 });
 
 describe('CachedSyncFiles: writing through to storage', () => {
@@ -402,6 +444,31 @@ describe('CachedSyncFiles: changes made by others', () => {
     release();
     await view.whenCurrent();
     expect(str(view.read('/memory/demo/race.txt', 0, 10))).toBe('PROG');
+  });
+
+  // A hypothesis of another engineer (gate I3 round 3), confirmed: changes that arrive while a
+  // refresh runs were coalesced as "the last one", so an append of this window replaced another
+  // window's write that was waiting, and the append alone was added to a copy that never saw that
+  // write.
+  it("another window's change waiting behind a running refresh is not lost to an append that follows", async () => {
+    const { view, vfs, backend } = await setup({ 'demo/f.txt': 'abc' });
+    await view.prepare('/memory/demo');
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const real = vfs.readFile.bind(vfs);
+    const slow = vi.spyOn(vfs, 'readFile').mockImplementationOnce(async (path) => {
+      const data = await real(path); // read now, delivered late: the refresh is still running
+      await gate;
+      return data;
+    });
+    await backend.externalWrite('demo/f.txt', text('ABC')); // refresh 1 reads 'ABC' and waits
+    await vi.waitFor(() => expect(slow).toHaveBeenCalled());
+    await backend.externalWrite('demo/f.txt', text('XYZ')); // another window: waits behind refresh 1
+    await vfs.appendFile('/memory/demo/f.txt', text('d')); // this window's log appends at 3
+    expect(await stored(vfs, '/memory/demo/f.txt')).toBe('XYZd');
+    release();
+    await view.whenCurrent();
+    expect(str(view.read('/memory/demo/f.txt', 0, 100))).toBe('XYZd');
   });
 
   it('revalidate() finds changes no one reported (the opened folder)', async () => {

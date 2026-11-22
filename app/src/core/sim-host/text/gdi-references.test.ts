@@ -11,21 +11,29 @@
 //   text-outline-glyphs   outline faces with visible glyphs: the pen positions (the glyphs are
 //                         substitutes, 3.5.1, and are not compared).
 //
-// The fourth suite, text-control, holds the strings Windows draws from a fallback font. Its
-// pictures depend on the machine and the port does not reproduce them (docs/differences/SH3.md);
-// check-text.mjs reports its numbers.
+// The suite text-control holds the strings Windows draws (in part) from a fallback font or
+// that T2's model does not cover. For the bytes $01-$08, $0B, $0E-$1B the pictures differ between
+// two Windows, so 6.5.3 holds their pens instead (erratum T2 25). The other 162 strings of the suite
+// are drawn the same by both captured Windows, and the text screen draws them as Windows does
+// (gate I3, item 3b: Windows' Unicode text path - the zero-width bar, italic itemization, the euro
+// sign; docs/porting/errata/SH3.md entry 32): every pixel and the pen, except the pixels of the
+// euro sign Windows takes from a fallback font with ClearType (6.5.3 as corrected, erratum T2 26).
+// The suites text-path and text-path-euro hold more such strings. check-text.mjs reports the numbers.
 
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { GdiCase } from '../../../../../tests/conformance/gdi/cases';
-import { references } from '../../../../../tests/conformance/gdi/golden';
+import { FALLBACK_BYTES, type GdiCase } from '../../../../../tests/conformance/gdi/cases';
+import { GOLDEN_DIR, references } from '../../../../../tests/conformance/gdi/golden';
+import { decodePack, decodePix } from '../../../../../tests/conformance/gdi/pix';
 import type { FontSpec } from '../../../contracts';
 import { AtlasGlyphProvider, OUTLINE_INDEX_FILE } from '../fonts/atlas-provider';
 import { parseOutlineIndex, type OutlineAtlasInfo } from '../fonts/metrics';
 import { Surface } from '../surface/surface';
 import {
   compareReplay,
+  euroInk,
   fontOfCase,
   isProportionalName,
   outlineWidening,
@@ -376,6 +384,208 @@ describe('the comparison itself', () => {
     expect(widened(3)).toBeNull();
     expect(widened(4)).toMatchObject({ count: 1 });
   });
+});
+
+describe('task 95 with the bytes Windows draws from a fallback font (suite text-control; 6.5.3 as corrected, erratum T2 25)', () => {
+  // $01-$08, $0B and $0E-$1B in Fixedsys and Courier. Windows draws them from another font, and two
+  // Windows draw them differently (10.0.26300, the references: a ClearType box 4 pixels wide in
+  // Fixedsys 9; 10.0.26100, GitHub's runner: other glyphs, 6 pixels and more, without smoothing), so
+  // "every pixel equal" has no single truth for them. What holds instead: the pen (which a program
+  // sees through the next line or text) wherever the two captures agree, the picture wherever they
+  // agree, and otherwise the port's documented choice (docs/differences/SH3.md).
+  const RUNNER = `${GOLDEN_DIR}windows-10.0.26100/text-control.pixpack.gz`;
+  const withFallbackByte = (reference: ReferenceCase) =>
+    reference.case.ops.some((o) => o.op === 'text' && o.bytes.some((b) => FALLBACK_BYTES.includes(b)));
+  const both = () => {
+    const runner = decodePack(new Uint8Array(readFileSync(RUNNER)));
+    return suite('text-control').flatMap((reference, i) => {
+      const other = runner.cases[i];
+      if (!other || other.id !== reference.case.id) throw new Error(`${RUNNER} does not list ${reference.case.id}`);
+      if (!withFallbackByte(reference)) return [];
+      const image = decodePix(other.pix);
+      const samePicture = image.pixels.every(
+        (p, j) => (p & 0xffffff) === ((reference.image.pixels[j] as number) & 0xffffff),
+      );
+      const samePen = other.pen[0] === reference.pen[0] && other.pen[1] === reference.pen[1];
+      return [{ reference, samePicture, samePen }];
+    });
+  };
+
+  it(
+    'the pen position is that of Windows in every case in which the two captured Windows agree on it',
+    () => {
+      const cases = both();
+      expect(cases.length).toBe(90);
+      const agreed = cases.filter((c) => c.samePen).map((c) => c.reference);
+      expect(agreed.length).toBe(85); // the other 5 differ between the two Windows by 4 to 9 pixels
+      const score = scoreReplays(agreed, fonts, 'pens');
+      expect(differing(score)).toEqual([]);
+    },
+    LIMIT,
+  );
+
+  it(
+    'every pixel and the pen are those of Windows in every case in which the two captured Windows draw the same picture',
+    () => {
+      const agreed = both()
+        .filter((c) => c.samePicture && c.samePen)
+        .map((c) => c.reference);
+      expect(agreed.length).toBe(16); // 18 equal pictures; in two of them the pens are 9 and 4 pixels apart
+      const score = scoreReplays(agreed, fonts, 'pixels');
+      expect(differing(score)).toEqual([]);
+    },
+    LIMIT,
+  );
+
+  it(
+    "elsewhere the port's choice: without underline or strike-out each such byte is a blank cell of the face's own width, as a space",
+    () => {
+      const plain = suite('text-control').filter(
+        (reference) => withFallbackByte(reference) && fontOfCase(reference.case).style <= 2,
+      );
+      expect(plain.length).toBeGreaterThanOrEqual(60);
+      const asSpace = (c: ReplayCase): ReplayCase => ({
+        ...c,
+        ops: c.ops.map((o) =>
+          o.op === 'text' ? { ...o, bytes: o.bytes.map((b) => (FALLBACK_BYTES.includes(b) ? 0x20 : b)) } : o,
+        ),
+      });
+      const failures: string[] = [];
+      for (const reference of plain) {
+        const [port, spaced] = [replayCase(reference.case, fonts), replayCase(asSpace(reference.case), fonts)];
+        const pixels = port.pixels.filter((p, i) => p !== spaced.pixels[i]).length;
+        if (pixels || port.pen.join() !== spaced.pen.join())
+          failures.push(`${reference.case.id}: ${pixels} pixels, pen ${port.pen.join()} and ${spaced.pen.join()}`);
+      }
+      expect(failures).toEqual([]);
+    },
+    LIMIT,
+  );
+});
+
+describe("task 95 on Windows' Unicode text path in the raster faces (gate I3, item 3b; docs/porting/errata/SH3.md entry 32)", () => {
+  const withFallbackByte = (reference: ReferenceCase) =>
+    reference.case.ops.some((o) => o.op === 'text' && o.bytes.some((b) => FALLBACK_BYTES.includes(b)));
+  const control = () => suite('text-control').filter((reference) => !withFallbackByte(reference));
+
+  it(
+    'text-control without the fallback-font bytes (162 cases, drawn the same by both captured Windows): every pixel and the pen, but the smoothed euro sign',
+    () => {
+      const cases = control();
+      expect(cases.length).toBe(162);
+      const withEuro = cases.filter((reference) => euroInk(reference.case, fonts) !== null);
+      expect(withEuro.length).toBe(30); // the rows $80-$9F of Fixedsys 9, 0, 18 and Courier 10, 12, 15
+      const exact = cases.filter((reference) => euroInk(reference.case, fonts) === null);
+      const score = scoreReplays(exact, fonts, 'pixels');
+      expect(differing(score)).toEqual([]);
+      expect(score.equal).toBe(132);
+      const outside = scoreReplays(withEuro, fonts, 'but-euro');
+      expect(differing(outside)).toEqual([]);
+    },
+    LIMIT,
+  );
+
+  it(
+    'text-path: the bar, every string of up to three zero-width bytes, edges, italic itemization, undefined bytes - every pixel and the pen',
+    () => {
+      const cases = suite('text-path');
+      expect(cases.length).toBeGreaterThanOrEqual(7000);
+      const score = scoreReplays(cases, fonts, 'pixels');
+      expect(differing(score)).toEqual([]);
+      expect(score.equal).toBe(cases.length);
+    },
+    LIMIT,
+  );
+
+  it(
+    'text-path, control texts ($7F with undefined bytes and punctuation; erratum T2 27): the extra cell and the italic overhang, every pixel and the pen',
+    () => {
+      // The last 1,440 cases of text-path: 36 strings in 8 fonts and 5 styles (review R4 of gate I3).
+      const cases = suite('text-path').filter((reference) =>
+        reference.case.ops.some(
+          (o) =>
+            o.op === 'text' &&
+            o.x === 6 &&
+            o.y === 2 &&
+            o.bytes.includes(0x7f) &&
+            o.bytes.some((b) => [0x81, 0x8d, 0x8f, 0x90, 0x9d].includes(b)),
+        ),
+      );
+      expect(cases.length).toBe(1440);
+      const score = scoreReplays(cases, fonts, 'pixels');
+      expect(differing(score)).toEqual([]);
+      // Windows' box: $7F $81 fills two cells in Fixedsys 9 plain (one for the pen), and three with
+      // the italic overhang; $7F $81 "A" stays the ordinary two.
+      const ids = (bytes: number[], style: number) =>
+        cases.filter(
+          (reference) =>
+            reference.case.ops.some(
+              (o) => o.op === 'font' && o.name === 'Fixedsys' && o.size === 9 && o.style === style,
+            ) && reference.case.ops.some((o) => o.op === 'text' && o.bytes.join() === bytes.join()),
+        );
+      for (const [bytes, style, box] of [
+        [[0x7f, 0x81], 0, 16],
+        [[0x7f, 0x81], 2, 23],
+        [[0x7f, 0x81, 0x41], 0, 16],
+        [[0x7f, 0x81, 0x7f], 2, 23],
+      ] as const) {
+        const [reference] = ids([...bytes], style);
+        expect(reference, bytes.join()).toBeDefined();
+        const row = 2 + 7; // a row of the text's box, below every glyph's ink at the left
+        const fill = (x: number) =>
+          ((reference!.image.pixels[row * reference!.case.width + x] as number) & 0xffffff) !== 0;
+        expect([fill(6 + box - 1), fill(6 + box)], `${bytes.join()} style ${style}`).toEqual([true, false]);
+      }
+    },
+    LIMIT,
+  );
+
+  it(
+    'text-path-formfeed: $0C on the text path is not modelled (a known difference, erratum T2 27) - reported, not required',
+    () => {
+      const cases = suite('text-path-formfeed');
+      expect(cases.length).toBe(640);
+      const score = scoreReplays(cases, fonts, 'pixels');
+      // Printed for the record; the numbers say how far the port is from Windows here.
+      console.log(
+        `text-path-formfeed: ${score.equal} of ${score.cases} cases every pixel and pen equal, pens ${score.pensEqual} (not modelled; docs/differences/SH3.md)`,
+      );
+      expect(score.cases).toBe(640);
+    },
+    LIMIT,
+  );
+
+  it(
+    'text-path-euro: $80 on the text path - the pen, and every pixel but the smoothed euro sign',
+    () => {
+      const cases = suite('text-path-euro');
+      expect(cases.length).toBe(1400);
+      expect(cases.filter((reference) => euroInk(reference.case, fonts) !== null).length).toBeGreaterThanOrEqual(1200);
+      const score = scoreReplays(cases, fonts, 'but-euro');
+      expect(differing(score)).toEqual([]);
+    },
+    LIMIT,
+  );
+
+  it(
+    'without the font data of the text path the bar and the euro width would fail (the rules need raster.textPath)',
+    () => {
+      const plain = {
+        ready: fonts.ready,
+        metrics: fonts.metrics.bind(fonts),
+        glyph: fonts.glyph.bind(fonts),
+        textOverhang: fonts.textOverhang.bind(fonts),
+        delInHighText: fonts.delInHighText.bind(fonts),
+        monospacedOutline: fonts.monospacedOutline.bind(fonts),
+      };
+      const bars = suite('text-path').slice(0, 1610); // a lone $0D at every raster size and style
+      // 81 bar sizes (29 of Fixedsys, 52 of Courier) in plain, bold and italic
+      expect(scoreReplays(bars, plain, 'pixels').picturesEqual).toBe(bars.length - 81 * 3);
+      const euros = suite('text-path-euro');
+      expect(scoreReplays(euros, plain, 'pens').pensEqual).toBeLessThan(euros.length / 2);
+    },
+    LIMIT,
+  );
 });
 
 describe('the text screen proper draws a character as task 95 draws a text of that one byte', () => {

@@ -4,7 +4,7 @@
 //
 //     node tests/oracle/gdi-capture/run.mjs            regenerate and compare (what CI runs)
 //     node tests/oracle/gdi-capture/run.mjs --write    regenerate and update the committed files
-//     options: --only cases,spots,nibs,fonts   --all (also compare the machine-dependent outputs)
+//     options: --only cases,spots,nibs,modes,fonts   --all (also compare the machine-dependent outputs)
 //              --replace-references-from-other-windows (let --write replace references captured on
 //              another Windows; see "Another Windows" in README.md)
 //              --as-windows "10.0.26100 cp1252 96dpi" (judge as that Windows; to try the policy)
@@ -18,6 +18,7 @@
 //                                                     cases-ellipse.ts once it exists), packed
 //   tests/conformance/gdi/golden/spots.json           the spot values of trap15-b, measured
 //   tests/conformance/gdi/golden/nibs.json            the polygon of every wide pen 2-255 (WidenPath)
+//   tests/conformance/gdi/golden/modes.json           SetROP2 with the values task 92 passes for modes above 15
 //   app/public/fonts/metrics.json                     the metric table of 3.5.1 + the raster rules
 //   app/public/fonts/bitmap/*.bin                     the raster-font atlases (Fixedsys, Courier)
 //   tools/fonts-src/windows-outline-metrics.tsv       what make-font-atlases.mjs needs from Windows
@@ -62,7 +63,9 @@ const asWindows = asWindowsIndex >= 0 ? args[asWindowsIndex + 1] : undefined;
 const fromIndex = args.indexOf('--from');
 const from = fromIndex >= 0 ? resolve(args[fromIndex + 1] ?? '.') : undefined;
 const onlyIndex = args.indexOf('--only');
-const only = new Set(onlyIndex >= 0 ? (args[onlyIndex + 1] ?? '').split(',') : ['cases', 'spots', 'nibs', 'fonts']);
+const only = new Set(
+  onlyIndex >= 0 ? (args[onlyIndex + 1] ?? '').split(',') : ['cases', 'spots', 'nibs', 'modes', 'fonts'],
+);
 
 const { generateCases, serializeCases, SUITES } = await import(pathToFileURL(join(GDI, 'cases.ts')).href);
 const { encodePack, decodePack, decodeAtlas } = await import(pathToFileURL(join(GDI, 'pix.ts')).href);
@@ -73,7 +76,9 @@ const STYLE_NAMES = { '-': 'plain', b: 'bold', i: 'italic', u: 'underline', s: '
 
 function exec(file, argv) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(file, argv, { stdio: ['ignore', 'pipe', 'pipe'] });
+    // windowsHide: the capture program is a console program and draws into memory only; it must
+    // never open a console window on the desktop, whatever this process is attached to.
+    const child = spawn(file, argv, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     let out = '';
     child.stdout.on('data', (d) => (out += d));
     child.stderr.on('data', (d) => (out += d));
@@ -211,6 +216,23 @@ async function captureNibs(exe, out) {
   add(relative(repo, join(GOLDEN, 'nibs.json')), Buffer.from(json), canon);
 }
 
+/** SetROP2 with the values task 92 passes above mode 15 (errata SH1.md entry 17); without capturedOn. */
+async function captureModes(exe, out) {
+  if (from && !existsSync(join(out, 'modes.json'))) {
+    console.log(`  (modes: the capture in ${from} has no modes.json; not compared)`);
+    return;
+  }
+  process.stdout.write(await capture(exe, ['modes', out]));
+  const json = readFileSync(join(out, 'modes.json'), 'utf8').replaceAll('\r\n', '\n');
+  const canon = (b) => {
+    const value = JSON.parse(b.toString());
+    delete value.capturedOn;
+    return JSON.stringify(value);
+  };
+  canon(Buffer.from(json)); // must be valid
+  add(relative(repo, join(GOLDEN, 'modes.json')), Buffer.from(json), canon);
+}
+
 async function captureFonts(exe, out) {
   const started = Date.now();
   process.stdout.write(await capture(exe, ['fonts', out]));
@@ -277,6 +299,16 @@ async function captureFonts(exe, out) {
   );
   if (unruled.length)
     console.log(`no rule reproduces ${unruled.length} raster cells on this Windows: ${unruled.join(', ')}`);
+  // Windows' text path in the raster faces (README.md, "Windows' text path"): per requested name,
+  // style and point size, the height of the bar a text of zero-width bytes only may be drawn as,
+  // and the width of $80 drawn from the fallback font on that path.
+  const zeroWidthBar = {};
+  const fallbackEuro = {};
+  for (const [name, size, style, bar, euro] of tsvRows(readFileSync(join(out, 'text-path.tsv'), 'utf8'))) {
+    const styleName = STYLE_NAMES[style];
+    if (bar !== '-') ((zeroWidthBar[name] ??= {})[styleName] ??= {})[size] = Number(bar);
+    ((fallbackEuro[name] ??= {})[styleName] ??= Array(256).fill(null))[Number(size)] = Number(euro);
+  }
   const metrics = {
     about:
       'Measured by tests/oracle/gdi-capture (npm run oracle:gdi) with GetTextFace and GetTextExtentPoint32 on fonts made as the VCL makes them. fonts[name][style][size] = [colWidth = TextWidth("W"), rowHeight = TextHeight("Xp"), index into faces]. raster: how every raster cell is made from the atlases (see tests/oracle/gdi-capture/README.md).',
@@ -295,6 +327,12 @@ async function captureFonts(exe, out) {
       },
       atlases,
       cells,
+      textPath: {
+        about:
+          'Windows takes a text through its Unicode text path (README.md, "Windows\' text path"). zeroWidthBar[name][style][size]: the height of the bar, 3 pixels wide from x - 1, that a text of zero-width bytes only is drawn as at that requested size when it has an odd number of bytes or two $1F in a row (otherwise, and at every size not listed, the first byte\'s cell). fallbackEuro[name][style][size]: the width of $80 in a text on that path, drawn from a fallback font (null where the face is not a raster face).',
+        zeroWidthBar,
+        fallbackEuro,
+      },
     },
   };
   add(
@@ -425,6 +463,7 @@ async function main() {
   if (only.has('cases')) await captureCases(exe, out);
   if (only.has('spots')) await captureSpots(exe, out);
   if (only.has('nibs')) await captureNibs(exe, out);
+  if (only.has('modes')) await captureModes(exe, out);
   if (only.has('fonts')) await captureFonts(exe, out);
 
   const differences = [];

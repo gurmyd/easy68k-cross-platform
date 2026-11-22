@@ -6,6 +6,8 @@ export declare const LIMITS: {
   readonly frameP95Ms: { readonly 60: number; readonly 120: number };
   readonly maximumSteps: number;
   readonly maximumWindowSeconds: number;
+  readonly maximumShareOfEngine: number;
+  readonly maximumEngineSeconds: number;
   readonly assemblyMs: number;
 };
 
@@ -58,7 +60,10 @@ export declare function judgeBest<T>(
 ): BestVerdict;
 export declare function judgeFrames(runs: readonly (Summary & { passes?: number })[], hz: 60 | 120): BestVerdict;
 export declare function judgeTaskDuration(runs: readonly { seconds: number }[]): BestVerdict;
-export declare function judgeMaximum(runs: readonly { steps: number }[]): BestVerdict;
+export declare function judgeMaximum(
+  runs: readonly { steps: number }[],
+  engineRate: number,
+): BestVerdict & { floorOk: boolean; shareOk: boolean; share: number };
 export declare function judgeAssembly(runs: readonly { ms: number }[]): BestVerdict;
 export declare function judgeCalibrate(
   report: CalibrateReport,

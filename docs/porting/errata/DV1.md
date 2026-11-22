@@ -193,3 +193,34 @@ The worker precaches all 242 help files and answers them offline (a `fetch()` of
 from the page: 200 from the worker; a frame without sandbox or with `allow-scripts`: loads offline
 in WebKit). WebKit simply never asks the worker for a frame sandboxed without `allow-scripts`. No
 change to `sw.ts`; the decision is the help frame's (H1 errata, `docs/requests/H1-help-offline-webkit.md`).
+
+## 15. The worker answers a frame only below help/ (third round before I3; erratum H1 11)
+
+- The architect took option 1 of `docs/requests/H1-help-offline-webkit.md`: in WebKit, under the
+  worker, the Help frame has `allow-scripts`, so that WebKit hands its navigations to the worker
+  (entry 14). In return the frame must be able to show nothing but Help.
+- `sw.ts`: a navigation whose destination is a frame (`request.mode` `navigate` and
+  `request.destination` `iframe` or `frame`, `isFrameNavigation`) is answered as before only when
+  its address is below `<scope>help/` (`inHelpFolder`; a help file that is not precached still goes
+  to the network); every other one gets `Response.error()`, so the application's own page, any
+  other file of the site and any address outside the scope never load in a frame of a controlled
+  page. A navigation of the page itself and every request that is not a navigation are unchanged.
+  The folder is repeated in the worker (`HELP_FOLDER`, which imports nothing) and a test compares it
+  with `core/help`'s.
+- Tests: `sw.test.ts` (Node): a frame navigation to a help page is answered from the cache, one
+  below help/ that is not precached is left to the network, and the scope, `index.html`, `?open=`,
+  a fixture file, `helpx/`, `Help/` (another letter case) and addresses outside the scope give an
+  error for both destinations without a request to the server. `check-pwa.mjs` (both browsers):
+  after the offline part, with the page controlled, the Help panel's frame is given a help page
+  (`fixtures/frame-guard.htm`, added to the build by the check, as import-help would refuse it)
+  with links to `../../index.html` and `../../?open=...`: clicking each does not load the application
+  in the frame (no script, no `#root`, no application title; Chromium shows an error page, WebKit
+  stays on the page), and its link to `main.htm` still loads that page. WebKit reports each refused
+  navigation in the console ("Response served by service worker is an error", "Cannot load .");
+  the check allows exactly those messages in that step. The frame's sandbox is checked there too
+  (`allow-scripts` in WebKit only).
+- Evidence that the rule is what keeps the application out: with the rule cut out of `sw.js`
+  (`build/H1R3/probe-frame-guard.mjs`), the same click in WebKit ran the whole application inside
+  the Help frame (`.e68-shell` present, title "EASy68K Editor/Assembler v5.16.01 - unofficial port
+  ..."), and in Chromium loaded `index.html` into the frame (scripts not run there, the sandbox
+  has none); with the rule, neither.

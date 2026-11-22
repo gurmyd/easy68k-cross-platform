@@ -18,7 +18,9 @@
 //   calibrate     calibrate.X68 at the default speed and at Maximum, by the program's own clock;
 //   taskduration  spin.X68 at the default speed for 30 s: the increase of TaskDuration of the
 //                 DevTools protocol's Performance.getMetrics (6.9: less than 4.5 s; Chromium only);
-//   maximum       spin.X68 at Maximum for 10 s: engine.stepCount (6.9: at least 200 million);
+//   maximum       the engine alone first (no governor), then spin.X68 at Maximum for 10 s:
+//                 engine.stepCount (6.9 as corrected on 22 November 2026: at least 100 million and
+//                 at least 85 % of what the engine alone executes in 5 s; erratum P1 13);
 //   frames        draw.X68: the intervals of requestAnimationFrame timestamps (6.9: 95th
 //                 percentile below 20 ms at 60 Hz, below 12 ms with the 120 Hz frame source);
 //   surface       surface.X68: a 4096 x 4096 surface is resized, cleared, flood-filled and
@@ -624,14 +626,63 @@ async function taskDurationPart(browser, name, programs) {
   }
 }
 
-/** 6.9: at Maximum, engine.stepCount advances by at least 200 million in 10 s. */
+/**
+ * The engine alone, without the governor: spin.X68 in calls of one million instructions (through
+ * invoke(), the controller's door for an engine call), after one call not counted, best of 5, in
+ * instructions per second. The
+ * program is loaded and stopped; it is opened again afterwards by the caller.
+ */
+async function engineAloneRates(page) {
+  await openProgram(page, 'spin');
+  return page.evaluate(
+    () =>
+      new Promise((done) => {
+        const { controller } = window.__easy68k.ctx.sim;
+        controller.invoke((engine) => {
+          const rates = [];
+          engine.cmdRun();
+          // One call first that is not counted: the engine's code is compiled and warm before the
+          // five that are (a cold figure would be lower and make the share easier to reach).
+          engine.run(1_000_000);
+          for (let i = 0; i < 5; i++) {
+            const s0 = engine.stepCount >>> 0;
+            const t0 = performance.now();
+            engine.run(1_000_000);
+            rates.push((((engine.stepCount >>> 0) - s0) >>> 0) / ((performance.now() - t0) / 1000));
+          }
+          engine.cmdPause();
+          done(rates);
+        });
+      }),
+  );
+}
+
+/**
+ * 6.9 item 9 as corrected on 22 November 2026 (erratum P1 13): at Maximum, engine.stepCount advances
+ * in 10 s by at least 100 million, and by at least 85 % of what the engine alone executes in 5 s on
+ * the same runner in the same job (the half of each frame that the governor gives the engine,
+ * SLICE_FRAME_SHARE = 0.5). The engine-alone figure is measured first, in the page of the 60 Hz
+ * run, before any Maximum run. The 60 Hz frame source is the judged figure; the 120 Hz one is
+ * printed with its verdict, for information.
+ */
 async function maximumPart(browser, name, programs) {
   const judged = judgeHere({ platform: process.platform, browser: name, override: judgeOverride });
   figures.parts[`maximum-${name}`] = {};
+  let engineRate = Number.NaN;
   for (const source of [60, 120]) {
     console.log(`\n[${name}, Maximum, ${sourceName(source)}]`);
     const { context, page, errors } = await openApp(browser, source);
     await prepare(page, programs);
+    if (source === 60) {
+      const alone = await engineAloneRates(page);
+      engineRate = Math.max(...alone);
+      figures.parts[`maximum-${name}`].engineAlone = alone;
+      note(
+        `${name}: the engine alone (spin.X68, run(1,000,000), no governor, best of 5): ${grouped(engineRate)} instructions per second ` +
+          `(runs ${alone.map(grouped).join(', ')}), so ${grouped(engineRate * LIMITS.maximumEngineSeconds)} in ${LIMITS.maximumEngineSeconds} s; ` +
+          `at Maximum the governor gives it ${fixed(100 * 0.5, 0)} % of each frame (SLICE_FRAME_SHARE), so 10 s at Maximum can give about that at best`,
+      );
+    }
     await setSpeed(page, 'max');
     await loadAndRun(page, 'spin');
     await page.waitForTimeout(1000);
@@ -641,46 +692,21 @@ async function maximumPart(browser, name, programs) {
       // Scaled to exactly 10 s.
       const steps = (stepsBetween(samples) * LIMITS.maximumWindowSeconds * 1000) / ms;
       runs.push({ steps, ms, phase });
-      if (steps >= LIMITS.maximumSteps) break;
+      if (judgeMaximum(runs, engineRate).ok) break;
     }
     figures.parts[`maximum-${name}`][source] = runs;
-    threshold(
-      `${name}: spin.X68 at Maximum with ${sourceName(source)}: at least 200 million instructions in 10 s`,
-      judgeMaximum(runs),
-      judged,
-    );
+    const verdict = judgeMaximum(runs, engineRate);
+    figures.parts[`maximum-${name}`][`verdict${source}`] = { ...verdict, engineRate };
+    const title =
+      `${name}: spin.X68 at Maximum with ${sourceName(source)}: at least ${grouped(LIMITS.maximumSteps)} instructions in ` +
+      `${LIMITS.maximumWindowSeconds} s and at least ${fixed(100 * LIMITS.maximumShareOfEngine, 0)} % of the engine alone in ${LIMITS.maximumEngineSeconds} s`;
+    if (source === 120) note(`${title}: ${verdict.ok ? 'passes' : 'misses'} (for information) - ${verdict.detail}`);
+    else threshold(title, verdict, judged);
     check(
       `${name}, ${sourceName(source)}: spin.X68 ran at Maximum throughout`,
       runs.every((run) => run.phase === 'running' && run.steps > 0),
     );
     await pause(page);
-    if (source === 60) {
-      // For the explanation, not for a verdict: the engine alone, without the governor, in calls of
-      // one million instructions (through invoke(), the controller's door for an engine call).
-      const alone = await page.evaluate(
-        () =>
-          new Promise((done) => {
-            const { controller } = window.__easy68k.ctx.sim;
-            controller.invoke((engine) => {
-              const rates = [];
-              engine.cmdRun();
-              for (let i = 0; i < 5; i++) {
-                const s0 = engine.stepCount >>> 0;
-                const t0 = performance.now();
-                engine.run(1_000_000);
-                rates.push((((engine.stepCount >>> 0) - s0) >>> 0) / ((performance.now() - t0) / 1000));
-              }
-              engine.cmdPause();
-              done(rates);
-            });
-          }),
-      );
-      figures.parts[`maximum-${name}`].engineAlone = alone;
-      note(
-        `${name}: the engine alone (run(1,000,000), no governor, best of 5): ${grouped(Math.max(...alone))} instructions per second; ` +
-          `at Maximum the governor gives it at most ${fixed(100 * 0.5, 0)} % of the time (SLICE_FRAME_SHARE), so about ${grouped(Math.max(...alone) * 5)} in 10 s at best`,
-      );
-    }
     check(
       `${name}, ${sourceName(source)}: no console or page errors`,
       errors.length === 0,

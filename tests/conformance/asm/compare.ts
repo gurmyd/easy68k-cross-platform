@@ -283,7 +283,16 @@ export function canonicalSRecord(sRecord: Uint8Array, masked: readonly AddressRa
 export interface Outputs {
   listing: Uint8Array | null;
   sRecord: Uint8Array | null;
+  /**
+   * For a run without a listing (Generate Listing off): the listing of the same program assembled
+   * with the same options and the listing on, by the same assembler. The code is the same; its
+   * undefined-symbol statements say which bytes of the S-records to mask (erratum T1 20).
+   */
+  maskingListing?: Uint8Array | null;
 }
+
+/** The listing that names the undefined-symbol statements of a run: its own, or the masking listing. */
+const maskSource = (outputs: Outputs): Uint8Array | null => outputs.listing ?? outputs.maskingListing ?? null;
 
 export interface FileVerdict {
   /** `identical`: the canonical forms are equal. */
@@ -333,13 +342,10 @@ export interface Verdict {
  * text and options. `limit` is the number of differing lines kept per file for the report.
  */
 export function compareOutputs(expected: Outputs, actual: Outputs, limit = 5): Verdict {
-  const undefinedSymbols =
-    (expected.listing !== null && hasUndefinedSymbols(expected.listing)) ||
-    (actual.listing !== null && hasUndefinedSymbols(actual.listing));
+  const sources = [maskSource(expected), maskSource(actual)];
+  const undefinedSymbols = sources.some((listing) => listing !== null && hasUndefinedSymbols(listing));
   // The statements of either side: when the two listings agree, they name the same bytes.
-  const masked = [expected.listing, actual.listing].flatMap((listing) =>
-    listing === null ? [] : undefinedSymbolRanges(listing),
-  );
+  const masked = sources.flatMap((listing) => (listing === null ? [] : undefinedSymbolRanges(listing)));
   const canonL = (bytes: Uint8Array | null): Uint8Array | null => (bytes === null ? null : canonicalListing(bytes));
   const canonS = (bytes: Uint8Array | null): Uint8Array | null =>
     bytes === null ? null : canonicalSRecord(bytes, masked);
@@ -354,8 +360,9 @@ export function canonicalHashes(outputs: Outputs): {
   s68: string | null;
   undefinedSymbols: boolean;
 } {
-  const undefinedSymbols = outputs.listing !== null && hasUndefinedSymbols(outputs.listing);
-  const masked = outputs.listing === null ? [] : undefinedSymbolRanges(outputs.listing);
+  const source = maskSource(outputs);
+  const undefinedSymbols = source !== null && hasUndefinedSymbols(source);
+  const masked = source === null ? [] : undefinedSymbolRanges(source);
   return {
     l68: outputs.listing === null ? null : sha256Hex(canonicalListing(outputs.listing)),
     s68: outputs.sRecord === null ? null : sha256Hex(canonicalSRecord(outputs.sRecord, masked)),

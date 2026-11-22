@@ -1,0 +1,35 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:57:56 AM
+
+00001000                             1      ORG $1000
+00001000                             2      FOR.L D0 = #1 TO #10 DO.S
+00001004  4E71                       3      NOP
+00001006                             4      ENDF
+00001010                             5      FOR D1 = D1 DOWNTO #0 BY #2 DO
+00001014  4E71                       6      NOP
+00001016                             7      ENDF
+0000101E                             8      DBLOOP D4 = #5
+00001022  4E71                       9      NOP
+00001024                            10      UNLESS
+00001028                            11      DBLOOP D5 = D5
+00001028  4E71                      12      NOP
+0000102A                            13      UNLESS.B D0 <EQ> #3
+00001032                            14      DBLOOP D6 = #1
+00001036                            15      UNLESS <F>
+0000103A                            16      END $1000
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+_20000000           1004
+_20000001           1008
+_20000002           1014
+_20000003           1018
+_40000000           1022
+_40000001           1028
+_40000002           1036

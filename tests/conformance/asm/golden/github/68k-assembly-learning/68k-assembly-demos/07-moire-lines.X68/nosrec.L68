@@ -1,0 +1,375 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:51:43 AM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title      : moire-lines
+00000000                             3  * Written by : Henry Wrightson
+00000000                             4  * Date       : 14/8/2026
+00000000                             5  * Description: Plot diagonal lines using a Bresenham Algorithm
+00000000                             6  *            : to create moire patterns across the screen
+00000000                             7  *-----------------------------------------------------------
+00001000                             8      org     $1000
+00001000                             9  Start:
+00001000  41F9 000012B5             10      lea     ColourStateTable,a0
+00001006                            11      
+00001006  4EB9 000011AE             12      jsr     SetScreenRes
+0000100C                            13  .LoopForever
+0000100C  4EB9 00001018             14      jsr     DrawMoire
+00001012  60F8                      15      bra.s   .LoopForever
+00001014                            16  
+00001014  6000 0286                 17      bra     Finish
+00001018                            18  
+00001018                            19  DrawMoire:
+00001018  303C 028A                 20      move.w  #RES_X,d0       ; 800
+0000101C  0440 028A                 21      sub.w   #MOIRE_X,d0     ; 800-550 = 250
+00001020  80FC 0002                 22      divu.w  #2,d0           ; 250/2 = 125
+00001024  33C0 000012AC             23      move.w  d0,offset_x
+0000102A                            24  
+0000102A  303C 028A                 25      move.w  #RES_Y,d0       ; 600
+0000102E  0440 028A                 26      sub.w   #MOIRE_Y,d0     ; 600-550 = 50
+00001032  80FC 0002                 27      divu.w  #2,d0           ; 50/2 = 25
+00001036  33C0 000012AE             28      move.w  d0,offset_y
+0000103C                            29      
+0000103C  3839 000012AC             30      move.w  offset_x,d4     ; x0
+00001042  3A39 000012AE             31      move.w  offset_y,d5     ; y0
+00001048  3C3C 028A                 32      move.w  #MOIRE_X,d6     ; x1
+0000104C  DC79 000012AC             33      add.w   offset_x,d6
+00001052  3E3C 028A                 34      move.w  #MOIRE_Y,d7     ; y1
+00001056  DE79 000012AE             35      add.w   offset_y,d7
+0000105C                            36  .LoopX:                 ; loop along the x axis from left to right
+0000105C  4EB9 000010A2             37      jsr     DrawLineFast        ; choose one, but this is way faster
+00001062                            38      ;jsr     DrawLineBresenham
+00001062                            39      
+00001062  5644                      40      addq    #MOVE_X,d4
+00001064  5746                      41      subq    #MOVE_X,d6
+00001066  BC79 000012AC             42      cmp.w   offset_x,d6
+0000106C  6CEE                      43      bge.s   .LoopX
+0000106E                            44      
+0000106E  3839 000012AC             45      move.w  offset_x,d4
+00001074  3A3C 028A                 46      move.w  #MOIRE_Y,d5
+00001078  DA79 000012AE             47      add.w   offset_y,d5
+0000107E  3C3C 028A                 48      move.w  #MOIRE_X,d6
+00001082  DC79 000012AC             49      add.w   offset_x,d6
+00001088  3E39 000012AE             50      move.w  offset_y,d7
+0000108E                            51  .LoopY:                  ; loop from MOIRE_Y to 0 along the y-axis
+0000108E  4EB9 000010A2             52      jsr     DrawLineFast        ; choose one, but this is way faster
+00001094                            53      ;jsr     DrawLineBresenham
+00001094                            54      
+00001094  5745                      55      subq    #MOVE_Y,d5    
+00001096  5647                      56      addq    #MOVE_Y,d7
+00001098  BA79 000012AE             57      cmp.w   offset_y,d5
+0000109E  6CEE                      58      bge.s   .LoopY
+000010A0  4E75                      59      rts
+000010A2                            60  
+000010A2                            61  DrawLineFast:           ; draw a line from (d4,d5) to (d6,d7) using the built in routines
+000010A2  2F04                      62      move.l  d4,-(sp)
+000010A4                            63      
+000010A4  4EB9 000011D8             64      jsr     CycleColour
+000010AA                            65  .SkipColourCycle:
+000010AA                            66  
+000010AA  7050                      67      moveq   #80,d0      ; set pen colour
+000010AC  4EB9 00001278             68      jsr     MoveColourToD1
+000010B2  4E4F                      69      trap    #15
+000010B4                            70      
+000010B4  7054                      71      moveq   #84,d0
+000010B6  3204                      72      move.w  d4,d1
+000010B8  3405                      73      move.w  d5,d2
+000010BA  3606                      74      move.w  d6,d3
+000010BC  3807                      75      move.w  d7,d4
+000010BE  4E4F                      76      trap    #15
+000010C0                            77      
+000010C0  281F                      78      move.l  (sp)+,d4
+000010C2  4EB9 00001292             79      jsr     WaitABit
+000010C8                            80      
+000010C8  4E75                      81      rts
+000010CA                            82      
+000010CA                            83  DrawLineBresenham:      ; draw a line from (d4,d5) to (d6,d7) using the Bresenham Algorithm d2=e2  d3=error d4=x0  d5=y0  d6=x1  d7=y1
+000010CA  4EB9 000011D8             84      jsr     CycleColour
+000010D0                            85      
+000010D0  3006                      86      move.w  d6,d0       ; const dx = Math.abs(x1 - x0)
+000010D2  9044                      87      sub.w   d4,d0
+000010D4  4EB9 00001194             88      jsr     PositiveD0
+000010DA  33C0 000012A4             89      move.w  d0,dx
+000010E0                            90      
+000010E0  3007                      91      move.w  d7,d0       ; const dy = -Math.abs(y1 - y0)
+000010E2  9045                      92      sub.w   d5,d0
+000010E4  4EB9 0000119C             93      jsr     NegativeD0
+000010EA  33C0 000012A6             94      move.w  d0,dy
+000010F0                            95      
+000010F0  33FC 0001 000012A8        96      move.w  #1,sx       ; const sx = x0 < x1 ? 1 : -1
+000010F8  B846                      97      cmp.w   d6,d4
+000010FA  6500 000A                 98      blo     .X0LessThanX1
+000010FE  33FC FFFF 000012A8        99      move.w  #-1,sx
+00001106                           100  .X0LessThanX1:
+00001106                           101  
+00001106  33FC 0001 000012AA       102      move.w  #1,sy       ; const sy = y0 < y1 ? 1 : -1
+0000110E  BA47                     103      cmp.w   d7,d5
+00001110  6500 000A                104      blo     .Y0LessThanY1
+00001114  33FC FFFF 000012AA       105      move.w  #-1,sy
+0000111C                           106  .Y0LessThanY1:
+0000111C                           107  
+0000111C  3639 000012A4            108      move.w  dx,d3       ; let error = dx + dy
+00001122  D679 000012A6            109      add.w   dy,d3
+00001128  33C4 000012A0            110      move.w  d4,x        ; let x = x0
+0000112E  33C5 000012A2            111      move.w  d5,y        ; let y = y0
+00001134                           112  .Loop:                  ; while (true) {
+00001134  4EB9 000011BC            113      jsr     PlotPoint   ;   Plot(x, y)
+0000113A                           114      
+0000113A  3403                     115      move.w  d3,d2       ;   const e2 = 2 * error
+0000113C  C5FC 0002                116      muls.w  #2,d2
+00001140                           117  
+00001140                           118  .MoveX:
+00001140  B479 000012A6            119      cmp.w   dy,d2       ;   if (dy < e2) {
+00001146  6D20                     120      blt.s   .MoveY
+00001148  BC79 000012A0            121      cmp.w   x,d6        ;     if (x == x1) break
+0000114E  6742                     122      beq.s   .EndLoop
+00001150  D679 000012A6            123      add.w   dy,d3       ;     error = error + dy
+00001156  3039 000012A0            124      move.w  x,d0        ;     x = x + sx
+0000115C  D079 000012A8            125      add.w   sx,d0
+00001162  33C0 000012A0            126      move.w  d0,x
+00001168                           127                          ;   }
+00001168                           128  .MoveY:
+00001168  B479 000012A4            129      cmp.w   dx,d2       ;   if (dx >= e2) {
+0000116E  6CC4                     130      bge.s   .Loop
+00001170  BE79 000012A2            131      cmp.w   y,d7        ;     if (y == y1) break
+00001176  671A                     132      beq.s   .EndLoop
+00001178  D679 000012A4            133      add.w   dx,d3       ;     error = error + dx
+0000117E  3039 000012A2            134      move.w  y,d0        ;     y = y + sy
+00001184  D079 000012AA            135      add.w   sy,d0
+0000118A  33C0 000012A2            136      move.w  d0,y
+00001190  60A2                     137      bra.s   .Loop
+00001192                           138                          ;   }
+00001192                           139  .EndLoop:               ; }
+00001192  4E75                     140      rts
+00001194                           141  
+00001194                           142  PositiveD0:             ; convert d0 to a positive number
+00001194  4A40                     143      tst.w   d0
+00001196  6A02                     144      bpl.s   .Positive
+00001198  4440                     145      neg.w   d0
+0000119A                           146  .Positive:
+0000119A  4E75                     147      rts
+0000119C                           148      
+0000119C                           149  NegativeD0:             ; convert d0 to a negative number
+0000119C  4A40                     150      tst.w   d0
+0000119E  6B02                     151      bmi.s   .Negative
+000011A0  4440                     152      neg.w   d0
+000011A2                           153  .Negative:
+000011A2  4E75                     154      rts
+000011A4                           155      
+000011A4                           156  ClearScreen:
+000011A4  700B                     157      moveq   #11,d0
+000011A6  323C FF00                158      move.w  #$ff00,d1
+000011AA  4E4F                     159      trap    #15
+000011AC  4E75                     160      rts
+000011AE                           161  
+000011AE                           162  SetScreenRes:
+000011AE  103C 0021                163      move.b  #33,d0      ; Set screen to 640x480
+000011B2  223C 028A028A            164      move.l  #RES_X*$10000+RES_Y,d1
+000011B8  4E4F                     165      trap    #15
+000011BA  4E75                     166      rts
+000011BC                           167      
+000011BC                           168  PlotPoint:              ; plot a point at x,y
+000011BC  7050                     169      moveq   #80,d0      ; set pen colour
+000011BE  4EB9 00001278            170      jsr     MoveColourToD1
+000011C4  4E4F                     171      trap    #15
+000011C6                           172  
+000011C6  7052                     173      moveq   #82,d0      ; draw pixel at x,y
+000011C8  3239 000012A0            174      move.w  x,d1
+000011CE  3439 000012A2            175      move.w  y,d2
+000011D4  4E4F                     176      trap    #15
+000011D6  4E75                     177      rts
+000011D8                           178      
+000011D8                           179  CycleColour:
+000011D8  1039 000012B0            180      move.b  counter,d0
+000011DE  5340                     181      subq    #1,d0
+000011E0  13C0 000012B0            182      move.b  d0,counter
+000011E6  4A00                     183      tst.b   d0
+000011E8  6700 0004                184      beq     .TriggerCycle
+000011EC  6052                     185      bra.s   .SkipTriggers
+000011EE                           186      
+000011EE                           187  .TriggerCycle:
+000011EE  13FC 0006 000012B0       188      move.b  #CYCLE_FREQUENCY,counter
+000011F6                           189      
+000011F6  7000                     190      moveq   #0,d0
+000011F8  1028 0000                191      move.b  COLOURSTATE_DR(a0),d0
+000011FC  D139 000012B1            192      add.b   d0,Red
+00001202  1028 0001                193      move.b  COLOURSTATE_DG(a0),d0
+00001206  D139 000012B2            194      add.b   d0,Green
+0000120C  1028 0002                195      move.b  COLOURSTATE_DB(a0),d0
+00001210  D139 000012B3            196      add.b   d0,Blue
+00001216                           197      
+00001216  1028 0003                198      move.b  COLOURSTATE_TR(a0),d0
+0000121A  B039 000012B1            199      cmp.b   Red,d0
+00001220  661E                     200      bne.s   .SkipTriggers
+00001222                           201      
+00001222  1028 0004                202      move.b  COLOURSTATE_TG(a0),d0
+00001226  B039 000012B2            203      cmp.b   Green,d0
+0000122C  6612                     204      bne.s   .SkipTriggers
+0000122E                           205      
+0000122E  1028 0005                206      move.b  COLOURSTATE_TB(a0),d0
+00001232  B039 000012B3            207      cmp.b   Blue,d0
+00001238  6606                     208      bne.s   .SkipTriggers
+0000123A  4EB9 00001242            209      jsr     NextColourState
+00001240                           210  .SkipTriggers:
+00001240  4E75                     211      rts
+00001242                           212  
+00001242                           213  NextColourState:
+00001242  5239 000012B4            214      addq.b  #1,ColourState
+00001248  1039 000012B4            215      move.b  ColourState,d0
+0000124E  0C00 0006                216      cmpi.b  #LAST_COLOUR_STATE,d0
+00001252  6600 0008                217      bne     .SkipRollover
+00001256  4239 000012B4            218      clr.b   ColourState
+0000125C                           219  .SkipRollover:
+0000125C  4EB9 00001264            220      jsr     MoveColourStateRecord
+00001262  4E75                     221      rts
+00001264                           222  
+00001264                           223  MoveColourStateRecord:
+00001264  1039 000012B4            224      move.b  ColourState,d0
+0000126A  7206                     225      moveq   #COLOUR_STATE_TABLE_WIDTH,d1
+0000126C  C0C1                     226      mulu.w  d1,d0           ; multiply by record size
+0000126E                           227  
+0000126E  41F9 000012B5            228      lea     ColourStateTable,a0
+00001274  D0C0                     229      adda.w  d0,a0
+00001276                           230  
+00001276  4E75                     231      rts
+00001278                           232  
+00001278                           233  MoveColourToD1:
+00001278  7200                     234      moveq   #0,d1
+0000127A  1239 000012B3            235      move.b  Blue,d1
+00001280  E189                     236      lsl.l   #8,d1
+00001282  8239 000012B2            237      or.b    Green,d1
+00001288  E189                     238      lsl.l   #8,d1
+0000128A  8239 000012B1            239      or.b    Red,d1
+00001290  4E75                     240      rts
+00001292                           241  
+00001292                           242  WaitABit:
+00001292  303C 0FA0                243      move.w  #4000,d0
+00001296                           244  .Loop:
+00001296  51C8 FFFE                245      dbra    d0,.Loop
+0000129A  4E75                     246      rts
+0000129C                           247      
+0000129C                           248  Finish:
+0000129C  FFFF FFFF                249      simhalt
+000012A0                           250  
+000012A0                           251  ; Moire constants
+000012A0  =0000028A                252  RES_X               equ     650
+000012A0  =0000028A                253  RES_Y               equ     650
+000012A0  =0000028A                254  MOIRE_X             equ     650
+000012A0  =0000028A                255  MOIRE_Y             equ     650
+000012A0  =00000003                256  MOVE_X              equ     3
+000012A0  =00000003                257  MOVE_Y              equ     3
+000012A0  =00008000                258  COLOUR_GREEN        equ     $00008000
+000012A0  =00FFFFFF                259  COLOUR_WHITE        equ     $00ffffff
+000012A0                           260  
+000012A0                           261  ; Colour constants
+000012A0  =00000000                262  COLOURSTATE_DR      equ     0       ; Offsets
+000012A0  =00000001                263  COLOURSTATE_DG      equ     1
+000012A0  =00000002                264  COLOURSTATE_DB      equ     2
+000012A0  =00000003                265  COLOURSTATE_TR      equ     3
+000012A0  =00000004                266  COLOURSTATE_TG      equ     4
+000012A0  =00000005                267  COLOURSTATE_TB      equ     5
+000012A0                           268  
+000012A0  =00000006                269  COLOUR_STATE_TABLE_WIDTH    equ 6   ; constants
+000012A0  =00000006                270  LAST_COLOUR_STATE   equ     6
+000012A0  =00000006                271  CYCLE_FREQUENCY     equ     6
+000012A0                           272  
+000012A0                           273  ; Moire variables
+000012A0= 0000                     274  x           dc.w    0
+000012A2= 0000                     275  y           dc.w    0
+000012A4= 0000                     276  dx          dc.w    0
+000012A6= 0000                     277  dy          dc.w    0
+000012A8= 0000                     278  sx          dc.w    0
+000012AA= 0000                     279  sy          dc.w    0
+000012AC= 0000                     280  offset_x    dc.w    0
+000012AE= 0000                     281  offset_y    dc.w    0
+000012B0= 01                       282  counter     dc.b    1
+000012B1                           283  
+000012B1                           284  * Colour variables with their starting values
+000012B1= FF                       285  Red                 dc.b    $ff
+000012B2= 00                       286  Green               dc.b    $00
+000012B3= 00                       287  Blue                dc.b    $00
+000012B4= 00                       288  ColourState         dc.b    0
+000012B5                           289  
+000012B5                           290  ; Colour structures
+000012B5                           291  * DeltaR, DeltaG, DeltaB, TriggerR, TriggerG, TriggerB
+000012B5                           292  * The Delta is how much to change each RGB value
+000012B5                           293  * The Trigger is the condition that causes a state change, when R,G,B = TriggerR,TriggerG,TriggerB
+000012B5= 00 01 00 FF FF 00        294  ColourStateTable:   DC.B     0, 1, 0, $ff, $ff, $00 ;red     >  yellow
+000012BB= FF 00 00 00 FF 00        295                      DC.B    -1, 0, 0, $00, $ff, $00 ;yellow  >  green
+000012C1= 00 00 01 00 FF FF        296                      DC.B     0, 0, 1, $00, $ff, $ff ;green   >  cyan
+000012C7= 00 FF 00 00 00 FF        297                      DC.B     0,-1, 0, $00, $00, $ff ;cyan    >  blue
+000012CD= 01 00 00 FF 00 FF        298                      DC.B     1, 0, 0, $ff, $00, $ff ;blue    >  magenta
+000012D3= 00 00 FF FF 00 00        299                      DC.B     0, 0,-1, $ff, $00, $00 ;magenta >  red
+000012D9                           300                      
+000012D9                           301      end     Start
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+BLUE                12B3
+CLEARSCREEN         11A4
+COLOURSTATE         12B4
+COLOURSTATETABLE    12B5
+COLOURSTATE_DB      2
+COLOURSTATE_DG      1
+COLOURSTATE_DR      0
+COLOURSTATE_TB      5
+COLOURSTATE_TG      4
+COLOURSTATE_TR      3
+COLOUR_GREEN        8000
+COLOUR_STATE_TABLE_WIDTH  6
+COLOUR_WHITE        FFFFFF
+COUNTER             12B0
+CYCLECOLOUR         11D8
+CYCLECOLOUR:SKIPTRIGGERS  1240
+CYCLECOLOUR:TRIGGERCYCLE  11EE
+CYCLE_FREQUENCY     6
+DRAWLINEBRESENHAM   10CA
+DRAWLINEBRESENHAM:ENDLOOP  1192
+DRAWLINEBRESENHAM:LOOP  1134
+DRAWLINEBRESENHAM:MOVEX  1140
+DRAWLINEBRESENHAM:MOVEY  1168
+DRAWLINEBRESENHAM:X0LESSTHANX1  1106
+DRAWLINEBRESENHAM:Y0LESSTHANY1  111C
+DRAWLINEFAST        10A2
+DRAWLINEFAST:SKIPCOLOURCYCLE  10AA
+DRAWMOIRE           1018
+DRAWMOIRE:LOOPX     105C
+DRAWMOIRE:LOOPY     108E
+DX                  12A4
+DY                  12A6
+FINISH              129C
+GREEN               12B2
+LAST_COLOUR_STATE   6
+MOIRE_X             28A
+MOIRE_Y             28A
+MOVECOLOURSTATERECORD  1264
+MOVECOLOURTOD1      1278
+MOVE_X              3
+MOVE_Y              3
+NEGATIVED0          119C
+NEGATIVED0:NEGATIVE  11A2
+NEXTCOLOURSTATE     1242
+NEXTCOLOURSTATE:SKIPROLLOVER  125C
+OFFSET_X            12AC
+OFFSET_Y            12AE
+PLOTPOINT           11BC
+POSITIVED0          1194
+POSITIVED0:POSITIVE  119A
+RED                 12B1
+RES_X               28A
+RES_Y               28A
+SETSCREENRES        11AE
+START               1000
+START:LOOPFOREVER   100C
+SX                  12A8
+SY                  12AA
+WAITABIT            1292
+WAITABIT:LOOP       1296
+X                   12A0
+Y                   12A2

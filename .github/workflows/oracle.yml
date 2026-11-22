@@ -1,8 +1,9 @@
 # The oracles that are too slow or too heavy for every push (ARCHITECTURE.md 6.1, 6.2.2, 7.4):
 # weekly and on demand.
 #
-#   wine        builds the Wine container (restored from the cache while the Dockerfile and the
-#               scripts are unchanged), fetches the official EASy68K v5.16.1 distribution, and
+#   wine        fetches the official EASy68K v5.16.1 distribution, builds the Wine container
+#               (restored from the cache while the Dockerfile and the scripts are unchanged), and,
+#               only when both succeeded,
 #               - regenerates the goldens of the tracked sets with the official EDIT68K.exe
 #                 (npm run oracle:wine:asm) and, once work package T3 has written it, with the
 #                 official SIM68K.exe (npm run oracle:wine:sim);
@@ -52,7 +53,11 @@ jobs:
   wine:
     name: wine (official EDIT68K.exe and SIM68K.exe)
     needs: [engines]
-    runs-on: ubuntu-latest
+    # Pinned: on ubuntu-latest = ubuntu-26.04 (image 20261116) the image build stops at wineboot
+    # with "wineserver: socket: Function not implemented" (32-bit Wine cannot create its socket
+    # there; run 45003265263). ubuntu-24.04 is what ubuntu-latest was before; on Docker Desktop
+    # (WSL 2) the same Dockerfile builds and runs. Move back only after a run of this job passes.
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
     outputs:
       changed: ${{ steps.diff.outputs.changed }}
@@ -79,6 +84,11 @@ jobs:
           name: engine-dist
           path: engine/dist
 
+      # Before the image: the download needs nothing of it.
+      - name: Fetch the official EASy68K v5.16.1 distribution
+        id: official
+        run: node tests/oracle/wine/common/fetch-official.mjs
+
       # The image (2.4 GB) takes three minutes to build and changes only with these files.
       # Of the simulator's folder only sim_run.py is copied into it; the rest of the driver is
       # mounted at run time (docs/requests/T3-oracle-image.md).
@@ -98,21 +108,49 @@ jobs:
           mkdir -p build/oracle-wine
           docker save --output build/oracle-wine/image.tar easy68k-oracle-wine
 
-      - name: Fetch the official EASy68K v5.16.1 distribution
-        run: node tests/oracle/wine/common/fetch-official.mjs
+      # Runs only when every step above succeeded: the image is there and so are the official
+      # programs. Every step below that runs an official program, or reports on what one produced,
+      # requires it, so a failed build or download is not followed by secondary failures or by a
+      # report of results that were never produced (run 45003265263, erratum T1 23).
+      - name: The image and the official programs are ready
+        id: ready
+        run: |
+          docker image inspect easy68k-oracle-wine --format 'Image {{.Id}}'
+          echo "ok=true" >> "$GITHUB_OUTPUT"
 
       - name: Regenerate the assembler goldens of the tracked sets
+        id: asm
+        if: ${{ !cancelled() && steps.ready.outputs.ok == 'true' }}
         run: npm run oracle:wine:asm -- --containers "$CONTAINERS"
       - name: Regenerate the simulator goldens (T3)
-        if: ${{ !cancelled() && hashFiles('tests/oracle/wine/sim/regenerate.mjs') != '' }}
+        id: sim
+        if: ${{ !cancelled() && steps.ready.outputs.ok == 'true' && hashFiles('tests/oracle/wine/sim/regenerate.mjs') != '' }}
         run: npm run oracle:wine:sim
 
+      # Proposes files only when every regeneration that ran completed; a partial regeneration is
+      # listed for diagnosis but not proposed.
       - name: What changed
         id: diff
         if: ${{ !cancelled() }}
+        env:
+          READY: ${{ steps.ready.outputs.ok }}
+          ASM_OUTCOME: ${{ steps.asm.outcome }}
+          SIM_OUTCOME: ${{ steps.sim.outcome }}
         run: |
           # Goldens, the manifest and the reports: everything a regeneration may write.
           paths=(tests/corpus/manifest.json tests/conformance)
+          if [ "$READY" != 'true' ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Nothing was regenerated: the Wine image or the official distribution is missing (see the steps above)."
+            exit 0
+          fi
+          if [ "$ASM_OUTCOME" != 'success' ] || { [ "$SIM_OUTCOME" != 'success' ] && [ "$SIM_OUTCOME" != 'skipped' ]; }; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "The regeneration did not complete (assembler: $ASM_OUTCOME, simulator: $SIM_OUTCOME): nothing is proposed."
+            echo "Files it wrote before it stopped:"
+            git status --short -- "${paths[@]}" | head -50
+            exit 0
+          fi
           git add --all -- "${paths[@]}"
           if git diff --cached --quiet -- "${paths[@]}"; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -139,12 +177,14 @@ jobs:
         if: ${{ !cancelled() }}
         run: node tools/fetch-site-examples.mjs
       - name: The site set through the official assembler, compared with the manifest
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.ready.outputs.ok == 'true' }}
         run: node tests/oracle/wine/asm/regenerate.mjs --sets site --check --containers "$CONTAINERS"
 
-      # Against the regenerated goldens, and over the site set when it was fetched.
+      # Against the regenerated goldens, and over the site set when it was fetched: so only after a
+      # completed regeneration of the assembler goldens (otherwise it would only repeat ci.yml's
+      # run against the committed ones).
       - name: Conformance tests
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.asm.outcome == 'success' }}
         run: npm run test:conformance
 
       - name: Upload the logs of the runs

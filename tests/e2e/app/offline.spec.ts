@@ -43,37 +43,65 @@ test.describe('offline', () => {
     }
   });
 
-  test('offline, Help > Help shows the introduction page in the help frame', async ({
+  test('offline, Help > Help shows the introduction page; a link to another page and the Differences page work', async ({
     app,
     page,
     context,
     browserName,
   }) => {
-    // Cause found (errata X1 entry 12, H1 entry, docs/requests/H1-help-offline-webkit.md): WebKit
-    // does not send the navigation of a frame sandboxed WITHOUT allow-scripts to the service
-    // worker at all. Online that frame's page comes from the network (Playwright reports
-    // fromServiceWorker false for it, true for the same page in a frame with allow-scripts, and
-    // true in Chromium for every sandbox); offline it fails with "WebKit encountered an internal
-    // error". The help frame is sandboxed without scripts on purpose (ARCHITECTURE.md 7.6), so
-    // the repair is a security decision of the architect, asked in that request. The rule depends
-    // on the frame's sandbox and holds online too, so it is the engine's, not Playwright's offline
-    // switch: real Safari is expected to behave the same; MANUAL-TEST-MAC.md W1 checks it. When the frame is repaired, this test
-    // reports "expected to fail, but passed": then this line goes.
-    test.fail(
-      browserName === 'webkit',
-      'WebKit sends no navigation of a frame sandboxed without allow-scripts to the service worker (X1 errata 12)',
-    );
+    // Erratum H1 11 (docs/requests/H1-help-offline-webkit.md): WebKit sends no navigation of a frame
+    // sandboxed without allow-scripts to the service worker, so the Help frame has allow-scripts in
+    // WebKit while the worker controls the page; every help page forbids scripts by its own policy.
+    // This test failed in WebKit before (X1 errata 12) and must pass in both browsers now.
+    const panel = page.locator('[data-e68-panel="help"]');
+    const title = panel.locator('.e68-help__title');
+    const frame = panel.locator('iframe');
+    /** The length of the text the frame shows (0 while it shows nothing or an error). */
+    const shown = () =>
+      frame.evaluate((element: HTMLIFrameElement) => element.contentDocument?.body?.textContent?.length ?? 0);
     try {
       await reloadOffline(app, page, context);
+      const vendor = await page.evaluate(() => navigator.vendor);
       await app.chooseMenu('Help', 'Help');
-      await expect(page.locator('[data-e68-panel="help"] .e68-help__title')).toHaveText('Easy68k Introduction');
+      await expect(title).toHaveText('Easy68k Introduction');
+      await expect.poll(shown, { message: 'the introduction page is shown offline' }).toBeGreaterThan(100);
+      expect(await frame.getAttribute('sandbox')).toBe(
+        browserName === 'webkit' && vendor === 'Apple Computer, Inc.'
+          ? 'allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox'
+          : 'allow-same-origin allow-popups allow-popups-to-escape-sandbox',
+      );
+
+      // A link from one page to another: Quick Start (found with the filter), then its link to the
+      // Simulator I/O page, in the frame. (Not Credits: its licence page refers to the original's
+      // missing ac-archive.css, which the browser reports as a failed load.)
+      const contents = panel.getByRole('button', { name: 'Contents' });
+      if ((await contents.getAttribute('aria-pressed')) !== 'true') await contents.click();
+      await expect(contents).toHaveAttribute('aria-pressed', 'true');
+      await panel.getByLabel('Filter the contents by title').fill('Quick Start');
+      await panel.locator('.e68-help__tree [role=treeitem]', { hasText: /^\s*Quick Start$/ }).click();
+      await expect(title).toHaveText('Quick Start');
+      await expect.poll(shown, { message: 'Quick Start is shown offline' }).toBeGreaterThan(100);
+      await page
+        .frameLocator('[data-e68-panel="help"] iframe')
+        .getByRole('link', { name: 'Simulator I/O' })
+        .first()
+        .click();
+      await expect(title).toHaveText('Simulator Environment');
+      await expect.poll(shown, { message: 'the page reached by the link is shown offline' }).toBeGreaterThan(1000);
+      // Help > Differences from EASy68K: the port's own page.
+      await app.chooseMenu('Help', 'Differences from EASy68K');
+      await expect(title).toHaveText('Differences from EASy68K');
       await expect
-        .poll(() =>
-          page
-            .locator('[data-e68-panel="help"] iframe')
-            .evaluate((frame: HTMLIFrameElement) => frame.contentDocument?.body?.textContent?.length ?? 0),
-        )
-        .toBeGreaterThan(100);
+        .poll(() => frame.evaluate((element: HTMLIFrameElement) => element.contentDocument?.body?.textContent ?? ''), {
+          message: 'the Differences page is shown offline',
+        })
+        .toContain('Differences from EASy68K');
+      expect(await shown()).toBeGreaterThan(1000);
+      // No script ran in any of these pages: each one forbids scripts by its own policy.
+      const policy = await frame.evaluate(
+        (element: HTMLIFrameElement) => element.contentDocument?.head?.firstElementChild?.outerHTML ?? null,
+      );
+      expect(policy).toBe(`<meta http-equiv="Content-Security-Policy" content="script-src 'none'">`);
     } finally {
       await context.setOffline(false);
     }

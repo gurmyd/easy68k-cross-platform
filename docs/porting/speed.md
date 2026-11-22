@@ -145,7 +145,25 @@ millisecond; the program also draws more passes, because frames stop overrunning
 did not improve measurably (its 15 ms timers and the load dominate; errata P1.md entry 10). P1 has
 not changed the controller; when SH8 does, the check shows the effect without the experiment flag.
 
-### 4.2 `Maximum`: 200 million instructions in 10 s
+### 4.2 `Maximum`: 200 million instructions in 10 s (decided: 100 million and 85 % of the engine alone)
+
+**Decided (architect, 22 November 2026; errata P1.md entry 13; the correction note under
+`docs/ARCHITECTURE.md` 6.9).** The third bullet of 6.9 item 9 now reads: "at `Maximum`,
+`engine.stepCount` advances in 10 s by at least 100 million, and by at least 85 % of what the engine
+alone executes in 5 s on the same runner in the same job (the half of each frame that the governor
+gives the engine, `SLICE_FRAME_SHARE = 0.5`)". Why: on ubuntu-latest, in Chromium (performance job
+of run 44988194975), the engine alone executes 32.05 million instructions per second, so half of
+each frame gives at most about 160 million in 10 s; the port reached 150.4 million with the
+simulated 60 Hz source and 158.9 million with the 120 Hz one (94 and 99 % of that), and missed the
+old 200 million only because the runner's engine is slower than the 40 million per second the figure
+assumed. The first proposal below was taken; `SLICE_FRAME_SHARE` is not raised, because the
+interface's half of the frame is what the design promises. The new figure judges what the port
+controls (how much of its half the governor really delivers) with a floor that a student's long
+computation needs. `check-perf.mjs` now measures the engine alone in the same job before the
+`Maximum` runs (one call not counted, then the best of five calls of one million instructions) and
+judges both conditions with the 60 Hz source; the 120 Hz figure is printed with its verdict for
+information. The thresholds printed in the tables of sections 3 and 4.6 are the old 200 million of
+the day they were taken. Only the performance job of the next manual CI run decides the item.
 
 **Finding.** 6.9 asks for an average of 20 million instructions per second. The governor gives the
 engine at most `SLICE_FRAME_SHARE` = half of each frame (4.1, 4.2), so the engine itself would have
@@ -167,7 +185,8 @@ the window usable while one runs.
 this PC at a quiet moment are above the threshold (section 4.6: 236.9 million in 10 s with the
 simulated 60 Hz source, 248.0 million at 120 Hz, best of three runs). These are figures of a Windows
 PC, not of ubuntu-latest: 6.9 item 9 is decided there, by the performance job of a manual CI run,
-and this document does not claim it. The proposal above stands until that run has been read.
+and this document does not claim it. That run (44988194975, on f17e78a) gave the figures of the
+decision above.
 
 ### 4.3 TaskDuration (6.9: < 4.5 s in 30 s at the default speed)
 
@@ -259,6 +278,22 @@ WebKit in run C, for information (6.9 item 9 does not judge it): `Maximum` 145,8
 simulated sources (its timers on Windows, errata P1.md entry 10) and 13.0 ms with the display's
 frames.
 
+The threshold column shows the rule of that day; the corrected rule of 4.2 (at least 100 million
+and at least 85 % of the engine alone in 5 s) did not exist yet. With it, the same PC, loaded again
+later on 22 November 2026, gave with `node tests/perf/check-perf.mjs --browser chromium --only
+maximum` (simulated 60 Hz source): 146,400,959 instructions in 10 s, 92.2 % of the engine alone's
+158,730,159 in 5 s (default `--judge auto`, not judged on Windows), and with `--judge strict`
+144,853,494, 89.5 % of 161,812,298; the 120 Hz source 151,471,891 (93.6 %, for information). At
+the close of the round, in a quieter moment, `npm run check:perf -- --browser all` ("42 of 42";
+log `build/DOC1/checks/perf.log`, git-ignored) gave in Chromium the engine alone 53,191,489 per
+second (best of five calls that ranged from 28,011,204 to 53,191,489) and `Maximum` 224,550,143 in
+10 s with the 60 Hz source, **84.4 %** of the engine alone's 265,957,447: "would MISS (not judged
+here)"; with the 120 Hz source 235,152,974 (88.4 %). WebKit, for information: 159,295,269 (79.6 %)
+and 197,537,528 (98.8 %). The share is sensitive to the engine alone's best call: one fast call
+raises the figure it is measured against. These are still figures of a Windows PC: only the
+performance job of a manual CI run on ubuntu-latest decides 6.9 item 9, and none has run under the
+corrected rule yet.
+
 What changed against section 3: the engine alone is more than twice as fast as in run 2 (51.5 to
 54.6 against 23.4 million per second), which says how much of section 3's shortfall was the load of
 that day; and with the bound, a drawing program's calls stay under 8 ms and the frames no longer
@@ -317,7 +352,7 @@ that keeps time with task 23 or task 8 behaves the same at any setting.
 | To | What | Section |
 |---|---|---|
 | SH8 | Bound each sub-slice by the remaining time budget, not only by instructions (taken up in the round before gate I3: errata SH8.md entry 40) | 4.1 |
-| Architect | 6.9's `Maximum` threshold: 200 million in 10 s needs an engine of 40 million per second; measured 22 to 28 million under load. Lower it (proposal: 100 million) or give `Maximum` more of the frame. On the quieter PC after the time-bounded sub-slice: 237 million (60 Hz) and 248 million (120 Hz), best of three runs (4.6); decide after reading the manual CI run's performance job on ubuntu-latest | 4.2, 4.6 |
+| Architect | 6.9's `Maximum` threshold: 200 million in 10 s needs an engine of 40 million per second; measured 22 to 28 million under load. Lower it (proposal: 100 million) or give `Maximum` more of the frame. On the quieter PC after the time-bounded sub-slice: 237 million (60 Hz) and 248 million (120 Hz), best of three runs (4.6). **Decided** on 22 November 2026 from the performance job of run 44988194975 on ubuntu-latest (engine alone 32.05 million per second; 150.4 million at 60 Hz, 158.9 million at 120 Hz): at least 100 million in 10 s and at least 85 % of what the engine alone executes in 5 s in the same job; `SLICE_FRAME_SHARE` stays 0.5 (errata P1.md entry 13). Judged by `check-perf.mjs` from this round; the next manual CI run decides the item | 4.2, 4.6 |
 | SH8, SH4 | Publish and present only when something changed, so that TaskDuration does not grow with the frame rate | 4.3 |
 | Architect | Say at which frame rate the TaskDuration threshold applies (P1 judges it at 60 Hz) | 4.3 |
 | Owner, then SH8 and W1 | Measure the original with `calibrate.X68`; until then `DEFAULT_IPS` = 1,000,000 | 5 |

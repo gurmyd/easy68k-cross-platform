@@ -58,8 +58,11 @@ import { createServer } from 'vite';
 import {
   SLICE_BUDGET_MS,
   SLICE_FRAME_SHARE,
+  FRAME_KEEP_SHARE,
   STEADY_GAP_MS,
+  frameWindowMs,
   judgeDelays,
+  judgeFrames,
   judgeMaximum,
   judgeRate,
 } from './run-verdicts.mjs';
@@ -467,9 +470,9 @@ async function runPass(browser, name, programs) {
   // controller's engine.run calls and the time budget the governor allows for those frames.
   // judgeMaximum: in one pair, Maximum ran the engine for most of its budget and executed at least
   // twice the default's rate. The absolute figure of 6.9 item 9 is tests/perf's, on ubuntu-latest.
-  const measureSpeed = (mode) =>
+  const measureSpeed = (mode, windowMs = 500) =>
     page.evaluate(
-      ({ mode, budgetMs, frameShare }) =>
+      ({ mode, budgetMs, frameShare, windowMs }) =>
         new Promise((done) => {
           const { ctx } = window.__easy68k;
           ctx.settings.update((s) => ({
@@ -519,10 +522,10 @@ async function runPass(browser, name, programs) {
               if (ownRun) engine.run = original;
               else delete engine.run;
               done({ executed, ms: now - t0, frames, longest, busy, budget, wrapped });
-            }, 500);
+            }, windowMs);
           }, 200);
         }),
-      { mode, budgetMs: SLICE_BUDGET_MS, frameShare: SLICE_FRAME_SHARE },
+      { mode, budgetMs: SLICE_BUDGET_MS, frameShare: SLICE_FRAME_SHARE, windowMs },
     );
   const pairs = [];
   for (let i = 0; i < 3; i++) pairs.push({ normal: await measureSpeed('original'), max: await measureSpeed('max') });
@@ -539,25 +542,29 @@ async function runPass(browser, name, programs) {
     (await statusText(page)).includes('speed: Maximum'),
     await statusText(page),
   );
-  const frames = await page.evaluate(
-    () =>
-      new Promise((resolveFrames) => {
-        let count = 0;
-        const t0 = performance.now();
-        const tick = () => {
-          count++;
-          if (performance.now() - t0 < 500) window.requestAnimationFrame(tick);
-          else resolveFrames(count / ((performance.now() - t0) / 1000));
-        };
-        window.requestAnimationFrame(tick);
-      }),
-  );
   // At most half of each frame goes to the engine (4.2), so the display keeps most of its frames.
+  // How many frames a browser delivers is the machine's (GitHub's macOS runner: Chromium about 15
+  // per second at any speed; errata SH8.md entry 44), so the frames of each Maximum window above
+  // are compared with those of the default-speed window just before it: judgeFrames. A default window
+  // with too few frames for a share is too short: the frames are then measured again, in three pairs
+  // of windows long enough for them (frameWindowMs; errata SH8.md entry 45).
+  let framePairs = pairs;
+  const longer = frameWindowMs(pairs);
+  if (longer !== null) {
+    console.log(
+      `  --   ${p} too few frames at the default speed in half a second: measured again in windows of ${longer} ms`,
+    );
+    framePairs = [];
+    for (let i = 0; i < 3; i++)
+      framePairs.push({ normal: await measureSpeed('original', longer), max: await measureSpeed('max', longer) });
+  }
+  const keeps = judgeFrames(framePairs);
   check(
-    `${p} the page keeps its frames while the program runs at Maximum`,
-    frames > 15,
-    `${Math.round(frames)} frames per second`,
+    `${p} the page keeps its frames while the program runs at Maximum (at least ${Math.round(100 * FRAME_KEEP_SHARE)} % of the default speed's frame rate in the same pair, in most of three pairs)`,
+    keeps.ok,
+    keeps.detail,
   );
+  for (const note of keeps.notes) console.log(`  --   ${p} ${note}`);
   await pressInMainWindow(page, 'F6');
   await waitForPhase(page, 'idle');
   await page.evaluate(() =>

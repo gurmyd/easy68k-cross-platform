@@ -40,5 +40,8 @@ official program under Wine and the difference is marked `unconfirmed` in
   F7).
 - `../sim/trap15-a/a58-files-devices.X68` (the device name `NUL`, F8).
 
+The steps for one Windows session that runs these five, the speed measurement of
+`docs/porting/speed.md` section 5 and the three programs above: `docs/porting/windows-confirmation.md`.
+
 If the Windows result equals the golden, the owner named in `known-differences.json` repairs the
 port; if not, the golden is replaced by the Windows result.

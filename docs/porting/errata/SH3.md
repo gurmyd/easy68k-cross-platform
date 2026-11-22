@@ -469,3 +469,90 @@ model; the port keeps the rule of the ordinary case. `docs/differences/SH3.md` l
   (errata W1.md entry 13). `TextScreen` now calls it through `deps.glyphs` directly; only
   `monospacedOutline`, which the contract does not have, is still read through the module's own
   `FallbackGlyphs`. `FallbackGlyphs` itself is unchanged (both providers still implement it).
+
+## Gate I3 (release-candidate item 3)
+
+### 31. The fallback-font bytes of task 95 against two Windows (6.5.3 as corrected, erratum T2 25)
+
+- The bytes `$01-$08 $0B $0E-$1B` have no single Windows picture: T2's references (10.0.26300) and
+  GitHub's Windows Server (10.0.26100) draw 72 of the 90 captured texts with them differently
+  (erratum T2 25). 6.5.3 now holds the port to what both agree on, and the port meets it unchanged:
+  `gdi-references.test.ts` has three new tests (the pen in all 85 texts on whose pen the two agree;
+  every pixel and the pen in the 16 on whose picture and pen they agree; and, as the documented
+  choice, that in plain, bold and italic such a byte draws exactly what a space draws), and
+  `check-text.mjs` three new lines (two required: pens 85 of 85, pictures 16 of 16; one reported:
+  all 90). Its check count went from 61 to 64. Nothing the port draws changed: the digest of the
+  252 `text-control` replays is `2a5aa238` before and after, in Node, Chromium and WebKit.
+- Found on the way, not changed (outside the bytes above; recorded in `docs/differences/SH3.md`):
+  the other 162 `text-control` texts are the same on both Windows, so they are not machine
+  dependent. The port differs from Windows in the zero-width bar (pictures 16 of 111; these are
+  control bytes, `$09 $0A $0D $1C-$1F`, still under 6.5.3's "every pixel equal"), the undefined
+  bytes (30 of 34 pens and pictures) and italic itemization (9 of 11 pictures).
+
+### 32. Windows' Unicode text path in the raster faces (gate I3, item 3b; erratum T2 26)
+
+- The other 162 `text-control` texts (drawn the same by both captured Windows) are now drawn as
+  Windows draws them. They have in common that Windows takes the text through its Unicode text
+  path (Uniscribe): a text with a zero-width byte, `$7F`, an undefined byte or `$86 $87 $88 $98`.
+  `TextScreen.layout` models what that path does, from T2's measurements (erratum T2 26):
+  - **the zero-width bar**: at the sizes `metrics.json` `raster.textPath.zeroWidthBar` lists
+    (plain, bold, italic), a text of zero-width bytes only with an odd number of bytes or two `$1F`
+    in a row is a box 3 pixels wide from x - 1, as high as the list says; the pen is as before;
+  - **the euro sign**: `$80` on the path has the width of `raster.textPath.fallbackEuro`, in the box
+    and for the pen; its cell is blank (the glyph is ClearType output, not shipped; 6.5.3 as
+    corrected);
+  - **the box is at least one cell** on the path (texts of undefined bytes only, the euro alone);
+  - **italic itemization**: the overhang of all but the first glyph is left out when the text is on
+    the path and cut into two or more items (`itemClass`, `severalItems`); this replaces the earlier
+    "a zero-width byte, or `$7F` with another drawn byte", which it contains.
+- `charOut`, the echo of line input and the prompt now go through `layout` for their one byte too
+  (`textOutChar`), so a zero-width or undefined byte echoed at the cursor is drawn as task 95 draws
+  it (the test "the text screen proper draws a character as task 95 draws a text of that one byte").
+  _Corrected in review R4:_ this entry said that nothing changed at the cursor for any byte
+  `$20`-`$FF`; that was wrong. What changed at the cursor: the five undefined bytes `$81 $8D $8F $90
+  $9D`, written or echoed alone, now fill one cell of the face plus the style overhang (before: a
+  glyph of no width plus the overhang; Fixedsys 9 plain: 8 pixels instead of none), in 1,610 of the
+  2,560 raster font, size and style combinations the reviewer probed, as Windows does (`text-path`
+  has `$81` alone in 6 fonts x 5 styles); and the zero-width bytes, at the sizes of the bar, now draw
+  the bar. Every other byte `$20`-`$FF` draws at the cursor exactly what it drew before.
+- Font data: `metrics.ts` reads `raster.textPath` (optional; a file without it gives the old
+  behaviour), `FontSet` and `AtlasGlyphProvider` answer `zeroWidthBar(font)` and
+  `euroInTextPath(font)`, two optional members of the module's own `FallbackGlyphs` (the contract's
+  `GlyphProvider` is unchanged; a provider without them, such as the synthetic fonts, draws as
+  before).
+- Tests (`gdi-references.test.ts`): the 162 texts (132 every pixel and the pen; the 30 with the euro
+  sign the pen and every pixel outside its ink), the suite `text-path` (7,497 of 7,497 every pixel
+  and pen) and `text-path-euro` (1,400 of 1,400 outside the euro's ink), and a test that the bar and
+  the euro width fail without the font data. `gdi-replay.ts` has `euroInk` and the comparison
+  `but-euro`; `check-text.mjs` has four new required lines and the two new suites' digests (72
+  checks instead of 64). The digests of `text`, `text-outline`, `text-outline-zero`,
+  `text-outline-glyphs` and of the four scenarios are what they were; that of `text-control` changed
+  from `2a5aa238` to `ca729b7d` (the repair).
+- Not modelled (`docs/differences/SH3.md`): `$0C` on the path, an undefined byte right after `$7F`.
+  (The second is modelled since entry 33.)
+
+### 33. Control texts on Windows' text path; `$0C` on the path reported (review R4 of gate I3; erratum T2 27)
+
+- The review found that item 3 did not hold for two kinds of text the 6.5.3 threshold covers, both
+  left out of the suites: `$7F` followed by an undefined byte, and `$0C` on the text path.
+- **Repaired:** `$7F $81` filled one cell where Windows fills two. The cause was not that pair but a
+  class of texts T2 measured in entry 27, the control texts (`controlText` in `text-screen.ts`):
+  `$7F` and an undefined byte with at most one run of punctuation between the controls (or two at
+  the ends), and nothing else drawn. Windows keeps the whole italic overhang in them, and gives one
+  more cell to one that ends with an undefined byte (plain, bold, italic). `layout` now does both.
+  Measured: 12,048 of 12,048 captured texts without `$80`, `$01` or `$0C` are equal in every pixel
+  and pen (`build/SH3-R4`); the reviewer's 18 `$7F $81` cases of `e8` now pass (360 of 360). Tests:
+  the 1,440 new `text-path` cases in `gdi-references.test.ts` (fail with 408 differences when the
+  rule is switched off), with four spot checks of Windows' box. What a program sees changes only in
+  such texts of task 95: the width of the box, and in italic its overhang. A character written at
+  the cursor is one byte, never a control text, so the text screen proper is unchanged by this
+  entry. The pen never changes.
+- **Reported, not repaired:** `$0C` on the text path (T2 27: a smoothed fallback glyph whose width
+  depends on its item). `check-text.mjs` has two reported lines for the new suite
+  `text-path-formfeed` (0 of 640 every pixel, pens 400 of 640) and `gdi-references.test.ts` prints
+  the same numbers. ARCHITECTURE.md 6.5.3's correction note now says that `$0C` stays under "every
+  pixel equal" only off the text path, and that on it this is a known failure.
+- `check-text.mjs`: 76 checks (was 72): the two reported lines and the browsers' digest of the new
+  suite. Digests: `text-path` `79c949dc` -> `1c4d5b75` (1,440 cases more), `text-path-formfeed`
+  `8245a757` (new); `text`, `text-outline`, `text-outline-zero`, `text-outline-glyphs`,
+  `text-control` (`ca729b7d`) and `text-path-euro` unchanged.

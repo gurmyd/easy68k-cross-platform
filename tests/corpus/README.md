@@ -23,6 +23,11 @@ includes it.
   status, error and warning counts, the SHA-256 of the text the editor handed to its assembler and
   of the canonical `.L68` and `.S68`. It is written by `tests/oracle/wine/asm/regenerate.mjs`
   (`npm run oracle:wine:asm`); do not edit it by hand.
+- `option-subset.json` - the fixed subset of `docs/ARCHITECTURE.md` 6.9 item 1: 30 programs of
+  the tracked sets, each assembled besides its other runs with each of the eight assembler options
+  switched alone from its shipped value (runs `nolist`, `nosrec`, `nowar`, `nocre`, `mex`, `sex`,
+  `cex`, `nobit`; `SINGLE_OPTION_SETS` in `tests/oracle/wine/asm/settings.ts`). Each entry says
+  why the program is there; `regenerate.mjs` plans the runs from this list.
 - `index.ts` - reads the manifest and hands out a program's files. Use it from any test:
   `loadManifest()`, `programAvailable(program)`, `readProgram(program)` (the files by the names
   INCLUDE and INCBIN use), `sourcePath`, `goldenDirectory`.

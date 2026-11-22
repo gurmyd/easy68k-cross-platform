@@ -796,6 +796,69 @@ describe.skipIf(!enginesBuilt)(
       expect(str(await storage.readFile('demo/note.txt'))).toBe('note.txt');
       b.session.dispose();
     });
+
+    // trap15-a/a58 and a61, errata SH6.md entry 14: NUL is the null device, CON does not open.
+    it('NUL: task 52, 54, 55, 56, 59, 51, 53, 57 as the original on Windows; nothing is created', async () => {
+      const w = await createWorld({ 'demo/sub/keep.txt': 'k' });
+      const onName = (label: string) => [
+        `        LEA     ${label},A1`,
+        ...trap(52),
+        ...rec('D0'),
+        '        MOVE.L  D1,D6',
+        '        LEA     ABC,A1',
+        '        MOVEQ   #3,D2',
+        ...trap(54),
+        ...rec('D0'),
+        '        MOVE.L  D6,D1',
+        '        MOVEQ   #5,D2',
+        ...trap(55),
+        ...rec('D0'),
+        '        MOVE.L  D6,D1',
+        ...trap(56),
+        ...rec('D0'),
+        `        LEA     ${label},A1`,
+        ...trap(59),
+        ...rec('D0'),
+        `        LEA     ${label},A1`,
+        ...trap(51),
+        ...rec('D0'),
+        '        MOVE.L  D1,D6',
+        '        LEA     BUF,A1',
+        '        MOVEQ   #3,D2',
+        ...trap(53),
+        ...rec('D0'),
+        ...rec('D2'),
+        '        MOVE.L  D6,D1',
+        ...trap(56),
+        ...rec('D0'),
+        `        LEA     ${label},A1`,
+        ...trap(57),
+        ...rec('D0'),
+      ];
+      await load(
+        w,
+        program(
+          [...onName('NUL'), ...onName('SUBNUL'), '        LEA     CON,A1', ...trap(52), ...rec('D0'), ...rec('D1')],
+          [
+            "NUL:    DC.B    'nul.',0",
+            "SUBNUL: DC.B    'sub\\NUL',0",
+            "CON:    DC.B    'CON',0",
+            "ABC:    DC.B    'abc'",
+            '        DS.W    0',
+          ],
+        ),
+      );
+      await runToStop(w);
+      const nul = [0, 0, 0, 0, 0, 0, 1, 3, 0, 2];
+      expect(results(w, 22).map(word)).toEqual([...nul, ...nul, 2, 0xffff]);
+      await w.view.settled();
+      expect((await w.vfs.list('/memory/demo')).map((entry) => entry.name).sort()).toEqual([
+        'prog.L68',
+        'prog.S68',
+        'sub',
+      ]);
+      expect((await w.vfs.list('/memory/demo/sub')).map((entry) => entry.name)).toEqual(['keep.txt']);
+    });
   },
 );
 

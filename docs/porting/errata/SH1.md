@@ -412,3 +412,48 @@ equal because they use the measured table (entry 14); everything else the stubs 
   of Wine, and the entry should be settled by the run on Windows that
   tests/conformance/windows-confirm/README.md describes; SIM68K.exe cannot be run here, because it
   opens a window. For T3 (owner of known-differences.json): the evidence above.
+
+## 17. Gate I3 round 3: drawing modes above 15, measured on Windows 11 as SIM68K.exe draws them
+
+Entry 16 rested on raw `SetROP2` values 0-255 and on words read from the binary, never on the two
+together, and not on values above 255. SIM68K.exe passes `SetROP2` a 16-bit word (`PenModes[mode]`,
+read beyond the 16-entry table for modes 18-255), and for modes 22 and 23 that word is 772 and
+37008, which `rop2Raw` never tried. T2's capture program now has the cases (`capture.cpp`,
+`modesAbove15Json`; output `tests/conformance/gdi/golden/modes.json`; captured on
+this PC, Windows 11 10.0.26300, with `node tests/oracle/gdi-capture/run.mjs --only modes --write`).
+They do what the original does for task 92 and then task 82 (pixel) and task 85 (line with its
+end-point pixel): a red pen (COLORREF `$0000FF`) selected, `R2_COPYPEN` first (task 92 with 4 just
+before, as in b06), `SetROP2(value)`, `GetROP2`, `SetPixel`, `MoveToEx`/`LineTo`/`SetPixel`, on black
+and on `$336699`. `setRop2` gives raw values 0-32, 48, 128, 255, 256, 257, 772, 4096, 32768, 32896,
+37008, 65535, 65536, 65540, `$7FFFFFFF`, -1 and -16; `task92` the modes 0-15, 18-32, 44, 64, 66, 128,
+158, 200, 209, 222 and 255 with the binary's word for each (`PEN_MODE_WORDS`, the 256 words at
+`$005270B4`, file offset `$125EB4`, `.data`).
+
+What Windows does (every row of both lists): `SetROP2` returns the previous ROP2 (13, `R2_COPYPEN`)
+and never fails (`GetLastError` 0); `GetROP2` afterwards reads the value's **low byte**; the pixel,
+the line body and the end point are all drawn with operation `((low byte - 1) AND 15) + 1`. The
+modes of b06:
+
+| Mode | Word passed | `GetROP2` after | Operation | Red on black (task 83) | Red on `$336699` |
+|---|---|---|---|---|---|
+| 18, 19, 20, 21 | 0 | 0 | 16 `R2_WHITE` | `$FFFFFF` | `$FFFFFF` |
+| 22 | 772 (`$0304`) | 4 | 4 `R2_NOTCOPYPEN` | `$FFFF00` | `$FFFF00` |
+| 23 | 37008 (`$9090`) | 144 | 16 `R2_WHITE` | `$FFFFFF` | `$FFFFFF` |
+| 24 | 772 | 4 | 4 `R2_NOTCOPYPEN` | `$FFFF00` | `$FFFF00` |
+| 30 | 32768 | 0 | 16 | `$FFFFFF` | `$FFFFFF` |
+| 32 | 32896 | 128 | 16 | `$FFFFFF` | `$FFFFFF` |
+| 64 | 37556 | 180 | 4 | `$FFFF00` | `$FFFF00` |
+| 158 | 32765 | 253 | 13 `R2_COPYPEN` | `$0000FF` | `$0000FF` |
+| 209 | 71 | 71 | 7 `R2_XORPEN` | `$0000FF` | `$336666` |
+
+(Colours as task 83 reads them, `$00BBGGRR`.) Raw values: 0 reads back 0 and draws white; 17-32
+draw as 1-16 again; 256 reads 0, 257 reads 1, 65540 reads 4, -1 and `$7FFFFFFF` read 255 (operation
+15), -16 reads 240 (16). So Windows behaves as the port does, and not as Wine did: the port's
+`MODE_TABLE` is right for every value, and b06's golden is Wine's own. `known-differences.json`
+keeps the entry, with the cause "Wine's SetROP2 differs from Windows'; measured on Windows 11 with
+the capture program"; the golden cannot be regenerated without the official program on real
+Windows (docs/porting/windows-confirmation.md part A).
+
+Test: `app/src/core/sim-host/surface/modes.gdi.test.ts` checks the capture against the rule, the
+surface against every measured row (pixel, line and end point on both backgrounds), and every value
+0-255 except 16 and 17 against the operation GDI gives its word. No surface code changed.
