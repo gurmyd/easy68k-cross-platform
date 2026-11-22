@@ -229,7 +229,8 @@ describe.skipIf(!enginesBuilt)('with the real engines (needs engine/dist)', ENGI
     expect(test.engine.getRegister(Reg.D0) & 0xffff).toBe(0);
     const buffer = program.result.messages.length === 0 ? addressOf(program.l68, 'BUFFER') : 0;
     expect(textOf(test.engine.memory.subarray(buffer, buffer + 4))).toBe('data');
-    expect(test.callsTo('fileRead')).toEqual([[1, 4]]);
+    // The Borland run-time fills its 512-byte buffer: ReadFile(512), not the program's 4 (STDIO-MODEL.md R1).
+    expect(test.callsTo('fileRead')).toEqual([[1, 512]]);
     test.release();
   });
 

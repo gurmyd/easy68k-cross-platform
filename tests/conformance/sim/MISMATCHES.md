@@ -8,10 +8,10 @@ Host parts: the classes at their final paths. Text metrics: Wine's cells (harnes
 
 |                              | Count |
 | ---------------------------- | ----- |
-| Programs compared            | 209   |
-| Artifacts compared           | 233   |
-| Equal to the official result | 225   |
-| Different, with an owner     | 8     |
+| Programs compared            | 217   |
+| Artifacts compared           | 241   |
+| Equal to the official result | 236   |
+| Different, with an owner     | 5     |
 | Different, not yet assigned  | 0     |
 
 ## surface (SH1)
@@ -19,14 +19,6 @@ Host parts: the classes at their final paths. Text metrics: Wine's cells (harnes
 | Program                       | Recipe        | First difference | Official                                                                                                                                                           | Port                                                                                                                                                               | Cause                                                                                                                                                            |
 | ----------------------------- | ------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `trap15-b/b06-modes-above-15` | report result | line 1           | `D0=000000FF D1=00000032 D2=00000032 D3=00000000 D4=00000000 D5=00000014 D6=000000FF D7=00000014 A0=00000000 A1=00000000 A2=00000000 A3=0000106A A4=00000000 A5=0` | `D0=00FFFFFF D1=00000032 D2=00000032 D3=00000000 D4=00000000 D5=00000014 D6=00FFFFFF D7=00000014 A0=00000000 A1=00000000 A2=00000000 A3=0000106A A4=00000000 A5=0` | Accepted difference. Cause: Wine's SetROP2 differs from Windows'; measured on Windows 11 with the capture program. Drawing modes 18-23 (trap15-b 15 V8): task 92 |
-
-## program files (SH6)
-
-| Program                                 | Recipe        | First difference | Official                                                                                                                                                           | Port                                                                                                                                                               | Cause                                                                                                                                                            |
-| --------------------------------------- | ------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `trap15-a/a51-files-read-after-write`   | report result | line 2           | `D0=00000000 D1=00000001 D2=00000004 D3=00000000 D4=00000000 D5=00000000 D6=00000001 D7=00000000 A0=00000000 A1=0000109C A2=00000000 A3=00000000 A4=00000000 A5=0` | `D0=00000001 D1=00000001 D2=00000004 D3=00000000 D4=00000000 D5=00000000 D6=00000001 D7=00000000 A0=00000000 A1=0000109C A2=00000000 A3=00000000 A4=00000000 A5=0` | A defect of the port; it counts against 6.9 item 2 until the port imitates the run-time's stream state. Task 53 right after a task 54 on the same stream, withou |
-| `trap15-a/a52-files-write-after-read`   | report result | line 7           | `000010CC: 41 42 43 44 45 EE EE EE\r`                                                                                                                              | `000010CC: 41 42 43 58 45 EE EE EE\r`                                                                                                                              | A defect of the port; it counts against 6.9 item 2 until the port imitates the run-time's stream state. Task 54 right after a task 53 on the same stream, withou |
-| `trap15-a/a53-files-past-end-then-read` | report result | line 2           | `D0=00000000 D1=00000001 D2=00000004 D3=00000000 D4=00000000 D5=00000000 D6=00000001 D7=00000000 A0=00000000 A1=000010BE A2=00000000 A3=00000000 A4=00000000 A5=0` | `D0=00000001 D1=00000001 D2=00000004 D3=00000000 D4=00000000 D5=00000000 D6=00000001 D7=00000000 A0=00000000 A1=000010BE A2=00000000 A3=00000000 A4=00000000 A5=0` | Unconfirmed (Wine only): Seen only under Wine 8.0. The close fails (D0.W = 2), i.e. a WriteFile or CloseHandle failed after a SetFilePointer past the end of the |
 
 ## the null serial and network devices (W1)
 

@@ -174,7 +174,7 @@ The engine never reads a clock, so a run is reproducible.
 | Text of a listing line containing `%` in the execution log | Printed through `fprintf` as a format string: depends on stack contents. | Written literally. |
 | Timer ticks while a "Current Log Stopped." box is open after a bus / address error | Cannot do anything (hardware disabled first). | Same; that box is reported at the next checkpoint of the step instead of inside `mem_req`. |
 | S-record file read in text mode | Borland: CR removed, Ctrl-Z ends the file. | Emulated in `shim/hostfile.cpp`. |
-| TRAP #15 file tasks: a read right after a write, a write right after a read (C: undefined) | Decided by the Borland run-time's stream (one buffer, one `level` counter for both directions). | The same stream, `shim/hostfile.cpp`, specified in `shim/STDIO-MODEL.md`; only the bytes of the heap that the buffer did not get from the program are inferred (zero, or the last closed stream's buffer). |
+| TRAP #15 file tasks: a read right after a write, a write right after a read (C: undefined) | Decided by the Borland run-time's stream (one buffer, one `level` counter for both directions). | The same stream, `shim/hostfile.cpp`, specified in `shim/STDIO-MODEL.md`; the bytes of the original's heap that a read can return without the program having written them (residue of earlier strings) are zeros here (STDIO-MODEL.md section 7). |
 | Uninitialised locals, accesses past the end of memory, `MOVEA` timing-table overrun, `fclose(NULL)` | Unknowable / benign. | Made deterministic; PATCHES.md sections 3 and 4. |
 
 ## Reference host and tools

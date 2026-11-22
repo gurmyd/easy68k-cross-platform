@@ -3,13 +3,15 @@
 //
 // The fixture stdio.X68 stores D0.W and D2.L after every task. The headless host is an
 // operating system without buffers, so what the engine hands it shows directly in host.file().
-// The official results of the first three are the conformance programs trap15-a a51-a53
-// (tests/conformance/sim); the others are the rules read in SIM68K.exe's machine code
-// (STDIO-MODEL.md marks which); these tests pin the engine's side.
+// Every rule was measured in the official program (STDIO-MODEL.md names the conformance program or
+// probe for each); these tests pin the engine's side, also of what the oracle's recipes cannot
+// drive (Rewind, the end of the process, the heap damage).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { run } from './helpers.mjs';
+import { Reg } from '../sim68k.mjs';
+import { drive } from './headless-host.mjs';
 
 const RESULTS = 0x8000;
 
@@ -80,4 +82,28 @@ test('a stream whose close failed keeps its entry: 47 streams in all (section 8)
   const { sim, host } = await run('stdio', { caseNumber: 5 });
   assert.equal(60 - sim.readWord(RESULTS), 47, 'streams opened before an open failed');
   assert.equal(host.handles.size, 47);
+});
+
+test('a stream that a Rewind forgets keeps its bytes and the file until the end (R13; probe e2)', async () => {
+  const { sim, host } = await run('stdio', { caseNumber: 6 });
+  assert.equal(host.file('XA.BIN').length, 0, 'the bytes are in the forgotten buffer');
+  sim.rewind();
+  sim.setRegister(Reg.D7, 6);
+  sim.cmdRun();
+  drive(sim, host);
+  const list = results(sim, 4);
+  assert.equal(list[0][0], 0, 'the second run opens the file');
+  assert.equal(list[1][0], 1, 'and reads nothing (end of file)');
+  assert.equal(list[3][0], 2, 'the forgotten stream keeps the file open: the delete fails');
+  host.exit(); // the process ends: the run-time flushes every stream
+  assert.equal(text(host.file('XA.BIN')), 'ABCDE');
+});
+
+test('a write more than 4 bytes past the buffer damages the heap: the next release fails (section 7; p10a, p12)', async () => {
+  const data = new Uint8Array(1100).fill(0x41);
+  const { sim, host } = await run('stdio', { caseNumber: 7, host: { files: { 'in.bin': data } } });
+  const list = results(sim, 3);
+  assert.deepEqual(list.map(([d0]) => d0), [0, 0, 0], 'open, read and write report success');
+  assert.equal(sim.readWord(RESULTS + 18), 0xffff, 'the close never returned');
+  assert.ok(host.alerts.some((a) => a.text.includes("exception occurred in routine 'exec_inst'")), JSON.stringify(host.alerts));
 });

@@ -159,6 +159,42 @@ LEAK:   LEA     NAME,A1
 FULL:   MOVE.W  D5,(A6)+        60 - number of streams that were opened
         SIMHALT
 
+        ORG     $2600           case 6: a stream a Rewind forgets (R13; probe e2)
+        LEA     NAME,A1
+        T15     51              second run: the file exists
+        TST.W   D0
+        BEQ.S   SECOND
+        LEA     NAME,A1
+        T15     52              first run: create, write ABCDE, never close
+        LEA     ABC,A1
+        MOVEQ   #5,D2
+        T15     54
+        SIMHALT
+SECOND: MOVE.L  D1,D6
+        LEA     BUF,A1
+        MOVEQ   #10,D2
+        T15     53              the bytes are still in the forgotten buffer: end of file
+        MOVE.L  D6,D1
+        T15     56
+        LEA     NAME,A1
+        T15     57              the forgotten stream keeps the file open: 2
+        SIMHALT
+
+        ORG     $2700           case 7: a write in the read state 10 bytes past the buffer (section 7; p10a)
+        LEA     DATA,A1
+        T15     51
+        MOVE.L  D1,D6
+        LEA     BUF,A1
+        MOVEQ   #10,D2
+        T15     53
+        MOVE.L  D6,D1
+        LEA     BIG,A1
+        MOVE.L  #512,D2
+        T15     54              into the buffer at 10: 10 bytes past its end
+        MOVE.L  D6,D1
+        T15     56              the release of the buffer: access violation
+        SIMHALT
+
 NAME    DC.B    'xA.bin',0
 DATA    DC.B    'in.bin',0
 ABC     DC.B    'ABCDE'

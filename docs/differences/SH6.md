@@ -24,21 +24,23 @@ measurements of docs/porting/errata/T3.md F2.
 
 Since gate I3 the engine has the file streams of the Borland run-time linked into SIM68K.exe, so
 the sequences C leaves undefined - a read right after a write, a write right after a read, without
-a seek between them - give the official results (trap15-a `a51`, `a52`, `a53`). What remains
-different is memory the program never wrote. A read right after a write takes its bytes from the
-stream's 512-byte buffer behind the written ones (in `a51` the 4 bytes after `ABCDE`), and a read
-in the read state after a write there can run past the bytes that came from the file. In the
-original those bytes are whatever the heap block of the buffer held: zero in a block never used
-before (most likely), bytes of an earlier stream's file in a block that an earlier `fclose` freed,
-and beyond the 512 bytes the next heap block. The port gives zero for a fresh block, reuses the
-block of the stream closed last with its old bytes, and gives zero past the 512 bytes (bytes a
-write put there stay with the stream instead of overwriting another block). These rules are
-inferred, not measured: the official program could not be run for it during gate I3 (the probe
-`p01-garbage.X68` of STDIO-MODEL.md section 9 measures them). The bytes of `a51`'s read are not
-part of its golden. A program that seeks between a write and a read, as C requires, never sees
-any of this. Two smaller differences: if a stream that has been read in the write state is left
-open while a task 58 dialog moves the current folder, the bytes the host writes for it at the end
-of the program can be more than the original's flush would write (STDIO-MODEL.md section 10); and
-a copy of a read in the write state whose count wrapped the bounds test of task 53 ends in the
-`exec_inst` error box without copying anything, where the original copied heap memory until its
-access violation.
+a seek between them - give the official results (trap15-a `a51`, `a52`, `a53`, and `a61`-`a68`).
+What remains different is memory of the original's heap that the program never wrote, which a
+read can return in two cases: a read right after a write takes its bytes from the stream's
+512-byte buffer behind the written ones (in `a51` the 4 bytes after `ABCDE`), and a read in the read
+state after a write there can run past the bytes that came from the file. Measured in the official
+program under Wine (STDIO-MODEL.md section 7, probes p01, p09, p11): the same bytes in every run of
+one program, but different from program to program, because they are remains of what the program
+loaded before - text of the listing (`00001000 Starting Address`), of the Windows help texts
+(`Primary screen = 1  Secondary screens = 2 and up.`), heap pointers past the end of the buffer,
+and in a buffer that an earlier stream used, that stream's bytes after the first eight, which the
+heap overwrites with its bookkeeping (a small number at byte 5, zeros at 6 and 7). In `a51` the 4
+bytes are `0A 00 00 44`. The port does what is measured about which block a stream gets (the lowest
+freed one, with its old bytes from the ninth on) and gives zeros for everything that depends on
+the heap's history: `00 00 00 00` in `a51` (not part of its golden). A program that seeks between a
+write and a read, as C requires, never sees any of this. Two smaller differences: if a stream that
+has been read in the write state is left open while a task 58 dialog moves the current folder, the
+bytes the host writes for it at the end of the program can be more than the original's flush would
+write (STDIO-MODEL.md section 10); and a copy of a read in the write state whose count wrapped the
+bounds test of task 53 ends in the `exec_inst` error box without copying anything, where the
+original copied heap memory until its access violation.

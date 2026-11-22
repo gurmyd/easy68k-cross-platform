@@ -128,7 +128,8 @@ describe.skipIf(!enginesBuilt)('the tour on the real engine (needs engine/dist)'
     expect(textOf(memory.subarray(0, 11))).toBe('C:\\TOUR.TXT');
     // the file tasks: written, read back, closed, found and deleted
     expect(tour.log).toContain('fileWrite(1,"HI")');
-    expect(tour.log).toContain('fileRead(1,2)');
+    // The task 53 of 2 bytes fills the run-time's 512-byte buffer (engine/sim/shim/STDIO-MODEL.md R1).
+    expect(tour.log).toContain('fileRead(1,512)');
     expect(files.files.size).toBe(0);
   });
 

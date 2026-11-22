@@ -104,10 +104,11 @@ These keep further lines of the originals unchanged.
   Until then the streams were unbuffered `fopencookie` streams of this build's C library, and the
   host imitated the run-time's buffering; the sequences C leaves undefined came out differently
   (trap15-a `a51`, `a52`, `a53`: a read right after a write, a write right after a read, a close
-  that fails and leaves the file open; they now produce the official results). Observable
-  differences that remain: the bytes a read in the write state returns from the buffer's memory
-  where the original's heap held something the port cannot know, and the bytes past the end of a
-  buffer (STDIO-MODEL.md sections 7 and 10; docs/differences/SH6.md). The two special cases that
+  that fails and leaves the file open; they now produce the official results, as do the
+  conformance programs `a61`-`a68` that cover every rule of the model). Observable differences
+  that remain: the bytes a read returns of memory the program never wrote - residue of the
+  original's heap (text loaded earlier, heap pointers) that the port gives as zeros
+  (STDIO-MODEL.md sections 7 and 10; docs/differences/SH6.md). The two special cases that
   gate I2 measured are part of the model: `fwrite` with an item size of 0 returns the item count
   (task 54 with D2 = 0 gives D0.W = 0, not 2), and `fread` of 0xFFFFFFFF bytes returns the
   requested count because the failed `ReadFile` returns -1, which the run-time compares with the
@@ -115,8 +116,9 @@ These keep further lines of the originals unchanged.
   D2 unchanged; T3: `tests/conformance/sim`, trap15-a `a31` and `a32`; errata T3.md F3, F4). Other
   wrapping counts now fail as the original's do (D0.W = 2) instead of returning the count. Tests:
   io.test.mjs ("file tasks 50-59 ..."), `app/src/engine/trap15.test.ts`, and the conformance
-  programs trap15-a `a30`-`a37` and `a51`-`a60`; `test/stdio.test.mjs` for the rules that no official
-  run measures yet (STDIO-MODEL.md section 9).
+  programs trap15-a `a30`-`a37`, `a51`-`a60` and `a61`-`a68`; `test/stdio.test.mjs` also for what the
+  oracle's recipes cannot drive (Rewind, the end of the process, the heap damage; measured with the
+  probes of STDIO-MODEL.md section 9).
   `shim/simio.cpp` (`fileDialogReply`) tells `shim/hostfile.cpp` when a task 58 dialog was
   accepted (`easy68k_files_folder_changed`), and `shim/api.cpp` takes the size of the memory
   padding from `shim/easy68k.h` (`EASY68K_MEMORY_PADDING`), which the streams use to tell where

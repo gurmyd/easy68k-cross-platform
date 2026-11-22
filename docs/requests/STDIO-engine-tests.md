@@ -1,4 +1,4 @@
-Status: open.
+Status: applied on the branch gate3/stdio by its own author, at the merge of main (the orchestrator assigned the three files for that merge).
 
 # Request from the stdio work (branch `gate3/stdio`) to W4 (`app/src/engine/`)
 

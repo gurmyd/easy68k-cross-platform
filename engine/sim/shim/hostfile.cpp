@@ -58,30 +58,49 @@ const int BUFFER_SIZE = 512; // setvbuf(fp, NULL, _IOFBF, 512) in fopen
 // _streams[] has 50 entries (_NFILE_); stdin, stdout and stderr hold three.
 const int STREAM_SLOTS = 47;
 
-// The 512-byte heap block that holds a stream buffer.  The run-time frees it
-// at fclose and the next fopen gets it back (STDIO-MODEL.md, "The buffer's
-// memory"); its old bytes stay in it.  A read past its end returns
-// BEYOND_BYTE; a write past its end is kept with the block (in the original it
-// overwrites whatever follows in the heap).
+// The 512-byte heap block that holds a stream buffer (STDIO-MODEL.md section 7,
+// measured with the probes p01, p09, p10, p11, p12):
+// - fclose frees it with its bytes, except that the heap's bookkeeping takes
+//   its first 8 bytes; fopen takes the free block that was allocated first
+//   (the lowest one), else a new one.
+// - What the heap held before (bytes of strings the program freed long ago,
+//   heap pointers past the end) cannot be known here: those bytes read as 0.
+// - A write that runs more than HEAP_SLACK bytes past the end of the block
+//   damages the next heap block; the next allocation or release of a stream
+//   buffer then fails with an access violation (and so does every later one:
+//   the heap stays damaged).  Bytes written past the end are kept with the
+//   block, so that the stream reads them back as the original does.
 const unsigned char FRESH_BYTE = 0x00;
 const unsigned char BEYOND_BYTE = 0x00;
+const int HEAP_HEADER = 8;
+const int HEAP_SLACK = 4;
 struct Block {
+  unsigned serial;                  // allocation order: lower = earlier = lower address
   std::vector<unsigned char> bytes; // at least BUFFER_SIZE
 };
-std::vector<Block *> freeBlocks; // freed blocks, the next one to be reused last
+std::vector<Block *> freeBlocks;
+unsigned nextSerial = 0;
+bool heapDamaged = false;
 
 Block *allocBlock() {
+  if (heapDamaged) throw EAccessViolation();
   if (!freeBlocks.empty()) {
-    Block *block = freeBlocks.back();
-    freeBlocks.pop_back();
+    size_t lowest = 0;
+    for (size_t i = 1; i < freeBlocks.size(); i++)
+      if (freeBlocks[i]->serial < freeBlocks[lowest]->serial) lowest = i;
+    Block *block = freeBlocks[lowest];
+    freeBlocks.erase(freeBlocks.begin() + (long)lowest);
     return block;
   }
   Block *block = new Block();
+  block->serial = nextSerial++;
   block->bytes.assign(BUFFER_SIZE, FRESH_BYTE);
   return block;
 }
 void freeBlock(Block *block) {
+  if (heapDamaged) throw EAccessViolation();
   block->bytes.resize(BUFFER_SIZE); // what lay past the end is not part of the block
+  for (int i = 0; i < HEAP_HEADER; i++) block->bytes[(size_t)i] = 0;
   freeBlocks.push_back(block);
 }
 
@@ -120,6 +139,7 @@ void putByte(Stream *s, long long offset, unsigned char value) {
   // Bytes written past the end of the block are kept (up to 1 MB) so that a
   // later read through the same stream returns them, as it does in the
   // original as long as nothing else used that heap memory.
+  if (offset >= BUFFER_SIZE + HEAP_SLACK) heapDamaged = true;
   if (offset >= (long long)bytes.size()) {
     if (offset >= BUFFER_SIZE + (1 << 20)) return;
     bytes.resize((size_t)offset + 1, BEYOND_BYTE);
@@ -459,13 +479,18 @@ extern "C" FILE *easy68k_fopen(const char *name, const char *mode) {
   if (!s) return NULL;
   int handle = host_file_open(name, hostMode);
   if (handle <= 0) return NULL;
+  // The handle is the stream's from here on: if the allocation of the buffer
+  // fails (a damaged heap), the entry and the handle stay taken.
   s->open = true;
-  s->flags = flags | BF_BUF;
+  s->handle = handle;
+  s->buffer = NULL;
+  s->flags = flags;
   s->level = 0;
-  s->bsize = BUFFER_SIZE;
+  s->bsize = 0;
   s->curp = 0;
   s->buffer = allocBlock();
-  s->handle = handle;
+  s->flags = flags | BF_BUF;
+  s->bsize = BUFFER_SIZE;
   s->osPosition = 0;
   s->mirrored = 0;
   s->mirrorLost = false;
@@ -524,7 +549,7 @@ extern "C" int easy68k_fclose(FILE *stream) {
     mirrorSync(s);
     return EOF;
   }
-  freeBlock(s->buffer);
+  freeBlock(s->buffer); // throws on a damaged heap: the stream and its handle stay open
   s->buffer = NULL;
   int r = host_file_close(s->handle) == 0 ? 0 : -1;
   s->open = false;
