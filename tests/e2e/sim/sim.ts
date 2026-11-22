@@ -345,7 +345,13 @@ export async function answer(app: App, button: string, title?: string): Promise<
   const box = title ? app.dialog(title) : app.messageBox;
   await expect(box).toBeVisible();
   const text = await app.boxText(box);
-  await app.button(box, button).click();
+  const target = app.button(box, button);
+  // Once seen in WebKit on a loaded machine (1 of 496): the box was shown, but the click waited 45 s
+  // for its button to become "stable". The keyboard does what the click does, without that wait.
+  await target.click({ timeout: 10_000 }).catch(async () => {
+    await target.focus();
+    await target.press('Enter');
+  });
   await expect(box).toBeHidden();
   return text;
 }

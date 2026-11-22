@@ -186,6 +186,9 @@ test('full screen: the button enters, Alt+Enter in the Output panel leaves; the 
           : 'none',
     )
     .not.toBe('none');
+  const outcome = (await refused.count()) > 0 ? 'refused (the original box)' : 'entered';
+  // Printed, so that the CI log says which way each browser went.
+  console.log(`full screen in ${browserName} on ${process.platform}: ${outcome}`);
   if ((await refused.count()) > 0) {
     test.info().annotations.push({ type: 'note', description: `${browserName}: full screen refused in this browser` });
     expect(await app.boxText(refused)).toBe(

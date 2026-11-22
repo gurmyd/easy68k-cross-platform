@@ -134,10 +134,16 @@ test('task 4 reads a number with atoi rules; task 5 reads one character into D1.
 });
 
 test('type-ahead: keys typed while nothing waits keep the last one for the next input', async ({ app, page }) => {
+  // The program waits with task 7 until a key is pending, gives the user two more seconds, then reads
+  // one character with task 5. Nothing waits for input meanwhile, so the keys are type-ahead.
   await execute(
     app,
     program(
-      '    MOVE.L  #300,D1',
+      'WAIT MOVE.B  #7,D0',
+      '    TRAP    #15',
+      '    TST.B   D1',
+      '    BEQ     WAIT',
+      '    MOVE.L  #200,D1',
       '    MOVE.B  #23,D0',
       '    TRAP    #15',
       '    MOVE.B  #5,D0',
@@ -149,8 +155,8 @@ test('type-ahead: keys typed while nothing waits keep the last one for the next 
   await expectState(app, 'Running');
   await page.keyboard.type('ab');
   await expectState(app, 'Halted');
-  // D1 held 300 ($12C); task 5 replaces only D1.B.
-  await expectReg(app, 'D1', '00000162');
+  // D1 held 200 ($C8); task 5 replaces only D1.B with the last key typed ahead.
+  await expectReg(app, 'D1', '00000062');
 });
 
 test('paste chord: one line completes a task 2 input; of several lines the last character is the type-ahead', async ({
