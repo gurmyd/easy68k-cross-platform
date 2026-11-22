@@ -3397,6 +3397,22 @@
         }
       }
     },
+    "trap15-a/a70-files-device-names": {
+      "sourceSha256": "390ed6a6a21954719731b83499d3fa0fd4f5204e29edeee242e34927aa917e5d",
+      "s68Sha256": "6542a342a1a426c06b9f2a04c64279f3e3c987d256197481ae7c5b48ed6d1370",
+      "l68Sha256": "3d19d7c2a0df930c6347a25442a883a7af5b358ccb9f2a221eca6529e113f386",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "artifacts": {
+            "result": {
+              "sha256": "bbc1c6071aabb459d30411a9062b17f6bfa1558e01823431cf8ab9663773d174",
+              "bytes": 3761
+            }
+          }
+        }
+      }
+    },
     "trap15-b/b01-text-background-fill": {
       "sourceSha256": "5ba26815aa6a9eb93a7f407bb33edd65bcf3185e77de9ba67edceb521c201538",
       "s68Sha256": "e2d14b1ff4a1d1b5f5956b5a170026036932b3ded8a6bdd964784ab5df352c39",
