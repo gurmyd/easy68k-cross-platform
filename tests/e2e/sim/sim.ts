@@ -198,6 +198,9 @@ export async function step(
  * and Reload on the macOS key map - belong to the program (K3, 2.9.4); a user clicks the listing first.
  */
 export async function pressInListing(app: App, id: KnownCommandId): Promise<void> {
+  // A chord of a disabled command does nothing; the state that enables it may be a frame away.
+  const button = app.toolbarButton(id);
+  if ((await button.count()) > 0) await expect(button, `${id} is enabled before its chord`).toBeEnabled();
   await listing(app).focus();
   await app.press(id);
 }
