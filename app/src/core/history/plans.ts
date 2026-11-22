@@ -278,11 +278,16 @@ export class Work {
 
   /**
    * Admission (P3.3.4): true when `incoming` more counted bytes fit into `half`, after pruning it
-   * down to 0.9 x B / 2 with the change included when they would not.
+   * down to 0.9 x B / 2 with the change included when they would not. It first finds out whether
+   * they can fit at all, with everything it may prune gone; when they cannot, it prunes nothing
+   * and keeps nothing (decided by the architect, D-e, errata N3: earlier versions and Trash items
+   * are never removed for a change that is not kept in the end).
    */
   async admit(half: Half, incoming: number, protect: Protect = {}): Promise<boolean> {
     if (this.totals[half] + incoming <= this.limit) return true;
-    const fits = incoming <= this.limit && (half === 'versions' ? true : await this.trashCanFit(incoming, protect));
+    const fits =
+      incoming <= this.limit &&
+      (half === 'versions' ? await this.versionsCanFit(incoming, protect) : await this.trashCanFit(incoming, protect));
     if (fits) {
       const target = Math.max(0, Math.floor(PRUNE_TO * this.limit) - incoming);
       if (half === 'trash') await this.pruneTrash(target, protect, 'admission');
@@ -291,6 +296,20 @@ export class Work {
     const admitted = this.totals[half] + incoming <= this.limit;
     if (!admitted) this.env.log?.({ kind: 'not-admitted', half, incoming });
     return admitted;
+  }
+
+  /**
+   * True when the versions half could take `incoming` if every version pruning may remove went
+   * (pruneVersions): every version counted there goes, and with its last version every living
+   * record but a protected one, which keeps its record (128 bytes) and only that.
+   */
+  private async versionsCanFit(incoming: number, protect: Protect): Promise<boolean> {
+    let kept = 0;
+    for (const id of protect.records ?? NONE) {
+      const record = await this.tx.file(id);
+      if (record && !record.trash) kept += RECORD_BYTES;
+    }
+    return kept + incoming <= this.limit;
   }
 
   /** True when the Trash half could take `incoming` if every item it may prune went. */
@@ -671,7 +690,12 @@ export async function planGuardSettle(
   args: { item: string; untouched: ReadonlySet<string> },
 ): Promise<void> {
   const work = await Work.start(tx, env);
-  for (const { id, value } of await tx.item(args.item)) {
+  for (const { id } of await tx.item(args.item)) {
+    // Read each record again: a record moved back earlier in this loop passed admission, which may
+    // have pruned older versions of this one (they count in the versions half); writing the record
+    // as the item was first read would undo that count (seed 22043, errata N3).
+    const value = await tx.file(id);
+    if (!value) continue;
     const mark = value.trash;
     if (!mark) continue;
     if (args.untouched.has(value.place)) {

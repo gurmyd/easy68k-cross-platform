@@ -4,8 +4,9 @@
 // tests drive these functions under Node.
 //
 // ARCHITECTURE-PLUS (N5): Delete is the one-item case of bulk.ts; Import passes the question of
-// import-guard.ts and keeps a replaced file's bytes as `Before import`; Rename refuses a folder
-// that holds .git and lets the history and an open document follow.
+// import-guard.ts and keeps a replaced file's bytes as `Before import`, and is otherwise main's,
+// also below .git (P1.1 rule 2); Rename refuses a folder that holds .git and lets the history and
+// an open document follow.
 //
 // Owner: FS1 > N5.
 
@@ -16,8 +17,6 @@ import { invalidNameReason } from './filters';
 import { findGitHolder, gitRefusalFor, innerName, isGitName } from './git-guard';
 import { guardImport, type StorageEstimator } from './import-guard';
 import {
-  GIT_NOT_IMPORTED,
-  IMPORT_TITLE,
   NEW_FOLDER_INITIAL_NAME,
   NEW_FOLDER_TITLE,
   RENAME_TITLE,
@@ -25,6 +24,7 @@ import {
   exportedToast,
   gitNameRefused,
   gitRefusal,
+  goneAfterRenaming,
   openInEditor,
 } from './texts';
 import { renameChecked } from './rename';
@@ -78,12 +78,10 @@ export async function importInto(
   items: readonly ImportItem[],
   options: { estimate?: StorageEstimator } = {},
 ): Promise<ImportResult | null> {
-  const store = gitRefusalFor(ctx.vfs, [dir]);
-  if (store !== null) {
-    await inform(ctx, IMPORT_TITLE, store);
-    return null;
-  }
-  const unpacked: ImportItem[] = [];
+  // ARCHITECTURE-PLUS P1.1 rule 2: Import is unchanged, also below a folder named .git and in an
+  // opened folder that is itself one (decided by the architect, 22 November 2026; errata N5 entry 19):
+  // no refusal and nothing left out here, as on main. The history keeps nothing there (`untracked`).
+  const expanded: ImportItem[] = [];
   const notes: string[] = [];
   for (const item of items) {
     const segments = item.rel.split('/');
@@ -101,7 +99,7 @@ export async function importInto(
           const prefix = segments.slice(0, -1).join('/');
           const zip = await itemsFromZip(bytes);
           for (const entry of zip.items)
-            unpacked.push({ ...entry, rel: prefix ? `${prefix}/${entry.rel}` : entry.rel });
+            expanded.push({ ...entry, rel: prefix ? `${prefix}/${entry.rel}` : entry.rel });
           for (const skipped of zip.skipped) {
             if (skipped.reason !== 'resource-fork') notes.push(`${skipped.path}: ${skipped.reason}`);
           }
@@ -111,13 +109,11 @@ export async function importInto(
           continue;
         }
       }
-      unpacked.push({ rel: item.rel, read: async () => bytes, size: bytes.length });
+      expanded.push({ rel: item.rel, read: async () => bytes, size: bytes.length });
       continue;
     }
-    unpacked.push(item);
+    expanded.push(item);
   }
-  const { items: expanded, notes: gitNotes } = withoutTopGit(unpacked);
-  notes.push(...gitNotes);
 
   // ARCHITECTURE-PLUS P3.2.6: a question before a large import into the browser's storage.
   const fileItems = expanded.filter((item) => !item.rel.endsWith('/'));
@@ -320,6 +316,7 @@ async function askAndRename(ctx: AppContext, path: VPath): Promise<VPath | null>
     }
     let renamed: VPath;
     const kept: VPath[] = [];
+    const gone: VPath[] = [];
     let copies: VPath | null = null;
     try {
       renamed = await renameChecked(ctx.vfs, path, trimmed, {
@@ -327,38 +324,23 @@ async function askAndRename(ctx: AppContext, path: VPath): Promise<VPath | null>
           kept.push(...files);
           copies = folder;
         },
+        gone: (files) => void gone.push(...files),
       });
     } catch (error) {
       await showError(ctx, RENAME_TITLE, error);
       initial = trimmed;
       continue;
     }
-    // A file that changed at the last moment stayed under the old name (errata N5 entry 18).
+    // A file that changed at the last moment stayed under the old name; one that was moved or
+    // deleted meanwhile has no copy under the new name (errata N5 entry 18).
     for (const file of kept) {
       await inform(ctx, RENAME_TITLE, changedAfterRenaming(basename(file), displayPath(ctx.vfs, copies ?? renamed)));
     }
+    for (const file of gone) {
+      await inform(ctx, RENAME_TITLE, goneAfterRenaming(basename(file), displayPath(ctx.vfs, renamed)));
+    }
     return renamed;
   }
-}
-
-/**
- * The items of an import that would make a folder named .git at the top of the import folder (a
- * picked or zipped folder named .git): they are left out, and named once each (errata N5 entry 15).
- * Deeper .git folders (a repository's own, `lab3/.git/...`) are imported as today (P1.1 rule 2).
- */
-export function withoutTopGit(items: readonly ImportItem[]): { items: ImportItem[]; notes: string[] } {
-  const out: ImportItem[] = [];
-  const tops: string[] = [];
-  for (const item of items) {
-    const segments = item.rel.split('/');
-    const top = segments[0] as string;
-    if (isGitName(top) && segments.length > 1) {
-      if (!tops.includes(top)) tops.push(top);
-      continue;
-    }
-    out.push(item);
-  }
-  return { items: out, notes: tops.map((top) => `${top}/: ${GIT_NOT_IMPORTED}`) };
 }
 
 /** The folder an action on `path` works in: the folder itself, or the folder of a file. */

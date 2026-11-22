@@ -32,6 +32,7 @@ import {
   alreadyExists,
   changedWhileMoving,
   gitRefusal,
+  goneWhileMoving,
   movedToast,
   openInEditor,
   replaceManyQuestion,
@@ -140,6 +141,39 @@ export async function unchangedSince(
   if (now?.kind !== 'file' || now.mtime !== seen.mtime || now.size !== seen.size) return false;
   const bytes = await vfs.readFile(path).catch(() => null);
   return bytes !== null && bytes.length === seen.data.length && bytes.every((b, i) => b === seen.data[i]);
+}
+
+/** A file just written with `data`, as a later unchangedSince compares it; undefined when not read back. */
+export async function writtenAs(
+  vfs: Pick<FilesDeps['vfs'], 'stat'>,
+  path: VPath,
+  data: Uint8Array,
+): Promise<SourceSeen | undefined> {
+  const stat = await vfs.stat(path).catch(() => null);
+  return stat?.kind === 'file' ? { mtime: stat.mtime, size: stat.size, data } : undefined;
+}
+
+/**
+ * A source that is gone when a move (or a rename, or Undo's move back) wants to remove it was moved
+ * or deleted by someone else meanwhile (another window, a program): its copy must not stay, or the
+ * file would come back (errata N5 entry 18). When `source` is gone, removes `copy` while it is still
+ * the copy written (`written`): 'taken-back'; a copy someone wrote to since stays, being their save:
+ * 'kept'. 'there': the source still exists (it changed; the caller keeps both).
+ */
+export async function takeBackCopyOfGone(
+  vfs: Pick<FilesDeps['vfs'], 'stat' | 'readFile' | 'remove'>,
+  source: VPath,
+  copy: VPath,
+  written: SourceSeen | undefined,
+): Promise<'there' | 'taken-back' | 'kept'> {
+  if ((await vfs.stat(source).catch(() => null)) !== null) return 'there';
+  if (!(await unchangedSince(vfs, copy, written))) return 'kept';
+  try {
+    await vfs.remove(copy);
+    return 'taken-back';
+  } catch {
+    return 'kept';
+  }
 }
 
 interface PlannedFile {
@@ -300,6 +334,8 @@ export async function transferItems(
   const replacedDocs: { path: VPath; doc: DocumentState }[] = [];
   // What each source was when its bytes were taken: a move removes it only while it is unchanged.
   const taken = new Map<VPath, SourceSeen>();
+  // Each copy as written where it replaced nothing: taken back when its source goes meanwhile.
+  const copies = new Map<VPath, SourceSeen | undefined>();
   let failed = false;
   for (const file of planned) {
     if (file.skip) continue;
@@ -353,6 +389,7 @@ export async function transferItems(
         failed = true;
         break;
       }
+      copies.set(file.to, await writtenAs(vfs, file.to, data));
     }
     outcome.written.push([file.from, file.to]);
     const doc = file.conflict ? documentAt(documents, file.to) : undefined;
@@ -370,15 +407,30 @@ export async function transferItems(
 
   const written = outcome.written;
   const effective: TransferMode = failed ? 'copy' : mode; // a failed write removes nothing
+  // Copies taken back because their source went meanwhile: not moved, and not counted as moved.
+  const takenBack = new Set<VPath>();
   if (effective === 'move') {
     // Remove what was written at the target, then the item's folders left empty.
     const moved: [VPath, VPath][] = [];
     for (const [from, to] of written) {
       if (sameName(from, to)) continue; // never remove the file just written (cannot happen: alreadyIn)
       // A source that changed after its bytes were copied (another window saved it, a program
-      // wrote it) stays: removing it would lose the change (errata N5 entry 16).
+      // wrote it) stays: removing it would lose the change (errata N5 entry 16). One that is gone
+      // was moved or deleted by someone else: its copy goes again, unless it replaced a file (that
+      // file is in the Trash, and the target keeps the copy) or was written to since (errata N5
+      // entry 18).
       if (!(await unchangedSince(vfs, from, taken.get(from)))) {
-        await inform(deps, title, changedWhileMoving(basename(from), displayPath(vfs, dirname(to)), false));
+        const gone = copies.has(to)
+          ? await takeBackCopyOfGone(vfs, from, to, copies.get(to))
+          : (await vfs.stat(from).catch(() => null)) === null
+            ? 'kept'
+            : 'there';
+        if (gone === 'taken-back') {
+          takenBack.add(to);
+          await inform(deps, title, goneWhileMoving(basename(from), displayPath(vfs, dirname(to)), false));
+        } else if (gone === 'there') {
+          await inform(deps, title, changedWhileMoving(basename(from), displayPath(vfs, dirname(to)), false));
+        }
         continue;
       }
       try {
@@ -413,10 +465,11 @@ export async function transferItems(
   // A replaced file whose document is open and not modified is reloaded.
   for (const { doc } of replacedDocs) await documents.reload(doc.id).catch(() => {});
 
+  const carriedFiles = written.filter(([, to]) => !takenBack.has(to));
   outcome.items = tops
     .filter(
       ({ item }) =>
-        written.some(([from]) => isWithin(from, item)) || emptyFolders.some(([from]) => isWithin(from, item)),
+        carriedFiles.some(([from]) => isWithin(from, item)) || emptyFolders.some(([from]) => isWithin(from, item)),
     )
     .map(({ item }) => item);
   outcome.done = outcome.items.length > 0;

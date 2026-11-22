@@ -235,6 +235,9 @@ const REGRESSION_SEEDS: readonly [number, string][] = [
   [2762, ABORTED_MOVE],
   [
     4063,
+    // Since decision D-e (errata N3, third round of the gate) a rule of the model, not an exception
+    // of the checker: a copy moving back that can be kept counts as admitted, one that cannot adds
+    // nothing, and the store prunes nothing for it.
     "a Trash restore's copy that did not fit pruned the versions half and was then not kept (the model; found after the repair)",
   ],
   [4590, HOLDER],
@@ -269,6 +272,12 @@ const REGRESSION_SEEDS: readonly [number, string][] = [
 /** Seeds that failed against createMemoryHistoryService (found after the repair). */
 const MEMORY_REGRESSION_SEEDS: readonly [number, string][] = [
   [3694, "a delete's own copies had left the versions half before its settle pruned it (the model)"],
+  // Third round of the gate: failed about 1 run in 6 on a loaded machine (Node's own hashing and
+  // compression make the order of the awaits vary); history-db.test.ts holds the case exactly.
+  [
+    22043,
+    "guard's settle wrote records of the item as first read, after a copy's admission had pruned their older versions (the store)",
+  ],
 ];
 
 // They failed against createHistoryService (two windows, faults), and run there; the three the review

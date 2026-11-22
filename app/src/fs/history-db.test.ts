@@ -676,6 +676,83 @@ describe('guard (P3.3.4)', () => {
     const db = await dump(env.factory);
     expect(db.versions.every((v) => (v.value as { size: number }).size <= MB)).toBe(true);
   }, 120_000);
+
+  it('guard gives an unchanged file its place back after the others of its item lost older versions to that admission: every record still counts its versions (seed 22043)', async () => {
+    // A folder delete whose `act` leaves y.X68: settle moves y's record back, its copy's admission
+    // prunes the oldest versions of the half (the older versions of x0..x2, in the same item), and
+    // settle then clears x0..x2's pending marks. It must write those records as they are now, not
+    // as the item was first read (errata N3, "What the model test found, third round").
+    const env = setup();
+    let ids = 0;
+    let quota = 640 * MB;
+    const h = createMemoryHistoryStore(
+      {
+        vfs: env.vfs,
+        clock: env.clock,
+        scheduler: env.scheduler,
+        settings: env.settings,
+        factory: env.factory,
+        // B = 64 MB while the files are saved, then 4 MB (B / 2 = 2 MB), as a quota that fell.
+        estimate: async () => ({ quota, usage: 0 }),
+      },
+      // Ids in the order made: y's record comes before x0..x2's in the item.
+      { schedulePass: false, newId: () => `id${String(++ids).padStart(6, '0')}`, log: (e) => env.events.push(e) },
+    );
+    await save(env, h, '/browser/d/y.X68', noise(300_000, 1));
+    for (let i = 0; i < 3; i++) await save(env, h, `/browser/d/x${i}.X68`, noise(300_000, 10 + i));
+    env.clock.t += 10 * MINUTE;
+    for (let i = 0; i < 3; i++) await save(env, h, `/browser/d/x${i}.X68`, noise(300_000, 20 + i));
+    env.clock.t += 10 * MINUTE;
+    for (let i = 0; i < 5; i++) await save(env, h, `/browser/o${i}.X68`, noise(300_000, 30 + i));
+    env.clock.t += 10 * MINUTE;
+    quota = 40 * MB;
+    env.events.length = 0;
+    const result = await h.guard(
+      '/browser/d',
+      'delete',
+      async (seen) => {
+        for (const file of seen) if (!file.path.endsWith('/y.X68')) await env.vfs.remove(file.path);
+      },
+      yes,
+    );
+    expect(result.outcome).toBe('kept');
+    expect((await h.versions('/browser/d/y.X68')).length).toBeGreaterThan(0);
+    // The admission did prune the older versions of x0..x2 (the case of the seed).
+    expect(env.events.some((e) => e.kind === 'prune' && e.half === 'versions' && e.trashVersions > 0)).toBe(true);
+    const db = await dump(env.factory);
+    const versionsOf = (id: IDBValidKey) =>
+      db.versions
+        .filter((v) => (v.value as { file: string }).file === String(id))
+        .map((v) => v.value as { stored: number });
+    for (const { key, value } of db.files) {
+      const record = value as { count: number; bytes: number };
+      const versions = versionsOf(key);
+      expect(record.count, String(key)).toBe(versions.length);
+      expect(record.bytes, String(key)).toBe(128 + versions.reduce((n, v) => n + v.stored + 128, 0));
+    }
+  }, 120_000);
+
+  it('a copy moving back from the Trash that cannot be kept prunes nothing for it, with the versions half near B / 2 (D-e)', async () => {
+    // Decided by the architect (D-e, errata N3): admission first finds out whether the copy can be
+    // kept at all; a copy of 1 MB + 1 byte cannot, so no earlier version of another file goes.
+    const env = setup();
+    const h = env.make({ quota: 40 * MB }); // B = 4 MB, B / 2 = 2 MB
+    for (let i = 0; i < 30; i++) await save(env, h, `/browser/s${i % 6}.X68`, noise(60_000, 700 + i));
+    const versionsBefore = (await h.usage()).versionBytes;
+    expect(versionsBefore).toBeGreaterThan(1.5 * MB);
+    const rows = async () =>
+      (await Promise.all([0, 1, 2, 3, 4, 5].map((i) => h.versions(`/browser/s${i}.X68`)))).map((list) => list.length);
+    const listed = await rows();
+    await env.vfs.writeFile('/browser/big.X68', noise(MB + 1, 11));
+    await h.guard('/browser/big.X68', 'delete', remover(env, '/browser/big.X68'), yes);
+    const [item] = await h.trashItems();
+    env.events.length = 0;
+    expect((await h.restoreTrash(item?.id ?? '', RESTORE_ALL)).restored).toEqual(['/browser/big.X68']);
+    expect(env.events.filter((e) => e.kind === 'prune')).toEqual([]);
+    expect(await rows()).toEqual(listed);
+    expect((await h.usage()).versionBytes).toBe(versionsBefore);
+    expect(await h.versions('/browser/big.X68')).toEqual([]);
+  }, 120_000);
 });
 
 /**

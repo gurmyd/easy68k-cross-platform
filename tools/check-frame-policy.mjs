@@ -32,7 +32,10 @@
 //     made itself; none shows the application, none runs a script, nothing of an address below the
 //     worker's scope reaches the server. An HTML file with a script saved as x.pdf runs nothing;
 //   - no Content Security Policy violation except those the check provokes on purpose (data: and
-//     the other site in a frame), and no console error except the refused loads.
+//     the other site in a frame), and no console error except the refused loads;
+//   - without a worker (a first visit; the desktop app has none): the PDF frame sent to the
+//     application's page and its ?open= address shows its document again within 2 s and keeps no
+//     copy of the application (decision D-c, errata N6 14); a picture's viewer has no frame.
 // Screenshots (both themes) go to <out> (default build/frame-policy-check, git-ignored). Prints
 // "N of M checks passed"; exit code 0 only if every check passed.
 
@@ -467,31 +470,89 @@ async function strangerPass(p, page, frameName, selector, base, serve) {
 
 /**
  * Before a worker controls the page (the first visit), nothing answers a frame navigation but the
- * server. The Help frame then has no allow-scripts (H1), but the PDF frame has no sandbox at all
- * (P3.4.2: a sandbox blocks the browsers' PDF viewers). What the PDF frame shows when it is sent to
- * the application's page on the first visit is printed as a note: the guarantee this check gives
- * is the one under the worker, as the task of the gate asks.
+ * server, and the same holds in the desktop app, which has no worker. The Help frame then has no
+ * allow-scripts (H1), but the PDF frame has no sandbox at all (P3.4.2: a sandbox blocks the
+ * browsers' PDF viewers), and the policy allows the application's own origin in it. Decision D-c of
+ * the stage's gate (errata N6 14, N0 11): the viewer puts its document back whenever the frame is
+ * found to show something else. This pass sends the PDF frame to the application's page and to its
+ * ?open= address without a worker, and checks that the document is back within two seconds, that no
+ * copy of the application stays in the frame, and that the server saw only what the frame was sent
+ * to; a picture's viewer has no frame (an <img> only).
  */
-async function firstVisitNote(name, browser, serve) {
+async function firstVisitPass(name, browser, serve) {
+  const p = `${name}, first visit without a worker:`;
   const context = await browser.newContext({ serviceWorkers: 'block', viewport: { width: 1400, height: 900 } });
   try {
     await context.addInitScript(watchPage);
     const page = await context.newPage();
     await page.goto(`${serve.origin}${BASE}`, { timeout: 240_000 });
     await page.waitForSelector('.e68-shell', { timeout: 240_000 });
+    check(`${p} no worker controls the page`, await page.evaluate(() => navigator.serviceWorker?.controller == null));
     await dropFiles(page, [{ name: `${name}-first.pdf`, bytes: pdfBytes('first visit'), type: 'application/pdf' }]);
     const viewer = page.locator('[data-e68-panel^="viewer:"]', { has: page.locator('iframe') }).first();
     await viewer.waitFor({ timeout: 30_000 });
-    const selector = `[data-e68-panel="${await viewer.getAttribute('data-e68-panel')}"] iframe`;
-    const state = await navigateFrame(page, selector, `${serve.origin}${BASE}index.html`);
-    await page.waitForTimeout(3000);
-    const again = await frameState(page, selector);
-    note(
-      `${name}, first visit without a worker: the PDF frame sent to the application's page shows ` +
-        `${JSON.stringify(again ?? state)}`,
+    await page.waitForTimeout(1000);
+    const panel = `[data-e68-panel="${await viewer.getAttribute('data-e68-panel')}"]`;
+    const selector = `${panel} iframe`;
+    const src = await page.locator(selector).getAttribute('src');
+    for (const [label, address] of [
+      ["the application's page", `${serve.origin}${BASE}index.html`],
+      ["the application's ?open= address", `${serve.origin}${BASE}?open=/browser/demo.X68`],
+    ]) {
+      await page.evaluate((css) => document.querySelector(css)?.setAttribute('data-check-old', ''), selector);
+      const started = Date.now();
+      await page.evaluate(
+        ([css, url]) => document.querySelector(css).contentWindow.location.replace(url),
+        [selector, address],
+      );
+      let back = -1;
+      let state = null;
+      while (Date.now() - started < 5000) {
+        state = await frameState(page, selector);
+        const old = await page.evaluate(() => document.querySelector('[data-check-old]') !== null);
+        const nowSrc = await page.locator(selector).getAttribute('src');
+        if (!old && state && !state.app && !state.global && state.href !== address && nowSrc === src) {
+          back = Date.now() - started;
+          break;
+        }
+        await page.waitForTimeout(50);
+      }
+      check(
+        `${p} the PDF frame sent to ${label} shows its document again within 2 s`,
+        back >= 0 && back <= 2000,
+        `${back < 0 ? 'not back after 5 s' : `${back} ms`}: ${JSON.stringify(state)}`,
+      );
+      await page.waitForTimeout(3000);
+      const later = await frameState(page, selector);
+      const frames = await page.locator(`${panel} iframe`).count();
+      const shells = await page.evaluate(() => document.querySelectorAll('.e68-shell').length);
+      check(
+        `${p} after ${label}, 3 s later no copy of the application is in the frame`,
+        later !== null && !later.app && !later.global && later.href !== address && frames === 1 && shells === 1,
+        `${JSON.stringify(later)} frames=${frames} shells=${shells}`,
+      );
+    }
+    await dropFiles(page, [{ name: `${name}-first.png`, bytes: await makePng(page), type: 'image/png' }]);
+    const picture = page.locator('[data-e68-panel^="viewer:"]', { has: page.locator('img') }).first();
+    await picture.waitFor({ timeout: 30_000 });
+    const facts = await picture.evaluate((element) => ({
+      frames: element.querySelectorAll('iframe, object, embed, frame').length,
+      src: element.querySelector('img')?.getAttribute('src') ?? '',
+    }));
+    check(
+      `${p} a picture's viewer has no frame that could be sent anywhere, only its <img> of a blob:`,
+      facts.frames === 0 && /^blob:/.test(facts.src),
+      JSON.stringify(facts),
     );
   } catch (error) {
-    note(`${name}, first visit without a worker: not measured (${String(error).split('\n')[0]})`);
+    check(
+      `${p} the pass ran to the end`,
+      false,
+      String(error?.stack ?? error)
+        .split('\n')
+        .slice(0, 3)
+        .join(' | '),
+    );
   } finally {
     await context.close();
   }
@@ -699,7 +760,7 @@ async function browserPass(name, serve) {
     await context.setOffline(false);
     serve.state.down = false;
     await context.close();
-    await firstVisitNote(name, browser, serve);
+    await firstVisitPass(name, browser, serve);
   } catch (error) {
     check(`${p} the pass ran to the end`, false, String(error?.stack ?? error));
   } finally {

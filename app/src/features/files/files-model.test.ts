@@ -68,8 +68,10 @@ async function runSeed(seed: number, trace: string[], stats: Stats): Promise<str
   const raw = createVfs();
   raw.mount(new MemoryBackend({ mount: 'browser', kind: 'browser', label: 'My Programs', now: () => ++fileTime }));
   raw.mount(new MemoryBackend({ mount: 'disk', kind: 'disk', label: 'This computer', now: () => ++fileTime }));
-  // No opened folder (/folder): N3's checker cannot place its paths, even with a root handle
-  // (errata N5 entry 12); the Files panel's own oracle below does not depend on the store.
+  // An opened folder (/folder): the store keys its places by the root it gives the folder, found by
+  // name for a backend without a handle (history-db.ts findRoot), and so does N3's checker (errata N3,
+  // "The model places an opened folder", third round of the gate; errata N5 entry 12).
+  raw.mount(new MemoryBackend({ mount: 'folder', kind: 'fsaccess', label: 'Lab', now: () => ++fileTime }));
 
   let now = Date.UTC(2026, 10, 2, 9, 0, 0);
   const clock = { now: () => now, wallTime: () => new Date(now) };
@@ -102,7 +104,15 @@ async function runSeed(seed: number, trace: string[], stats: Stats): Promise<str
   // A Git repository saved before (Save is unchanged below .git): no command may touch its .git.
   await raw.writeFile('/browser/repo/.git/HEAD', text(40));
   await raw.writeFile('/browser/repo/main.X68', text(300));
-  for (const path of ['/browser/a/p.X68', '/browser/a/q.X68', '/browser/b/r.X68', '/disk/lab/s.X68', '/disk/p.X68'])
+  for (const path of [
+    '/browser/a/p.X68',
+    '/browser/a/q.X68',
+    '/browser/b/r.X68',
+    '/disk/lab/s.X68',
+    '/disk/p.X68',
+    '/folder/p.X68',
+    '/folder/lab2/q.X68',
+  ])
     await raw.writeFile(path, text(500 + Math.floor(random() * 3000)));
   await model.adoptFiles();
 
@@ -122,11 +132,28 @@ async function runSeed(seed: number, trace: string[], stats: Stats): Promise<str
     documents: fakeDocuments(),
   });
 
-  const folders: VPath[] = ['/browser', '/browser/a', '/browser/b', '/browser/a/sub', '/disk', '/disk/lab'];
+  const folders: VPath[] = [
+    '/browser',
+    '/browser/a',
+    '/browser/b',
+    '/browser/a/sub',
+    '/disk',
+    '/disk/lab',
+    '/folder',
+    '/folder/lab2',
+  ];
   const names = ['p.X68', 'q.X68', 'r.X68', 's.X68', 't.X68', 'pic.png'];
   const files = () => [...model.files.keys()].filter((p) => !p.includes('/.git/'));
   const someItems = (): VPath[] => {
-    const pool = [...files(), '/browser/a', '/browser/b', '/disk/lab', '/browser/a/sub', '/browser/repo'];
+    const pool = [
+      ...files(),
+      '/browser/a',
+      '/browser/b',
+      '/disk/lab',
+      '/browser/a/sub',
+      '/browser/repo',
+      '/folder/lab2',
+    ];
     const n = 1 + Math.floor(random() * 3);
     // Now and then a selection as Ctrl+A leaves it: a folder with files inside it, or the same
     // item twice (verify round 1).
@@ -229,7 +256,7 @@ async function runSeed(seed: number, trace: string[], stats: Stats): Promise<str
       6,
       'rename',
       async () => {
-        const from = pick([...files(), '/browser/a', '/browser/repo', '/disk/lab', '/browser/a/sub']);
+        const from = pick([...files(), '/browser/a', '/browser/repo', '/disk/lab', '/browser/a/sub', '/folder/lab2']);
         if (!(await model.vfs.stat(from).catch(() => null))) return `rename ${from}: gone`;
         if (await renameRefused(deps, from)) return `rename ${from}: refused`;
         const name = basename(from);

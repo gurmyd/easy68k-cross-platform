@@ -10,7 +10,10 @@
 //   the current file (P3.3.1 property 1; errata N5 entry 18). renameEntry copies, then removes the
 //   whole folder, so this module makes the copy itself and keeps renameEntry's order and names: the
 //   copy first, a change of letter case through `<name>.renaming-<time>` (P1.1 rule 2's exception),
-//   and the old name removed last.
+//   and the old name removed last;
+// - a file that is gone when its old name is to be removed was moved or deleted by someone else
+//   (another window, a program): its copy under the new name is removed again, so that the rename
+//   never brings back a file that was moved or deleted (errata N5 entry 18).
 //
 // Plain functions on the Vfs; tested under Node (rename.test.ts). Owner: N5.
 
@@ -18,7 +21,7 @@ import type { Vfs, VPath } from '../../contracts';
 import { basename, childPath, dirname, foldCase, splitVPath } from '../../core/paths/winpath';
 import { removeEmptyFolders } from './bulk';
 import { findGitHolder, innerName } from './git-guard';
-import { unchangedSince, type SourceSeen } from './move';
+import { takeBackCopyOfGone, unchangedSince, writtenAs, type SourceSeen } from './move';
 import { listTree, makeFolder, renameEntry } from './store';
 import { alreadyExists, changedWhileRenaming, gitNameRefused, gitRefusal, noLongerExists } from './texts';
 
@@ -29,6 +32,13 @@ export interface RenameOptions {
    * holds them as they were before the change. The rename itself is made.
    */
   kept?: (kept: readonly VPath[], copies: VPath) => void;
+  /**
+   * Called when files of a renamed folder were gone in the moment between the last check and their
+   * removal (another window moved or deleted them, or a program did): their copies under the new
+   * name were removed again (`gone`, the old paths), so that a moved file does not come back and a
+   * deleted one does not stay. `copies` is the folder under its new name. The rename itself is made.
+   */
+  gone?: (gone: readonly VPath[], copies: VPath) => void;
 }
 
 /** One file copied to its new name: what was read from the source, and what was written. */
@@ -38,11 +48,6 @@ interface Copied {
   seen: SourceSeen;
   /** The copy as written; undefined when it could not be read back (it is then never removed). */
   written: SourceSeen | undefined;
-}
-
-async function seenOf(vfs: Vfs, path: VPath, data: Uint8Array): Promise<SourceSeen | undefined> {
-  const stat = await vfs.stat(path).catch(() => null);
-  return stat?.kind === 'file' ? { mtime: stat.mtime, size: stat.size, data } : undefined;
 }
 
 async function copyFile(vfs: Vfs, source: VPath, dest: VPath): Promise<Copied> {
@@ -56,7 +61,7 @@ async function copyFile(vfs: Vfs, source: VPath, dest: VPath): Promise<Copied> {
     source,
     dest,
     seen: { mtime: before.mtime, size: before.size, data },
-    written: await seenOf(vfs, dest, data),
+    written: await writtenAs(vfs, dest, data),
   };
 }
 
@@ -105,6 +110,31 @@ async function takeBack(vfs: Vfs, dest: VPath, kind: 'file' | 'dir', copied: rea
     if (await unchangedSince(vfs, file.dest, file.written)) await vfs.remove(file.dest).catch(() => {});
   }
   if (kind === 'dir') await removeEmptyFolders(vfs, dest).catch(() => []);
+}
+
+/**
+ * The folders of the copy that only held files that were gone (a subfolder moved out or deleted
+ * whole): each goes when it is empty and its counterpart under the old name no longer exists (asked
+ * before the old name's empty folders are removed). A folder whose files alone went stays, empty, as
+ * it stays under the old name. The renamed folder itself stays.
+ */
+async function dropGoneFolders(vfs: Vfs, from: VPath, staging: VPath, gone: readonly VPath[]): Promise<void> {
+  const rels = new Set<string>();
+  for (const source of gone) {
+    const rel = source
+      .slice(from.length + 1)
+      .split('/')
+      .slice(0, -1);
+    for (let n = rel.length; n > 0; n--) rels.add(rel.slice(0, n).join('/'));
+  }
+  // Deepest first, so that a parent is empty when its turn comes.
+  for (const rel of [...rels].sort((a, b) => b.split('/').length - a.split('/').length)) {
+    const parts = rel.split('/');
+    if ((await vfs.stat(childPath(from, ...parts)).catch(() => null)) !== null) continue;
+    const copy = childPath(staging, ...parts);
+    const entries = await vfs.list(copy).catch(() => null);
+    if (entries !== null && entries.length === 0) await vfs.remove(copy).catch(() => {});
+  }
 }
 
 /** `changed` as a path below the folder that holds the renamed item ("lab/prog.X68"). */
@@ -171,13 +201,32 @@ export async function renameChecked(
     throw new Error(changedWhileRenaming(own, shownPath(parent, changed), kind === 'dir'));
   }
   // The old name goes file by file, each only while it is unchanged (a change in the moment since
-  // the check above keeps that file under the old name), then its empty folders.
+  // the check above keeps that file under the old name), then its empty folders. A file that is
+  // gone by then was moved or deleted by someone else (another window, a program): its copy goes
+  // too, while it is still the copy written, so that the rename brings back nothing that was moved
+  // or deleted (errata N5 entry 18). A file replaced by another of the same name is a change: it
+  // stays, and the copy holds the one that was there before.
   const kept: VPath[] = [];
+  const gone: VPath[] = [];
   for (const file of copied) {
-    if (await unchangedSince(vfs, file.source, file.seen)) await vfs.remove(file.source);
-    else kept.push(file.source);
+    if (await unchangedSince(vfs, file.source, file.seen)) {
+      await vfs.remove(file.source);
+      continue;
+    }
+    const outcome = await takeBackCopyOfGone(vfs, file.source, file.dest, file.written);
+    if (outcome === 'taken-back') gone.push(file.source);
+    else if (outcome === 'there') kept.push(file.source);
   }
-  if (kind === 'dir') await removeEmptyFolders(vfs, from);
+  if (kind === 'dir') {
+    // Before the old folders go: a folder that is no longer there was moved or deleted whole.
+    await dropGoneFolders(vfs, from, staging, gone);
+    await removeEmptyFolders(vfs, from);
+  }
+  if (kind === 'file' && gone.length > 0) {
+    // The file itself went while it was being renamed: nothing is renamed, nothing is left.
+    throw new Error(changedWhileRenaming(own, own, false));
+  }
+  if (gone.length > 0) options.gone?.(gone, staging);
   if (kept.length > 0) {
     // The old folder still holds those files: a change of letter case cannot be finished (the two
     // spellings are one name), so the folder keeps its temporary name, which the message gives.

@@ -72,8 +72,20 @@ export function trashRow(item: TrashItemInfo, placeShort: (path: VPath) => strin
 
 type Ask = Pick<DialogService, 'messageBox'>;
 
+/**
+ * The questions of this dialog cannot be undone (Delete for Good, Empty Trash, Delete History and
+ * Trash): No has the focus (`defaultButton`), as for the Files panel's Delete and the question of
+ * P3.3.4, so that a stray Enter leaves everything in place (decided by the architect, errata N4).
+ */
 async function yes(dialogs: Ask, title: string, text: string): Promise<boolean> {
-  return (await dialogs.messageBox({ title, text, icon: 'confirmation', buttons: ['Yes', 'No'] })) === 'Yes';
+  const answer = await dialogs.messageBox({
+    title,
+    text,
+    icon: 'confirmation',
+    buttons: ['Yes', 'No'],
+    defaultButton: 'No',
+  });
+  return answer === 'Yes';
 }
 
 /**

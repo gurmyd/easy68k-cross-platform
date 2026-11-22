@@ -1,6 +1,7 @@
 // Browser check of the dock (ARCHITECTURE-PLUS P3.1, P5 N1 acceptance). Owner: N1.
 //
 //   node app/src/ui/dock/check-dock.mjs [--browser chromium|webkit|all] [--out <dir>] [--only <pass,...>]
+//                                       [--serve <built dist> [--record <file>]]
 //
 // Starts the Vite dev server of app/ on a free port and drives the real application in headless
 // Chromium and WebKit (Playwright), with the Windows key map and with the macOS key map where keys
@@ -39,19 +40,28 @@
 //              page, with today's frames and with frames 130 ms late (GitHub's macOS runners)
 //   taborder   Lock Layout on (the default): Tab and Shift+Tab go through the window in main's order,
 //              in the three modes, wide and narrow, with and without a tool panel (the lists below,
-//              recorded on main); in Chromium the accessibility tree reads the dock in main's order;
-//              unlocked, no slot is left; a splitter reached through its slot keeps its keys
+//              recorded on main), each Shift+Tab walk from the end ten times; in Chromium the
+//              accessibility tree reads the dock in main's order; the dock adds no text to the
+//              accessibility tree (no FindBorderBarSize); unlocked, no slot is left; a splitter
+//              reached through its slot keeps its keys
+//   starts     Lock Layout on: from every starting point a person can reach (the focused element
+//              gone, then the window away and back; the focused element gone beside each stop; a
+//              click on the status bar or beside the menus; a menu or a dialog closed; a mode
+//              switch), Tab and Shift+Tab go as on main (check-dock.main.json, recorded from main's
+//              build with --serve <dist> --record <file>)
 //   scan       axe (WCAG 2.0/2.1 A and AA) of each mode in both themes, locked and unlocked: no
 //              serious or critical finding; screenshots of both themes
 //
 // Prints "N of M checks passed" and exits non-zero on any failure or console error. Screenshots go
 // to build/dock-check (git-ignored) or --out.
 
-/* global console, process, document, window, getComputedStyle, Navigator, requestAnimationFrame, Element, Event, setTimeout, clearTimeout, MutationObserver */
+/* global console, process, document, window, getComputedStyle, Navigator, requestAnimationFrame, Element, Event, setTimeout, clearTimeout, MutationObserver, NodeFilter */
 
-import { existsSync, mkdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { createServer as createHttpServer } from 'node:http';
+import { dirname, extname, join, resolve } from 'node:path';
+import { URL, fileURLToPath } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
@@ -67,6 +77,9 @@ const option = (name, fallback) => {
 };
 const browserChoice = option('--browser', 'all');
 const outDir = resolve(option('--out', join(repoRoot, 'build', 'dock-check')));
+// A production build to serve instead of the dev server (only the starts pass runs on it): the
+// way main's figures of that pass were recorded (check-dock.main.json, with --record <file>).
+const serveDir = option('--serve', '') ? resolve(option('--serve', '')) : '';
 const only = option('--only', '')
   .split(',')
   .map((name) => name.trim())
@@ -163,6 +176,23 @@ async function openApp(context, query = '') {
       focusedPanel: () => document.activeElement?.closest('[data-e68-panel]')?.getAttribute('data-e68-panel') ?? null,
     };
   });
+  return { page, errors };
+}
+
+/** The application without the development hooks (the starts pass; also a build given by --serve). */
+async function openPlain(context) {
+  const page = await context.newPage();
+  const errors = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error' && !isMissingEngineError(message.text())) errors.push(message.text());
+  });
+  page.on('pageerror', (error) => {
+    if (!isMissingEngineError(String(error))) errors.push(String(error));
+  });
+  await page.goto(baseUrl, { timeout: LOAD_TIMEOUT });
+  await page.waitForSelector('.e68-shell [data-e68-panel="editor"]', { timeout: LOAD_TIMEOUT });
+  await page.waitForSelector('[data-e68-storage-line]', { timeout: 30_000 }).catch(() => {});
+  await sleep(1000);
   return { page, errors };
 }
 
@@ -2380,7 +2410,7 @@ const entryMatches = (expected, actual) => {
  * Tab (or Shift+Tab) from the start (the end) of the page; the focused elements in order, up to
  * the body, the Output panel's key field or `until`.
  */
-async function walkTabs(page, backward, until = null, beforeKeys = false) {
+async function walkTabs(page, backward, until = null, beforeKeys = false, refocus = false, maxSteps = 90) {
   await page.evaluate(
     ({ atEnd, beforeKeys }) => {
       // The sequential navigation starts where this element is (the page's start or end, or just
@@ -2397,8 +2427,9 @@ async function walkTabs(page, backward, until = null, beforeKeys = false) {
     },
     { atEnd: backward, beforeKeys },
   );
+  if (refocus) await windowComesBack(page);
   const seen = [];
-  for (let i = 0; i < 90; i++) {
+  for (let i = 0; i < maxSteps; i++) {
     await page.keyboard.press(backward ? 'Shift+Tab' : 'Tab');
     if (i === 0) await page.evaluate(() => document.querySelector('[data-e68-walk-mark]')?.remove());
     const focus = await page.evaluate(focusEntry);
@@ -2426,6 +2457,77 @@ function compareWalk(label, expected, actual) {
     detail = `differs at ${at}: expected ${JSON.stringify(expected.slice(from, at + 4).map((e) => e.replace(/^~/, '')))}, got ${JSON.stringify(actual.slice(from, at + 4))}`;
   }
   check(label, ok, detail);
+}
+
+/** How often each Shift+Tab walk from the end of the page is repeated (errata N1 26). */
+const BACK_WALKS = 10;
+
+const walkDiffers = (expected, actual) =>
+  !(expected.length === actual.length && expected.every((entry, i) => entryMatches(entry, actual[i])));
+
+/** Several walks that must each be `expected`: one check, which names every walk that differs. */
+function compareWalks(label, expected, walks) {
+  const bad = walks.map((walk, i) => ({ walk, i })).filter(({ walk }) => walkDiffers(expected, walk));
+  let detail = `${walks.length - bad.length} of ${walks.length} as on main`;
+  if (bad.length > 0) {
+    const { walk, i } = bad[0];
+    const at = expected.findIndex((entry, k) => !entryMatches(entry, walk[k] ?? ''));
+    const from = Math.max(0, at - 2);
+    detail += `; walk ${i + 1} differs at ${at}: expected ${JSON.stringify(expected.slice(from, at + 4).map((e) => e.replace(/^~/, '')))}, got ${JSON.stringify(walk.slice(from, at + 4))}`;
+  }
+  check(label, bad.length === 0, detail);
+}
+
+/**
+ * The window loses the focus and gets it back (a person switches to another window and back),
+ * with nothing focused in the page: the application's own listeners run (the Files panel lists an
+ * opened folder again, P3.3.10, and renders). Then the page settles.
+ */
+async function windowComesBack(page) {
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('blur'));
+    window.dispatchEvent(new Event('focus'));
+  });
+  await sleep(300);
+  await frames(page, 2);
+}
+
+/** Texts FlexLayout 0.11.1 renders of its own (its measuring element). */
+const FLEXLAYOUT_TEXTS = ['FindBorderBarSize'];
+
+/**
+ * The texts inside the dock that are not a panel's content, a tab's caption, a menu's or the dock's
+ * live status, and are not hidden from assistive technology (run in the page).
+ */
+function strayDockText() {
+  const out = [];
+  for (const dock of document.querySelectorAll('[data-e68-dock]')) {
+    const walker = document.createTreeWalker(dock, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const text = (node.textContent ?? '').trim();
+      const parent = node.parentElement;
+      if (!text || !parent) continue;
+      if (
+        parent.closest(
+          '[aria-hidden="true"], [data-e68-panel], [data-e68-dock-content], [role="tab"], [data-e68-dock-live], [role="menu"]',
+        )
+      )
+        continue;
+      out.push(text);
+    }
+  }
+  return out;
+}
+
+/** Chromium only: every name and static text of the accessibility tree that is not ignored. */
+async function axTextsOf(page) {
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    const { nodes } = await cdp.send('Accessibility.getFullAXTree');
+    return nodes.filter((node) => !node.ignored).map((node) => node.name?.value ?? '');
+  } finally {
+    await cdp.detach().catch(() => {});
+  }
 }
 
 /** Chromium only: the dock's part of the accessibility tree in reading order. */
@@ -2510,14 +2612,22 @@ async function tabOrderPass(browser, name) {
         await settle(page);
       }
       const list = MAIN_TAB_ORDER[item.label];
-      for (const backward of [false, true]) {
-        const walk = await walkTabs(page, backward);
-        compareWalk(
-          `${tag}: ${backward ? 'Shift+Tab' : 'Tab'} goes through the window as on main`,
-          predictedWalk(list, backward, buttonsStop),
-          walk,
-        );
-      }
+      compareWalk(
+        `${tag}: Tab goes through the window as on main`,
+        predictedWalk(list, false, buttonsStop),
+        await walkTabs(page, false),
+      );
+      // The gate's third round: a Shift+Tab walk from the end once differed from main 7 times in 10
+      // (errata N1 26), so one walk proves little. Each is repeated BACK_WALKS times; every one of
+      // them must go as on main. Each walk after the first starts where the one before it ended
+      // (the body, the focus gone from the page), as a person's next Shift+Tab would.
+      const backWalks = [];
+      for (let i = 0; i < BACK_WALKS; i++) backWalks.push(await walkTabs(page, true));
+      compareWalks(
+        `${tag}: Shift+Tab goes through the window as on main, ${BACK_WALKS} walks from the end`,
+        predictedWalk(list, true, buttonsStop),
+        backWalks,
+      );
       // The key field ends a walk (it keeps Tab and Shift+Tab), so a Shift+Tab walk from the end
       // of a page that shows it covers only what follows it: a second walk goes back from just
       // before the key field to the start of the page.
@@ -2539,6 +2649,20 @@ async function tabOrderPass(browser, name) {
           same(read, want) ? '' : `expected ${JSON.stringify(want)}, got ${JSON.stringify(read)}`,
         );
       }
+      // The dock adds no text of its own to what a screen reader reads (errata N1 27): every text
+      // of the dock is a panel's, a tab's caption or the dock's live status; FlexLayout's measuring
+      // element (`FindBorderBarSize`) is hidden. The accessibility tree itself is read too
+      // (Playwright's aria snapshot, both browsers; in Chromium also CDP's full tree).
+      const stray = await page.evaluate(strayDockText);
+      const snapshot = await page.locator('body').ariaSnapshot();
+      let axTexts = [];
+      if (name === 'chromium') axTexts = await axTextsOf(page);
+      const flexTexts = [...FLEXLAYOUT_TEXTS].filter((text) => snapshot.includes(text) || axTexts.includes(text));
+      check(
+        `${tag}: the dock adds no text to the accessibility tree (no FindBorderBarSize)`,
+        stray.length === 0 && flexTexts.length === 0,
+        `stray ${JSON.stringify(stray.slice(0, 5))}, FlexLayout's ${JSON.stringify(flexTexts)}`,
+      );
       // Each selected tab names its tab panel (aria-controls), which is labelled by the tab: the
       // tabpanel role moved to the content's wrapper while locked (errata N1 25), so must the name.
       const tabs = await page.evaluate(() =>
@@ -2637,6 +2761,240 @@ async function tabOrderPass(browser, name) {
   }
 }
 
+// --- starting points (errata N1 26) ---------------------------------------------------------------
+
+/**
+ * The focused element goes away at every stop: a walk in which, before each step, an element
+ * focused just after the stop (Tab) or just before it (Shift+Tab) inside the same panel is removed,
+ * as a toast's button, a rename field or a closed panel's button goes away. Stops outside the
+ * panels' contents (the menu bar, the splitters, the strips, the editor's text) are left as they
+ * are: no element of the page's own goes away beside them.
+ */
+async function walkFromRemoved(page, backward) {
+  const seen = [];
+  for (let i = 0; i < 90; i++) {
+    await page.evaluate((backward) => {
+      const active = document.activeElement;
+      if (
+        !active ||
+        active === document.body ||
+        !active.closest('[data-e68-panel]') ||
+        active.isContentEditable ||
+        active.closest('[data-e68-relocated]')
+      )
+        return;
+      const mark = document.createElement('span');
+      mark.tabIndex = -1;
+      if (backward) active.before(mark);
+      else active.after(mark);
+      mark.focus();
+      mark.remove();
+    }, backward);
+    await page.keyboard.press(backward ? 'Shift+Tab' : 'Tab');
+    const focus = await page.evaluate(focusEntry);
+    seen.push(focus.entry);
+    if (focus.entry === 'body' || focus.entry.startsWith('textarea|')) break;
+    if (focus.editor) await page.keyboard.press('Escape');
+  }
+  return seen;
+}
+
+/** The element a click at the middle of `selector`'s box (or `x` px from its right) reaches. */
+async function clickAt(page, selector, fromRight = null) {
+  const box = await page.locator(selector).first().boundingBox();
+  if (!box) return null;
+  const x = fromRight === null ? box.x + box.width / 2 : box.x + box.width - fromRight;
+  await page.mouse.click(x, box.y + box.height / 2);
+  await settle(page);
+  return page.evaluate(focusEntry);
+}
+
+/** A click on the menu row 12 px right of the last menu (no control there, on main as here). */
+async function clickBesideMenus(page) {
+  const box = await page.locator('.e68-menubar').first().boundingBox();
+  if (!box) return;
+  await page.mouse.click(box.x + box.width + 12, box.y + box.height / 2);
+  await settle(page);
+}
+
+const menuBarItem = (page, caption) =>
+  page
+    .locator('.e68-menubar [role="menuitem"]')
+    .filter({ hasText: new RegExp(`^${caption}$`) })
+    .first();
+
+/** Opens a menu of the menu bar by a click and closes it with Escape. */
+async function openAndCloseMenu(page, caption) {
+  await menuBarItem(page, caption).click();
+  await settle(page);
+  await page.keyboard.press('Escape');
+  await settle(page);
+}
+
+/** Help > About (the mode's), then Escape: the dialog closes and gives the focus back. */
+async function openAndCloseAbout(page) {
+  await menuBarItem(page, 'Help').click();
+  await settle(page);
+  await page
+    .locator('[role="menu"] [role="menuitem"]')
+    .filter({ hasText: /^About/ })
+    .first()
+    .click();
+  await page.getByRole('dialog').first().waitFor({ timeout: 10_000 });
+  await settle(page);
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog').first().waitFor({ state: 'detached', timeout: 10_000 });
+  await settle(page);
+}
+
+/**
+ * What main does from each starting point, recorded from main's own production build (b247e17)
+ * with `--serve <its dist> --record app/src/ui/dock/check-dock.main.json`, per browser: the walks
+ * and the single steps of startsPass. main's figures are not all what its Tab list predicts (in
+ * WebKit, for one, Shift+Tab after an element before the Files tree went away skips New Folder...),
+ * so the pass compares with what main did, not with a prediction.
+ */
+const MAIN_STARTS_FILE = join(here, 'check-dock.main.json');
+const recordFile = option('--record', '') ? resolve(option('--record', '')) : '';
+const recorded = {};
+
+/** P3.2.6's storage line is the one stop of the stage's own in these walks (N5): set aside. */
+const withoutStorageLine = (entries) => entries.filter((entry) => !entry.includes('|This site uses'));
+
+/** Records (with --record) or compares with main's record. */
+function asOnMain(key, label, observed) {
+  if (recordFile) {
+    recorded[key] = observed;
+    check(`${label} (recorded)`, true);
+    return;
+  }
+  const main = startsOfMain()[key];
+  const got = JSON.stringify(observed);
+  const ok = main !== undefined && (JSON.stringify(main) === got || filesCountLineStep(key, main, observed));
+  check(label, ok, `main ${JSON.stringify(main)}, here ${got}`);
+}
+
+/**
+ * The one step that is the Files panel's and not the dock's (errata N1 26): WebKit goes on from the
+ * node before an element that went away. Before the tree, that is main's Files strip, so main's
+ * Shift+Tab skips `New Folder...` (Chromium does not, and WebKit does not with a node between);
+ * here the selection count line of P3.2.1 (N5) is between them, so WebKit stops at `New Folder...`
+ * as Chromium does. Only that walk, only that one stop more.
+ */
+function filesCountLineStep(key, main, observed) {
+  if (!/^webkit\|editor.*\|gone beside each stop, Shift\+Tab$/.test(key) || !Array.isArray(main)) return false;
+  const at = main.indexOf('tree|Files|files');
+  if (at < 0 || main[at + 1] === 'button|New Folder...|files') return false;
+  const expected = [...main.slice(0, at + 1), 'button|New Folder...|files', ...main.slice(at + 1)];
+  return JSON.stringify(expected) === JSON.stringify(observed);
+}
+
+let mainStarts = null;
+function startsOfMain() {
+  if (mainStarts === null)
+    mainStarts = existsSync(MAIN_STARTS_FILE) ? JSON.parse(readFileSync(MAIN_STARTS_FILE, 'utf8')) : {};
+  return mainStarts;
+}
+
+/**
+ * P1.2 with Lock Layout on, the gate's third round (errata N1 26): main's order holds from every
+ * starting point a person can reach, in both directions: the focused element gone at the end or the
+ * start of the page and then the window gone and back; the focused element gone beside each stop;
+ * a click on something that takes no focus (the status bar, the menu row beside the menus); a menu
+ * and a dialog closed; a mode switch and back. No development hook is used, so the same pass runs
+ * against main's build (--serve) to record it.
+ */
+async function startsPass(browser, name) {
+  const p = `${name}/starts:`;
+  const cases = [
+    { label: 'editor', mode: 'editor', viewport: VIEWPORT },
+    { label: 'editor', mode: 'editor', viewport: { width: 1000, height: 800 }, narrow: true },
+    { label: 'simulator wide', mode: 'simulator', viewport: VIEWPORT },
+    { label: 'simulator narrow', mode: 'simulator', viewport: { width: 1000, height: 800 } },
+    { label: 'easybin', mode: 'easybin', viewport: VIEWPORT },
+  ];
+  for (const item of cases) {
+    const where = `${item.label}${item.narrow ? ' (1000 px)' : ''}`;
+    const tag = `${p} ${where}`;
+    const key = (what) => `${name}|${where}|${what}`;
+    const context = await newContext(browser, 'windows', item.viewport);
+    const { page, errors } = await openPlain(context);
+    try {
+      if (item.mode !== 'editor') await setMode(page, item.mode);
+      await settle(page);
+      const list = MAIN_TAB_ORDER[item.label];
+      const keysAt = list.findIndex((entry) => entry.startsWith('textarea|'));
+      // The focused element went away at the end (the start) of the page, then the window went
+      // away and came back: BACK_WALKS walks from the end, two from the start.
+      const backWalks = [];
+      for (let i = 0; i < BACK_WALKS; i++)
+        backWalks.push(withoutStorageLine(await walkTabs(page, true, null, false, true)));
+      const backs = [...new Set(backWalks.map((walk) => JSON.stringify(walk)))].map((walk) => JSON.parse(walk));
+      asOnMain(
+        key('gone at the end, window back, Shift+Tab'),
+        `${tag}: the focused element gone and the window back, ${BACK_WALKS} Shift+Tab walks from the end go as on main`,
+        backs,
+      );
+      const forth = [];
+      for (let i = 0; i < 2; i++) forth.push(withoutStorageLine(await walkTabs(page, false, null, false, true)));
+      asOnMain(
+        key('gone at the start, window back, Tab'),
+        `${tag}: the focused element gone and the window back, Tab walks from the start go as on main`,
+        [...new Set(forth.map((walk) => JSON.stringify(walk)))].map((walk) => JSON.parse(walk)),
+      );
+      // The focused element gone beside each stop inside a panel. (A Shift+Tab walk of a page
+      // with the Output panel's key field starts just before it: the field keeps Tab.)
+      for (const backward of [false, true]) {
+        // Reach the first stop of the walk, then walk with an element gone before each step.
+        const begin = await walkTabs(page, backward, null, backward && keysAt > 0, false, 1);
+        const steps = [...begin, ...(begin[0] === 'body' ? [] : await walkFromRemoved(page, backward))];
+        asOnMain(
+          key(`gone beside each stop, ${backward ? 'Shift+Tab' : 'Tab'}`),
+          `${tag}: ${backward ? 'Shift+Tab' : 'Tab'} with the focused element gone beside each stop goes as on main`,
+          withoutStorageLine(steps),
+        );
+      }
+      // Single steps from the other starting points (each from the state the one before left).
+      const starts = [
+        ['a click on the status bar', () => clickAt(page, '.e68-statusbar')],
+        ['a click on the menu row beside the menus', () => clickBesideMenus(page)],
+        ['a menu opened and closed with Escape', () => openAndCloseMenu(page, 'File')],
+        ['Help > About opened and closed with Escape', () => openAndCloseAbout(page)],
+        [
+          'a mode switch by a click and back',
+          async () => {
+            await setMode(page, item.mode === 'editor' ? 'simulator' : 'editor');
+            await settle(page);
+            await setMode(page, item.mode);
+            await settle(page);
+          },
+        ],
+      ];
+      for (const [label, start] of starts) {
+        for (const backward of [false, true]) {
+          await start();
+          const from = (await page.evaluate(focusEntry)).entry;
+          await page.keyboard.press(backward ? 'Shift+Tab' : 'Tab');
+          const got = (await page.evaluate(focusEntry)).entry;
+          if (got.startsWith('textbox|')) await page.keyboard.press('Escape');
+          asOnMain(
+            key(`${label}, ${backward ? 'Shift+Tab' : 'Tab'}`),
+            `${tag}: after ${label}, ${backward ? 'Shift+Tab' : 'Tab'} goes as on main`,
+            { from, to: got },
+          );
+        }
+      }
+      check(`${tag}: no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+    } finally {
+      await context.close();
+    }
+  }
+  if (recordFile) {
+    const before = existsSync(recordFile) ? JSON.parse(readFileSync(recordFile, 'utf8')) : {};
+    writeFileSync(recordFile, `${JSON.stringify({ ...before, ...recorded }, null, 2)}\n`);
+  }
+}
+
 // --- run -----------------------------------------------------------------------------------------
 
 const PASSES = {
@@ -2648,22 +3006,58 @@ const PASSES = {
   editor: (browser, name) => editorPass(browser, name),
   frames: (browser, name) => framesPass(browser, name),
   taborder: (browser, name) => tabOrderPass(browser, name),
+  starts: (browser, name) => startsPass(browser, name),
   scan: (browser, name) => scanPass(browser, name),
 };
+
+const MIME = {
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.mjs': 'text/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json',
+  '.wasm': 'application/wasm',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+  '.htm': 'text/html',
+};
+
+/** A static server of a production build on a free port, with Vite's server shape (close, httpServer). */
+async function serveStatic(root) {
+  const httpServer = createHttpServer(async (request, response) => {
+    let path = decodeURIComponent(new URL(request.url ?? '/', 'http://x').pathname);
+    if (path.endsWith('/')) path += 'index.html';
+    try {
+      const body = await readFile(join(root, path));
+      response.writeHead(200, { 'content-type': MIME[extname(path)] ?? 'application/octet-stream' });
+      response.end(body);
+    } catch {
+      response.writeHead(404);
+      response.end();
+    }
+  });
+  await new Promise((done) => httpServer.listen(0, '127.0.0.1', done));
+  return { httpServer, close: () => new Promise((done) => httpServer.close(() => done())) };
+}
 
 async function main() {
   if (!enginesPresent && enginesRequired) {
     console.error('engine/dist is missing and EASY68K_REQUIRE_ENGINES=1: the simulator session cannot start.');
     process.exit(1);
   }
-  const server = await createServer({
-    configFile: join(appRoot, 'vite.config.ts'),
-    root: appRoot,
-    logLevel: 'warn',
-    cacheDir: join(outDir, 'vite-cache'),
-    server: { port: 0, strictPort: false, host: '127.0.0.1', hmr: false, watch: null },
-  });
-  await server.listen();
+  const server = serveDir
+    ? await serveStatic(serveDir)
+    : await createServer({
+        configFile: join(appRoot, 'vite.config.ts'),
+        root: appRoot,
+        logLevel: 'warn',
+        cacheDir: join(outDir, 'vite-cache'),
+        server: { port: 0, strictPort: false, host: '127.0.0.1', hmr: false, watch: null },
+      });
+  if (!serveDir) await server.listen();
   const address = server.httpServer?.address();
   if (typeof address !== 'object' || !address) throw new Error('The dev server has no address');
   baseUrl = `http://127.0.0.1:${address.port}/`;
@@ -2675,6 +3069,8 @@ async function main() {
       try {
         for (const [label, run] of Object.entries(PASSES)) {
           if (only.length > 0 && !only.includes(label.split(':')[0])) continue;
+          // A build given by --serve has no development hooks: only the starts pass runs on it.
+          if (serveDir && label !== 'starts') continue;
           console.log(`\n[${name}, ${label}]`);
           try {
             await run(browser, name);

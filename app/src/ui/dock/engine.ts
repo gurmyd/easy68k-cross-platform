@@ -837,6 +837,12 @@ export class DockEngine implements DockLive {
   decorate(): void {
     const root = this.element;
     if (!root) return;
+    // FlexLayout 0.11.1 measures its strips and splitters with an element of its own that holds
+    // the text `FindBorderBarSize`, moved off the screen by CSS only: a screen reader read it in
+    // every mode. It is no content (errata N1 27).
+    for (const metrics of Array.from(root.querySelectorAll('.flexlayout__layout_metrics'))) {
+      if (metrics.getAttribute('aria-hidden') !== 'true') metrics.setAttribute('aria-hidden', 'true');
+    }
     const index = indexModel(this.model);
     const plans = splitterPlans(this.mode, index.tree, {
       isDefault: this.isDefault(),

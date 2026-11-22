@@ -370,6 +370,8 @@ describe('Empty Trash', () => {
       text: 'Delete everything in the Trash for good? (2 items, 1.0 MB)',
       icon: 'confirmation',
       buttons: ['Yes', 'No'],
+      // It cannot be undone: No has the focus (decided by the architect, errata N7).
+      defaultButton: 'No',
     });
     app.dialogs.close(box.key, 'No');
     expect(await done).toBe('declined');
@@ -441,6 +443,8 @@ describe('Delete Earlier Versions', () => {
       text: 'Delete all earlier versions of all files for good? Your current files are not affected.',
       icon: 'confirmation',
       buttons: ['Yes', 'No'],
+      // It cannot be undone: No has the focus (decided by the architect, errata N7).
+      defaultButton: 'No',
     });
     app.dialogs.close(box.key, 'No');
     expect(await done).toBe('declined');

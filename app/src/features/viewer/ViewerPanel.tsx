@@ -13,8 +13,9 @@
 // The dock puts this into the element that carries data-e68-panel="viewer:<n>" and role tabpanel;
 // the scrolling body takes the focus (data-e68-panel-focus).
 
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Button } from '../../ui/components';
+import { createFrameWatch, createRestoreGuard, FRAME_WATCH_MS, readFrameAddress } from './frame-watch';
 import type { ViewerHandle, ViewerSnapshot } from './model';
 import {
   ACTUAL_SIZE,
@@ -57,6 +58,49 @@ function Picture({ snapshot, actual, onFailed }: { snapshot: ViewerSnapshot; act
   );
 }
 
+/**
+ * The PDF's frame. No sandbox attribute (P3.4.2): its src is only ever this viewer's own blob of
+ * type application/pdf; the page's policy (inherited by a blob: document) lets no script run in
+ * it. Whenever the frame is found to show anything else (a link inside the PDF or a script sent it
+ * to the application's own page, which nothing refuses before a service worker controls the page
+ * and in the desktop app), a fresh frame with the document replaces it, which also ends whatever
+ * the old one held (decision D-c; frame-watch.ts, errata N6 14). Nothing is shown about it.
+ */
+function PdfFrame({ url, title }: { url: string; title: string }) {
+  const [generation, setGeneration] = useState(0);
+  const frame = useRef<HTMLIFrameElement>(null);
+  const guard = useRef(createRestoreGuard()).current;
+  useEffect(() => {
+    const element = frame.current;
+    if (!element) return;
+    const watch = createFrameWatch(url);
+    let done = false;
+    const look = () => {
+      if (done || watch.observe(readFrameAddress(element)) !== 'foreign') return;
+      if (!guard.allow(Date.now())) return;
+      done = true;
+      setGeneration((n) => n + 1);
+    };
+    element.addEventListener('load', look);
+    const timer = window.setInterval(look, FRAME_WATCH_MS);
+    return () => {
+      done = true;
+      element.removeEventListener('load', look);
+      window.clearInterval(timer);
+    };
+  }, [url, generation, guard]);
+  return (
+    <iframe
+      key={generation}
+      ref={frame}
+      className="e68-viewer__frame"
+      src={url}
+      title={title}
+      data-e68-viewer-frame={generation}
+    />
+  );
+}
+
 export function ViewerPanel({ handle }: { handle: ViewerHandle }) {
   const snapshot = useSyncExternalStore(handle.subscribe, handle.snapshot, handle.snapshot);
   const { actions } = handle;
@@ -81,17 +125,8 @@ export function ViewerPanel({ handle }: { handle: ViewerHandle }) {
         onFailed={() => setFailedUrl(snapshot.url)}
       />
     );
-  } else if (showsFrame) {
-    // No sandbox attribute (P3.4.2): its src is only ever this viewer's own blob of type
-    // application/pdf; the page's policy (inherited by a blob: document) lets no script run in it.
-    body = (
-      <iframe
-        key={snapshot.url ?? ''}
-        className="e68-viewer__frame"
-        src={snapshot.url ?? undefined}
-        title={pdfFrameTitle(snapshot.name)}
-      />
-    );
+  } else if (showsFrame && snapshot.url !== null) {
+    body = <PdfFrame key={snapshot.url} url={snapshot.url} title={pdfFrameTitle(snapshot.name)} />;
   } else if (snapshot.kind === 'pdf') {
     body = <Notice text={pdfNoticeText(snapshot.name)} handle={handle} />;
   } else {

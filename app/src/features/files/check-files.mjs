@@ -3001,9 +3001,10 @@ async function openedFolderPass(browser, name) {
 
 /**
  * Chromium, an opened folder that is itself a repository's .git folder (FS2's Open Folder... can
- * choose one; P1.1 rule 2, P3.3.10, errata N5 entries 15 and 19): what the Files panel shows, and
- * that no command of the stage writes into it or keeps anything of it (the fake directory handle's
- * write log stays empty; the history keeps no version and no Trash item there).
+ * choose one; P1.1 rule 2, P3.3.10, errata N5 entries 15 and 19): what the Files panel shows; that
+ * no command of the stage writes into it or keeps anything of it (the fake directory handle's write
+ * log stays empty; the history keeps no version and no Trash item there); and that main's Import and
+ * Save work there as on main (decided by the architect, 22 November 2026), writing exactly their files.
  */
 async function gitFolderPass(browser, name) {
   const p = `${name}: opened .git folder:`;
@@ -3064,7 +3065,7 @@ async function gitFolderPass(browser, name) {
   await page.locator(FILES).screenshot({ path: join(outDir, `${name}-opened-git-folder-dark.png`) });
   await page.evaluate(() => window.__easy68k.ctx.commands.run('app.theme.set', 'light'));
 
-  // Every command refuses with the text of errata N5 entry 15.
+  // Every command of the stage refuses with the text of errata N5 entry 15.
   const answers = {};
   await row(page, '/folder/HEAD').click();
   await page.locator(TREE).focus();
@@ -3074,13 +3075,6 @@ async function gitFolderPass(browser, name) {
   answers.rename = await answerBox(page, 'OK');
   await page.locator(FILES).getByRole('button', { name: 'New Folder...' }).click();
   answers.newFolder = await answerBox(page, 'OK');
-  await page.locator(`${FILES} button[aria-label="Import..."]`).click();
-  const [chooser] = await Promise.all([
-    page.waitForEvent('filechooser'),
-    page.getByRole('menuitem', { name: /Files or \.zip/ }).click(),
-  ]);
-  await chooser.setFiles({ name: 'into.X68', mimeType: 'text/plain', buffer: Buffer.from('* into\r\n') });
-  answers.import = await answerBox(page, 'OK');
   await revealRow(page, '/browser/mine.X68');
   await syntheticDrag(page, '/browser/mine.X68', '/folder');
   answers.moveInto = await answerBox(page, 'OK');
@@ -3089,7 +3083,7 @@ async function gitFolderPass(browser, name) {
   answers.copyOut = await answerBox(page, 'OK');
   const refusedAll = Object.values(answers).every((text) => text.includes(texts.refused));
   check(
-    `${p} Delete, Rename, New Folder, Import, a move into it and a copy out of it are refused with the text`,
+    `${p} Delete, Rename, New Folder, a move into it and a copy out of it are refused with the text`,
     refusedAll,
     JSON.stringify(answers),
   );
@@ -3113,7 +3107,7 @@ async function gitFolderPass(browser, name) {
     JSON.stringify(history),
   );
   await page.waitForTimeout(300);
-  const entries = await page.evaluate(() => window.__fsLog.splice(0));
+  let entries = await page.evaluate(() => window.__fsLog.splice(0));
   const after = await page.evaluate(async () => {
     const { vfs } = window.__easy68k.ctx;
     return {
@@ -3122,14 +3116,107 @@ async function gitFolderPass(browser, name) {
     };
   });
   check(
-    `${p} nothing was written into it or removed from it; nothing was copied out`,
+    `${p} the refused commands wrote nothing into it and removed nothing; nothing was copied out`,
     entries.length === 0 && same(after.top, ['HEAD', 'config', 'refs']) && !after.browser.includes('HEAD'),
     `${JSON.stringify(entries)} | ${JSON.stringify(after)}`,
+  );
+
+  // Import is main's command and stays as it is there (P1.1 rule 2; decided by the architect, 22
+  // November 2026; errata N5 entry 19): a new file, a file that exists (main's question, Yes), and a
+  // .zip with a folder, each into the opened .git folder. The write log holds exactly the imported
+  // files, and the history keeps nothing of the file the import replaced.
+  const importFiles = async (files, question) => {
+    await revealRow(page, '/folder/HEAD');
+    await page.locator(`${FILES} button[aria-label="Import..."]`).click();
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser'),
+      page.getByRole('menuitem', { name: /Files or \.zip/ }).click(),
+    ]);
+    await chooser.setFiles(files);
+    const asked = question ? await answerBox(page, 'Yes') : null;
+    const toast = page.locator('.e68-toast', { hasText: 'Imported' }).last();
+    await toast.waitFor({ timeout: 10_000 });
+    const text = (await toast.innerText()).replace(/\s+/g, ' ');
+    await page.evaluate(() => document.querySelectorAll('.e68-toast').forEach((t) => t.remove()));
+    return { asked, text };
+  };
+  const zipBytes = await page.evaluate(async () => {
+    const { writeZip } = await import('/src/fs/zip.ts');
+    const data = new TextEncoder().encode('#!/bin/sh\n');
+    return Array.from(
+      writeZip([
+        { path: 'hooks/', mtime: 0 },
+        { path: 'hooks/pre-commit', data, mtime: 0 },
+      ]),
+    );
+  });
+  const imports = [];
+  imports.push(await importFiles({ name: 'into.X68', mimeType: 'text/plain', buffer: Buffer.from('* into\r\n') }));
+  imports.push(
+    await importFiles({ name: 'HEAD', mimeType: 'application/octet-stream', buffer: Buffer.from('ref: x\n') }, true),
+  );
+  imports.push(await importFiles({ name: 'h.zip', mimeType: 'application/zip', buffer: Buffer.from(zipBytes) }));
+  await page.waitForTimeout(500);
+  entries = await page.evaluate(() => window.__fsLog.splice(0));
+  const imported = await page.evaluate(async () => {
+    const { vfs, history } = window.__easy68k.ctx;
+    const read = async (path) => new TextDecoder().decode(await vfs.readFile(path));
+    return {
+      into: await read('/folder/into.X68'),
+      head: await read('/folder/HEAD'),
+      hook: await read('/folder/hooks/pre-commit'),
+      versions: (await history.versions('/folder/HEAD')).length,
+      trash: (await history.trashItems()).filter((item) => item.path.startsWith('/folder')).length,
+    };
+  });
+  const named = ['Repo/.git/into.X68', 'Repo/.git/HEAD', 'Repo/.git/hooks/pre-commit'];
+  const onlyImported = entries.every((e) =>
+    e.startsWith('mkdir ')
+      ? e === 'mkdir Repo/.git/hooks'
+      : named.some((n) => e === `create ${n}` || e === `write ${n}`),
+  );
+  const eachWritten = named.every((n) => entries.includes(`write ${n}`));
+  check(
+    `${p} Import into it works as on main: the toasts, the question for the file that exists, the bytes`,
+    imports[0].text.startsWith('Imported 1 file into ') &&
+      imports[1].asked?.includes('"HEAD" already exists in ') &&
+      imports[1].asked?.includes('Replace it?') &&
+      imports[1].text.startsWith('Imported 1 file into ') &&
+      imports[2].text.startsWith('Imported 1 file into ') &&
+      imported.into === '* into\r\n' &&
+      imported.head === 'ref: x\n' &&
+      imported.hook === '#!/bin/sh\n',
+    `${JSON.stringify(imports)} | ${JSON.stringify(imported)}`,
+  );
+  check(
+    `${p} the write log holds exactly the imported files (a file, a replaced file, a .zip's file and folder)`,
+    onlyImported && eachWritten,
+    JSON.stringify(entries),
+  );
+  check(
+    `${p} the history keeps nothing of the imported or replaced files there`,
+    imported.versions === 0 && imported.trash === 0,
+    JSON.stringify(imported),
+  );
+
+  // Save writes there as before (P1.1 rule 2): a document of the folder saved writes its file.
+  const saved = await page.evaluate(async () => {
+    const { documents, history } = window.__easy68k.ctx;
+    const doc = await documents.open('/folder/config', { asText: true });
+    const ok = doc ? await documents.save(doc.id) : false;
+    if (doc) await documents.close(doc.id);
+    await new Promise((r) => setTimeout(r, 500));
+    return { ok, versions: (await history.versions('/folder/config')).length };
+  });
+  entries = await page.evaluate(() => window.__fsLog.splice(0));
+  check(
+    `${p} Save writes the document's file there as before, and the history keeps no version of it`,
+    saved.ok === true && entries.includes('write Repo/.git/config') && saved.versions === 0,
+    `${JSON.stringify(saved)} | ${JSON.stringify(entries)}`,
   );
   check(`${p} no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   await context.close();
 }
-
 /** Opens the application without waiting for the Files panel (it may be hidden, or absent in Simulator mode). */
 async function openAppAnyMode(context, query = '') {
   const page = await context.newPage();

@@ -30,7 +30,11 @@
 //   production  the production build (vite build with EASY68K_BASE=/easy68k-cross-platform/,
 //               served under that sub-path): a PDF, a PNG, a JPEG and an SVG dropped on the window
 //               open in the viewer with no Content Security Policy violation and no console error,
-//               and the HTML-with-a-script files run nothing and open no window there either.
+//               and the HTML-with-a-script files run nothing and open no window there either;
+//               then without a service worker (a first visit, the desktop app): the PDF frame sent
+//               to the application's own page and its ?open= address shows its document again
+//               within 2 s, with no copy of the application left in it (decision D-c), and a
+//               picture's viewer has no frame at all.
 //
 // Headless browsers do not run a PDF viewer (P3.4.2): the check asserts the frame and its blob,
 // never that a PDF is drawn. Screenshots go to build/viewer-check (git-ignored). The page object
@@ -158,9 +162,12 @@ function freePort() {
 }
 
 /** The Windows key map on every machine, so that the result does not depend on the runner. */
+// Configurable: the script runs again in a frame whose first document's window is kept for the next
+// same-origin document (HTML's rule for the initial about:blank, which WebKit applies to the PDF
+// frame sent to the application's page in escapePass).
 function pretendWindows() {
-  Object.defineProperty(Navigator.prototype, 'platform', { get: () => 'Win32' });
-  Object.defineProperty(Navigator.prototype, 'userAgentData', { get: () => undefined });
+  Object.defineProperty(Navigator.prototype, 'platform', { get: () => 'Win32', configurable: true });
+  Object.defineProperty(Navigator.prototype, 'userAgentData', { get: () => undefined, configurable: true });
 }
 
 /** Records every blob: URL the page makes and revokes, window.open, messages and policy violations. */
@@ -201,6 +208,8 @@ async function newContext(browser, options = {}) {
     viewport: { width: 1400, height: 900 },
     reducedMotion: 'reduce',
     acceptDownloads: true,
+    // No worker: a first visit before the worker is installed, and the desktop app (escapePass).
+    ...(options.noWorker ? { serviceWorkers: 'block' } : {}),
   });
   await context.addInitScript(pretendWindows);
   await context.addInitScript(recordPage, SCRIPT_KEY);
@@ -918,6 +927,129 @@ const dropFiles = (page, files) =>
     target.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
   }, files);
 
+/** What the frame of a viewer shows now, read from the page (`selector` finds the viewer's panel). */
+const viewerFrameState = (page, selector) =>
+  page.evaluate((css) => {
+    const panel = document.querySelector(css);
+    const frames = panel ? [...panel.querySelectorAll('iframe')] : [];
+    const frame = frames[0] ?? null;
+    let href;
+    let app = false;
+    try {
+      href = frame?.contentWindow?.location.href ?? null;
+      const doc = frame?.contentDocument;
+      app = doc ? doc.querySelector('#root, .e68-shell, link[rel=manifest]') !== null : false;
+    } catch {
+      href = '(not readable)';
+    }
+    return {
+      panel: panel !== null,
+      frames: frames.length,
+      src: frame?.getAttribute('src') ?? null,
+      generation: frame?.getAttribute('data-e68-viewer-frame') ?? null,
+      href,
+      app,
+    };
+  }, selector);
+
+/**
+ * Decision D-c of the stage's gate (errata N6 14): the PDF frame never shows anything but the
+ * viewer's document. The page runs without a service worker (as on a first visit before the worker
+ * is installed, and as the desktop app always does), so nothing refuses the frame's navigation to
+ * the application's own page: the frame is sent there (as a link inside the PDF or a script would),
+ * and its document must be back within two seconds, with no copy of the application left in it, the
+ * tab still open and nothing shown about it. A picture's viewer has no frame at all (an <img>
+ * cannot be sent anywhere): asserted too.
+ */
+async function escapePass(browser, name, origin) {
+  const p = `${name} production, no worker:`;
+  const { context } = await newContext(browser, { noWorker: true });
+  try {
+    const { page, errors } = await openApp(context, `${origin}${BASE}`, { dev: false });
+    const pictures = await makePictures(page, 400, 300);
+    const stamp = `${name}-escape`;
+    await dropFiles(page, [{ name: `${stamp}-report.pdf`, bytes: pdfBytes('escape'), type: 'application/pdf' }]);
+    await page.locator('[data-e68-panel^="viewer:"] iframe').first().waitFor({ timeout: 30_000 });
+    await dropFiles(page, [{ name: `${stamp}-photo.png`, bytes: pictures.png, type: 'image/png' }]);
+    await page.locator('[data-e68-panel^="viewer:"] img').first().waitFor({ timeout: 30_000 });
+    await page.waitForTimeout(1000);
+    await escapeChecks(page, p, origin, stamp);
+    check(`${p} no console error`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  } finally {
+    await context.close();
+  }
+}
+
+async function escapeChecks(page, p, origin, stamp) {
+  const controlled = await page.evaluate(() => navigator.serviceWorker?.controller != null);
+  check(`${p} escape: no service worker controls the page`, !controlled);
+  const pdf = page.locator('[data-e68-panel^="viewer:"]', { has: page.locator('iframe') }).filter({
+    hasText: `${stamp}-report.pdf`,
+  });
+  const id = await pdf.first().getAttribute('data-e68-panel');
+  const selector = `[data-e68-panel="${id}"]`;
+  const before = await viewerFrameState(page, selector);
+  const texts = await page.locator(selector).innerText();
+  for (const [label, address] of [
+    ["the application's page", `${origin}${BASE}index.html`],
+    ["the application's ?open= address", `${origin}${BASE}?open=/browser/demo.X68`],
+  ]) {
+    await page.evaluate(
+      (css) => document.querySelector(`${css} iframe`)?.setAttribute('data-e68-check-old', ''),
+      selector,
+    );
+    const started = Date.now();
+    await page.evaluate(
+      ([css, url]) => document.querySelector(`${css} iframe`).contentWindow.location.replace(url),
+      [selector, address],
+    );
+    // Back: the frame shows its blob again (Chromium reads it; WebKit reads about:blank for its own
+    // PDF) and is a fresh frame, and the old one is gone.
+    let state = null;
+    let back = -1;
+    while (Date.now() - started < 5000) {
+      state = await viewerFrameState(page, selector);
+      const old = await page.evaluate(() => document.querySelector('[data-e68-check-old]') !== null);
+      if (!old && state.frames === 1 && !state.app && state.src === before.src && state.href !== address) {
+        back = Date.now() - started;
+        break;
+      }
+      await page.waitForTimeout(50);
+    }
+    check(
+      `${p} escape: the PDF frame sent to ${label} shows its document again within 2 s`,
+      back >= 0 && back <= 2000,
+      `${back < 0 ? 'not back after 5 s' : `${back} ms`}: ${JSON.stringify(state)}`,
+    );
+    await page.waitForTimeout(3000);
+    const later = await viewerFrameState(page, selector);
+    const shells = await page.evaluate(() => document.querySelectorAll('.e68-shell').length);
+    check(
+      `${p} escape: after ${label}, 3 s later no copy of the application is in the frame, the tab is open and shows nothing new`,
+      later.panel &&
+        later.frames === 1 &&
+        !later.app &&
+        later.src === before.src &&
+        later.href !== address &&
+        shells === 1 &&
+        (await page.locator(selector).innerText()) === texts,
+      `${JSON.stringify(later)} shells=${shells}`,
+    );
+  }
+  const picture = page.locator('[data-e68-panel^="viewer:"]', { has: page.locator('img') }).filter({
+    hasText: `${stamp}-photo.png`,
+  });
+  const pictureFacts = await picture.first().evaluate((panel) => ({
+    frames: panel.querySelectorAll('iframe, object, embed, frame').length,
+    src: panel.querySelector('img')?.getAttribute('src') ?? '',
+  }));
+  check(
+    `${p} escape: a picture's viewer has no frame that could be sent anywhere, only its <img> of a blob:`,
+    pictureFacts.frames === 0 && /^blob:/.test(pictureFacts.src),
+    JSON.stringify(pictureFacts),
+  );
+}
+
 async function productionPass(browser, name, origin) {
   const p = `${name} production:`;
   const { context, popups } = await newContext(browser);
@@ -1069,6 +1201,8 @@ async function main() {
       try {
         console.log(`\n[${name}, production]`);
         await productionPass(browser, name, staticServer.origin);
+        console.log(`\n[${name}, production without a worker]`);
+        await escapePass(browser, name, staticServer.origin);
       } catch (error) {
         check(`${name}: the production pass ran to the end`, false, String(error?.stack ?? error));
       } finally {

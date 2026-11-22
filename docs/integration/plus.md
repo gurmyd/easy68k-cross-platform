@@ -220,9 +220,10 @@ Simulator, EASyBIN and back to Editor with them open: 41 of 41 checks, no
   prints, wait until no print frame is left and the page has the focus again. The same evidence
   shows a question for `platform/web.ts` (W3): `printDocument` does not give the focus back to the
   element that had it before printing.
-- **D4, the typical student's history** (owner). Stress run (a): 39.33 MB at B = 64 MB, the earlier
-  versions of a source all younger than 1.3 days; options in erratum N3 "The typical-student
-  figure" (deltas, versions only for smaller files, or as it is).
+- **D4, the typical student's history: decided** (by the architect, 22 November 2026, D-d). Deltas
+  are not built for the first release: the budget B bounds the storage in any case, and stress run
+  (a)'s typical student (39.33 MB at B = 64 MB) stays inside it. The owner may ask for deltas later;
+  the figure and the options are in erratum N3 "The typical-student figure".
 - **The model test's time** (orchestrator, after the commit): read "history model: 1000 seeds in 4
   processes in <s> s" in the new CI job `history-model` on ubuntu-latest (P5 N3: 5 minutes). Inside
   `npm test` the 2,000 seeds took 472 s on Ubuntu, 416 s on Windows and 776 s on macOS; `npm test`

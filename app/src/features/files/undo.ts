@@ -25,7 +25,7 @@ import {
   type UndoEntry,
 } from './bulk';
 import { gitRefusalFor } from './git-guard';
-import { unchangedSince } from './move';
+import { takeBackCopyOfGone, unchangedSince, writtenAs } from './move';
 import { renameChecked } from './rename';
 import { displayPath } from './store';
 import {
@@ -34,6 +34,8 @@ import {
   cannotMoveBackGone,
   changedAfterRenaming,
   changedWhileMoving,
+  goneAfterRenaming,
+  goneWhileMoving,
   openInEditor,
   type UndoKind,
 } from './texts';
@@ -212,10 +214,17 @@ async function undoMove(deps: FilesDeps, entry: Extract<UndoEntry, { kind: 'move
       const before = await vfs.stat(to);
       const data = await vfs.readFile(to);
       await vfs.writeFile(from, data);
-      // The file changed after its bytes were taken: it stays, with the change (entry 16).
+      const copy = await writtenAs(vfs, from, data);
+      // The file changed after its bytes were taken: it stays, with the change (entry 16). One that
+      // is gone was moved or deleted by someone else: its copy goes again (entry 18).
       const seen = before ? { mtime: before.mtime, size: before.size, data } : undefined;
       if (!(await unchangedSince(vfs, to, seen))) {
-        await inform(deps, UNDO_TITLE, changedWhileMoving(basename(to), displayPath(vfs, dirname(from)), true));
+        const gone = await takeBackCopyOfGone(vfs, to, from, copy);
+        if (gone === 'taken-back') {
+          await inform(deps, UNDO_TITLE, goneWhileMoving(basename(to), displayPath(vfs, dirname(from)), true));
+        } else if (gone === 'there') {
+          await inform(deps, UNDO_TITLE, changedWhileMoving(basename(to), displayPath(vfs, dirname(from)), true));
+        }
         continue;
       }
       await vfs.remove(to);
@@ -266,6 +275,7 @@ async function undoRename(deps: FilesDeps, entry: Extract<UndoEntry, { kind: 'mo
   }
   let renamed: VPath;
   const kept: VPath[] = [];
+  const gone: VPath[] = [];
   let copies: VPath | null = null;
   try {
     renamed = await renameChecked(vfs, to, basename(from), {
@@ -273,14 +283,19 @@ async function undoRename(deps: FilesDeps, entry: Extract<UndoEntry, { kind: 'mo
         kept.push(...files);
         copies = folder;
       },
+      gone: (files) => void gone.push(...files),
     });
   } catch (error) {
     await showError(deps, UNDO_TITLE, error);
     return [];
   }
-  // A file that changed at the last moment stayed under the name it had (errata N5 entry 18).
+  // A file that changed at the last moment stayed under the name it had; one that was moved or
+  // deleted meanwhile has no copy under the old name (errata N5 entry 18).
   for (const file of kept) {
     await inform(deps, UNDO_TITLE, changedAfterRenaming(basename(file), displayPath(vfs, copies ?? renamed)));
+  }
+  for (const file of gone) {
+    await inform(deps, UNDO_TITLE, goneAfterRenaming(basename(file), displayPath(vfs, renamed)));
   }
   await deps.history?.moved(to, renamed).catch(() => {});
   if (openDocumentsAt(documents, to).length > 0) await documents.relocate?.(to, renamed).catch(() => {});

@@ -143,6 +143,8 @@ export async function emptyTrash(ctx: AppContext): Promise<StorageOutcome> {
     text: emptyTrashQuestion(items.length, bytes),
     icon: 'confirmation',
     buttons: ['Yes', 'No'],
+    // It cannot be undone: No has the focus, so that a stray Enter keeps the Trash (errata N7).
+    defaultButton: 'No',
   });
   if (answer !== 'Yes') return 'declined';
   try {
@@ -165,6 +167,8 @@ export async function deleteEarlierVersions(ctx: AppContext): Promise<StorageOut
     text: DELETE_VERSIONS_QUESTION,
     icon: 'confirmation',
     buttons: ['Yes', 'No'],
+    // It cannot be undone: No has the focus, so that a stray Enter keeps the versions (errata N7).
+    defaultButton: 'No',
   });
   if (answer !== 'Yes') return 'declined';
   try {

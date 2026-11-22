@@ -149,11 +149,15 @@ export async function restoreWithQuestions(
         },
         ask: async (path) => {
           const ready = deps.history.state() === 'ready';
+          // Outside state `ready` its Yes replaces the file there for good (`This cannot be undone.`):
+          // then No (keep both) has the focus, as for every question that cannot be undone (errata
+          // N4, decided by the architect). In state `ready` the replaced file goes to the Trash.
           const answer = await deps.dialogs.messageBox({
             title,
             text: existsQuestion(deps.placeShort(path), await besideName(deps, path), ready),
             icon: 'confirmation',
             buttons: ['Yes', 'No', 'Cancel'],
+            ...(ready ? {} : { defaultButton: 'No' as const }),
           });
           if (answer === 'Yes') {
             if (!ready) toldCannotUndo.add(path);

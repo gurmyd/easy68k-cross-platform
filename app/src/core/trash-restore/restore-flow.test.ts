@@ -259,6 +259,8 @@ describe('restoreWithQuestions against the store (P3.3.8)', () => {
         existsQuestion('My Programs/prog.X68', 'prog (restored).X68', false),
       ]);
       expect(t.boxes[0]?.text).toContain('This cannot be undone.');
+      // Its Yes cannot be undone: No (keep both) has the focus (decided by the architect, errata N4).
+      expect(t.boxes[0]).toMatchObject({ buttons: ['Yes', 'No', 'Cancel'], defaultButton: 'No' });
       expect(await t.read('/browser/prog.X68')).toBe('old');
       // Written without a copy: nothing of the file that was there went to the Trash.
       expect(await t.history.trashItems()).toEqual([]);
@@ -426,6 +428,7 @@ describe('restoreWithQuestions with a scripted restoreTrash', () => {
       expect(t.boxes.map((box) => box.text)).toEqual([
         existsQuestion('My Programs/prog.X68', 'prog (restored).X68', false),
       ]);
+      expect(t.boxes[0]?.defaultButton).toBe('No');
     }
   });
 });

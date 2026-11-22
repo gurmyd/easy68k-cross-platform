@@ -35,6 +35,7 @@ import type {
 } from '../contracts';
 import { DAY, HOUR, MINUTE, RECORD_BYTES, TRASH_AGE, VERSION_AGE, LARGEST_VERSION } from '../core/history/limits';
 import { besideName, placeOf, touchesGit, untrackedReason } from '../core/history/places';
+import { isVPath, splitVPath } from '../core/paths/winpath';
 import { createVfs } from './vfs';
 
 // ---- the database, read directly ------------------------------------------------------------------
@@ -182,6 +183,58 @@ function connection(factory: IDBFactory): Promise<IDBDatabase | null> {
   return found;
 }
 
+/** A record of the `roots` store (P3.3.5): an opened folder's handle, or null and its name. */
+interface DbRoot {
+  handle: unknown;
+  name: string;
+}
+
+/** The `roots` store of `factory`, in key order, as the store's cursor reads it (read-only). */
+async function readRoots(factory: IDBFactory): Promise<[string, DbRoot][]> {
+  const db = await connection(factory);
+  if (!db || !db.objectStoreNames.contains('roots')) return [];
+  try {
+    const store = db.transaction('roots', 'readonly').objectStore('roots');
+    const get = <T>(request: IDBRequest<T>) =>
+      new Promise<T>((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    const [keys, values] = await Promise.all([get(store.getAllKeys()), get(store.getAll())]);
+    const out: [string, DbRoot][] = [];
+    keys.forEach((key, i) => {
+      const value = values[i] as DbRoot | undefined;
+      if (value && typeof value === 'object' && typeof value.name === 'string') out.push([String(key), value]);
+    });
+    return out;
+  } catch {
+    CONNECTIONS.delete(factory);
+    return [];
+  }
+}
+
+/**
+ * The rootId the store gives `backend` (fs/history-db.ts findRoot, P4.3): the first record, in key
+ * order, of the same handle (`isSameEntry`), or without a handle of the same name; null when the
+ * store has made none yet.
+ */
+async function rootIdIn(roots: readonly [string, DbRoot][], backend: FileSystemBackend): Promise<string | null> {
+  const handle = (backend as { rootHandle?: unknown }).rootHandle ?? null;
+  for (const [id, record] of roots) {
+    if (handle === null) {
+      if (record.handle === null && record.name === backend.label) return id;
+      continue;
+    }
+    const same = (record.handle as { isSameEntry?: (other: unknown) => Promise<boolean> } | null)?.isSameEntry;
+    if (typeof same !== 'function') continue;
+    if (await Promise.resolve(same.call(record.handle, handle)).catch(() => false)) return id;
+  }
+  return null;
+}
+
+/** Stands for the root of an opened folder the store has not given a rootId yet (no record names it). */
+const ROOT_NOT_YET = '?';
+
 // ---- small helpers ----------------------------------------------------------------------------------
 
 /** The hash and the inflation the checker uses; a test may give faster ones of the same results. */
@@ -322,8 +375,16 @@ export interface HistoryModel {
   mount(backend: FileSystemBackend): void;
   unmount(name: string): void;
   /** The IndexedDB the history writes to, when the model may read it (restores of items no
-   *  promise describes). */
+   *  promise describes; the root of an opened folder). */
   readonly database?: () => IDBFactory;
+  /**
+   * The place of `path` (P4.3) as the store keys it: `/folder/<rel>` through the rootId the store
+   * gave the opened folder (read with refreshRoots), null where the store tracks nothing (`/memory`,
+   * a `/folder` path while no folder is open).
+   */
+  place(path: VPath): string | null;
+  /** Reads the opened folder's rootId from the database again (`factory`, else `database`). */
+  refreshRoots(factory?: IDBFactory): Promise<void>;
   /** @internal */
   state: ModelState;
 }
@@ -354,6 +415,8 @@ export interface ModelState {
   stepRestoring: Set<string>;
   /** Commands of this stage are running (no write below .git is allowed then). */
   stageCommand: number;
+  /** The rootId of each mounted backend that has one in the store (the opened folder), by mount. */
+  roots: Map<string, string>;
 }
 
 /** Bytes read before, by path: read again only when the modification time or size changed. */
@@ -414,6 +477,7 @@ export function createHistoryModel(
     stepPromises: [],
     stepRestoring: new Set(),
     stageCommand: 0,
+    roots: new Map(),
   };
 
   const removeBelow = (path: VPath) => {
@@ -469,6 +533,25 @@ export function createHistoryModel(
     violations,
     state,
     ...(database ? { database } : {}),
+    place(path) {
+      if (!isVPath(path)) return null;
+      const { mount } = splitVPath(path);
+      if (mount !== 'folder') return placeOf(path);
+      // As the store does (history-db.ts place): no opened folder, no place.
+      if (!raw.backends().some((b) => b.mount === 'folder')) return null;
+      return placeOf(path, state.roots.get('folder') ?? ROOT_NOT_YET);
+    },
+    async refreshRoots(factory) {
+      const source = factory ?? database?.();
+      const backend = raw.backends().find((b) => b.mount === 'folder');
+      if (!source || !backend) {
+        state.roots.delete('folder');
+        return;
+      }
+      const id = await rootIdIn(await readRoots(source), backend);
+      if (id === null) state.roots.delete('folder');
+      else state.roots.set('folder', id);
+    },
     async adoptFiles() {
       files.clear();
       for (const [path, data] of await currentFiles(raw)) files.set(path, data);
@@ -599,9 +682,10 @@ function watchHistory(model: HistoryModel, history: HistoryService): HistoryServ
     promises.push(promised);
     if (p.half === 'trash') state.stepPromises.push(promised);
   };
-  const releaseVersionsAt = (paths: readonly VPath[]) => {
-    const places = new Set(paths.map((path) => placeOf(path)));
-    model.release((p) => p.half === 'versions' && places.has(placeOf(p.path)));
+  const releaseVersionsAt = async (paths: readonly VPath[]) => {
+    await model.refreshRoots();
+    const places = new Set(paths.map((path) => model.place(path)).filter((place) => place !== null));
+    model.release((p) => p.half === 'versions' && places.has(model.place(p.path) ?? ''));
   };
   const stage = async <T>(fn: () => Promise<T>): Promise<T> => {
     state.stageCommand++;
@@ -666,9 +750,9 @@ function watchHistory(model: HistoryModel, history: HistoryService): HistoryServ
           }
         }
         // A file that went into the Trash takes its earlier versions with it (open case 6).
-        if (how !== 'restore') releaseVersionsAt(touched.map(([file]) => file));
+        if (how !== 'restore') await releaseVersionsAt(touched.map(([file]) => file));
       }
-      if (outcome === 'not-kept' && how !== 'restore') releaseVersionsAt(touched.map(([file]) => file));
+      if (outcome === 'not-kept' && how !== 'restore') await releaseVersionsAt(touched.map(([file]) => file));
       if (how !== 'restore') {
         for (const [file, bytes] of atAct) {
           if (!touched.some(([t]) => t === file)) state.transient += bytes.length + 2 * RECORD_BYTES;
@@ -793,7 +877,7 @@ function watchHistory(model: HistoryModel, history: HistoryService): HistoryServ
         const old = before.get(target);
         if (old && answers.get(target) === 'replace') {
           if (confirmed.has(target)) {
-            releaseVersionsAt([target]);
+            await releaseVersionsAt([target]);
           } else {
             // The item this restore made (other Replaced items of the same path may be older).
             const replaced = (await history.trashItems()).find(
@@ -802,7 +886,7 @@ function watchHistory(model: HistoryModel, history: HistoryService): HistoryServ
             if (replaced)
               await keep({ half: 'trash', path: target, bytes: old, time: state.step.now, item: replaced.id });
             else violations.push(`restoreTrash replaced "${target}" without a copy and without a Yes`);
-            releaseVersionsAt([target]);
+            await releaseVersionsAt([target]);
           }
         }
       }
@@ -833,9 +917,10 @@ function watchHistory(model: HistoryModel, history: HistoryService): HistoryServ
       // Rejected: the records stayed at `from`, and so do the promises.
       await stage(() => history.moved(from, to));
       // The history follows by place (P4.3: the browser store ignores letter case).
-      const fromPlace = placeOf(from);
+      await model.refreshRoots();
+      const fromPlace = model.place(from);
       for (const p of promises) {
-        const place = placeOf(p.path);
+        const place = model.place(p.path);
         if (p.half !== 'versions' || !fromPlace || !place) continue;
         if (place === fromPlace || place.startsWith(`${fromPlace}/`)) p.path = to + p.path.slice(from.length);
       }
@@ -880,6 +965,8 @@ export async function checkHistoryInvariants(db: IDBFactory, vfs: Vfs, model: Hi
     }
     return out;
   });
+  // The opened folder's places go through its rootId, as the store keys them (P4.3).
+  await model.refreshRoots(db);
   const before = state.before;
   const limit = Math.floor(state.step.budget / 2);
 
@@ -967,11 +1054,11 @@ export async function checkHistoryInvariants(db: IDBFactory, vfs: Vfs, model: Hi
         .filter(([fid]) => (after.versions.get(fid) ?? []).some((v) => v.hash === p.hash))
         .map(([fid, r]) => `${fid}@${r.live ?? `trash:${r.trash?.item}`}`);
       console.log(
-        `HOLDERS ${p.id} ${placeOf(p.path)} living=${living.get(placeOf(p.path) ?? '')} ${holders.join(' ')}`,
+        `HOLDERS ${p.id} ${model.place(p.path)} living=${living.get(model.place(p.path) ?? '')} ${holders.join(' ')}`,
       );
     }
   }
-  const filePlaces = new Set([...model.files.keys()].map((path) => placeOf(path) ?? ''));
+  const filePlaces = new Set([...model.files.keys()].map((path) => model.place(path) ?? ''));
   for (const p of [...model.promises]) {
     let found = false;
     if (p.half === 'trash') {
@@ -987,7 +1074,7 @@ export async function checkHistoryInvariants(db: IDBFactory, vfs: Vfs, model: Hi
       // seed 4590), whose path the promise then takes. Not any other record that happens to hold the
       // same bytes (a copy of the file deleted elsewhere): that would hide the step in which the
       // file's own record lost the version (seed 9490).
-      const place = placeOf(p.path) ?? '';
+      const place = model.place(p.path) ?? '';
       const holds = (fid: string | undefined): fid is string =>
         !!fid && (after.versions.get(fid) ?? []).some((v) => v.hash === p.hash);
       const live = living.get(place);
@@ -1007,7 +1094,7 @@ export async function checkHistoryInvariants(db: IDBFactory, vfs: Vfs, model: Hi
       }
     }
     if (found) continue;
-    const why = explainLoss(p, before, after, state);
+    const why = explainLoss(p, before, after, state, model.place(p.path));
     if (why) model.release((q) => q.id === p.id);
     else {
       const held =
@@ -1016,7 +1103,7 @@ export async function checkHistoryInvariants(db: IDBFactory, vfs: Vfs, model: Hi
               const copy = (after.versions.get(id) ?? []).find((v) => v.seq === r.newestSeq);
               return `${r.spelling}${r.dir ? ' (folder)' : ''} copy ${copy?.hash.slice(0, 8) ?? 'none'}`;
             })
-          : (after.versions.get(living.get(placeOf(p.path) ?? '') ?? '') ?? []).map(
+          : (after.versions.get(living.get(model.place(p.path) ?? '') ?? '') ?? []).map(
               (v) => `${v.seq}:${v.hash.slice(0, 8)}`,
             );
       if (globalThis.process?.env?.EASY68K_HISTORY_DEBUG) {
@@ -1045,7 +1132,7 @@ export async function checkHistoryInvariants(db: IDBFactory, vfs: Vfs, model: Hi
     for (const path of model.files.keys()) {
       const data = model.files.get(path) as Bytes;
       if (untrackedReason(path, data.length, data) === 'memory') continue;
-      const id = living.get(placeOf(path) ?? '');
+      const id = living.get(model.place(path) ?? '');
       const record = id ? after.files.get(id) : undefined;
       const signature = `${id}:${record?.newestSeq}:${record?.count}:${record?.lastSeq}`;
       seen.set(path, signature);
@@ -1111,7 +1198,13 @@ export async function checkHistoryInvariants(db: IDBFactory, vfs: Vfs, model: Hi
  * schedule and the cap on its record, or pruning of its half in that half's order by a change that
  * needed the room (or a pass while the half was above B / 2, or the lowering when storage is tight).
  */
-function explainLoss(p: Promised, before: DbSnapshot | null, after: DbSnapshot, state: ModelState): string | null {
+function explainLoss(
+  p: Promised,
+  before: DbSnapshot | null,
+  after: DbSnapshot,
+  state: ModelState,
+  place: string | null,
+): string | null {
   const { now, budget, pass } = state.step;
   const limit = Math.floor(budget / 2);
   if (pass && p.half === 'trash' && p.time < now - TRASH_AGE) return 'expired';
@@ -1132,20 +1225,23 @@ function explainLoss(p: Promised, before: DbSnapshot | null, after: DbSnapshot, 
       if (!oldVersions.has(v.seq) || wasHalf !== half) added[half] += counted(v);
     }
     if (old && !!old.trash !== !!record.trash) added[record.trash ? 'trash' : 'versions'] += RECORD_BYTES;
-    // A copy that moved back with its record and was not admitted (no room even after pruning,
-    // P3.3.4 "What does not fit after pruning is not kept") was still checked against B / 2, and its
-    // admission may have pruned the half first (seed 4063).
+    // A copy that moved back with its record (a restore, or guard giving a place back) is admitted
+    // to the versions half when it can be kept at all (D-e, errata N3): at most 1 MB, and its record
+    // and copy at most B / 2 (everything else in the half may be pruned for it). Admitted, it counts
+    // as added also when the step removed it again; one that cannot be kept adds nothing, and
+    // nothing may be pruned for it.
     if (old?.trash && !record.trash) {
       const copy = (before.versions.get(id) ?? []).find((v) => v.seq === old.newestSeq);
-      if (copy && !(after.versions.get(id) ?? []).some((v) => v.seq === copy.seq)) added.versions += counted(copy);
+      if (copy && !(after.versions.get(id) ?? []).some((v) => v.seq === copy.seq) && keepable(copy, limit))
+        added.versions += counted(copy);
     }
   }
-  // The same for a record of an item being restored that went altogether: a living record without
-  // versions is not kept (open case 4).
+  // The same rule for a record of an item being restored that went altogether (a living record
+  // without versions is not kept, open case 4).
   for (const [id, old] of before.files) {
     if (!old.trash || after.files.has(id) || !state.stepRestoring.has(old.trash.item)) continue;
     const copy = (before.versions.get(id) ?? []).find((v) => v.seq === old.newestSeq);
-    if (copy) added.versions += counted(copy);
+    if (copy && keepable(copy, limit)) added.versions += counted(copy);
   }
   // Copies guard kept in this step whose records went back to living after act (files act left,
   // a failed act) passed Trash admission on their way: they count as what the step added there.
@@ -1195,8 +1291,7 @@ function explainLoss(p: Promised, before: DbSnapshot | null, after: DbSnapshot, 
     }
     return 'pruned oldest first';
   }
-  // Versions half: its record in the step before.
-  const place = placeOf(p.path);
+  // Versions half: its record in the step before (place: the place of p.path, model.place).
   const holds = (id: string) => (before.versions.get(id) ?? []).some((v) => v.hash === p.hash);
   const entry =
     [...before.files.entries()].find(([id, r]) => r.live === place && holds(id)) ??
@@ -1248,6 +1343,14 @@ function explainLoss(p: Promised, before: DbSnapshot | null, after: DbSnapshot, 
     }
   }
   return 'pruned oldest first';
+}
+
+/**
+ * True when a copy moving back from the Trash with its record can be kept in the versions half
+ * (P3.3.4, D-e): at most 1 MB, and its record and copy together at most B / 2 = `limit`.
+ */
+function keepable(copy: DbVersion, limit: number): boolean {
+  return copy.size <= LARGEST_VERSION && RECORD_BYTES + counted(copy) <= limit;
 }
 
 /** The largest version the versions half admits, for the driver. */
@@ -1424,8 +1527,8 @@ export async function runModelSequence(options: DriverOptions): Promise<DriverRe
    *  from a file there names that file. The memory backend of the test does not, so the driver does. */
   const canon = (path: VPath): VPath => {
     if (!path.startsWith('/browser/')) return path;
-    const place = placeOf(path);
-    for (const key of model.files.keys()) if (placeOf(key) === place) return key;
+    const place = model.place(path);
+    for (const key of model.files.keys()) if (model.place(key) === place) return key;
     return path;
   };
   const filesIn = (folder: VPath) =>
@@ -1589,7 +1692,7 @@ export async function runModelSequence(options: DriverOptions): Promise<DriverRe
         const to = caseOnly
           ? `${from.slice(0, from.lastIndexOf('/'))}/${name === name.toUpperCase() ? name.toLowerCase() : name.toUpperCase()}`
           : `${folder}/n${Math.floor(random() * 4)}${name}`;
-        if (to === from || (placeOf(to) !== placeOf(from) && (model.files.has(to) || canon(to) !== to)))
+        if (to === from || (model.place(to) !== model.place(from) && (model.files.has(to) || canon(to) !== to)))
           return `rename ${from}: the name is taken`;
         const data = model.files.get(from) as Bytes;
         await model.vfs.writeFile(to, data);

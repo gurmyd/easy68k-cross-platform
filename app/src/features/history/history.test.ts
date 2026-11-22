@@ -671,6 +671,8 @@ describe('the Trash (P3.3.8)', () => {
         text: 'Delete the 2 selected items for good?',
         icon: 'confirmation',
         buttons: ['Yes', 'No'],
+        // It cannot be undone: No has the focus (decided by the architect, errata N4).
+        defaultButton: 'No',
       },
     ]);
     expect(dropTrash).toHaveBeenCalledWith(['a', 'b']);
@@ -687,7 +689,13 @@ describe('the Trash (P3.3.8)', () => {
     const listed = Array.from({ length: 12 }, (_, i) => item(`f${i}`, 0));
     listed[0]!.bytes = Math.round(1.4 * MB);
     await emptyTrash({ history: { dropTrash } as unknown as HistoryService, dialogs }, listed);
-    expect(boxes[0]?.text).toBe('Delete everything in the Trash for good? (12 items, 1.4 MB)');
+    expect(boxes[0]).toEqual({
+      title: 'Empty Trash',
+      text: 'Delete everything in the Trash for good? (12 items, 1.4 MB)',
+      icon: 'confirmation',
+      buttons: ['Yes', 'No'],
+      defaultButton: 'No',
+    });
     expect(dropTrash).toHaveBeenCalledWith(listed.map((i) => i.id));
   });
 
@@ -719,7 +727,13 @@ describe('the Trash (P3.3.8)', () => {
     const { boxes, dialogs } = asking('Yes');
     expect(await deleteHistoryAndTrash({ history: { deleteAll } as unknown as HistoryService, dialogs })).toBe(true);
     expect(boxes).toEqual([
-      { title: DELETE_HISTORY_BUTTON, text: DELETE_HISTORY_QUESTION, icon: 'confirmation', buttons: ['Yes', 'No'] },
+      {
+        title: DELETE_HISTORY_BUTTON,
+        text: DELETE_HISTORY_QUESTION,
+        icon: 'confirmation',
+        buttons: ['Yes', 'No'],
+        defaultButton: 'No',
+      },
     ]);
     expect(deleteAll).toHaveBeenCalledTimes(1);
     const no = asking('No');

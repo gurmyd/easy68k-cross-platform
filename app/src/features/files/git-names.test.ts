@@ -1,8 +1,10 @@
 // No command of the Files panel makes a folder named .git or writes below one (ARCHITECTURE-PLUS
 // P1.1 rule 2; verify round 2 of N5; errata N5 entry 15): every way a name can become .git, in any
-// letter case: Rename, New Folder, Move, Copy, Import, a dropped folder, and Undo of each that has
-// one; and an opened folder that is itself a repository's .git folder. Each case reads the write log
-// of the Vfs (every writeFile, mkdirp and remove) and finds nothing below .git.
+// letter case: Rename, New Folder, Move, Copy, and Undo of each that has one; and an opened folder
+// that is itself a repository's .git folder. Each case reads the write log of the Vfs (every
+// writeFile, mkdirp and remove) and finds nothing below .git. Import and a dropped folder are main's
+// and stay so, also below .git (P1.1 rule 2; decided by the architect, 22 November 2026; errata N5
+// entry 19): their cases show that they do exactly what they do elsewhere.
 
 import { describe, expect, it } from 'vitest';
 import type { DialogInstance, MessageBoxRequest, Vfs, VPath } from '../../contracts';
@@ -16,7 +18,8 @@ import { gitRefusalFor, gitStoreName, writesBelowGit } from './git-guard';
 import { createFileDialogs, feature } from './index';
 import { moveTargets, transferItems } from './move';
 import { renameChecked } from './rename';
-import { GIT_DROP_TOAST, GIT_NOT_IMPORTED, gitNameRefused, gitPathRefused, gitStoreRefused } from './texts';
+import * as filesTexts from './texts';
+import { gitNameRefused, gitPathRefused, gitStoreRefused } from './texts';
 import { ascii, filesTestDeps, memoryStores, scriptedDialogs, scriptedHistory, text } from './testing';
 
 const GIT_SPELLINGS = ['.git', '.GIT', '.Git'];
@@ -89,10 +92,6 @@ describe('the texts (errata N5 entry 15)', () => {
     );
     expect(gitStoreRefused('.git')).toBe(
       'The folder ".git" is the .git folder of a Git repository. The Files panel changes nothing in it.',
-    );
-    expect(GIT_NOT_IMPORTED).toBe('a folder named .git is not imported into the Files panel');
-    expect(GIT_DROP_TOAST).toBe(
-      "A folder named .git is not opened: the Files panel writes nothing into a Git repository's .git folder. Drop the folder that holds it.",
     );
   });
 
@@ -246,7 +245,7 @@ describe('Move and Copy never write below .git (P1.1 rule 2)', { timeout: 60_000
   });
 });
 
-describe('Delete, Rename, New Folder and Import in an opened folder that is a .git folder', { timeout: 60_000 }, () => {
+describe('Delete, Rename and New Folder in an opened folder that is a .git folder', { timeout: 60_000 }, () => {
   it('are refused with the text, and nothing is written or removed', async () => {
     const { app, shown } = application(['x']);
     const { ctx } = app;
@@ -260,102 +259,182 @@ describe('Delete, Rename, New Folder and Import in an opened folder that is a .g
     expect((await deleteItems(deps, ['/folder/HEAD'])).deleted).toEqual([]);
     expect(await renamePath(ctx, '/folder/refs')).toBeNull();
     expect(await newFolder(ctx, '/folder')).toBeNull();
-    expect(await importInto(ctx, '/folder', [{ rel: 'a.X68', read: async () => ascii('A'), size: 1 }])).toBeNull();
     expect(deps.dialogs.shown.map((r) => [r.title, r.text])).toEqual([['Delete', gitStoreRefused('.GIT')]]);
     expect(shown.map((r) => [r.title, r.text])).toEqual([
       ['Rename', gitStoreRefused('.GIT')],
       ['New Folder', gitStoreRefused('.GIT')],
-      ['Import', gitStoreRefused('.GIT')],
     ]);
     expect(log).toEqual([]);
     app.dispose();
   });
 });
 
-describe('Import and a dropped folder named .git (P1.1 rule 2)', { timeout: 60_000 }, () => {
-  it('an imported folder named .git (any letter case) is left out and named; a repository inside a folder comes in as today', async () => {
-    const { app } = application([]);
-    const { ctx } = app;
-    const toasts: string[] = [];
-    ctx.dialogs.toast = (t) => void toasts.push(t);
-    const log = logWrites(ctx.vfs);
-    const item = (rel: string, data = rel) => ({ rel, read: async () => ascii(data), size: data.length });
-    const result = await importInto(ctx, '/browser', [
-      item('.git/'),
-      item('.git/HEAD'),
-      item('.GIT/config'),
-      item('lab3/'),
-      item('lab3/.git/HEAD', 'repo'),
-      item('lab3/main.X68'),
-      item('a.X68'),
-    ]);
-    expect(result?.written).toEqual(['/browser/lab3/.git/HEAD', '/browser/lab3/main.X68', '/browser/a.X68']);
-    expect(log.filter((l) => /^(write|mkdir) \/browser\/\.git/i.test(l))).toEqual([]);
-    expect(await ctx.vfs.stat('/browser/.git')).toBeNull();
-    expect(await ctx.vfs.stat('/browser/.GIT')).toBeNull();
-    expect(toasts).toEqual([
-      `Imported 3 files into My Programs. Not imported: .git/: ${GIT_NOT_IMPORTED}; .GIT/: ${GIT_NOT_IMPORTED}`,
-    ]);
-    app.dispose();
-  });
+/**
+ * Import into an opened folder named `rootName`: a new file, a file that exists (replaced after the
+ * question, answered `answer`), and a .zip with a folder. Returns everything a person and the store
+ * can observe: the questions, the toasts, the result, the write log, the files, and what the history
+ * keeps of the replaced file.
+ */
+async function importIntoOpenedFolder(rootName: string, answer: 'Yes' | 'No') {
+  const app = createTestApplication({ features: [feature], services: { createFileDialogs } });
+  const { ctx } = app;
+  const questions: string[] = [];
+  const toasts: string[] = [];
+  ctx.dialogs.messageBox = async (request) => {
+    questions.push(`${request.title}|${request.icon}|${request.buttons.join(',')}|${request.text}`);
+    return answer;
+  };
+  ctx.dialogs.toast = (t) => void toasts.push(t);
+  const { MemoryBackend } = await import('../../fs/memory-backend');
+  ctx.vfs.mount(new MemoryBackend({ mount: 'folder', kind: 'fsaccess', label: 'Folder: Repo' }));
+  await seed(ctx.vfs, { '/folder/HEAD': 'ref: refs/heads/main', '/folder/refs/heads/main': 'abc' });
+  openedFolderNamed(ctx.vfs, rootName);
+  const log = logWrites(ctx.vfs);
+  const zip = writeZip([
+    { path: 'hooks/', mtime: 0 },
+    { path: 'hooks/pre-commit', data: ascii('#!/bin/sh'), mtime: 0 },
+  ]);
+  const results = [];
+  results.push(await importInto(ctx, '/folder', [{ rel: 'a.X68', read: async () => ascii('A'), size: 1 }]));
+  results.push(await importInto(ctx, '/folder', [{ rel: 'HEAD', read: async () => ascii('ref: x'), size: 6 }]));
+  results.push(await importInto(ctx, '/folder', [{ rel: 'h.zip', read: async () => zip, size: zip.length }]));
+  const files: Record<string, string> = {};
+  for (const path of ['/folder/a.X68', '/folder/HEAD', '/folder/hooks/pre-commit'] as VPath[]) {
+    files[path] = (await ctx.vfs.stat(path)) ? text(await ctx.vfs.readFile(path)) : '(none)';
+  }
+  await new Promise((resolve) => setTimeout(resolve, 50)); // a `Before import` record is not awaited
+  const history = ctx.history;
+  const kept = history ? (await history.versions('/folder/HEAD')).length : -1;
+  const trash = history ? (await history.trashItems()).length : -1;
+  app.dispose();
+  return { questions, toasts, results, log, files, kept, trash };
+}
 
-  it('a .zip whose top folder is .git is unpacked without it', async () => {
-    const { app } = application([]);
-    const { ctx } = app;
-    const toasts: string[] = [];
-    ctx.dialogs.toast = (t) => void toasts.push(t);
-    const zip = writeZip([
-      { path: '.Git/', mtime: 0 },
-      { path: '.Git/HEAD', data: ascii('ref'), mtime: 0 },
-      { path: 'p.X68', data: ascii('P'), mtime: 0 },
-    ]);
-    const result = await importInto(ctx, '/browser', [{ rel: 'x.zip', read: async () => zip, size: zip.length }]);
-    expect(result?.written).toEqual(['/browser/p.X68']);
-    expect(await ctx.vfs.stat('/browser/.Git')).toBeNull();
-    expect(toasts).toEqual([`Imported 1 file into My Programs. Not imported: .Git/: ${GIT_NOT_IMPORTED}`]);
-    app.dispose();
-  });
-
-  it('a dropped folder named .git is not offered to the opened-folder provider', async () => {
-    const offered: unknown[] = [];
-    const toasts: string[] = [];
-    const deps: DropDeps = {
-      mode: 'editor',
-      programLoaded: false,
-      messageBox: async () => 'OK',
-      toast: (t) => void toasts.push(t),
-      importFile: async (name) => `/browser/Imported/${name}` as VPath,
-      openDocument: async () => null,
-      openProgram: async () => {},
-      folderProviders: () => [
-        {
-          id: 'folder',
-          label: 'Open folder...',
-          available: () => true,
-          openDroppedFolder: async (handle: unknown) => {
-            offered.push(handle);
-            return true;
-          },
-        } as unknown as DroppedFolderProvider,
-      ],
-    };
-    const folder = (name: string): DroppedItem => ({
-      name,
-      isFolder: true,
-      read: () => Promise.reject(new Error('folder')),
-      handle: Promise.resolve({ kind: 'directory', name }),
-    });
-    for (const name of GIT_SPELLINGS) {
-      const outcome = await handleDrop([folder(name)], deps);
-      expect(outcome.folders).toBe('refused');
+describe('Import in an opened folder that is a .git folder (P1.1 rule 2; decided 22 November 2026)', () => {
+  it('imports as into any opened folder: a new file, a replaced file after the question, a .zip', async () => {
+    for (const answer of ['Yes', 'No'] as const) {
+      const git = await importIntoOpenedFolder('.git', answer);
+      const lab = await importIntoOpenedFolder('Lab', answer);
+      // Exactly what an opened folder that is not a .git folder sees: the same questions, toasts,
+      // results, writes and bytes (the history's own `Before import` aside, which keeps nothing there).
+      expect(git.questions).toEqual(lab.questions);
+      expect(git.toasts).toEqual(lab.toasts);
+      expect(git.results).toEqual(lab.results);
+      expect(git.log).toEqual(lab.log);
+      expect(git.files).toEqual(lab.files);
+      // And that is main's Import: no refusal, the question of 3.8.1, the imported files only.
+      expect(git.questions).toEqual(['Import|confirmation|Yes,No,Cancel|"HEAD" already exists in Repo. Replace it?']);
+      expect(git.log).toEqual([
+        'write /folder/a.X68',
+        ...(answer === 'Yes' ? ['write /folder/HEAD'] : []),
+        'mkdir /folder/hooks',
+        'write /folder/hooks/pre-commit',
+      ]);
+      expect(git.files).toEqual({
+        '/folder/a.X68': 'A',
+        '/folder/HEAD': answer === 'Yes' ? 'ref: x' : 'ref: refs/heads/main',
+        '/folder/hooks/pre-commit': '#!/bin/sh',
+      });
+      expect(git.toasts[1]).toBe(
+        answer === 'Yes' ? 'Imported 1 file into Repo.' : 'Imported 0 files into Repo. 1 existing file was kept.',
+      );
+      // The history keeps nothing there (P3.3.1 property 7): no `Before import` of the replaced file.
+      expect(git.kept).toBe(0);
+      expect(git.trash).toBe(0);
+      if (answer === 'Yes') expect(lab.kept).toBe(1);
     }
-    expect(offered).toEqual([]);
-    expect(toasts).toEqual(GIT_SPELLINGS.map(() => GIT_DROP_TOAST));
-    // Any other folder is still offered.
-    expect((await handleDrop([folder('lab')], deps)).folders).toBe('taken');
-    expect(offered).toEqual([{ kind: 'directory', name: 'lab' }]);
-  });
+  }, 60_000);
 });
+
+describe(
+  'Import and a dropped folder named .git (P1.1 rule 2: Import is unchanged, also below .git)',
+  { timeout: 60_000 },
+  () => {
+    it('an imported folder named .git comes in as on main, at the top and inside a folder', async () => {
+      const { app } = application([]);
+      const { ctx } = app;
+      const toasts: string[] = [];
+      ctx.dialogs.toast = (t) => void toasts.push(t);
+      const item = (rel: string, data = rel) => ({ rel, read: async () => ascii(data), size: data.length });
+      const result = await importInto(ctx, '/browser', [
+        item('.git/'),
+        item('.git/HEAD', 'top'),
+        item('lab3/'),
+        item('lab3/.git/HEAD', 'repo'),
+        item('lab3/main.X68'),
+        item('a.X68'),
+      ]);
+      expect(result?.written).toEqual([
+        '/browser/.git/HEAD',
+        '/browser/lab3/.git/HEAD',
+        '/browser/lab3/main.X68',
+        '/browser/a.X68',
+      ]);
+      expect(text(await ctx.vfs.readFile('/browser/.git/HEAD'))).toBe('top');
+      expect(toasts).toEqual(['Imported 4 files into My Programs.']);
+      // Nothing of it gets an earlier version (the history keeps nothing below .git).
+      expect(ctx.history?.untracked('/browser/.git/HEAD', 3, ascii('top'))).toBe('git');
+      app.dispose();
+    });
+
+    it('a .zip whose top folder is .git is unpacked with it, as on main', async () => {
+      const { app } = application([]);
+      const { ctx } = app;
+      const toasts: string[] = [];
+      ctx.dialogs.toast = (t) => void toasts.push(t);
+      const zip = writeZip([
+        { path: '.Git/', mtime: 0 },
+        { path: '.Git/HEAD', data: ascii('ref'), mtime: 0 },
+        { path: 'p.X68', data: ascii('P'), mtime: 0 },
+      ]);
+      const result = await importInto(ctx, '/browser', [{ rel: 'x.zip', read: async () => zip, size: zip.length }]);
+      expect(result?.written).toEqual(['/browser/.Git/HEAD', '/browser/p.X68']);
+      expect(text(await ctx.vfs.readFile('/browser/.Git/HEAD'))).toBe('ref');
+      expect(toasts).toEqual(['Imported 2 files into My Programs.']);
+      app.dispose();
+    });
+
+    it('the texts that left a .git folder out of an import, or refused a dropped one, are gone', () => {
+      expect(Object.keys(filesTexts).filter((key) => /^GIT_(NOT_IMPORTED|DROP_TOAST)$/.test(key))).toEqual([]);
+    });
+
+    it('a dropped folder named .git is offered to the opened-folder provider, as any folder (as on main)', async () => {
+      const offered: unknown[] = [];
+      const toasts: string[] = [];
+      const deps: DropDeps = {
+        mode: 'editor',
+        programLoaded: false,
+        messageBox: async () => 'OK',
+        toast: (t) => void toasts.push(t),
+        importFile: async (name) => `/browser/Imported/${name}` as VPath,
+        openDocument: async () => null,
+        openProgram: async () => {},
+        folderProviders: () => [
+          {
+            id: 'folder',
+            label: 'Open folder...',
+            available: () => true,
+            openDroppedFolder: async (handle: unknown) => {
+              offered.push(handle);
+              return true;
+            },
+          } as unknown as DroppedFolderProvider,
+        ],
+      };
+      const folder = (name: string): DroppedItem => ({
+        name,
+        isFolder: true,
+        read: () => Promise.reject(new Error('folder')),
+        handle: Promise.resolve({ kind: 'directory', name }),
+      });
+      for (const name of [...GIT_SPELLINGS, 'lab']) {
+        expect((await handleDrop([folder(name)], deps)).folders).toBe('taken');
+      }
+      expect(offered).toEqual([...GIT_SPELLINGS, 'lab'].map((name) => ({ kind: 'directory', name })));
+      expect(toasts).toEqual([]);
+    });
+  },
+);
 
 describe('the question texts keep No as the default button (P3.2.2, P3.3.4)', () => {
   it('Delete and the cannot-keep question name No', async () => {

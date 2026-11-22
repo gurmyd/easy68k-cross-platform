@@ -16,8 +16,11 @@
 //     700 px of dialog width it is the unified view, with the same marks;
 //   - Trash (app.files.trash), with items deleted through ctx.history.guard as the Files panel does:
 //     every control reached with Tab, Shift+Down extends the selection, Enter on `Restore` restores
-//     the selected items, Enter on `Delete for Good` and on `Empty Trash` asks (Enter answers the
-//     focused `Yes`) and drops; Esc closes;
+//     the selected items, Enter on `Delete for Good` and on `Empty Trash` asks (the question opens
+//     with the focus on `No`; Shift+Tab and Enter answer `Yes`) and drops; Esc closes;
+//   - the questions that cannot be undone (Delete for Good, Empty Trash, and Delete History and
+//     Trash with a damaged database) open with the focus on `No`, and Enter leaves every Trash item,
+//     earlier version and record in place (decided by the architect, errata N4);
 //   - an axe scan (WCAG 2.0/2.1 A and AA) of both dialogs in both themes; no console or page error.
 //
 // Part 2 makes a production build of app/ (vite build into the output folder; the service worker is
@@ -32,7 +35,7 @@
 // Screenshots go to <out> (default build/history-ui-check, git-ignored). Prints "N of M checks
 // passed"; exit code 0 = everything passed.
 
-/* global console, process, document, window, navigator, caches, setTimeout, TextEncoder, URL -- the browser globals are used inside page.evaluate() callbacks, which run in the page */
+/* global console, process, document, window, navigator, caches, indexedDB, setTimeout, TextEncoder, URL -- the browser globals are used inside page.evaluate() callbacks, which run in the page */
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { createServer as createHttpServer } from 'node:http';
@@ -126,6 +129,41 @@ async function tabTo(page, test) {
 }
 const isButton = (caption) => (text) => text.startsWith('button') && text.includes(caption);
 const isGrid = (text) => text.startsWith('grid');
+
+const questionGone = (page) =>
+  page.waitForFunction(() => document.querySelector('[role=alertdialog]') === null, null, { timeout: STEP_TIMEOUT });
+
+/**
+ * A question that cannot be undone is open: No has the focus (decided by the architect, errata N4);
+ * Shift+Tab moves to Yes, and Enter presses it.
+ */
+async function answerYes(page, label) {
+  const first = await focused(page);
+  check(`${label}: the question opens with the focus on No`, first === 'button "No"', first);
+  await page.keyboard.press('Shift+Tab');
+  const yes = await focused(page);
+  check(`${label}: Shift+Tab moves to Yes`, yes === 'button "Yes"', yes);
+  await page.keyboard.press('Enter');
+  await questionGone(page);
+}
+
+/**
+ * A question that cannot be undone is open: No has the focus, and Enter answers it and leaves
+ * everything in place (`unchanged` reads the state again and says whether it is as before).
+ */
+async function enterKeepsAll(page, label, unchanged, shot) {
+  const first = await focused(page);
+  check(`${label}: the question opens with the focus on No`, first === 'button "No"', first);
+  if (shot) await page.screenshot({ path: shot });
+  await page.keyboard.press('Enter');
+  const closed = await questionGone(page).then(
+    () => true,
+    () => false,
+  );
+  check(`${label}: Enter answers the question (No)`, closed);
+  const state = await unchanged();
+  check(`${label}: Enter left everything in place`, state.ok, state.detail);
+}
 
 const dialogOpen = (page, kind) => page.locator(`[data-e68-history="${kind}"][data-loaded="true"]`);
 const dialogGone = (page) =>
@@ -544,7 +582,7 @@ async function dialogsPass(browser, name, theme, baseUrl) {
       JSON.stringify({ restored, remaining }),
     );
 
-    // Delete for Good: Enter, the question, Enter on Yes.
+    // Delete for Good: Enter, the question (No has the focus), Shift+Tab to Yes, Enter.
     await page.waitForFunction(
       () => document.querySelectorAll('[data-e68-history=trash] [role=row][data-row]').length === 1,
       null,
@@ -559,7 +597,7 @@ async function dialogsPass(browser, name, theme, baseUrl) {
       question.includes('Delete the selected item for good?'),
       question.replace(/\s+/g, ' '),
     );
-    await page.keyboard.press('Enter');
+    await answerYes(page, `${p} Delete for Good`);
     await page.waitForFunction(async () => (await window.__easy68k.ctx.history.trashItems()).length === 0, null, {
       timeout: STEP_TIMEOUT,
     });
@@ -569,7 +607,7 @@ async function dialogsPass(browser, name, theme, baseUrl) {
       (await page.locator('[data-e68-history=trash]').innerText()).includes('The Trash is empty.'),
     );
 
-    // Empty Trash: two more items, Enter, Enter on Yes.
+    // Empty Trash: two more items, Enter, Shift+Tab to Yes, Enter.
     await makeTrash(page, ['d.X68', 'e.X68']);
     await page.waitForFunction(
       () => document.querySelectorAll('[data-e68-history=trash] [role=row][data-row]').length === 2,
@@ -587,7 +625,7 @@ async function dialogsPass(browser, name, theme, baseUrl) {
       ),
       emptyQuestion.replace(/\s+/g, ' '),
     );
-    await page.keyboard.press('Enter');
+    await answerYes(page, `${p} Empty Trash`);
     await page.waitForFunction(async () => (await window.__easy68k.ctx.history.trashItems()).length === 0, null, {
       timeout: STEP_TIMEOUT,
     });
@@ -596,6 +634,160 @@ async function dialogsPass(browser, name, theme, baseUrl) {
     await dialogGone(page).then(
       () => check(`${p} Esc closes the Trash`, true),
       () => check(`${p} Esc closes the Trash`, false),
+    );
+    check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  } finally {
+    await context.close();
+  }
+}
+
+/**
+ * The questions that cannot be undone (Delete for Good, Empty Trash, Delete History and Trash) open
+ * with the focus on No, and Enter leaves every Trash item and every earlier version in place
+ * (decided by the architect, errata N4). Delete History and Trash is offered when the history is
+ * unavailable (P3.3.7): its `meta` record is damaged in the browser's own IndexedDB and the page
+ * reloaded, as a damaged database would be found; after the No, Yes deletes it and the history
+ * works again.
+ */
+async function defaultNoPass(browser, name, baseUrl) {
+  const p = `${name} default No:`;
+  const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, reducedMotion: 'reduce' });
+  const errors = [];
+  try {
+    const page = await openApp(context, baseUrl, errors);
+    const reasons = await makeVersions(page);
+    check(`${p} the file has three earlier versions`, reasons.length === 3, reasons.join(','));
+    await makeTrash(page, ['f.X68', 'g.X68']);
+    const kept = async () => {
+      const now = await page.evaluate(async () => {
+        const { history } = window.__easy68k.ctx;
+        return {
+          trash: (await history.trashItems()).length,
+          versions: (await history.versions('/browser/hist/prog.X68')).length,
+        };
+      });
+      return { ok: now.trash === 2 && now.versions === 3, detail: JSON.stringify(now) };
+    };
+
+    await page.evaluate(() => void window.__easy68k.ctx.commands.run('app.files.trash'));
+    await dialogOpen(page, 'trash').waitFor({ timeout: STEP_TIMEOUT });
+    await page
+      .locator('[data-e68-history=trash] [role=grid] [role=row][data-row]')
+      .first()
+      .waitFor({ timeout: STEP_TIMEOUT });
+    for (const [caption, text, shot] of [
+      ['Delete for Good', 'Delete the selected item for good?', 'delete-for-good'],
+      ['Empty Trash', 'Delete everything in the Trash for good? (2 items,', 'empty-trash'],
+    ]) {
+      check(`${p} reached ${caption} with Tab`, await tabTo(page, isButton(caption)));
+      await page.keyboard.press('Enter');
+      await page.locator('[role=alertdialog]').waitFor({ timeout: STEP_TIMEOUT });
+      const question = (await page.locator('[role=alertdialog]').innerText()).replace(/\s+/g, ' ');
+      check(`${p} ${caption} asks its question`, question.includes(text), question);
+      await enterKeepsAll(page, `${p} ${caption}`, kept, join(outDir, `${name}-default-no-${shot}.png`));
+    }
+    await page.keyboard.press('Escape');
+    await dialogGone(page);
+
+    // A damaged `meta` record: the history is unavailable after the reload (P3.3.7).
+    await page.evaluate(
+      () =>
+        new Promise((resolve, reject) => {
+          const request = indexedDB.open('easy68k-history');
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => {
+            const db = request.result;
+            const tx = db.transaction('meta', 'readwrite');
+            tx.objectStore('meta').put('damaged', 'totals');
+            tx.oncomplete = () => {
+              db.close();
+              resolve();
+            };
+            tx.onerror = () => reject(tx.error);
+          };
+        }),
+    );
+    await page.reload({ timeout: LOAD_TIMEOUT });
+    await page.waitForSelector('.e68-shell', { timeout: LOAD_TIMEOUT });
+    await page.waitForFunction(() => window.__easy68k?.ctx.history?.state() === 'unavailable', null, {
+      timeout: STEP_TIMEOUT,
+    });
+    /** The records in the database, read past the service (which cannot read them now). */
+    const records = () =>
+      page.evaluate(
+        () =>
+          new Promise((resolve, reject) => {
+            const request = indexedDB.open('easy68k-history');
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => {
+              const db = request.result;
+              const tx = db.transaction(['files', 'versions'], 'readonly');
+              const files = tx.objectStore('files').count();
+              const versions = tx.objectStore('versions').count();
+              tx.oncomplete = () => {
+                db.close();
+                resolve({ files: files.result, versions: versions.result });
+              };
+              tx.onerror = () => reject(tx.error);
+            };
+          }),
+      );
+    const before = await records();
+    check(
+      `${p} the damaged database still holds the records`,
+      before.files > 0 && before.versions > 0,
+      JSON.stringify(before),
+    );
+    await page.evaluate(() => void window.__easy68k.ctx.commands.run('app.files.trash'));
+    await dialogOpen(page, 'trash').waitFor({ timeout: STEP_TIMEOUT });
+    check(`${p} reached Delete History and Trash with Tab`, await tabTo(page, isButton('Delete History and Trash')));
+    await page.keyboard.press('Enter');
+    await page.locator('[role=alertdialog]').waitFor({ timeout: STEP_TIMEOUT });
+    const question = (await page.locator('[role=alertdialog]').innerText()).replace(/\s+/g, ' ');
+    check(
+      `${p} Delete History and Trash asks its question`,
+      question.includes(
+        'Delete all earlier versions and everything in the Trash for good? Your current files are not affected.',
+      ),
+      question,
+    );
+    await enterKeepsAll(
+      page,
+      `${p} Delete History and Trash`,
+      async () => {
+        const now = await records();
+        const state = await page.evaluate(() => window.__easy68k.ctx.history.state());
+        return {
+          ok: now.files === before.files && now.versions === before.versions && state === 'unavailable',
+          detail: JSON.stringify({ ...now, state }),
+        };
+      },
+      join(outDir, `${name}-default-no-delete-history.png`),
+    );
+    // And Yes still deletes it: the history works again, the current file is untouched.
+    check(`${p} Delete History and Trash again with Tab`, await tabTo(page, isButton('Delete History and Trash')));
+    await page.keyboard.press('Enter');
+    await page.locator('[role=alertdialog]').waitFor({ timeout: STEP_TIMEOUT });
+    await answerYes(page, `${p} Delete History and Trash`);
+    const recovered = await page
+      .waitForFunction(
+        async () => {
+          const { history } = window.__easy68k.ctx;
+          return history.state() !== 'unavailable' && (await history.trashItems()).length === 0;
+        },
+        null,
+        { timeout: STEP_TIMEOUT },
+      )
+      .then(
+        () => true,
+        () => false,
+      );
+    check(`${p} Yes deleted the history and it works again`, recovered);
+    check(
+      `${p} the current file is untouched`,
+      // The editor saves its text and the original's settings lines after it.
+      ((await readFile(page, '/browser/hist/prog.X68')) ?? '').startsWith(V3),
+      JSON.stringify(await readFile(page, '/browser/hist/prog.X68')),
     );
     check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   } finally {
@@ -824,6 +1016,7 @@ async function main() {
           ['light', () => dialogsPass(browser, name, 'light', baseUrl)],
           ['dark', () => dialogsPass(browser, name, 'dark', baseUrl)],
           ['narrow', () => unifiedPass(browser, name, baseUrl)],
+          ['default No', () => defaultNoPass(browser, name, baseUrl)],
         ]) {
           try {
             await run[1]();

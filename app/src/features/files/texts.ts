@@ -130,16 +130,13 @@ export const gitNameRefused = (name: string): string =>
 export const gitPathRefused = (name: string): string =>
   `${quoted(name)} belongs to a Git repository: the Files panel does not write, move, copy or delete anything named .git or inside a folder named .git. Use your own tools.`;
 
-/** The opened folder is itself a repository's .git folder (errata N5 entry 15). */
+/**
+ * The opened folder is itself a repository's .git folder (errata N5 entries 15 and 19): the stage's
+ * own commands there (Delete, Rename, New Folder, Move, Copy, Undo). Import is not refused there
+ * (P1.1 rule 2, entry 19).
+ */
 export const gitStoreRefused = (name: string): string =>
   `The folder ${quoted(name)} is the .git folder of a Git repository. The Files panel changes nothing in it.`;
-
-/** Import: why the items of a folder named .git at the top of the import were left out (entry 15). */
-export const GIT_NOT_IMPORTED = 'a folder named .git is not imported into the Files panel';
-
-/** A dropped folder named .git is not opened (entry 15). */
-export const GIT_DROP_TOAST =
-  "A folder named .git is not opened: the Files panel writes nothing into a Git repository's .git folder. Drop the folder that holds it.";
 
 /** The toast after a delete (P3.2.2). `only` names the one item deleted. */
 export function deletedToast(count: number, only: string | null, forGood: number, changedKept: number): string {
@@ -231,6 +228,16 @@ export const changedWhileMoving = (name: string, place: string, back: boolean): 
     : `${quoted(name)} changed while it was being moved, so it stays where it was. The copy in ${place} holds it as it was before the change.`;
 
 /**
+ * A file was moved or deleted by someone else (another window, a program) between its copy and its
+ * removal: its copy was removed again, so that the move does not bring it back (`Move` or `Undo`,
+ * `information`, `OK`; errata N5 entry 18). `place` is the folder that would have held the copy.
+ */
+export const goneWhileMoving = (name: string, place: string, back: boolean): string =>
+  back
+    ? `${quoted(name)} was moved or deleted while it was being moved back, so ${place} does not hold a copy of it.`
+    : `${quoted(name)} was moved or deleted while it was being moved, so ${place} does not hold a copy of it.`;
+
+/**
  * A file changed (or appeared) between its copy and the removal of the old name, found before
  * anything was removed: the rename is not made, the copies made so far are removed again (`Rename`
  * or `Undo`, `error`, `OK`, as renameEntry's own refusals; errata N5 entry 18). `item` is the file or folder being renamed,
@@ -248,6 +255,14 @@ export const changedWhileRenaming = (item: string, changed: string, isFolder: bo
  */
 export const changedAfterRenaming = (changed: string, place: string): string =>
   `${quoted(changed)} changed while its folder was being renamed, so it stays where it was. The copy in ${place} holds it as it was before the change.`;
+
+/**
+ * A file of a renamed folder was moved or deleted (by another window, or a program) in the moment
+ * between the last check and its removal: its copy under the new name was removed again, so that the
+ * rename does not bring it back (`Rename` or `Undo`, `information`, `OK`; errata N5 entry 18).
+ */
+export const goneAfterRenaming = (gone: string, place: string): string =>
+  `${quoted(gone)} was moved or deleted while its folder was being renamed, so ${place} does not hold a copy of it.`;
 
 /** The toast after a move (P3.2.4), with `Undo`. `only` names the one item moved. */
 export function movedToast(count: number, only: string | null, target: string, copied: boolean): string {

@@ -16,13 +16,14 @@
 //   - the figures: My Programs follows a file written while the dialog is open; Earlier versions and
 //     Trash follow the store; the site line with an estimate (the page's own, and a fixed one for
 //     the exact text) and without one (navigator.storage.estimate removed before the page loads);
-//   - Empty Trash and Delete Earlier Versions ask their questions, No keeps everything, Yes acts at
-//     once (the figures change while the dialog stays open), and Cancel afterwards keeps the effect;
+//   - Empty Trash and Delete Earlier Versions ask their questions, which open with the focus on No;
+//     Enter (No) keeps everything, Yes acts at once (the figures change while the dialog stays
+//     open), and Cancel afterwards keeps the effect;
 //   - the desktop variant of the group's texts (the page's platform kind set to 'desktop');
 //   - an accessibility scan (axe-core) in the light and the dark theme; no console errors.
 //
-// Nothing here assumes Windows: the only keys pressed are Escape and Tab-free clicks; every wait is
-// for a condition, with limits sized for GitHub's slower Mac runner. Needs neither engine/dist nor a
+// Nothing here assumes Windows: the only keys pressed are Escape, Enter and Tab-free clicks; every
+// wait is for a condition, with limits sized for GitHub's slower Mac runner. Needs neither engine/dist nor a
 // production build. Screenshots go to build/N7-plus/additions-check (git-ignored).
 // Exit code 0 = everything passed. `window.__easy68k` exists in development builds only.
 
@@ -121,6 +122,24 @@ const dialogOf = (page) =>
 const messageBox = (page) => page.locator('[role=alertdialog]').last();
 const plus = (page) => page.evaluate(() => window.__easy68k.ctx.settings.get().app.plus ?? null);
 const textOf = async (locator) => (await locator.innerText()).replace(/\s+/g, ' ').trim();
+
+/**
+ * A question that cannot be undone is open: the focus is on No (decided by the architect, errata N7)
+ * and Enter answers it; the caller checks that nothing changed.
+ */
+async function enterAnswersNo(page, box, label) {
+  const focus = await page.evaluate(() => {
+    const el = document.activeElement;
+    return el ? `${el.tagName.toLowerCase()} ${(el.textContent ?? '').trim()}` : null;
+  });
+  check(`${label}: the question opens with the focus on No`, focus === 'button No', String(focus));
+  await page.keyboard.press('Enter');
+  const closed = await box
+    .waitFor({ state: 'hidden', timeout: 15_000 })
+    .then(() => true)
+    .catch(() => false);
+  check(`${label}: Enter answers the question`, closed);
+}
 
 /** The lines of the Storage group as shown: label and figure, or the sentence. */
 async function lines(dialog) {
@@ -416,8 +435,8 @@ async function dialogPass(browser, name) {
     `${boxTitle}: ${question} ${JSON.stringify(boxButtons)}`,
   );
   await page.screenshot({ path: join(outDir, `${name}-empty-trash-question.png`) });
-  await box.getByRole('button', { name: 'No', exact: true }).click();
-  await box.waitFor({ state: 'hidden' });
+  // It cannot be undone: No has the focus, and Enter answers No (decided by the architect, errata N7).
+  await enterAnswersNo(page, box, `${p} Empty Trash`);
   check(`${p} No keeps the Trash`, (await page.evaluate(() => window.__easy68k.ctx.history.usage())).trashItems === 1);
   await page
     .waitForFunction(() => document.activeElement?.textContent?.trim() === 'Empty Trash', null, { timeout: 5_000 })
@@ -472,8 +491,8 @@ async function dialogPass(browser, name) {
       ),
     question2,
   );
-  await box.getByRole('button', { name: 'No', exact: true }).click();
-  await box.waitFor({ state: 'hidden' });
+  // It cannot be undone: No has the focus, and Enter answers No (decided by the architect, errata N7).
+  await enterAnswersNo(page, box, `${p} Delete Earlier Versions`);
   check(
     `${p} No keeps the versions`,
     (await page.evaluate(() => window.__easy68k.ctx.history.usage())).versions === usage.versions,
