@@ -1,5 +1,7 @@
 # Errata of work package SH6 (program files, file dialog, printer)
 
+> **Merge status (DOC1, 2026-11-21; completed in its repair round 1).** Every entry of this file has been read. Merged into the documents, each place marked "erratum SH6 <n>" or naming this file: 1, 2, 3, 4, 5, 5a, 5b, 6, 7, 8, 9, 10, 12 (ARCHITECTURE.md 3.8.4 (12 in the text of "Write buffering", "Reads" and the paragraph after the list)); 11 (ARCHITECTURE.md 3.8.5); E2 (ARCHITECTURE.md 3.8.4, Task 58: superseded by W4 15 (the engine no longer copies the defects); SH6 E2 describes the state before that repair). Nothing to merge, because no statement of a document is wrong or missing: 5c (a record of a speed measure; nothing a document states); C1, C2 (contract entries (C1 granted at gate I2); `app/src/contracts/` is the authority); E1, E3, E4, E5, E6 (notes for other owners, settled or filed as requests); T3 items 1-10 (questions for T3, answered in T3.md or still open there).
+
 Where the code of SH6 differs from ARCHITECTURE.md, or the document leaves a gap that SH6 had to
 fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`; entries under "For other
 owners" name a defect or a question that is not SH6's to change.
@@ -59,6 +61,18 @@ owners" name a defect or a question that is not SH6's to change.
     `n` at least the size returns one cached copy, made again only after a write, a truncation or a
     change by others. Callers must not modify it (none does: the engine and the sound device copy).
 
+5c. **A name asked for again is not looked up again (gate I2 round 2; the integration scenario's
+    measurement).** With 5b no read copied a file any more, but each try of graphicSound.X68's task 70
+    loop still cost 9 to 15 us, nearly all of it the name lookup (`CachedSyncFiles.resolve` walks the
+    folder's names for the Windows letter-case rule; `ProgramFiles` splits and checks the name). Now
+    `CachedSyncFiles.resolve` keeps its answers by folder and name until a name is added to or
+    removed from a folder or the prepared folders change, and `ProgramFiles` keeps the parse of a
+    name until the current directory or the mounts change. Measured: 15 us to 1 us per read under
+    Node; in Chromium (check-wave2) 20,619 reads at 9 us before, 70,167 reads at 1 us after in the
+    same wait (the loop now spins faster, which the program cannot observe: the busy flag clears by
+    the clock). `CachedSyncFiles.nameLookups` counts the lookups for tests. A change by others is
+    still seen at the next try (program-files.test.ts, "ProgramFiles.read in a wait loop").
+
 6. **The journal (3.8.4; SH8 errata C8, left to SH6).** `localStorage` keeps one text per origin
    (`easy68k.sim.journal.v1`, SH8's key). SH6 keeps every window's part in it under a random
    instance id, so two windows that close at once do not overwrite each other's bytes:
@@ -115,16 +129,23 @@ owners" name a defect or a question that is not SH6's to change.
     (docs/porting/errata/T3.md F2) and found otherwise; the port now follows the measurement:
     - the buffer holds 512 bytes and is written when it is full **and another byte comes**: byte by
       byte, nothing is visible after 512 bytes, 512 after the 513th, 1024 after the 1025th;
-    - a write of 512 bytes or more is not buffered: what was buffered goes first, then the write
-      whole (10 + 1000 bytes: 1010 visible; 5000 bytes: 5000; 600 bytes: 600);
+    - a write that fits into what is left of the buffer is copied into it, **even when it fills it
+      exactly**: one write of exactly 512 bytes on a fresh stream leaves nothing visible, 511 + 1
+      leave nothing (T3's `trap15-a/a59-files-buffer-edges`, T3.md F8; repaired at gate I2 round 2,
+      the port showed 512 before);
+    - a write that does not fit writes the buffer first, then goes to the file whole when it is 512
+      bytes or more (measured: 10 + 1000 bytes: 1010 visible; 5000: 5000; 600: 600; 513: 513; by
+      the rule, not measured: 10 + 512: 522),
+      or into the buffer when it is smaller (300 + 300 bytes: 300 visible, measured in a59);
     - a reading stream buffers what it reads, 512 bytes at a time, and keeps returning those bytes
       after another stream changed them; a seek, or a write through the same stream, empties it.
-    Not measured, chosen as the Borland `fwrite` most likely does (it copies a small write into the
-    buffer in one piece): a small write that does not fit into what is left of the buffer writes the
-    buffer first (300 + 300 bytes: 300 visible, not 512). Whether exactly 512 bytes in one write go
-    through (assumed, "512 or more" in T3's words) was not measured either. The engine test replays
-    stdio-buffer.X68 and compares the whole `result.bin` with the Wine result
-    (`program-files.engine.test.ts`); a second probe answering these two would settle them.
+    Not measured (gate I2 review): **a read of 512 bytes or more.** `fileRead` keeps the last 512-byte
+    block of any read, as a buffer refilled block by block would be left. If Borland's `fread` passes
+    a large read straight to the file (as its `fwrite` does a large write), the buffer would instead
+    be empty or hold another block, and a stream that read 1000 bytes would see another stream's
+    later change to bytes 512-1023 where the port shows its buffered copy. T3 is asked for a probe
+    (item 1 below). The engine test replays stdio-buffer.X68 and compares the whole `result.bin` with
+    the Wine result (`program-files.engine.test.ts`); the conformance suite replays a59.
 
 ## Contract
 
@@ -169,13 +190,37 @@ E3. **SH8 (`features/run/session.ts`):** `viewFor` creates one `CachedSyncFiles`
     disposes of it; `CachedSyncFiles.dispose()` exists (unsubscribes, cancels timers) for the session
     to call when it ends. Harmless while a session lives as long as its page.
 
+E4. **T3 (`tests/conformance/sim/known-differences.json`):** a59 is equal since gate I2 round 2
+    (entry 12); its entry must go, or the suite reports "listed ... but now equal". Filed as
+    `docs/requests/SH6-a59-known-difference.md`.
+
+E5. **FS2 (`/folder`, gate I2: "each appendFile copies the whole file in Chromium: batch writes").**
+    The program's writes are batched already: `CachedSyncFiles` sends at most one write per file
+    every 500 ms (entry 4), however many task 54 calls the program makes, plus one at a close, a stop
+    and exit, as 3.8.4 requires. What one `appendFile` costs on an opened folder is the File System
+    Access backend's (a writable keeps the existing data by copying it); that is FS2's to make
+    cheaper, not something the view can batch further without delaying what 3.8.4 asks for "at once".
+    U4's log flushes do not pass through the view.
+
+E6. **SH8 and the contracts engineer (`SimSession.printJobs`, gate I2):** the session keeps every
+    finished print job for its life. The Printer Output dialog (`features/sim-files`) only lists the
+    jobs neither printed nor discarded; it cannot drop one from the session because the list is
+    readonly in the contract. A `discardPrintJob(job)` on the session (contracts, then SH8) would let
+    Discard and Print free them; SH6 would call it from `PrinterOutputDialog.tsx`. Not requested this
+    round: a job holds a few kilobytes per page, so the growth matters only for a program that
+    prints thousands of pages in one session.
+
 ## What T3 is asked to confirm on the official binary (Wine driver)
 
-1. `stdio-buffer.X68` (6.8): **answered at gate I2** (T3.md F2; entry 12 above): blocks of 512 on
-   the 513th byte, large writes whole, reads buffered. Still open: 300 + 300 bytes in two task 54
-   calls (the port: 300 visible), and one write of exactly 512 bytes (the port: 512 visible).
+1. `stdio-buffer.X68` (6.8): **answered at gate I2** (T3.md F2, F8; entry 12 above): blocks of 512
+   on the 513th byte, large writes whole, reads buffered; 300 + 300 bytes leave 300 visible; one
+   write of exactly 512 leaves nothing visible (a59; the port follows it since gate I2 round 2).
+   Still open: **a read of 512 bytes or more** (entry 12). Probe: a 2000-byte file of `A`; stream 1
+   reads 1000 bytes; stream 2 opens the file, writes 2000 `B` and closes; stream 1 reads 10 more
+   bytes. The port gives ten `A` (positions 1000-1009 lie in its buffered block 512-1023); a
+   Borland `fread` that passes a large read straight through would refill and give ten `B`.
 2. The same file open in two slots at once (trap15-a §12 item 11), and task 52 on a file another slot
-   holds open (the port allows both).
+   holds open (the port allows both): **answered** (T3.md F8, a56): the original agrees.
 3. After Rewind, task 57 on a file a forgotten slot still holds: `D0.W = 2` (the port), and a new
    task 51 on it reads end of file.
 4. How many Rewinds with a file left open it takes until task 51/52 fail because the Borland run-time
@@ -184,7 +229,16 @@ E3. **SH8 (`features/run/session.ts`):** `viewFor` creates one `CachedSyncFiles`
 6. Task 54 with `D2 = 0` and task 53 with `A1 = $2000`, `D2 = $FFFFFFFF` on a 10-byte file:
    **answered** (T3.md F3, F4; see E1).
 7. Names: `DATA.TXT.` and `data.txt ` open `data.txt`; a name with `?` or `*` gives 2 for tasks 51,
-   52, 59.
-8. Task 52 on `NUL` and `CON` (Windows devices; the port creates ordinary files).
+   52, 59: **answered** (T3.md F8, a57): the original agrees.
+8. Task 52 on `NUL` and `CON` (Windows devices; the port creates ordinary files): **measured under
+   Wine for `NUL`** (T3.md F8, a58): a read gives end of file where the port reads back what it
+   stored. Not repaired yet: T3 marks it unconfirmed until it runs on Windows (Wine's null device);
+   `CON` was not measured.
 9. Task 10: the job a form feed sends (with a PDF printer as the default printer), to compare the
-   page geometry of 3.8.4 (margins 1/8 and 1/11 of the page, cell from Courier New 10).
+   page geometry of 3.8.4 (margins 1/8 and 1/11 of the page, cell from Courier New 10). Items 3, 4,
+   5 and 9 cannot be measured with the oracle's recipes (T3.md F8).
+10. **Reads and writes without a seek between them** (T3.md F7; a51, a52, a53, measured under Wine):
+    the Borland run-time does something definite that the port does not imitate (3.8.4 commits
+    pending bytes before a read). Not repaired yet, as T3's entries ask: they stay unconfirmed until
+    the three programs run on Windows, where the file system under the C library is Windows' own.
+    If Windows agrees, SH6 models the Borland stream state for these cases.

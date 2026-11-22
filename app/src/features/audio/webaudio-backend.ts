@@ -11,8 +11,10 @@
 //   then playbacks wait.
 // - A suspended context (a background tab in Safari, the system taking the audio device). Playbacks
 //   requested meanwhile wait too.
-// - Decoding is asynchronous. `load()` starts it at once (task 71 and 74 load ahead of play); a
-//   playback asked for before its sound is decoded waits for it.
+// - Decoding. Uncompressed WAVE data (every official sound) becomes an AudioBuffer within `load()`
+//   (pcm.ts), so the sound starts at the moment the program asked for it. Anything else goes to the
+//   browser's asynchronous decoder, which `load()` starts at once (task 71 and 74 load ahead of
+//   play); a playback asked for before its sound is decoded waits for it.
 //
 // A playback that had to wait starts where it would be by now had it started on time, so that what
 // is heard stays in step with what the program sees: a sound whose time is over by then is not
@@ -27,6 +29,7 @@
 // Owner: SH5.
 
 import type { AudioBackend, Bytes, SoundId } from '../../contracts';
+import { decodePcmWav, type PcmSound } from './pcm';
 
 /** A decoded sound; `duration` in seconds (AudioBuffer.duration). */
 export interface DecodedSound {
@@ -49,6 +52,12 @@ export interface AudioOutput {
   readonly created: boolean;
   /** Calls `listener` each time the audio context starts running. */
   onRunning(listener: () => void): void;
+  /**
+   * Makes a sound from samples at once (an AudioBuffer filled in place), or returns null or throws
+   * when it cannot; the backend then decodes the file instead. Optional: an output without it always
+   * decodes.
+   */
+  fromPcm?(pcm: PcmSound): DecodedSound | null;
 }
 
 /** A wait shorter than this (seconds) starts a sound from its beginning rather than part-way. */
@@ -96,6 +105,20 @@ export class WebAudioBackend implements AudioBackend {
     if (!this.output) {
       entry.failed = true;
       return sound;
+    }
+    // Uncompressed WAVE (every official sound): ready at once, so a play() that follows starts now,
+    // at the moment the program's clock says it starts (pcm.ts says why that matters).
+    if (this.output.fromPcm) {
+      try {
+        const pcm = decodePcmWav(data);
+        const ready = pcm ? this.output.fromPcm(pcm) : null;
+        if (ready) {
+          entry.decoded = ready;
+          return sound;
+        }
+      } catch {
+        // the browser refused these samples (a sample rate it does not take): let it decode the file
+      }
     }
     try {
       // A copy: decodeAudioData detaches the buffer it is given, and the caller keeps its bytes.
@@ -297,6 +320,18 @@ export function createBrowserAudioOutput(options: BrowserAudioOptions = {}): Aud
       return context !== null;
     },
     decode: (data) => decodingContext().decodeAudioData(data),
+    fromPcm(pcm) {
+      const shape = { numberOfChannels: pcm.channels.length, length: pcm.length, sampleRate: pcm.sampleRate };
+      let buffer: AudioBuffer;
+      try {
+        buffer = new AudioBuffer(shape);
+      } catch {
+        // An engine without the AudioBuffer constructor; a context's createBuffer takes the same.
+        buffer = decodingContext().createBuffer(shape.numberOfChannels, shape.length, shape.sampleRate);
+      }
+      pcm.channels.forEach((samples, channel) => buffer.getChannelData(channel).set(samples));
+      return buffer;
+    },
     start(sound, loop, offset, onEnded) {
       const active = create();
       if (!active || !destination) return () => {};

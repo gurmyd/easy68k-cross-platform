@@ -145,6 +145,19 @@ describe('task 72: play a standard slot', () => {
     expect(device.busyUntil).toBe(100);
   });
 
+  it('the next sound stops the voice before it: the one voice never sounds twice (a sound the backend could start only late)', () => {
+    // graphicSound.X68: 1.wav, then 0.wav when the player is free again (gate I2).
+    device.loadSound(n('short.wav'), 1);
+    device.loadSound(n('medium.wav'), 0);
+    expect(device.playSoundMem(1)).toBe(1);
+    const first = playing()[0]!.playback;
+    time.advance(100);
+    expect(device.playSoundMem(0)).toBe(1);
+    expect(backend.eventsOf('stop')).toEqual([{ kind: 'stop', playback: first, at: 100 }]);
+    expect(playing()).toHaveLength(1);
+    expect(backend.bytesOf(playing()[0]!.playback)).toEqual(MEDIUM);
+  });
+
   it('an empty slot: nothing happens and D0 is not written (§13 row 9)', () => {
     expect(device.playSoundMem(7)).toBeUndefined();
     expect(backend.events).toEqual([]);

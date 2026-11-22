@@ -1,5 +1,7 @@
 # Errata of SH8 (Run controller and session)
 
+> **Merge status (DOC1, 2026-11-21; completed in its repair round 1).** Every entry of this file has been read. Merged into the documents, each place marked "erratum SH8 <n>" or naming this file: 1, 22, 25 (ARCHITECTURE.md 4.3, 4.5.5, 5.7 (first round)); 2, 3 (ARCHITECTURE.md 4.3); 4 (ARCHITECTURE.md 4.4.2); 5, 6, 13 (ARCHITECTURE.md 4.8); 7, 8, 12, 27, 31, 34 (ARCHITECTURE.md 4.7 (12 also sim-ui.md 8.3)); 9, 10, 11, 21, 23, 28, 38 (ARCHITECTURE.md 4.7.1); 14, 17, 26 (ARCHITECTURE.md 4.5.3 (26 confirms the rule as written)); 15, 16 (ARCHITECTURE.md 3.11.1); 18, 24, 32, 33 (ARCHITECTURE.md 4.6); 19 (ARCHITECTURE.md 2.10); 20, 29, 36 (ARCHITECTURE.md 2.3); 35 (ARCHITECTURE.md 3.8.4); 39 (ARCHITECTURE.md 4.8, the Close row, in the text). Nothing to merge, because no statement of a document is wrong or missing: 30, 37 (records of the run feature's browser check); C1-C7, C9, C10 (contract entries; `app/src/contracts/` is the authority); C8 (merged by SH6 6 (ARCHITECTURE.md 3.8.4)).
+
 What SH8 found while building `app/src/core/run/**`, `app/src/core/sim-host/index.ts` and
 `app/src/features/run/**` from `docs/ARCHITECTURE.md` sections 3.3.1, 3.3.2, 3.11 and 4: where the
 document is silent, contradicts itself or cannot be done as written, what the repository does, and
@@ -425,7 +427,9 @@ entry 28 and the lines marked "Gate I1, round 2" in its second round.
   itself. Because the action may now run after the click handler has returned, a waiting run
   command unlocks audio (`resumeAudio`, 3.7) before it waits, inside the user's gesture.
   Tests: `files-catch-up.test.ts` (real `CachedSyncFiles`, a backend whose reads take several
-  turns, the real engine); without the wait the first test reads 3 bytes instead of 11.
+  turns, the real engine); without the wait the first test reads 3 bytes instead of 11, which the
+  control case of the same file shows: the same view with `whenCurrent` hidden reads 3 (gate I2
+  review).
 
 ### 35. The session ends the cached views it made (3.8.4; SH6's note)
 
@@ -448,6 +452,50 @@ entry 28 and the lines marked "Gate I1, round 2" in its second round.
   accepts half the grant only when every window had gaps over 50 ms; when any window had steady
   frames one window must be exact, as in round 2. The detail prints the grant per second beside
   the rate per second, and the window's length.
+
+### 38. A skipped cold start leaves nothing out, and whether it is skipped does not depend on frames (4.7.1; gate I2)
+
+- Says: 4.7.1, last paragraph: "A cold start is skipped when the simulator is still exactly in that
+  state: nothing has been loaded, run or changed since the last one". Entry 9 added the parts the
+  user can change directly.
+- Problem (integration scenario of gate I2, round 1): a new window imports sim68K.dat (exceptions
+  on, execution log type 2), then Execute. The settings changed without an engine call, so the
+  controller skipped the cold start and the program ran with exceptions off and no log type: not
+  the settings the student sees, and not what the original's new `SIM68K.EXE` reads. Besides, every
+  engine call counted as a change, including the log service's read of the log types that the cold
+  start itself queues in its step 2 (3.3.5). Whether that read had been delivered when Execute came
+  depended on display frames: in the browsers it always had (so no Execute was ever skipped), under
+  Node or before the first frame it had not.
+- Does: "changed" covers three things, and a skipped cold start is therefore exactly the state a
+  cold start would make. (a) The engine: every call through the controller since the last cold
+  start, except the entries that the cold start's own synchronous steps queued (step 2, the parts'
+  `resetToStartup`, and steps 4 and 5, `applySettings` and the `onEngineReplaced` listeners);
+  those belong to it, as the original's start-up belongs to the new process, and they are delivered
+  after the next load either way. (b) The parts (entry 9). (c) The saved settings the cold start
+  puts in place: `RunControllerDeps.settingsUnchanged()`, which the session answers by comparing
+  `coldStartSettingsKey()` (compose.ts: the options and addresses of `applySimSettings`, the three
+  fonts, the Stack and Memory choices, whether the Hardware panel is visible) with what the last
+  cold start read in its steps 2 and 4. Not in it: the speed, the auto-trace interval and the
+  highlighting of changed registers, which act on a running simulator when they change.
+- So the first Execute of a new window in which nothing was done to the simulator is skipped,
+  in every browser and under Node; after an import that changed any of those settings it is a cold
+  start with the imported settings. Tests: `controller.load.test.ts` ("does not skip it when the
+  saved settings changed", "a call the cold start queued itself does not count as a change", run
+  with the queued read delivered and still queued; without the repair the delivered case fails),
+  `headless.test.ts` ("the cold start of Execute and the saved settings"), and the integration
+  scenario `tests/integration/wave2/scenario.test.ts` (settings; "each Execute is a cold start",
+  whose first Execute is now asserted to be 0 cold starts).
+
+### 39. Close is enabled at start-up, with no program (4.8; sim-ui §3.6)
+
+- Says: 4.8, availability table: Close "a listing or program is present".
+- Original (sim-ui §3.6): start-up runs `initSim`, which enables all nine commands, Close among
+  them (`STARTSIM.CPP:83`), and `setMenuTrace` enables Close again in the busy state. Close is never
+  disabled. Reported by the shell's engineer at gate I2 (screenshot of the Simulator menu).
+- Does: Close is enabled whenever the phase is not `loading`; with no program it asks the
+  `Caution` question and on OK leaves the simulator in start-up state (sim-ui §8.5). For the spec:
+  4.8's row should read "the phase is not `loading`". Tests: `session.test.ts` ("follows the
+  command table of 4.8", "Close at start-up, with no program").
 
 ### 28. A session or controller disposed before it starts stays inert (3.12.3, 4.7.1)
 
@@ -534,6 +582,10 @@ entry 28 and the lines marked "Gate I1, round 2" in its second round.
 - For W1: a slot on `SimSession` (for example `printJobs` and `onPrintJob`) or on `AppContext`.
 - Gate I1: done. `SimSession.printJobs?` and `onPrintJob?(listener)` are in `contracts/run.ts`, in
   the form `RunSession` has.
+- Gate I2: the composed session (`composeSession`, core/run/compose.ts) keeps the jobs and has both
+  members, so the headless session has them too and the contracts engineer may make them required
+  on `SimSession`. The session uses `SyncFiles.whenCurrent?()` and `dispose?()` from the contract
+  instead of a type of its own.
 
 ### C3. Props of the two dialogs the session opens for other packages (2.7)
 

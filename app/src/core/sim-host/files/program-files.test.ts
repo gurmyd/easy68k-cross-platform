@@ -71,6 +71,21 @@ describe('ProgramFiles: names', () => {
     }
   });
 
+  it('read() of the same name follows the current directory and the mounts given (names are parsed once)', async () => {
+    const { files } = await harness({
+      '/memory/demo/a.txt': 'demo',
+      '/memory/other/a.txt': 'other',
+      '/memory/other/b.txt': 'b',
+    });
+    expect(str(files.read(name('a.txt')))).toBe('demo');
+    await files.setCurrentDir('/memory/other');
+    expect(str(files.read(name('a.txt')))).toBe('other');
+    expect(str(files.read(name('\\memory\\demo\\a.txt')))).toBe('demo');
+    files.resetToStartup();
+    expect(files.read(name('a.txt'))).toBeNull();
+    expect(files.read(name('\\memory\\demo\\a.txt'))).toBeNull(); // the mount is no longer given
+  });
+
   it('without a current directory no relative name resolves', async () => {
     const { files } = await harness({ '/memory/demo/a.txt': 'a' });
     files.resetToStartup();
@@ -181,7 +196,7 @@ describe('ProgramFiles: write buffering', () => {
     expect(view.stat('/memory/demo/a.bin')?.size).toBe(2100);
   });
 
-  it(`a write of ${STDIO_BUFFER} bytes or more goes out whole, after what was buffered`, async () => {
+  it(`a write that does not fit and is ${STDIO_BUFFER} bytes or more goes out whole, after what was buffered`, async () => {
     const { files, view } = await harness();
     const w = files.fileOpen(name('b.bin'), FileMode.Create);
     files.fileWrite(w, new Uint8Array(10).fill(1));
@@ -191,14 +206,37 @@ describe('ProgramFiles: write buffering', () => {
     const c = files.fileOpen(name('c.bin'), FileMode.Create);
     files.fileWrite(c, new Uint8Array(5000).fill(3));
     expect(view.stat('/memory/demo/c.bin')?.size).toBe(5000);
-    const d = files.fileOpen(name('d.bin'), FileMode.Create);
-    files.fileWrite(d, new Uint8Array(STDIO_BUFFER).fill(4));
-    expect(view.stat('/memory/demo/d.bin')?.size).toBe(STDIO_BUFFER);
+    const g = files.fileOpen(name('g.bin'), FileMode.Create);
+    files.fileWrite(g, new Uint8Array(STDIO_BUFFER + 1).fill(5));
+    expect(view.stat('/memory/demo/g.bin')?.size).toBe(STDIO_BUFFER + 1);
+    const h = files.fileOpen(name('h.bin'), FileMode.Create);
+    files.fileWrite(h, new Uint8Array(10).fill(6));
+    files.fileWrite(h, new Uint8Array(STDIO_BUFFER).fill(7)); // does not fit after 10: 10 + 512 out
+    expect(view.stat('/memory/demo/h.bin')?.size).toBe(10 + STDIO_BUFFER);
     expect([...(view.get('/memory/demo/b.bin') ?? [])].slice(8, 12)).toEqual([1, 1, 2, 2]);
   });
 
+  it(`one write of exactly ${STDIO_BUFFER} bytes on a fresh stream stays in the buffer (T3's a59, measured)`, async () => {
+    // tests/conformance/sim/trap15-a/a59-files-buffer-edges.X68 on the official binary: nothing is
+    // visible to another stream until another byte comes, the stream seeks or it closes.
+    const { files, view } = await harness();
+    const d = files.fileOpen(name('d.bin'), FileMode.Create);
+    files.fileWrite(d, new Uint8Array(STDIO_BUFFER).fill(4));
+    expect(view.stat('/memory/demo/d.bin')?.size).toBe(0);
+    files.fileWrite(d, new Uint8Array(1).fill(4));
+    expect(view.stat('/memory/demo/d.bin')?.size).toBe(STDIO_BUFFER);
+    const e = files.fileOpen(name('e.bin'), FileMode.Create);
+    files.fileWrite(e, new Uint8Array(511).fill(1));
+    files.fileWrite(e, new Uint8Array(1).fill(2));
+    expect(view.stat('/memory/demo/e.bin')?.size).toBe(0);
+    files.fileClose(e);
+    expect(view.stat('/memory/demo/e.bin')?.size).toBe(STDIO_BUFFER);
+    files.fileClose(d);
+    expect(view.stat('/memory/demo/d.bin')?.size).toBe(STDIO_BUFFER + 1);
+  });
+
   it('a small write that does not fit into the rest of the buffer pushes the buffer out first', async () => {
-    // Not measured on the original (300 + 300 is T3's open question; errata SH6.md entry 12).
+    // Measured on the original since gate I2 (T3's a59: 300 + 300 bytes leave 300 visible).
     const { files, view } = await harness();
     const w = files.fileOpen(name('e.bin'), FileMode.Create);
     files.fileWrite(w, new Uint8Array(300).fill(1));
@@ -372,6 +410,27 @@ function cachedProgramFiles(backend: FileSystemBackend, journal: { text: string 
   });
   return { vfs, view, files };
 }
+
+describe('ProgramFiles.read in a wait loop (task 70 until the player is free; gate I2)', () => {
+  it('neither copies the file nor looks the name up again while nothing changes', async () => {
+    const storage = new MemoryBackend();
+    await storage.mkdirp('demo');
+    await storage.writeFile('demo/roger.wav', new Uint8Array(11_045).fill(7));
+    const { vfs, view, files } = cachedProgramFiles(storage, { text: null });
+    await files.setCurrentDir('/memory/demo');
+    const first = files.read(name('roger.wav'));
+    const lookups = view.nameLookups;
+    for (let i = 0; i < 10_000; i++) expect(files.read(name('roger.wav'))).toBe(first);
+    expect(view.nameLookups).toBe(lookups);
+    // A change by others is seen at the next try.
+    await vfs.writeFile('/memory/demo/roger.wav', text('new'));
+    await view.whenCurrent();
+    expect(str(files.read(name('roger.wav')))).toBe('new');
+    await vfs.remove('/memory/demo/roger.wav');
+    await view.whenCurrent();
+    expect(files.read(name('roger.wav'))).toBeNull();
+  });
+});
 
 describe('ProgramFiles: exitNow() and recoverJournal()', () => {
   it('leaves every byte in storage after an abrupt close', async () => {

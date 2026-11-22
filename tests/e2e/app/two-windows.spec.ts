@@ -6,7 +6,7 @@
 // BroadcastChannels as two tabs of one browser profile do.
 
 import { crlf, expect, requirePackage, test, type App } from '../fixtures';
-import { DRAFTS_OFFER, crash, draftsCheckDone, waitForDrafts } from '../fixtures/windows';
+import { DRAFTS_OFFER, crash, draftsCheckDone, waitForDrafts, withDraftsDiagnosis } from '../fixtures/windows';
 
 const background = (app: App) =>
   app.page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--c-bg').trim().toUpperCase());
@@ -115,15 +115,24 @@ test('drafts: two windows that start together after a crash offer the drafts exa
   await crash(app);
 
   const [first, second] = await Promise.all([keeper.openWindow(), keeper.openWindow()]);
+  const windows = [keeper, first, second];
   const offers = () =>
     Promise.all([first, second].map((w) => w.page.getByText(DRAFTS_OFFER).count())).then(([a, b]) => a! + b!);
-  await expect.poll(offers).toBe(1);
+  // Exactly one of the two offers (the other waits for the offer lock). On failure the message says
+  // what each window saw (E1 errata entry 19: a crashed window's lock can be listed for a moment).
+  await withDraftsDiagnosis(windows, () =>
+    expect.poll(offers, { message: 'exactly one window offers the drafts' }).toBe(1),
+  );
   const offering = (await first.page.getByText(DRAFTS_OFFER).count()) === 1 ? first : second;
   const quiet = offering === first ? second : first;
   await offering.button(offering.messageBox, 'Restore').click();
   await expect(offering.messageBox).toBeHidden();
-  await draftsCheckDone(quiet);
-  await expect(quiet.page.getByText(DRAFTS_OFFER)).toHaveCount(0);
-  await expect(keeper.page.getByText(DRAFTS_OFFER)).toHaveCount(0);
-  await expect.poll(() => offering.tabNames()).toContain('untitled2.x68');
+  await withDraftsDiagnosis(windows, async () => {
+    await draftsCheckDone(quiet);
+    await expect(quiet.page.getByText(DRAFTS_OFFER)).toHaveCount(0);
+    await expect(keeper.page.getByText(DRAFTS_OFFER)).toHaveCount(0);
+    await expect.poll(() => offering.tabNames()).toContain('untitled2.x68');
+    // The work is kept: one draft, now the offering window's, with the crashed window's text.
+    await waitForDrafts(offering, 1);
+  });
 });

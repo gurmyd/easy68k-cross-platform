@@ -141,8 +141,6 @@ export function createSimSession(ctx: AppContext, env: SimSessionEnv, options: S
   // the next look at the store, because the request arrives in the middle of an engine call.
   let fullScreenRequest: boolean | null = null;
   const beep = createBeep(ctx.devices.audio);
-  const printJobs: PrintJob[] = [];
-  const printListeners = new Set<(job: PrintJob) => void>();
 
   const ui: SessionUi = {
     // Text output while the Output panel is collapsed expands it; the focus stays (2.10).
@@ -201,10 +199,8 @@ export function createSimSession(ctx: AppContext, env: SimSessionEnv, options: S
         return 'Cancel';
       }
     },
-    submitPrintJob(job) {
-      printJobs.push(job);
-      for (const listener of [...printListeners]) listener(job);
-    },
+    // The composed session keeps the finished jobs and tells its listeners (core/run/compose.ts).
+    submitPrintJob: () => {},
     // The storage is looked up at each use: reading the property itself can throw in a page that
     // may not use storage.
     journal: {
@@ -399,13 +395,6 @@ export function createSimSession(ctx: AppContext, env: SimSessionEnv, options: S
   let disposed = false;
   const runSession: RunSession = Object.assign(session, {
     ui,
-    printJobs,
-    onPrintJob(listener: (job: PrintJob) => void) {
-      printListeners.add(listener);
-      return () => {
-        printListeners.delete(listener);
-      };
-    },
     sync() {
       readEngine();
       sync();
@@ -424,7 +413,7 @@ export function createSimSession(ctx: AppContext, env: SimSessionEnv, options: S
       // contract); what they hold that storage has not got yet is handed to storage first.
       for (const view of cachedViews.values()) {
         settleView(view);
-        (view as { dispose?: () => void }).dispose?.();
+        view.dispose?.();
       }
       cachedViews.clear();
     },

@@ -23,6 +23,11 @@ async function reloadOffline(app: App, page: Page, context: BrowserContext): Pro
 
 test.describe('offline', () => {
   test.use({ serviceWorkers: 'allow' });
+  // Each test precaches the whole site (430 files, about 17.8 MB) in a fresh profile. Run in parallel
+  // on a loaded machine they ran out of resources (net::ERR_INSUFFICIENT_RESOURCES, or no activated
+  // worker after 120 s: gate I2 round 1 review), so the two run one after the other in one worker
+  // (errata X1 entry 4). Other suites still run beside them.
+  test.describe.configure({ mode: 'default' });
 
   test('after one load, a reload with the network off brings the application back and the editor works', async ({
     app,

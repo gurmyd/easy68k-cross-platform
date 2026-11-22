@@ -1619,6 +1619,8 @@ macros with binary constants work in the field it evidently copies an invalid sp
 so `fputs` is equivalent except for body lines whose `%` happens to form a **valid** conversion (for
 example `'%d'`, `% d` in a comment, `%%`), where the real program substitutes garbage or collapses `%%`.
 
+> **Corrected (erratum T1 10).** Measured (`checklist/macro-09-*`): with `DC.B '%d%s%%'` as a body line the official program ends the expansion at that line (neither it nor `ENDM` is listed, no code, no error, the assembly goes on after the call); a `%` without a valid conversion expands normally. The port expands the line literally; listed in `tests/conformance/asm/known-differences.json` for the engine's owner.
+
 #### 9.3.5 `writeMap` overflows `char data[6]` [EXP]
 
 OBJECT.CPP:281, 291, 300: `sprintf(data, "%06X", start)` writes 7 bytes. In the `-O0` WebAssembly build
@@ -1640,6 +1642,8 @@ address 0 is writable, and by default Emscripten compiles `catch` blocks out.
 | Fixed tab size 0 | LISTING.CPP:143 | divide error caught in `listLine` -> exception message | never pass 0 |
 | runaway macro recursion | MACRO.CPP:172-177 | 1 MB default stack (EDIT68K.bpr:46 sets no stack reserve) is exhausted at roughly 85 levels, long before the 256-level check; outcome UNVERIFIED | give the module enough stack so the 256-level check fires [EXP] |
 | `exit(0)` | CODEGEN.CPP:121 | unreachable with the shipped tables | make `exit` a trap that reports |
+
+> **Corrected (erratum T1 12).** Measured (`checklist/stc-03-*`): `ENDI` with an empty stack gives `Undefined symbol` and a listed label line with a value read from the empty stack in the official program, and a following `IF D0 <EQ> #1` without THEN only the `THEN expected` warning; the port reports `Invalid syntax` and an extra `Undefined symbol` (6 errors instead of 5). Listed in `known-differences.json`.
 
 #### 9.3.7 Stack consumption [EXP]
 
@@ -1675,6 +1679,8 @@ Recommendation: add one check in the shim-side patch set - if the expanded macro
 255 characters, report an error instead of copying. This deviates from the original only where the
 original corrupts memory.
 
+> **Corrected (erratum T1 9).** Measured (official `EDIT68K.exe` v5.16.1 under Wine, `checklist/macro-10-*`): a macro body line that expands beyond 255 characters crashes the official program (stack overflow, a return address overwritten by the text `1,1,`), so the item has no golden and the port's defined result (`engine/asm/PATCHES.md` P8) cannot be checked against the original. A macro that calls itself without end also crashes it; the item "recursion to the limit" is proved by a recursion that ends by a condition (`macro-12-*`; erratum T1 13).
+
 #### 9.3.9 Other
 
 - `Active->Project.TabSize` of 0 (possible from a `*~Tab size~0~` footer, textS.cpp:144-149):
@@ -1688,6 +1694,8 @@ original corrupts memory.
   in the rare case that the symbol does not exist in pass 2 (for instance a `SET` line that only pass 2
   reaches). In WebAssembly that silently writes near address 0. Guard in the patch or accept.
 
+> **Corrected (erratum T1 11).** Measured (`checklist/dir-11-*`): a `SET` line that only pass 2 reaches (`IFNE FWD` / `S SET 5` / `DC.B S` / `ENDC` / `FWD EQU 1`) assembles `DC.B S` to `05` with no error in the official program; the port reports `Undefined symbol` and emits `00`. Listed in `known-differences.json` (`PATCHES.md` P14).
+
 ### 9.4 Files, line ends, paths, encoding
 
 #### 9.4.1 Input
@@ -1699,9 +1707,9 @@ original corrupts memory.
   LF, stop at 0x1A. A lone CR is not a line end for the assembler. **Do not append a line end to an
   INCLUDE file that lacks one**: the original reads the unterminated last line as it is, and a bare
   label there is "Invalid opcode" (3.1.3).
-- The main source is what the editor control holds, saved with `TStrings::SaveToFile`: every line ends
-  with CR LF, including the last. Feed the core the editor text with line ends normalised to LF and a
-  final LF added if missing.
+- The main source is what the editor control holds, saved as plain text by the RichEdit control: every
+  line break is written as CR LF, and the text ends with a line break only if the editor text ends with
+  one (corrected, erratum E1 1; the port's `encodeForAssembler`, ARCHITECTURE.md 3.9.3).
 - The `*~Font name~`, `*~Font size~`, `*~Tab type~`, `*~Tab size~` footer lines of .X68 files written by
   the real editor (mainS.cpp:239-253) are removed when the file is loaded into the editor
   (textS.cpp:139-173) and therefore never reach the assembler for the main file. In include files they

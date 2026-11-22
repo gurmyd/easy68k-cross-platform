@@ -41,7 +41,7 @@
 #       log           app/src/features/log/check-log.mjs                 U4
 #       wave2         tests/integration/wave2/check-wave2.mjs            I2
 #   check: packaging unit tests  tests/desktop/packaged/playwright.config.ts (project unit, DV3)
-#   e2e-stability              as e2e, on a manual run or when tests/e2e/** changed (6.9 item 10, X1)
+#   e2e-stability              as e2e, on a manual run (input e2e_stability) or a push of a v* tag (6.9 item 10, X1)
 #   windows-oracles: GDI       tests/oracle/gdi-capture/run.mjs     (npm run oracle:gdi, T2)
 #   windows-oracles: twins     tests/oracle/native-twin/run.mjs     (npm run oracle:twins, T4)
 #   windows-oracles: asm CLI   tests/oracle/asm-cli/run.mjs         (T1)
@@ -56,7 +56,8 @@
 # on a scheduled run, plan sets every guard but engines_weekly to false and
 # check and unit are skipped, so the run is engines + windows-oracles (with
 # only the comparison step). A manual run (workflow_dispatch) runs everything
-# a push would, plus the comparison. The engines come from the reusable workflow
+# a push would, plus the comparison and, unless its input is unticked, the
+# 20-repetition stability job. The engines come from the reusable workflow
 # engines.yml as the artifact "engine-dist"; a job downloads it when it exists.
 # A job that has it sets EASY68K_REQUIRE_ENGINES=1 when the artifact holds both
 # engines, so that a test that needs engine/dist fails there instead of
@@ -79,6 +80,11 @@ on:
     # build with the canonical Linux build (7.3); every other job is skipped.
     - cron: '17 4 * * 1'
   workflow_dispatch:
+    inputs:
+      e2e_stability:
+        description: 'Also run the end-to-end suites 20 times in a row on ubuntu-latest (6.9 item 10; about 1.5 hours)'
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -153,6 +159,8 @@ jobs:
         id: guards
         env:
           EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          STABILITY_INPUT: ${{ inputs.e2e_stability }}
           BEFORE: ${{ github.event.before }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -225,15 +233,21 @@ jobs:
           desktop_dev=false
           if [ -f tests/desktop/dev/playwright.config.ts ] && [ "$changed" = true ]; then desktop_dev=true; fi
 
-          # e2e-stability (6.9 item 10: 20 repetitions in a row on ubuntu-latest, X1-ci.md): about
-          # twenty times the e2e job, so only on a manual run and when the end-to-end suites or their
-          # configuration changed (against the same base as desktop-dev; no base known: changed).
-          e2e_changed=true
-          if [ -n "$base" ] && [ "$base" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
-            if git diff --quiet "$base" HEAD -- tests/e2e tests/playwright.config.ts; then e2e_changed=false; fi
-          fi
+          # e2e-stability (6.9 item 10: the end-to-end suites pass 20 times in a row on ubuntu-latest
+          # in each browser; X1-ci.md). 6.9 is the condition for tagging a release, not a check of
+          # every push, and the job takes about twenty times the e2e job (run 44948457389: 56 min in
+          # Chromium, 94 in WebKit). So it runs when asked for - a manual run, unless its input
+          # e2e_stability is unticked - and on the push of a release tag v*, so that the tag's run
+          # shows whether item 10 holds before the draft release of release.yml is published.
+          stability_why="not asked for (a manual run or a v* tag)"
           e2e_stability=false
-          if [ "$e2e" = true ] && { [ "$EVENT" = workflow_dispatch ] || [ "$e2e_changed" = true ]; }; then e2e_stability=true; fi
+          if [ "$e2e" = true ]; then
+            case "$EVENT:$REF" in
+              workflow_dispatch:*)
+                if [ "$STABILITY_INPUT" != false ]; then e2e_stability=true; stability_why="manual run"; else stability_why="manual run, input e2e_stability unticked"; fi ;;
+              push:refs/tags/v*) e2e_stability=true; stability_why="release tag $REF" ;;
+            esac
+          fi
 
           # The weekly schedule runs the engine comparison only (7.3, 7.4).
           if [ "$EVENT" = schedule ]; then
@@ -267,7 +281,7 @@ jobs:
             echo
             echo "desktop/** or app/** changed: $changed"
             echo
-            echo "tests/e2e/** or tests/playwright.config.ts changed: $e2e_changed"
+            echo "e2e stability: $stability_why"
           } >> "$GITHUB_STEP_SUMMARY"
 
   engines:
@@ -465,8 +479,10 @@ jobs:
           retention-days: 14
 
   # 6.9 item 10 and X1's acceptance: the end-to-end suites pass 20 times in a row on ubuntu-latest
-  # in each browser (docs/requests/X1-ci.md item 2). The plan runs it on a manual run and when
-  # tests/e2e/** or tests/playwright.config.ts changed, never on the weekly schedule.
+  # in each browser (docs/requests/X1-ci.md item 2). The plan runs it on a manual run (input
+  # e2e_stability, ticked by default) and on the push of a v* tag, never on the weekly schedule.
+  # Measured in run 44948457389: 56 min (Chromium) and 94 min (WebKit) for the 20 repetitions;
+  # the limit of 180 leaves room for about twice the longer.
   e2e-stability:
     name: e2e stability (ubuntu-latest, ${{ matrix.browser }}, 20 repetitions)
     needs: [plan, engines]
@@ -476,7 +492,7 @@ jobs:
       matrix:
         browser: [chromium, webkit]
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    timeout-minutes: 180
     env:
       EASY68K_REQUIRE_ENGINES: ${{ needs.engines.outputs.available == 'asm sim' && '1' || '' }}
     steps:
@@ -500,12 +516,17 @@ jobs:
       - name: Playwright version
         id: playwright
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
-      # The same cache entries as e2e (ubuntu-latest, one browser each).
+      # The same cache entries as e2e (ubuntu-latest, one browser each). The path list must be the
+      # e2e job's, line for line: actions/cache derives an entry's version from its paths, so an
+      # entry saved under three paths is not found by a restore that names one.
       - name: Restore Playwright browsers
         id: browsers
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.cache/ms-playwright
+          path: |
+            ~/.cache/ms-playwright
+            ~/Library/Caches/ms-playwright
+            ~/AppData/Local/ms-playwright
           key: playwright-${{ steps.playwright.outputs.version }}-${{ runner.os }}-${{ runner.arch }}-${{ matrix.browser }}
       - name: Install ${{ matrix.browser }}
         if: steps.browsers.outputs.cache-hit != 'true'
@@ -568,9 +589,14 @@ jobs:
   # have a group of their own, `integration`, and check:assemble (E5, an editor feature that needs
   # the engines) is in `interface`, which downloads engine-dist too. Expected on macOS: interface
   # about 20 min, simulator about 20, integration about 10; the limit of 45 leaves room for twice.
-  # Re-measured in round 2 of gate I2 (this PC, two queues, after the restart): options 108 s,
+  # Re-measured in round 1 of gate I2, after the restart (this PC, two queues): options 108 s,
   # find 170, print 47, fsaccess 109, assemble 146 (interface: 580 s added); audio 48, sim-files
   # 115, breakpoints 153, log 187 (simulator: 503 s added).
+  # On GitHub, run 44958853557 (commit d771d77, every check of waves one and two), whole jobs
+  # including set-up, Ubuntu / macOS / Windows: interface 10.0 / 11.2 / 8.8 min, simulator 8.8 /
+  # 11.6 / 8.1, integration 5.3 / 6.7 / 6.2. The longest step was check:sim-main on macOS, 3.8
+  # min (check:wave1 3.1, check:wave2 2.8); check:log took 0.8 / 1.2 / 0.7. Both limits (45 per
+  # job, 15 per step) leave room for about four times that.
   browser-checks:
     name: browser-checks (${{ matrix.os }}, ${{ matrix.group }})
     needs: [plan, engines]

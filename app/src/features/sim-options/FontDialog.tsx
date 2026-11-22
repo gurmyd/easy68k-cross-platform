@@ -8,7 +8,7 @@
 
 import { useState } from 'react';
 import type { DialogProps } from '../../contracts';
-import { Button, Checkbox, Dialog, ListBox, Select, SpinField, TextField } from '../../ui/components';
+import { Button, Checkbox, Dialog, GroupBox, ListBox, Select, SpinField, TextField } from '../../ui/components';
 import {
   FONT_COLORS,
   FONT_DIALOG_TITLES,
@@ -97,8 +97,7 @@ export function FontDialog({ props, close }: DialogProps<FontDialogProps, FontDi
           />
         </div>
         {withEffects && (
-          <fieldset className="e68-fontdlg__effects">
-            <legend>Effects</legend>
+          <GroupBox caption="Effects" className="e68-fontdlg__effects">
             <Checkbox label="Stri&keout" checked={strikeOut} onChange={setStrikeOut} />
             <Checkbox label="&Underline" checked={underline} onChange={setUnderline} />
             <Select
@@ -111,7 +110,7 @@ export function FontDialog({ props, close }: DialogProps<FontDialogProps, FontDi
               value={String(color)}
               onChange={(value) => setColor(Number(value))}
             />
-          </fieldset>
+          </GroupBox>
         )}
         <div
           className="e68-fontdlg__sample"

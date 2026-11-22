@@ -1,5 +1,7 @@
 # Errata of SH2 (Ellipses and wide pens)
 
+> **Merge status (DOC1, 2026-11-21; completed in its repair round 1).** Every entry of this file has been read. Merged into the documents, each place marked "erratum SH2 <n>" or naming this file: 1, 2 (Against trap15-b) (trap15-tasks-60-up.md 6.2, 6.4 (first round)); 3 (trap15-tasks-60-up.md 6.4); 4, 9 (ARCHITECTURE.md 3.4); 5, 6 (ARCHITECTURE.md 6.5.2). Nothing to merge, because no statement of a document is wrong or missing: 7, 8 (records of a scratch probe and of repair round 1 (its result is in gdi-deviations.md)); C1, C2, C3 (contract entries (C2 by request `SH2-ellipse-mode.md`); `app/src/contracts/` is the authority); Notes (performance figures).
+
 What SH2 found while building `app/src/core/sim-host/surface/ellipse.ts`, `widepen.ts` and
 `tables/pens.ts`: where `docs/ARCHITECTURE.md` or `docs/porting/trap15-tasks-60-up.md` (trap15-b)
 is silent, wrong or cannot be met as written, what the code does, and why. The measured results are

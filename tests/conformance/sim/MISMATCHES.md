@@ -10,8 +10,8 @@ Host parts: the classes at their final paths. Text metrics: Wine's cells (harnes
 | ---------------------------- | ----- |
 | Programs compared            | 194   |
 | Artifacts compared           | 217   |
-| Equal to the official result | 209   |
-| Different, with an owner     | 8     |
+| Equal to the official result | 210   |
+| Different, with an owner     | 7     |
 | Different, not yet assigned  | 0     |
 
 ## surface (SH1)
@@ -28,7 +28,6 @@ Host parts: the classes at their final paths. Text metrics: Wine's cells (harnes
 | `trap15-a/a52-files-write-after-read`   | report result | line 7           | `000010CC: 41 42 43 44 45 EE EE EE\r`                                                                                                                              | `000010CC: 41 42 43 58 45 EE EE EE\r`                                                                                                                              | Unconfirmed (Wine only): run a52 on Windows (6.8). If Windows agrees, SH6 drops a write that follows a read without a seek as the Borland run-time does. Task 54 |
 | `trap15-a/a53-files-past-end-then-read` | report result | line 2           | `D0=00000000 D1=00000001 D2=00000004 D3=00000000 D4=00000000 D5=00000000 D6=00000001 D7=00000000 A0=00000000 A1=000010BE A2=00000000 A3=00000000 A4=00000000 A5=0` | `D0=00000001 D1=00000001 D2=00000004 D3=00000000 D4=00000000 D5=00000000 D6=00000001 D7=00000000 A0=00000000 A1=000010BE A2=00000000 A3=00000000 A4=00000000 A5=0` | Unconfirmed (Wine only): run a53 on Windows (6.8). If Windows agrees, SH6 imitates the failed close and the lost bytes. Write 'ABCDE', seek to 25, write 'X', th |
 | `trap15-a/a58-files-devices`            | report result | line 6           | `D0=00000001 D1=00000001 D2=00000003 D3=00000000 D4=00000000 D5=00000000 D6=00000001 D7=00000000 A0=00000000 A1=00001090 A2=00000000 A3=00000000 A4=00000000 A5=0` | `D0=00000000 D1=00000001 D2=00000003 D3=00000000 D4=00000000 D5=00000000 D6=00000001 D7=00000000 A0=00000000 A1=00001090 A2=00000000 A3=00000000 A4=00000000 A5=0` | Unconfirmed (Wine only): Wine maps NUL to its null device as Windows does; run a58 on Windows (6.8) to confirm. If Windows agrees, SH6 treats NUL as an empty si |
-| `trap15-a/a59-files-buffer-edges`       | report result | line 3           | `visibleAfter512=00000000\r`                                                                                                                                       | `visibleAfter512=00000200\r`                                                                                                                                       | The 512-byte stdio buffer (ARCHITECTURE.md 3.8.4, SH6 errata entry 12, item 1): one task 54 of exactly 512 bytes on a fresh stream leaves nothing visible to a s |
 
 ## the simulator engine (engine/sim, owner W4 for the binding)
 

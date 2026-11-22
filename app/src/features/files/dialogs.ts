@@ -44,6 +44,8 @@ export interface OpenDialogProps {
   request: OpenRequest;
   startDir: VPath | null;
   registry: ProviderRegistry;
+  /** The text the File name field starts with (OpenRequest.initialName; gate I2). */
+  initialName?: string;
 }
 export interface SaveDialogProps {
   kind: 'save';
@@ -96,7 +98,13 @@ export function createFileDialogService(ctx: AppContext, registry = createProvid
   /** The port's own Save dialog (the Save dialog of save(), or the folder chooser of chooseFolder()). */
   const showSaveDialog = async (request: SaveRequest, folder: boolean, folderStart?: VPath): Promise<VPath | null> => {
     const suggested = request.suggested && isVPath(request.suggested) ? request.suggested : undefined;
-    const startDir = await chooseStartDir(ctx.vfs, [folderStart, suggested ? dirname(suggested) : undefined, last]);
+    // The folder of `suggested` wins over SaveRequest.startDir (contract; errata SH6.md C1).
+    const startDir = await chooseStartDir(ctx.vfs, [
+      folderStart,
+      suggested ? dirname(suggested) : undefined,
+      request.startDir,
+      last,
+    ]);
     const props: SaveDialogProps = {
       kind: 'save',
       request,
@@ -122,7 +130,13 @@ export function createFileDialogService(ctx: AppContext, registry = createProvid
         return heldWhileOpen(() => nativeOpen(request));
       }
       const startDir = await chooseStartDir(ctx.vfs, [request.startDir, last]);
-      const props: OpenDialogProps = { kind: 'open', request, startDir, registry };
+      const props: OpenDialogProps = {
+        kind: 'open',
+        request,
+        startDir,
+        registry,
+        ...(request.initialName ? { initialName: request.initialName } : {}),
+      };
       const result = await ctx.dialogs.open<OpenDialogProps, VPath[] | null>(OPEN_DIALOG_ID, props);
       if (!result || result.length === 0) return null;
       last = dirname(result[0] as VPath);
@@ -164,6 +178,16 @@ export function createFileDialogService(ctx: AppContext, registry = createProvid
       }
       if (stat === null) await makeFolder(ctx.vfs, chosen);
       return chosen;
+    },
+
+    /**
+     * A file handed to the application as a FileSystemFileHandle (an installed web app's
+     * launchQueue, 5.7): the first available provider that can link one does (FS2's, in
+     * Chromium); null when none can. Added to the contract at gate I2.
+     */
+    async linkFileHandle(handle) {
+      const provider = registry.available().find((p) => typeof p.linkFileHandle === 'function');
+      return provider?.linkFileHandle ? provider.linkFileHandle(handle) : null;
     },
   };
 }

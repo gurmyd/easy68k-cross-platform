@@ -1634,6 +1634,8 @@ Consequences the port must reproduce:
 - A memory condition with an address above `$FFFFFF` can never satisfy a read/write test (the recorded pointers
   are always inside the 16 MB array) but its value is read from the masked address.
 
+> **Corrected (erratum U3 3).** Fields left open: `id` is never read by `BPoint::isBreak` (the port sends the condition's 0-based row); a register condition's `readWrite` is never set (the port sends 0); a freed slot is sent disabled with zero fields (an expression with an empty postfix), then the counts. The grids allow 49 rows (50 including the header, as the original's).
+
 ### 7.3 Break expressions: `class BPointExpr` (`BPointExpr.h:22-52`, `BPointExpr.cpp`)
 
 Fields: `int id; int postfix_expr[10]; int infix_expr[10]; int p_count; int i_count; AnsiString expr; int count;

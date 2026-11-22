@@ -1,9 +1,14 @@
 // The Web Audio backend's logic (3.7) with a fake AudioOutput under Node: waiting for the decoder,
 // for a gesture and for a suspended context, starting late in step with the program, stop, release.
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { AppContext } from '../../contracts';
+import { silentWav } from '../../core/sim-host/audio/testing';
+import { parseWav } from '../../core/sim-host/audio/types';
 import { createAudioBackend, feature } from './index';
+import type { PcmSound } from './pcm';
 import { LATE_START_S, MAX_VOICES, WebAudioBackend, type AudioOutput, type DecodedSound } from './webaudio-backend';
 
 interface Started {
@@ -60,6 +65,9 @@ class FakeOutput implements AudioOutput {
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+const official = (name: string) =>
+  new Uint8Array(readFileSync(fileURLToPath(new URL(`../../../../tests/corpus/official/${name}`, import.meta.url))));
+
 function rig() {
   const output = new FakeOutput();
   let now = 1000;
@@ -96,6 +104,52 @@ describe('WebAudioBackend', () => {
     expect(output.started).toEqual([expect.objectContaining({ loop: false, offset: 0 })]);
     expect(backend.soundingCount()).toBe(1);
     expect(backend.decodedDuration(sound)).toBe(1);
+  });
+
+  describe('uncompressed WAVE: ready within load(), so a sound starts when the program asks (gate I2)', () => {
+    /** An output that makes sounds from samples, as createBrowserAudioOutput's does. */
+    class PcmOutput extends FakeOutput {
+      readonly made: PcmSound[] = [];
+      refuse = false;
+      fromPcm(pcm: PcmSound): DecodedSound {
+        if (this.refuse) throw new Error('NotSupportedError: sample rate');
+        this.made.push(pcm);
+        return { duration: pcm.length / pcm.sampleRate };
+      }
+    }
+    const pcmRig = () => {
+      const output = new PcmOutput();
+      output.setRunning(true);
+      return { output, backend: new WebAudioBackend(output, () => 1000) };
+    };
+
+    it('graphicSound.X68: task 71 loads, task 72 plays at once; no decoder is waited for', () => {
+      // The regression of gate I2: 1.wav waited 50 to 100 ms for decodeAudioData and then started
+      // from its beginning, so 0.wav, already decoded, started while 1.wav still sounded.
+      const { output, backend } = pcmRig();
+      const one = backend.load(official('1.wav'));
+      const zero = backend.load(official('0.wav'));
+      expect(output.decodes).toHaveLength(0);
+      backend.play(one, false);
+      expect(output.started).toHaveLength(1);
+      expect(output.started[0]!.offset).toBe(0);
+      expect(output.started[0]!.sound.duration * 1000).toBeCloseTo(parseWav(official('1.wav')).durationMs, 9);
+      expect(backend.decodedDuration(zero)).toBeCloseTo(7849 / 22050, 12);
+    });
+
+    it('a sound the output refuses, or a compressed one, goes to the decoder as before', async () => {
+      const { output, backend } = pcmRig();
+      output.refuse = true;
+      const refused = backend.load(silentWav(800));
+      const compressed = backend.load(BYTES); // not a WAVE file at all
+      expect(output.decodes).toHaveLength(2);
+      backend.play(refused, false);
+      expect(output.started).toHaveLength(0);
+      output.decodes[0]!.resolve(0.1);
+      await flush();
+      expect(output.started).toHaveLength(1);
+      expect(backend.decodedDuration(compressed)).toBeNull();
+    });
   });
 
   it('before any gesture (context not running): the playback waits, prepare() is tried, resume() unlocks', async () => {

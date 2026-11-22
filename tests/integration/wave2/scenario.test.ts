@@ -247,14 +247,13 @@ describe.skipIf(!enginesBuilt)(
           const replacedBefore = s.engineReplacements();
           await execute(s, close, sRecord);
           // 4.7.1: a cold start is skipped while the simulator is still exactly as the last one left
-          // it, which can be so for the first Execute of a new window only. Whether the controller
-          // skips it there depends on whether a queued read of the engine (the log service's, after
-          // the start) has been delivered yet (docs/integration/wave2.md, finding on 4.7.1): either
-          // is the same fresh simulator for the program. Every later Execute must be a cold start.
+          // it, which is so for the first Execute of a new window and for no other. Since the run
+          // controller's repair (docs/porting/errata/SH8.md, entry 38) the skip no longer depends on
+          // timing: the first Execute makes no cold start, every later one makes exactly one.
           const coldStarts = s.engineReplacements() - replacedBefore;
           const first = example === OFFICIAL_EXAMPLES[0];
-          if (!(coldStarts === 1 || (first && coldStarts === 0))) {
-            failures.push(`${example}: Execute made ${coldStarts} cold start(s)`);
+          if (coldStarts !== (first ? 0 : 1)) {
+            failures.push(`${example}: Execute made ${coldStarts} cold start(s), expected ${first ? 0 : 1}`);
           }
           const { end, boxes: shown } = await runProgram(s, 5000);
           const text = outputText(s);
@@ -361,10 +360,11 @@ describe.skipIf(!enginesBuilt)(
           await s.app.ctx.commands.run('app.mode.set', 'editor');
         }
         expect(outputs).toEqual([penOutput(1), penOutput(2), penOutput(3)]);
-        // The first Execute of a new window may find the simulator as its own start left it, and 4.7.1
-        // then skips the cold start (whether it does depends on a queued engine read, see the examples
-        // test); the two after it must each replace the engine.
-        expect([0, 1]).toContain(replacements[0]);
+        // The first Execute of a new window finds the simulator as its own start left it, with the
+        // settings it applied, and 4.7.1 skips the cold start: always, whether or not a display frame
+        // has delivered what that start queued (errata SH8.md entry 38); the two after it must each
+        // replace the engine.
+        expect(replacements[0]).toBe(0);
         expect(replacements.slice(1)).toEqual([1, 1]);
         // The control: File > Open of the same program over the finished run is no cold start, and the
         // pen is where the last run left it. This is what makes the three results above evidence.

@@ -110,9 +110,11 @@ Shortcut rules that apply to every row (details and the reasons are in 2.9):
 - K5. `F2` (next panel) replaces `Ctrl+Tab` in browsers, which reserve it. `F4` switches mode. Both are
   additions. Like K3 they do not exist while the Output panel has the keyboard, because the original
   leaves F2 to F5 to programs (`keyCodes.htm`). From the Output panel the way out is `Ctrl+Alt+O`.
-- K6. A chord that contains Alt (Option on macOS) is matched by the **position** of the letter key
+- K6. On macOS a chord with Option is matched by the **position** of the letter key
   (`KeyboardEvent.code`), because Option changes the character a key produces (Option+O is `ø`).
-  On macOS every command that has such a chord also has one without Option, shown first.
+  On Windows and Linux a Ctrl+Alt+letter chord follows the key's label (`KeyboardEvent.key` when it
+  is one ASCII letter) and otherwise its position (erratum W3 24). On macOS every command that has
+  such a chord also has one without Option, shown first.
 
 #### 1.3.1 Editor - menus (editor-ui §2)
 
@@ -226,10 +228,10 @@ Shortcut rules that apply to every row (details and the reasons are in 2.9):
 | Run > `&Step Over` | `sim.run.stepOver` | Run, toolbar | F8 | F8 | = |
 | Run > `&Trace Into` | `sim.run.traceInto` | Run, toolbar | F7 | F7 | = |
 | Run > `&Pause` | `sim.run.pause` | Run, toolbar | F6 | F6 | ~24 |
-| Run > `R&ewind Program` | `sim.run.rewind` | Run, toolbar | Ctrl+F2, Shift+F2 | Shift+F2 | = |
-| Run > `Re&load Program` | `sim.run.reload` | Run, toolbar | Ctrl+F3, Shift+F3 | Shift+F3 | ~22 |
-| Run > `L&og Start` | `sim.run.logStart` | Run, toolbar | Shift+F4 (Ctrl+F4 in the desktop app) | Shift+F4 | ~25 |
-| Run > `Lo&g Stop` | `sim.run.logStop` | Run, toolbar | Ctrl+F5, Shift+F5 | Shift+F5 | = |
+| Run > `R&ewind Program` | `sim.run.rewind` | Run, toolbar | Ctrl+F2, Shift+F2 | Shift+F2, Ctrl+F2 (erratum W3 3) | = |
+| Run > `Re&load Program` | `sim.run.reload` | Run, toolbar | Ctrl+F3, Shift+F3 | Shift+F3, Ctrl+F3 (erratum W3 3) | ~22 |
+| Run > `L&og Start` | `sim.run.logStart` | Run, toolbar | Shift+F4 (Ctrl+F4 in the desktop app) | Shift+F4, Ctrl+F4 (erratum W3 3) | ~25 |
+| Run > `Lo&g Stop` | `sim.run.logStop` | Run, toolbar | Ctrl+F5, Shift+F5 | Shift+F5, Ctrl+F5 (erratum W3 3) | = |
 | View > `&Output Window` | `sim.view.output` | View: shows and focuses the Output panel; leaves full screen if active | - | - | = |
 | View > `&Memory` | `sim.view.memory` | View: shows and focuses the Memory panel | - | - | = |
 | View > `&Stack` | `sim.view.stack` | View: Stack panel | - | - | = |
@@ -310,19 +312,34 @@ Shortcut rules that apply to every row (details and the reasons are in 2.9):
 
 #### 1.3.8 EASyBIN
 
-No porting spec exists for EASyBIN yet. Work package B1 writes `docs/porting/easybin.md` from
-`reference/src-easybin/EASyBINv2.5.0` and `easybin.htm` before it implements anything, and extends this
-table. Known from the help page:
+The specification is `docs/porting/easybin.md`, written by B1 from `reference/src-easybin/EASyBINv2.5.0`
+and `easybin.htm`. The rows below are its section 21.4 (corrected, errata B1 1 to 4 and 7, 8, 10 to 12:
+the Save Binary shortcut is Ctrl+S as in the source, New fills with `$FF` after the `Caution` question,
+the caption is ` Binary Input/Output Split `, Exit quits the application like the other modes' Exit,
+files dropped in EASyBIN mode are read by EASyBIN itself, the tab order follows the layout).
 
-| Original | id | Port | Win/Linux | macOS |
-|---|---|---|---|---|
-| File > New (fill memory with the Fill byte) | `bin.file.new` | EASyBIN menu File | - | - |
-| File > Open S-Record... | `bin.file.openSrec` | File | Ctrl+O | Cmd+O |
-| File > Open Binary... | `bin.file.openBinary` | File | Ctrl+B | Cmd+B |
-| File > Save S-Record... | `bin.file.saveSrec` | File | Ctrl+R | Ctrl+R |
-| File > Save Binary... | `bin.file.saveBinary` | File | (as found in the source) | (same) |
-| File > Exit | `bin.file.exit` | File | - | - |
-| Main screen: 16 MB hex/ASCII editor, Address field, Row/Page, wheel; S-Record File group; Binary Output Split (1, 2, 4 files); Binary File(s) group; From / To; Copy; Fill | - | EASyBIN workspace | | |
+| Original | id | Port | Win/Linux | macOS | St |
+|---|---|---|---|---|---|
+| File > `&New` (fill memory with `$FF` after `Caution` question) | `bin.file.new` | EASyBIN menu File | - | - | = |
+| File > `&Open S-Record...` | `bin.file.openSrec` | File; button in `S-Record File` | Ctrl+O | Cmd+O | = |
+| File > `Open &Binary...` | `bin.file.openBinary` | File | Ctrl+B | Cmd+B | = |
+| File > `Save S-&Record...` | `bin.file.saveSrec` | File | Ctrl+R | Ctrl+R | = |
+| File > `&Save Binary...` | `bin.file.saveBinary` | File; button in `Binary File(s)` | Ctrl+S | Cmd+S | = |
+| File > `E&xit` | `bin.file.exit` | File | - | - | ~ (quits the application, easybin.md 19 item 4) |
+| Help > `&EASyBIN Help` | `bin.help.help` | Help; F1 in the workspace | F1 | F1 | ~ (Help panel) |
+| Help > `&About EASyBIN` | `bin.help.about` | Help | - | - | ~ (port notice added) |
+| Simulator View > `&EASyBIN` | `sim.view.easybin` | switches to EASyBIN mode | - | - | ~ (note 26) |
+| Memory area: 16 MB, rows of 16 bytes, hex and ASCII editing, cursor, colours | - | EASyBIN workspace | | | = |
+| Address field, Row and Page buttons, wheel, Page Up/Down, arrows | - | workspace | | | = |
+| `S-Record File` group: Start Address, Last Address, Length | - | workspace | | | = |
+| `Binary Input/Output Split` (1, 2, 4 files) and `File Split` digits | - | workspace | | | = |
+| `Binary File(s)` group: First Address, Length | - | workspace | | | = |
+| From / To, Size + Copy, fill byte + Fill | - | workspace | | | = |
+| Window title = opened file | - | window title (with the port's notice) | | | = |
+| F1 in the About box (credits page) | - | Help panel, `credits.htm` | F1 | F1 | ~ (Help panel) |
+| Files dropped on the window | - | drop while EASyBIN mode is shown | | | = |
+| Tab order | - | follows the layout | | | ~ (easybin.md Q18) |
+| Command line `EASyBIN <file>` | - | none | | | x (easybin.md 19 item 7) |
 
 ### 1.4 Notes on changes and drops
 
@@ -382,8 +399,9 @@ table. Known from the help page:
     no memory-map range, output size, pen position, breakpoint or open port. The original leaves the
     earlier simulator windows open; the port has one simulator per window, so if a program is running
     or waiting there, the `Caution` question of sim-ui §8.4 is asked first (not when it is stopped or
-    halted; O-16). A second window keeps the old one (note 43). Execute is enabled as the engine
-    reports it (`AsmResult.executeEnabled`).
+    halted; O-16). A second window keeps the old one (note 43). Execute is enabled when the engine
+    reports it (`AsmResult.executeEnabled`) and this assembly wrote the S-record (4.9 step 9; erratum
+    E5 1).
 21. **Settings files** next to the executable cannot exist in a web page or a signed app bundle.
     Positions and sizes of Windows windows (`$main top` and its neighbours, the simulator's window
     lines) and the `$maximized edit` flag have no meaning in a tabbed single window; they are ignored on
@@ -476,6 +494,7 @@ items keep their positions:
 | (release keyboard from the Output panel: focus to the next panel) | `sim.output.releaseKeyboard` | key only | Ctrl+Alt+O | Ctrl+Option+O |
 | `New Window` | `app.window.new` | desktop app: application menu; web: the same address in another tab | - | Cmd+N (desktop only) |
 | `Files` panel show/hide | `app.files.toggle` | button at the left of the editor toolbar | - | - |
+| `Log` panel show (erratum W3 40) | `sim.view.log` | end of the simulator's View menu | - | - |
 
 ---
 
@@ -541,6 +560,12 @@ items keep their positions:
   of the last assembly; the message text appears on hover and focus. They are removed at the next
   assembly and by `Clear Error Messages`, and they move with edits.
 
+> **Corrected (erratum W3 15).** The shell owns the separator above the Messages panel and applies editor-ui §7.3 itself from `AppState.messages` and `AppState.assemble` (`messagesPaneHeight()` in `state/layout.ts`); a document's list counts as used once it has a summary or a message list (erratum W3 41).
+
+> **Corrected (erratum E2 8).** Two panes: each document is in exactly one pane. Tiling from one pane moves the active document to the second pane (the first shows the document opened last of the others; with one document the second pane is empty and says `No document in this pane. New and Open put a document here after a click into it.`). A click into a pane makes it active; `Cascade` shows every document in one pane again; the tab menu offers `Move to the Other &Pane` while two panes are shown; the pane sizes can be dragged and are not stored. Cascade and the Tile commands are enabled while a document is open.
+
+> **Corrected (erratum E5 11).** With two panes there is still one Messages region under the editor area; it shows the list of the active document, whichever pane it is in.
+
 ### 2.3 Simulator mode
 
 ```
@@ -583,6 +608,8 @@ drawn with the selection colours.
 - Width below 1100 px: the right column moves under the left one and the tool tabs join the Output
   panel as tabs of one group.
 
+> **Corrected (erratum SH8 20).** The status bar's run words: `Loading`, `Running`, `Waiting for input`, `Waiting`, `Auto trace` (between two Auto Trace ticks), `Halted` (only while the simulator is idle after a halt with the commands busy, `menuState` 1; Rewind, Open and Pause bring back `Stopped`; erratum SH8 29), `Stopped`. The toolbar's `LOGGING` label shows only if a log type was not Disabled at Log Start (erratum SH8 36).
+
 ### 2.4 Panel and document behaviour
 
 Panels:
@@ -619,6 +646,8 @@ Editing rules that differ from a stock code editor and must be built on purpose 
   caret was on.
 - Insert/Replace per document, shown in the status bar.
 
+> **Corrected (erratum W3 14).** Three more ids are regions of the shell, not panels: `editor` (the editor area, E2), `easybin` (the EASyBIN workspace, B1) and `status` (a mode's status bar). A PanelSpec with the id `help` serves every mode; `messages` exists once per mode. Shell state that `AppState` does not hold (the tool tab in front, a collapsed Output panel, a pending focus request, "Exit has run") is in `ShellState` (`app/src/state/shell.ts`), used through `state/panels.ts` and `showExitScreen(ctx)` (erratum W3 13).
+
 ### 2.5 Output panel
 
 - **One surface.** The canvas backing store is exactly `canWidth` x `canHeight` (640x480 at start,
@@ -642,13 +671,16 @@ black around it. The display mode is never changed.
 
 | | Browser | Desktop app |
 |---|---|---|
-| Mechanism | Fullscreen API on the panel's container | the window itself goes full screen (`Platform.setFullScreen`) and the Output panel fills it |
+| Mechanism | Fullscreen API on the page's root element; the Output panel then fills the window, as in the desktop app (erratum SH4 6) | the window itself goes full screen (`Platform.setFullScreen`) and the Output panel fills it |
 | `Esc` | Chromium: the panel calls `navigator.keyboard.lock(['Escape'])` after entering, so a short Esc reaches the program, as in the original; holding Esc leaves. Safari and Firefox: Esc leaves full screen and is not delivered (a difference, listed) | delivered to the program; leaves nothing |
 | Needs a user gesture | yes | no |
 
 - Entered by Alt+Enter (macOS Option+Return), the full-screen button, the `/f` switch, and task 33
   with `D1.L = 2` (the engine calls `host.setupWindow(true)`). When the user is the one who toggles,
   the panel tells the engine (`SimOption.Fullscreen`), as the original's key handler sets its flag.
+  The engine's flag `SimOption.Fullscreen` is the state; the Output feature reads it once per frame and
+  makes the screen follow, and sets it whenever the state changes on the user's or the browser's side
+  (erratum SH4 1).
 - Left by Alt+Enter, by `View > Output Window`, by task 33 with `D1.L = 1`, and automatically when the
   engine calls `host.setupWindow(false)` (a stop in trace mode or a halt, sim-ui §9.2 step 9).
 - **A program asks without a gesture** (task 33 from a running program in a browser): the panel shows
@@ -665,6 +697,8 @@ black around it. The display mode is never changed.
   `fullscreenchange` and sets the engine's flag back with
   `controller.invoke(e => e.setOption(SimOption.Fullscreen, false))`, so the engine and the panel never
   disagree.
+
+> **Corrected (erratum SH4 14).** Details (SH4): the full-screen prompt appears only when no user gesture is active (`navigator.userActivation`), so a program that asks within a few seconds of the key or click that started it (F9, then task 33) gets full screen at once, as in the original; a key or click without user activation (Esc) does not carry the request out. The refusal box is `FULL_SCREEN_REFUSED` with no icon and OK (erratum SH4 17). In the desktop app `Platform.onFullScreenChange` tells the panel that the window left full screen (erratum SH4 5). The header strip has a `Collapse the Output panel` button (note 35), hidden where the panel is a tab; leaving Simulator mode leaves full screen; `View > Output Window` leaves full screen and shows and focuses the panel (erratum SH4 15). The picture's scroll region is a Tab stop (`role="region"`, `aria-label="Output picture"`; erratum SH4 25).
 
 ### 2.6 Tool panels
 
@@ -698,14 +732,25 @@ black around it. The display mode is never changed.
   message loop, and a program's log or timing can depend on it. Modeless dialogs and the dialogs of
   Editor mode do not hold it. The dialogs a **program** causes - the task 58 file dialog and the
   message boxes the engine opens (`Current Log Stopped.` and the others of 4.4.4) - stop it through the
-  engine's own wait states. No command can be given while a modal dialog is open (2.9.1).
+  engine's own wait states. No command can be given while a modal dialog is open (2.9.1), except by
+  the dialog's own code (its Help button and F1, 3.12.2; erratum W1 11.4).
 - Dialog ids (3.12.4): `asm.status`, `options.assembler`, `options.editor`, `find`, `replace`,
   `about.editor`, `about.sim`, `sim.find`, `sim.logOutput`, `sim.logFileExists`, `sim.autoTrace`,
   `sim.fullscreen`, `sim.font`, `sim.speed`, `file.open`, `file.save`, `sim.fileDialog`,
-  `settings.transfer`, `message`.
+  `settings.transfer`, `message`, and `print.range` (Print: All / Selection, asked only while the
+  document has a selection; erratum E6 6). The features added four more (erratum Q1 4):
+  `documents.drafts` (the drafts found at start-up, 3.9.4), `files.name` (a name asked by the Files
+  panel), `sim.printerOutput` (the output of task 10, 3.3.1) and `easybin.about` (Help > About
+  EASyBIN, which has its own texts; erratum B1 5). The running application's list
+  (`dialogComponents`) is the authority; the accessibility audit fails when a registered dialog has
+  no route in it.
 - The **Help panel** shows the original pages in a sandboxed `iframe` (no scripts), with the original
   contents tree (`contents.hhc`) as a collapsible list and a text filter over page titles. In the
   desktop app `Help` opens the same view in a separate window.
+
+> **Corrected (erratum H1 9).** The help frame is `sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"` and the panel attaches nothing to the frame's document (WebKit refuses event listeners in a frame without scripts). A link navigates the frame by itself; the panel notices the load and records a history entry, so Back and Forward work. Escape while the page itself has the focus does not close the drawer; it does from the toolbar, the tree and the filter.
+
+> **Corrected (erratum H1 8).** `sim.help.context` (F1 in Simulator mode) opens `BasicOperation.htm`, or, while the focus is in the Memory, Stack, Hardware, Break Points or Log panel, `Memory.htm`, `Stack.htm`, `Hardware.htm`, `AdvBreakpoints.htm` or `SimOptions.htm` (note 10: the page that was meant).
 
 ### 2.8 Visual design tokens
 
@@ -719,7 +764,7 @@ values apply under `:root[data-theme="dark"]`. `data-theme` is `light`, `dark`, 
 | `--c-surface` | `#FFFFFF` | `#1B1F24` | panels, dialogs, fields |
 | `--c-panel` | `#F9FAFB` | `#22272E` | toolbars, headers, status bar |
 | `--c-border` | `#D1D5DB` | `#373E47` | separators |
-| `--c-border-strong` | `#9CA3AF` | `#545D68` | field borders |
+| `--c-border-strong` | `#818B98` | `#6E7781` | field borders (erratum W2 1: the first values failed 3:1) |
 | `--c-text` | `#111827` | `#E6EDF3` | text |
 | `--c-text-muted` | `#4B5563` | `#9DA7B3` | secondary text, disabled captions use 60% of it |
 | `--c-accent` | `#0B63CE` | `#58A6FF` | focus, active tab, changed registers |
@@ -754,6 +799,10 @@ Rules:
 - Icons: one SVG sprite `app/src/ui/components/icons.svg`, 16 px, drawn for the port, `currentColor`.
   The help folder's `Tool*.GIF` images are the visual reference for the meaning of each button.
 
+> **Corrected (erratum E3 10).** The light `Auto` syntax colours are the original's (`#808000` Macro/Other, `#FF0000` Structure Error on `#FFFFFF`) although they are below 4.5:1: the rule specific to the editor's syntax colours decides over the general contrast rule. An automated contrast scan excludes the syntax-colour samples and marks (`[data-element]`, `.e68-syntax__*`) with this as the reason; a student who needs more contrast picks the dark theme or a stored preset.
+
+> **Corrected (erratum W2 2).** Tokens derived from the table, in `tokens.css` under "Derived colours" and covered by the contrast test: `--c-text-disabled` (`--c-text-muted` at 60 %), `--c-hover` and `--c-pressed` (`--c-text` at 7 % / 13 % light, 8 % / 11 % dark), `--c-accent-soft` (a selected item of a list without the focus), `--c-bp-on-edge` and `--c-bp-off-edge` (`#B42318`, `#067647` light; `#FF7B72`, `#12B76A` dark: a 1-1.5 px outline that lets the gutter dots, whose fills keep the original's colours, meet 3:1; erratum W2 3), `--c-logging-text` and `--c-stack-text` (`#000000`), `--c-backdrop`, `--shadow-popup`, `--shadow-dialog`, `--focus-offset` (`1px`), `--focus-ring-inset` and `--focus-offset-inset` (erratum W2 25), `--lh-body` (`1.4`), `--motion-fast` and `--motion-normal` (`90ms`, `160ms`; `0s` under `prefers-reduced-motion`). Tool-tips use `--z-toast` (erratum W2 9). `components.css` holds the classes several components share (field frame, pop-up surface, access-key underline, screen-reader-only text, separators, icons; erratum W2 8).
+
 ### 2.9 Keyboard
 
 #### 2.9.1 One dispatcher
@@ -764,23 +813,38 @@ event it builds a normalised chord (`Ctrl+Shift+F9`, `Cmd+O`):
 - function keys, digits and punctuation from `KeyboardEvent.code`;
 - a letter from `KeyboardEvent.key` when that is a single ASCII letter, which follows the user's keyboard
   layout (Ctrl+Z is the key labelled Z on AZERTY and QWERTZ keyboards too);
-- a letter from `KeyboardEvent.code` (`KeyA` .. `KeyZ`) when `altKey` is set or when `key` is not an
-  ASCII letter (rule K6: Option on macOS and AltGr on Windows change `key`; Cyrillic and Greek layouts
-  have no ASCII letters). Such chords follow the key's position.
+- a letter from `KeyboardEvent.code` (`KeyA` .. `KeyZ`) when `key` is not an ASCII letter (AltGr on
+  Windows changes `key`; Cyrillic and Greek layouts have no ASCII letters), and on macOS whenever
+  `altKey` is set (Option changes `key`). Such chords follow the key's position (rule K6; erratum
+  W3 24);
+- a key of the numeric keypad from `key` when that names a navigation key (NumLock off); keypad
+  digits and operators form no chord (erratum W3 21).
 
 The chord is resolved in this order:
 
 1. A modal dialog is open: only the dialog's keys (Enter, Esc, Tab, its mnemonics) and text editing.
    `CommandRegistry.run` does nothing while a modal dialog is open (3.12.2), whatever asked for the
-   command: a key, a toolbar, or the native menu of the desktop app.
+   command: a key, a toolbar, or the native menu of the desktop app. The open dialog's own code may
+   run a command with `{ allowInModal: true }` (erratum W1 11.4).
 2. The Output panel has the keyboard (2.10): the rules of 2.9.4 and nothing else.
 3. A command of the current mode bound to the chord and enabled: run it, `preventDefault()`.
 4. A command of the current mode bound to the chord but disabled: `preventDefault()` and do nothing
    (the browser must not act on F5, Ctrl+S and the like).
 5. Otherwise the event continues to the focused element (editor, field, grid).
 
+Three refinements (errata W3 1, 2, 25):
+
+- The platform's text-editing chords (Ctrl/Cmd+Z, X, C, V, A, Shift+Cmd+Z, Shift+Insert) are left to a
+  focused text field or editor.
+- A chord of the list of 2.9.3 (F5, F6, F7, F10, Ctrl+O/S/P/F/G/R and their Cmd forms) is cancelled
+  with `preventDefault()` in every mode, bound or not, and also in steps 1 and 5.
+- Step 4 has one exception: Insert, Ctrl+Shift+. and Ctrl+Shift+, (commands of the editor, enabled
+  only while it has the focus) reach a text field that has the focus.
+
 In the desktop app the page's dispatcher is the only thing that acts on a command chord. The native
 menu shows the shortcuts but does not act on them (7.6).
+
+> **Corrected (erratum W3 5).** Details of the dispatcher (W3): the three chords of the Output panel (Alt+Enter, Shift+Insert / Cmd+V, Ctrl+Alt+O) are never acted on by the dispatcher (`OUTPUT_PANEL_COMMANDS`); the panel acts on them through `outputPanelKeyAction()` (rules 1-4 of 2.9.4). The element that takes keys for a program carries `data-e68-keys="program"`, and while it is the target the dispatcher does nothing (erratum W3 6). While the target is in the menu bar or an open menu no command runs; Alt+letter that no command uses opens the menu with that access key on Windows and Linux (erratum W3 7). Of two commands on one chord (F1: `ed.help.context`, then `ed.help.help`) the first enabled one in the key table runs, so an editor command reports itself enabled only while the editor has the focus (erratum W3 8). An element marked `data-e68-own-keys="F1"` keeps the chords it lists while the focus is inside it (erratum W3 37). On the macOS key map the dispatcher performs Ctrl+Z, Ctrl+Option+Z, Ctrl+X, C, V and A itself in a plain text field, with the shell's own undo history (`TextFieldHistory`), in every mode and in modal dialogs (errata W3 34, 36).
 
 #### 2.9.2 Chord table
 
@@ -790,11 +854,13 @@ Per command it holds `win` (Windows and Linux), `mac`, and `desktopOnly` chords,
 feature code. The unit tests of the table use key and code pairs recorded from real keyboards (for
 example `key: 'ø', code: 'KeyO'` for Option+O on a Mac), never synthetic events with plain letters.
 
+> **Corrected (erratum W3 9).** The key and code pairs of `commands/key-fixtures.ts` (macOS Option layer with dead keys, Windows AltGr, QWERTZ, AZERTY, Russian, Greek, the keypad) were not captured on a keyboard; they come from the published layouts. Recording them is `docs/requests/W3-key-recording.md`, and step A6 of `docs/MANUAL-TEST-MAC.md` asks a person to do it.
+
 #### 2.9.3 Keys that cannot be had
 
 | Key | Problem | Decision |
 |---|---|---|
-| Ctrl+F4 (Windows, Linux browsers) | closes the tab, cannot be intercepted | Log Start = Shift+F4; Ctrl+F4 only in the desktop app |
+| Ctrl+F4 (Windows, Linux browsers) | closes the tab, cannot be intercepted | Log Start = Shift+F4; outside the Output panel Ctrl+F4 only in the desktop app; in the Output panel a Ctrl+F4 that arrives is Log Start (2.9.4; erratum W3 3) |
 | Ctrl+Tab | switches browser tabs | `F2`; Ctrl+Tab only in the desktop app |
 | Ctrl+N, Ctrl+T, Ctrl+W, Cmd+N, Cmd+T, Cmd+W, Cmd+Q | reserved by browsers | not used by the original; Cmd+N, Cmd+W and Cmd+Q are bound in the desktop app only |
 | Ctrl+F2 .. Ctrl+F8 (macOS) | system focus shortcuts unless the user has switched them off | Shift+F2 .. Shift+F5 (K3); Ctrl+F9 is free and works |
@@ -843,6 +909,10 @@ this order:
      chord: the original delivers it to the program as the character `$16`, and so does the port.
    - **Ctrl+Tab** (desktop app only; a browser never delivers it): next panel.
 
+   `Alt+Enter` and `Ctrl+Tab` act also with further modifiers held (the original tests with
+   `Shift.Contains`); `Shift+Insert` is exact, because a browser pastes only on its own chord
+   (`docs/DIFFERENCES.md`; erratum W3 29).
+
    After task 24 none of the three acts; the keys are delivered and nothing else happens.
 
 Every `keyup` is posted to the program, also for Tab and for a key whose key-down ran a menu shortcut:
@@ -863,6 +933,10 @@ What the port offers in the Output panel beyond the original is therefore only t
 Panel cycling with F2, the mode switch with F4 and the Shift+F<n> alternatives are available in every
 other panel and after `Ctrl+Alt+O`; every command is also on the toolbar and in the menu.
 
+> **Corrected (erratum W3 4).** After task 24 the chords of `sim.help.context` (F1) and `sim.panel.next` are ignored in Simulator mode too, like the eleven of sim-ui §3.5 (`ALSO_IGNORED_AFTER_TASK_24`); menus show no shortcut for them, and the commands still run from the mouse, as in the original.
+
+> **Corrected (erratum SH4 7).** Also not cancelled: a key-down whose `key` is text of several characters and not a key name (a dead key followed by a letter it does not combine with); it is handled like a dead key.
+
 ### 2.10 Focus rules
 
 | Event | Focus goes to | Source |
@@ -881,13 +955,19 @@ other panel and after `Ctrl+Alt+O`; every command is also on the toolbar and in 
 | F2; in the Output panel Ctrl+Alt+O; in the desktop app also Ctrl+Tab | next visible panel in the order of 1.3.5 | sim-ui §3.4 |
 | Dialog closes | the element that had the focus before it opened | - |
 
+> **Corrected (erratum W3 38).** Before focusing a panel's element the shell sends it `e68-panel-focus` (`PANEL_FOCUS_EVENT`, not bubbling, cancelable); an element that cancels it has focused itself (the editor does, to keep its caret).
+
+> **Corrected (erratum SH8 19).** The two "show the Output panel" hooks: `SessionUi.showOutput()` for text output (the panel expands, the focus stays) and `SessionUi.inputStarted()` for `host.ioShow()` (the panel takes the focus; a toast in Editor mode); `ioBringToFront` (Run) focuses the panel in Simulator mode only.
+
 ### 2.11 Accessibility basics
 
 - Every command is reachable from the menu bar with the keyboard (arrow keys, Enter, Esc; the menu bar
   is a `menubar` with `menu` and `menuitem`, `menuitemcheckbox`, `menuitemradio` roles).
 - Toolbars are `toolbar` elements with one tab stop and arrow-key movement; every button has an
-  accessible name equal to its hint.
-- Panels are `region` landmarks named by their title. Tool tabs are a `tablist`.
+  accessible name equal to its tool-tip (the hint and its shortcut, `Open File (Ctrl+O)`, as
+  `resolveToolbar` makes it; a disabled button may give its reason instead; erratum Q1 1).
+- Panels are `region` landmarks named by their title, except those shown as tool tabs, which are the
+  `tabpanel`s of a `tablist` (erratum Q1 2).
 - Dialogs are `dialog` elements with `aria-modal` where modal, a labelled title, focus trapped inside
   and returned afterwards.
 - The message areas (editor and simulator) are `log` live regions with polite announcements; a halt and
@@ -896,14 +976,28 @@ other panel and after `Ctrl+Alt+O`; every command is also on the toolbar and in 
 - The Output canvas has `role="img"` and a label; the text mirror next to it (2.5) is a polite live
   region throttled to two updates per second.
 - Focus is always visible (`--focus-ring`). Nothing depends on colour alone: breakpoints also differ in
-  shape (`*` filled, `o` hollow), errors carry the word `ERROR`.
+  shape (`*` filled; the instruction dot `o` is drawn at most half opaque inside its edge, erratum
+  Q1 3), errors carry the word `ERROR`.
 - `prefers-reduced-motion`: no interface animation; the Memory cursor does not blink. The input prompt
   of a running program keeps blinking because it is program output.
 - Checked with an automated scan (6.6) and the manual list of 6.8.
 
+> **Corrected (erratum W2 6).** "Dialogs are `dialog` elements" means elements with the dialog role: `Dialog` renders a `div` with `role="dialog"` (`alertdialog` for message boxes), `aria-modal`, `aria-labelledby` and its own focus trap, not the HTML `<dialog>` with `showModal()`, whose top layer would cover the menus, lists and tool-tips a dialog opens.
+
+> **Corrected (erratum W2 13).** A modal dialog moves the focus on every Tab and Shift+Tab itself, through its own list of controls, wrapping at the ends; controls that refuse the focus (disabled, also through a `<fieldset disabled>`, `visibility: hidden`) are skipped, a container that hands its focus to a child counts as that child's place, a focus pulled back after the control was disabled goes to its next neighbour, and Escape, Enter and access keys pressed with the focus on the page body go to the top-most modal dialog (errata W2 13, 14). So every control of a dialog is reachable with Tab in every browser, Safari included.
+
+> **Corrected (erratum W2 10).** Tab and Shift+Tab in an open menu of the menu bar close it and move on from the menu bar in document order, as from the bar's own title (`Menu`'s `onClose` may return true for the reason `tab`; a context menu does not). Only the selected tab carries `aria-controls` (the panels of other tabs are not rendered; erratum W2 11).
+
+> **Corrected (erratum U1 6).** The simulator's message list renders only the rows on screen, so it is a plain `list`, and a separate visually hidden `role="log"` region with `aria-live="polite"` receives the new lines.
+
 ---
 
 ## 3. Module architecture
+
+The declarations of this section were copied into `app/src/contracts/` by W1, which is the authority
+from then on. The changes made there after wave zero are listed, with proposed texts for this
+section, in `docs/porting/errata/W1.md` (entries 4 and 10 to 14; 11.4 lists them section by
+section); the declarations below are not updated with every one of them.
 
 ### 3.1 Layers
 
@@ -920,16 +1014,20 @@ core/ (framework-free logic: documents, settings, sim-host, run, listing, highli
 contracts/ (types only)   <-   engine/ (wrappers around asm68k.mjs, sim68k.mjs)   <-   fs/ (backends)
 ```
 
-Dependency rules, enforced by an ESLint `no-restricted-imports` configuration written by W0:
+Dependency rules, enforced by the local ESLint rule `easy68k/layer-imports` in `eslint.config.js`
+(with `no-restricted-globals` / `no-restricted-properties`), written by W0 (erratum W0 2):
 
 - `contracts/` imports nothing.
 - `core/` imports `contracts/` and `@codemirror/state` (for the text type) only. No React, no DOM
   globals, no `window`, `document`, `navigator`, `performance`, `Date.now()` or timers except through
   the injected `Clock` and `Scheduler` (3.11.1).
-- `engine/` imports `contracts/` and the two engine modules.
+- `engine/` imports `contracts/`; it loads the engine modules by URL at run time (`loader.ts`;
+  erratum W4 4).
 - `fs/` imports `contracts/` and `core/paths`, `core/codec`.
 - `features/<x>/` imports `contracts/`, `core/`, `state/`, `commands/`, `ui/components/`, and other
-  features only through `AppContext` services (3.12.3), never by path.
+  features only through `AppContext` services (3.12.3), never by path. `features/editor/` also imports
+  `ui/editor/` (the editor component is its user interface; erratum E2 1), and `features/files/**` and
+  `features/files-fsaccess/**` may import `fs/**` (gate W0).
 - `ui/shell/` imports features only through `features/index.ts`.
 
 Runtime dependencies (closed list). Web application: `react`, `react-dom`, `@codemirror/state`,
@@ -1470,7 +1568,7 @@ devices.
 
 | Part | Implementation | File (W1 creates the stub, the owner replaces its body) | Owner |
 |---|---|---|---|
-| `main` | `SimUiBridge` - turns callbacks into flags, store actions and controller events | `app/src/core/run/ui-bridge.ts` | SH8 |
+| `main` | `SimUiBridge` - turns callbacks into flags, store actions and controller events | `app/src/core/run/ui-bridge.ts` (no W1 stub: section 8 gives `core/run/**` to SH8, which created it; erratum W1 5) | SH8 |
 | `hardware` | `HardwareModel` | `app/src/core/sim-host/hardware/model.ts` | SH7 |
 | `log` | `LogService` | `app/src/core/sim-host/log/log-service.ts` | U4 |
 | `files` | `ProgramFiles` | `app/src/core/sim-host/files/program-files.ts` | SH6 |
@@ -1579,6 +1677,10 @@ of hardware §3.6 and tells the model through `hardwareTimer` whenever a timer's
 interval changes. Push buttons are released on pointer cancel and when the panel loses the pointer
 (hardware §9.2 item 8).
 
+> **Corrected (erratum SH7 2).** `hardwareTimer` writes `intervalMs` and `enabled` to SoftTimer n only when they differ, and sets the interval before enabling, so a repeated report never restarts a running period (the original's TTimer does not either).
+
+> **Corrected (erratum SH7 4).** `features/hardware` watches the panel's visibility and calls `actions.setVisible(visible)` on every change, and `setVisible(true)` once at `init` when the restored layout shows the panel; View > Hardware, the tab, task 32 and a restored layout all reach the engine the same way, and hiding the panel tells the engine, so the next show zeroes the switch byte again. A call that repeats the engine's state changes nothing.
+
 #### 3.3.4 Serial and network
 
 W1 provides `NullSerial` and `NullNet`, which produce the results of note 37 in 1.4 (`initComm` returns
@@ -1622,9 +1724,12 @@ Behaviour that follows the original call for call (trap15-a §6, trap15-b §12):
 
 Note on `serverAddress`: the engine's import passes the server string of task 100 as a copy, without
 its address, so a host cannot do the write-back above. Until the engine package passes the address
-(requested in 10.3), W4's binding supplies it by reading register A2 when it forwards the call. That
-read is the one place where anything touches the engine inside a host call; it has no side effect and
-is confined to `app/src/engine/sim.ts`.
+(requested in 10.3), W4's binding supplied it by reading register A2. The engine now passes it as the
+third argument (`A2 & $FFFFFF`; erratum W4 8), so nothing touches the engine inside a host call.
+
+> **Corrected (erratum DV2 8).** The device channels of the desktop app: `desktop/src/sync-ipc.ts` exports `registerDeviceHandler(channel, (sender, ...args) => reply)` and `sendDeviceEvent(webContents, channel, ...args)`; names are `<device>.<call>` (`serial.open`, `net.receive`); `request` is one `sendSync`, a channel without a handler answers `undefined`, and `sender` identifies the window, so each window has its own devices.
+
+> **Corrected (erratum W1 8).** `NullSerial.commRead` returns -3 ("port not initialised"), which the engine turns into result 3 for task 42 (note 37); `NullNet.receivePortNet` returns `{ d0: 0, d1: 0 }`. For a CID outside 0..15 (`MAX_COMM = 16`) `NullSerial` answers 1 ("invalid CID") for tasks 40, 41 and 43 and the device result -1 for task 42, as the original's `TsimIO` checks before it touches a port (`simIOu.cpp:2072, 2129, 2306, 2351`; erratum W1 14.2, T3 F5); a real serial device must make the same check first.
 
 #### 3.3.5 Log service
 
@@ -1685,8 +1790,11 @@ Writing rules:
   next flush. A flush is due every second while logging, but never sooner than twenty times the
   duration of the previous flush, so a slow backend cannot take more than about 5% of the time. A flush
   always follows a stop of execution, Log Stop and `exit()`.
-- While the `Log File Options` question is open the program is held (2.7), so no output can fall
-  between the click on Log Start and the first logged byte, as in the original.
+- The Log Start command holds the run controller from the click until `start()` has resolved (the
+  `Log File Options` question holds it too, 2.7), so no output can fall between the click and the
+  first logged byte, however long the user and the store take (erratum U4 2).
+
+> **Corrected (erratum U4 3).** The log service reads `ExecLogType`, `OutputLogType`, `LogMemFrom` and `LogMemBytes` through `invoke` in `setLogFileNames`, `dialogShown`, `start` and `resetToStartup`, and keeps them itself in `applyDialog` (the engine reports no change of them). A flush is due one second after the first byte not yet in storage (no timer runs while nothing is pending), or twenty times the previous flush's duration if that is longer; every stop of execution flushes (erratum U4 9). The Log panel shows the last 200 lines of the last 256 KiB written to each file since its Log Start; in Append mode the earlier contents are not read back (erratum U4 11). `LogService` also has `startFailure` and `writeError`, read through `logStartFailure(log)` and `logWriteError(log)` (erratum U4 C1).
 
 ### 3.4 Drawing surface
 
@@ -1780,20 +1888,27 @@ Model rules (each is a rule of trap15-b; the section is the place to read the de
    through the mode, also when the start pixel already has the fill colour; nothing outside the surface.
 9. **Two pen positions** (§5.5): the table there, row by row. Drawing uses `backPen`; `getXY` returns
    `windowPen`.
-10. **Double buffering** (§5.6): mode 17 sets `doubleBuffer` and takes a copy of `back` as `window`;
+10. **Double buffering** (§5.6): mode 17, if double buffering is off, sets `doubleBuffer` and takes a
+    copy of `back` as `window` (a second mode 17 changes nothing; erratum SH1 2);
     while on, drawing changes `back` only; `formPaint()`, mode 16, `invalidate()` and `resize()` copy
     `back` to `window`; mode 16 also sets `windowPen := backPen` and drops `window`.
 11. **Resize** (§4.3): minimum 640x480, port maximum `MAX_SURFACE` in each direction, both buffers
     black every time, state kept, `backPen := windowPen`.
 12. **Clipping**: every primitive clips to the surface; coordinates are signed 16-bit values and are
     never an error.
-13. **Out-of-surface memory**: buffers are reallocated on resize; `PixelBuffer` objects are replaced,
-    so users re-read `surface.back` after a resize.
+13. **Out-of-surface memory**: buffers are reallocated on resize; `PixelBuffer` objects are replaced
+    when the size changes (otherwise the existing buffers are blackened; erratum SH1 3), so users
+    re-read `surface.back` after a resize. `resize` takes the low 16 bits of each argument, treats
+    (0, 0) as "keep the current size", then clamps; the message of 2.5 is its caller's (erratum SH1 9).
 
 Presentation is the Output panel's job (SH4): once per animation frame it calls `takeDirty()` and, if
 there is a region, calls `putImageData` for that region from `window ?? back`, then draws `overlay`.
 Presenting once per frame instead of after every drawing call is not observable by a program (task 83
 reads `back`).
+
+> **Corrected (erratum SH2 4).** Rule 4's round caps are not the dots of the dot table: they are vertices of the pen's nib (`tables/pens.ts`); only a zero-length line fills exactly the dot. `penDot` remains the dot of a one-point ellipse and of the rectangles. When one of two equally far nib vertices lies on the x axis, the choice goes by dy > 0 (`laterOnTie` in `widepen.ts`, measured against GDI's LineTo for every direction in -40..40 at widths 2-14; erratum SH2 9).
+
+> **Corrected (erratum SH1 10).** Where the surface's values come from (erratum SH1 10): the system colours other than 5, 8 and 15 are those Windows 10 and 11 ship with, confirmed by T2's capture; the dots of pen widths 2-255 are measured (`tables/dots.ts`: `penDot` for a zero-length line and a one-point ellipse, `rectangleDot` for a one-point rectangle; 35 widths are not symmetric, so nothing may mirror them; errata SH1 11, 14); `copyRect` leaves pixels outside the surface unchanged, as GDI does (measured). Still not measured: `floodFill` in a mode other than Copy applies the mode (trap15-b V4), and the blending of anti-aliased coverage.
 
 ### 3.5 Text screen and fonts
 
@@ -1854,7 +1969,19 @@ one for every reachable font, style and size. Glyph pixels are exact for the ras
 include the default font. Glyph pixels of the outline faces are substitutes: right position, right
 size, different edge pixels from Windows ClearType (10, R-5).
 
-Task 95 control bytes (trap15-b §6.7): bytes below `$20` paint nothing but count one cell in the extent.
+Task 95 control bytes (trap15-b §6.7, corrected, erratum SH3 14 from T2's measurements): only `$09 $0A $0D
+$1C-$1F` take no width, and only inside a text of two or more bytes; they paint nothing, and they count
+in the pen's advance except when the text also has a byte of `$80` or above. `$0C` is the font's
+solid block. The opaque box is the advances of the drawn bytes plus the style overhang; the
+fixed-pitch outline faces and `$7F` follow the rules of trap15-b §6.7's additions (errata SH3 25,
+28, T2 section 2). The bytes Windows draws from a fallback font (`$01-$08 $0B $0E-$1B`) are empty
+cells of their width in the port.
+
+> **Corrected (erratum T2 2).** Raster atlases: GDI makes every cell from a few native sizes by whole-number pixel repetition (independent factors in x and y) and simulates the styles on the scaled glyph, so `app/public/fonts/bitmap/` holds 25 atlases (the native plain cells and the four styles at each native size, 230 KB) and `metrics.json` `raster` gives the rules and, per face, style and cell, the native atlas, `kx`, `ky` and the line rows. A styled cell is made with its style rule after the repetition (bold adds one pixel after scaling, italic shears after scaling, underline rows scale with the cell), not by repeating a styled native atlas.
+
+> **Corrected (erratum T2 3).** Outline atlases are stored plain, bold and italic at 8-12, 14, 16, 18, 24 and 36 pt (14 MB). A request above 36 pt resamples the 36 pt atlas of the same face and style to the cell of `metrics.json`; underline and strike-out are the plain glyph plus the line `scalable/index.json` gives (`underline`, `strikeOut`: `[top, height]` in cell rows, across the advance; Windows draws the TrueType underline below the cell). The positions come from `GetOutlineTextMetrics` (erratum T2 6). Inconsolata has no italic: Consolas italic is a synthetic oblique (erratum T2 8); every glyph is fitted into Windows' cell (erratum T2 9).
+
+> **Corrected (erratum SH3 9).** The provider (SH3): a glyph of a raster face is made from the native atlas by the rule of `metrics.json` `raster.cells` (`ruledGlyph`: bold `P(x, y) | P(x - 1, y)` with the advance one more, italic shears by `floor((h - 1) / 2) - floor(y / 2)`, underline and strike-out rows across the advance), checked against T2's 102,235 raster glyphs. The atlas files are taken from T2's lists (`raster.atlases`, `scalable/index.json`; a page cannot list a folder), names derived only for a set without lists (erratum SH3 8). "Nearest": the atlas with the same cell, else for a raster face the largest of which the cell is a whole multiple, else the smallest difference in height, then width; resampling by whole-number repetition, otherwise area averaging (erratum SH3 11). Underline and strike-out of outline faces are the plain glyph plus a full line at the listed rows, also below the cell (erratum SH3 10). Above 36 pt the 36 pt atlas is resampled; an advance as wide as the cell becomes the measured column width, other advances grow with `MulDiv(size, 96, 72)`; the proportional substitute's pen is within 2 % of Windows' (erratum SH3 26, `docs/differences/SH3.md`). A name not in the table uses `Fixedsys`'s entries (erratum SH3 12); a font with several style flags takes the last of bold, italic, underline, strike-out (erratum SH3 13).
 
 #### 3.5.2 TextScreen
 
@@ -1908,6 +2035,8 @@ scroll and clear use black, text cells use the fill colour; the cursor is not mo
 `doCRLF` in the wrap branch uses the current row; in task 21 only the highest style bit counts and a
 font number sets the size byte even when it is 0.
 
+> **Corrected (erratum SH3 15).** `fontAssign(target, source)`: for target 1 or 2 with source 101, font and colour of the Options font and the cell measured again (the cursor stays); everything else is ignored. `resetToStartup()` puts the Options font back to a fresh installation's (Fixedsys 9, white), and step 4 of the cold start applies the saved one (erratum SH3 16). The text colour keeps all 32 bits and is resolved by the rule of trap15-b §4.6 when drawn, as Windows does for fonts (`ColorToRGB`; confirmed by T2's ten captured colours; erratum SH3 17). `textOut` ends with `surface.formPaint()` when double buffering is off, also for an empty text, and the output log gets one call per byte (erratum SH3 20). `TextScreenDeps.show` is called for every character (erratum SH3 3). `setWindowSize` does not call `setupWindow()` or `WindowSizeChecked()`: the Output panel lays itself out from the size every frame (erratum SH3 24). Where the original would fail and the port does not: a cell wider than the canvas wraps once, a cell higher than the canvas scrolls the pixels only, a cell of 0 is taken as 1 (erratum SH3 18).
+
 #### 3.5.3 Prompt
 
 The prompt timer runs on the injected `Scheduler` (500 ms). `promptTick` draws `_` or a blank at the
@@ -1917,6 +2046,8 @@ overlay even while double buffering is on. Any presentation from the back buffer
 `invalidate`, a drawing call while not double buffered) clears the overlay. The two timing quirks of
 trap15-a §3.8 (prompt started after a type-ahead key completed the input; not stopped by `initSim`) are
 reproduced because they follow from calling the same functions in the same order.
+
+> **Corrected (erratum SH1 8).** "A drawing call while not double buffered" is every drawing call, also one that changes no pixel: `drawPixel`, `line`, `lineTo`, the four shapes, `floodFill`, `fillBlack`, `copyRect` and `textOut(..., 'both')` clear the overlay while double buffering is off; changing state and reading do not.
 
 ### 3.6 Keyboard and mouse
 
@@ -2008,6 +2139,8 @@ The left button captures the pointer, as the original's window does; the right a
 not. If the browser cancels a captured pointer, a `mouseUp` with no buttons is posted. Ctrl+click on
 macOS is reported as a right-button event, which is what the platform delivers.
 
+> **Corrected (erratum SH4 3).** Details (SH4): the zero-delay timer of a paste chord is the panel's (`ctx.scheduler`, `keyboard.paste('')`), and `OutputKeyboard` sends a waiting key-down itself before anything else it is told. `input/mouse.ts` exports `OutputMouse` (`down`, `up`, `move`, `cancel`, `resetToStartup`, `leftHeld`), owned by the Output feature (erratum SH4 4). A key the virtual-key table does not know (Windows/Command key, menu key, the ISO extra key, F13 and up) posts no `keyDown` and no `keyUp`, only a `char` if it types one (erratum SH4 8). Virtual keys follow the key's position (`code`); characters and Ctrl+letter follow what the key types, so on another layout task 19 reports the US key at that position (erratum SH4 9, `docs/differences/SH4.md`). For keypad keys NumLock counts as off when `key` names a navigation key (erratum SH4 11). `charFromKey` follows Windows where this list is silent: Ctrl+`@` `$00`, Ctrl+`[ \ ] ^ _` `$1B`-`$1F`, Ctrl+Space `$20`, Ctrl with a digit or punctuation nothing, Alt+key nothing, AltGr the character unless an ASCII letter or digit, Meta nothing; on macOS Option+key types its character (Option+G `$A9`), checked against `ToUnicodeEx` on Windows 11 (erratum SH4 10). Plain Tab is refused by `OutputKeyboard.keydown` too (erratum SH4 12); `pasteBytes` stops at the first NUL, as `for (i = 0; inBuf[i]; i++)` does (erratum SH4 13). A paste that reaches the panel without the chord is typed in while key commands are on and dropped after task 24 (erratum SH4 19).
+
 ### 3.7 Audio
 
 Owner SH5. Logic in `app/src/core/sim-host/audio/` (Node-testable), device in
@@ -2075,6 +2208,10 @@ Model (trap15-b §11):
   DirectX player also accepts, are not supported; the load reports failure (`D0.W = 0`) with the message
   `'<name>' Error loading `.
 
+> **Corrected (erratum SH5 2).** `parseWav` walks the chunk list (even padding, any order, unknown chunks skipped; `tick.wav` has a `LIST` chunk after `data`). Valid = `RIFF....WAVE` with a `fmt ` chunk of at least 16 bytes, a `data` chunk, channels > 0 and a sample rate > 0. Duration for PCM, IEEE float and WAVE_FORMAT_EXTENSIBLE: whole frames (`data size / blockAlign`) / sample rate; for compressed formats the `fact` chunk's frame count / sample rate, else `data size / byte rate`. A `data` size beyond the end of the file is cut to the bytes present; durations are not rounded.
+
+> **Corrected (erratum SH5 4).** The Web Audio backend starts decoding in `load()` (tasks 71 and 74 decode ahead of play); a `play()` before the decode is done waits for it. Uncompressed WAVE data (every official sound) is converted to samples within `load()` and put into an `AudioBuffer` at once, so the sound starts within the task that asked for it (erratum SH5 4a: waiting for `decodeAudioData` made `1.wav` start late and overlap `0.wav`). `release(sound)` does not stop playbacks already started. A playback that has to wait starts late in step with the program, or not at all after `LATE_START_S` = 0.2 s; at most 64 play at once. The feature resumes audio at `pointerdown`, `keydown` and when the page becomes visible, only for a context that exists or that a playback waits for; without Web Audio the backend plays nothing and never throws.
+
 ### 3.8 File system
 
 #### 3.8.1 Backends
@@ -2096,7 +2233,8 @@ export interface FileSystemBackend {
   stat(rel: string): Promise<FileStat | null>;     // rel: path inside the mount, no leading '/'
   readFile(rel: string): Promise<Bytes>;
   writeFile(rel: string, data: Bytes): Promise<void>;    // creates parent directories; replaces the file
-  /** Adds bytes at the end (creating the file). Cost must depend on data.length, not on the file size. */
+  /** Adds bytes at the end (creating the file). Cost must depend on data.length, not on the file size,
+   *  except for the `fsaccess` backends, where the browser copies the file (erratum FS2 C2). */
   appendFile(rel: string, data: Bytes): Promise<void>;
   remove(rel: string): Promise<void>;
   list(rel: string): Promise<DirEntry[]>;
@@ -2119,7 +2257,10 @@ export interface Vfs {
   backends(): FileSystemBackend[];
   stat(path: VPath): Promise<FileStat | null>;
   readFile(path: VPath): Promise<Bytes>;
-  /** writeFile, appendFile and remove on one path run one at a time, in call order. */
+  /** writeFile, appendFile, remove and mkdirp on one path run one at a time, in call order. mkdirp
+   *  (W1 11.4) is a member too. createVfs() (fs/vfs.ts) is the only implementation of Vfs; tests call it
+   *  and mount a MemoryBackend, and code that needs a few members takes Pick<Vfs, ...>, so a member
+   *  added later is implemented in one place and may be required (erratum W1 12.1). */
   writeFile(path: VPath, data: Bytes): Promise<void>;
   appendFile(path: VPath, data: Bytes): Promise<void>;
   remove(path: VPath): Promise<void>;
@@ -2175,6 +2316,28 @@ one write in flight, the newest bytes written next, the data taken when a write 
 and the codec (`app/src/core/codec/cp1252.ts`) are written by W1 in wave zero, because almost every
 package needs them.
 
+> **Corrected (erratum FS1 1).** Besides the file record `{data, mtime}` the object store `files` holds, under array keys, a head per file `["h", rel] = {size, mtime, segs}` (a file exists when its head exists), the appended segments `["s", rel, n] = {data}` (n = 1, 2, ...) and a record per folder `["d", rel] = {mtime}` (empty folders are kept). Only heads and folders are read at start, and an append reads only the head, so its cost does not depend on the file's size; every operation is one transaction, so two windows appending to one file never take the same segment number.
+
+> **Corrected (erratum FS1 2).** Segments are merged by a whole-file write in its own transaction; a read returns the concatenation from a read-only transaction and then merges in a separate read-write transaction in the background (also after the append that makes the count exceed 256). A read never waits for a merge, a failed merge loses nothing, and a merge changes neither the modification time nor anything other windows are told.
+
+> **Corrected (erratum FS1 4).** Every read-write transaction of the browser store is opened with `{ durability: 'strict' }`, and a write resolves on the transaction's `complete` event: an acknowledged write is on disk.
+
+> **Corrected (erratum FS1 5).** When IndexedDB cannot be used (`indexedDB.open` throws, fails or takes longer than 20 s), `/browser` is a memory store with the same label, and the Files feature says so permanently: `Files are NOT being saved: this browser does not let the page keep files (<reason>; ...). Use Export... in the Files panel to keep your work.` Start-up waits for the database at most 3 s; after that the store is mounted as pending (its operations wait for the database) with the message `My Programs is still opening: ...`. A write refused for lack of space rejects with code `io` and a message that says nothing saved before is lost. At start the backend asks for persistent storage (`navigator.storage.persist()`), best effort.
+
+> **Corrected (erratum FS1 6).** `Export...` downloads a file as itself, a folder as `<folder>.zip` holding the folder, and the store's root as `My Programs.zip` holding the store's content at the top level, so that importing it into an empty store gives the same store.
+
+> **Corrected (erratum FS1 7).** `Import...` offers `Files or .zip...` and `Folder...`. A `.zip` is unpacked into the selected folder, other files are copied as they are; existing files are replaced only after one question for all of them (Yes / No / Cancel). `.zip` files of other tools are read too (deflate, code page 437 names, macOS resource forks skipped), and nothing is ever written outside the target folder.
+
+> **Corrected (erratum DV2 9).** The disk backend rejects a path outside the granted roots with code `io` and a message starting `refused:` (the synchronous view answers it like a missing file). Granted roots are compared after resolving symbolic links, so a link that points outside is refused; letter case is ignored only on Windows. The label is `This Mac` (`This Computer` elsewhere). Writes and removes through the main process are reported to the other windows; changes by other programs are not.
+
+> **Corrected (erratum W1 8).** Behaviour W1 fixed where this section is silent: paths that differ only in letter case share one Vfs queue, and `stat` and `readFile` wait for the mutations requested before them (a failed mutation does not block the next). `Vfs.resolve` is lexical first (`..` as on Windows, also through a folder that does not exist), then each segment takes its stored spelling (exact match first); a drive letter or a leading `\` or `/` is refused. `Vfs.snapshot` walks breadth first with names sorted, so the files nearest the folder are taken first when a limit is reached; a deeper folder is listed once as `too-deep`. The backend contract (`fs/backend-contract.ts`, with a `SyncFiles` suite): `remove` of a folder removes its content, missing paths reject with `not-found`, `writeFile` below a file with `not-directory` and on a folder with `is-directory`; `SyncFiles.write` on a missing file returns false.
+
+> **Corrected (erratum FS2 1).** The copies of linked files live in a browser store of their own, the IndexedDB database `easy68k-linked` (FS1's `BrowserBackend` with its own `BroadcastChannel` `easy68k.linked`), not in My Programs, so they appear neither in the Files panel nor in exports; `<id>` is 8 hex digits. The handles are kept in `easy68k-fsaccess`, store `handles` (`folder` = `{handle, name}`, `link:<id>` = `{id, name, handle, size, mtime}`); without IndexedDB they are kept in memory and nothing survives a reload, but the real files are written.
+
+> **Corrected (erratum FS2 3).** On `/folder` the rule "cost must depend on `data.length`" cannot be met: through the File System Access API Chromium copies the existing data into a swap file for every writable stream (appending 1 kB: 3-4 ms on a 1 kB file, 90-125 ms on a 20 MB file). Callers batch appends there (the cached view writes at most every 500 ms per file); `FolderBackend` runs the writes of one file one after the other. What the API cannot say: folders have no modification time (`mtime: 0`), there is no read-only flag (a write to a read-only file fails with `io`; what a program can see of it is in `docs/differences/FS2.md`), swap files (`*.crswap`) are left out of `list`, and a change that keeps the size within the disk clock's resolution is not seen (erratum FS2 4). Names are passed as given; `Vfs.resolve` takes the stored spelling first, so letter case behaves alike on every system (erratum FS2 12).
+
+> **Corrected (erratum FS2 5).** After a reload the folder is mounted at start only when `queryPermission({mode: 'readwrite'})` is `granted`; otherwise a toast `The folder "<name>" was open the last time. Open it again?` with `Open folder` asks inside the click. `requestPermission` is never called without a user activation. One folder at a time: another folder replaces `/folder` only when no open document and no loaded program comes from it, otherwise `Only one folder can be open at a time. Close what is open from "<name>" first (...), then open the other folder.` (erratum FS2 7). In the desktop app the feature does nothing (erratum FS2 10).
+
 #### 3.8.2 The program's directory
 
 Every document and every loaded program has a **program directory**: the `VPath` of the folder that
@@ -2187,6 +2350,8 @@ contains it. It is what the original calls the current directory (editor-ui §10
 | Linked single file | `/linked/<id>` (browser store) | that browser-store folder; the Files panel offers `Export`. `Save` writes the document to the real file and to the copy. A banner offers `Open the containing folder...` to get real-folder behaviour |
 | Disk, `/disk/Users/me/demo/prog.X68` | `/disk/Users/me/demo` | the real folder |
 | Never-saved document `untitledN.x68` | `/browser/Untitled` (web), `/disk/<userData>/Untitled` (desktop) | that folder, as the original uses whatever the current directory is |
+
+> **Corrected (erratum FS2 2).** The linked backend ties only `<id>/<name>` to the real file; every other path of `/linked` is the copy store. `stat` reports the real file while read access is granted; `readFile` reads the real file and refreshes the copy (asking for read and write at once in a user activation); `writeFile` asks for write access and refuses with `io` when the real file's size or time differ from what this window saw (`"<name>" has been changed by another program since this window last read it, so it was not saved. ...`); a real file that is gone is reported, never re-created; `remove` forgets the link and never deletes the real file. The banner is a toast with `Open the containing folder...`, which reopens the unmodified documents of the file from `/folder/...` when the chosen folder holds it (erratum FS2 6).
 
 #### 3.8.3 How the assembler sees files
 
@@ -2206,6 +2371,10 @@ editor buffer, not the stored file.
 
 Names with a drive letter or a leading `\` or `/` are not resolved; the assembler then reports
 `Unable to access specified file`, which is what the original reports for a path that does not exist.
+
+> **Corrected (erratum FS1 13).** Names that differ only in letter case are the same name wherever an entry is created: Rename refuses such a name (except a change of case of the entry itself), Import and drops count a file in another spelling as existing and write to the stored spelling, and two items of one import whose names differ only in case are a conflict. Without this a `.zip` exported to Windows could hold names that collide.
+
+> **Corrected (erratum E5 7).** The snapshot retry assembles once more only when the snapshot added at least one file (every assembly runs in a fresh instance, so the same files give the same result). Include names drop trailing dots and spaces of every component and empty components, as Win32 does, before `Vfs.resolve` applies `.` and `..` (erratum E5 12).
 
 #### 3.8.4 How the simulator sees files
 
@@ -2296,12 +2465,18 @@ Rules:
   file may be open in several streams.
 - **Write buffering.** Bytes written through a stream are **pending** until they are committed to the
   view. Pending bytes are committed when the stream is closed (task 56, task 50), when it is
-  repositioned (task 55), before a read through the same stream, and in whole multiples of
-  `STDIO_BUFFER` as soon as that many are pending. Until then no other stream and no other host part
-  sees them. This reproduces what the original's help warns about: data a program has written and not
+  repositioned (task 55), before a read through the same stream, and when the 512-byte buffer is full
+  **and another byte comes** (corrected, erratum SH6 12, from T3's measurement of the original, T3.md
+  F2 and F8): byte by byte nothing is visible after 512 bytes, 512 after the 513th; a write that fits
+  into what is left of the buffer is copied into it even when it fills it exactly; a write that does
+  not fit commits the buffer first and then goes to the file whole when it is 512 bytes or more, or
+  into the buffer when it is smaller. Until then no other stream and no other host part sees them. This reproduces what the original's help warns about: data a program has written and not
   closed is not in the file yet when the program, or anything else, looks at the file again. A program
   that forgets task 56 fails in the port as it fails on EASy68K, and not only when it is graded.
-- **Reads** see the committed bytes at the moment of the call. `fileRead` returns an empty array at the
+- **Reads** see the committed bytes at the moment of the call, except that a reading stream buffers
+  what it reads, 512 bytes at a time, and keeps returning those bytes after another stream changed
+  them; a seek, or a write through the same stream, empties that buffer (erratum SH6 12; a read of
+  512 bytes or more keeps its last 512-byte block, not measured on the original yet). `fileRead` returns an empty array at the
   end of the file. A seek past the end is allowed; a later write fills the gap with zero bytes.
 - **Simulator reset.** The engine forgets its eight slots on every reset without closing them
   (trap15-a §7.1 lifetime quirk), so the host never hears of it: the streams stay open as **abandoned**
@@ -2323,16 +2498,19 @@ Rules:
   it with task 52. The path the program receives is the port's own: `/browser/demo/data.txt` in a
   browser, the real path in the desktop app; it is cut to 255 bytes by the engine as the original cuts
   it. The original's two defects in the Save branch (trap15-a task 58) concern which dialog's file name
-  is used; they are not reproduced.
+  is used; they are not reproduced. The engine's `shim/simio.cpp` copied both until gate I2, when W4
+  removed them (erratum W4 15, `engine/sim/PATCHES.md` section 5); the host passes on what the engine
+  gives (erratum SH6 E2, which still describes the state before that repair).
 - The `.S68` and `.L68` of the program are read by the run controller and given to `engine.load` as
   bytes (4.7); they do not pass through these calls.
 
 What is modelled and what is assumed: that written data stays invisible until close or until the
 buffer fills, and that a reset abandons streams, is in the original's source and help. The buffer size,
 whether a large write bypasses the buffer, and whether a reading stream keeps stale bytes in its own
-buffer are properties of the Borland run-time library that the source does not show. The port uses the
-constant above, commits whole multiples, and does not buffer reads; T3's Windows confirmation program
-`stdio-buffer.X68` settles all three (6.8), and until then they are listed as unconfirmed.
+buffer are properties of the Borland run-time library that the source does not show. T3 measured all
+three on the official program under Wine with `stdio-buffer.X68` and `a59-files-buffer-edges`
+(erratum SH6 12: 512 bytes, large writes go to the file whole, reads are buffered), and the port
+follows that measurement; Windows itself confirms it once (6.8, Part C of the manual list).
 
 `PrinterDevice` (same owner) is the page device for task 10:
 
@@ -2361,6 +2539,32 @@ Font setting: `round(size * 600 / 72 * 0.6)` and `round(size * 600 / 72 * 1.13)`
 characters of `printerTextOut` between `printerBeginDoc` and `printerEndDoc`, and on `printerEndDoc`
 submits one print job. Jobs are listed in a `Printer Output` dialog until printed (`Platform.print`) or
 discarded.
+
+> **Corrected (erratum SH6 1).** A cached view reaches the folders it was asked to `prepare()` and everything below them (to `maxDepth`), not the whole mount: the program's folder at every load, the data file's folder at Open Data, the chosen file's folder at task 58 OK. A name that leaves the prepared folders (`../other/data.txt`) gets the result of a missing file (`docs/differences/SH6.md`).
+
+> **Corrected (erratum SH6 2).** The limits message names the reason in words (`too large`, `too many files`, `too deep`, `unreadable`) and `<path>` is the VPath. It is written from a timer, because the engine's load empties the message area after the folder was prepared. A file beyond the limits cannot be opened, created or removed.
+
+> **Corrected (erratum SH6 3).** A write to storage that fails is reported once per file in the message area, `A file of the program could not be saved: <path> (<reason>)`; the view keeps the change and writes the whole file again at the next `settled()`.
+
+> **Corrected (erratum SH6 4).** A change arms one 500 ms timer per file (so the first write of a quiet file also waits 500 ms); `settled()` starts every pending write at once. "When a handle closes" is `fileClose()` calling `view.settled()`, which writes every changed file of the view. A change that only adds bytes at the end is sent as `appendFile`; anything else rewrites the file.
+
+> **Corrected (erratum SH6 5).** A change reported by the Vfs replaces the cached bytes unless the program changed the file after the change was reported and before its bytes were read; then the program's bytes win and the next write replaces the whole file (never an append onto the other version). Nothing is merged. Every change by others to a cached file is read whole (the `Vfs` has no ranged read; `docs/requests/SH6-append-change.md`), and a whole-file read returns one cached copy until the file changes.
+
+> **Corrected (erratum SH6 6).** The journal is one `localStorage` text per origin (`easy68k.sim.journal.v1`) holding every window's part under a random instance id: `{"v":1,"parts":{"<id>":{"entries":[...]}}}`. An entry says what a file must look like (`{path, remove: true}` or `{path, size, at, data}`), so applying it twice gives the same bytes; only what the view has not written yet is journalled. `recoverJournal()` applies other instances' parts and removes them. Known hazard: an entry applied after another window changed the same bytes overwrites that change.
+
+> **Corrected (erratum SH6 7).** `exitNow()` commits the pending bytes of every stream (in the order the streams were opened) but leaves the streams open, because `pagehide` also comes to a page that enters the back-forward cache and may come back.
+
+> **Corrected (erratum SH6 8).** Names: a character Windows refuses in file names (`< > : " | ? *`, control characters) does not resolve; trailing periods and spaces of every segment are dropped (`data.txt.` opens `data.txt`); an absolute name is accepted only for a mount the program has been given (in the desktop app, with the program's folder on `/disk`, every absolute name is a real path). Device names (`NUL`, `CON`) are ordinary names here.
+
+> **Corrected (erratum SH6 9).** The printer's cell is computed from `SimSettings.printerFont` whenever the engine asks (at the first character of every document), so a font change takes effect at the next document; `fontChanged()` does nothing.
+
+> **Corrected (erratum SH6 10).** The Printer Output dialog (`sim.printerOutput`, title `Printer Output`) lists the jobs neither printed nor discarded, shows the selected page as text, and has `Print...` (`Platform.print`, letter-size page, every character at its place at 600 dpi), `Discard` and `Close`. A finished job opens it modeless; `File > Printer Setup...` opens it modal.
+
+> **Corrected (erratum DV2 9a).** On the disk, a path segment that no listing contains but that exists (a Windows 8.3 short name such as `RUNNER~1`, or a folder that may be entered but not listed) is kept as given and the walk goes on below it, so the later segments still get their stored spelling.
+
+> **Corrected (erratum SH8 35).** `RunSession.dispose()` calls `settled()` on each cached view it made and then the view's `dispose()` (stops listening to the Vfs and the timers; writes already started go on).
+
+> **Corrected (erratum T3 F7).** Measured under Wine and not yet reproduced (unconfirmed until it runs on Windows, 6.8): a stream that mixes reads and writes without a seek between them does something definite in the Borland run-time that the rule "pending bytes are committed before a read through the same stream" does not give. Write `ABCDE`, read 4 without a seek: the original gives D0.W = 0, D2 = 4 and leaves a file holding `A`; seek to 1, read 2, write `X`: the original's file stays `ABCDE`; a write past the end followed by a read gives 0 and a close that fails with 2 (`trap15-a/a51`-`a53`, `known-differences.json`). If Windows agrees, SH6 models the Borland stream state for these cases (erratum SH6, questions for T3 item 10).
 
 #### 3.8.5 File dialogs
 
@@ -2399,6 +2603,24 @@ A dropped **folder** is never opened as a document: where the File System Access
 offered as the opened folder (`Open this folder?`), in the desktop app it becomes the start folder of
 the Open dialog, and elsewhere a toast says `Drop files, not folders. Use Import... for a folder.`
 
+> **Corrected (erratum FS1 10).** Each opener puts its filters into the request itself (a feature cannot import another): E1, SH8 and SH6 copy the reference texts of `features/files/filters.ts` exactly, double spaces included, and task 58's `"desc|pattern|..."` strings go through `parseWindowsFilter()`. The dialog shows each label verbatim.
+
+> **Corrected (erratum FS1 11).** A file dropped in a browser has no path the port can keep: it is copied into `/browser/Imported/` (as `From this computer...` does) and the copy is opened. A copy with the same bytes is reused; one with other bytes is replaced only after a question.
+
+> **Corrected (erratum FS1 12).** For a name that does not exist the Open dialog shows the Windows common dialog's message: `<name>` / `File not found.` / `Check the file name and try again.`, titled with the dialog's title.
+
+> **Corrected (erratum FS1 14).** A dropped `.S68` while a program is loaded: in a browser the `Caution` question is asked first (`RunController.confirmLoad('drop')`); on Cancel nothing is copied or loaded, on OK the file is copied (with its own replace question) and loaded with `open(copy, 'drop', { confirmed: true })`. In the desktop app the file is loaded where it lies and `open` asks.
+
+> **Corrected (erratum FS1 15).** In the desktop app `Platform.nativeFileDialogs` is registered as the provider `native`, which replaces the port's dialogs ("From this computer..." is then not offered). A dropped file on the disk is opened where it is; a dropped folder opens the Open dialog (`Open File`, the editor's five filters) with that folder as start. A native dialog opened in Simulator mode holds the run controller while it is open, and its Save receives `defaultExt` normalised (`'*.X68'` becomes `'.X68'`).
+
+> **Corrected (erratum FS1 16).** `FileDialogs.chooseFolder` uses the native folder dialog where there is one (`NativeFileDialogs.chooseFolder(title, startDir?)`); in a browser the port's Save dialog is shown in folder mode: it starts in `startDir`, lists only folders, its button is `OK`; OK with an empty name takes the selected (or shown) folder, a typed existing folder is taken, a new name is created, a file is refused.
+
+> **Corrected (erratum FS1 17).** `app.files.toggle` with `{ reveal: VPath }` shows the Files panel (never hides it) and reveals the path; a panel that is not mounted gets the request when it mounts, within 5 s (`PENDING_REVEAL_MS`), and a request made in Simulator or EASyBIN mode waits for the next switch to Editor mode.
+
+> **Corrected (erratum SH6 11).** The task 58 request: the program's title, or `Open` / `Save As` when it passes none; its filter string read as `description|patterns|...`, or `All Files (*.*)` when it passes none; Save has no default extension and no overwrite question (`overwritePrompt: null`). The program's initial name gives the Save dialog's suggested file (`initialName`) and the Open dialog's start folder (`startDir`).
+
+> **Corrected (erratum FS2 8).** In Chromium FS2 registers a provider with the id `upload` and the caption `From this computer...` that replaces FS1's: the picked files are linked, so Save writes to them; it has no `save` (in the Save dialog `Open folder...` is the way to the computer). A dropped folder asks a message box titled with the folder's name, `Open this folder?`, Yes / No (erratum FS2 9). A newly mounted store is reported by the Vfs as a `write` of its root (errata FS2 11, W1 14.2).
+
 #### 3.8.6 More than one window
 
 The original lets a student start the editor and the simulator as often as they like; every Execute
@@ -2410,11 +2632,16 @@ one origin's storage, so four rules keep them from damaging each other:
 1. **Window identity.** At start a window takes a random `windowId` and holds the Web Lock
    `easy68k.window.<id>` for as long as the page lives. A lock that is no longer held means its window
    is gone, however it ended.
-2. **Settings.** `SettingsService.update()` reads the stored document again, applies the change to
-   that, and writes it, all in one synchronous step, so two windows never overwrite each other's
-   fields. A `storage` event from another window replaces the in-memory copy and notifies subscribers;
-   the `editor` and `sim` settings then take effect at once, while the panel layout of a window that
-   is already open stays as it is.
+2. **Settings.** A page may read another page's `localStorage` write late, so re-reading before a
+   write is not enough. Each changed setting carries a stamp (time, window) in the document's
+   `stamps` table; every document a window reads or receives with a `storage` event (its `newValue`)
+   is merged with what the window knows, setting by setting, the later stamp winning, and a window
+   whose newer setting is missing from another window's write writes the merged document again,
+   after a short pause and only if no other window has done so meanwhile. A document without a
+   `stamps` table was written by something other than the port and replaces what the windows know
+   (the rule for such documents: errata W3 entries 27, 28, 33 and 39). Subscribers are notified; the
+   `editor` and `sim` settings then take effect at once, while the panel layout of a window that is
+   already open stays as it is (erratum W3 26).
 3. **Browser store.** After every write and remove the backend posts `{rel, kind, mtime}` on the
    `BroadcastChannel` `easy68k.files`. Other windows update their index, and their `Vfs` reports the
    change (`origin: 'external'`) to the Files panel and to a simulator's cached view. Before a document
@@ -2427,6 +2654,10 @@ one origin's storage, so four rules keep them from damaging each other:
 
 Two simulators that talk to each other over the network (the classic demo of trap15-b §12) are two
 windows of the desktop app. In a browser both get the "no network" results.
+
+> **Corrected (erratum FS1 3).** The broadcast of a change is `{rel, kind, mtime}`. A receiving window does not trust it for sizes: it re-reads the heads and folders at and below `rel` in a read-only transaction, replaces that part of its index, and then reports `{rel, kind}` through `onExternalChange`.
+
+> **Corrected (erratum W3 33).** The rule for an outside document (a stored JSON object without a `stamps` table; the port always writes one, `{}` before any change; errata W3 27, 28, 31, 33 and 39, of which 33 states the rule and 39 completes it): each such write is one event of the shared history, and every window gives it the same stamp, the writer `outside:<FNV-1a hash of its text>#<n>` (n counts the writes of that text; the first has no `#1`) at the time the first window took it in. A window takes a write in exactly once, the first time it sees a document that differs from the last one it saw, wrote or took in (its first read, a `storage` event, or its own copy for a write made in its own page), stamps every setting that write changed and records the mark `~outside/<writer>`; when two stamp tables meet, every stamp of one outside writer moves back to the earliest time either holds. A window counts the writes of each outside text it has seen itself, so an event it already heard of is not a new write.
 
 ### 3.9 Documents
 
@@ -2483,7 +2714,7 @@ export interface LoadedSource { text: string; tabType: TabType; tabSize: number;
 export function decodeFile(bytes: Bytes): string;                      // Windows-1252; CR LF, lone LF and lone CR each end a line
 export function stripTrailer(text: string, defaults: DocDefaults): LoadedSource;   // editor-ui §6.3 step 4
 export function encodeFile(doc: DocumentState, text: string): Bytes;   // editor-ui §6.4: text, then SaveFont
-export function encodeForAssembler(text: string): Bytes;               // every line + CR LF, also the last (assembler §9.4.1)
+export function encodeForAssembler(text: string): Bytes;               // every "\n" as CR LF; a final line break only if the text ends with one (the RichEdit's plain-text save; erratum E1 1)
 ```
 
 `stripTrailer`, exactly: split the text into lines; if the text ends with a line break, the empty piece
@@ -2522,15 +2753,21 @@ and `Discard`. Drafts of windows that are still open are left alone. Drafts neve
 real file. (The original's own option *Auto Save Modified Source Before Assembling* is separate and
 behaves as in the original.)
 
+> **Corrected (erratum E1 13).** The drafts database is `easy68k.drafts` (version 1, key path `key` = `<windowId>/<docId>`), separate from the browser store; a record holds the `DocumentState`, the text, the file's recorded modification time and the tab order. The offer runs under the Web Lock `easy68k.drafts.offer`; without `navigator.locks.query` nothing is offered. A draft goes as soon as its document is no longer modified or no longer open. While an owner of drafts still looks alive the starting window asks the lock list again every 100 ms for at most 3 s (`DRAFTS_GONE_POLL_MS`, `DRAFTS_GONE_GRACE_MS`), because a crashed window's lock can stay listed for a moment (erratum E1 19).
+
 ### 3.10 Settings
 
 File: `app/src/contracts/settings.ts`. The store is `SettingsService`
 (`app/src/core/settings/service.ts`, owner W3): `get()`, `update(patch)`, `subscribe()`, persisted as
 one JSON document under the `localStorage` key `easy68k.settings.v1` (both deliveries; in the desktop
 app `localStorage` belongs to the app's own origin and lives in the user-data folder). Unknown keys are
-kept; missing keys take defaults; a version field allows migration. `update()` re-reads the stored
-document before it applies a change, and a `storage` event from another window refreshes the copy in
-memory, so several windows share one set of settings without overwriting each other (3.8.6).
+kept; missing keys take defaults; a stored value that the contract does not allow for its key is
+treated as missing (erratum W3 23); a version field allows migration. `update()` reads the stored
+document again, applies the change and writes it; because a page may read another page's write
+late, each changed setting carries a stamp in the document's `stamps` table and every document a
+window reads or receives with a `storage` event is merged with what it knows, setting by setting,
+the later stamp winning (3.8.6 rule 2), so several windows share one set of settings without
+overwriting each other (erratum W3 26).
 
 ```ts
 export interface SyntaxStyle { color: number; bold: boolean; italic: boolean; underline: boolean; }  // color = COLORREF
@@ -2598,6 +2835,14 @@ the positional reader's behaviour (a missing line puts all later lines back to d
 positions are ignored on import and written as the original's defaults on export; the `Auto` preset is
 exported as `-1` with the Color1 values.
 
+> **Corrected (erratum SH7 3).** The Hardware panel writes `seg7Address`, `ledAddress`, `switchAddress` and `buttonAddress` into `SimSettings` on every change the user makes to a device address (the port's settings are written at once, not at Exit); the cold start reads them.
+
+> **Corrected (erratum W1 8).** Defaults W1 chose where this section gives none: theme `system`, empty panel and splitter maps, `editorPanes` `one`, `outputZoom` `fit`, empty `serialPortMap`; `EditorSettings.template` is the shipped template with `"\n"` line breaks (saved with CR LF it is the original's 420 bytes); `SimSettings.speed.instructionsPerSecond` is 1,000,000.
+
+> **Corrected (erratum W3 16).** `SettingsService` keeps `app.layout` per window: a change from another window replaces everything except the layout, and `update()` writes this window's layout back only if the change touched it; a window that starts takes the stored layout.
+
+> **Corrected (erratum E4 7).** "Cancel restores everything" (note 8) with several windows: a dialog keeps what the user changes in a draft and writes nothing before OK; Cancel, Escape and the close button discard the draft, so every setting is what it would be had the dialog never opened, including other windows' changes meanwhile; OK writes the draft and nothing else through `ctx.settings.update`. The font and size boxes of Editor Options count as touched from the moment the dialog opens, because in the original those boxes are the defaults for new documents and OK always applies them (erratum E4 8). What the original applies at once (Auto Indent, Real Tabs, the Assembler Options check boxes) therefore takes effect on OK (`docs/differences/E4.md`).
+
 ### 3.11 Run controller
 
 Owner SH8 (`app/src/core/run/`). Section 4 specifies behaviour; this section fixes the types.
@@ -2636,6 +2881,10 @@ export class VirtualTime implements Clock, Scheduler {
   setTimer(delayMs: number, fn: () => void): () => void;
 }
 ```
+
+> **Corrected (erratum W3 12).** Until SH8's classes existed the bootstrap put `createRealClock()` and `createFrameScheduler()` of `app/src/state/browser.ts` on the context (frames, with the 250 ms watchdog); SH8's session may use its own; nothing depends on which.
+
+> **Corrected (erratum SH8 15).** `VirtualTime`: timers due at the same time run in the order they were set, and timers due at a frame time before that frame; a zero-delay timer set inside a callback runs before `advance()` returns. `clock.ts` switches the lint rule for `core/` off for the four lines that reach the browser's clock and timers, each with its reason; `FrameScheduler` takes the timer functions as a second optional argument (erratum SH8 16).
 
 #### 3.11.2 Controller
 
@@ -2697,7 +2946,10 @@ export interface RunController {
   hold(): () => void;
 
   editBox(box: Box, text: string): void;          // Registers panel: forwarded to the engine at once
-  pokeMemory(address: number, value: number): void;   // Memory panel: direct write
+  /** Memory panel: direct write. Writes the byte and bumps liveRevision; the Hardware, Memory and Stack
+   *  panels redraw, the Stack panel without re-centring. Interface code that writes memory with
+   *  invoke(... writeBytes ...) bumps liveRevision itself (errata W1 11.4, U2 C1). */
+  pokeMemory(address: number, value: number): void;
   clearCycles(): void;
 }
 
@@ -2742,6 +2994,8 @@ accepts only 0 and 1 and types a `0` for Backspace and for any other key):
 - Double-click on PC re-selects the current row; double-click on an address-register field copies its
   text to the Memory panel's Address field and shows that panel.
 
+> **Corrected (erratum U1 C1).** The hand-over from a register field to the Memory panel is the command `sim.view.memory` with an optional argument, a number or the register field's hex text (`ctx.commands.run('sim.view.memory', boxText)`); the Memory panel masks it to 24 bits and rounds it down to 16 (erratum U2 C4).
+
 #### 3.11.4 Listing view
 
 Owner U1 (`app/src/core/listing/view.ts`). The engine holds the listing; this class is the host's
@@ -2759,13 +3013,15 @@ export class ListingView {
 ```
 
 Selection: the original has one selected row, moved both by the user and by the highlight rule. The
-panel keeps `sim.selectedRow` in the store. A click sets it. After every snapshot refresh, if
-`snapshot.highlight` differs from the value seen at the previous refresh, the selection becomes the
-engine's row; otherwise the user's selection stays. Whenever the selection is set by the engine and
+panel keeps `sim.selectedRow` in the store. A click sets it. After every snapshot refresh that comes
+from a `scrshow()` with the listing display on, the engine's row becomes the selection when it
+matches the PC field (sim-ui §6.4); otherwise the selection stays (errata W1 12.4, U1 1, W4 12). Whenever the selection is set by the engine and
 lies outside the visible rows, the panel scrolls so that it is the third visible row (sim-ui §6.4).
 Gutter clicks go through `controller.invoke` to `engine.setBreakpoint` / `clearBreakpoint` for
 instruction rows with index above 2; a double-click on an instruction row calls
 `controller.editBox(Box.PC, first 8 characters)`.
+
+> **Corrected (erratum U1 2).** `ListingView.refresh()` re-reads the rows only after a load, a close and a cold start (4.7 step 7, 4.7.1 step 5, 4.8 Close), not at every `RepaintBit.Listing` (which the engine reports at every `scrshow()` and breakpoint toggle); on `sim.viewRevision` the panel re-reads the breakpoints and redraws. After Close and an Open of the same program, and after any load whose start PC equals the PC shown before, no row is selected, as in the original (errata U1 8, 9, W4 12); Ctrl+G or the first step selects the PC row.
 
 ### 3.12 Store, commands, features, dialogs
 
@@ -2805,6 +3061,8 @@ export interface AppState {
   settings: Settings;                              // mirror of SettingsService
 }
 export type Mode = 'editor' | 'simulator' | 'easybin';
+// file: the file the message belongs to; null = the document whose list it is, when that document has
+// no path yet (erratum E5 2).
 export interface EditorMessage { file: VPath | null; line: number; text: string; severity: 'error' | 'warning'; }
 export interface AssembleSummary { errors: number; warnings: number; hasSRecord: boolean; hasListing: boolean; at: number; }
 ```
@@ -2813,6 +3071,10 @@ export interface AssembleSummary { errors: number; warnings: number; hasSRecord:
 `useAppState(selector, isEqual?)` with React's `useSyncExternalStore`. Large or fast-changing data
 (memory, pixels, listing rows, log tails, register values) is **not** in the store; components read it
 from `SimSession` when the matching revision counter changes.
+
+> **Corrected (erratum U1 C2).** `AppState.sim.breakpoints` has no writer: the Listing panel's gutter reads `engine.breakpoints()` whenever `sim.viewRevision` moves and after its own toggles.
+
+> **Corrected (erratum SH4 2).** `AppState.sim.output.width`, `height` and `textWrap` have one writer, the simulator session (SH8), which mirrors `surface.back.width / height` and `text.state.textWrap` into the store once per frame; the check marks of `Output Window Size` and `Output Window Text Wrap` follow them, also after task 33.
 
 #### 3.12.2 Commands
 
@@ -2852,6 +3114,10 @@ Tables (owner W3, written once from section 1.3): `app/src/commands/tables/edito
 without a handler is shown disabled; a unit test fails while any id of section 1.3 has no handler at the
 end of wave 2.
 
+> **Corrected (erratum W3 35).** The tool-tip `Program halted` (note 22) is given only while the simulator is idle and busy after a halt (`blockedByHalt(state)` in `commands/menus.ts`: `halted && phase === 'idle' && menuState === 1`).
+
+> **Corrected (erratum E2 6).** Menus re-read `enabled` when the store changes. The editor session announces a change of the facts its handlers depend on (undo or redo possible, selection empty, focused document) with a new state object of the same contents, at most once per change (the rule of `CommandHandler.enabled`, erratum W1 11.2). While a plain text field is the target, Cut and Copy count as enabled and do nothing on an empty selection.
+
 #### 3.12.3 Features and context
 
 ```ts
@@ -2872,7 +3138,9 @@ export interface AppContext {
   clock: Clock;
   scheduler: Scheduler;
   /** Editor extensions contributed by other features (highlighting, markers). The editor component
-   *  applies every registered source to every document view. Extension is @codemirror/state's type. */
+   *  applies every registered source to every document view. `Extension` is declared in
+   *  contracts/features.ts as a structural copy of @codemirror/state's type; React.ComponentType is
+   *  reached through a type reference (contracts/ imports nothing; erratum W1 2). */
   editorExtensions: { register(source: (doc: DocumentState) => Extension): () => void };
 }
 export interface PanelSpec { id: string; title: string; mode: Mode; component: React.ComponentType; }
@@ -2897,10 +3165,12 @@ Services created by features are placed on the context by W3's bootstrap in this
 `settings`, `store`, `commands`, `dialogs`, `vfs` (+ backends), `fileDialogs`, `documents`, `asm`,
 `devices`, `sim`. A feature that provides a service exports a factory with a fixed name from its
 `index.ts` (`createDocumentService(ctx)`, `createFileDialogs(ctx)`, `createAudioBackend(ctx)`,
-`createSimSession(ctx)`); the stubs return minimal working services (the memory file backend, one
-in-memory document, dialogs that answer Cancel, the scripted assembler of `fake-asm.ts`, a silent audio
-backend, and an inert simulator session whose commands are all disabled) so that the shell runs from
-wave zero. The real simulator session is SH8's `features/run/session.ts` (3.1).
+`createSimSession(ctx, env)`, with `env: SimSessionEnv` of `contracts/features.ts`, because a feature
+may not import `engine/` or `fs/`; erratum W3 10); the stubs return minimal working services (the
+memory file backend, one in-memory document, dialogs that answer Cancel, a silent audio backend, and
+an inert simulator session whose commands are all disabled) so that the shell runs from wave zero.
+`asm` is W4's engine, loaded by the bootstrap at the first assembly; unit tests pass the scripted
+assembler of `fake-asm.ts` (erratum W3 22). The real simulator session is SH8's `features/run/session.ts` (3.1).
 
 #### 3.12.4 Dialogs
 
@@ -2922,11 +3192,16 @@ export interface DialogService {
 }
 ```
 
+> **Corrected (erratum W3 17).** `open(id, ...)` for an id no feature registered rejects with an error naming the id. A dialog component draws the kit's `Dialog` with the `modal` value it was opened with; only dialogs opened through `ctx.dialogs` block commands and hold the run controller.
+
 ### 3.13 Platform bridge
 
 File: `app/src/contracts/platform.ts`; implementations `app/src/platform/web.ts` (W3) and
 `app/src/platform/desktop.ts` (DV2), chosen at start by the presence of `window.easy68kDesktop`, the
-object the Electron preload script exposes.
+object the Electron preload script exposes. `main.tsx` chooses the platform (`createDesktopPlatform()`
+when `window.easy68kDesktop` exists, otherwise the web platform) and mounts whatever
+`createStartupBackends(platform)` of each `fs/*-backend.ts` returns; the bootstrap mounts
+`platform.disk`. Both happen before the features start (erratum W3 11).
 
 ```ts
 export interface StartupArgs {
@@ -2968,6 +3243,10 @@ export interface Platform {
   readonly net: HostNet | null;                                     // desktop only
 }
 ```
+
+> **Corrected (erratum DV2 12).** In the desktop app `confirmBeforeUnload` is answered by a native question: `Leave EASy68K?` / `Changes you made may not be saved.`, buttons `Leave` and `Stay` (Stay is the default). `Platform.print(html, title)` loads the document into a hidden window with JavaScript off and opens the system print dialog; it resolves when that closes (erratum DV2 13).
+
+> **Corrected (erratum E1 17).** `confirmBeforeUnload(needed, who?)` keeps the guard while any named party needs it: the documents feature always passes `'documents'` and gives its question back when the window is disposed while a document is still modified.
 
 ---
 
@@ -3035,7 +3314,9 @@ runSlice(now):
   budget = min(SLICE_BUDGET_MS, SLICE_FRAME_SHARE * frameInterval) - usedThisFrame
   start = clock.now()
   while phase == running and allowance >= 1 and clock.now() - start < budget:
-    n = min(subslice(ips), floor(allowance))
+    n = min(subslice(ips), floor(allowance), edgeGap if an input edge is waiting)   # erratum SH8 1:
+    # an input edge delivered while the program executes sets edgeGap = subslice(ips); the next edge
+    # waits until edgeGap executed instructions have run (edgeGap -= executed)
     before = engine.stepCount
     status = engine.run(n)
     allowance -= (engine.stepCount - before) mod 2^32
@@ -3134,6 +3415,8 @@ and no slice is executing at that moment. After **every** engine call the contro
 queue or from a command, it runs `afterEngineCall()`: if `host.registersShown()` was called meanwhile
 it refreshes the snapshot (4.6), and if `host.alert()` was called it shows the box (4.4.4).
 
+> **Corrected (erratum SH8 2).** Details (SH8): `handleStatus(engine.run(subslice))` enters `running` with the allowance of one sub-slice, executes, and deducts what `stepCount` says was executed; at most one sub-slice runs at once. While the controller is held or an engine box is open a queue entry is delivered and its `run()` is left to the catch-up of 4.4.5 (4.4.5 wins over the table; erratum SH8 3).
+
 ### 4.4 Wait states
 
 #### 4.4.1 `WaitInput`
@@ -3176,6 +3459,8 @@ Keys typed during a delay reach `engine.keyChar()` and become the one-character 
 and mouse state keep updating; interrupt requests are latched and recognised when the TRAP ends
 (sim-core §10.4 item 3). `Pause` and `Rewind` end the delay at once. In Trace Into the engine skips the
 delay entirely.
+
+> **Corrected (erratum SH8 4).** A delay also stands still while a message box of the engine is open: holds and open boxes are one condition ("the program may not execute"), and the time either lasts is added to `delayStart`, as the original's delay loop stands still inside either modal loop.
 
 #### 4.4.3 `WaitHost` (task 58)
 
@@ -3249,10 +3534,12 @@ Resolution is one display frame (about 16.7 ms at 60 Hz) against 15.6 ms on Wind
 |---|---|---|
 | Auto-interrupt, levels 1-7 | per level, default 1000 ms | `post({kind:'timerTick', level})`. Enabled, disabled and given its interval by the engine through `hardwareTimer` (the arming rule of hardware §3.6 is the engine's); ticks also while the simulator is idle |
 | Auto trace | `SimSettings.autoTraceIntervalMs`, 10-1000, default 200 | `post({kind:'autoTraceTick'})`; the engine skips a tick while keyboard input is pending |
-| Input prompt | 500 ms | `TextScreen.promptTick()` |
+| Input prompt | 500 ms | runs inside `TextScreen` on the injected `Scheduler`, not on a `SoftTimer` (errata SH3 2, W1 11.4) |
 | Log flush | 1000 ms or more while logging (3.3.5) | `LogService.flush()` |
 
 The end of a task 23 delay is not one of these: it has its own timer on the `Scheduler` (4.4.2).
+
+> **Corrected (erratum SH8 14).** `SoftTimer`: a new `intervalMs` restarts the period of a running timer, the same value does not, and `enabled = true` on an enabled timer changes nothing (hardware §3.6, the VCL's `SetInterval`). The controller's `TimerSet` holds the seven auto-interrupt timers and the auto-trace timer; the input prompt and the log flush run on the scheduler in their own packages (erratum SH8 17).
 
 #### 4.5.4 Sound durations
 
@@ -3261,7 +3548,8 @@ The end of a task 23 delay is not one of these: it has its own timer on the `Sch
 #### 4.5.5 Hidden pages
 
 `FrameScheduler` uses `requestAnimationFrame`. A watchdog timer, re-armed by every frame, takes over
-whenever no frame has arrived for 250 ms and calls the frame callbacks itself until frames return. It
+whenever no frame has arrived for 250 ms and then calls the frame callbacks itself about 60 times per
+second until frames return (errata SH8 25, W3 32). It
 does not consult the page's visibility state, because a minimised or covered window can stop producing
 frames while still calling itself visible.
 
@@ -3270,6 +3558,8 @@ about one per minute after several minutes). Because the allowance is capped at 
 program in a hidden tab runs at a few percent of its speed or less; delays, sound and timers stay
 correct because they use real time, only coarser. The desktop app disables background throttling, so
 there the watchdog keeps a program at its speed when the window is hidden or minimised.
+
+> **Corrected (erratum W3 32).** Once the watchdog has fired it calls the frame callbacks every `WATCHDOG_FRAME_MS` (1000 / 60 ms) until a frame arrives, then waits 250 ms again. A hidden browser tab slows the timer down by itself; the desktop app keeps the speed.
 
 #### 4.5.6 Speed
 
@@ -3299,6 +3589,8 @@ timing. With `Maximum`, delay loops finish almost at once; the setting exists fo
 Step Over's full-speed stretch and Run To Cursor use the same governor. Trace Into and Auto Trace
 execute one instruction per command or tick and are not governed.
 
+> **Corrected (erratum P1 6).** `DEFAULT_IPS` (`app/src/core/run/governor.ts`) and `DEFAULT_INSTRUCTIONS_PER_SECOND` (`app/src/core/settings/defaults.ts`, stored in `SimSettings.speed`) are both 1,000,000; a change of the default after O-1 must change both.
+
 ### 4.6 What is refreshed when
 
 The original refreshes registers, cycle counter, listing highlight, Stack and Memory only when
@@ -3308,7 +3600,7 @@ only record what happened; the controller acts after the engine call has returne
 | Engine callback | Effect in the port |
 |---|---|
 | `registersShown()` | Sets a flag. In `afterEngineCall()` the controller copies the twenty `boxText()` values, the cycle count and `listingHighlight` into `RunSnapshot` and bumps `regsRevision`. The Registers panel and the listing selection (3.11.4) update. |
-| `repaint(what)` | Records the bits. `afterEngineCall()` bumps `viewRevision`; the panels named by the `RepaintBit`s (Listing, Break Points, Memory, Stack) re-read their data. The engine itself applies the rule that an auto-trace step with `Disable display update` skips the listing, stack and memory (sim-ui §4.2); the host only keeps `SimOption.DisableDisplay` equal to the setting. |
+| `repaint(what)` | Records the bits. `afterEngineCall()` bumps `viewRevision` and, in `sim.repaint`, the counter of every panel the bits name; a panel re-reads its data when its own counter moves (Listing, Break Points, Memory, Stack). `RepaintBit.Stack` is `updateDisplay()`, which re-centres the Stack panel; `StackRedraw: 16` comes with `Stack` for `StackFrm->Repaint()`, which redraws it in place (errata W1 11.4, 12.2, 13.3; W4 10). The engine itself applies the rule that an auto-trace step with `Disable display update` skips the listing, stack and memory (sim-ui §4.2); the host only keeps `SimOption.DisableDisplay` equal to the setting. |
 | `memoryLivePaint(address)` | Only while `SimOption.MemLive` is on, which the Memory panel sets while its `Live` box is checked. The panel records the row as dirty; once per frame `publishRevisions()` bumps `liveRevision` if a visible row is dirty. |
 | `hardwareUpdate()`, `hardwareControls()`, `hardwareState()` | `HardwareModel` notifies its listeners; the Hardware panel re-reads `view()` at most once per frame. |
 | `message(text)`, `messagesClear()` | Appended to or clearing `sim.messageLines`; published once per frame. |
@@ -3317,6 +3609,12 @@ only record what happened; the controller acts after the engine call has returne
 
 During a full-speed run nothing else is refreshed: register fields, cycle counter, listing and stack are
 frozen until the program stops, exactly as in the original.
+
+> **Corrected (erratum W4 10).** `TStackFrm::Repaint()` sends `REPAINT_STACK | REPAINT_STACK_REDRAW` (24) and `updateDisplay()` keeps `REPAINT_STACK` (8), so a host that counts only `Stack` still redraws the Stack panel as before, and one that counts both re-centres only when `Stack` moved by more than `StackRedraw` (`RepaintBit.StackRedraw = 16`).
+
+> **Corrected (erratum U2 C2).** When U2 wrote this entry `AppState.sim` carried only `viewRevision`, and the Memory and Stack panels treated every change of it as their own repaint. Since gate I1 the optional `AppState.sim.repaint` counts the repaints per panel (`listing`, `breakpoints`, `memory`, `stack`, `stackRedraw`; errata W1 11, SH8 24, 33), and a panel falls back on `viewRevision` only while it is absent; U2 C2 is superseded there. While `Live` is checked the Memory panel compares its visible bytes with the engine's memory once per display frame and repaints when one differs, which sim-ui §10.4 allows; `memoryLivePaint` reaches no panel (erratum U2 C3).
+
+> **Corrected (erratum SH8 18).** Publishing (SH8): frame ticks and everything a free run changes publish at most once per frame; commands, loads, `invoke`, `hold` and `dismissAlerts` publish when they return. The repaint counters count `host.repaint()` calls per panel (`SimUiBridge.takeRepaintCalls()`), not engine calls; `viewRevision` still moves once per engine call; `stackRedraw` is a fifth counter, mirrored into `AppState.sim.repaint.stackRedraw` (errata SH8 24, 32, 33).
 
 ### 4.7 Loading a program
 
@@ -3327,7 +3625,9 @@ frozen until the program stops, exactly as in the original.
    running: the `Caution` question (`The current debug environment will be lost, click OK to
    continue.`, OK / Cancel). `origin` `execute` while a program is running or waiting: the same
    question (note 20). The controller holds the program (4.4.5) while it asks, whatever the mode.
-   Stop on Cancel.
+   Stop on Cancel. `confirmLoad(origin)` asks this question on its own for a caller that must act
+   between the question and the load; `open(path, origin, { confirmed: true })` then skips it
+   (erratum W1 13.5).
 3. `phase = loading`. From here until step 10 no tick touches the engine, the queue is kept, and every
    simulator command is disabled. The old program does not execute another instruction.
 4. `origin` `execute`, `commandLine` or `association`: `await coldStart()` (4.7.1).
@@ -3357,6 +3657,8 @@ arrives as `optionChanged` and is written to `SimSettings` at once (sim-ui Q14).
 file's folder (3.8.4), and make `path` the file that Reload loads (sim-ui Q11, a quirk that can load
 the wrong program and is therefore kept).
 
+> **Corrected (erratum SH8 7).** Details (SH8): with an `.S68` that cannot be read, `program` stays `null` if nothing was loaded, otherwise it keeps its title and gets the new path and `hasListing: false`. `/e` and `/b` reach `SimSettings` at once through `host.optionChanged`; the port stores every settings change when it is made, so there is no "at exit" (erratum SH8 8). `/f` passes `true` to `sim.output.fullscreen`: it asks for full screen, it does not toggle (erratum SH8 27). `confirmLoad(origin)` asks exactly when `open(path, origin)` would, holds the program while the question is open, and resolves with the answer (erratum SH8 31). A run command and a load wait until the cached program files have read a change saved elsewhere (`whenCurrent()`, `filesCatchingUp()`; erratum SH8 34). Open Data while a program runs moves the PC, because there is no next run command to reload it (erratum SH8 12; sim-ui 8.3's sentence holds for a stopped simulator).
+
 #### 4.7.1 Cold start: process-start state
 
 In the original, the editor's Execute button starts a new `SIM68K.EXE` (`assembleS.cpp:37`), and so
@@ -3384,6 +3686,10 @@ The application's own start is the same function, and it is the recovery from an
 (4.8). A cold start is skipped when the simulator is still exactly in that state: nothing has been
 loaded, run or changed since the last one (the usual case for a file named on the command line).
 
+> **Corrected (erratum U3 7).** The breakpoints model empties its grids at every `onEngineReplaced`, which also fires when the window's first engine exists, so rows entered while the first engine is still being created are lost; the original has no such moment.
+
+> **Corrected (erratum SH8 9).** Details (SH8): "all timers are cancelled" is `TimerSet.disableAll()` (the seven auto-interrupt timers and the auto-trace timer) plus the delay timer and the pending tick (erratum SH8 11). The Output font is in place before the engine exists: `TextScreen.setOptionsFont` is called in step 2, right after the parts' `resetToStartup()` (erratum SH8 10). `recoverJournal()` is the first step of `controller.start()`, before the first engine (erratum SH8 23). A cold start is skipped only when no engine call has gone through the controller since the last one, the parts the user can change directly are untouched (`RunControllerDeps.partsUntouched()`), and so a skipped cold start leaves exactly the state one would make, independent of frames (errata SH8 9, 38). The session starts its engine in the microtask after bootstrap; until then `session.engine` is a stand-in that reads as a simulator in start-up state (erratum SH8 21); a session or controller disposed before it starts stays inert (erratum SH8 28).
+
 ### 4.8 Commands and states
 
 | Command | Controller action |
@@ -3408,7 +3714,7 @@ Command availability follows `sim.menuState`, `sim.phase` and `sim.halted`:
 |---|---|
 | Run, Run To Cursor, Auto Trace, Step Over, Trace Into | `menuState == 0` and the phase is not `loading` |
 | Pause, Rewind | the phase is not `loading` |
-| Close | a listing or program is present |
+| Close | the phase is not `loading` (also with no program: it asks `Caution` and leaves the start-up state; erratum SH8 39) |
 | Open | the phase is not `loading` (note 22) |
 | Reload | a program has been loaded in this session |
 | Log Start / Log Stop | sim-ui §13.6 |
@@ -3419,6 +3725,10 @@ Engine failure: if any engine call throws (a WebAssembly trap or an abort), the 
 engine in start-up state next to host parts in their old state would be inconsistent, so nothing is
 kept; the message area then reads `The simulator was restarted after an internal error. Load the
 program again.` This path is tested with an engine wrapped by a fault injector.
+
+> **Corrected (erratum U1 C3).** Clear Cycles: the panel calls `controller.clearCycles()` and shows `0` itself, as the original's `ClearCyclesClick` does; the next snapshot refresh shows the engine's count again.
+
+> **Corrected (erratum SH8 5).** After `cmdPause()`, `rewind()` and every `Stopped` status the controller looks at `engine.state()`: with `fileDialogOpen` the phase is `waitHost`, with an engine box open `waitAlert`, otherwise `idle`. The run commands check their availability in the controller too: `run()`, `runToCursor()`, `stepOver()`, `traceInto()`, `autoTrace()` do nothing unless the commands are active and the phase is not `loading`, and `pause()`, `rewind()`, `editBox()`, `pokeMemory()`, `clearCycles()` nothing during a load (erratum SH8 6). Engine failure: the box shows `PC=<PC box>  Code=<the word at the snapshot's PC>`; it is the controller's own alert, and the cold start begins at once without waiting for OK. If the engine fails again while restarted, or cannot be created, a stand-in engine stays in place and the message area says so; the next cold start tries again (erratum SH8 13).
 
 ### 4.9 Assembling
 
@@ -3447,6 +3757,8 @@ program again.` This path is tested with an engine wrapped by a fault injector.
 The interface is not blocked visibly: assembling a typical program takes a few milliseconds. For a
 long assembly the toolbar button shows a busy state and a second F9 is ignored.
 
+> **Corrected (erratum E5 4).** Details (E5): a cancelled or a failed auto-save both cancel the assembly (the original assembles whatever happened). A write failure shows its box and stops: no engine message boxes, no rows, no new summary (erratum E5 5). A rejection of `AsmEngine.assemble` (a forbidden tab size from a hand-edited trailer, an engine that cannot load) is shown like a fatal result: one row `The assembler stopped: <error message>` with line number 0, no file, no dialog (errata E5 6, 10). An engine message box takes the engine's caption as its title and the error icon when the caption is `Error`; the status dialog has no default button. `ed.project.assemble` is enabled while a document is active and some open document is a source document (the original's frame-wide flag), and disabled while an assembly runs; `ed.msg.clear` is enabled while the active document's list has rows (erratum E5 9).
+
 ---
 
 ## 5. Files and formats
@@ -3469,6 +3781,8 @@ long assembly the toolbar button shows a busy state and a second F9 is ignored.
 - **Ctrl-Z** (`$1A`) in a source ends the file for the assembler (text mode); the editor shows the
   character and everything after it.
 - **Tabs** are never converted on load or save.
+
+> **Corrected (erratum E1 12).** The UTF-8 notice is a toast: `DocumentState` has no field to carry a banner to the editor, so the document service shows `This file looks like UTF-8. EASy68K reads it as Windows-1252.` through `dialogs.toast` when such a file is opened or reloaded (a UTF-8 byte-order mark counts).
 
 ### 5.2 `.X68` source files
 
@@ -3499,8 +3813,8 @@ one. Save As with an extension spelled exactly `.X68` turns a list document into
   on month, day and hour; at exactly midnight only the date is printed, as the original's
   `DateTimeToStr` does (the original prints the Windows locale's format; the port always uses the US
   form, which is the form of every sample listing and of the oracle). Tests mask this line. Log
-  headers use the same form and the same midnight rule, produced by `formatUsDateTime(date)` in the
-  application (5.5).
+  headers use the same form and the same midnight rule, produced by `formatUsDateTime(date)` of
+  `app/src/core/sim-host/log/format.ts` (U4; erratum U4 1).
 - `Load L68` opens the listing as a list document in the editor.
 
 ### 5.4 Opening an `.S68` in the simulator
@@ -3531,6 +3845,8 @@ lines and still runs the program. The filter of the dialog is
   and the engine writes a note only when logging is on and the matching snapshot is non-zero (to the
   execution log through `logWrite`, to the output log through `outputLogWrite`).
 
+> **Corrected (erratum U4 8).** Log file names are VPaths (`/browser/work/prog_RunLog.txt`), shown and edited as such; a typed name that is not a VPath is taken relative to the program's folder (Windows rules), and the folder buttons open the port's Save dialog.
+
 ### 5.6 Settings files
 
 `settings.dat`: 57 lines, CR LF, `<value>$<name>`, positional (editor-ui §11.4). `sim68K.dat`: 37
@@ -3542,17 +3858,23 @@ text. All three are imported and exported through `settings.transfer`; the port'
 
 | Delivery | Syntax | Behaviour |
 |---|---|---|
-| Desktop command line | `EASy68K [file] [/r] [/f] [/e] [/b]` | A first argument ending in `.S68` (any case) that exists: Simulator mode, load it, then the switches of sim-ui §8.1 (only from the second argument on). Any other existing file: Editor mode, open it. Otherwise a new document. |
+| Desktop command line | `EASy68K [file] [/r] [/f] [/e] [/b]` | A first argument ending in `.S68` (any case) that exists: Simulator mode, load it, then the switches of sim-ui §8.1 (only from the second argument on). Any other existing file: Editor mode, open it. Otherwise a new document. The switches of sim-ui §8.1 are processed in all three cases; without a loaded program `/r` halts at once and `/f` acts only once Simulator mode is shown (erratum SH8 22). |
 | Desktop file association and drop on the Dock icon | `.X68`, `.L68` | Editor mode, open (the original's installer maps both to EDIT68K) |
 | | `.S68` | Simulator mode, simulator started afresh (4.7.1), load without running |
 | Web URL | `?open=<VPath>` plus optional `run=1`, `fullscreen=1`, `exceptions=1`, `bitfield=1` | Same rules on the path's extension. Only paths in the browser store can be opened this way. `?example=<name>` opens an official example. |
 | Web, installed app | file handlers in the manifest for `.x68`, `.l68`, `.s68` (Chromium) | as the desktop association |
 
+> **Corrected (erratum DV1 6).** Not done yet: the installed web app's manifest has no `file_handlers`. A launched file arrives as a `FileSystemFileHandle`; FS2's `LinkedBackend.link(handle)` can make it a `/linked/...` path that saves back, but `features/pwa` may not import `app/src/fs` and no contract member reaches it (erratum DV1 12, `docs/requests/DV1-launch-files.md`: W1, then FS2, then DV1). Declaring the handlers before something consumes the launch queue would open an empty window for every double-clicked file.
+
+> **Corrected (erratum DV2 4).** In the desktop app `StartupArgs.file` and `onOpenFiles` carry VPaths of `/disk` (`/Users/me/x.X68` arrives as `/disk/Users/me/x.X68`); a command-line file that does not exist gives `file: null`. The switches `/r /f /e /b` count from the second argument on, in any letter case, and only with the slash, as `SIM68Ku.cpp` compares them.
+
 ### 5.8 Examples
 
 The ten official example programs and six sounds (`reference/examples/official/Examples`, GPL) are
 shipped under `app/public/examples/`. `Help > Examples...`: web - copies them into `/browser/Examples/`
-if that folder is missing and shows it in the Files panel; desktop - asks for a folder, copies them
+if that folder is missing and shows it in the Files panel (`ctx.commands.run('app.files.toggle',
+{ reveal: '/browser/Examples' })`, `FilesRevealArg` of 3.12.2; erratum W1 12.3); desktop - asks for a
+folder, copies them
 there and shows the open dialog in it. Nothing from `reference/examples/site` is shipped or committed.
 
 ### 5.9 Exchanging files with users of the Windows original
@@ -3584,7 +3906,7 @@ proved in general. It is argued in layers, each with an oracle and with a stated
 
 | # | Layer | Oracle | What it shows | What it cannot show | Runs | Owner |
 |---|---|---|---|---|---|---|
-| L1 | Compiler independence of the engines | Native "twins": the same patched sources built with MSVC (32-bit, `/O2` and `/Od`) and the unpatched sources built the same way | The WebAssembly build has no compiler-dependent behaviour on the tested inputs (uninitialised data, layout, signedness); our patches change nothing but what they say | Equality with the Borland build; anything in the GUI-coupled code the twins replace by shims | Windows CI, every push | T4 |
+| L1 | Compiler independence of the engines | Native "twins": the same patched sources built with MSVC (32-bit, `/O2` and `/Od`) and, for the assembler, the unpatched sources built the same way (the simulator's shim needs the patches that make it non-blocking; erratum T4 2) | The WebAssembly build has no compiler-dependent behaviour on the tested inputs (uninitialised data, layout, signedness); our patches change nothing but what they say | Equality with the Borland build; anything in the GUI-coupled code the twins replace by shims | Windows CI, every push | T4 |
 | L2 | Assembler output | Official EDIT68K.exe v5.16.1 under Wine in Docker | `.S68` and `.L68` (date line masked) are byte-identical for every corpus file and for an option matrix | Inputs outside the corpus; the path through Wine's RichEdit control, which hands the text to the assembler (ground-truth §4 risk 1) | Docker, on demand and weekly; results are compared on every push | T1 |
 | L3 | Assembler logic, second opinion | `asy68k.exe`, the v5.15.4 command-line port built natively | Same output except the documented 5.16 changes (assembler §8.3) | 5.16.1-specific formatting | Windows CI | T1 |
 | L4 | Simulator results | Official SIM68K.exe under Wine: (a) self-reporting programs started with `/r` that write their registers and memory to a file; (b) execution logs made with Log Start and Auto Trace | CPU results, flags, cycle counts (through task 31), register effects of non-interactive TRAP #15 tasks, file-task results, per-instruction register traces | Pixels (Wine's GDI is not Windows GDI), timing, sound, interactive input, the hardware window | Docker, on demand and weekly; compared on every push | T3 |
@@ -3605,13 +3927,16 @@ The twins are built with MSVC as 32-bit programs (ILP32, like Borland and wasm32
   program `ez68k-asm` (inputs by manifest, the eight options, tab settings and the time as switches)
   once from the engine's patched sources and once from the unpatched sources, and the engine's own
   tests compare them. T4 runs them in CI and over the corpus and does not own them.
-- `tests/oracle/native-twin/sim-twin.exe`: the patched simulator core with a headless C++ host (text
+- `tests/oracle/native-twin/sim-twin/`: the sources of `sim-twin.exe` (built into `build/native-twin/`;
+  erratum T4 1): the patched simulator core with a headless C++ host (text
   output to a file, no graphics, files on disk), driven by a script: load, run N instructions, dump
   registers and a memory range.
 
 Comparisons: twin against WebAssembly for the whole tracked corpus (assembler) and for the conformance
 programs (simulator); `/O2` against `/Od`; patched against unpatched on inputs that do not trigger the
 patched defects. Any difference fails the build.
+
+> **Corrected (erratum T4 3).** Details (T4): the engine's own build (`engine/asm/native/build.mjs`) makes only the `/Od` assembler twins, so `tests/oracle/native-twin/build-asm-twins.mjs` compiles the same files with the same flags (read from the engine's build scripts, failing if they cannot be found) at `/O2` and `/Od`. The compiler is found with `vswhere` and passed through `VCVARS32` (erratum T4 4). In CI the unpatched twins are built from the original archive (`ProfKelly/EASy68K` at `dab554f0`, SHA-256 checked) and compared with the engine's list of expected differences (erratum T4 5); the archive is unpacked with `%SystemRoot%\System32\tar.exe`, never a `tar` from PATH (erratum T4 11). The simulator comparison runs a standard script for every `.X68` under `tests/` that assembles, the engine's test programs, the hand-written scripts and the single-step suite, each program given the files of its folder and its parent (erratum T4 8). A twin built from older sources than the WebAssembly engine is not compared (erratum T4 12).
 
 #### 6.2.2 Official binaries under Wine (T1, T3)
 
@@ -3625,19 +3950,25 @@ The binaries never run on the host.
   Options are selected by writing `settings.dat` first. The script detects and dismisses the
   help-viewer message boxes and fails loudly on any unexpected window.
 - **Simulator, self-reporting** (`tests/oracle/wine/sim/run-report.sh <file.S68>`): start
-  `SIM68K.exe file.S68 /r` (plus `/e`, `/b` when the test asks), wait for `result.bin` to stop growing,
-  kill the process.
+  `SIM68K.exe file.S68 /r` (plus `/e`, `/b` when the test asks), wait for the end marker the program
+  writes (errata T3 4 and 6: `result.bin`), kill the process. Wine has no Fixedsys: under the oracle the
+  default output font has an 11 x 14 cell. Programs whose results depend on the text grid are compared
+  with the port running with the same cells; Windows' cells are verified by L5 (erratum T3 1).
 - **Simulator, execution log** (`tests/oracle/wine/sim/run-log.sh <file.S68> <type>`): write
   `sim68K.dat` with the raw type byte, start without `/r`, Ctrl+F4, open and confirm Auto Trace Options
   (to apply the 10 ms interval), F10, wait for the `Current Log Stopped.` box, Enter, kill; collect
   `<name>_RunLog.txt`.
 - Outputs for redistributable inputs are committed under `tests/conformance/*/golden/`. Outputs for
   inputs that may not be redistributed are kept in `build/golden-local/` (git-ignored); only their
-  SHA-256 (after masking) is committed, in the corpus manifest.
+  SHA-256 (after masking) is committed, in the corpus manifest. An output above 512 KiB is kept like a
+  non-redistributable one: its hash in the manifest, the file in `build/golden-local/` (erratum T1 2).
 - **Spot check of the RichEdit path**: files with bytes `>= $80`, lines longer than 255 characters, lone
   LF or lone CR, tabs or Ctrl-Z are flagged `richedit-sensitive` in the manifest. A sample of them must
   be confirmed once on real Windows (6.8) before the corresponding goldens count as ground truth; until
-  then a mismatch on a flagged file is reported as "unconfirmed", not as a failure.
+  then the text the editor model produces for such a file is "unconfirmed" where it differs from the
+  text captured under Wine; the assembler comparison uses the captured text and is exact (erratum T1 5).
+
+> **Corrected (erratum T3 5).** The simulator's goldens (T3): `tests/conformance/sim/golden/<suite>/<program>.result.bin`, `.OutLog.txt` and `.log<N>[o].RunLog.txt.gz`, with `golden/manifest.json` (hashes after masking the header and listing dates, and the status of every run) and `golden/REPORT.md` (runs without a result). The official `.S68` is not stored, only its SHA-256, and the port's assembler must produce the same bytes. The simulator driver is mounted into the container, not copied into the image, and `run-report.sh` waits for the end marker `END-OF-DUMP` in `result.bin` (errata T3 3, 4); `dumplib.X68` is `tests/conformance/sim/dumplib.X68` (erratum T3 6). The harness ran `ProgramFiles` and `LogService` as doubles while SH6 and U4 wrote them (erratum T3 2).
 
 #### 6.2.3 GDI capture (T2)
 
@@ -3656,11 +3987,18 @@ committed reference changed (a Windows update changed GDI), so drift is noticed.
 atlases do not come from Windows at all (3.5.1): `tools/make-font-atlases.mjs` produces them from the
 bundled open fonts, identically on every operating system, and CI checks that too.
 
+> **Corrected (erratum T2 17).** Besides display scaling and font smoothing, the fallback font depends on the machine: what the control bytes `$00-$08 $0B $0E-$1B` draw in the raster faces differs between Windows builds. These pixels are not compared on another Windows (`tests/oracle/gdi-capture/machine-dependent.ts`, `OTHER_FONT_BYTES`; their advances still are). On another Windows than the references' the differences must be exactly those recorded for it in `tests/oracle/gdi-capture/other-windows.json`, and `--write` refuses to replace the references from it (erratum T2 13).
+
 #### 6.2.4 The command-line port and the single-step suites
 
-`tools/build-asm-oracle.ps1` already builds `asy68k.exe` (toolchain §4); T1 moves the hand-written
-files it needs from `build/` to `tests/oracle/asm-cli/`. The single-step suites are downloaded at test
+`tools/build-asm-oracle.ps1` already builds `asy68k.exe` (toolchain §4); W0 moved the hand-written
+files it needs from `build/` to `tests/oracle/asm-cli/`; T1 owns them from then on (erratum W0 5).
+The single-step suites are downloaded at test
 time into `build/singlestep/` (never committed; SingleStepTests/680x0 has no licence, m68000 is MIT).
+
+> **Corrected (erratum T1 8).** L3 as built: `tests/oracle/asm-cli/run.mjs` builds `asy68k.exe` (`tools/build-asm-oracle.ps1`) and compares it with the port's assembler (not with the official program, as `compare_cli.py` of the hand-off did) on the tracked example sets, both option sets, the same text and Assembly tabs; it runs on Windows in CI when the file exists.
+
+> **Corrected (erratum T4 6).** One single-step suite: SingleStepTests/680x0 (`68000/v1`, commit `e0d5ece9`), whose JSON states are the 68000's architectural state; SingleStepTests/m68000 is a repackaging of MAME's core and is not used. The runner enables exceptions and traces one NOP at `$000400` between tests, because EASy68K's double-fault latch and the previous instruction's static result survive a reset (erratum T4 9). "The frozen baseline on every push" is the job `windows-oracles` (`npm run oracle:twins`), which checks `tests/conformance/cpu/baseline.json`; `run-singlestep.mjs` checks it weekly on Linux in `oracle.yml` (errata T4 7, 10).
 
 ### 6.3 Corpus
 
@@ -3677,6 +4015,8 @@ input, flags (`richedit-sensitive`, `needs-include`, `interactive`), and the exp
 The third-party project checked out under `reference/examples/github/easy68k-qt` is not used in any
 way: not its sources, tools, documents or expected outputs, and not its example files either. No
 package reads that folder.
+
+> **Corrected (erratum T1 6).** The hand-off's figures (420 and 419 error-free programs, 57 differing only in undefined-symbol lines) include the excluded third-party folder. For the permitted sets (`npm run test:conformance` with the `site` set fetched): 185 / 184 runs with an official result, 129 / 128 byte-identical (every error-free program, 128 of 128 and 127 of 127), 56 equal after masking undefined symbols, 0 differing. Without an official result: `pacman-mc68000/GAME/GFX.X68` (2.4 MB) and one 1.2 MB program of the `site` set with the expansion options (`golden/REPORT.md`).
 
 ### 6.4 Conformance checklists
 
@@ -3699,6 +4039,8 @@ scenario (keys to type at each `WaitInput`, panel actions at instruction counts,
 returns the message lines, the text shadow array, a hash of the surface, the files written, the logs
 and the final registers.
 
+> **Corrected (erratum T3 7).** "Panel actions at instruction counts": `ScheduledAction` has `atInstruction` (checked after every frame of virtual time, so it comes at the first frame boundary at or after the count), `atMs` and `whenIdle`; exact boundaries need a scripted Trace Into. Checklist items that need a person at the original or a memory map have no golden from the Wine oracle and are tested in the harness against what the specs dictate (`tests/conformance/sim/checklist.test.ts`; erratum T3 9). 6.9 item 2's "100,000 instructions" of execution logs is not reached yet: the suite has 27 execution-log runs with 47,664 instructions (the official Auto Trace runs at 8-12 instructions per second in a one-CPU container; erratum T3 8).
+
 ### 6.5 Pixel tests
 
 #### 6.5.1 Primitives (SH1, SH2)
@@ -3719,6 +4061,8 @@ Acceptance: **every pixel equal** to the GDI capture.
 - The measured figures are written to `docs/porting/gdi-deviations.md` and become the regression
   baseline: a later change may not make them worse.
 
+> **Corrected (erratum SH2 5).** The 3,000 large boxes are drawn on a 200 x 150 canvas, each placed so that a part of it shows (whole ellipses up to 1,200 x 1,200 would make the references several megabytes; the three packs are 706 kB), and "0.5 % of its outline" is 0.5 % of the pixels of the whole outline. The whole shapes were compared separately with GDI's FlattenPath (equal); the committed suite is 3,000 of 3,000 equal. The packs (`ellipses`, `ellipses-large`, `ellipses-wide`) live in T2's `tests/conformance/gdi/golden/` (erratum SH2 6).
+
 #### 6.5.3 Text and reference formats
 
 - Text grid: cell positions, opaque cell backgrounds in the fill colour, pen movement, clipping,
@@ -3727,13 +4071,17 @@ Acceptance: **every pixel equal** to the GDI capture.
 - `.pix` reference file: bytes `E68P`, version 1, width (u16 LE), height (u16 LE), then runs of
   `count (u32 LE)`, `colour (u32 LE, $00BBGGRR)` until `width * height` pixels are covered.
 - Font atlas `app/public/fonts/{bitmap,scalable}/<face>-<height>[-<style>].bin` (`<style>` is `b`, `i`,
-  `u` or `s`): bytes `E68F`, version 2, cell width (u8), cell height (u8), glyph width (u8, at least
+  `u` or `s`): bytes `E68F`, version (u8) = 2, cell width (u8), cell height (u8), glyph width (u8, at least
   the cell width; larger when a style overhangs), flags (u8; bit 0 set = 8-bit coverage, clear = 1 bit
   per pixel), 256 advance widths (u8 each), then 256 glyphs of `glyphWidth x cellHeight` in byte order
-  `$00`..`$FF`, row-major, rows of 1-bit glyphs padded to whole bytes.
+  `$00`..`$FF`, row-major, rows of 1-bit glyphs padded to whole bytes, leftmost pixel in the highest bit (erratum SH3 6).
 - `app/public/fonts/metrics.json`: `{ "faces": [...], "fonts": { "<requested name>": { "<style>":
   [[colWidth, rowHeight, faceIndex], ... 256 entries, index = point size ] } } }`, with the capture
   machine's Windows version and settings in a `"capturedOn"` field.
+
+> **Corrected (erratum T2 1).** The `.pix` references are committed packed, one gzip file per suite, `tests/conformance/gdi/golden/<suite>.pixpack.gz` ("E68R", a JSON header with each case's id and GDI's pen position, then the `.pix` files unchanged; format in `tests/conformance/gdi/pix.ts`); the pen position, which the `.pix` format cannot hold, travels in the header. 26,000 single files would make every checkout slow; the packs are 0.85 MB.
+
+> **Corrected (erratum T2 4).** `metrics.json`'s style keys are `plain`, `bold`, `italic`, `underline`, `strikeOut` (the names of `FontSpec`); it also has `about`, `faceKinds` (`raster` or `outline`, parallel to `faces`) and `raster` (the style rules and the cells, erratum T2 2). `scalable/index.json` lists the outline atlases. Atlas files are named `<face>-<height>[-<style>].bin` with spaces as `_`, and `<face>-<height>x<width>[-<style>].bin` when two sizes share a height (erratum T2 5); providers take the names from these two files, not build them.
 
 #### 6.5.4 Whole programs (X3)
 
@@ -3742,6 +4090,10 @@ instruction count with scripted input; the surface hash is committed. The same p
 Chromium and WebKit through Playwright; the surface's pixel array, read from the session, must have the
 same hash, and a screenshot of the canvas at 100% zoom must show exactly those pixels. This proves
 that the pixels do not depend on the browser.
+
+> **Corrected (erratum X3 1).** The committed surface hashes (`tests/conformance/examples/golden/surfaces.json`) come from the port itself (headless under Node, real glyph atlases, virtual time; its `provenance` member says so). The official program under Wine cannot give whole-program pictures that mean anything for Windows (no Fixedsys, its own GDI), so this suite proves stability and independence of browser and system, not agreement with the original; agreement is covered by T2's GDI references and T3's flat-area checks.
+
+> **Corrected (erratum X3 2).** "Twenty conformance programs with graphics" are the thirteen of `trap15-b` and seven of `trap15-a` (`a01, a06, a07, a17, a20, a40, a46`; those that end by clearing the screen are left out), plus four programs of X3's own (`programs/x01` to `x04`). "A fixed instruction count": a run stops at the first 16 ms frame boundary at or after the limit, at the program's halt, or at the time limit, and the count it stopped at is in the golden (erratum X3 3). The browser check compares the screenshot with `screenHash`, the surface with the prompt overlay painted over it, as the Output panel shows it (erratum X3 4).
 
 ### 6.6 End-to-end tests
 
@@ -3786,6 +4138,10 @@ Two rules for these tests:
   focus) is not on that path, and Playwright's WebKit is not Safari. These tests therefore prove what
   the page does with a key, never what a real browser does with it; the second half is manual (6.8).
 
+> **Corrected (erratum X1 2).** The production build has no page object (`window.__easy68k` exists in development builds only), so the end-to-end suites act through the interface and read what a user sees: bytes in storage through the Files panel's Export... and Import..., the editor's text from the CodeMirror view of the document element (`viewIn()` in `tests/e2e/fixtures/test.ts`). The build is served on a free port with the application's own headers (CSP included); service workers are blocked except in the offline tests (erratum X1 3, 4).
+
+> **Corrected (erratum X1 5a).** The axe scan excludes the Help panel's frame (`.e68-help__frame`): axe cannot run inside a frame sandboxed without scripts, and its content is the original help, not the port's interface. Printing in the tests never opens a print dialog: `tests/e2e/fixtures/printing.ts` replaces `print()` in child frames and reports `afterprint` (erratum X1 5c); what a real print dialog does is the manual list of 6.8.
+
 ### 6.7 The desktop app
 
 Two kinds of test, because one tool cannot do both.
@@ -3816,6 +4172,8 @@ fuses of the shipped build are never relaxed for a test.
 | 6 | Open `tutorial1.X68` from a temporary folder; assemble; `tutorial1.L68` and `tutorial1.S68` appear in that folder and equal the goldens | DV5 |
 | 7 | Execute, Run; the message area equals, and the hash of the output surface equals, what the headless harness (6.4) computes for the same program in the same job; a screenshot is stored as an artifact | DV5 |
 | 8 | Run `fileio.X68`: the file it writes is on disk with the expected bytes as soon as the program has closed it | DV5 |
+
+> **Corrected (erratum DV3 3).** How the packaged checks work (DV3): window titles are read from macOS with System Events (the page cannot read its native title, and the packaged app has no test hooks); check 3 runs `open -n -a <app> <file> --args --remote-debugging-port=<p> --user-data-dir=<tmp>` (erratum DV3 10); check 4 answers DV2's sheet `Leave EASy68K?` with **Stay** and quits with `app.quit()` through the bridge, reading "Modified" from the editor's status row (Cmd+Q and the native menu stay on the manual list; erratum DV3 11); check 5 measures from F9 to `Halted`, noted by the page itself with a MutationObserver, with the window minimised through System Events once the status bar says `Running`, best of up to three runs, and the program's own task 8 delay (300-350 hundredths in D7; erratum DV3 12). Results go to `build/desktop-packaged/` (erratum DV3 14). First runs on GitHub's Mac runners passed checks 1 to 5 on Apple silicon and Intel (erratum DV3 21).
 
 ### 6.8 What only a person can check
 
@@ -3896,15 +4254,21 @@ Version 1.0.0 may be tagged when all of the following hold on `main`:
     behaviour.
 12. **Manual**: `docs/MANUAL-TEST-MAC.md` completed for the release candidate.
 
+> **Corrected (erratum X1 8).** Item 8 as tested: `tests/e2e/app/a11y.spec.ts` keeps a short list `ALLOWED` (rule, a pattern on the node, owner, reason). Its one entry is `color-contrast` on text drawn in a syntax colour (the light `Auto` preset's olive and red on white are the original's; 2.8, erratum E3 10); every other serious or critical finding fails.
+
+> **Corrected (erratum P1 1).** Item 9 as measured by `tests/perf/check-perf.mjs`: "at 60 Hz" and "the 120 Hz frame source" are simulated in the browser by an init script that replaces `requestAnimationFrame` with a timer on a grid of 1000/60 or 1000/120 ms that skips the slots the page was too busy for; the application's scheduler runs on it unchanged (in Playwright's WebKit for Windows timers come about every 15 ms, so its figures are for information only, erratum P1 10). The wall-clock thresholds are judged in Chromium on Linux (`--judge strict` judges them everywhere); elsewhere the same figures are printed with "would pass" or "would MISS" (erratum P1 2). TaskDuration is judged at 60 Hz and printed at 120 Hz (erratum P1 3). "The largest corpus file" is judged both as `GFX.X68` alone and as `MAIN.X68` with its includes, as the `assemble()` call with the module compiled (erratum P1 4).
+
 ---
 
 ## 7. Build, continuous integration, release
 
 ### 7.1 Toolchain and versions
 
-Node 24 and npm workspaces. Emscripten 7.0.0 (pinned; toolchain §2). TypeScript, Vite, React,
-CodeMirror 6, Vitest, Playwright, Electron and electron-builder at the current stable release when W0
-runs, pinned exactly by `package-lock.json` and updated only by deliberate pull requests. TypeScript is
+Node 24 and npm workspaces. Emscripten 7.0.0 (pinned; toolchain §2). Vite, React, CodeMirror 6,
+Vitest, Playwright, Electron and electron-builder at the current stable release when W0 runs;
+TypeScript at the newest release that the current `typescript-eslint` supports (6.0.x in wave 0; it
+moves to 7 by a deliberate pull request once `typescript-eslint` accepts it; erratum W0 1). All are
+pinned exactly by `package-lock.json` and updated only by deliberate pull requests. TypeScript is
 strict (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `isolatedModules`).
 
 Workspaces: `app`, `desktop`, `tests`. The engines are not npm workspaces; they are built by scripts.
@@ -3922,7 +4286,7 @@ runtime dependencies are the closed list of 3.1.
 | `setup:emsdk` | installs the pinned Emscripten into `.toolchain/emsdk` (`tools/setup-emsdk.ps1` / `.sh`) |
 | `build:engines` | runs each engine's own build script; output in `engine/dist/` |
 | `fetch:engines` | downloads `engine-dist.zip` of the latest release into `engine/dist/` (for contributors without Emscripten) |
-| `dev` | Vite dev server for `app` (requires `engine/dist/`); the page is served without the Content Security Policy, which only the production build adds (7.6) |
+| `dev` | Vite dev server for `app` (needs `engine/dist/` to assemble or run; warns when it is missing; erratum W0 3); the page is served without the Content Security Policy, which only the production build adds (7.6) |
 | `build` | production build of `app` into `app/dist/` |
 | `preview` | serves `app/dist/` |
 | `typecheck`, `lint`, `format` | `tsc --noEmit` for all workspaces; ESLint; Prettier |
@@ -3936,7 +4300,7 @@ runtime dependencies are the closed list of 3.1.
 | `import:help`, `import:examples` | copy the original help and the official examples from `reference/` into `app/public/` (run once by H1; the results are committed) |
 | `desktop:dev` | Electron against the Vite dev server |
 | `desktop:pack` | unpacked `.app` for the host architecture |
-| `desktop:dist` | signed `.dmg` and `.zip` for one architecture (`--arch arm64` or `x64`) |
+| `desktop:dist` | signed `.dmg` and `.zip` for one architecture (`npm run desktop:dist -- --arm64` or `-- --x64`, electron-builder's switches; erratum DV3 1) |
 | `desktop:test` | the desktop tests of 6.7: `-- dev` against the development build, `-- packaged` against a built `.app` |
 | `fonts:atlases` | regenerate the outline-font atlases from `tools/fonts-src/` (3.5.1) |
 
@@ -3958,10 +4322,10 @@ Built `.wasm` and `.mjs` files are **not committed**. `engine/dist/` stays git-i
 
 | Workflow | Trigger | Jobs |
 |---|---|---|
-| `ci.yml` | push, pull request | `engines` (reusable); `check` on ubuntu: typecheck, lint, format check; `unit` on ubuntu, windows, macos: `npm test`; `conformance` on ubuntu and macos: `npm run test:conformance` against committed goldens; `e2e` on ubuntu (chromium, webkit), macos (chromium, webkit) and windows (chromium, webkit); `windows-oracles` on windows: GDI capture regenerate-and-compare, native twins, command-line assembler oracle; `desktop-dev` on macos-15: the development-build tests of 6.7 (only when `desktop/**` or `app/**` changed). Every job is written by W0 with a guard that reports it as skipped while the script or folder it needs does not exist yet (8) |
+| `ci.yml` | push, pull request | `engines` (reusable); `check` on ubuntu: typecheck, lint, format check; `unit` on ubuntu, windows, macos: `npm test`; `conformance` on ubuntu and macos: `npm run test:conformance` against committed goldens; `e2e` on ubuntu (chromium, webkit), macos (chromium, webkit) and windows (chromium, webkit); `e2e-stability` on ubuntu (chromium, webkit): the suites 20 times in a row (6.9 item 10), on a manual run and on a `v*` tag (erratum W0 6); `windows-oracles` on windows: GDI capture regenerate-and-compare, native twins, command-line assembler oracle; `desktop-dev` on macos-15: the development-build tests of 6.7 (only when `desktop/**` or `app/**` changed). Every job is written by W0 with a guard that reports it as skipped while the script or folder it needs does not exist yet (8) |
 | `pages.yml` | push to `main` | `engines`; build `app` with the repository's base path; upload the Pages artifact; deploy with `actions/deploy-pages` |
 | `oracle.yml` | weekly, manual | build the Wine container (layer cache); regenerate goldens for the tracked sets and open a pull request if any changed; fetch the `site` set, run it, compare hashes with the manifest; download the single-step suites and re-check the frozen baseline |
-| `release.yml` | tag `v*` | `engines`; `web`: build and zip `app/dist`; `mac-arm64` on macos-15 and `mac-x64` on the Intel runner (`macos-15-intel` while GitHub offers it; otherwise built on arm64 and tested under Rosetta 2): `desktop:dist`, the packaged-app checks of 6.7; `publish`: draft GitHub Release with the two `.dmg`, two `.zip`, `engine-dist.zip`, the web zip and `SHA256SUMS.txt` |
+| `release.yml` | tag `v*` | `engines`; `web`: build and zip `app/dist`; `mac-arm64` on macos-15 and `mac-x64` on the Intel runner (`macos-15-intel` while GitHub offers it; otherwise built on arm64 and tested under Rosetta 2): `desktop:dist`, the packaged-app checks of 6.7; `publish`: draft GitHub Release with the two `.dmg`, two `.zip`, `engine-dist.zip`, the web zip and `SHA256SUMS.txt` (names: `EASy68K-<v>-arm64.dmg`, `EASy68K-<v>-x64.dmg`, `EASy68K-<v>-arm64-mac.zip`, `EASy68K-<v>-x64-mac.zip`, `engine-dist.zip`, `easy68k-cross-platform-web-<v>.zip`; a `checksums` job writes `SHA256SUMS.txt` and the notes on every run; errata DV3 2 and 20) |
 
 Caches: npm (`actions/setup-node`), Emscripten (by version), engine artifact (by source hash),
 Playwright browsers (by Playwright version), Electron and electron-builder downloads, Docker layers
@@ -3969,6 +4333,12 @@ Playwright browsers (by Playwright version), Electron and electron-builder downl
 
 All actions are pinned by commit hash. Workflows have `permissions: contents: read` by default; only
 `pages.yml` (pages, id-token) and the `publish` job (contents: write) ask for more.
+
+> **Corrected (erratum DV1 1).** The service worker and the manifest tags are written by a step after the build: `pwaPlugin()` in `app/vite.config.ts` (since gate I1) runs `app/src/features/pwa/build/pwa-build.mjs` at the end of every production build (tags in the built `index.html`, the precache list with size and SHA-256 of every file, and `sw.js`); `pages.yml` runs `finish-build.mjs app/dist` again as an idempotent safety net. The development server has no manifest and no worker.
+
+> **Corrected (erratum DV1 7).** `pages.yml`: the base path comes from `actions/configure-pages` (`base_path` plus `/`, as `EASY68K_BASE`), so forks work unchanged; the build job needs `pages: read` besides `contents: read`; it refuses to deploy unless `engines.yml` reports both engines, so the previous site stays online rather than one that cannot assemble. In Git Bash on Windows a hand-run of the step needs `MSYS_NO_PATHCONV=1`.
+
+> **Corrected (erratum T1 14).** `oracle.yml` (T1): the Wine image is cached as one file (`docker save` / `docker load`) with `actions/cache`, keyed by the hash of the Dockerfile and the scripts it copies (no buildx actions). The job that runs Docker, Wine and the official programs has a read-only token; a second job, `propose`, with `contents: write` and `pull-requests: write`, receives the changed goldens as an artifact, accepts only paths under `tests/corpus/manifest.json` and `tests/conformance/`, and opens the pull request with `gh`; so `oracle.yml` is a third workflow that asks for more than read access, in one job. A pull request opened with the workflow's token does not start `ci.yml` by itself (its text says to close and reopen it).
 
 ### 7.5 Versioning and release
 
@@ -3981,6 +4351,14 @@ All actions are pinned by commit hash. Workflows have `permissions: contents: re
   document is modified.
 - The update check of the About box reads the latest release tag from the GitHub API and compares it
   with the running version; it sends nothing but the request itself.
+
+> **Corrected (erratum DV1 2).** "Versioned by the build hash": the version is the first 20 hex digits of a SHA-256 over the worker's bundled code and the precache list (paths, sizes, hashes); the cache is `easy68k-v-<version>`.
+
+> **Corrected (erratum DV1 3).** Two versions never mix: installation fetches each file with `cache: 'no-cache'` and keeps it only if size and SHA-256 match the list (one mismatch fails the whole installation; unchanged files are copied from the previous cache). The first installation does not claim the page that registered it; a new version waits until the student presses `Reload` on `A new version is available.` (shown with `duration: 0`), and only that page reloads. The worker answers each page from the cache of the version it was loaded with and deletes an old cache once no open page uses it. Known remaining mix: a help page opened in a frame by an old page after the new version took over is answered by the new version.
+
+> **Corrected (erratum DV1 4).** The worker leaves to the network everything that is not a GET for a listed file under its scope (`sw.js`, source maps, `https://api.github.com`, other origins). A navigation to the scope with any query (`?open=`, `?example=`) is answered with `index.html`; paths are compared with percent-escapes decoded; a range request gets the whole file.
+
+> **Corrected (erratum DV3 9).** One version number: release.yml passes `-c.extraMetadata.version=<root version>` (the frozen `desktop/package.json` says `0.0.0`), so the app, its file names and the window title carry the root `package.json`'s version; a tag push fails unless the tag is `v<root version>`. The web zip of a release is built with the relative base `./`, so it works from any folder of any server (erratum DV3 13). Every run of release.yml yields `SHA256SUMS.txt` and checks the downloads (erratum DV3 20).
 
 ### 7.6 Security posture
 
@@ -4058,6 +4436,22 @@ Desktop app (owner DV2):
   users are in section 11.
 - No automatic updater.
 
+> **Corrected (erratum DV2 6).** Start-up information is asynchronous: `createDesktopPlatform()` asks the main process once with `ipcRenderer.invoke` for the system, the start-up arguments and the user-data folder and returns a Promise (`main.tsx` accepts `Platform | Promise<Platform>`). No other synchronous call is used than those this section allows.
+
+> **Corrected (erratum DV2 7).** The fixed set of `window.easy68kDesktop` is `DESKTOP_BRIDGE_KEYS` in `app/src/platform/desktop.ts`: `version`, `startup`, `fs`, `fsSync`, `onFsChange`, `setMenu`, `onMenuCommand`, `onOpenFiles`, `setTitle`, `openExternal`, `showHelp`, `newWindow`, `pasteIntoFocus`, `quit`, `setFullScreen`, `onFullScreenChange`, `print`, `showOpenDialog`, `showSaveDialog`, `chooseFolder`, `grantDroppedFile`, `devices`. Every handler checks that the message comes from the main frame of a window the main process created showing the app's page, and refuses anything else (`refused: ...`).
+
+> **Corrected (erratum DV2 10).** On Windows and Linux each window has its own native menu with the bar hidden (the page shows its own), without the macOS-only roles, and with `registerAccelerator: false`; no key reaches the menu there. On macOS only the chords of the role items the window's menu has reach the menu (`roleChordsOf`), judged by the character the key types (so Cmd+C works on Dvorak and AZERTY) and by position only when it types no ASCII letter or digit; in Editor mode Undo and Redo are command items and stay with the page. With no window open the bar shows a small menu of its own (`windowlessMenuTemplate`: application menu, `File > New Window`, Window, Help).
+
+> **Corrected (erratum DV2 11).** The desktop's help window is a separate window per application window that loads `app://easy68k/help/<page>` with JavaScript off and no preload script; links inside the help stay there, allow-listed web addresses open in the system browser after a confirmation, everything else is cancelled; `target="_blank"` links to help files (the Quick Reference PDF) show in the help window itself. `showHelp(page)` returns false for anything but a relative `.htm`/`.html` path inside the help folder.
+
+> **Corrected (erratum DV2 13a).** `app://` also serves `.pdf` (`application/pdf`) and `.md` (`text/plain`); a test fails when `app/public` or the build holds an extension the table lacks. A single `Range: bytes=...` gets 206 with `Content-Range` (416 beyond the end); several ranges get the whole file with 200; every response says `Accept-Ranges: bytes`.
+
+> **Corrected (erratum DV2 14).** The packaged app loads the built web app from `<resources>/app/dist` or `<app path>/app/dist`; from the repository it is `app/dist`. `EASY68K_APP_DIST`, `EASY68K_DEV_SERVER_URL` and the test switch `EASY68K_DESKTOP_TEST_WINDOWS` are honoured only when the app is not packaged (`developmentOverrides`), so whoever controls a packaged app's environment cannot make it serve another folder or install the test hooks.
+
+> **Corrected (erratum W3 18).** The page describes the whole native menu bar: `buildNativeMenu()` (`commands/native-menu.ts`) builds the application menu (About, Settings... in Editor mode, New Window, Services, Hide, Quit = the mode's Exit command), the mode's menus and the standard Edit and Window menus, and the bootstrap hands it to `Platform.setNativeMenu` whenever it changes.
+
+> **Corrected (erratum DV3 5).** Packaging as built (DV3): besides the four fuses of this section, `EnableNodeOptionsEnvironmentVariable` is off (with it on, `NODE_OPTIONS=--require ...` would run any script in the main process) and `GrantFileProtocolExtraPrivileges` is off (the app loads only `app://`; erratum DV3 16); every other fuse keeps Electron's default (`SHIPPED_FUSES`). The web build lies next to the archive, in `Contents/Resources/app/dist`, sealed by the code signature rather than the ASAR integrity check (erratum DV3 6). `@serialport/bindings-cpp` ships one N-API binary for both Mac architectures; nothing is compiled, and `after-pack.mjs` thins every `.node` file to the architecture being built with `lipo -thin` (erratum DV3 7). `after-pack.mjs` does native modules, fuses and the ad-hoc signature itself, in that order (`.node` and `.dylib` files, helper executables, frameworks, helper apps, the app; `codesign --force --sign - --timestamp=none`, then `--verify --deep --strict`); with a Developer ID in the secrets electron-builder signs and notarises instead, a path that has never run (erratum DV3 8). The bundle identifier is `org.easy68k-port.easy68k` and must never change after the first release; `productName` (`EASy68K`) names the user-data folder and must not change either (errata DV3 4, 19). The minimum macOS is Electron's own `LSMinimumSystemVersion`, measured as 13.0 (Ventura) on both architectures; release.yml reads it from the built bundle into the release notes (erratum DV3 17).
+
 ---
 
 ## 8. Repository layout and ownership
@@ -4069,6 +4463,7 @@ skeleton or a first version) and B owns it from then on. `**` means everything b
 /
   package.json, package-lock.json, tsconfig.base.json, eslint.config.js,
   .prettierrc, .editorconfig, .gitignore                                   W0 > gates (see rules)
+  .gitattributes, .prettierignore                                          W0 > gates (erratum W0 4)
   LICENSE                                                                  (exists)
   README.md, CHANGELOG.md                                                  DOC1
   .github/workflows/ci.yml, engines.yml                                    W0 > gates
@@ -4095,6 +4490,8 @@ skeleton or a first version) and B owns it from then on. `**` means everything b
     emsdk-env.ps1, build-asm-oracle*.ps1, compare-asm-oracle.ps1           (exist)
     setup-emsdk.ps1, setup-emsdk.sh, build-engines.mjs, fetch-engines.mjs,
     vite-csp-plugin.mjs                                                    W0
+    build-info.mjs                                                         W0 (erratum W0 4)
+    typecheck.mjs, desktop-dev.mjs                                         W0 > gates (erratum W0 4)
     import-help.mjs, import-examples.mjs                                   H1
     fetch-site-examples.mjs                                                T1
     make-font-atlases.mjs, fonts-src/**                                    T2
@@ -4107,11 +4504,13 @@ skeleton or a first version) and B owns it from then on. `**` means everything b
       icons/**, manifest.webmanifest                                       DV1
     src/
       main.tsx, App.tsx, bootstrap.ts                                      W3
+      App.test.tsx                                                         W0 > W3 (erratum W0 4)
       build-info.ts (generated)                                            W0
       sw.ts                                                                DV1
       contracts/**                                                         W1
-      engine/index.ts, asm.ts, sim.ts, loader.ts, testing.ts, *.test.ts    W4
-      engine/fake-asm.ts                                                   W1
+      engine/index.ts, asm.ts, sim.ts, loader.ts, testing.ts,
+         *.test.ts (except fake-asm.test.ts)                               W4 (erratum W1 7)
+      engine/fake-asm.ts, fake-asm.test.ts                                 W1
       fs/vfs.ts, write-behind.ts, memory-backend.ts, backend-contract.ts,
          sync/memory.ts                                                    W1
       fs/browser-backend.ts, zip.ts                                        FS1
@@ -4181,6 +4580,7 @@ skeleton or a first version) and B owns it from then on. `**` means everything b
     electron-builder.yml, build/**, scripts/**                             DV3
   tests/
     package.json, vitest.workspace.ts                                      W0 > gates
+    tsconfig.json, lint/**                                                 W0 > gates (erratum W0 4)
     playwright.config.ts                                                   W0 > X1
     corpus/**                                                              T1
     oracle/asm-cli/**                                                      W0 > T1
@@ -4343,9 +4743,13 @@ need a particular assembler result, not a substitute for the engine in acceptanc
   assemblies succeed in Chromium and in WebKit**, with the memory use recorded at the start and the
   end; `createNetClient` receives the address of its string; a program that calls every TRAP #15 task
   reaches every `SimHost` method the specs say it should (recording host). Assembler: `smoke.X68`
-  assembles to the native oracle's `.S68` byte for byte and to its `.L68` after masking line 3; the
+  assembles to the native oracle's `.S68` byte for byte and to its `.L68` after masking lines 2 and 3
+  (the oracle is version 5.15.4), with the Assembly tab type the oracle uses (erratum W4 1); the
   three statements of 3.2 have tests; a `fatal` result is returned, not thrown; the module loads under
-  Vite, Node and the `app://` protocol.
+  Vite and Node, and from a server that behaves as the protocol handler of 7.6 is specified to (the
+  run under `app://` itself is DV2's; erratum W4 3).
+
+> **Corrected (erratum W4 2).** `app/src/engine/browser.test.ts` is a Vitest file that builds the binding with Vite, serves it and drives headless Chromium and WebKit; it runs only when `EASY68K_BROWSERS` is set (`npm run check:engine-browsers`, CI job `browser-checks`). "Loads under the `app://` protocol" is shown as far as the protocol is specified: the production build at a sub-path, served with the handler's content types and the policy as a response header (erratum W4 3; the run under `app://` itself is DV2's). "Every SimHost method the specs say it should" is `TRAP15_TOUR`: one entry per call (94: every task of the inventories, every sub-task of task 32, the forms of tasks 11, 24 and 33) with the host methods trap15-a §4-§7 and trap15-b say it reaches (erratum W4 6).
 
 ### 9.2 Wave 1 - fifteen packages in parallel (all depend on wave 0)
 
@@ -4402,6 +4806,8 @@ need a particular assembler result, not a substitute for the engine in acceptanc
   §4.6; `resetToStartup()` gives the state of 3.3.2; when T2's references are available, the
   thresholds of 6.5.1 for width-1 lines, rectangles, flood fill, raster operations and pixels; a
   1920x1200 flood fill takes under 30 ms.
+
+> **Corrected (erratum SH1 12).** "A 1920x1200 flood fill takes under 30 ms" is measured, best of several runs, on a whole surface and on ragged pictures, under Node and in both browsers (`check-surface.mjs`). The comparison with T2's GDI references (6.5.1) runs on every system; a case waits for SH2 only while the file that draws it is still SH1's stub (errata SH1 13, T2 12).
 
 **SH3 - Text screen, fonts, output device** - tier strongest
 - Read: 3.5, 2.5; trap15-a §2, §3, tasks 0-25 of §4, §11, §13 ("Text output", "Cursor"); trap15-b §5.5,
@@ -4546,6 +4952,14 @@ need a particular assembler result, not a substitute for the engine in acceptanc
   frame with their images; About texts are exact; a test asserts that nothing from
   `reference/examples/site` is under `app/public/`.
 
+> **Corrected (erratum H1 10).** Besides the letter case, the import adds `target="_blank"` to the four links that leave the help (three web addresses and the Quick Reference PDF), because neither can be shown in the sandboxed frame (`manifest.json`: `blankTargetsAdded: 4`).
+
+> **Corrected (erratum H1 3).** Encoding: pages, `contents.hhc` and `index.hhk` are decoded as `windows-1252` and written as UTF-8 without a byte order mark; every page declares `charset=utf-8` (the three that declared nothing get a `<meta>` line); line ends stay CR LF. The import adds `manifest.json` (the list of imported files the tests compare against), `README.txt`, `Reference/ATTRIBUTION.txt` (O-5) and `Port/differences.htm`, rendered from `docs/DIFFERENCES.md` by the import's own small Markdown renderer: run `npm run import:help` after `DIFFERENCES.md` changes and commit the result (errata H1 4, 5).
+
+> **Corrected (erratum H1 1).** The import copies every file of the help project except its build files (`help.chm`, `help.chw`, `help.hhp`, `ez68k.*`, the compiler log, `Thumbs.db`) and the unused `EASy68K Icons` folder, because `Quick Reference.htm` links to `EASy68KQuickRef.pdf`. A reference to a file left out stops the import with an error.
+
+> **Corrected (erratum H1 2).** The 23 split as 20 in `contents.hhc` and 3 in `index.hhk`. The four missing targets are `ac-archive.css`, `Reference/68ks2d.htm`, a bare `top` and `..\Helpv1_4\main.htm`, all listed in `app/public/help/manifest.json`; seven index entries keep a fragment whose anchor does not exist in an existing page.
+
 ### 9.3 Integration gate I1 - tier strongest - depends on: wave 1
 
 - Outputs: `tests/integration/wave1/**`, `docs/integration/wave1.md`; the shared-configuration changes
@@ -4686,6 +5100,10 @@ need a particular assembler result, not a substitute for the engine in acceptanc
   files written by the assembler load and save back byte for byte where the original would; binary
   open and save with 1, 2 and 4 files; Copy and Fill; editing anywhere in 16 MB stays responsive.
 
+> **Corrected (erratum B1 16).** "Editing anywhere in 16 MB stays responsive" is measured as the work the product does per key: key-down to the changed page median under 16 ms and p95 under 50 ms, the slowest address no more than twice the fastest plus 4 ms, and key-down to painted frame median under 50 ms (or at most 20 ms above a baseline measured under the same load). The painted frame's p95 is printed, not judged, because a loaded runner paints late whatever the page does.
+
+> **Corrected (erratum B1 6).** "Load and save back byte for byte where the original would" means: after loading such a file every value in memory and every field is the original's, and Save S-Record writes byte for byte the file the original writes for the same From, To and Start Address - not the input file, because the original writes its own header, 32-byte records and an S7 record (easybin.md 11.3). Proven against the original's functions compiled natively (easybin.md 0.4).
+
 **X1 - End-to-end harness, editor and application suites** - tier mid - depends on: E1, E2, FS1
 - Read: 6.6; editor-ui §20.
 - Outputs: `tests/playwright.config.ts`, `tests/e2e/fixtures/**`, `tests/e2e/editor/**`,
@@ -4694,6 +5112,8 @@ need a particular assembler result, not a substitute for the engine in acceptanc
   are written against the spec and marked expected-fail until the feature lands); the two-window tests
   of 6.6; green in Chromium and WebKit on the three operating systems; 20 repetitions in a row
   without a failure on `ubuntu-latest` in each browser.
+
+> **Corrected (erratum X1 1).** "Every editor row of 1.3 whose kind is `web-e2e`": the kinds are set in X2's `tests/parity/matrix.json`. Until it existed X1 chose the rows: every row of 1.3.1-1.3.3 that a browser can show has a test in `tests/e2e/editor/` (the file per area named in its header); the desktop-only chords, the Easter egg and dead code, the positional parsing of `settings.dat` and the highlighting vectors are left to other kinds. X2 can take the test titles as the ids for `verifiedBy: web-e2e`.
 
 ### 9.5 Integration gate I2 - tier strongest - depends on: wave 2
 
@@ -4851,6 +5271,10 @@ Which package registers which command handler (ids of 1.3 and 1.5; exactly one o
 | O-15 | Keep written data invisible until a file is closed, as the original's C library does (3.8.4), although that means a forgotten task 56 loses nothing in the end but shows an empty file until the simulator restarts? | Yes: it is what a student's program observes on EASy68K, and the help warns about it. `STDIO_BUFFER = 512` until confirmed. |
 | O-16 | Ask the `Caution` question on Execute only while a program is running or waiting (note 20), or always when one is loaded? | Only while running or waiting: the original never asks on Execute, and the common loop of edit, assemble and execute should not need an extra click. |
 | O-17 | The keyboard-release chord `Ctrl+Alt+O` is the one key the port takes from programs. | Keep; a program is very unlikely to need it, and a keyboard-only user needs a way out that task 24 cannot switch off. |
+
+> **Corrected (erratum DV1 8).** O-7 as done by DV1: `app/public/icons/` is original work of this project (GPL-2.0-or-later): a chip in a dual in-line package with "68K" in seven-segment figures on the light theme's accent colour, drawn from rectangles and polygons only (`features/pwa/icons/icon-art.mjs`); nothing is taken from the original's icon.
+
+> **Corrected (erratum P1 7).** O-1: `tests/perf/calibrate.X68` exists and needs nothing else on real Windows (steps in `docs/porting/speed.md` section 5; it also writes `result.bin` for the Wine oracle's report recipe, erratum P1 11). P1 also ran it in the official program under Wine; that figure is not the measurement O-1 asks for, and `DEFAULT_IPS` stays 1,000,000.
 
 ### 10.3 Notes for the spec and engine owners
 

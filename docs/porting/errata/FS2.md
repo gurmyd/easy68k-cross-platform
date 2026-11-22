@@ -1,5 +1,7 @@
 # Errata of work package FS2 (File System Access backend)
 
+> **Merge status (DOC1, 2026-11-21; completed in its repair round 1).** Every entry of this file has been read. Merged into the documents, each place marked "erratum FS2 <n>" or naming this file: 1, 3, 4, 5, 7, 10, 12 (ARCHITECTURE.md 3.8.1); 2, 6 (ARCHITECTURE.md 3.8.2); 8, 9, 11 (ARCHITECTURE.md 3.8.5); 13 (ARCHITECTURE.md 5.7 (with DV1 6)); C2 (ARCHITECTURE.md 3.8.1 (first round)). Nothing to merge, because no statement of a document is wrong or missing: C1 (contract entry, applied by W1 at gate I2 (14.2); `app/src/contracts/` is the authority); Manual checks (in `docs/MANUAL-TEST-MAC.md`, B9 (G1-G10)).
+
 Where the code of FS2 (`app/src/fs/fsaccess-backend.ts`, `app/src/features/files-fsaccess/**`)
 differs from ARCHITECTURE.md, or fills a gap the document leaves. Entries under "Contract" are for
 W1. "Manual checks" lists what only a person with a real folder can prove.

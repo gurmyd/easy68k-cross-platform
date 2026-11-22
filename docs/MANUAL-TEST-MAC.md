@@ -1,0 +1,501 @@
+# Manual test on a real Mac
+
+The automatic tests of this project run on GitHub's Mac, Windows and Linux machines, in the engines
+of Chrome and Safari. Some things they cannot see: what macOS shows when you open the app, what
+you hear, what a real keyboard sends, what Safari itself (not its test engine) does with a key. This
+list is for a person with a Mac. Nobody has worked through it yet.
+
+You do not need to know anything about how the port is built. You need a Mac, Safari, Chrome, and
+about **twenty minutes for part A**. Parts B and C need more time or other equipment; do whatever of
+them you can. Every check says what to do and what you should see. If you see something else, that
+is exactly what we want to know.
+
+**How to report.** Copy the report form at the end of this page, fill it in as you go, and post it as
+an issue on <https://github.com/gurmyd/easy68k-cross-platform/issues> with the title
+`Manual test report`. A photo or screenshot of anything odd helps (Shift+Cmd+4 takes a screenshot of
+an area). Do not include anything personal.
+
+**Words used here.**
+
+- The **web version** is <https://gurmyd.github.io/easy68k-cross-platform/>.
+- The **Mac app** is the downloadable app. There is none yet; the checks that need it say so.
+- **Fn**: on most Mac keyboards the keys F1 to F12 change brightness and volume unless you hold
+  the Fn (or globe) key. "Press F9" means Fn+F9 on such a keyboard.
+- The **mode switch** is the group of three buttons at the top right: Editor, Simulator, EASyBIN.
+- The **Output panel** is the black area on the right in Simulator mode. A program receives your
+  keys only after you have clicked into it (a blue frame shows that it has the keyboard).
+
+## Before you start
+
+Write down in the report form:
+
+1. Your Mac: Apple menu > About This Mac. Note the chip (Apple M1, M2 ... or Intel) and the macOS
+   version.
+2. Your keyboard: built into the Mac or separate; with a Touch Bar or not; the keyboard layout you
+   use (the input menu at the top right of the screen, or System Settings > Keyboard > Text Input).
+3. The versions of your browsers: Safari > About Safari; Chrome > Google Chrome > About Google Chrome;
+   Edge if you have it.
+
+## The three test programs
+
+Some checks use one of these small programs. To use one: open the web version, choose File > New X68
+Source File in Editor mode, delete the text in the new document (Cmd+A, then Delete), copy the program
+from this page and paste it with Cmd+V. Then press F9 (or Cmd+B) to assemble, click **Execute** in the
+window that opens, and press F9 again to run it. Each program was tried in the application before it
+was put here.
+
+**echo** reads a line you type and shows it again:
+
+```
+        ORG     $1000
+START   LEA     PROMPT,A1
+        MOVE.B  #14,D0          display the prompt, no new line
+        TRAP    #15
+        LEA     LINE,A1
+        MOVE.B  #2,D0           read a line into LINE
+        TRAP    #15
+        LEA     SHOW,A1
+        MOVE.B  #14,D0
+        TRAP    #15
+        LEA     LINE,A1
+        MOVE.B  #13,D0          display the line and a new line
+        TRAP    #15
+        BRA     START
+
+PROMPT  DC.B    'Type a line: ',0
+SHOW    DC.B    'You typed:   ',0
+LINE    DS.B    82
+        END     START
+```
+
+**keys** shows the code of the last key pressed and the last key released (TRAP #15 task 19), and
+whether the A key is down (`FF`) or up (`0`). A line `released/pressed: 410042` means: the last key
+released was `$41` (A), the last key pressed was `$42` (B).
+
+```
+        ORG     $1000
+START   MOVE.L  #-1,D6          last codes shown
+        MOVE.L  #-1,D5          last state of A shown
+LOOP    CLR.L   D1
+        MOVE.B  #19,D0          D1 = released << 16 + pressed
+        TRAP    #15
+        MOVE.L  D1,D3
+        MOVE.L  #$41,D1         is the A key down?
+        MOVE.B  #19,D0
+        TRAP    #15
+        MOVE.L  D1,D4
+        CMP.L   D6,D3
+        BNE     SHOWIT
+        CMP.L   D5,D4
+        BEQ     LOOP
+SHOWIT  MOVE.L  D3,D6
+        MOVE.L  D4,D5
+        LEA     UPDOWN,A1
+        MOVE.B  #14,D0
+        TRAP    #15
+        MOVE.L  D3,D1
+        MOVE.B  #16,D2          in hexadecimal
+        MOVE.B  #15,D0
+        TRAP    #15
+        LEA     AKEY,A1
+        MOVE.B  #14,D0
+        TRAP    #15
+        MOVE.L  D4,D1
+        MOVE.B  #16,D2
+        MOVE.B  #15,D0
+        TRAP    #15
+        LEA     CRLF,A1
+        MOVE.B  #14,D0
+        TRAP    #15
+        BRA     LOOP
+
+UPDOWN  DC.B    'released/pressed: ',0
+AKEY    DC.B    '   A down: ',0
+CRLF    DC.B    $D,$A,0
+        END     START
+```
+
+**fonts** writes a line in each of the seven fonts a program can choose, adds up the colours of the
+pixels in that area and shows the sum. With the default settings the sum is `B4818F4C` in Chrome's
+and Safari's test engines.
+
+```
+        ORG     $1000
+START   MOVEQ   #1,D6           font number 1 to 7
+FONT    MOVE.L  #$00FFFFFF,D1   white
+        MOVE.L  D6,D2
+        ROR.L   #8,D2           font number into the top byte
+        ORI.L   #$000C0000,D2   12 points, plain
+        MOVE.B  #21,D0
+        TRAP    #15
+        LEA     TEXT,A1
+        MOVE.B  #13,D0
+        TRAP    #15
+        ADDQ.L  #1,D6
+        CMP.L   #8,D6
+        BNE     FONT
+
+        CLR.L   D5              the sum
+        CLR.L   D2              y
+ROW     CLR.L   D1              x
+PIXEL   MOVE.B  #83,D0          D0 = colour of the pixel at D1, D2
+        TRAP    #15
+        ROL.L   #1,D5
+        ADD.L   D0,D5
+        ADDQ.W  #1,D1
+        CMP.W   #320,D1
+        BNE     PIXEL
+        ADDQ.W  #1,D2
+        CMP.W   #160,D2
+        BNE     ROW
+
+        MOVE.L  #$00FFFFFF,D1   back to the Options font
+        CLR.L   D2
+        MOVE.B  #21,D0
+        TRAP    #15
+        LEA     SUM,A1
+        MOVE.B  #14,D0
+        TRAP    #15
+        MOVE.L  D5,D1
+        MOVE.B  #16,D2
+        MOVE.B  #15,D0
+        TRAP    #15
+        SIMHALT
+
+TEXT    DC.B    'EASy68K 0123456789 {[(<>)]} @#$%&*',0
+SUM     DC.B    'Sum: ',0
+        END     START
+```
+
+## Part A: twenty minutes with a Mac
+
+The times in the headings add up to twenty minutes. If you have less time, do A1, A2 and A6 first.
+
+### A1. A first program in Safari (2 minutes)
+
+1. Open the web version in Safari.
+2. Help > Examples... The Files panel opens on the left with a folder `Examples`.
+3. Double-click `tutorial1.X68`. It opens in the editor.
+4. Press F9 (or Cmd+B). A window `Assembler Status - tutorial1.X68` says 0 warnings and 0 errors.
+5. Click **Execute**. The application switches to Simulator mode with the program loaded.
+6. Press F9. The Output panel shows four lines: `D1 contains: 8`, `D2 contains: 520`,
+   `D3 contains: 68020`, `Program End`. The status bar at the bottom says `Halted`.
+
+Repeat steps 1 to 6 in Chrome.
+
+### A2. Shortcuts the browser must leave to the page (6 minutes)
+
+A web page can ask the browser not to act on a key, and this application does for the keys below.
+Whether a real browser obeys cannot be tested automatically. For each row, prepare what the column
+"Before" says, press the key, and write in the table what happened: **ok** if the application did
+what the row says and the browser did nothing of its own; otherwise what you saw (for example "the
+page reloaded" or "Safari's own Save dialog").
+
+Preparation: do A1 first. For Editor rows, click into the text of `tutorial1.X68`. For Simulator
+rows, use the program as A1 left it (Execute again if it has halted). The F keys need Fn on most
+Mac keyboards.
+
+| # | Before | Press | The application must | The browser must not | Safari | Chrome | Edge |
+|---|---|---|---|---|---|---|---|
+| K1 | Simulator, program loaded, click on the listing | F5 | do nothing | reload the page | | | |
+| K2 | Simulator: open `clockDigital.X68` from Examples, F9, Execute, F9 (it keeps running) | F6 | Pause: the status bar says `Stopped` | move the focus to the address bar | | | |
+| K3 | Simulator, program stopped | F7 | Trace Into: the highlighted listing line moves on | ask about caret browsing | | | |
+| K4 | Simulator, program stopped | F10 | Auto Trace: the listing steps on by itself; F6 stops it | open or focus a browser menu | | | |
+| K5 | Editor, a changed document | Cmd+S | Save (the dot on the tab and `Modified` go away, or the application's own Save As dialog appears) | show its "Save page" dialog | | | |
+| K6 | Editor | Ctrl+S | the same as Cmd+S | the same | | | |
+| K7 | Editor | Cmd+P | Print: a print dialog whose preview shows only the program text | print the whole page with menus | | | |
+| K8 | Editor | Ctrl+P | the same as Cmd+P | the same | | | |
+| K9 | Editor | Cmd+O | the application's own Open dialog (it lists My Programs) | show the system's file chooser | | | |
+| K10 | Editor | Ctrl+O | the same as Cmd+O | the same | | | |
+| K11 | Editor | Cmd+F | the application's Find dialog (top right of the editor) | show its own find bar | | | |
+| K12 | Editor | Ctrl+F | the same as Cmd+F | the same | | | |
+| K13 | Editor, after a Find | Cmd+G | Find Next | find in the page | | | |
+| K14 | Simulator, program stopped | Ctrl+G | Go to PC: the listing shows the PC's line | find in the page | | | |
+| K15 | Editor | Ctrl+R | the Find And Replace dialog | reload the page | | | |
+
+Cmd+R is not in the table: in a browser on a Mac it is left to the browser (it reloads the page;
+Find And Replace is Ctrl+R there).
+
+### A3. The keyboard of a Mac (4 minutes)
+
+Use Safari unless the row says otherwise.
+
+| # | Do | Expected |
+|---|---|---|
+| M1 | Simulator, program loaded: press F9 with Fn and, if your keyboard's F keys are set to brightness and volume, without Fn | With Fn: Run. Without Fn: the Mac changes brightness or volume and the program does not run. (With "Use F1, F2, etc. keys as standard function keys" switched on in System Settings > Keyboard, it is the other way round.) |
+| M2 | Simulator, program loaded: Shift+F2, Shift+F3, Shift+F4, Shift+F5 (with Fn if needed) | Rewind Program, Reload Program, Log Start (a log file dialog), Log Stop. Cancel any dialog. |
+| M3 | Simulator: Ctrl+F2 | Either Rewind Program, or macOS moves the focus to the menu bar of the screen (its standard shortcut, System Settings > Keyboard > Keyboard Shortcuts > Keyboard). Write down which. |
+| M4 | Editor: type a word, then Cmd+Z, then Ctrl+Option+Z | Undo, then Redo: the word comes back |
+| M5 | Editor: select two lines, Ctrl+Option+C, then Ctrl+Option+U | A `*` is put in front of each line, then removed |
+| M6 | Simulator: run **keys**, click into the Output panel, press Ctrl+Option+O | The blue frame leaves the Output panel; the program shows no new line |
+| M7 | Run **keys**, click into the Output panel, press Option+Return | The Output panel goes full screen. Option+Return again (or Esc in Safari) leaves it |
+| M8 | Only with a Touch Bar: hold Fn and look at the Touch Bar, press F9 there in Simulator mode | F1 to F12 appear; F9 runs the program |
+| M9 | Run **echo**, click into the Output panel, hold the A key for two seconds, then Return | The letter repeats at your usual repeat rate, no accent menu appears, and the line comes back after `You typed:` |
+| M10 | Run **keys**, click into the Output panel, hold Cmd, press and release A, then release Cmd | While Cmd is held the line may say `A down: FF`; after you release Cmd the last line says `A down: 0` (the A key does not stay down) |
+| M11 | Only with a numeric keypad: run **keys**, press the keypad digits 0 to 9 | Codes `60` to `69` (or the codes of the arrow keys if the keypad is in navigation mode); write down what you see |
+
+### A4. Paste (2 minutes)
+
+| # | Do | Expected |
+|---|---|---|
+| P1 | Copy the text `HELLO` from anywhere. Run **echo**, click into the Output panel, press Cmd+V, then Return | `You typed:   HELLO` (in Safari and in Chrome) |
+| P2 | Editor: Edit > Paste in the menu | Safari shows a small `Paste` button next to the pointer; click it and the text is pasted. Chrome asks once for permission to see the clipboard; after Allow it pastes. If the browser refuses, a message says `Press Cmd+V to paste` |
+| P3 | Editor: the Paste button of the toolbar, and Paste in the menu of a right-click (Ctrl+click) into the text | The same as P2 |
+
+### A5. Sound (3 minutes)
+
+Use the examples (Help > Examples...), speakers or headphones on.
+
+| # | Do | Expected |
+|---|---|---|
+| S1 | Open `graphicSound.X68`, F9, Execute, F9 | You hear "one", then "zero", then "roger", each once, in this order, without overlapping; the program halts after "roger" starts |
+| S2 | Open `clockWithSound.X68`, F9, Execute, F9, and wait until the drawn clock passes the next full minute (at most one minute) | Tick and tock every second, in step with the drawn clock; a chime at the full minute |
+| S3 | While S2 runs: Run > Rewind Program (Shift+F2) | The sounds stop |
+| S4 | Run `graphicSound.X68` and switch to another tab at once; come back after five seconds | The program has halted; no sound plays late in a burst |
+| S5 | Reload the page, open `graphicSound.X68`, and do everything with the keyboard only (F9, Return on Execute, F9) | The sound is heard (a key press is enough to let a page play sound) |
+
+### A6. Recording what your keyboard sends (3 minutes)
+
+The keyboard tests of this project use key presses recorded from real keyboards. None has been
+recorded yet. This step records yours. It does not use the application.
+
+1. In Chrome, open a new tab, type `about:blank` in the address bar and press Return.
+2. Open the developer console: View > Developer > JavaScript Console (Option+Cmd+J).
+3. Paste this and press Return:
+
+   ```js
+   addEventListener(
+     'keydown',
+     (e) => {
+       e.preventDefault(); // keeps the browser from acting on Ctrl+S, Cmd+O and the like
+       const { key, code, ctrlKey, altKey, shiftKey, metaKey } = e;
+       console.log(JSON.stringify({ key, code, ctrlKey, altKey, shiftKey, metaKey }));
+     },
+     true,
+   );
+   ```
+
+4. Click into the empty page and press, with the U.S. or ABC layout: Cmd+O, Ctrl+O, Shift+Cmd+S,
+   Shift+Cmd+Z, Option+O, Ctrl+Option+O, Ctrl+Option+Z, Ctrl+Option+C, Ctrl+Option+U, Cmd+/,
+   Shift+Cmd+/, Cmd+, (comma), Cmd+G, Cmd+B, Ctrl+R, Ctrl+Shift+I, Option+Return, Shift+F2,
+   Shift+F4, Ctrl+F9, Cmd+V. If you have switched off the system's Ctrl+F<n> shortcuts (System
+   Settings > Keyboard > Keyboard Shortcuts > Keyboard), also Ctrl+F2 and Ctrl+F4.
+5. If you can add the Russian input source: switch to it and press Cmd + the O position, Ctrl + the
+   O position, Ctrl+Option + the O position (the O position is the key where O is on a U.S.
+   keyboard).
+6. Do the same in Safari (Develop > Show JavaScript Console; if there is no Develop menu, switch it on
+   in Safari > Settings > Advanced).
+7. Right-click in the console, choose to save or copy everything, and attach it to the report with
+   your macOS and browser versions, the keyboard model and the layout.
+
+Do **not** press Cmd+Q, Cmd+W, Cmd+N or Cmd+T: the browser closes or opens windows before the page
+sees them.
+
+## Part B: with more time or other equipment
+
+### B1. Another keyboard layout (5 minutes)
+
+Add a second layout if you have only one (System Settings > Keyboard > Text Input > Edit > +; for
+example French, or U.S. International - PC, or ABC - Extended). Switch to it with the input menu.
+
+| # | Do | Expected |
+|---|---|---|
+| L1 | Run **echo**, click into the Output panel. Type an accented letter with a dead key: Option+E then E (gives é on most layouts). Then Option+U then A (ä). Return | The line shows `é` and `ä`, each once; nothing doubled, nothing missing |
+| L2 | Same prompt: type a few Option characters, for example Option+G (©), Option+2 (™), Option+8 (•) on U.S.; on French, the € and @ keys. Return | The characters appear as typed, if Windows-1252 has them (©, ™, •, €, @ do); a character it does not have is left out |
+| L3 | Run **keys** with the French layout (AZERTY). Press the key labelled A | The pressed code is `51`: the port reports where the key is on a US keyboard (Q), not its label. This is a known difference (`docs/DIFFERENCES.md`, part SH4). Write down what you see |
+| L4 | Only if you use an input method (Japanese, Chinese, Korean): in **echo**, type a word with it and confirm it, then Return | The composed word appears once. Characters Windows-1252 does not have are left out, so it may come back empty: write down what you saw |
+
+### B2. Safari itself (10 minutes)
+
+| # | Do | Expected |
+|---|---|---|
+| W1 | Open the web version, wait until it shows the editor. Switch Wi-Fi off. Reload the page | The application loads and works (assemble tutorial1) without a network |
+| W2 | Safari > File > Add to Dock... (macOS 14 Sonoma or later), then open EASy68K from the Dock | It opens in a window of its own. Its Files panel (My Programs) is empty: a Dock app has its own storage. That is Apple's rule, not a defect |
+| W3 | In the Safari tab: click `My Programs` in the Files panel, then the Export... button of the panel | A file `My Programs.zip` is downloaded |
+| W4 | In the Dock app: Import... in the Files panel, choose that `My Programs.zip` | The files of the Safari tab appear in the Dock app |
+| W5 | Safari > File > New Private Window, open the web version, run **fonts**. Then close the private window, open a new one and run it again | `Sum: B4818F4C` both times (Safari changes some pictures in private windows to stop tracking; this checks that the application's text is not affected) |
+| W6 | Normal Safari window: run **fonts** | `Sum: B4818F4C` |
+
+### B3. The Mac app (only once a release exists)
+
+There is no release yet. When there is one, download the `.dmg` for your Mac from
+<https://github.com/gurmyd/easy68k-cross-platform/releases> and follow "Opening the Mac app for the
+first time" in the README.
+
+| # | Do | Expected |
+|---|---|---|
+| D1 | First start after the download | macOS refuses to open it. Write down the exact text of the message and its buttons, and which of the README's two ways worked. Note any message about XProtect or malware |
+| D2 | The same on the other kind of Mac (Apple silicon or Intel) and on the two most recent macOS versions, if you have them | As D1 |
+| D3 | In Finder, double-click a `.X68`, a `.L68` and a `.S68` file | `.X68` and `.L68` open in Editor mode; `.S68` opens in Simulator mode with the program loaded and not running. Write down what icon Finder shows on these files, and what Get Info > Open with says (EASy68K is expected) |
+| D4 | Look at the Dock while the app runs | The EASy68K icon is there, with a dot under it |
+| D5 | Change a document without saving, then Cmd+Q | A question about the unsaved document appears; Cancel (or Stay) keeps the app running |
+| D6 | Repeat A1, S1 and S2 in the app; during S2 switch the sound output to headphones | The same results; the sound moves to the headphones and goes on |
+| D7 | Run **echo** in the app, Cmd+V into the prompt | As P1 |
+| D8 | Run **keys** in the app, full screen with Option+Return, press Esc | The program shows code `1B` and the panel stays full screen (in Safari, Esc leaves full screen instead: see F2) |
+
+### B4. Full screen, display and trackpad
+
+| # | Do | Expected |
+|---|---|---|
+| F1 | Run **keys**, Option+Return, on the built-in display and on an external monitor | The output fills the screen at the largest whole size, black around it |
+| F2 | In full screen, press Esc in Chrome, in Safari and in the Mac app | Chrome and the app: the program shows code `1B` and full screen stays. Safari: full screen ends and the program gets no key (a known difference, note 36 of `docs/DIFFERENCES.md`) |
+| F3 | On a Retina display: Output panel zoom `200%`, run `graphicSound.X68` | Sharp square pixels, no blur |
+| F4 | Run `mouseWindowSize.X68` (it shows the mouse position and buttons and draws a green crosshair): tap the trackpad, click with two fingers (right-click), drag | The program shows the left button for a tap, the right button for a two-finger click, and the position follows while dragging |
+
+### B5. Printing (needs a printer)
+
+| # | Do | Expected |
+|---|---|---|
+| R1 | Editor: open `tutorial1.X68`, File > Print, print on a real printer | The program text, nothing of the application around it |
+| R2 | A program that prints with TRAP #15 task 10 (A1 = the address of a text ending in a zero byte, `MOVE.B #10,D0`, `TRAP #15`; a byte `$0C` in the text ends a page) | A `Printer Output` dialog opens by itself at each `$0C`; its Print... button shows the system's print dialog and the page comes out of the printer |
+
+### B6. Serial port and network (needs the Mac app)
+
+| # | Do | Expected |
+|---|---|---|
+| N1 | A USB serial adapter and a program using TRAP #15 tasks 40-43 | The program opens the port, sends and receives |
+| N2 | Two windows of the app (File > New Window, Cmd+N), one program as server and one as client with the network tasks 100-107 | They exchange data |
+| N3 | The same on two Macs in the same network | They exchange data |
+
+### B7. VoiceOver
+
+Switch VoiceOver on with Cmd+F5 (Fn+Cmd+F5). Write down what it says, and anything you cannot reach.
+
+| # | Do | Expected |
+|---|---|---|
+| V1 | The menu bar of the application (Tab to it, or click File) | The menus and their items are read |
+| V2 | Assemble a program with an error; the Assembler Status window | Its title, Warnings and Errors and the buttons are read |
+| V3 | The Messages panel under the editor after that | The message line is read |
+| V4 | Run tutorial1; move VoiceOver to the Output panel | The program's text is read (the panel has a text copy for screen readers) |
+| V5 | In Safari, Tab through a dialog (Options > Editor Options...) | Tab reaches every control of the dialog |
+
+### B8. A long session in Safari (30 minutes)
+
+| # | Do | Expected |
+|---|---|---|
+| T1 | In one Safari tab: open `tutorial1.X68`, then repeat F9 (assemble), Execute, F9 (run) one hundred times | No error, no slowdown, no reload needed |
+| T2 | In the same tab: press F9 in the editor several hundred times | Every assembly ends with 0 errors |
+
+### B9. A folder of your computer (Chrome or Edge, Mac or Windows)
+
+Safari cannot open folders; Chrome and Edge can. Use a folder with a copy of some `.X68` files.
+
+| # | Do | Expected |
+|---|---|---|
+| G1 | File > Open File..., `Open folder...`, choose the folder | Chrome asks "Let site edit files?"; after Allow the folder appears in the dialog and the Files panel |
+| G2 | Reload the page | A message `The folder "<name>" was open the last time. Open it again?`; its button shows Chrome's permission question; after Allow the folder is back. With "Allow on every visit" the next reload opens it without asking |
+| G3 | In the Open dialog, `From this computer...`, choose a `.X68`, change it, Save | Chrome asks to save changes to the file; the file on the disk has the new text (open it in TextEdit) |
+| G4 | Change that file in another editor while it is open in the application, then Save in the application | `'<name>' has been changed outside this window. Save anyway?`; No keeps the other version |
+| G5 | After a reload, change the file in another editor, open it again in the application without changing it, Save | The application refuses to save and the file keeps the other editor's version |
+| G6 | Drag a folder from Finder onto the window | `Open this folder?`; Yes opens it |
+| G7 | A read-only file in the folder (Finder: Get Info > Sharing & Permissions, your name: Read only): open it, change it, Save | An error message; the file is unchanged |
+| G8 | A folder containing a symbolic link (alias made with `ln -s` in Terminal) to a folder outside it | Nothing outside the folder can be opened through the link |
+| G9 | While a folder is open: Chrome's site settings (the icon left of the address) > remove file access; then Save | `The browser does not allow this page to use "<name>" at the moment...` |
+| G10 | On a file opened with `From this computer...`: `Open the containing folder...` | The folder chooser starts in the file's folder |
+
+### B10. Windows PC: the same shortcut table, paste, keyboards
+
+If you also have a Windows PC, do A2 in Chrome and Edge on Windows. There the keys are Ctrl, not
+Cmd: only rows K1 to K4, K6, K8, K10, K12, K14 and K15 apply, and in K13 press F3. Also:
+
+| # | Do | Expected |
+|---|---|---|
+| X1 | Chrome on Windows: run **echo**, copy `HELLO`, click into the Output panel, Shift+Insert, Enter | `You typed:   HELLO` |
+| X2 | Chrome on Windows: Paste from the editor's Edit menu, its toolbar and its right-click menu | As P2 |
+| X3 | Record the keyboard as in A6, in Chrome and in Firefox, pressing for each keyboard and layout you have: **Windows or Linux, US**: Ctrl+O, Ctrl+S, Ctrl+Z, Ctrl+Alt+Z, Ctrl+Alt+C, Ctrl+Alt+U, Ctrl+Alt+O, Ctrl+O with Caps Lock, F9, Ctrl+F9, Shift+F4, F1, Insert, Shift+Insert, Ctrl+Shift+. (period), Ctrl+Shift+, (comma), Alt+Enter, Alt + the keypad's Enter, Alt+F, A. **the same, numeric keypad**: NumLock off: 0, Shift+0, . (Del), 1 to 9, Ctrl+7; NumLock on: 0, Ctrl+1, . (decimal), +. **Windows, German (QWERTZ)**: Ctrl + the key labelled Z, Ctrl + the key labelled Y, Ctrl+Alt + the keys labelled Z, Y, C and U, AltGr+Q, AltGr+E, Ctrl+Shift+. (period). **Windows, French (AZERTY)**: Ctrl + the key labelled A, Ctrl + the key labelled Z, Ctrl + the key labelled M, Ctrl+Alt + the keys labelled A, Z and W, AltGr + the key labelled 0 (types @). **Windows, Russian**: Ctrl + the positions of O, S, Z and F of a US keyboard, Ctrl+Alt + the C position, F7. **Windows, Greek**: Ctrl + the positions of F, G and P of a US keyboard. | Send the console output with Windows, browser and keyboard versions. Do not press Ctrl+W, Ctrl+N, Ctrl+T, Ctrl+F4 or Ctrl+Tab |
+
+A layout can be recorded without its keyboard: add it in the system's settings, switch to it and
+press the key at the position named.
+
+### B11. The beep
+
+| # | Do | Expected |
+|---|---|---|
+| S6 | Simulator, a program loaded: click into the D0 field of the register panel and type `G` (not a hexadecimal digit) | A short, quiet tone; the field does not change |
+
+## Part C: on real Windows, once (for the project's maintainers)
+
+These need the official EASy68K on a real Windows PC, which the project's rules allow only once and
+only with the owner's permission (decision O-2 in `docs/ARCHITECTURE.md`, section 10.2), in Windows
+Sandbox or a throw-away virtual machine.
+
+| # | Do | Expected |
+|---|---|---|
+| C1 | Run the programs in `tests/conformance/windows-confirm/` in the official SIM68K.exe | Each writes its findings to a file; they settle the UNVERIFIED items of `docs/porting/trap15-tasks-0-59.md` section 12 and `docs/porting/trap15-tasks-60-up.md` section 15 that Wine cannot (drawing, key handling, sound, the `fwrite`/`fread` edge cases and the C library's file buffer of `docs/ARCHITECTURE.md` 3.8.4) |
+| C2 | The RichEdit spot check of `docs/ARCHITECTURE.md` 6.2.2 | The official assembler gives the same output on Windows as under Wine for the flagged files |
+| C3 | The speed measurement for `DEFAULT_IPS` with `tests/perf/calibrate.X68` (decision O-1) | A measured instruction rate of the original |
+
+## Which check covers which item of the plan
+
+`docs/ARCHITECTURE.md` section 6.8 lists what only a person can check. Every item is above:
+
+| Item of 6.8 | Checks |
+|---|---|
+| First launch of the downloaded app: the Gatekeeper dialogs and the way through them, on the two most recent macOS versions, Apple silicon and Intel | D1, D2 |
+| Double-click on `.X68`, `.L68`, `.S68` in Finder; icons; the app in the Dock; Cmd+Q with unsaved work | D3, D4, D5 |
+| Sound: tasks 70-77 audible, in order, loops stop on reset | S1-S5, D6 |
+| Browser shortcut table (Safari, Chrome, Edge on macOS; Chrome, Edge on Windows) | A2 (K1-K15), B8 |
+| Keyboard on a real MacBook: function keys with and without Fn; Shift+F2..F5; the Option chords Ctrl+Option+Z, C, U and O; Option+Return; Touch Bar; a non-US layout (dead keys and Option characters into task 2, the key position for task 19); a held letter repeats with no accent menu; a key released while Cmd is held does not stay down; keypad digits | M1-M11, L1-L4 |
+| Paste into a task 2 prompt with Cmd+V in Safari, Chrome and the app, with Shift+Insert in Chrome on Windows; Paste from the editor's menu, toolbar and context menu | P1-P3, D7, X1, X2 |
+| Full screen on the built-in display and an external monitor; Esc in Chrome, the app and Safari; sharpness on Retina; trackpad tap, right-click and drag | M7, F1-F4, D8 |
+| Printing a source file and task 10 output on a real printer | R1, R2 |
+| A serial adapter with tasks 40-43; two windows, and two machines on a LAN, with the network tasks | N1-N3 |
+| VoiceOver: menu bar, dialogs, message area, the Output text mirror | V1-V5 |
+| Safari itself: the web app, offline reload, Add to Dock, a `.zip` exported from the Safari tab imported into the Dock app; Private Browsing: text in every font the same on every run | A1, W1-W6 |
+| A long session: one hundred Execute cycles and several hundred assemblies in Safari | T1, T2 |
+| On real Windows, once: the UNVERIFIED items, the RichEdit spot check, the speed measurement | C1-C3 |
+
+And what the parts of the port left for a person:
+
+| From | Checks |
+|---|---|
+| `docs/requests/W3-key-recording.md` (keys recorded from real keyboards) | A6, X3 |
+| `docs/porting/errata/SH4.md` entry 21 (dead keys, input methods, key repeat, the accent menu) | L1, L2, L4, M9 |
+| `docs/porting/errata/SH5.md` section 7 (what is heard), items 1-4, 7 and 8; items 5 and 6 (a loop after SIMHALT, task 77 on a looping slot) need a test program that has not been written and tried yet, so they are not in this list | S1-S6, D6 |
+| `docs/porting/errata/FS2.md`, "Manual checks" (real folders) | G1-G10 |
+| `docs/requests/W2-dialog-focus-followups.md` (Safari with a person at the keyboard, a real input method) | V5, L4 |
+| `docs/porting/errata/DV3.md` entries 11 and 21, `docs/differences/DV3.md` (the exact first-start messages, Cmd+Q, XProtect) | D1, D2, D5 |
+| `docs/ENGINE-BINDING.md` section 7 (many cold starts and assemblies in real Safari) | T1, T2 |
+
+## Report form
+
+Copy this into the issue and fill it in. Leave out what you did not do.
+
+```
+Manual test report
+
+Date:
+Mac (chip, model):
+macOS version:
+Keyboard (built-in / separate, Touch Bar yes/no, layout):
+Safari version:
+Chrome version:
+Edge version (if used):
+Mac app version (if used):
+
+A1 first program:   Safari:        Chrome:
+A2 shortcuts (ok, or what happened):
+  K1  F5        Safari:      Chrome:      Edge:
+  K2  F6        Safari:      Chrome:      Edge:
+  K3  F7        Safari:      Chrome:      Edge:
+  K4  F10       Safari:      Chrome:      Edge:
+  K5  Cmd+S     Safari:      Chrome:      Edge:
+  K6  Ctrl+S    Safari:      Chrome:      Edge:
+  K7  Cmd+P     Safari:      Chrome:      Edge:
+  K8  Ctrl+P    Safari:      Chrome:      Edge:
+  K9  Cmd+O     Safari:      Chrome:      Edge:
+  K10 Ctrl+O    Safari:      Chrome:      Edge:
+  K11 Cmd+F     Safari:      Chrome:      Edge:
+  K12 Ctrl+F    Safari:      Chrome:      Edge:
+  K13 Cmd+G     Safari:      Chrome:      Edge:
+  K14 Ctrl+G    Safari:      Chrome:      Edge:
+  K15 Ctrl+R    Safari:      Chrome:      Edge:
+A3 keyboard: M1:   M2:   M3:   M4:   M5:   M6:   M7:   M8:   M9:   M10:   M11:
+A4 paste: P1 Safari:   P1 Chrome:   P2 Safari:   P2 Chrome:   P3:
+A5 sound: S1:   S2:   S3:   S4:   S5:
+A6 key recording: attached yes/no
+B1 layouts (which layout): L1:   L2:   L3:   L4:
+B2 Safari: W1:   W2:   W3:   W4:   W5 (both sums):   W6 (sum):
+Other parts of B (any you did):
+Anything else you noticed:
+```

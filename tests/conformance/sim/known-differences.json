@@ -34,11 +34,6 @@
     "evidence": "golden/trap15-a/a58-files-devices.result.bin line 6; docs/porting/errata/T3.md F8",
     "unconfirmed": "Wine maps NUL to its null device as Windows does; run a58 on Windows (6.8) to confirm. If Windows agrees, SH6 treats NUL as an empty sink (the other device names, CON, PRN, AUX, COM1-9, LPT1-9, were not measured)."
   },
-  "trap15-a/a59-files-buffer-edges|report|result": {
-    "owner": "SH6",
-    "summary": "The 512-byte stdio buffer (ARCHITECTURE.md 3.8.4, SH6 errata entry 12, item 1): one task 54 of exactly 512 bytes on a fresh stream leaves nothing visible to a second stream in the official program (the write fills the buffer and stays in it until another byte comes); the port writes it at once (512 visible). The rest agrees: 300 then 300 bytes leave 300 visible (the buffer is written when the second write does not fit), 511 + 1 leave 0, one more byte makes 512 visible, one write of 513 makes 513 visible. So the rule is: a write that fits into what is left of the buffer is copied into it, even when it fills it exactly; one that does not fit writes the buffer first and then goes out whole when it is 512 bytes or more.",
-    "evidence": "golden/trap15-a/a59-files-buffer-edges.result.bin line 3 (all seven lines for the rule); docs/porting/errata/T3.md F8"
-  },
   "trap15-b/b06-modes-above-15|report|result": {
     "owner": "SH1",
     "summary": "Drawing modes 18-23 (trap15-b 15 V8): under Wine the official program draws the red pixel unchanged for every one of them (Wine's SetROP2 refuses the values the table yields and keeps the copy mode); the port follows trap15-b 5.4 (mode 20 gives white, mode 22 the inverse of the pen, ...).",

@@ -1,5 +1,7 @@
 # Errata and notes of DV1 (offline, install, Pages)
 
+> **Merge status (DOC1, 2026-11-21; completed in its repair round 1).** Every entry of this file has been read. Merged into the documents, each place marked "erratum DV1 <n>" or naming this file: 1, 7 (ARCHITECTURE.md 7.4); 2, 3, 4 (ARCHITECTURE.md 7.5); 6, 12 (ARCHITECTURE.md 5.7); 8 (ARCHITECTURE.md 10.2 (O-7)). Nothing to merge, because no statement of a document is wrong or missing: 5 (contract entry, granted at gate I1 (`ToastOptions`); `app/src/contracts/` is the authority); 9, 10, 11 (records of the browser check and of gate rounds).
+
 Where DV1's work differs from, or adds to, ARCHITECTURE.md (sections 1.1, 5.7, 7.4-7.6, 9.4).
 
 ## 1. The build step runs outside the Vite configuration (until gate I1)

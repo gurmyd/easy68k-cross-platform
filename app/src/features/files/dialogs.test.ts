@@ -230,6 +230,69 @@ describe('the FileDialogs service', { timeout: 60_000 }, () => {
     app.dispose();
   });
 
+  it('a save without `suggested` starts in SaveRequest.startDir; `suggested` wins over it (task 58)', async () => {
+    const app = createTestApplication({ features: [feature], services: { createFileDialogs } });
+    await app.ctx.vfs.writeFile('/browser/prog/dir/a.X68', ascii('x'));
+    await app.ctx.vfs.writeFile('/browser/work/prog.X68', ascii('x'));
+    const first = app.ctx.fileDialogs.save({ ...saveRequest, startDir: '/browser/prog/dir' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    let [dialog] = app.ctx.store.getState().dialogs.stack;
+    expect((dialog?.props as SaveDialogProps).startDir).toBe('/browser/prog/dir');
+    app.dialogs.close(dialog?.key as number, null);
+    expect(await first).toBeNull();
+    const second = app.ctx.fileDialogs.save({
+      ...saveRequest,
+      startDir: '/browser/prog/dir',
+      suggested: '/browser/work/prog.X68',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    [dialog] = app.ctx.store.getState().dialogs.stack;
+    expect((dialog?.props as SaveDialogProps).startDir).toBe('/browser/work');
+    app.dialogs.close(dialog?.key as number, null);
+    await second;
+    app.dispose();
+  });
+
+  it('an open starts its File name field with OpenRequest.initialName (task 58)', async () => {
+    const app = createTestApplication({ features: [feature], services: { createFileDialogs } });
+    const pending = app.ctx.fileDialogs.open({ ...openRequest, initialName: 'data.txt' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const [dialog] = app.ctx.store.getState().dialogs.stack;
+    expect((dialog?.props as OpenDialogProps).initialName).toBe('data.txt');
+    app.dialogs.close(dialog?.key as number, null);
+    expect(await pending).toBeNull();
+    // Without it the field starts empty, as before.
+    const plain = app.ctx.fileDialogs.open(openRequest);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const [again] = app.ctx.store.getState().dialogs.stack;
+    expect((again?.props as OpenDialogProps).initialName).toBeUndefined();
+    app.dialogs.close(again?.key as number, null);
+    await plain;
+    app.dispose();
+  });
+
+  it('linkFileHandle goes to the first available provider that can link, else resolves null', async () => {
+    const app = createTestApplication({ features: [feature], services: { createFileDialogs } });
+    const handle = { kind: 'file', name: 'prog.X68' } as unknown as FileSystemFileHandle;
+    expect(await app.ctx.fileDialogs.linkFileHandle?.(handle)).toBeNull();
+    const linked: string[] = [];
+    app.ctx.fileDialogs.registerProvider({
+      id: 'off',
+      label: 'Unavailable',
+      available: () => false,
+      linkFileHandle: async () => '/linked/00000000/no.X68',
+    });
+    app.ctx.fileDialogs.registerProvider({
+      id: 'fsaccess',
+      label: 'Linker',
+      available: () => true,
+      linkFileHandle: async (h) => (linked.push(h.name), '/linked/21d878e9/prog.X68'),
+    });
+    expect(await app.ctx.fileDialogs.linkFileHandle?.(handle)).toBe('/linked/21d878e9/prog.X68');
+    expect(linked).toEqual(['prog.X68']);
+    app.dispose();
+  });
+
   it('an empty result counts as Cancel', async () => {
     const app = createTestApplication({ features: [feature], services: { createFileDialogs } });
     const pending = app.ctx.fileDialogs.open(openRequest);

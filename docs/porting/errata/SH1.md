@@ -1,5 +1,7 @@
 # Errata of SH1 (Drawing surface)
 
+> **Merge status (DOC1, 2026-11-21; completed in its repair round 1).** Every entry of this file has been read. Merged into the documents, each place marked "erratum SH1 <n>" or naming this file: 1, 14 (trap15-tasks-60-up.md 6.2, 6.3 (first round)); 2, 3, 9 (ARCHITECTURE.md 3.4 rules 10 and 13, in the text); 8 (ARCHITECTURE.md 3.5.3); 10, 11 (ARCHITECTURE.md 3.4); 12, 13 (ARCHITECTURE.md 9.2, SH1). Nothing to merge, because no statement of a document is wrong or missing: 4, 5, 6, 7, 15 (contract entries about the surface's interface; `app/src/contracts/` is the authority (the opaque-cell width: T2 4, SH3 5)); 16 (a record of gate I2 round 1 (SH2's files replaced the stubs)).
+
 What SH1 found while building `app/src/core/sim-host/surface/`: where `docs/ARCHITECTURE.md` or
 `docs/porting/trap15-tasks-60-up.md` (trap15-b) is silent, imprecise or cannot be met yet, what the
 code does, and why. Entries under **Contract** concern what other packages compile or build against.

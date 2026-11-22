@@ -1,5 +1,7 @@
 # Errata of work package FS1 (browser store, file dialogs, Files panel)
 
+> **Merge status (DOC1, 2026-11-21; completed in its repair round 1).** Every entry of this file has been read. Merged into the documents, each place marked "erratum FS1 <n>" or naming this file: 1, 2, 4, 5, 6, 7 (ARCHITECTURE.md 3.8.1); 3 (ARCHITECTURE.md 3.8.6); 8 (ARCHITECTURE.md 2.7 (with Q1 4)); 10, 11, 12, 14, 15, 16, 17 (ARCHITECTURE.md 3.8.5); 13 (ARCHITECTURE.md 3.8.3). Nothing to merge, because no statement of a document is wrong or missing: 9 (implements the behaviour editor-ui §6.4 recommends; nothing to correct); 18, 19, 20, 21, 22, 23 (records of the browser check and of gate rounds); C1, C2, C3 (contract entries, applied by W1 at gate I1; `app/src/contracts/` is the authority).
+
 Where the code of FS1 differs from ARCHITECTURE.md, or the document leaves a gap that FS1 had to
 fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`.
 
@@ -203,6 +205,28 @@ fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`.
     wrong there. FS1 marks its own provider (`providers.ts: markImportingUpload`), and the note
     carries the sentence only while that provider is the one registered. check-files.mjs checks the
     note against the provider actually registered in the page.
+22. **A linked file's display path (gate I2 round 2; review of round 1).** `displayPath` returned the
+    raw VPath for `/linked/<id>/prog.X68`, because `locations()` hides `/linked` (the folder is the
+    port's own copy). It now names a linked file by what follows its id, under the linked backend's
+    label (FS2's `LINKED_LABEL`, `Linked files/prog.X68`), and never shows `/linked/` or the id
+    (`store.test.ts`). The window's bottom status line, where the review saw the internal path, is
+    not FS1's: `EditorWindowStatus` (ui/editor/EditorStatusBar.tsx, E2) shows `doc.path` itself and
+    cannot import a feature; that part is reported to E2.
+23. **Each pass of check-files.mjs has a time limit (gate I2 round 2; config's note on CI run
+    44937920498).** `page.evaluate` has no time limit in Playwright, and the check once waited 39
+    minutes in WebKit after "a page killed in the middle of a write" until CI cancelled the job. Every
+    pass now runs under `PASS_LIMIT_MS` (6 minutes; the passes took 1.2 to 60.4 s here, WebKit the slower) and fails with
+    the last step it reached (the kill pass reports each step per delay); the browser's remaining
+    passes are then skipped. The cause of that one WebKit hang is not known: it did not recur here.
+24. **The contract members of gate I2 (contracts engineer's and SH6's requests).** `dialogs.ts` now
+    honours `OpenRequest.initialName` (the File name field starts with it; absent, it starts empty
+    as before) and `SaveRequest.startDir` (the folder a Save dialog starts in when `suggested` gives
+    none; `suggested` wins), and implements `FileDialogs.linkFileHandle(handle)`: the first
+    available registered provider that has `linkFileHandle` links the file, null when none has
+    (FS2 has none yet, so the launch queue of DV1 gets null until FS2 adds it to its provider).
+    Tested in `dialogs.test.ts`; the initial name also in `check-files.mjs` in both browsers.
+    `DroppedFolderProvider` stays as it is (the contract's optional `openDroppedFolder` has the
+    same signature, so both describe the same providers).
 
 ## Contract
 

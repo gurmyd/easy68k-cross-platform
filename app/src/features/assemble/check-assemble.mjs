@@ -290,6 +290,21 @@ async function assemblePass(browser, name) {
     JSON.stringify(status.buttons.map((b) => b.replace(/\s+/g, ''))) === '["Execute","LoadL68","Close"]',
     JSON.stringify(status.buttons),
   );
+  // The form centres its buttons (assembleS.dfm); the kit's footerAlign="center" does it.
+  const centring = await statusDialog(page)
+    .locator('.e68-dialog__footer')
+    .evaluate((footer) => {
+      const box = footer.getBoundingClientRect();
+      const buttons = [...footer.querySelectorAll('button')].map((b) => b.getBoundingClientRect());
+      const left = Math.min(...buttons.map((b) => b.left)) - box.left;
+      const right = box.right - Math.max(...buttons.map((b) => b.right));
+      return { left: Math.round(left), right: Math.round(right) };
+    });
+  check(
+    `${p} the buttons are centred in the dialog's footer`,
+    Math.abs(centring.left - centring.right) <= 2,
+    JSON.stringify(centring),
+  );
   await shot(page, `${name}-status-template`);
   await page.keyboard.press('Escape');
   await statusDialog(page).waitFor({ state: 'detached', timeout: STEP_MS });
@@ -606,6 +621,22 @@ const documentText = (page) =>
     return document.querySelector(`[data-e68-document="${id}"]`).e68View.state.doc.toString();
   });
 
+/**
+ * The rows of the simulator's text screen (the shadow array that TRAP #15 task 22 reads and the
+ * Output panel's text mirror shows), without trailing blanks: what the program has printed.
+ */
+const screenRows = (page) =>
+  page.evaluate(() => {
+    const { text, textRows, textCols } = window.__easy68k.ctx.sim.text.state;
+    const rows = [];
+    for (let row = 0; row < textRows && (row + 1) * textCols <= text.length; row++) {
+      const bytes = text.subarray(row * textCols, (row + 1) * textCols);
+      rows.push(String.fromCharCode(...bytes.map((b) => (b < 32 || b === 127 ? 32 : b))).trimEnd());
+    }
+    while (rows.length > 0 && rows.at(-1) === '') rows.pop();
+    return rows;
+  });
+
 /** Presses the first chord of a command on the page's key map. */
 async function pressCommand(page, id) {
   const [chord] = await chordsOf(page, id);
@@ -754,6 +785,8 @@ async function studentPass(browser, name) {
     ran.d0 === 14 && ran.pc > 0x1000 && ran.pc < 0x1020,
     JSON.stringify(ran),
   );
+  const printed = await screenRows(page);
+  check(`${p} the output window's first line is HELLO (task 14)`, printed[0] === 'HELLO', JSON.stringify(printed));
   await shot(page, `${name}-student-run`);
 
   // A program in the browser store with an INCLUDE of a file next to it.
@@ -787,6 +820,12 @@ async function studentPass(browser, name) {
   );
   await pressCommand(page, 'sim.run.run');
   await page.waitForFunction(() => window.__easy68k.ctx.store.getState().sim.halted, null, { timeout: STEP_MS });
+  const included = await screenRows(page);
+  check(
+    `${p} the program with the INCLUDEd macro prints FROM AN INCLUDE on the output window's first line`,
+    included[0] === 'FROM AN INCLUDE',
+    JSON.stringify(included),
+  );
   await shot(page, `${name}-student-include-run`);
   check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   await context.close();

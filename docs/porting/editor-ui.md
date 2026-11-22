@@ -123,6 +123,8 @@ the same.
    and shuts the HTML Help library down. If that throws, the message
    `Html Help may not have closed correctly` is shown.
 
+> **Corrected (erratum E1 15).** Exit asks every modified document's prompt in tab order first (Yes saves at once, as the original saves inside `FormCloseQuery`); only when every prompt agreed are the documents discarded. Cancel, a cancelled Save As or a failed save stops the exit with everything still open.
+
 ### 1.4 Opening files from outside the program
 
 * Command line: see 1.1 step 2.
@@ -339,6 +341,8 @@ Items 1-8 share the enabled state of the main-menu items.
 |---|---|---|
 | 1 | `&Clear Error Messages` | `ClearErrorMessages` (`textS.cpp:708-713`): list height set to 7 px, all rows removed, list disabled |
 
+> **Corrected (erratum E5 8).** In the port `ed.msg.clear` empties the document's message list and leaves its summary, so the shell shows the 7 px height for the assembled document; an include file's document whose list was cleared keeps a list (empty), so it counts as used (erratum W3 41).
+
 ---
 
 ## 5. Complete keyboard map
@@ -397,6 +401,8 @@ All other keys (arrows, Home/End, PgUp/PgDn, Ctrl+Left/Right, Ctrl+Home/End, Shi
 Backspace, Delete, printable characters) have the standard behaviour of a Windows
 multi-line edit control. Native RichEdit undo is unavailable because the control's own
 undo buffer is cleared after every change (`SourceText->ClearUndo()`, `textS.cpp:1860`).
+
+> **Corrected (erratum E2 10).** The port's editor key map: Ctrl+Y is not bound (the original has no such key); Esc followed by Tab moves the focus out of the editor; Enter with any modifiers inserts a line break and the auto indent (rule 11); Ctrl/Cmd+X and C with no selection do nothing (the original's edit control never cuts a whole line); the status-bar position is the end of the selection (`cpMax`); Ctrl+Backspace, Ctrl+Delete, Ctrl+E and the Ctrl+Shift keys the original swallows work as in a standard editor (note 13). On macOS the editor binds Ctrl+Z, A, X, C and V itself, because a Mac's browser acts only on the Cmd forms (rule K2; erratum E2 13).
 
 ### 5.3 Keys in dialogs
 
@@ -528,6 +534,8 @@ caret goes to the start, the modified flags are cleared, `colorHighlight(0, Line
 is requested (it does nothing for list documents). A failure anywhere shows
 `Error in LoadFile()`.
 
+> **Corrected (erratum E1 2).** A trailer line that ends before the characters a loop reads (`for(i=12; str[i] != '~' && i<14; i++)`, `textS.cpp:144-146`, and the like) makes C++Builder's checked `AnsiString::operator[]` throw: the original shows `Error in LoadFile()` (Information, OK) and opens the document anyway. The port's `stripTrailer` stops at such a line, keeps it and the lines above it in the text, keeps the values already taken and reports the same message. `*~Font name~` never copies the line's last character (`i<str.Length()`, `textS.cpp:164-166`): `*~Font name~Arial` without its closing `~` gives `Aria` (erratum E1 3). A list document keeps tab type 0 and tab size 0, so Save As `.X68` writes `*~Tab type~0~` / `*~Tab size~0~` as the original does (erratum E1 7).
+
 ### 6.4 Save and Save As
 
 **Save** (`TMain::mnuSaveClick`, `mainS.cpp:217-235`), acting on the active window:
@@ -615,6 +623,8 @@ document when the file is loaded again (only the four trailer lines are deleted)
 open-then-save cycle therefore adds one empty line to the end of the document. The shipped
 examples show the effect: they have two to four empty lines between the last source line
 and the trailer.
+
+> **Corrected (erratum E1 9).** The port's message boxes take the VCL `MessageDlg` titles: `Confirm` (already open, close prompt, reload, save conflict), `Error` (File Access Error, write failure), `Information` (`Error in LoadFile()`), `Warning` (characters without a Windows-1252 byte); the drafts dialog is titled `EASy68K`. A failed save shows `Cannot create file "<path>". <reason>` (VCL's `EFCreateError`) and keeps the document modified; a reason that is a whole message naming the file is shown on its own (errata E1 10, 18, 20). The overwrite question is the file dialog's (erratum E1 8). Save As passes `defaultExt: '.X68'` (erratum E1 11).
 
 ### 6.5 Reload File (`TTextStuff::EditorReload1Click`, `textS.cpp:995-1017`)
 
@@ -752,6 +762,8 @@ positions, so it disagrees with the on-screen tab stops when a tab is typed past
 (c) `col` is a single global variable shared by all windows (`textS.cpp:30`) and is the
 value the Tab key uses (section 8.2).
 
+> **Corrected (erratum E2 9).** In the port each pane has the five cells as ARCHITECTURE.md 2.2 draws them; with Assembly tabs the information cell says `Assembly tabs`. The `Insert`/`Replace` cell is a button that does not take the focus. The window's status region of Editor mode shows the active document's full path.
+
 ### 7.3 Message list (`Messages`, `textS.dfm:97-124`)
 
 * Report-style list with grid lines and full-row selection; read-only; column headers are
@@ -862,6 +874,8 @@ selection, if any, with one tab character (code 9). UNVERIFIED: Shift+Tab in thi
 
 Existing tab characters (from files or pasted text) are displayed and kept in both modes.
 
+> **Corrected (erratum E2 4).** Shift+Tab (note 12) works the same with Real Tabs on and off: only blanks (U+0020) before the caret are deleted, never a tab character or text, back to the previous stop of the document's model (Assembly 44 > 20 > 12 > 0, multiples of the fixed size beyond 44); with a selection the caret is its end and the selection is dropped; one undo step. Tab works from the true visual column (tabs before the caret expanded with the document's stops), which differs from the original only on lines that already hold tab characters; with a tab size that is not a positive integer Tab inserts nothing and tab characters show with size 8; "the selection's end" is the larger offset (erratum E2 5).
+
 ### 8.3 Display of tab characters (`TTextStuff::SetTabs`, `textS.cpp:437-492`)
 
 Twenty tab stops are set on the paragraphs (`TABCOUNT = 20`). In character columns:
@@ -949,6 +963,8 @@ QUIRKS:
   selection did not start at column 0 (or there was no selection), undoing the command
   does not restore the text correctly (the first inserted character stays and one
   neighbouring character is lost). The port should implement a correct undo instead.
+
+> **Corrected (erratum E2 7).** With a selection the port does exactly this (anchor = old start, head = start + old length +- n). Without a selection (note 6: the caret line) the caret stays after the same character, instead of the original's one-character selection, which arose only because the original took the caret for a selection of length 0.
 
 ### 8.6 Insert / overwrite
 
@@ -1161,6 +1177,8 @@ The whole range is first painted in the Code style (`1131-1142`). Then, for each
 Lines longer than 255 characters overflow the 256-byte `capLine` buffer
 (`textS.cpp:51, 1146`); the port must simply handle long lines safely.
 
+> **Corrected (erratum E3 6).** Lines longer than 255 characters overflow `capLine` in the original (undefined behaviour); the port analyses the whole line with `MAXT` and `MAX_SIZE` as in the source. A NUL inside a line ends the analysis there, as `c_str()` would; ranges that run "to the end of the line" still end at the line's real end.
+
 ### 9.4 The tokeniser as used by the highlighter (`tokenize`, `ASSEMBLE.CPP:821-881`)
 
 Called with the delimiter set **space, tab, newline and period** (the assembler proper
@@ -1177,6 +1195,10 @@ calls it with comma instead of period).
 * `tokenEnd[n]` records where token `n` ended in the line; the highlighter uses it to find
   the end of the operation or of a structured statement.
 * At most 128 tokens (`MAXT`, `ASSEMBLE.CPP:139`); unused tokens are empty strings.
+
+> **Corrected (erratum E3 2).** The token buffer is contiguous: `tokenize` copies the tokens one after the other, each ended by NUL, into `tokensS[512]`, and `checkRelational`, the `UNLESS` test (`tokenS[n][3]`) and `instLookup` (`p[1]`, `p[2]`) read past the end of a token shorter than three characters into the next one: `    IF D0 <E >X THEN` is accepted as a structured statement, `    IF D0 <E X THEN` is not. The port keeps the same buffer; bytes the current line did not write read as NUL.
+
+> **Corrected (erratum E3 3).** `''` at the start of a token writes a NUL and skips the two quotes, but the token goes on taking characters behind the NUL. In `    MOVE.B  '' 'x` token 3 is empty, so the opcode branch takes the line for "opcode only" and the whole line is Code (9.5 (c) is decided on token `n+1` being empty, not on the text). `MAX_SIZE` (512) also limits the tokeniser: when the buffer is full no further token is made, even below `MAXT`.
 
 ### 9.5 Classification (`TTextStuff::highlightLine`, `textS.cpp:1304-1491`)
 
@@ -1313,6 +1335,8 @@ So the operand field is a comma-separated list in which blanks are allowed aroun
 commas; the first blank-separated word that is not preceded by a comma starts the comment.
 A `;` or `*` is not needed to start a trailing comment and is not treated specially here.
 
+> **Corrected (erratum E3 1).** A string moves `syntaxStart`: the string branch sets it at the opening quote and again behind the closing quote (`textS.cpp:1534, 1549`). An unclosed parenthesis after a string is error-styled from the character behind the string: `    MOVE.B  #'A',(A0` gives `MOVE.B  #` Code, `'A'` Text and `,(A0` Structure Error.
+
 ### 9.7 Known highlighter quirks
 
 * `n = 2` is chosen whenever token 2 starts with `.`, even when that token is an operand
@@ -1324,6 +1348,10 @@ A `;` or `*` is not needed to start a trailing comment and is not treated specia
 * `IF <T> THEN`-style three-character conditions are only special-cased for `WHILE <T>`
   and `UNLESS <F>`.
 * Highlighting never reports assembler errors; it is purely lexical.
+
+> **Corrected (erratum E3 4).** More consequences of the label rule of 9.3 step 4: a line starting with `#`, `(` or `Ä` has a zero-length "label" in column 0, so `#1 junk` is all Macro/Other and `ÄBC  NOP` all Code; `LOOP:ADD D0,D1` makes `LOOP:ADD` token 0, so `LOOP:` is Label and `ADD D0,D1` Macro/Other; `    MOVE D0,D1;nocomment` is all Code (a `;` directly after the operands is not a comment start).
+
+> **Corrected (erratum E3 5).** Characters at or above `$80` (and UTF-16 code units of characters Windows-1252 lacks) are neither letter, digit nor white space, and `strcap` leaves them unchanged, as the "C" locale does for those values read as unsigned; the source's signed `char` into the Borland ctype macros is not knowable. No table of the highlighter contains such a character.
 
 ---
 
@@ -1467,6 +1495,8 @@ the main file are appended to the include file's list, the result dialog title s
 include file's name, and `Execute`/`Load L68` derive their file names from the include
 file. The port should keep the identity of the document that was assembled.
 
+> **Corrected (erratum E5 3).** The engine does not report which INCLUDEs it executed, so the port clears, before the messages are routed, the lists of the open documents whose path is one of the INCLUDE files the file scan of ARCHITECTURE.md 3.8.3 found (loose on purpose: also inside a block conditional assembly skips). The include notice is `ShowMessage` (`ERROR.CPP:261`): title `EASy68K`, no icon, OK (erratum E5 10).
+
 ### 10.6 Execute: launching the simulator (`TAssemblerBox::cmdExecuteClick`, `assembleS.cpp:25-40`)
 
 ```cpp
@@ -1559,6 +1589,8 @@ genuinely needs OK.
 
 F1 in this dialog: see 15.2.
 
+> **Corrected (erratum E4 11).** `Save Template` writes `template.NEW` like the source window's plain-text save: each line break as CR LF and no line break appended after the last line unless the text ends with one; the shipped template, which ends with one, writes back byte for byte. A preset chosen while Bold, Italic or Underline is checked applies as the preset table says: the original's defect (the check box's `OnClick` selects Custom and the preset is not applied) is a GUI defect and is not reproduced (erratum E4 9).
+
 ### 11.2 Editor Options (`TEditorOptionsForm`, `editorOptions.dfm`, `editorOptions.cpp`)
 
 Modal dialog titled `EASy68K Editor Options`, centred on the frame. Tabs `General` and
@@ -1566,6 +1598,8 @@ Modal dialog titled `EASy68K Editor Options`, centred on the frame. Tabs `Genera
 `Images\EditorOptions.GIF`, `Images\EditorOptionsColors.PNG`. The tab that was showing
 last time is shown again; the design-time active tab is `Colors`
 (`editorOptions.dfm:99-100`), so that is the tab seen the first time.
+
+> **Corrected (erratum E3 7).** Highlighting is off exactly when `highlightDisabled` (line 57 of `settings.dat`) is true, whatever the preset index (line 54) says, as `textS.cpp:1054` tests only that flag; with `Auto` and `highlightDisabled` the text takes the theme's Code colour. `presetStyles(5)` (Auto) returns the Color1 values.
 
 #### General tab
 
@@ -1777,16 +1811,23 @@ Courier New$font name
 
    Otherwise that setting keeps its default and reading continues with the next line for
    the next setting. A missing or extra line therefore shifts everything after it out of
-   step and all later settings fall back to defaults. The header line is read and ignored;
+   step and all later settings fall back to defaults, except line 57, which then matches the
+   leftover of the file's last line in the never-cleared buffer and selects `Color1` (corrected,
+   erratum E4 2). The header line is read and ignored;
    the version in it is not checked.
 3. On/off lines must have exactly one character before the `$`: `1` = on, anything else =
    off. Exception: `$tab type` uses `0` = Assembly, anything else = Fixed. Numeric and text
-   lines take everything before the `$`.
+   lines take everything before the `$`. The style attributes (lines 23-25, 27-29, ... 51-53) and
+   line 54 are numeric: `atoi` of the text before the `$`, any non-zero value is on; only the
+   lines read with `&buffer[1]` (2-9, 12, 14-17, 55) follow this rule (corrected, erratum E4 1;
+   `optionsS.cpp:500-870`).
 4. Loading sets both the variables and the dialog controls (check boxes, font and size
    boxes, tab radio buttons, spin box, preset box), and moves/resizes the frame.
 
 Errors show `Error loading editor settings` / `Error saving editor settings` /
 `Error configuring default editor settings`.
+
+> **Corrected (erratum E4 3).** What the C reader does to the lines, as `c-reader.ts` reproduces it: text mode turns CR LF into LF (a lone CR stays in the line); a line of more than 255 bytes puts the stream into its fail state (that line is seen cut to 255 bytes and every later line reads empty), one of exactly 255 is read whole; a NUL ends a line for `strcmp` and for the value, but the scan walks past it to the `$`, and a scan that finds no `$` runs into bytes an earlier, longer line left in the buffer. A value the port keeps as a number (`$font size` 1..9999, `$fixed tab size` clamped to 4..20, `$color presets` outside 0..4 gives -1, the addresses of `sim68K.dat` one to six hex digits, `$which stack` outside 0..8 gives 8, font sizes above zero, `$auto trace interval` 10..1000) that the port cannot read counts as a line that did not match (erratum E4 4). On export the window lines are written with the original's defaults (`$main top` 106, `$main left` 513, height and width 943 and 925 as in the shipped file; `sim68K.dat` from `def.h:252-262`, the main window 744 x 500; erratum E4 5). An import sets every setting the file holds, from its line where it matched and from the original's start-up value otherwise (`colorPreset` -1); the port's own settings are never touched by an import (erratum E4 6).
 
 ---
 
@@ -1897,6 +1938,8 @@ START<TAB>ORG<TAB>$1000
 6. The whole thing is repeated for each requested copy.
 7. Any failure: the job is aborted and `Printer error.  Please check printer.` is shown.
 
+> **Corrected (erratum E6 7).** How many lines fit on a page, and with it the original's empty page after an exactly full page, is decided by the browser, not reproduced. A fixed tab size 0 with a tab character, and any rejection of `Platform.print`, shows `Printer error.  Please check printer.` as the original's division by zero does. Printer Setup hands the active document's text to the system dialog (where the printer is chosen; confirming prints, as Print with All), an empty page with no document (erratum E6 8).
+
 ### 13.2 Printer Setup
 
 `File | Printer Setup...` opens the standard Windows printer-setup dialog
@@ -1934,6 +1977,8 @@ text is kept. When shown with a non-empty text box, the Find button gets the foc
 The search text and the two options persist while the program runs; they are not saved in
 `settings.dat`.
 
+> **Corrected (erratum E6 5).** Small rules (E6): a selection with a line break preloads its first line into the Find box; Find... again while the dialog is open takes the selection and returns the focus to the dialog; Esc and the close button close both dialogs (`docs/differences/E6.md`); they float at the top right of the workspace, the second under the first; in Simulator and EASyBIN mode they are not drawn and come back in Editor mode.
+
 ### 14.2 The search (`TMain::FindDialogFind`, `mainS.cpp:601-642`)
 
 ```cpp
@@ -1961,6 +2006,8 @@ last search was typed in the Replace dialog). It is available only when an edit 
 exists and the Find text is non-empty.
 
 The search works in any edit window, including list documents.
+
+> **Corrected (erratum E6 2).** In the port the selection made by Find survives the focus moving into the editor (ARCHITECTURE.md 2.10, erratum W3 38). Note 7 in detail (erratum E6 3): Find without a selection starts at the caret; after `End of document reached.` the next search starts from the top while the text and the caret are unchanged; a selection that is not a match counts as no selection with the caret at its start, and the next match is found and replaced in the same press; after an empty replacement the next search starts at its place; Replace All is one undo step. Match whole word only: a match counts when the characters before and after it are not letters (Unicode), digits or `_` (UNVERIFIED against the original's RichEdit; erratum E6 4).
 
 ### 14.3 Replace dialog (`replaceDialogFrm`, `replaceDialogS.dfm`, `replaceDialogS.cpp`)
 
@@ -2234,6 +2281,10 @@ assembler's mnemonics are `SMI`, `SF`, `ST`, and it lacks `BHS`, `BLO`, `DBF`, `
 the introduction. Context ids that exist but are not reachable by keyword:
 `IDH_EASYBIN`, `IDH_IO_NETWORK`, `IDH_SIM_BREAKPOINT`, `IDH_SIM_MEMORY`,
 `IDH_SIM_OPTIONS`, `IDH_SRECORD`.
+
+> **Corrected (erratum H1 6).** The port's keyword table writes the letter case of the imported files (`Reference/...`, `Directives/...`, `credits.htm`), not the alias file's (`reference/68ks8e.htm`); a test compares keywords and pages with this table ignoring case.
+
+> **Corrected (erratum H1 7).** The word search keeps two behaviours that look like mistakes: the word always starts at the character before the caret (`a,b` with the caret after the comma is the word `a,b`), and the last character of the text is never part of a word. The port feeds it the caret's line between two line ends, so the second shows only at the end of the last line, and a caret at offset 0 of the first line does nothing. Keywords fold only A-Z, and the selection is trimmed of characters up to U+0020 only.
 
 ### 15.4 About box (`AboutBox`, `aboutS.dfm` (binary), `aboutS.cpp`)
 
@@ -2512,6 +2563,8 @@ bold, italic and underline per element; highlighting absent in `.L68`/`.S68` win
   steps; Redo is Ctrl+Alt+Z.
 * Paste of rich text arrives as plain text.
 
+> **Corrected (erratum E2 3).** "Undo reverses single typed characters one at a time" gives way to note 5 (standard history): typing is grouped by CodeMirror's history (500 ms), and Paste, Cut, a Tab press, Comment, Uncomment, Indent, Outdent and the auto-indent fill are one step each. The tests check grouping.
+
 ### 20.4 Assemble
 
 * F9 on the template: dialog `Assembler Status - untitled1.x68`, `Warnings: 0`,
@@ -2527,6 +2580,8 @@ bold, italic and underline per element; highlighting absent in `.L68`/`.S68` win
   file on disk unchanged but outputs reflect the edited text.
 * Load L68 opens `<name>.L68` in a new, uncoloured window.
 * Execute loads `<name>.S68` in the simulator without running it.
+
+> **Corrected (erratum E3 8).** "Uncoloured" means without syntax colours: `colorHighlight` returns for `!Project.IsSource` (`textS.cpp:1056`), but the window's background is set for every MDI child, list windows included (`textS.cpp:78`, `editorOptions.cpp:148`). Under a stored preset a list document takes the stored background and black text and no marks; under `Auto` it keeps the theme's editor colours (`docs/differences/E3.md` item 3).
 
 ### 20.5 Settings
 

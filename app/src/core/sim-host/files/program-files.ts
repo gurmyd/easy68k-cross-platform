@@ -18,9 +18,11 @@
 //   file may be open in several streams.
 // - Write buffering, as the Borland run-time does it (measured under Wine, docs/porting/errata/T3.md
 //   F2, tests/conformance/windows-confirm/stdio-buffer.X68): a stream holds up to STDIO_BUFFER
-//   pending bytes. A write that does not fit into what is left of the buffer first commits the
-//   buffer (so byte by byte, 512 bytes become visible when the 513th arrives); a write of
-//   STDIO_BUFFER bytes or more commits the buffer and then goes to the file whole. Pending bytes
+//   pending bytes. A write that fits into what is left of the buffer is copied into it, even when
+//   it fills it exactly (one write of 512 bytes on a fresh stream is not visible yet:
+//   tests/conformance/sim/trap15-a/a59-files-buffer-edges.X68). A write that does not fit
+//   first commits the buffer (so byte by byte, 512 bytes become visible when the 513th arrives),
+//   and then goes to the file whole if it is STDIO_BUFFER bytes or more. Pending bytes
 //   are also committed on close, on a seek and before a read through the same stream. No other
 //   stream and no other host part sees pending bytes.
 // - Read buffering, likewise measured: a read takes its bytes from the stream's buffer and refills
@@ -51,6 +53,9 @@ import { applyEntryBytes, parseJournal, serializeJournal, toBase64, type Journal
 export type { ProgramFilesDeps } from '../../../contracts';
 
 export const STDIO_BUFFER = 512; // bytes; Borland BUFSIZ (O-15), confirmed under Wine (T3 errata F2)
+
+/** The program's file names whose parse a ProgramFiles keeps (it forgets them all when it has more). */
+const PARSED_NAMES_LIMIT = 256;
 
 /** The mount of the desktop app's real file system (3.8.1). */
 const DISK_MOUNT = 'disk';
@@ -108,6 +113,11 @@ export class ProgramFiles implements ProgramFilesApi {
   /** Mounts of the folders the program has been given (absolute names must name one of them). */
   private readonly mounts = new Set<string>();
   private stale = false;
+  /**
+   * parseName() answers by name text; they depend on `dir` and `mounts` only, so they are forgotten
+   * when either changes. The file system part of a lookup (view.resolve) is asked every time.
+   */
+  private readonly parsedNames = new Map<string, { dir: VPath; rel: string } | null>();
   /** This window's part of the journal. */
   private readonly instanceId = newInstanceId();
 
@@ -130,6 +140,7 @@ export class ProgramFiles implements ProgramFilesApi {
   async setCurrentDir(dir: VPath): Promise<void> {
     this.dir = dir;
     this.mounts.add(mountOf(dir));
+    this.parsedNames.clear();
     const view = this.deps.viewFor(dir);
     this.viewUsed(view);
     await view.prepare(dir);
@@ -196,6 +207,7 @@ export class ProgramFiles implements ProgramFilesApi {
     this.streams.clear();
     this.dir = null;
     this.mounts.clear();
+    this.parsedNames.clear();
     this.stale = false;
   }
 
@@ -271,15 +283,16 @@ export class ProgramFiles implements ProgramFilesApi {
     if (!stream || !stream.writable) return -1;
     stream.readBuffer = NO_BYTES;
     if (data.length === 0) return 0;
-    // What does not fit into the rest of the buffer pushes the buffer out first.
-    if (stream.pendingLength > 0 && stream.pendingLength + data.length > STDIO_BUFFER) {
+    // A write that fits into the rest of the buffer is copied into it, even when it fills it exactly
+    // (one write of 512 bytes on a fresh stream leaves nothing visible: T3's a59). One that does not
+    // fit pushes the buffer out first, and then goes to the file whole if it is a buffer or more.
+    if (stream.pendingLength + data.length > STDIO_BUFFER) {
       if (!this.commit(stream)) return -1;
-    }
-    if (data.length >= STDIO_BUFFER) {
-      // A large write goes to the file whole, not through the buffer.
-      if (!this.viewWrite(stream.view, stream.path, stream.position, data)) return -1;
-      stream.position += data.length;
-      return data.length;
+      if (data.length >= STDIO_BUFFER) {
+        if (!this.viewWrite(stream.view, stream.path, stream.position, data)) return -1;
+        stream.position += data.length;
+        return data.length;
+      }
     }
     if (stream.pendingLength === 0) stream.pendingStart = stream.position;
     stream.pending.set(data, stream.pendingLength);
@@ -356,6 +369,21 @@ export class ProgramFiles implements ProgramFilesApi {
   /** The view and the path a program's file name refers to, or null. */
   private locate(name: Bytes): { view: SyncFiles; path: VPath } | null {
     const text = decode(name);
+    let where = this.parsedNames.get(text);
+    if (where === undefined) {
+      where = this.parseName(text);
+      if (this.parsedNames.size >= PARSED_NAMES_LIMIT) this.parsedNames.clear();
+      this.parsedNames.set(text, where);
+    }
+    if (where === null) return null;
+    const view = this.deps.viewFor(where.dir);
+    this.viewUsed(view);
+    const path = view.resolve(where.dir, where.rel);
+    return path === null ? null : { view, path };
+  }
+
+  /** The folder and the relative name a program's file name stands for (no file system access). */
+  private parseName(text: string): { dir: VPath; rel: string } | null {
     // A drive letter names no folder of the port; the other characters Windows refuses fail fopen().
     if (text === '' || hasDriveLetter(text) || INVALID_NAME_CHARS.test(text)) return null;
     // Windows drops trailing periods and spaces of every name segment.
@@ -377,10 +405,7 @@ export class ProgramFiles implements ProgramFilesApi {
       dir = this.dir;
       rel = segments.join('\\');
     }
-    const view = this.deps.viewFor(dir);
-    this.viewUsed(view);
-    const path = view.resolve(dir, rel);
-    return path === null ? null : { view, path };
+    return { dir, rel };
   }
 
   /* ================================================================== committing pending bytes */

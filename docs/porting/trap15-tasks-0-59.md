@@ -432,6 +432,8 @@ The last three are disabled while task 24 has key commands disabled.
 
 ### Task 0 - display `D1.W` characters with CR, LF. Task 1 - the same without CR, LF
 
+> **Corrected (erratum W4 13).** With a negative D1.W the string ends at character 255 explicitly: T3 measured 255 characters on the official program (T3.md F1, `a05`); the extra bytes T4 saw are Borland stack residue no rule reproduces. Patch P24 adds `else buf[255] = '\0';` (`engine/sim/PATCHES.md`).
+
 `CODE9.CPP:733-749`.
 
 - Inputs: `A1` = address of the text (low 24 bits used). `D1.W` = character count, read as **signed** 16 bits.
@@ -674,6 +676,8 @@ Notes:
 
 ### Task 25 - scroll a text rectangle
 
+> **Corrected (erratum SH3 19).** With a rectangle wider than the grid (`w > textCols`; the original tests only `c+w < 256`) the columns beyond `textCols` are the bytes of the following rows, so the "up" loop moves most bytes twice: row 0 takes row 1, every later row the row two below it, while the picture moves by one row. The port's loops are the original's, so it does the same.
+
 `CODE9.CPP:893-895`, `scrollRect(ushort r, ushort c, ushort h, ushort w, ushort dir)` `simIOu.cpp:1151-1272`.
 
 - Inputs: top row `r` = high word of `D1.L`; left column `c` = low word of `D1.L`; height `h` (rows) = high word of `D2.L`; width `w` (columns) = low word of `D2.L`; direction = `D3.W`: 0 up, 1 down, 2 left, 3 right. (The header declares the parameters as `(r, c, w, h, dir)`, `simIOu.h:69`; the definition and the call agree on `(r, c, h, w, dir)`.)
@@ -804,7 +808,7 @@ A browser/macOS port has no Win32 COM ports. Faithful behaviour for "no such por
 - The file is not created if missing. Position 0.
 
 ### Task 52 - open new file
-`CODE9.CPP:1000-1009`, `SIMOPS2.CPP:94-109`. `fopen(name, "w+b")`: creates the file, or **truncates an existing one to zero length**; readable and writable. Success: `D0.W = 0`, `D1.L` = FID. Failure or no free slot: `D0.W = 2`, `D1.L = $FFFFFFFF`.
+`CODE9.CPP:1000-1009`, `SIMOPS2.CPP:94-109`. `fopen(name, "w+b")`: creates the file, or **truncates an existing one to zero length**; readable and writable. Success: `D0.W = 0`, `D1.L` = FID. Failure or no free slot: `D0.W = 2`, `D1.L = $FFFFFFFF`. A name that cannot be opened is tried once per free slot: `openFile` and `newFile` (`SIMOPS2.CPP:68-109`) call `fopen` inside the loop over the eight slots and leave it only on success, so with no file open a failing task 52 calls `fopen` 8 times and a failing task 51 calls it 16 times (update, then read, per slot). The results in D0 and D1 are as above (erratum W4 7).
 
 ### Task 53 - read
 `CODE9.CPP:1010-1022`, `SIMOPS2.CPP:113-133`.
@@ -818,6 +822,8 @@ A browser/macOS port has no Win32 COM ports. Faithful behaviour for "no such por
 - Bytes are copied straight into 68000 memory (no per-byte memory-map handling beyond step 2, no refresh of the Hardware or Memory windows, no write-breakpoint flag).
 - The bound in step 1 is exactly `MEMSIZE`: a block that ends on the last byte (`A1 + D2 = $1000000`) is accepted.
 - Hazard: step 1 is computed in 32-bit unsigned arithmetic (`CODE9.CPP:1012`), so it **wraps**: with `A1 = $1000` and `D2 = $FFFFFFFF` the sum is `$FFF`, the test passes, and `fread` is asked for 4 GB into the 16 MB array. On the original the read is then limited only by the length of the file: a file that fits is read to its end and reported as a normal success (`D0.W = 0`, `D2.L` = bytes read), a longer one overruns host memory. Port rule: evaluate the test with the same 32-bit wrap, and when it passes only because of the wrap, read at most `MEMSIZE - (A1 & ADDRMASK)` bytes. **UNVERIFIED**: that the Borland `fread` accepts a 4 GB count and simply stops at end of file - check `A1 = $2000`, `D2 = $FFFFFFFF` on a short file on real EASy68K.
+
+> **Corrected (erratum W4 14).** Measured on the official program (T3 F3, F4): task 53 with A1 = $2000 and D2 = $FFFFFFFF, whose bounds test wraps, gives D0.W = 0, leaves D2 at $FFFFFFFF and reads nothing; task 54 with D2 = 0 gives D0.W = 0. The engine answers exactly these two requests as Borland's `fread` / `fwrite` do (`shim/hostfile.cpp`, `PATCHES.md` section 3); the measurement wins over the expectation this section gave before (erratum SH6 E1).
 
 ### Task 54 - write
 `CODE9.CPP:1023-1034`, `SIMOPS2.CPP:137-149`.
@@ -838,6 +844,8 @@ A browser/macOS port has no Win32 COM ports. Faithful behaviour for "no such por
 
 ### Task 58 - file dialog
 `CODE9.CPP:1051-1053`, `displayFileDialog(long *mode, int A1, int A2, int A3, short *result)` `simIOu.cpp:468-563`.
+
+> **Corrected (erratum W4 15).** The port does not copy the Save branch's two defects: the Save branch clears the Save dialog's own name, and the overflow test after OK measures the name of the dialog that was shown (`shim/simio.cpp`, `PATCHES.md` section 5; ARCHITECTURE.md 3.8.4).
 
 - Inputs:
   - `D1.L` (all 32 bits): 0 = Open dialog, 1 = Save dialog. Any other value: nothing is shown, `D0.W = 0`, D1 unchanged.
@@ -987,6 +995,8 @@ A browser/macOS port has no Win32 COM ports. Faithful behaviour for "no such por
 14. The result of task 54 with `D2 = 0` (depends on the Borland `fwrite`), and of task 53 with a byte count that wraps the 32-bit bounds test (depends on the Borland `fread`).
 15. That `fclose(NULL)` in task 59 is harmless in the Borland runtime. It is inferred from the fact that "file does not exist" is the task's main use; the result code is already stored before the call, so the port simply skips the call.
 16. What `OnActivate` covers: the task-19 key table is cleared in the form's `OnActivate` handler (`simIOu.cpp:615-618`). In VCL that event fires when the form becomes the active form of the application (focus arriving from another simulator window, or the window being shown), not necessarily when the whole application regains focus from another program. The port clears the table whenever the I/O view gains focus.
+
+> **Corrected (erratum T2 3.1).** Items 1-3 answered by the GDI capture: the cell sizes for the seven names, five styles and sizes 0-255 are `app/public/fonts/metrics.json`; bold changes the grid of the raster faces (Fixedsys bold is 9x15, 71 columns on 640; Courier bold is one pixel wider at every size), the other styles do not change the cell; `Lucida Sans Typerwriter` and `Terminal` get Arial (size 0: Fixedsys 8x15, Courier 9x16, Courier New 10x18, Lucida Console 10x16, Consolas 9x19, Arial 15x18), and Windows replaces the raster faces by Arial from 122 pt (Fixedsys) and 200 pt (Courier).
 
 ## 13. Conformance checks derived from this specification
 

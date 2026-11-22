@@ -1,6 +1,6 @@
 # X1: CI for the end-to-end suites
 
-Status: open (for gate I2).
+Status: item 2 applied on main at gate I2 round 1 (config), from the branch's ci.yml: the job `e2e-stability`, the plan output `e2e_stability`, its row in the guard summary and the guard-table lines; the branch's own ci.yml hunk is not to be merged. Changed at round 2: the job runs on a manual run (input `e2e_stability`, ticked by default) and on the push of a `v*` tag, no longer on every push that touches `tests/e2e` (6.9 item 10 is a release condition; 56 and 94 minutes a run), and it restores the e2e job's browser cache with the same path list; `tests/lint/ci-workflow.test.ts` holds both. Item 1 needs nothing; item 3 declined as the request itself proposes (`E2E_DIST` works with `npm run test:e2e`).
 
 ## 1. The existing job `e2e` fits; nothing to change there
 

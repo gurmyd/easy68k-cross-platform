@@ -7,8 +7,7 @@
 // when the command is available (4.8):
 //
 //   Run, Run To Cursor, Auto Trace, Step Over, Trace Into   commands active, not loading
-//   Pause, Rewind, Open, Open Data                          not loading
-//   Close                                                   a program is present
+//   Pause, Rewind, Open, Open Data, Close                   not loading
 //   Reload                                                  a program has been loaded
 //
 // Owner: SH8.
@@ -81,7 +80,9 @@ export const commands: Record<CommandId, CommandHandler> = {
   },
   'sim.file.close': {
     run: (ctx) => ctx.sim.controller.close(),
-    enabled: (state) => state.sim.program !== null && notLoading(state),
+    // The original enables Close at its start, with no program, and keeps it enabled in the busy
+    // state (sim-ui §3.6: initSim and setMenuTrace; errata SH8.md entry 39).
+    enabled: notLoading,
   },
   'sim.file.exit': {
     run: exitSimulator,

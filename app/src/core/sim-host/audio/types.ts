@@ -32,6 +32,10 @@ export interface WavHeader {
   dataBytes: number;
   /** Sample frames according to the `fact` chunk, or null without one. */
   factFrames: number | null;
+  /** Where the sound data starts in the file (the body of the `data` chunk). */
+  dataOffset: number;
+  /** WAVE_FORMAT_EXTENSIBLE: the format tag of its sub-format GUID; null for other formats or a short chunk. */
+  subFormatTag: number | null;
 }
 
 const ascii = (data: Bytes, at: number, text: string): boolean => {
@@ -51,32 +55,38 @@ const u32 = (data: Bytes, at: number): number => (u16(data, at) + u16(data, at +
  */
 export function readWavHeader(data: Bytes): WavHeader | null {
   if (data.length < 12 || !ascii(data, 0, 'RIFF') || !ascii(data, 8, 'WAVE')) return null;
-  let format: Omit<WavHeader, 'dataBytes' | 'factFrames'> | null = null;
+  let format: Omit<WavHeader, 'dataBytes' | 'factFrames' | 'dataOffset'> | null = null;
   let dataBytes: number | null = null;
+  let dataOffset = 0;
   let factFrames: number | null = null;
   for (let at = 12; at + 8 <= data.length;) {
     const size = u32(data, at + 4);
     const body = at + 8;
     if (ascii(data, at, 'fmt ') && format === null && size >= 16 && body + 16 <= data.length) {
+      const formatTag = u16(data, body);
+      // WAVEFORMATEXTENSIBLE: cbSize (22) at 16, then 22 bytes; the GUID's first two bytes at 24.
+      const extensible = formatTag === FORMAT_EXTENSIBLE && size >= 40 && body + 26 <= data.length;
       format = {
-        formatTag: u16(data, body),
+        formatTag,
         channels: u16(data, body + 2),
         sampleRate: u32(data, body + 4),
         byteRate: u32(data, body + 8),
         blockAlign: u16(data, body + 12),
         bitsPerSample: u16(data, body + 14),
+        subFormatTag: extensible ? u16(data, body + 24) : null,
       };
     } else if (ascii(data, at, 'fact') && factFrames === null && size >= 4 && body + 4 <= data.length) {
       factFrames = u32(data, body);
     } else if (ascii(data, at, 'data') && dataBytes === null) {
       // A truncated file (or a streaming header with size $FFFFFFFF) plays what is there.
       dataBytes = Math.min(size, data.length - body);
+      dataOffset = body;
     }
     if (format !== null && dataBytes !== null && factFrames !== null) break;
     at = body + size + (size & 1);
   }
   if (format === null || dataBytes === null || format.channels === 0 || format.sampleRate === 0) return null;
-  return { ...format, dataBytes, factFrames };
+  return { ...format, dataBytes, factFrames, dataOffset };
 }
 
 /** How long the sound of a WAVE header plays, in milliseconds. */

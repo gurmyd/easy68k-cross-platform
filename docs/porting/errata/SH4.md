@@ -1,5 +1,7 @@
 # Errata of SH4 (Keyboard, mouse, Output panel)
 
+> **Merge status (DOC1, 2026-11-21; completed in its repair round 1).** Every entry of this file has been read. Merged into the documents, each place marked "erratum SH4 <n>" or naming this file: 1, 6 (ARCHITECTURE.md 2.5 (first round)); 2 (ARCHITECTURE.md 3.12.1); 3, 4, 8, 9, 10, 11, 12, 13, 19 (ARCHITECTURE.md 3.6); 5, 14, 15, 17, 25 (ARCHITECTURE.md 2.5); 7 (ARCHITECTURE.md 2.9.4); 18 (ARCHITECTURE.md 2.9.4 rule 4 (through W3 29)); 21 (the manual list, `docs/MANUAL-TEST-MAC.md` (L1, L2, L4, M9)). Nothing to merge, because no statement of a document is wrong or missing: 16, 22, 23, 24 (records of the browser check); 20 (answers to other packages' notes).
+
 What SH4 found while building `app/src/core/sim-host/input/` and `app/src/features/output/` from
 `docs/ARCHITECTURE.md` sections 2.5, 2.9.4, 2.10, 3.6 and 4.3 and from trap15-a §3.9, tasks 19 and
 24, trap15-b §8 and §9: where the document is silent, contradicts itself or cannot be met as

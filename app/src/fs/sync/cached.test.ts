@@ -92,6 +92,39 @@ describe('CachedSyncFiles: loading and names', () => {
     expect(view.preparedRoots).toEqual(['/memory/demo']);
   });
 
+  it('a name asked for again is answered from memory (a wait loop on task 70), until the names change', async () => {
+    const { view, vfs } = await setup({ 'demo/roger.wav': 'RIFF' });
+    await view.prepare('/memory/demo');
+    const before = view.nameLookups;
+    for (let i = 0; i < 1000; i++) expect(view.resolve('/memory/demo', 'ROGER.WAV')).toBe('/memory/demo/roger.wav');
+    expect(view.nameLookups - before).toBe(1);
+    // A name that does not exist yet keeps its spelling; once another part creates the file in
+    // another spelling, the same question gets the stored one.
+    expect(view.resolve('/memory/demo', 'NEW.TXT')).toBe('/memory/demo/NEW.TXT');
+    await vfs.writeFile('/memory/demo/new.txt', text('n'));
+    await view.whenCurrent();
+    expect(view.resolve('/memory/demo', 'NEW.TXT')).toBe('/memory/demo/new.txt');
+    // Removed by the program and created again in another spelling.
+    expect(view.remove('/memory/demo/new.txt')).toBe(true);
+    expect(view.resolve('/memory/demo', 'New.Txt')).toBe('/memory/demo/New.Txt');
+    expect(view.create('/memory/demo/New.Txt')).toBe(true);
+    expect(view.resolve('/memory/demo', 'NEW.TXT')).toBe('/memory/demo/New.Txt');
+    // A folder that appears below: its stored spelling is used for the rest of the name.
+    expect(view.resolve('/memory/demo', 'SUB\\x.txt')).toBe('/memory/demo/SUB/x.txt');
+    await vfs.mkdirp('/memory/demo/sub');
+    await vfs.writeFile('/memory/demo/sub/x.txt', text('x'));
+    await view.whenCurrent();
+    await view.revalidate();
+    expect(view.resolve('/memory/demo', 'SUB\\X.TXT')).toBe('/memory/demo/sub/x.txt');
+    // Outside every prepared folder until it is prepared.
+    await vfs.writeFile('/memory/other/far.txt', text('f'));
+    expect(view.resolve('/memory/other', 'far.txt')).toBeNull();
+    await view.prepare('/memory/other');
+    expect(view.resolve('/memory/other', 'FAR.TXT')).toBe('/memory/other/far.txt');
+    view.dispose();
+    expect(view.resolve('/memory/other', 'FAR.TXT')).toBeNull();
+  });
+
   it('a second prepare of a covered folder reads nothing again', async () => {
     const { view, vfs } = await setup({ 'demo/a.txt': 'a' });
     await view.prepare('/memory/demo');

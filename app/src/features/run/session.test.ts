@@ -326,9 +326,10 @@ describe.skipIf(!enginesBuilt)(
 
     it('follows the command table of 4.8 through the registry', async () => {
       await start();
-      // Start-up, nothing loaded: Run is enabled (it would halt at once), Close and Reload are not.
+      // Start-up, nothing loaded: Run is enabled (it would halt at once), and so is Close, which the
+      // original's initSim enables with the other eight (sim-ui §3.6); Reload is not (§3.6, last list).
       for (const id of RUN_COMMANDS) expect(enabled(id), id).toBe(true);
-      expect([enabled('sim.file.close'), enabled('sim.run.reload')]).toEqual([false, false]);
+      expect([enabled('sim.file.close'), enabled('sim.run.reload')]).toEqual([true, false]);
       expect([enabled('sim.file.open'), enabled('sim.run.pause'), enabled('sim.run.rewind')]).toEqual([
         true,
         true,
@@ -348,7 +349,8 @@ describe.skipIf(!enginesBuilt)(
         enabled('sim.run.rewind'),
         enabled('sim.file.open'),
         enabled('sim.run.reload'),
-      ]).toEqual([true, true, true, true]);
+        enabled('sim.file.close'), // setMenuTrace enables Pause, Rewind and Close again (sim-ui §3.6)
+      ]).toEqual([true, true, true, true, true]);
       time.advance(100);
       expect(app.ctx.sim.engine.getRegister(Reg.D0)).toBeGreaterThan(1000);
       // A second Run through the registry does nothing.
@@ -516,6 +518,19 @@ describe.skipIf(!enginesBuilt)(
       expect(sim().keyCommands).toBe(false);
       await app.ctx.commands.run('sim.run.rewind'); // a simulator reset switches them on again
       expect(sim().keyCommands).toBe(true);
+    });
+
+    it('Close at start-up, with no program: the Caution question, then the start-up state (sim-ui §3.6, §8.5)', async () => {
+      await start();
+      expect(enabled('sim.file.close')).toBe(true);
+      const closing = app.ctx.commands.run('sim.file.close');
+      await settle();
+      expect(boxes().map((box) => box.request.title)).toEqual([CAUTION_TITLE]);
+      await answer('OK');
+      await closing;
+      expect(sim()).toMatchObject({ phase: 'idle', program: null, menuState: 0 });
+      expect(app.ctx.sim.controller.snapshot.boxes[Box.SS]).toBe('01000000');
+      expect([enabled('sim.file.close'), enabled('sim.run.reload')]).toEqual([true, false]);
     });
 
     it('asks the Caution question for Close, and for Open while a program runs', async () => {

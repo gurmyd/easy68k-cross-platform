@@ -200,6 +200,8 @@ Only `loc` is tested, not `loc+bytes-1`. A word or long access that starts below
 - `pbAddrChange` (`hardwareu.cpp:642-672`) sets `pbLoc` on every text change and enables/disables the eight buttons on `pbLoc >= MEMSIZE` (unreachable). It does not restore the byte at the old address.
 - Not affected by `initialize()`, `initSim()`, hardware Reset, `enable()`/`disable()`.
 
+> **Corrected (erratum SH7 5).** In the port every key except Tab, Escape and a modifier alone presses a focused push button while held (in a VCL form Tab is taken by the dialog-key handling before `OnKeyDown`); Ctrl/Cmd chords are left to the dispatcher, and Space and Enter do not also click the button.
+
 ### 2.6 Address-conflict warning
 
 `addrKeyUp` is the `OnKeyUp` handler of all twelve address edit boxes (four device boxes and eight memory-map boxes) and, in the DFM, also of the twelve read-only `00` boxes. On every key release it recolours the four **device** address texts red or black (`hardwareu.cpp:676-712`):
@@ -212,6 +214,8 @@ Only `loc` is tested, not `loc+bytes-1`. A word or long access that starts below
 | `pbAddr` | `pbLoc >= MEMSIZE`, or in the 7-segment range, or `== LEDloc`, or `== switchLoc` |
 
 It is a warning only. Conflicting addresses are still used, and devices then share bytes (for example switches mapped onto the LED byte light the LEDs). The colours are not recomputed when addresses are set programmatically (startup), and memory-map ranges are never checked against anything.
+
+> **Corrected (erratum SH7 1).** The port recomputes the four conflict colours, from the engine's `hardware()`, inside the queued call of every change the user makes to a device field and of a memory-map field's `start` or `end`; a map check box, the cold start's `setDeviceAddress` calls and anything a program does leave them as they are, and `resetToStartup()` clears them. A change is treated as the key release that caused it.
 
 ### 2.7 When the display is refreshed
 

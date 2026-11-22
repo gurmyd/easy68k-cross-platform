@@ -269,9 +269,13 @@ export class SoundDevice implements SoundDeviceApi {
     return 1;
   }
 
-  /** Starts the one voice; the previous one has ended by itself (the player is not busy). */
+  /**
+   * Starts the one voice. By the clock the previous one has ended (the player is not busy); should
+   * the backend still sound it (it could start only late, waiting for a decoder), it is stopped, so
+   * that the one voice never sounds twice at once.
+   */
   private startStandard(sound: SoundId, durationMs: number, loop: boolean, owned: boolean): void {
-    this.endVoice(false);
+    this.endVoice(true);
     const playback = this.deps.backend.play(sound, loop);
     this.voice = { playback, sound, owned };
     this.standardBusyUntil = loop ? Infinity : this.deps.clock.now() + durationMs;

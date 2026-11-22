@@ -48,11 +48,23 @@ export function locationOf(vfs: Vfs, path: VPath): Location | undefined {
   return locations(vfs).find((location) => location.backend.mount === mount);
 }
 
-/** "My Programs/demo/prog.X68": a path as the user reads it. */
+/**
+ * "My Programs/demo/prog.X68": a path as the user reads it. A linked file (FS2) is shown by its
+ * name under the linked backend's label, "Linked files/prog.X68": the folder `/linked/<id>/` is the
+ * port's own copy, and the store's internal path is never shown (gate I2 review; errata FS1.md
+ * entry 22).
+ */
 export function displayPath(vfs: Vfs, path: VPath): string {
+  if (!isVPath(path)) return path;
+  const { mount, rel } = splitVPath(path);
+  if (mount === 'linked') {
+    const backend = vfs.backends().find((b) => b.mount === 'linked');
+    const name = rel.split('/').slice(1).join('/');
+    const label = backend?.label ?? 'Linked files';
+    return name === '' ? label : `${label}/${name}`;
+  }
   const location = locationOf(vfs, path);
   if (!location) return path;
-  const { rel } = splitVPath(path);
   return rel === '' ? location.label : `${location.label}/${rel}`;
 }
 

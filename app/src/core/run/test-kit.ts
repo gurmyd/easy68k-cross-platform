@@ -77,6 +77,7 @@ export interface KitOptions {
   /** What a cold start applies to a new engine (4.7.1 step 4); default nothing. */
   applySettings?: (engine: SimEngine) => void;
   partsUntouched?: () => boolean;
+  settingsUnchanged?: () => boolean;
   /** Host parts of the test's own, next to the bridge and the hardware double (see `partOf`). */
   parts?: Partial<Omit<SimHostParts, 'main' | 'hardware'>>;
   /** Called when a cold start resets the parts (4.7.1 step 2). */
@@ -439,6 +440,7 @@ export async function createKit(env: KitEnv, options: KitOptions = {}): Promise<
       report: (what, error) => void note(`report:${what}: ${error instanceof Error ? error.message : String(error)}`),
     },
     ...(options.partsUntouched ? { partsUntouched: options.partsUntouched } : {}),
+    ...(options.settingsUnchanged ? { settingsUnchanged: options.settingsUnchanged } : {}),
   };
 
   kit.controller = new SimRunController(deps);

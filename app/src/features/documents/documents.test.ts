@@ -15,6 +15,8 @@ import {
   createMemoryDraftStore,
   DRAFT_DELAY_MS,
   DRAFTS_DIALOG_ID,
+  DRAFTS_GONE_GRACE_MS,
+  DRAFTS_GONE_POLL_MS,
   type DraftStore,
 } from './drafts';
 import { createDocumentService, createDocumentsFeature } from './index';
@@ -55,6 +57,8 @@ function scriptedFileDialogs() {
   const dialogs: FileDialogs = {
     open: async (request) => (openRequests.push(request), opens.shift() ?? null),
     save: async (request) => (saveRequests.push(request), saves.shift() ?? null),
+    chooseFolder: async () => null,
+    linkFileHandle: async () => null,
     registerProvider: () => () => {},
   };
   return { dialogs, opens, saves, openRequests, saveRequests };
@@ -467,11 +471,67 @@ describe('drafts (3.9.4, 3.8.6 rule 4)', () => {
     await c.answer('No');
     expect(await saving).toBe(false);
 
-    // Offered exactly once: another window finds nothing of A's (C is alive).
+    // Offered exactly once: another window finds nothing of A's (C is alive, also after D has
+    // waited the whole grace for C's lock).
     const d = openWindow({ windowId: 'D', drafts, locks, backend });
-    await flushPromises();
+    for (let waited = 0; waited <= DRAFTS_GONE_GRACE_MS; waited += DRAFTS_GONE_POLL_MS) {
+      await flushPromises();
+      d.time.advance(DRAFTS_GONE_POLL_MS);
+    }
     await flushPromises();
     expect(d.stack()).toEqual([]);
+    expect(d.time.pending()).toBe(0);
+    expect(drafts.records.size).toBe(2);
+  });
+
+  it('a window that starts while a crashed window is still listed as alive offers its drafts once the lock is free', async () => {
+    // Playwright's page.close leaves the closed page's lock listed for 10 to 360 ms (errata E1.md
+    // entry 19); a window that looked only once would offer nothing.
+    const drafts = createMemoryDraftStore();
+    const locks = new FakeLocks();
+    const a = openWindow({ windowId: 'A', drafts, locks });
+    a.type(a.manager.active()!.id, 'crashed ');
+    a.time.advance(DRAFT_DELAY_MS);
+    await waitFor(() => drafts.records.size === 1, "A's draft");
+    a.app.dispose(); // A ends, but its lock is still listed
+    await flushPromises();
+    locks.held.add(windowLockName('A'));
+
+    const c = openWindow({ windowId: 'C', drafts, locks });
+    await waitFor(() => c.time.pending() === 1, 'C to wait for A');
+    c.time.advance(DRAFTS_GONE_POLL_MS);
+    await waitFor(() => c.time.pending() === 1, 'C to look again');
+    expect(c.stack()).toEqual([]);
+    locks.held.delete(windowLockName('A'));
+    c.time.advance(DRAFTS_GONE_POLL_MS);
+    await waitFor(() => c.stack().length === 1, 'the drafts offer');
+    expect(c.topText()).toBe('Unsaved changes from your last session were found for untitled1.x68.');
+    await c.answer('Restore', DRAFTS_DIALOG_ID);
+    await waitFor(() => [...drafts.records.values()].every((record) => record.windowId === 'C'), "C's drafts");
+    expect(drafts.records.size).toBe(1);
+  });
+
+  it('after Restore the old drafts are kept when the restored ones could not be written', async () => {
+    const memory = createMemoryDraftStore();
+    let failPuts = false;
+    const drafts: DraftStore = {
+      put: (records) => (failPuts ? Promise.reject(new Error('QuotaExceededError')) : memory.put(records)),
+      remove: (keys) => memory.remove(keys),
+      all: () => memory.all(),
+    };
+    const locks = new FakeLocks();
+    const a = openWindow({ windowId: 'A', drafts, locks });
+    a.type(a.manager.active()!.id, 'work ');
+    a.time.advance(DRAFT_DELAY_MS);
+    await waitFor(() => memory.records.size === 1, "A's draft");
+    locks.held.delete(windowLockName('A'));
+    failPuts = true;
+    const b = openWindow({ windowId: 'B', drafts, locks });
+    await b.answer('Restore', DRAFTS_DIALOG_ID);
+    await waitFor(() => b.manager.list().length === 2, 'the restored document');
+    await flushPromises();
+    await flushPromises();
+    expect([...memory.records.values()].map((record) => record.windowId)).toEqual(['A']);
   });
 
   it('Discard removes the drafts without restoring them', async () => {

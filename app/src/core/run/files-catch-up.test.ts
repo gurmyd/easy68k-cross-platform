@@ -9,7 +9,7 @@
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { Bytes, FileSystemBackend } from '../../contracts';
+import type { Bytes, FileSystemBackend, SyncFiles } from '../../contracts';
 import { createSimEngine, releaseSimEngine } from '../../engine';
 import { assembleProgram } from '../../engine/testing';
 import { MemoryBackend } from '../../fs/memory-backend';
@@ -71,7 +71,21 @@ describe.skipIf(!enginesBuilt)('program files saved outside the simulator (needs
     view = null;
   });
 
-  async function start(backend: FileSystemBackend) {
+  /**
+   * The same cached view without `whenCurrent` (SyncFiles' optional member): the session then has
+   * nothing to wait for, as before the repair. Every other member is the view's own, bound to it.
+   */
+  function withoutWhenCurrent(files: CachedSyncFiles): SyncFiles {
+    return new Proxy(files, {
+      get(target, key) {
+        if (key === 'whenCurrent') return undefined;
+        const value: unknown = Reflect.get(target, key, target);
+        return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+      },
+    });
+  }
+
+  async function start(backend: FileSystemBackend, options: { waitForView?: boolean } = {}) {
     const vfs = createVfs();
     vfs.mount(backend);
     await vfs.mkdirp('/memory/demo');
@@ -86,7 +100,7 @@ describe.skipIf(!enginesBuilt)('program files saved outside the simulator (needs
     session = await createHeadlessSession({
       engines: { create: createSimEngine, release: releaseSimEngine },
       vfs,
-      viewFor: () => files,
+      viewFor: () => (options.waitForView === false ? withoutWhenCurrent(files) : files),
       settleFiles: () => void files.settled(),
       time,
       audio,
@@ -126,6 +140,24 @@ describe.skipIf(!enginesBuilt)('program files saved outside the simulator (needs
       s.controller.run();
       expect(s.controller.phase).toBe('loading');
       expect(resumes).toBe(unlocked + 1);
+      expect(await runToHalt(s)).toBe(11);
+    },
+    ENGINE_TEST_TIMEOUT,
+  );
+
+  it(
+    'the control: without waiting for the view, Run reads the bytes from before the save',
+    async () => {
+      // What the test above would see without the repair (gate I2 review: the repair must be shown
+      // to matter). The command does not wait, the view has not read the change: 'old', 3 bytes.
+      const { vfs, session: s } = await start(new SlowReadBackend(), { waitForView: false });
+      expect(await runToHalt(s)).toBe(3);
+      await vfs.writeFile('/memory/demo/input.txt', text('new version'));
+      s.controller.rewind();
+      expect(await runToHalt(s)).toBe(3);
+      // Once the view has caught up, the next run sees the save.
+      for (let i = 0; i < 20; i++) await settle();
+      s.controller.rewind();
       expect(await runToHalt(s)).toBe(11);
     },
     ENGINE_TEST_TIMEOUT,

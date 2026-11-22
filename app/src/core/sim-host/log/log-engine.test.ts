@@ -5,7 +5,8 @@
 //     for byte;
 //   - the execution and output logs that the official SIM68K.exe wrote under Wine
 //     (build/ground-truth/sim/log, git-ignored; skipped where the folder is missing), from the
-//     programs of tests/oracle/wine/sim/tests;
+//     programs that were in tests/oracle/wine/sim/tests when the logs were made (read from git
+//     history now that T3 has moved them);
 //   - Log Start while a program runs and the file exists: every byte the program writes after the
 //     click is in the log, however long the question stays open;
 //   - a flush of a 30 MB log costs what a flush of a small one costs.
@@ -450,7 +451,9 @@ describe.skipIf(!enginesBuilt)(
           output: 0 | 1;
           drive: 'autotrace' | 'step' | 'run';
         }
-        // The recipes of tests/oracle/wine/sim/sim_proofs.sh (T1, T3).
+        // The recipes of the Wine proof script T1 and T3 used to make these logs. That script
+        // (tests/oracle/wine/sim/sim_proofs.sh) is deleted; the same recipes are now the goldens of
+        // tests/conformance/sim/golden/logs, which T3's suite compares on every CI run.
         const CASES: Case[] = [
           ...['l1_arith', 'l2_bcd_shift', 'l3_memory', 'l4_print', 'l5_branches'].map((program): Case => ({
             label: `${program}-autotrace-type3`,

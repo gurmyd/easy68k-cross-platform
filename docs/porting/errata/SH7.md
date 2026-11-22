@@ -1,5 +1,7 @@
 # Errata and decisions of SH7 (hardware model and panel)
 
+> **Merge status (DOC1, 2026-11-21; completed in its repair round 1).** Every entry of this file has been read. Merged into the documents, each place marked "erratum SH7 <n>" or naming this file: 1, 5 (hardware.md 2.6, 2.5); 2, 4 (ARCHITECTURE.md 3.3.3); 3 (ARCHITECTURE.md 3.10). Nothing to merge, because no statement of a document is wrong or missing: 6 (a record of the acceptance tests; its finding on timer periods was withdrawn, and the rule is merged from SH8 26 (ARCHITECTURE.md 4.5.3)); 7, 8, 9 (records of the browser check).
+
 Where the code of `app/src/core/sim-host/hardware/**` and `app/src/features/hardware/**` differs
 from ARCHITECTURE.md or the specs, or decides something they leave open. No contract change was
 needed.

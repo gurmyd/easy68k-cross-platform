@@ -27,6 +27,7 @@ export function StatusDialog({ props, close }: DialogProps<StatusDialogProps, St
       title={props.title}
       describedBy={countsId}
       className="e68-asm-status"
+      footerAlign="center"
       onCancel={() => close('close')}
       footer={
         <>

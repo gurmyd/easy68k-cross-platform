@@ -285,6 +285,51 @@ describe.skipIf(!enginesBuilt)('loading (needs engine/dist)', { timeout: ENGINE_
       expect(kit.created).toBe(2);
     });
 
+    it('does not skip it when the saved settings changed since the last one (gate I2)', async () => {
+      // An import of sim68K.dat changes the settings without an engine call; the program must be
+      // started with them, as the original's new SIM68K.EXE reads sim68K.dat.
+      let unchanged = true;
+      const exceptions = { on: false };
+      await start({
+        settingsUnchanged: () => unchanged,
+        applySettings: (engine) => engine.setOption(SimOption.Exceptions, exceptions.on),
+      });
+      await kit.put(KIT_PROGRAM_PATH, counter);
+      exceptions.on = true;
+      unchanged = false;
+      await kit.controller.open(KIT_PROGRAM_PATH, 'execute');
+      expect(kit.created).toBe(2);
+      expect(kit.controller.engine.getOption(SimOption.Exceptions)).toBe(1);
+    });
+
+    for (const delivered of [false, true]) {
+      it(`a call the cold start queued itself does not count as a change (${delivered ? 'delivered' : 'still queued'} at the load)`, async () => {
+        // The log service reads the log types of the new engine in its resetToStartup (3.3.5);
+        // that call waits in the queue until the next tick. The skip must not depend on whether
+        // a display frame has delivered it yet (gate I2).
+        const reads: number[] = [];
+        await start({
+          onReset: () => kit.controller.invoke((engine) => void reads.push(engine.getOption(SimOption.Exceptions))),
+          start: false, // `kit` must be this kit when the start resets the parts
+        });
+        await kit.controller.start();
+        await kit.put(KIT_PROGRAM_PATH, counter);
+        if (delivered) kit.time.advance(16);
+        expect(reads).toHaveLength(delivered ? 1 : 0);
+        await kit.controller.open(KIT_PROGRAM_PATH, 'execute');
+        expect(kit.created).toBe(1);
+        kit.time.advance(16);
+        expect(reads).toHaveLength(1);
+        // Interface code that reaches the engine itself is a change: the next Execute starts afresh.
+        await kit.controller.coldStart();
+        expect(kit.created).toBe(2);
+        kit.time.advance(16);
+        kit.controller.invoke((engine) => engine.setBreakpoint(0x1000));
+        await kit.controller.open(KIT_PROGRAM_PATH, 'execute');
+        expect(kit.created).toBe(3);
+      });
+    }
+
     it('finds the listing whatever its letter case, and works without one', async () => {
       await start();
       await kit.vfs.writeFile('/memory/a/Prog.s68', counter.s68);

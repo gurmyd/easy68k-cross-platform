@@ -80,6 +80,22 @@ describe('locations', { timeout: 60_000 }, () => {
     expect(displayPath(vfs, '/browser')).toBe('My Programs');
   });
 
+  it('shows a linked file by its name under the linked label, never as /linked/<id>/ (gate I2 review)', () => {
+    const vfs = createVfs();
+    vfs.mount(new MemoryBackend({ mount: 'browser', kind: 'browser', label: 'My Programs' }));
+    vfs.mount(new MemoryBackend({ mount: 'linked', kind: 'browser', label: 'Linked files' }));
+    expect(displayPath(vfs, '/linked/21d878e9/prog.X68')).toBe('Linked files/prog.X68');
+    expect(displayPath(vfs, '/linked/21d878e9')).toBe('Linked files');
+    expect(displayPath(vfs, '/linked')).toBe('Linked files');
+    for (const path of ['/linked/21d878e9/prog.X68', '/linked/21d878e9', '/linked'] as const) {
+      expect(displayPath(vfs, path)).not.toContain('/linked');
+      expect(displayPath(vfs, path)).not.toContain('21d878e9');
+    }
+    // Without a linked backend mounted, the label is the one FS2 gives it.
+    const bare = createVfs();
+    expect(displayPath(bare, '/linked/0a1b2c3d/lab.X68')).toBe('Linked files/lab.X68');
+  });
+
   it('chooses the first existing folder as start, else the browser store', async () => {
     const vfs = await browserVfs();
     await vfs.writeFile('/browser/demo/a.txt', ascii(''));
