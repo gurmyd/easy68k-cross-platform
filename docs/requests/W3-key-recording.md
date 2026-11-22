@@ -1,5 +1,7 @@
 # Request from W3: record the key fixtures on real keyboards (DOC1, the manual list of 6.8)
 
+Status (checked by W3 in the round before gate I3): the DOC1 part is done: `docs/MANUAL-TEST-MAC.md` has the step (A6 on a Mac, X3 on Windows and Linux; its table of requests names this file). The recording itself is open until a person runs that list and sends the lines; W3 then replaces the fixtures.
+
 ARCHITECTURE.md 2.9.2 asks that the tests of the chord table use "key and code pairs recorded from
 real keyboards". The pairs in `app/src/commands/key-fixtures.ts` were not recorded: W3 had no
 access to the keyboards, and an automated browser cannot stand in (it types through its own US

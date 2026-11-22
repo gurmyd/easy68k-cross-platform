@@ -43,25 +43,20 @@ export function pickFiles(options: PickOptions = {}): Promise<File[] | null> {
     const finish = (files: File[] | null) => {
       if (done) return;
       done = true;
-      window.removeEventListener('focus', onFocus);
       input.remove();
       resolve(files);
     };
+    // A choice ends only with 'change' or 'cancel', which every browser the port supports sends
+    // (Chromium 113, Safari 16.4 and Firefox 91 or later). There is deliberately no fallback on the
+    // window's focus: the browser hands the files over only after it has read them, which can be
+    // seconds after the chooser closed and the focus came back. For a folder it first asks "Upload
+    // N files to this site?"; a file may first have to be fetched (iCloud Drive, a network share).
+    // Giving up one second after the focus came back dropped such an import without a word, first
+    // for folders (repaired before) and then still for files (errata FS1.md entry 27).
     input.addEventListener('change', () =>
       finish(input.files && input.files.length > 0 ? Array.from(input.files) : null),
     );
     input.addEventListener('cancel', () => finish(null));
-    // Browsers without the 'cancel' event: the window gets the focus back when the chooser closes;
-    // if no 'change' follows soon, the user cancelled.
-    // Not for a folder. There the browser asks "Upload N files to this site?" after the chooser has
-    // closed, and hands the files over only when the person has answered and it has listed them:
-    // that can be many seconds after the focus came back, and giving up after one second dropped
-    // the whole import without a word. A folder choice ends only with 'change' or 'cancel'.
-    const onFocus = () => {
-      if (options.folder) return;
-      setTimeout(() => finish(input.files && input.files.length > 0 ? Array.from(input.files) : null), 1000);
-    };
-    window.addEventListener('focus', onFocus);
     document.body.append(input);
     input.click();
   });

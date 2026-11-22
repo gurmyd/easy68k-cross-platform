@@ -77,6 +77,7 @@ export function createFakePlatform(overrides: Partial<Platform> = {}): FakePlatf
     syncFiles: null,
     serial: null,
     net: null,
+    deviceBridge: null,
     ...overrides,
     titles: [],
     nativeMenus: [],

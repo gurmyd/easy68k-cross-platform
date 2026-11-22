@@ -172,9 +172,16 @@ export async function renameEntry(vfs: Vfs, from: VPath, newName: string): Promi
   if (to === from) return to;
   // Names are compared without regard to letter case (storedSpelling): an entry whose name differs
   // from the new one only in case is "already there", unless it is the entry being renamed.
+  // The comparison ignores case too: below a folder that may not be listed (the desktop app's
+  // granted roots, 7.6) resolve keeps the spelling as given, so the entry being renamed comes back
+  // as `to`, not as `from` (docs/requests/W1-case-only-rename.md; errata FS1.md entry 25).
   const existing = await vfs.resolve(parent, newName);
-  if (existing !== null && existing !== from) throw new Error(`"${newName}" already exists.`);
-  const caseOnly = existing === from;
+  const sameEntry = existing !== null && foldCase(existing) === foldCase(from);
+  if (existing !== null && !sameEntry) throw new Error(`"${newName}" already exists.`);
+  const caseOnly = sameEntry;
+  // A case-only rename goes through a temporary name beside the entry. Where that folder may not be
+  // used (above a granted root) the store refuses it: find that out before anything is moved.
+  if (caseOnly) await vfs.list(parent);
   const stat = await vfs.stat(from);
   if (!stat) throw new Error(`"${basename(from)}" no longer exists.`);
   if (stat.kind === 'file') {

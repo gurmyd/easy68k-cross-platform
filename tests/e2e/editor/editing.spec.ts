@@ -243,6 +243,31 @@ test.describe('undo and redo (note 5)', () => {
     await expect.poll(async () => (await app.status())[1]).toBe('');
   });
 
+  // The failure of the test above on GitHub's macOS runner (and in a Debian container: " PASTEDbase")
+  // was a product defect, not a paste in two steps: on a slow machine the focus that the Save As
+  // dialog gives back moved the caret to the start of the document (errata E2.md entry 16; X1.md
+  // entry 10). A CPU slowed down through the DevTools protocol shows it on any machine: before the
+  // repair 7 of 8 such runs failed.
+  test('after Save As on a slow machine the caret stays where it was (Chromium, CPU slowed 16 times)', async ({
+    app,
+    page,
+    browserName,
+  }) => {
+    test.skip(browserName !== 'chromium', 'the DevTools protocol that slows the CPU is Chromium only');
+    await given(app, 'base');
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 16 });
+    try {
+      await app.saveAs('slow.X68');
+      const caret = (await app.selection()).head;
+      await app.paste(' PASTED');
+      await expect.poll(() => app.text()).not.toBe('base');
+      expect({ caret, text: await app.text() }).toEqual({ caret: 4, text: 'base PASTED' });
+    } finally {
+      await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    }
+  });
+
   test('Undo and Redo of the toolbar and the Edit menu', async ({ app }) => {
     await given(app, 'one');
     await app.paste(' two');

@@ -546,6 +546,8 @@ describe('the feature: commands, the status dialog, Execute, Load L68, Clear', (
     expect(w.app.ctx.store.getState().mode).toBe('simulator');
     expect(w.loads).toEqual([['/browser/demo/prog.S68', 'execute']]);
     expect(activeId(w)).toBe(doc.id);
+    // Q1-2: the focus goes to the Listing, not to the hidden editor the dialog would return to.
+    expect(shellStateOf(w.app.ctx).getState().focusRequest?.panel).toBe('listing');
   });
 
   it('Load L68 opens the listing as a list document; Close does nothing', async () => {

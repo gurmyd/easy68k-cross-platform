@@ -13,7 +13,7 @@ EASy68K is widely used to teach 68000 assembly language. This project takes the 
 
 There are two ways to use it:
 
-- **The web version**: open <https://gurmyd.github.io/easy68k-cross-platform/> in Chrome, Edge or Safari. Nothing is installed. Your programs are kept in the browser on your own computer; nothing is sent anywhere.
+- **The web version**: open <https://gurmyd.github.io/easy68k-cross-platform/> in Chrome, Edge or Safari. Nothing is installed. Your programs are kept in the browser on your own computer; they are not uploaded anywhere. Firefox is not tested.
 - **The macOS app**: the same program as a Mac application, for Apple Silicon and Intel Macs, with direct access to the files on your disk. It is built and tested automatically, but it has **not been released yet**, so there is nothing to download today.
 
 ## What works today
@@ -26,10 +26,10 @@ Everything below has automated tests. No person has tried it on a Mac yet: the l
 - **Simulator**: run, step, trace, breakpoints (simple and advanced), the memory and stack views, the hardware window, logging, text and graphics output, keyboard and mouse input, sound, and files that a 68000 program reads and writes.
 - **The original's help pages and its example programs** (Help > Examples...).
 - **The web version** can be installed as an app from the browser and then works offline.
-- **Test runs**: every change is tested automatically on GitHub's Windows, macOS and Linux machines, in the engines of Chrome (Chromium) and Safari (WebKit). Every official example is opened, assembled, executed and run in the real application in both engines.
+- **Test runs**: every change is tested automatically on GitHub's Windows, macOS and Linux machines, in the engines of Chrome (Chromium) and Safari (WebKit) as the test tool Playwright ships them (not in Safari itself, and not in Firefox). Every official example is opened, assembled, executed and run in the real application in both engines.
 - **The macOS app** is built and signed (ad hoc, without an Apple developer account) by the release workflow (`.github/workflows/release.yml`) for Apple Silicon and Intel, and the built app passes its automatic checks on GitHub's Mac machines of both kinds. No release has been published from it.
 
-Known defects and open items are listed in [docs/integration/wave2.md](docs/integration/wave2.md). Everything the port does differently from the original, and why, is in [docs/DIFFERENCES.md](docs/DIFFERENCES.md).
+Everything the port does differently from the original, and why, is in [docs/DIFFERENCES.md](docs/DIFFERENCES.md); its last part lists the limitations known today (for example, a folder holding a large Git repository can crowd a program's own files out of what it may open in the web version). Open defects are listed in [docs/integration/rc.md](docs/integration/rc.md) and [docs/integration/wave2.md](docs/integration/wave2.md).
 
 ## Using it
 
@@ -141,7 +141,7 @@ npm run build
 npm run test:e2e
 ```
 
-On Linux, `--with-deps` installs the libraries the browsers need, and asks for your password (it uses `sudo`). There are also about thirty single checks, one per part of the application, such as `npm run check:shell`; `package.json` lists them.
+On Linux, `--with-deps` installs the libraries the browsers need, and asks for your password (it uses `sudo`). There are also more than thirty single checks, one per part of the application, such as `npm run check:shell`; `package.json` lists them.
 
 [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) explains how the project is organised, how to change it, and the rules a change must follow. The design is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

@@ -1,7 +1,8 @@
 # DV4: wiring the serial and network devices into the main process (for DV2)
 
-Status: made on DV4's branch (`gate3/dv4`) to prove 3.3.4 on the macOS runner; DV2 (owner of the
-two files) or the gate takes it over.
+Status: done. Both edits came to the main branch with the merge of DV4 (commit 7a1c3b4) and are
+taken over by DV2 as they are, in the round before gate I3 (`desktop/src/main.ts` lines 69-70 and
+228-229, `desktop/src/sync-ipc.ts` the Promise reply; docs/porting/errata/DV2.md entry D2).
 
 Without these two changes nothing of 3.3.4 can run in the desktop app: no file of the main process
 loads DV4's `desktop/src/net.ts` and `serial.ts`, and a device call cannot wait for an operation

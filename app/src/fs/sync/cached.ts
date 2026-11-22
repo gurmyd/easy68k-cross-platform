@@ -533,7 +533,41 @@ export class CachedSyncFiles implements SyncFiles {
     }
     const depth = this.depthBelow(root.path, dirname(change.path));
     if (depth > this.limits.maxDepth) return;
-    await this.reload({ path: change.path, size: stat.size, mtime: stat.mtime, readOnly: stat.readOnly });
+    const found: Found = { path: change.path, size: stat.size, mtime: stat.mtime, readOnly: stat.readOnly };
+    if (change.appended && this.applyAppend(found, change.appended)) return;
+    await this.reload(found);
+  }
+
+  /**
+   * An append made through the same Vfs says what it added (VfsChange.appended, request
+   * SH6-append-change): when the copy is exactly what storage held before it, unchanged by the
+   * program, and storage now holds exactly that plus the bytes, the bytes are added to the copy and
+   * nothing is read. An execution log of 30 MB in the program's folder then costs each flush what
+   * it added, not a read of the whole file (errata SH6.md entry 13). Anything else - the program
+   * changed the copy, a write of its own is landing, an append was missed, the file grew beyond the
+   * limits - returns false, and the whole file is read as before.
+   */
+  private applyAppend(found: Found, appended: { at: number; data: Bytes }): boolean {
+    const stored = this.lookupFile(found.path);
+    const file = stored ? this.files.get(stored) : undefined;
+    if (!stored || !file || file.dirty || file.rewrite || this.behind.isPending(stored)) return false;
+    const { at, data } = appended;
+    if (file.size !== at || file.storedSize !== at || found.size !== at + data.length) return false;
+    if (found.size > this.limits.maxFileBytes || this.totalBytes(stored) + found.size > this.limits.maxTotalBytes)
+      return false; // reload() marks it unavailable
+    if (found.size > file.buf.length) {
+      const grown = new Uint8Array(Math.max(found.size, file.buf.length * 2, 64));
+      grown.set(file.buf.subarray(0, file.size));
+      file.buf = grown;
+    }
+    file.buf.set(data, at);
+    file.size = found.size;
+    file.storedSize = found.size;
+    file.mtime = found.mtime;
+    file.readOnly = found.readOnly;
+    file.whole = null;
+    // `generation` counts the program's changes only; this is storage's own, already in storage.
+    return true;
   }
 
   /** Reads one file from storage into memory, unless the program changes it meanwhile. */

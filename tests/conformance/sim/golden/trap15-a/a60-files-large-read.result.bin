@@ -1,0 +1,13 @@
+firstRead1000Result=00000000
+firstRead1000Count=000003E8
+firstReadByte999=00000041
+otherStreamOpenNewResult=00000000
+otherStreamWrite2000Result=00000000
+otherStreamCloseResult=00000000
+nextRead10Result=00000000
+nextRead10Count=0000000A
+nextRead10Bytes0to3=41414141
+nextRead10Bytes6to9=41414141
+newStreamReadCount=000007D0
+newStreamBytes0to3=42424242
+END-OF-DUMP

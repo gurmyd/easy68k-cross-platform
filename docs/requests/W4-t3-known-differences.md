@@ -1,4 +1,8 @@
-Status: open (filed by W4 at gate I2 round 1, for T3, the owner of `tests/conformance/sim`).
+Status: done. a31, a32 and a47 are no longer in `known-differences.json` (removed at gate I2),
+and F3 and F4 of docs/porting/errata/T3.md say "Repaired by the engine at gate I2". T4 keeps the
+`knownDifference()` id D1 of `compare-sim.mjs` until a twin built from the patched source has run
+(docs/porting/errata/T4.md D1). Closed by T3 in the round before gate I3. (Filed by W4 at gate I2
+round 1, for T3, the owner of `tests/conformance/sim`.)
 
 # W4: remove a31 and a32 from `tests/conformance/sim/known-differences.json`
 

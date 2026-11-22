@@ -99,6 +99,7 @@ describe('createWebPlatform', () => {
     expect(platform.syncFiles).toBeNull();
     expect(platform.serial).toBeNull();
     expect(platform.net).toBeNull();
+    expect(platform.deviceBridge).toBeNull(); // docs/requests/DV4-platform-device-bridge.md
     expect(platform.setFullScreen).toBeNull();
     expect(platform.pasteIntoFocus).toBeNull();
     expect(platform.showHelp('main.htm')).toBe(false);

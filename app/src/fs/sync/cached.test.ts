@@ -337,6 +337,45 @@ describe('CachedSyncFiles: changes made by others', () => {
     expect(view.stat('/memory/demo/input.txt')).toBeNull();
   });
 
+  // Request SH6-append-change, errata SH6.md entry 13: U4's execution log beside the program.
+  it('an append through the Vfs (the log) is added to the copy without reading the file', async () => {
+    const { view, vfs } = await setup({ 'demo/run.log': 'line 1\n' });
+    await view.prepare('/memory/demo');
+    const reads = vi.spyOn(vfs, 'readFile');
+    for (let i = 2; i <= 5; i++) {
+      await vfs.appendFile('/memory/demo/run.log', text(`line ${i}\n`));
+      await view.whenCurrent();
+    }
+    expect(reads).not.toHaveBeenCalled();
+    expect(str(view.read('/memory/demo/run.log', 0, 1000))).toBe('line 1\nline 2\nline 3\nline 4\nline 5\n');
+    expect(view.stat('/memory/demo/run.log')).toEqual({ size: 35, readOnly: false });
+    // The copy is storage's: nothing is written back, and revalidate() reads nothing either.
+    expect(view.unsettled).toBe(false);
+    await view.revalidate();
+    expect(reads).not.toHaveBeenCalled();
+  });
+
+  it('an append the copy cannot follow (missed, or the program changed the copy) reads the file', async () => {
+    const { view, vfs } = await setup({ 'demo/run.log': 'abc' });
+    await view.prepare('/memory/demo');
+    const reads = vi.spyOn(vfs, 'readFile');
+    // Two appends that land before the view looks: the second says "at 4", the copy has 3 bytes.
+    const first = vfs.appendFile('/memory/demo/run.log', text('d'));
+    const second = vfs.appendFile('/memory/demo/run.log', text('e'));
+    await Promise.all([first, second]);
+    await view.whenCurrent();
+    expect(str(view.read('/memory/demo/run.log', 0, 100))).toBe('abcde');
+    expect(reads).toHaveBeenCalled();
+    reads.mockClear();
+    // The program changed its copy: its bytes win, as for any outside change (entry 5).
+    view.write('/memory/demo/run.log', 0, text('X'));
+    await vfs.appendFile('/memory/demo/run.log', text('f'));
+    await view.whenCurrent();
+    expect(str(view.read('/memory/demo/run.log', 0, 100))).toBe('Xbcde');
+    await view.settled();
+    expect(await stored(vfs, '/memory/demo/run.log')).toBe('Xbcde');
+  });
+
   it('a change in another window (the backend reports it) replaces the cached bytes', async () => {
     const { view, backend } = await setup({ 'demo/shared.txt': 'old' });
     await view.prepare('/memory/demo');

@@ -153,3 +153,44 @@ does not fit the code that exists, what the repository does, and why.
   returns it) therefore gives 0 and writes "255.255.255.255" to (A2), and `remote` stays
   INADDR_NONE. Whether Winsock's `gethostbyname` accepts that numeric string as Node does is not
   verified (no Windows check of it was possible here); if it does not, the original gives 8.
+
+## Round before gate I3 (one engineer for wave three and the desktop app)
+
+### 15. Task 100 over TCP to 0.0.0.0 or port 0 (repaired; found by the review of DV4)
+
+- Winsock's `connect()` documents WSAEADDRNOTAVAIL for "a remote address that is not valid (such
+  as INADDR_ANY)". Node (and Linux and macOS under it) connects 0.0.0.0 to the local machine, and
+  the page passed the address on unchanged, so task 100 over TCP to "0.0.0.0" gave 0 and a working
+  connection to a local server (the review's probe M1).
+- Does: `DesktopNet.connect` (`core/sim-host/net/desktop.ts`) answers EADDRNOTAVAIL itself when
+  `remote` is 0 or the port is 0, without asking the main process, as entry 7 does for UDP:
+  task 100 gives `$27410001`, and every later send retries and gets the same. Port 0 was already
+  answered so by the main process (Node's ERR_SOCKET_BAD_PORT); now the page gives it on every
+  system. Test: "client: 0.0.0.0 or port 0 returns (WSAEADDRNOTAVAIL << 16) + 1 without asking the
+  main process" in `desktop.test.ts` (fails without the change: D0 = 0). The original's answer
+  comes from the Winsock documentation; the official binary was not run for it.
+
+### 16. Serial Ports dialog: a problem under the Name field moved the row's Device label (repaired)
+
+- The text of a problem with a name ("com4 is in the list twice.") was wider than the Name field
+  and widened it, so the Device label of that row stood about 7 px to the right of the others.
+- Does: `desktop-devices.css` keeps the Name field at its own width and wraps its message inside
+  it. `check-desktop-devices.mjs` now opens the dialog, makes a duplicate name and checks that the
+  four rows keep the same columns (Name field left and width, Device label, Device field), that OK
+  is disabled and that Escape changes nothing; screenshot `<browser>-serial-ports-problem.png`.
+
+### 17. Entries 1 and 2: the contract member and the command exist now
+
+- W1 added `Platform.deviceBridge?` (optional, null on the web; docs/requests/DV4-platform-device-bridge.md),
+  and W3 added `sim.options.serialPorts` at the end of Simulator mode's Options menu
+  (docs/requests/DV4-serial-ports-command.md), both in the round before gate I3. `deviceBridgeOf`
+  keeps reading the member defensively (it accepts any platform object and checks the bridge's two
+  functions), which is correct with the typed member too. The feature now handles the command; test
+  "handles sim.options.serialPorts, enabled in the desktop app only" in `model.test.ts`. Item 3 of
+  the command request (the parity matrix row) is for X2.
+
+### 18. Entry 3 and `docs/requests/DV4-device-wiring.md`: taken over by DV2
+
+- The two edits in DV2's `desktop/src/main.ts` and `desktop/src/sync-ipc.ts` are on the main branch
+  since the merge of DV4 (commit 7a1c3b4) and are DV2's now; DV2 errata entry D2 records it. The
+  request is closed.

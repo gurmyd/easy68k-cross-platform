@@ -4,6 +4,7 @@
 /* ---- Messages panel ------------------------------------------------------------------------- */
 
 .e68-asm-messages {
+  position: relative; /* holds the visually hidden log region (MessagesPanel.tsx) */
   display: flex;
   flex-direction: column;
   height: 100%;

@@ -497,6 +497,98 @@ entry 28 and the lines marked "Gate I1, round 2" in its second round.
   4.8's row should read "the phase is not `loading`". Tests: `session.test.ts` ("follows the
   command table of 4.8", "Close at start-up, with no program").
 
+### 40. A sub-slice is bounded by time as well as by count (4.2; docs/porting/speed.md 4.1, round before gate I3)
+
+- Says: 4.2, the slice loop runs `engine.run(n)` with `n` a sub-slice of up to `SUBSLICE`
+  instructions while the frame's time budget (8 ms, or half the frame interval) lasts; it looks at
+  the clock only between two calls.
+- Problem (P1, speed.md 4.1; needs of the last round): a TRAP #15 drawing task costs far more than
+  an instruction. While `draw.X68` ran, one `engine.run(2000)` took 6 to 21 ms (95th percentile),
+  longer than the whole budget at 120 Hz (4.2 ms) and at times than the 8 ms at 60 Hz; the budget
+  rule cannot stop a call that is already running, so frames overran by up to one call and the
+  interface stuttered, where the original pumps its message queue after every instruction.
+- Does: the proposal of speed.md 4.1. The governor keeps the engine time per executed
+  instruction, smoothed over the last calls (`Governor.timed`, weight 1/2), and the next call is
+  `min(next(speed), fits(remaining budget))`, where `fits` is the remaining budget divided by that
+  cost, at least 1 (`Governor.fits`). Until a call has been timed, and while calls take no
+  measurable time (virtual time in tests; a call shorter than the clock's resolution), there is no
+  bound. A program of plain instructions keeps sub-slices of 2000 (they take well under a
+  millisecond); a drawing program gets sub-slices of a few passes. Nothing a program can observe
+  changes: the allowance, the instruction counts and the spacing of input edges (one edge per
+  `subslice(ips)` executed instructions, 4.3) count instructions, not calls, and queued input is
+  delivered between two calls as before, only sooner in a dear slice (as in the original, which
+  delivers between any two instructions). For the document: 4.2's loop should read
+  `n = min(subslice, allowance, max(1, floor(remaining budget / measured ms per instruction)))`.
+- Tests: `governor.test.ts` ("the time bound of a sub-slice": no bound until timed or while calls
+  take no time; the fit at the smoothed cost; back to whole sub-slices when calls are cheap again);
+  `controller.governor.test.ts` ("bounds a sub-slice by the time the frame has left": an engine
+  whose instructions cost 0.01 ms each; without the bound every frame took 20 ms, with it 8 ms
+  plus at most one instruction; the existing tests of the 8 ms and 120 Hz budgets are unchanged).
+- Not done: the second proposal of speed.md (4.3, publish and present only when something changed):
+  the controller already publishes only when something changed (`publish()` returns when nothing
+  is dirty, and a free-running slice is "quiet"); what TaskDuration still spends per frame there is
+  the Output panel's and the browser's, not measured again this round. `DEFAULT_IPS` stays
+  1,000,000 until the owner has measured the original (speed.md 5, decision O-1). `SLICE_FRAME_SHARE`
+  and the Maximum threshold of 6.9 item 9 are the architect's (speed.md 4.2): not changed.
+
+### 41. The Maximum check of check-run.mjs proves "unthrottled", not the runner's speed (CI runs 44972001171 and that of 191e768)
+
+- Problem: the check "F9 runs; at Maximum the program executes far more than a million
+  instructions per second (best of three)" asked for more than 2.5 million per second of wall
+  clock: its caption said one million, its number was two and a half. It failed on GitHub's macOS
+  runner, Chromium only, twice: 1,611,516, 1,059,007 and 1,510,280 (run 44972001171, rerun), and
+  2,210,180, 1,940,008 and 1,354,003 (the run of main's head 191e768, job "browser-checks
+  (macos-latest, simulator)"; log in build/gate3/ci-191e768-mac-sim-failed.log). The same job's
+  figures show why: that Chromium delivered frames 55 to 133 ms apart (the default-speed check: 7 of
+  15 gaps over 50 ms; 18 frames per second at Maximum), and the time budget is per frame by design
+  (4.2: 8 ms per frame), so 18 frames give the engine about 144 ms of each second. WebKit on the same
+  runner, at 61 frames per second, made 8.9 to 10.1 million per second. The product did what 4.2
+  says; the threshold measured the runner. A first repair in this round (ratio to the default's
+  computed grant, factor 2.5, the wall-clock figure kept on steady frames) would have given about
+  2.4 for the 191e768 figures and failed again: any rule of the form "Maximum's rate > k x
+  something" depends on the engine's raw speed when the frames are slow.
+- What the check is for: 4.2 and 4.5.6 promise that at `Maximum` no instruction count throttles
+  the program, only the engine's time budget per frame. How fast that is on a given machine is
+  section 6.9 item 9's figure (200 million in 10 s at Maximum), which belongs to Chromium on
+  ubuntu-latest and is measured by tests/perf (P1); the browser check does not repeat it.
+- Does: three pairs of half-second windows, back to back in the same run of `counter.X68`: one
+  at the default speed, then one at Maximum (the speed is changed through the settings while the
+  program runs; 200 ms to settle). In each window the page times the controller's `engine.run`
+  calls (an own-property wrapper around the engine's method, removed after the window), counts the
+  display frames and adds up the time budget the governor allows for them (`budgetFor(gap)` =
+  min(8, gap / 2) per gap, the constants of `governor.ts`, asserted equal in the unit test).
+  `judgeMaximum` passes when one pair shows both: the engine ran at least 60 % of its budget at
+  Maximum (`BUSY_SHARE`: what stopped it was the time, not a count), and the program executed at
+  least twice the default's rate of the same pair (`MAXIMUM_FACTOR`: under the same frames and the
+  same load). Both hold on any machine, fast or slow, with any frame rate; a Maximum that falls back
+  to a rate, or that a count stops early, fails either one. The detail prints per pair the two
+  rates, the factor, the engine time against the budget and the engine's own rate while it ran, and
+  the frames and gaps, so that the CI log alone tells the runner from the product.
+- Evidence on this PC (Windows, loaded by four other engineers): Chromium 12.4 to 12.7 million per
+  second at Maximum, 12.1 to 12.7 times the default, engine 95 to 96 % of its budget (27 million per
+  second while it ran; 17 of 240 ms at the default); WebKit 4.0 to 4.7 million, 4.1 to 6.6 times,
+  96 to 101 % (WebKit at 4.0 million would have come close to the old 2.5 million rule on a busy
+  machine). `check-run.mjs --browser all`: 102 of 102. Estimated for the 191e768 macOS figures: 2.2
+  million against a default of 0.6 to 0.8 million is 2.8 to 3.7 times, and an engine held by an 8 ms
+  budget at 18 frames per second is busy close to 100 % of it. Only the next CI run on macos-latest
+  can show the real figures there. Tests: `run-verdicts.test.ts` ("judgeMaximum": the governor
+  constants, steady frames, the macOS figures, a throttled Maximum, a Maximum stopped early by a
+  count, a busy engine no faster than the default, both conditions needed in the same pair).
+
+### 42. A halt is announced: the run-state cell of the status bar is a status region (2.11; finding Q1-5)
+
+- Says: 2.11, "a halt and `Current Log Stopped.` are announced". Q1's audit (docs/integration/rc.md,
+  Q1-5) ran a program to `SIMHALT` and heard only the load's message: the status bar shows `Halted`
+  but was no live region.
+- Does: the run-state cell (`data-e68-status="run"`, `features/run/StatusBar.tsx`) has
+  `role="status"` (polite, atomic), so `Halted`, `Stopped`, `Running`, `Waiting for input` and the
+  others are announced when they change. The other cells are not live: the PC changes at every step,
+  and the speed and the two flags change only by the user's own action. `Current Log Stopped.` is
+  an `alertdialog` (U4), announced by its role. Tests: `StatusBar.test.tsx` (one status region, the
+  run cell); `node tests/a11y/check-a11y.mjs --only structure`: "a halt is announced by a live
+  region" passes in Chromium and WebKit, both key maps and both themes (the live regions said
+  `Halted`).
+
 ### 28. A session or controller disposed before it starts stays inert (3.12.3, 4.7.1)
 
 - Says: nothing about a session that is disposed before its start. The session starts in the

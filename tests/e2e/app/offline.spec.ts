@@ -99,11 +99,8 @@ test.describe('installed-app manifest', () => {
   });
 
   test('the manifest declares file handlers for .x68, .l68 and .s68 (5.7)', async ({ app, page }) => {
-    // Known open item, not a defect of the suites: DV1's erratum 6 leaves the handlers out on
-    // purpose until the launch queue has a consumer (FS2 erratum, "left for gate I1 to assign").
-    // Expected to fail until then; when the handlers land this test reports "expected to fail,
-    // but passed": delete this line then.
-    test.fail(true, 'DV1 erratum 6: the manifest has no file_handlers yet (5.7), awaiting a gate decision');
+    // The launch queue that consumes them is features/pwa/launch.ts (DV1 erratum 13); what it does
+    // with a launched file is tests/e2e/app/launch.spec.ts.
     expect(await app.mode()).toBe('editor');
     const href = await page.evaluate(() => document.querySelector<HTMLLinkElement>('link[rel=manifest]')?.href ?? null);
     const manifest = await page.evaluate(async (url) => (await fetch(url)).json(), href!);

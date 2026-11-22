@@ -1,6 +1,8 @@
 # DV4: `Platform.deviceBridge` in the contract (for W1)
 
-Status: open. DV4 uses a local adapter meanwhile (docs/porting/errata/DV4.md, entry 1).
+Status: done in the round before gate I3 (W1), as an optional member: `readonly deviceBridge?: DesktopDeviceBridge | null` on `Platform` (`contracts/platform.ts`), optional like every other desktop-only member (errata W1.md entry 14.5: "optional by meaning: desktop only"), so that no fake platform in the tree had to change. `platform/web.ts` and `createFakePlatform` (`state/testing.ts`) give null; `platform/desktop.ts` (DV2) has it already. DV4 may now read `ctx.platform.deviceBridge ?? null` in `deviceBridgeOf` and drop the cast. Errata W1.md entry 16.3.
+
+(Original status: open. DV4 uses a local adapter meanwhile (docs/porting/errata/DV4.md, entry 1).)
 
 `features/desktop-devices` asks the main process which serial devices the machine has
 (`serial.list`), for the Serial Ports dialog. The bridge is `DesktopPlatform.deviceBridge`

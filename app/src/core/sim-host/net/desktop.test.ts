@@ -253,6 +253,26 @@ describe('TCP', () => {
     expect(net.createNetClient(settings(4000, TCP), ascii('127.0.0.1'), 0x1000)).toBe(0x274d0001);
   });
 
+  it('client: 0.0.0.0 or port 0 returns (WSAEADDRNOTAVAIL << 16) + 1 without asking the main process', () => {
+    // Winsock's connect() refuses INADDR_ANY as a remote address; Node would connect it to the
+    // local machine (review of DV4, wave three).
+    for (const [address, port] of [
+      ['0.0.0.0', 4000],
+      ['0', 4000],
+      ['127.0.0.1', 0],
+    ] as const) {
+      const { net, main, memory } = setup();
+      expect(net.createNetClient(settings(port, TCP), ascii(address), 0x1000)).toBe(0x27410001);
+      expect(main.count('net.connect')).toBe(0);
+      expect(net.state.type).toBe(2);
+      // A later send retries the connect and gets the same answer.
+      memory.set(ascii('abc'), 0x2000);
+      expect(net.sendNet(3, 0x2000, ascii(''))).toEqual({ result: 0x27410001 });
+      expect(main.count('net.connect')).toBe(0);
+      expect(main.count('net.send')).toBe(0);
+    }
+  });
+
   it('client: still pending after 5000 ms returns 0; sends retry and report 0 bytes until connected', () => {
     const main = workingMain();
     let state = 'pending';

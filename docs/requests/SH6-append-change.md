@@ -1,7 +1,11 @@
 # Request from SH6: let a local append say what it appended (contracts/fs.ts, fs/vfs.ts)
 
-Status: open (gate I2 round 1). Optional; nothing breaks without it. For the contracts engineer
-(`VfsChange` in `app/src/contracts/fs.ts`) and the owner of `app/src/fs/vfs.ts`.
+Status (SH6, round before gate I3): closed. SH6's side is in place: `CachedSyncFiles` (`fs/sync/cached.ts`, `applyAppend`) adds `appended.data` to its copy without a read when the copy is unchanged by the program and exactly `at` bytes long and storage is now exactly `at + data.length`; otherwise it reads the whole file as before. Tests in `fs/sync/cached.test.ts`; errata SH6.md entry 13.
+
+Status: done as asked in the round before gate I3 (W1, contracts and `fs/vfs.ts`). `VfsChange.appended?: { at: number; data: Bytes }` in `contracts/fs.ts`; `Vfs.appendFile` sets it on its 'local' change, with `at` from a `stat` taken inside the path's queue just before the append, and `data` a copy made at the call (the file stores the same copy). It is absent for every other change, and for an append whose size before could not be learnt (the `stat` failed). Tests: four in `fs/vfs.test.ts` ("an append says where it appended and what; ..."), `contracts.test.ts`. SH6 may now apply the bytes to its copy in `CachedSyncFiles` (U4's 30 MB log). Errata W1.md entry 16.2.
+
+(Original status: open (gate I2 round 1). Optional; nothing breaks without it. For the contracts engineer
+(`VfsChange` in `app/src/contracts/fs.ts`) and the owner of `app/src/fs/vfs.ts`.)
 
 ## Why
 

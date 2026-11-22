@@ -153,5 +153,6 @@ export function createWebPlatform(win: Window = window): Platform {
     syncFiles: null,
     serial: null,
     net: null,
+    deviceBridge: null, // no serial devices in a browser (docs/requests/DV4-platform-device-bridge.md)
   };
 }

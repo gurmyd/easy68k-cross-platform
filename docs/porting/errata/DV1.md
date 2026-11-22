@@ -165,3 +165,24 @@ import `app/src/fs`, and no contract reaches it. Filed as `docs/requests/DV1-lau
 (easy68k-cross-platform) is now used in `check-pwa.mjs` (the sub-path it serves under), the tests'
 example URLs, `sw.ts`'s comment and `pages.yml`'s comments; the build still takes the sub-path from
 `EASY68K_BASE` only.
+
+## 13. File handlers of the installed app (5.7): done
+
+Entries 6 and 12 are settled. FS2's `upload` provider has `linkFileHandle` (FS2 erratum 14), so the
+launch queue has its consumer:
+
+- `app/public/manifest.webmanifest` declares
+  `"file_handlers": [{ "action": "./", "accept": { "text/plain": [".x68", ".l68", ".s68"] } }]`.
+- `features/pwa/launch.ts` sets the consumer of `window.launchQueue` on the web platform (none in
+  the desktop app, and nothing where the browser has no launch queue). After the other features'
+  `init()` it links each file through `ctx.fileDialogs.linkFileHandle` and opens them as the desktop
+  association does (5.7): `.X68`, `.L68` and any other name in Editor mode as documents, in order;
+  the first `.S68` in Simulator mode with the origin `association` (a fresh simulator, loaded, not
+  run), as `features/run`'s `openAssociatedFiles` takes only the first. A file that cannot be
+  linked is named in a toast, `"<name>" could not be opened.` (the port's own text).
+- Tests: `launch.test.ts` (the rules, the toast, the consumer set only on the web and run after
+  `init()`, the manifest's handlers); X1's `tests/e2e/app/launch.spec.ts` gives the page a launch
+  queue with a real `FileSystemFileHandle` of the origin's private file system in Chromium and
+  checks the opened document, its status line and that Save writes back. Not tried: a real
+  installation and a double-click in a file manager (on the manual list; Playwright cannot install
+  an app).

@@ -12,6 +12,7 @@
 //   - Horizontal scrolling is ordinary scrolling; the heading scrolls with the text (1.4 note 33).
 //   - Added for the keyboard (docs/differences/U1.md): Enter does what a double-click does, Space
 //     toggles the breakpoint of the selected row, Shift+F10 or the Menu key opens the gutter menu.
+//   - For screen readers a row with a breakpoint or the PC is described as such (`ROW_NOTES`).
 
 import {
   useCallback,
@@ -36,6 +37,28 @@ export const LISTING_HEADING = ' Address  --------Code---------   Line ---------
 export const GUTTER_WIDTH = 24;
 
 const ROW_ID = (base: string, row: number) => `${base}-row-${row}`;
+
+/**
+ * What a screen reader is told about a row beyond its text (2.11 "nothing depends on colour
+ * alone"; finding Q1-4 of docs/integration/rc.md). The gutter's dots and the PC marker are drawn
+ * and `aria-hidden`, so a row with a breakpoint or the current instruction points with
+ * `aria-describedby` at one of these hidden texts, which sit beside the listbox.
+ */
+export const ROW_NOTES = {
+  bp: 'breakpoint',
+  pc: 'current instruction',
+  both: 'breakpoint, current instruction',
+} as const;
+
+export type RowNote = keyof typeof ROW_NOTES;
+
+/** The note of a row with (`breakpoint`) a PC breakpoint set and (`current`) the PC marker. */
+export function rowNote(breakpoint: boolean, current: boolean): RowNote | null {
+  if (breakpoint) return current ? 'both' : 'bp';
+  return current ? 'pc' : null;
+}
+
+const NOTE_ID = (base: string, note: RowNote) => `${base}-note-${note}`;
 
 export function ListingPanel() {
   const ctx = useAppContext();
@@ -199,8 +222,10 @@ export function ListingPanel() {
           const code = isCode(row);
           const address = code ? ctx.sim.listing.addressOf(row) : null;
           const on = address !== null && breakpoints.has(address);
+          const note = rowNote(on, row === pcRow);
           return {
             id: ROW_ID(base, row),
+            'aria-describedby': note ? NOTE_ID(base, note) : undefined,
             role: 'option',
             'aria-selected': row === selected,
             // An option needs a name; a blank listing line has no text of its own.
@@ -216,6 +241,12 @@ export function ListingPanel() {
         onScroll={onScroll}
         onKeyDown={onKeyDown}
       />
+      {/* Hidden: read only through the rows' aria-describedby, never on their own (accname 2C). */}
+      {(Object.keys(ROW_NOTES) as RowNote[]).map((note) => (
+        <span key={note} id={NOTE_ID(base, note)} hidden>
+          {ROW_NOTES[note]}
+        </span>
+      ))}
       <ContextMenu label="Breakpoints" items={menu} {...context.menuProps} />
     </div>
   );

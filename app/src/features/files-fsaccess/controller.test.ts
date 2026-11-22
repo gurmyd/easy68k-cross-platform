@@ -287,6 +287,26 @@ describe('feature "files-fsaccess"', { timeout: 60_000 }, () => {
     s.application.dispose();
   });
 
+  it('FileDialogs.linkFileHandle (the launch queue, 5.7) links a handed file through this provider, with the banner', async () => {
+    const s = setup();
+    await tick();
+    s.disk.writeExternally('home/me/launched.X68', ascii('ORG $1000\r\n'));
+    const dialogs = s.application.ctx.fileDialogs;
+    const path = await dialogs.linkFileHandle?.(s.disk.file('home/me/launched.X68') as unknown as FileSystemFileHandle);
+    expect(path).toMatch(/^\/linked\/[0-9a-f]{8}\/launched\.X68$/);
+    const { vfs } = s.application.ctx;
+    expect(text(await vfs.readFile(path as VPath))).toBe('ORG $1000\r\n');
+    await vfs.writeFile(path as VPath, ascii('saved\r\n'));
+    expect(text(s.disk.read('home/me/launched.X68'))).toBe('saved\r\n');
+    expect(s.toasts.find((t) => t.text === FSACCESS_TEXTS.linked('launched.X68'))?.action?.label).toBe(
+      OPEN_CONTAINING_FOLDER,
+    );
+    // What is not a file handle is declined.
+    expect(await s.access.linkFileHandle(s.disk.root('home/me'))).toBeNull();
+    expect(await s.access.linkFileHandle(null)).toBeNull();
+    s.application.dispose();
+  });
+
   it('several picked files are linked when the request allows several, else only the first', async () => {
     const s = setup();
     s.disk.writeExternally('h/a.X68', ascii('a'));

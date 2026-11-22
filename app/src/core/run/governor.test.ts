@@ -46,6 +46,38 @@ describe('constants of 4.2', () => {
   });
 });
 
+describe('the time bound of a sub-slice (speed.md 4.1; errata SH8.md entry 40)', () => {
+  it('sets no bound until a call has been timed, nor while calls take no measurable time', () => {
+    const g = new Governor();
+    expect(g.fits(8)).toBe(Infinity);
+    g.timed(2000, 0); // virtual time, or a call shorter than the clock's resolution
+    expect(g.fits(8)).toBe(Infinity);
+    g.timed(0, 5); // a call that executed nothing says nothing about the cost
+    expect(g.fits(8)).toBe(Infinity);
+  });
+
+  it('fits what the frame has left at the smoothed cost, at least one instruction', () => {
+    const g = new Governor();
+    g.timed(2000, 1); // plain instructions: 2000 in 1 ms
+    expect(g.fits(1)).toBe(2000);
+    expect(g.fits(7)).toBe(14_000);
+    // Drawing tasks: 2000 instructions took 20 ms. Half the weight goes to the new sample.
+    g.timed(2000, 20);
+    expect(g.msPerInstruction).toBeCloseTo((0.0005 + 0.01) / 2, 9);
+    expect(g.fits(8)).toBe(Math.floor(8 / 0.00525));
+    expect(g.fits(0)).toBe(1);
+    expect(g.fits(-3)).toBe(1);
+  });
+
+  it('comes back to whole sub-slices when the calls become cheap again', () => {
+    const g = new Governor();
+    g.timed(10, 50); // one flood fill of a large surface
+    expect(g.fits(8)).toBe(1);
+    for (let i = 0; i < 20; i++) g.timed(2000, 0.05);
+    expect(g.fits(8)).toBeGreaterThan(SUBSLICE);
+  });
+});
+
 describe('subslice()', () => {
   it('is at most 2 ms of program time, at least one instruction, at most SUBSLICE', () => {
     expect(subslice(1_000_000)).toBe(2000);

@@ -13,7 +13,8 @@
 // moment after a crash do not both offer the same drafts: the second one looks only after the first
 // has restored or discarded them. A window that owns drafts and still looks alive is given up to
 // three seconds to turn out gone, because a window that has just ended can still be listed as
-// holding its lock for a moment (errata E1.md entry 19).
+// holding its lock for a moment (errata E1.md entry 19). That wait happens before the offer lock is
+// taken, so that a live window with unsaved work does not make every new window queue behind it.
 //
 // Owner: E1.
 
@@ -47,6 +48,12 @@ export const DRAFTS_DATABASE = 'easy68k.drafts';
 export const DRAFTS_STORE = 'drafts';
 /** The Web Lock held while drafts are offered. */
 export const DRAFTS_OFFER_LOCK = 'easy68k.drafts.offer';
+/**
+ * Prefix of the Web Lock `easy68k.drafts.check.<windowId>` that a window holds for its whole start-up
+ * check of drafts (the grace included). No other window asks for it: it only lets a test, or anyone
+ * else, see when a window has finished looking (`navigator.locks.query()`).
+ */
+export const DRAFTS_CHECK_LOCK_PREFIX = 'easy68k.drafts.check.';
 /** Delay after the last change (3.9.4). */
 export const DRAFT_DELAY_MS = 2000;
 /**
@@ -246,13 +253,17 @@ export function startDraftKeeper(deps: DraftKeeperDeps): DraftKeeper {
     return alive;
   };
 
-  const offer = async () => {
-    const owners = new Set((await drafts.all()).map((record) => record.windowId).filter((id) => id !== windowId));
-    const alive = await stillAlive(owners);
-    if (alive === null) return; // cannot tell which windows are gone: offer nothing
-    // Read again: a window that ended while we waited may have written its drafts just before.
+  /**
+   * Inside the offer lock: the drafts of `gone` (windows found gone before the lock was taken) that
+   * are still there and whose windows are still gone. Read again under the lock: a window that ended
+   * while we waited may have written its drafts just before, and another window that held the lock
+   * meanwhile may have restored or discarded them.
+   */
+  const offer = async (gone: ReadonlySet<string>) => {
+    const live = await liveWindowIds(deps.locks);
+    if (live === null) return;
     const orphans = (await drafts.all())
-      .filter((record) => record.windowId !== windowId && owners.has(record.windowId) && !alive.has(record.windowId))
+      .filter((record) => record.windowId !== windowId && gone.has(record.windowId) && !live.has(record.windowId))
       .sort((a, b) => (a.windowId === b.windowId ? a.order - b.order : a.windowId < b.windowId ? -1 : 1));
     if (orphans.length === 0 || disposed) return;
     const names = [...new Set(orphans.map((record) => record.state.name))];
@@ -275,10 +286,24 @@ export function startDraftKeeper(deps: DraftKeeperDeps): DraftKeeper {
     await drafts.remove(orphans.map((record) => record.key));
   };
 
+  // The grace for owners that still look alive is waited for OUTSIDE the offer lock: an owner that
+  // really is alive (another open window with unsaved work) keeps its lock for the whole grace, and
+  // a window that starts meanwhile must not queue behind that wait (gate I2 round 2 review; errata
+  // E1.md entry 19). Only the windows found gone are then offered, under the lock.
   const offered = (async () => {
-    if (!deps.locks) return;
+    const locks = deps.locks;
+    if (!locks) return;
+    const check = async () => {
+      const owners = new Set((await drafts.all()).map((record) => record.windowId).filter((id) => id !== windowId));
+      if (owners.size === 0) return;
+      const alive = await stillAlive(owners);
+      if (alive === null) return; // cannot tell which windows are gone: offer nothing
+      const gone = new Set([...owners].filter((id) => !alive.has(id)));
+      if (gone.size === 0 || disposed) return;
+      await locks.request(DRAFTS_OFFER_LOCK, () => offer(gone));
+    };
     try {
-      await deps.locks.request(DRAFTS_OFFER_LOCK, offer);
+      await locks.request(`${DRAFTS_CHECK_LOCK_PREFIX}${windowId}`, check);
     } catch (error) {
       onError(error);
     }

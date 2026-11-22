@@ -46,20 +46,24 @@ export async function waitForDrafts(app: App, count: number): Promise<void> {
 }
 
 /**
- * Waits until no window is checking for drafts or offering them: the offer lock
- * (`easy68k.drafts.offer`, E1 errata entry 13) is free. A window asks for that lock while the
- * application starts, before its shell is drawn (features/documents/drafts.ts runs in the feature's
- * init), so once a window is `ready()` and the lock is free, its check is over. A window that shows
- * the offer holds the lock until the offer is answered.
+ * Waits until no window is checking for drafts or offering them. Each window holds its own lock
+ * `easy68k.drafts.check.<windowId>` for its whole start-up check, the wait for a window that may
+ * have just ended included, and asks for it while the application starts, before its shell is drawn
+ * (features/documents/drafts.ts runs in the feature's init; E1 errata entry 21). Since that entry the
+ * offer lock (`easy68k.drafts.offer`) is taken only after the wait, so it alone no longer tells that
+ * a check is over (X1 errata entry 11). A window that shows the offer holds both until it is answered.
  */
 export async function draftsCheckDone(app: App): Promise<void> {
   await expect
     .poll(
       () =>
-        app.page.evaluate(() =>
-          navigator.locks.request('easy68k.drafts.offer', { ifAvailable: true }, (lock) => lock !== null),
-        ),
-      { message: 'the drafts offer lock becomes free (no window is offering drafts)' },
+        app.page.evaluate(async () => {
+          const held = ((await navigator.locks.query()).held ?? []).map((lock) => lock.name ?? '');
+          const checking = held.filter((name) => name.startsWith('easy68k.drafts.check.')).length;
+          const offerFree = await navigator.locks.request('easy68k.drafts.offer', { ifAvailable: true }, (l) => !!l);
+          return checking === 0 && offerFree;
+        }),
+      { message: 'no window is checking for drafts or offering them (check locks and the offer lock are free)' },
     )
     .toBe(true);
 }
@@ -87,6 +91,10 @@ export async function draftsDiagnosis(windows: readonly App[]): Promise<string> 
             .map((lock) => lock.name ?? '')
             .filter((name) => name.startsWith('easy68k.window.'))
             .map((name) => name.slice('easy68k.window.'.length, 'easy68k.window.'.length + 6));
+          const checking = ((await navigator.locks.query()).held ?? [])
+            .map((lock) => lock.name ?? '')
+            .filter((name) => name.startsWith('easy68k.drafts.check.'))
+            .map((name) => name.slice('easy68k.drafts.check.'.length, 'easy68k.drafts.check.'.length + 6));
           const offerFree = await navigator.locks.request('easy68k.drafts.offer', { ifAvailable: true }, (l) => !!l);
           const drafts = await new Promise<string[]>((resolve) => {
             const open = indexedDB.open('easy68k.drafts');
@@ -109,7 +117,7 @@ export async function draftsDiagnosis(windows: readonly App[]): Promise<string> 
               all.onerror = () => resolve(['(cannot read)']);
             };
           });
-          return { held, offerFree, drafts };
+          return { held, checking, offerFree, drafts };
         })
         .catch((error: unknown) => ({ error: String(error) }));
       const offers = await app.page.getByText(DRAFTS_OFFER).count();

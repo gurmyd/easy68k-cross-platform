@@ -1,6 +1,18 @@
 # Q1: the accessibility audit in CI
 
-Status: open (for the next gate).
+Status: applied in the round that prepares gate I3 (config), all three items. (1) Root script
+`check:a11y`. (2) `browser-checks` has a fourth group, `accessibility`, on Ubuntu, macOS and Windows
+(job limit 75 minutes): the steps "Accessibility audit in Chromium (Q1)" and "... in WebKit (Q1)",
+`npm run check:a11y -- --browser <b>`, 30 minutes each, guarded by the plan output `a11y`;
+`build/Q1/a11y-check/` is in the failure upload (errata W0.md entry 9). (3) `a11y/vitest.config.ts` is
+in `PROJECT_GLOBS` of `tests/vitest.workspace.ts` (35 tests passed here). Run here with
+`EASY68K_REQUIRE_ENGINES=1`, both browsers, about 19 minutes: 1216 of 1220, 4 failed, all the same
+cause: the dialog `desktop-devices.serialPorts` (DV4, merged after the audit was written) has no route
+in `tests/a11y/lib/scan.mjs` ("every dialog the features register has a route in the audit", "every
+registered dialog was scanned (24)", in each browser). That is for Q1 (a route in `ROUTES`, opened by
+the command docs/requests/DV4-serial-ports-command.md asks W3 for); until then the group
+`accessibility` is red. Every known defect Q1-1 to Q1-6 printed "seems repaired" in both browsers:
+Q1 removes their `KNOWN_CHECKS` entries.
 
 Q1 delivers `tests/a11y/check-a11y.mjs` (the browser half of the audit) and
 `tests/a11y/vitest.config.ts` (unit tests of its logic under Node). Neither runs anywhere yet,

@@ -31,7 +31,9 @@ program can notice. If your program or your course depends on one of them, read 
 - **Files.** A program reaches only the files in its own folder and the folders it was given, not
   the whole disk. In a browser those files are kept by the browser (My Programs) or in a folder you
   opened; the file name task 58 returns looks like `/browser/demo/data.txt` instead of `C:\...`.
-  (Note 46, parts SH6, FS2 and DV2.)
+  (Note 46, parts SH6, FS2 and DV2.) In the Mac app, on a disk that tells letter case apart (not
+  the default on a Mac), a name that leaves the program's folders with `..` and comes back in
+  another letter case is not found (part W1).
 - **Serial port and network** (TRAP #15 tasks 40-43 and 100-107) work only in the Mac app. In a
   browser they return the original's "not available" results (note 37).
 - **The Output window** is at most 4096 x 4096 pixels (part SH1), and Windows' system colours are
@@ -46,7 +48,8 @@ program can notice. If your program or your course depends on one of them, read 
 Part 1 is the list of changes decided when the port was designed (`docs/ARCHITECTURE.md`, section
 1.4), with the features the port added. Part 2 holds the notes of each part of the port, word for
 word. Part 3 lists the keyboard shortcuts that a browser does not give up. Part 4 lists what has
-not been checked against the original yet.
+not been checked against the original yet. Part 5 lists the limitations the project knows of and
+has not repaired yet.
 
 A row or note marked **program** can change what a 68000 program observes; everything else concerns
 only the interface.
@@ -210,12 +213,25 @@ items keep their positions:
 | `New Window` | `app.window.new` | desktop app: application menu; web: the same address in another tab | - | Cmd+N (desktop only) |
 | `Files` panel show/hide | `app.files.toggle` | button at the left of the editor toolbar | - | - |
 | `Log` panel show (erratum W3 40) | `sim.view.log` | end of the simulator's View menu | - | - |
+| `Serial Ports...` (erratum DV4 2, W3 43; enabled in the desktop app only) | `sim.options.serialPorts` | end of the simulator's Options menu, after `Execution Speed...`, below a separator | - | - |
 
 ## 2. Differences recorded by each part of the port
 
 Each part of the port records the differences it introduced in `docs/differences/<part>.md`. They are
 copied here word for word, in the order the parts were built. The part names (W2, SH4 and so on) are
 the work packages of `docs/ARCHITECTURE.md` section 9.
+
+### Differences introduced by W1 (contracts and the virtual file system)
+
+(`docs/differences/W1.md`)
+
+Deliberate differences from the original that W1's code introduces, beyond those section 1.4 of
+`docs/ARCHITECTURE.md` already lists. DOC1 (or whoever next merges the differences files) merges
+this file into `docs/DIFFERENCES.md`, under 3.8.
+
+| Where | Original | Port | Why |
+|---|---|---|---|
+| A file name that leaves the folders the macOS app may use with `..` and comes back in another letter case (for example `..\DEMO\data.txt` from inside the folder `demo`), on a case-sensitive Mac disk | Found: Windows disks ignore letter case | Not found (the `.L68` lookup, `INCLUDE` and `INCBIN`, the Files panel, EASyBIN). On a disk that ignores letter case (macOS and Windows disks as they ship) it is found, as on Windows. In the browser and in every folder the app may use it is found as on Windows | Learning the stored spelling of the folder above would mean listing a folder the person did not grant, which 7.6 forbids. `Vfs.resolve` keeps the spelling as given for such a segment (docs/porting/errata/W1.md, entry 15.1). The simulator's own file tasks (TRAP #15 tasks 50-59) use another lookup (`SyncFiles.resolve`, in the main process), which this row does not describe. |
 
 ### Differences introduced by W2 (component kit)
 
@@ -1070,6 +1086,56 @@ Open Binary, Save S-Record, Save Binary, Copy and Fill give the original's resul
 - **The `Open S-Record...` and `Save Binary...` buttons** in the two groups have these names as
   tool-tips and accessible names; the original's glyph buttons have no hint.
 
+### Differences of DV4 (desktop serial ports and network)
+
+(`docs/differences/DV4.md`)
+
+Deliberate differences from EASy68K v5.16.1 on Windows in TRAP #15 tasks 40-43 and 100-107, as
+the desktop app gives them. A browser has no serial ports and no network: there every task gives
+the original's own "not available" result (note 37 of 1.4), unchanged.
+
+#### Serial ports (tasks 40-43)
+
+- **Port names.** Windows names serial ports `COM1`, `COM2`, ...; a Mac names them
+  `/dev/cu.<something>`. A program still opens `COM4` with task 40: the Serial Ports dialog (to be
+  reached from Simulator mode's Options menu, docs/requests/DV4-serial-ports-command.md) says which
+  device each name stands for
+  (`AppSettings.serialPortMap`). A name with no device gives result 2, as a COM port that does not
+  exist does. Names are compared without regard to letter case.
+- **Task 42 does not wait.** The original waits up to `count + 1` ms (plus the inter-character
+  timeout) for bytes that have not arrived yet; the port returns at once with what has arrived
+  (result 4 when that is fewer than asked for). A program that polls, as programs for the original
+  must anyway, sees the same bytes; a program that relies on the short wait may see more short
+  reads.
+- **Task 43 returns when the system has taken the bytes**, not when they have left the wire.
+- **Line settings the device cannot do.** A setting of task 41 that the Mac's serial driver refuses
+  gives result 2, where Windows may accept it. Mark parity is one: macOS has no mark parity, and
+  task 41 with parity 3 gives 2 there (seen on GitHub's macOS 15 runner against a pseudo-terminal;
+  the port stays open with its previous settings).
+- **Changing parity, data bits or stop bits** closes the device and opens it again with the new
+  settings (only the baud rate can be changed on an open port on a Mac); bytes the driver held
+  and had not passed on yet are lost.
+- **Buffers.** At most 64 KB per port wait to be read; more is dropped.
+
+#### Network (tasks 100-107)
+
+- **TCP server, task 101.** The original binds at task 101 and starts listening at the program's
+  first receive; the port listens from task 101 on. A client that connects before the server's
+  first receive is accepted (and its data kept) where the original would refuse the connection.
+  After the one client is accepted, others are refused, as in the original.
+- **Task 105** gives the first non-internal IPv4 address of the machine; the original gives the
+  first address its host name resolves to. On most machines they are the same address.
+- **Task 100 with a host name** looks the name up as macOS does (DNS, `/etc/hosts`, mDNS), not as
+  Windows does; a name only Windows knows (a NetBIOS name, say) fails with 8.
+- **Errors** are the Winsock numbers the original would report for the same situation, mapped from
+  the Mac's own error numbers; where the two systems disagree about what a situation is (a send to
+  a broadcast address, to address 0 or port 0, a TCP connection to address 0 or port 0), the Winsock
+  answer is given.
+- **Buffers.** At most 256 KB of datagrams wait to be read per socket; more are dropped, as a full
+  socket buffer drops them.
+- The waits of the original are kept: task 100 over TCP waits for the connection in steps of
+  500 ms for up to 5 seconds, and a name lookup takes as long as it takes, with the window waiting.
+
 ### Differences recorded by Q1 (accessibility and keyboard audit)
 
 (`docs/differences/Q1.md`)
@@ -1177,4 +1243,45 @@ yet confirmed:
   have not covered;
 - the cases the conformance suite records as unconfirmed in
   `tests/conformance/sim/known-differences.json`, with the evidence in
-  `tests/conformance/sim/MISMATCHES.md`.
+  `tests/conformance/sim/MISMATCHES.md`;
+- the original's own speed on a Windows PC, which has not been measured (decision O-1;
+  `docs/porting/speed.md` section 5): the default of 1,000,000 instructions per second is an
+  estimate.
+
+## 5. Known limitations
+
+These are not decisions: they are things the project knows of and has not repaired or proven yet.
+They stay here until they are.
+
+- **Nobody has used the port on a real Mac yet.** Everything is tested automatically on GitHub's
+  macOS, Linux and Windows machines, but the checks only a person can make
+  (`docs/MANUAL-TEST-MAC.md`) have not been worked through. There is no Mac app to download until a
+  release exists.
+- **Firefox is not tested.** The automatic tests run in the engines of Chrome (Chromium) and Safari
+  (WebKit) only, as Playwright ships them, not in Safari itself. Firefox may work; nothing proves
+  it. ChromeOS and phones are not tested either.
+- **A folder with a very large `.git`** (a Git repository) can crowd a program's own files out of
+  what it may open. When a program runs from a folder of the web version (My Programs, or a folder
+  of the disk opened in Chrome or Edge), the simulator loads that folder and the folders below it
+  into memory, up to 2,000 files (and 32 MB per file, 256 MB in all). The files below `.git` count
+  too, so in a large repository some of the program's own files may be left out; each one is named
+  in the message area as `Not available to the program: <path> (<reason>)`. Use a folder that
+  holds only the course's files, or open the program's own sub-folder. The Mac app reads the disk
+  directly and is not affected. (The repair, taking the files of `.git` last, is described in
+  `docs/ARCHITECTURE-PLUS.md` P3.3.10, package N8, and is not built yet.)
+- **Safari's storage rules are not explained in the application.** Safari may delete a website's
+  files after seven days without a visit, and a web app added to the Dock has its own, empty store.
+  The application asks the browser to keep its files, but it does not yet show the notice the
+  design asks for (risk R-10 of `docs/ARCHITECTURE.md`). The user guide explains both rules; export
+  your programs regularly (Files panel, Export...).
+- **Speed at `Maximum`.** The design asks for 200 million instructions in 10 seconds at the
+  `Maximum` setting; measured in Chromium on a busy Windows PC it was 106 to 140 million
+  (`docs/porting/speed.md` 4.2). Programs run correctly, only less fast than intended.
+- **A program that draws without pause on a 120 Hz display.** While such a program runs, the
+  window's frames come about every 17 ms instead of the 12 ms the design asks for at 120 Hz
+  (`docs/porting/speed.md` 4.1); the program's own results and timing are not affected.
+- **Screen readers have not been tried.** The accessibility checks look at the page's structure;
+  nobody has used the port with VoiceOver or NVDA yet. Open findings of the automatic audit are
+  listed in `docs/integration/rc.md`.
+- **Serial ports** (Mac app) were tested with a simulated serial line, never with a real USB serial
+  adapter.

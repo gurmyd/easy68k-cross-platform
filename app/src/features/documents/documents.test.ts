@@ -17,6 +17,8 @@ import {
   DRAFTS_DIALOG_ID,
   DRAFTS_GONE_GRACE_MS,
   DRAFTS_GONE_POLL_MS,
+  DRAFTS_CHECK_LOCK_PREFIX,
+  DRAFTS_OFFER_LOCK,
   type DraftStore,
 } from './drafts';
 import { createDocumentService, createDocumentsFeature } from './index';
@@ -508,6 +510,40 @@ describe('drafts (3.9.4, 3.8.6 rule 4)', () => {
     expect(c.topText()).toBe('Unsaved changes from your last session were found for untitled1.x68.');
     await c.answer('Restore', DRAFTS_DIALOG_ID);
     await waitFor(() => [...drafts.records.values()].every((record) => record.windowId === 'C'), "C's drafts");
+    expect(drafts.records.size).toBe(1);
+  });
+
+  it('a window that waits the grace for a live owner of drafts does not hold the offer lock meanwhile', async () => {
+    // Gate I2 round 2 review: one window with unsaved work and a second one opened kept the offer
+    // lock for 3 s, and a third window that started then queued behind it.
+    const drafts = createMemoryDraftStore();
+    const locks = new FakeLocks();
+    const a = openWindow({ windowId: 'A', drafts, locks });
+    a.type(a.manager.active()!.id, 'alive ');
+    a.time.advance(DRAFT_DELAY_MS);
+    await waitFor(() => drafts.records.size === 1, "A's draft");
+
+    const requested: string[] = [];
+    const request = locks.request.bind(locks);
+    locks.request = (name, callback) => {
+      requested.push(name);
+      return request(name, callback);
+    };
+    const b = openWindow({ windowId: 'B', drafts, locks });
+    for (let waited = 0; waited < DRAFTS_GONE_GRACE_MS; waited += DRAFTS_GONE_POLL_MS) {
+      await waitFor(() => b.time.pending() === 1, 'B to wait for A');
+      expect(locks.held.has(DRAFTS_OFFER_LOCK)).toBe(false);
+      // B's own check lock says that B is still looking (tests wait for it; nobody else asks for it).
+      expect(locks.held.has(`${DRAFTS_CHECK_LOCK_PREFIX}B`)).toBe(true);
+      b.time.advance(DRAFTS_GONE_POLL_MS);
+    }
+    await flushPromises();
+    await flushPromises();
+    expect(b.time.pending()).toBe(0); // the wait is over
+    expect(locks.held.has(`${DRAFTS_CHECK_LOCK_PREFIX}B`)).toBe(false);
+    expect(b.stack()).toEqual([]);
+    // A is alive the whole time: nothing to offer, so the offer lock was never even asked for.
+    expect(requested).not.toContain(DRAFTS_OFFER_LOCK);
     expect(drafts.records.size).toBe(1);
   });
 

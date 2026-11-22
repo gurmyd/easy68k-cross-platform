@@ -366,7 +366,14 @@ async function draftsPass(browser, name) {
 
   // A second window while the first is alive: no offer.
   const second = await openApp(context);
-  await second.page.waitForTimeout(3000);
+  // The second window's check is over when its lock easy68k.drafts.check.<windowId> is gone (it
+  // waits up to 3 s for a window that may have just ended; E1 errata entry 21), and no window offers.
+  await second.page.waitForFunction(
+    async () =>
+      ((await navigator.locks.query()).held ?? []).every((lock) => !lock.name?.startsWith('easy68k.drafts.check.')),
+    null,
+    { timeout: 30_000, polling: 100 },
+  );
   await second.page.evaluate(() => navigator.locks.request('easy68k.drafts.offer', () => {}));
   check(
     `${p} drafts: a second window does not offer the drafts of a window that is still open`,

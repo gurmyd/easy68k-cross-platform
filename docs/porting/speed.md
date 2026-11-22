@@ -270,9 +270,9 @@ that keeps time with task 23 or task 8 behaves the same at any setting.
 
 | To | What | Section |
 |---|---|---|
-| SH8 | Bound each sub-slice by the remaining time budget, not only by instructions | 4.1 |
+| SH8 | Bound each sub-slice by the remaining time budget, not only by instructions (taken up in the round before gate I3: errata SH8.md entry 40) | 4.1 |
 | Architect | 6.9's `Maximum` threshold: 200 million in 10 s needs an engine of 40 million per second; measured 22 to 28 million. Lower it (proposal: 100 million) or give `Maximum` more of the frame | 4.2 |
 | SH8, SH4 | Publish and present only when something changed, so that TaskDuration does not grow with the frame rate | 4.3 |
 | Architect | Say at which frame rate the TaskDuration threshold applies (P1 judges it at 60 Hz) | 4.3 |
 | Owner, then SH8 and W1 | Measure the original with `calibrate.X68`; until then `DEFAULT_IPS` = 1,000,000 | 5 |
-| I3 | `check:perf` in CI (`docs/requests/P1-perf-scripts.md`); on ubuntu-latest its verdicts are 6.9 item 9 | 1 |
+| I3 | `check:perf` in CI (`docs/requests/P1-perf-scripts.md`, applied in the round before gate I3); on ubuntu-latest its verdicts are 6.9 item 9 | 1 |

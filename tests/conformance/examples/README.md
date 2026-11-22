@@ -37,9 +37,16 @@ in row order (`runner.ts`, `sha256.ts`, which runs under Node and in the page).
 
 `catalog.ts` lists them and their scripts. "A fixed instruction count": a run ends at the first frame
 in which `script.limits.instructions` are reached (`mouseWindowSize` and the clocks never end on their
-own: the clocks stop at ten seconds of virtual time, `mouseWindowSize` at six), or when the program halts.
-Time is `VirtualTime`, so the clock a program reads and the end of its delays are the same every run.
-Frames are 16 ms; the count it stopped at is in the golden.
+own: the clocks stop at their limit of ten seconds of virtual time, `mouseWindowSize` at the instruction
+limit, 5,010,000 instructions after 4,944 ms, before its own time limit of six seconds), or when the
+program halts. Time is `VirtualTime`, so the clock a program reads and the end of its delays are the
+same every run. Frames are 16 ms; the count it stopped at is in the golden.
+
+Coverage, plainly: `clockDigital` and `fileio` end on an all-black surface (the clock uses the
+seven-segment display, not the surface; `fileio` draws nothing), so their pictures prove little beyond
+"nothing was drawn". The browser check presents the surface on a canvas of its own with the Output
+panel's `Presenter`, not inside the real Output panel, so the panel's CSS scaling and layout are not
+covered here (that is the end-to-end suite's, `tests/e2e/sim`).
 
 ## Files
 

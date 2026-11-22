@@ -1,6 +1,10 @@
 # X3: run the whole-program pixel check in CI
 
-Status: open.
+Status: applied in the round that prepares gate I3 (config), as asked: root script `check:examples` (no
+`--browser`), the step "Whole-program pixel check (X3)" of `browser-checks`, group `simulator`, on Ubuntu,
+macOS and Windows, guarded by the plan output `examples` and by both engines; `build/X3/check/` is in the
+failure upload. Run here: 309 of 309 checks passed. `tests/lint/ci-workflow.test.ts` now fails when a
+`check-*.mjs` under `app/src` or `tests` has no root script or no CI step.
 
 Package: X3 (whole-program pixel regression). Requested change: shared configuration (root
 `package.json`, `.github/workflows/ci.yml`), which X3 may not edit.

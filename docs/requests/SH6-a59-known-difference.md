@@ -1,4 +1,7 @@
-Status: open (filed by SH6 at gate I2 round 2, for T3, the owner of `tests/conformance/sim`).
+Status: done. The entry was removed from `known-differences.json` at gate I2 round 2 (commit
+f9b5441; MISMATCHES.md never listed it), and T3 marked item 1 of F8 as repaired by SH6 in the round
+before gate I3 (docs/porting/errata/T3.md F8). `npm run test:conformance` is green. (Filed by SH6
+at gate I2 round 2, for T3, the owner of `tests/conformance/sim`.)
 
 # SH6: remove a59 from `tests/conformance/sim/known-differences.json`
 

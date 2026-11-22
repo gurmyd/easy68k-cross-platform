@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { TabType } from '../../contracts';
 import { NOT_1252_TEXT, unmappableRanges } from './cp1252-marks';
 import { fontFamilyFor, fontSizeFor } from './fonts';
-import { statusTexts } from './status';
+import { statusTexts, windowStatusText } from './status';
 
 const at = (text: string, pos: number) => EditorState.create({ doc: text, selection: EditorSelection.cursor(pos) });
 
@@ -75,5 +75,19 @@ describe('display font (2.4)', () => {
     expect(fontFamilyFor('a"b')).toBe('"ab", var(--font-mono)');
     expect(fontSizeFor(10)).toBe('10pt');
     expect(fontSizeFor(0)).toBe('10pt');
+  });
+});
+
+describe("Editor mode's window status bar (gate I2 review: no /linked/<id>/)", () => {
+  it('shows a linked file under the store label, never the internal folder', () => {
+    expect(windowStatusText('/linked/21d878e9/prog.X68', 'prog.X68')).toBe('Linked files/prog.X68');
+    expect(windowStatusText('/linked/21d878e9/sub/prog.X68', 'prog.X68', 'Linked')).toBe('Linked/sub/prog.X68');
+    expect(windowStatusText('/linked/21d878e9', 'x')).toBe('Linked files');
+  });
+
+  it('shows any other path as it is, and the name of a document without a file', () => {
+    expect(windowStatusText('/browser/demo/prog.X68', 'prog.X68')).toBe('/browser/demo/prog.X68');
+    expect(windowStatusText('/browser/linked/a/prog.X68', 'prog.X68')).toBe('/browser/linked/a/prog.X68');
+    expect(windowStatusText(null, 'untitled1.x68')).toBe('untitled1.x68');
   });
 });
