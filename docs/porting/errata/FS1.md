@@ -56,6 +56,8 @@ fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`.
    `Files are NOT being saved: this browser does not let the page keep files (<reason>; for example
    in a private window, or when storage is blocked for this site). Everything you save is lost when
    this tab closes. Use Export... in the Files panel to keep your work.`
+   (A store that did not answer within the 20 s has a text of its own since entry 30: `Files are
+   NOT being saved right now: the browser's storage did not answer (<reason>; ...)`.)
    A write that the browser refuses for lack of space rejects with code `io` and
    `The browser's storage for this site is full, so "<rel>" was not saved. Nothing that was saved
    before has been lost. Delete files you no longer need in the Files panel, or use Export... to keep
@@ -425,6 +427,35 @@ fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`.
       page now comes up with the stand-in and the reason after 20 s, and a reload once the browser
       has let go shows every completely written file (a manual step for a Mac is proposed in the
       follow-up report for `docs/MANUAL-TEST-MAC.md`).
+
+30. **A store that did not answer has a text of its own (gate decision after entry 29).** Since
+    entry 29 a store that does not answer within `OPEN_TIMEOUT_MS`, in either step, becomes the
+    memory stand-in, and until now it showed the text of entry 5, which is about a browser that
+    refuses storage ("this browser does not let the page keep files (...; for example in a private
+    window ...). Everything you save is lost ..."). For a store that timed out that is wrong and
+    frightening: the programs are still in the browser's storage, and a reload a minute later shows
+    them. Decided: a message of its own for exactly that case.
+    - Does: `STORE_MESSAGES.notAnswering(detail)`, exactly: `Files are NOT being saved right now:
+      the browser's storage did not answer (<detail>; another tab of this site, or a page that was
+      closed during a save, may still be holding it). The programs you saved before are still in
+      the browser: reload the page in a minute to see them. What you save until then is lost when
+      this tab closes. Use Export... in the Files panel to keep it.` (`<detail>` is the step that
+      waited, e.g. `reading the list of files took longer than 20 s`, without a final full stop).
+      `BrowserBackend.open` marks the rejection of its time limit (`isStoreTimeout`);
+      `openBrowserStore` then makes `new UnsavedBrowserStore(detail, 'timeout')`, whose `cause` is
+      `'timeout'` and whose `problem` is that text. Every other failure (`indexedDB.open` throws or
+      fails, IndexedDB missing, the index cannot be read) is `'refused'` and keeps the text of entry
+      5 word for word. The Files panel's banner and the start-up toast show `problem`, unchanged.
+    - Tests: `browser-backend.test.ts` asserts the whole text for a refused store (SecurityError),
+      for a time limit in `indexedDB.open` (the hanging factory, and the start-up's pending store
+      after its limit) and in the reading of the index (the dead page's transaction, twice); with
+      `openBrowserStore` always giving `'refused'`, 4 of them fail. `check-files.mjs`: the held-store
+      pass asserts the new text with its reason and no "private window"; the blocked-storage pass
+      asserts the refused text's beginning and end; the hanging pass requires the new text after
+      the 20 s limit.
+    - Entry 5's text and the design's note under 3.8.1 quote the refused case; the note now names
+      this entry for a time limit; `docs/USER-GUIDE.md` (Troubleshooting) has a line for the new
+      text.
 
 ## Contract
 

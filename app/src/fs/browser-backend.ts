@@ -77,7 +77,24 @@ export const STORE_MESSAGES = {
     'Files are NOT being saved: this browser does not let the page keep files ' +
     `(${detail.replace(/\.$/, '')}; for example in a private window, or when storage is blocked for this site). ` +
     'Everything you save is lost when this tab closes. Use Export... in the Files panel to keep your work.',
+  /**
+   * The store did not answer within OPEN_TIMEOUT_MS (either step of BrowserBackend.open). The files
+   * are still in the browser's storage, unlike in the cases of `unavailable` (errata FS1 entry 30).
+   */
+  notAnswering: (detail: string) =>
+    "Files are NOT being saved right now: the browser's storage did not answer " +
+    `(${detail.replace(/\.$/, '')}; another tab of this site, or a page that was closed during a save, may still be holding it). ` +
+    'The programs you saved before are still in the browser: reload the page in a minute to see them. ' +
+    'What you save until then is lost when this tab closes. Use Export... in the Files panel to keep it.',
 } as const;
+
+/** The errors of BrowserBackend.open that mean "the time limit passed", not "refused". */
+const TIMED_OUT = new WeakSet<object>();
+
+/** True for an error of BrowserBackend.open that says the store did not answer in time. */
+export function isStoreTimeout(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && TIMED_OUT.has(error);
+}
 
 /** Something went wrong in a way the user must hear about (the Files feature shows it). */
 export interface StoreProblem {
@@ -276,7 +293,9 @@ export class BrowserBackend implements FileSystemBackend {
       timer = setTimeout(() => {
         gaveUp = true;
         backend?.abandon();
-        reject(fsError('io', `${step} took longer than ${timeoutMs / 1000} s`));
+        const error = fsError('io', `${step} took longer than ${timeoutMs / 1000} s`);
+        TIMED_OUT.add(error);
+        reject(error);
       }, timeoutMs);
     });
     const opening = (async () => {
@@ -920,12 +939,18 @@ function openDatabase(factory: IDBFactory, name: string, tooLate: () => boolean)
 
 // ---- when IndexedDB cannot be used ------------------------------------------------------------------
 
-/** The store of a page where IndexedDB failed: files live in memory until the tab closes. */
+/**
+ * The store of a page where IndexedDB failed: files live in memory until the tab closes. `cause`
+ * says why: 'refused' (IndexedDB cannot be used here: a private window, blocked storage) or
+ * 'timeout' (the store did not answer in time; the files are still in the browser's storage).
+ */
 export class UnsavedBrowserStore extends MemoryBackend {
   readonly problem: string;
-  constructor(detail: string) {
+  readonly cause: 'refused' | 'timeout';
+  constructor(detail: string, cause: 'refused' | 'timeout' = 'refused') {
     super({ mount: 'browser', kind: 'browser', label: BROWSER_STORE_LABEL });
-    this.problem = STORE_MESSAGES.unavailable(detail);
+    this.cause = cause;
+    this.problem = cause === 'timeout' ? STORE_MESSAGES.notAnswering(detail) : STORE_MESSAGES.unavailable(detail);
   }
 }
 
@@ -1084,7 +1109,7 @@ export async function openBrowserStore(deps: BrowserBackendDeps = {}): Promise<F
     const detail = isFsError(error)
       ? error.message
       : `${errorName(error)}: ${String((error as Error)?.message ?? error)}`;
-    return new UnsavedBrowserStore(detail);
+    return new UnsavedBrowserStore(detail, isStoreTimeout(error) ? 'timeout' : 'refused');
   }
 }
 

@@ -22,13 +22,17 @@
 //     offer the drafts of a window that is still open; after that window is gone (closed without
 //     its unload handlers, as in a crash) a new window offers them with the exact text, Escape does
 //     not dismiss the offer, and Restore brings the document back, modified, with its text;
-//   - an accessibility scan (axe-core) of the drafts offer and the close prompt;
+//   - drafts held by a read-write transaction that never ends (what a page that died while writing
+//     its drafts can leave; E1 errata entry 22): the next page says within 20 s that drafts are
+//     off, offers nothing and goes on working; once the transaction has ended a new page offers the
+//     draft kept before;
+//   - an accessibility scan (axe-core) of the drafts offer, the close prompt and the drafts-off notice;
 //   - no console errors.
 //
 // Screenshots go to build/E1/documents-check (git-ignored). Exit code 0 = everything passed.
 // The page object `window.__easy68k` exists in development builds only (main.tsx).
 
-/* global console, process, window, document, indexedDB, navigator, setTimeout, DataTransfer, DragEvent, File, Navigator, TextEncoder */
+/* global console, process, window, document, indexedDB, navigator, performance, setTimeout, DataTransfer, DragEvent, File, Navigator, TextEncoder */
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { createServer as createNetServer } from 'node:net';
@@ -433,6 +437,160 @@ async function draftsPass(browser, name) {
   await closeWithin(context);
 }
 
+/**
+ * What a page that died in the middle of writing its drafts can leave behind (E1 errata entry 22;
+ * FS1 entry 29 for the browser store): a read-write transaction on the drafts store that the browser
+ * does not end. Here another page holds one open, with a torn draft in it, by asking for a record
+ * each time the last one answered; before that it leaves a complete draft of a window that is gone.
+ * The next page must say within DRAFTS_TIMEOUT_MS (20 s) of its start that drafts are off, offer
+ * nothing and go on working; once the transaction has ended, a new page offers the complete draft.
+ * Before the repair the next page said nothing and its check of drafts never ended.
+ */
+async function heldDraftsPass(browser, name) {
+  const p = `${name}:`;
+  const DRAFTS_TIMEOUT_MS = 20_000; // features/documents/drafts.ts
+  const context = await newContext(browser);
+  const holder = await openApp(context);
+  await typeInEditor(holder.page, 'GONE ');
+  // The holder's draft is written two seconds after the last change.
+  const countDrafts = () =>
+    holder.page.evaluate(
+      () =>
+        new Promise((resolveCount) => {
+          const open = indexedDB.open('easy68k.drafts', 1);
+          open.onsuccess = () => {
+            const db = open.result;
+            if (!db.objectStoreNames.contains('drafts')) return (resolveCount(0), db.close());
+            const req = db.transaction('drafts', 'readonly').objectStore('drafts').count();
+            req.onsuccess = () => (resolveCount(req.result), db.close());
+            req.onerror = () => (resolveCount(-1), db.close());
+          };
+          open.onerror = () => resolveCount(-1);
+        }),
+    );
+  let count = 0;
+  for (let i = 0; i < 60 && count < 1; i++) {
+    await holder.page.waitForTimeout(500);
+    count = await countDrafts();
+  }
+  check(`${p} drafts held for ever: the holder's draft is written first`, count === 1, `records ${count}`);
+  // The holder's draft, copied as the draft of a window that is gone; then the held transaction.
+  await holder.page.evaluate(
+    () =>
+      new Promise((resolveHeld, reject) => {
+        const open = indexedDB.open('easy68k.drafts', 1);
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const copy = db.transaction('drafts', 'readwrite');
+          const all = copy.objectStore('drafts').getAll();
+          all.onsuccess = () => {
+            const [record] = all.result;
+            if (!record) return reject(new Error('the holder has no draft'));
+            copy.objectStore('drafts').put({ ...record, windowId: 'gone-window', key: `gone-window/${record.docId}` });
+          };
+          copy.onerror = () => reject(copy.error);
+          copy.oncomplete = () => {
+            const tx = db.transaction('drafts', 'readwrite');
+            const store = tx.objectStore('drafts');
+            store.put({
+              key: 'dead/torn',
+              windowId: 'dead',
+              docId: 'torn',
+              order: 0,
+              state: null,
+              text: '',
+              mtime: null,
+            });
+            const hold = { alive: true, tx, ended: new Promise((end) => (tx.onabort = tx.oncomplete = end)) };
+            window.__holdDrafts = hold;
+            const spin = () => {
+              store.get('dead/torn').onsuccess = () => {
+                if (hold.alive) spin();
+              };
+            };
+            spin();
+            resolveHeld();
+          };
+        };
+      }),
+  );
+
+  const next = await openApp(context);
+  const notice = next.page.getByText('NOT being kept as drafts');
+  const shown = await notice
+    .first()
+    .waitFor({ timeout: 90_000 })
+    .then(() => true)
+    .catch(() => false);
+  const sinceStart = Math.round(await next.page.evaluate(() => performance.now()));
+  check(
+    `${p} drafts held by a transaction that never ends: the next page says within the 20 s limit that drafts are off`,
+    shown && sinceStart <= DRAFTS_TIMEOUT_MS + 10_000,
+    shown ? `shown ${sinceStart} ms after the page started` : `no notice after ${sinceStart} ms`,
+  );
+  const text = shown ? (await notice.first().innerText()).replace(/\s+/g, ' ') : '';
+  check(
+    `${p} drafts held for ever: the notice's text`,
+    text.includes(
+      'Unsaved changes are NOT being kept as drafts in this window: the browser did not answer ' +
+        '(reading the drafts took longer than 20 s; another tab of this site may be holding the storage). ' +
+        'Save your work to keep it. Drafts kept before stay for a later start.',
+    ),
+    text,
+  );
+  const checking = await next.page.evaluate(async () =>
+    ((await navigator.locks.query()).held ?? [])
+      .map((lock) => lock.name)
+      .filter((lockName) => lockName?.startsWith('easy68k.drafts.')),
+  );
+  check(
+    `${p} drafts held for ever: the check of drafts has ended and nothing is offered`,
+    checking.length === 0 && (await next.page.getByText('Unsaved changes from your last session').count()) === 0,
+    `drafts locks held: ${JSON.stringify(checking)}`,
+  );
+  await typeInEditor(next.page, 'STILL ');
+  check(
+    `${p} drafts held for ever: the editor goes on working`,
+    (await documentsOf(next.page))[0]?.[1] === true && (await activeText(next.page))?.startsWith('STILL ') === true,
+  );
+  await next.page.screenshot({ path: join(outDir, `${name}-drafts-held.png`) });
+  if (shown) await scan(next.page, `${name} drafts off notice`);
+  check(`${p} drafts held for ever: no console errors`, next.errors.length === 0, next.errors.join(' | '));
+  await next.page.close({ runBeforeUnload: false });
+
+  // The browser ends the dead page's transaction: a new page is offered the complete draft.
+  await holder.page.evaluate(async () => {
+    window.__holdDrafts.alive = false;
+    window.__holdDrafts.tx.abort();
+    await window.__holdDrafts.ended;
+  });
+  const after = await openApp(context);
+  const offer = after.page.locator('[role=alertdialog]', { hasText: 'Unsaved changes' });
+  const offered = await offer
+    .waitFor({ timeout: 30_000 })
+    .then(() => true)
+    .catch(() => false);
+  const offerText = offered ? (await offer.innerText()).replace(/\s+/g, ' ') : '';
+  check(
+    `${p} drafts held for ever: once the transaction has ended, a new page offers the draft kept before`,
+    offerText.includes('Unsaved changes from your last session were found for untitled1.x68.') &&
+      (await after.page.getByText('NOT being kept as drafts').count()) === 0,
+    offerText || 'no offer',
+  );
+  await after.page.screenshot({ path: join(outDir, `${name}-drafts-held-ended.png`) });
+  if (offered) await offer.getByRole('button', { name: 'Discard' }).click();
+  check(`${p} drafts held for ever: no console errors after`, after.errors.length === 0, after.errors.join(' | '));
+  check(
+    `${p} drafts held for ever: no console errors in the holder`,
+    holder.errors.length === 0,
+    holder.errors.join(' | '),
+  );
+  await after.page.close({ runBeforeUnload: false });
+  await holder.page.close({ runBeforeUnload: false });
+  await closeWithin(context);
+}
+
 async function main() {
   const port = await freePort();
   const server = await createServer({
@@ -453,6 +611,7 @@ async function main() {
         for (const [label, pass] of [
           ['documents', documentsPass],
           ['drafts', draftsPass],
+          ['drafts held by a transaction that never ends', heldDraftsPass],
         ]) {
           console.log(`\n[${name}, ${label}]`);
           try {

@@ -498,7 +498,7 @@ example French, or U.S. International - PC, or ABC - Extended). Switch to it wit
 | L3 | Run **keys** with the French layout (AZERTY). Press the key labelled A | The pressed code is `51`: the port reports where the key is on a US keyboard (Q), not its label. This is a known difference (`docs/DIFFERENCES.md`, part SH4). Write down what you see |
 | L4 | Only if you use an input method (Japanese, Chinese, Korean): in **echo**, type a word with it and confirm it, then Return | The composed word appears once. Characters Windows-1252 does not have are left out, so it may come back empty: write down what you saw |
 
-### B2. Safari itself (10 minutes)
+### B2. Safari itself (15 minutes)
 
 | # | Do | Expected |
 |---|---|---|
@@ -510,6 +510,7 @@ example French, or U.S. International - PC, or ABC - Extended). Switch to it wit
 | W5 | Safari > File > New Private Window, open the web version, run **fonts**. Then close the private window, open a new one and run it again | `Sum: B4818F4C` both times (Safari changes some pictures in private windows to stop tracking; this checks that the application's text is not affected) |
 | W6 | Normal Safari window: run **fonts** | `Sum: B4818F4C` |
 | W7 | Only if you have an iPhone or iPad at hand (it is not tested anywhere else): open the web version in Safari there, after removing its website data (Settings > Apps > Safari > Advanced > Website Data). Then Share > Add to Home Screen, and open it from the Home Screen | In Safari, the Files panel (left; the toolbar button at the far left shows it) has the notice of W0, word for word. The Home Screen app has an empty My Programs with the notice of W2, word for word. Write down the device and its iOS or iPadOS version |
+| W8 | You need one large file of 200 MB or more, for example a film. (Or make one: open Terminal, type `mkfile 200m ~/Desktop/big.bin` and press Return; the file `big.bin` appears on the Desktop.) In a normal Safari window open the web version and choose Help > Examples... so that My Programs holds something. In the Files panel click Import... and choose the large file. At once, while it is being imported, force Safari to quit: press Option+Cmd+Esc, select Safari, click Force Quit. Open Safari and the web version again. Then do it all a second time, but this time close the tab with Cmd+W during the import instead of force-quitting | Each time, within a few seconds the editor is shown and My Programs lists the folder `Examples` and everything saved before. The large file is either not there or whole (the same size as the original), never cut short. If the Files panel says `My Programs is still opening`, count the seconds: within 20 s it must show your files, or this text: `Files are NOT being saved right now: the browser's storage did not answer (reading the list of files took longer than 20 s; another tab of this site, or a page that was closed during a save, may still be holding it). The programs you saved before are still in the browser: reload the page in a minute to see them. What you save until then is lost when this tab closes. Use Export... in the Files panel to keep it.` If you see that text, wait a minute and reload the page: every file saved before must be there. Write down which of these you saw, for each of the two tries how many seconds the Files panel took to show your files, and the macOS and Safari versions |
 
 ### B3. The Mac app (only once a release exists)
 
@@ -730,7 +731,7 @@ Sandbox or a throw-away virtual machine.
 | Printing a source file and task 10 output on a real printer | R1, R2 |
 | A serial adapter with tasks 40-43; two windows, and two machines on a LAN, with the network tasks | N1-N4, D9 |
 | VoiceOver: menu bar, dialogs, message area, the Output text mirror | V1-V7 |
-| Safari itself: the web app, offline reload, Add to Dock, a `.zip` exported from the Safari tab imported into the Dock app; Private Browsing: text in every font the same on every run | A1, W1-W6 |
+| Safari itself: the web app, offline reload, Add to Dock, a `.zip` exported from the Safari tab imported into the Dock app; Private Browsing: text in every font the same on every run; My Programs after Safari was force-quit or the tab closed during a save | A1, W1-W6, W8 |
 | A long session: one hundred Execute cycles and several hundred assemblies in Safari | T1, T2 |
 | On real Windows, once: the UNVERIFIED items, the RichEdit spot check, the speed measurement | C1-C7 |
 
@@ -791,7 +792,7 @@ A4 cut, copy, paste: P1 Safari:   P1 Chrome:   P2 Safari:   P2 Chrome:   P3:   P
 A5 sound: S1:   S2:   S3:   S4:   S5:
 A6 key recording: attached yes/no
 B1 layouts (which layout): L1:   L2:   L3:   L4:
-B2 Safari: W0:   W1:   W2:   W3:   W4:   W5 (both sums):   W6 (sum):   W7 (device, version):
+B2 Safari: W0:   W1:   W2:   W3:   W4:   W5 (both sums):   W6 (sum):   W7 (device, version):   W8 (what you saw, seconds for each try, macOS and Safari versions):
 B3 Mac app (exact first-start message, which way worked): D1:   D2:   D3:   D4:   D5:   D6:   D7:   D8:   D9:   D10:
 B7 VoiceOver and keyboard only: V1:   V2:   V3:   V4:   V5:   V6:   V7:   V8:   V9:
 B13 Chrome install (its exact words): I1:

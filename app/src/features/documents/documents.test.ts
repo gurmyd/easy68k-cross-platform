@@ -18,7 +18,9 @@ import {
   DRAFTS_GONE_GRACE_MS,
   DRAFTS_GONE_POLL_MS,
   DRAFTS_CHECK_LOCK_PREFIX,
+  DRAFTS_DATABASE,
   DRAFTS_OFFER_LOCK,
+  DRAFTS_STORE,
   type DraftStore,
 } from './drafts';
 import { createDocumentService, createDocumentsFeature } from './index';
@@ -630,5 +632,185 @@ describe('drafts (3.9.4, 3.8.6 rule 4)', () => {
     await flushPromises();
     expect(w.stack()).toEqual([]);
     expect(drafts.records.size).toBe(1);
+  });
+});
+
+/**
+ * What the browser can keep for a page that died in the middle of writing its drafts (as for the
+ * browser store, docs/porting/errata/FS1.md entry 29): a read-write transaction on `drafts` that is
+ * never ended. IndexedDB runs every later transaction on the store only after it. Here: a connection
+ * whose read-write transaction has put a draft and is kept alive by a request after each answer;
+ * abort() ends it as the browser does when it finally notices.
+ */
+async function deadDraftsTransaction(
+  factory: IDBFactory,
+): Promise<{ abort(): Promise<void>; connection: IDBDatabase }> {
+  const connection = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = factory.open(DRAFTS_DATABASE, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(DRAFTS_STORE, { keyPath: 'key' });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  const tx = connection.transaction(DRAFTS_STORE, 'readwrite');
+  const store = tx.objectStore(DRAFTS_STORE);
+  store.put({ key: 'dead/torn', windowId: 'dead', docId: 'torn', order: 0, state: null, text: 'torn', mtime: null });
+  let alive = true;
+  const spin = () => {
+    const request = store.get('dead/torn');
+    request.onsuccess = () => {
+      if (alive) spin();
+    };
+  };
+  spin();
+  const ended = new Promise<void>((resolve) => {
+    tx.onabort = () => resolve();
+    tx.oncomplete = () => resolve();
+  });
+  return {
+    connection,
+    async abort() {
+      alive = false;
+      tx.abort();
+      await ended;
+    },
+  };
+}
+
+/** The promise's value, or a rejection naming `what` after `ms` (a hang fails the test, not the run). */
+function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    promise.finally(() => clearTimeout(timer)),
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`still waiting after ${ms} ms: ${what}`)), ms);
+    }),
+  ]);
+}
+
+/** Resolves when `check` holds, polling with real time; rejects after `ms`. */
+async function until(check: () => boolean, ms: number, what: string): Promise<void> {
+  const started = Date.now();
+  while (!check()) {
+    if (Date.now() - started > ms) throw new Error(`still waiting after ${ms} ms: ${what}`);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+describe('drafts held by a transaction that never ends (errata E1.md entry 22)', { timeout: 60_000 }, () => {
+  const toasts = (w: ReturnType<typeof openWindow>) => w.app.dialogs.toasts.getState();
+
+  it('the store gives up within its time limit, ends its waiting transaction and stays off', async () => {
+    const factory = new IDBFactory();
+    const dead = await deadDraftsTransaction(factory);
+    const store = createIndexedDbDraftStore(factory, { timeoutMs: 200 });
+    const state = openWindow().manager.active()!;
+    const started = Date.now();
+    // Before the repair this waited for ever (the test ran into its 10 s guard).
+    const error = await within(
+      store.put([{ key: 'w/d1', windowId: 'w', docId: 'd1', order: 0, state, text: 'late', mtime: null }]).then(
+        () => null,
+        (reason: unknown) => reason,
+      ),
+      10_000,
+      'put behind the dead transaction',
+    );
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(error).toMatchObject({ name: 'DraftsTimeoutError', message: 'writing the drafts took longer than 0.2 s' });
+    // Off for the rest of the session: later calls answer at once with the same reason.
+    const again = Date.now();
+    await expect(store.all()).rejects.toBe(error);
+    await expect(store.remove(['w/d1'])).rejects.toBe(error);
+    expect(Date.now() - again).toBeLessThan(100);
+    // The browser ends the dead page's transaction: the write that gave up was aborted, it does not
+    // land late (a draft written after the window gave up would never be removed).
+    await dead.abort();
+    dead.connection.close();
+    const next = createIndexedDbDraftStore(factory);
+    expect(await within(next.all(), 10_000, 'the next store')).toEqual([]);
+  });
+
+  it('a window that starts behind it says within the time limit that drafts are off, and the old drafts stay', async () => {
+    const factory = new IDBFactory();
+    const locks = new FakeLocks();
+    // The last session: window "gone" left a draft, then died while writing again.
+    const earlier = createIndexedDbDraftStore(factory);
+    const state = openWindow().manager.active()!;
+    await earlier.put([{ key: 'gone/d1', windowId: 'gone', docId: 'd1', order: 0, state, text: 'kept', mtime: null }]);
+    const dead = await deadDraftsTransaction(factory);
+
+    const c = openWindow({ windowId: 'C', locks, drafts: createIndexedDbDraftStore(factory, { timeoutMs: 200 }) });
+    // Before the repair the start-up check waited for ever: no offer, no word, its lock held.
+    await until(() => toasts(c).length === 1, 10_000, 'the notice that drafts are off');
+    const [toast] = toasts(c);
+    expect(toast?.text).toBe(
+      'Unsaved changes are NOT being kept as drafts in this window: the browser did not answer ' +
+        '(reading the drafts took longer than 0.2 s; another tab of this site may be holding the storage). ' +
+        'Save your work to keep it. Drafts kept before stay for a later start.',
+    );
+    expect(toast?.duration).toBe(0);
+    await until(() => ![...locks.held].some((name) => name.startsWith(DRAFTS_CHECK_LOCK_PREFIX)), 1_000, 'the check');
+    expect(c.stack()).toEqual([]);
+    // Typing goes on; nothing is queued for the store, and nothing is said again.
+    c.type(c.manager.active()!.id, 'typed ');
+    c.time.advance(DRAFT_DELAY_MS);
+    for (const listener of c.hidden) listener();
+    await flushPromises();
+    expect(toasts(c)).toHaveLength(1);
+    expect(c.time.pending()).toBe(0);
+
+    // Once the browser lets go, the next window is offered the old draft, and C's typing was not kept.
+    await dead.abort();
+    dead.connection.close();
+    const d = openWindow({ windowId: 'D', locks, drafts: createIndexedDbDraftStore(factory) });
+    await within(d.answer('Discard', DRAFTS_DIALOG_ID), 10_000, 'the offer in the next window');
+    expect(toasts(d)).toEqual([]);
+  });
+
+  it('a window whose drafts store is held while it runs gives up its writes once, and queues nothing', async () => {
+    const factory = new IDBFactory();
+    let puts = 0;
+    const indexed = createIndexedDbDraftStore(factory, { timeoutMs: 200 });
+    const drafts: DraftStore = {
+      put: (records) => (puts++, indexed.put(records)),
+      remove: (keys) => indexed.remove(keys),
+      all: () => indexed.all(),
+    };
+    const a = openWindow({ windowId: 'A', drafts });
+    const doc = a.manager.active()!;
+    a.type(doc.id, 'one ');
+    a.time.advance(DRAFT_DELAY_MS);
+    await until(() => puts === 1, 1_000, 'the first draft');
+    await within(indexed.all(), 10_000, 'the first draft written');
+
+    const dead = await deadDraftsTransaction(factory); // another tab dies while writing
+    try {
+      a.type(doc.id, 'two ');
+      a.time.advance(DRAFT_DELAY_MS);
+      // Before the repair the write waited for ever, and every later change queued another one.
+      await until(() => toasts(a).length === 1, 10_000, 'the notice that drafts are off');
+      expect(toasts(a)[0]?.text).toContain('(writing the drafts took longer than 0.2 s;');
+      for (let i = 0; i < 5; i++) {
+        a.type(doc.id, `more${i} `);
+        a.time.advance(DRAFT_DELAY_MS);
+        for (const listener of a.hidden) listener();
+      }
+      const closing = a.manager.close(doc.id);
+      await a.answer('No');
+      expect(await within(closing, 1_000, 'the close')).toBe(true);
+      await flushPromises();
+      expect(puts).toBe(2);
+      expect(toasts(a)).toHaveLength(1);
+    } finally {
+      await dead.abort();
+      dead.connection.close();
+    }
+    // Nothing was waiting in line: once the browser lets go, no queued write runs.
+    a.ctx.documents.newSource();
+    a.type(a.manager.active()!.id, 'after ');
+    a.time.advance(DRAFT_DELAY_MS);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(puts).toBe(2);
+    // The first draft stays in the store, for a later start (the window could not remove it).
+    expect((await createIndexedDbDraftStore(factory).all()).map((record) => record.key)).toEqual([`A/${doc.id}`]);
   });
 });

@@ -224,6 +224,10 @@ nothing, use the menu or the toolbar.
 - **My files are gone in Safari**: see "Where your files are kept". Export regularly.
 - **The page says that files are NOT being saved**: the browser does not let this page keep files
   (some private windows do that). Use a normal window, and Export... what you want to keep.
+- **The page says that files are NOT being saved right now, because the browser's storage did not
+  answer**: another tab of this site, or a page that was closed during a save, may still be holding
+  the storage. Your saved programs are still there: reload the page in a minute. Until then,
+  Export... what you want to keep.
 - **The simulator or the assembler "could not be loaded"**: reload the page. If it persists, the
   browser may be too old.
 - **The message area says `Not available to the program: ...`**: in the web version, a running
