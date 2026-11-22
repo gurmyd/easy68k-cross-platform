@@ -8,7 +8,7 @@
 // the File System Access API the link needs.
 
 import type { Page } from '@playwright/test';
-import { expect, test } from '../fixtures';
+import { TRAILER, expect, test } from '../fixtures';
 
 /** Runs in the page before the application: a launch queue with one file of the private file system. */
 function launchWith({ name, text }: { name: string; text: string }): void {
@@ -27,6 +27,12 @@ function launchWith({ name, text }: { name: string; text: string }): void {
   Object.defineProperty(window, 'launchQueue', { value: queue, configurable: true });
 }
 
+/**
+ * The file's text, read once. Only call it when the application has no write of the file open: a
+ * read that overlaps the application's Save fails in Chromium (the File taken by getFile() is
+ * NotReadableError once the writable stream's close replaced the file, and getFileHandle() can
+ * meet the moment of the swap as NotFoundError; errata X1.md entry 15).
+ */
 async function privateFileText(page: Page, name: string): Promise<string> {
   return page.evaluate(async (fileName) => {
     const root = await navigator.storage.getDirectory();
@@ -53,7 +59,16 @@ test.describe('launched files (installed app, 5.7)', () => {
     expect(await page.locator('body').innerText()).not.toContain('/linked/');
 
     await app.replaceText('* saved back');
+    expect((await app.tabs()).find((tab) => tab.name === 'launched.X68')?.modified).toBe(true);
     await app.press('ed.file.save');
-    await expect.poll(() => privateFileText(page, 'launched.X68')).toContain('* saved back');
+    // Save is finished when the document is no longer modified: the application's write of the real
+    // file has been closed by then (a linked file's Save resolves after the stream's close). Only
+    // then is the real file read, once, and its bytes must be exactly the saved text.
+    await expect
+      .poll(async () => (await app.tabs()).find((tab) => tab.name === 'launched.X68')?.modified, {
+        message: 'Save has finished',
+      })
+      .toBe(false);
+    expect(await privateFileText(page, 'launched.X68')).toBe('* saved back\r\n' + TRAILER);
   });
 });

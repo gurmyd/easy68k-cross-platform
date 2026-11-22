@@ -408,6 +408,27 @@ describe('compareOutputs', () => {
       expect(describeVerdict(verdict)).toContain('line 1 official: S10B1000############4E71##');
       expect(describeVerdict(verdict)).toContain('line 1 ours:     S10B1000############4E72##');
     });
+
+    it('without a listing (Generate Listing off), masks by the listing of the same run with the listing on', () => {
+      const officialNoList = { listing: null, sRecord: official.sRecord, maskingListing: official.listing };
+      const oursNoList = {
+        listing: null,
+        sRecord: lines('S10B100041F9000000004E71D5', 'S804001000EB'),
+        maskingListing: withUndefined('00000000', '4E71'),
+      };
+      const verdict = compareOutputs(officialNoList, oursNoList);
+      expect(verdict.equal).toBe(true);
+      expect(verdict.undefinedSymbols).toBe(true);
+      expect(canonicalHashes(officialNoList)).toEqual({ ...canonicalHashes(oursNoList), l68: null });
+      expect(canonicalHashes(officialNoList).undefinedSymbols).toBe(true);
+      // Without the masking listing the uninitialised bytes are compared, and differ.
+      expect(
+        compareOutputs({ listing: null, sRecord: official.sRecord }, { ...oursNoList, maskingListing: null }).equal,
+      ).toBe(false);
+      // A byte outside the statement still counts.
+      const other = { ...oursNoList, sRecord: lines('S10B100041F9000000004E72D4', 'S804001000EB') };
+      expect(compareOutputs(officialNoList, other).equal).toBe(false);
+    });
   });
 
   it('treats a missing file as a difference and two missing files as equal', () => {

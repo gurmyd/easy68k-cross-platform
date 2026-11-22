@@ -17,8 +17,8 @@ import {
 import { judge, type Records } from '../../oracle/gdi-capture/windows-policy';
 import { FALLBACK_BYTES } from './cases';
 import { FONTS_DIR } from './fonts';
-import { GOLDEN_DIR } from './golden';
-import { decodeAtlas } from './pix';
+import { GOLDEN_DIR, references } from './golden';
+import { decodeAtlas, decodePack, decodePix } from './pix';
 
 const RUNNER_DIR = `${GOLDEN_DIR}windows-10.0.26100/`;
 const RUNNER = '10.0.26100 cp1252 96dpi';
@@ -128,7 +128,14 @@ describe('the other-font bytes are what differs on another Windows, and nothing 
 
   it("the runner's metrics.json equals the reference once ruleHolds is decided without the other-font bytes", () => {
     const runnerText = gunzipSync(readFileSync(`${RUNNER_DIR}metrics.json.gz`)).toString('utf8');
-    const reference = canonicalMetrics(readFileSync(`${FONTS_DIR}metrics.json`, 'utf8'), true);
+    // That capture is older than raster.textPath (gate I3, item 3b), so the reference is compared without it.
+    const committed = JSON.parse(readFileSync(`${FONTS_DIR}metrics.json`, 'utf8')) as {
+      raster: { textPath?: unknown };
+    };
+    expect(committed.raster.textPath).toBeDefined();
+    delete committed.raster.textPath;
+    const referenceText = JSON.stringify(committed);
+    const reference = canonicalMetrics(referenceText, true);
     // As captured by the old program: four cells marked "ruleHolds": false, a real difference.
     expect(canonicalMetrics(runnerText, true)).not.toBe(reference);
     const runner = JSON.parse(runnerText) as {
@@ -139,12 +146,58 @@ describe('the other-font bytes are what differs on another Windows, and nothing 
     // What the current capture.cpp writes there (the italic test above shows the rule holds).
     for (const cell of runner.raster.cells) delete cell.ruleHolds;
     expect(canonicalMetrics(JSON.stringify(runner), true)).toBe(reference);
-    expect(canonicalMetrics(JSON.stringify(runner), false)).not.toBe(
-      canonicalMetrics(readFileSync(`${FONTS_DIR}metrics.json`, 'utf8'), false),
-    );
+    expect(canonicalMetrics(JSON.stringify(runner), false)).not.toBe(canonicalMetrics(referenceText, false));
     // The metric table is compared in full.
     (runner.fonts['Courier'] as Record<string, number[][]>)['plain']![10]![0]! += 1;
     expect(canonicalMetrics(JSON.stringify(runner), true)).not.toBe(reference);
+  });
+
+  it('the suite text-control on both Windows: the fallback-font bytes have no single picture, everything else is equal (erratum T2 25)', () => {
+    // golden/windows-10.0.26100/text-control.pixpack.gz: the 252 text-control captures of the same
+    // artifact (every case definition equal to cases.ts when it was packed). ARCHITECTURE.md 6.5.3
+    // as corrected by erratum T2 25 rests on these numbers.
+    const runner = decodePack(new Uint8Array(readFileSync(`${RUNNER_DIR}text-control.pixpack.gz`)));
+    expect((runner.capturedOn as { windows: string }).windows).toBe('10.0.26100');
+    const reference = references('text-control');
+    expect(runner.cases.map((c) => c.id)).toEqual(reference.map((r) => r.case.id));
+    const fallback = { cases: 0, picturesDiffer: 0, pensDiffer: [] as string[] };
+    const others = { cases: 0, differ: [] as string[] };
+    reference.forEach((r, i) => {
+      const other = runner.cases[i]!;
+      const image = decodePix(other.pix);
+      const samePicture =
+        image.width === r.image.width &&
+        image.pixels.every((p, j) => (p & 0xffffff) === (r.image.pixels[j]! & 0xffffff));
+      const samePen = other.pen[0] === r.pen[0] && other.pen[1] === r.pen[1];
+      const texts = r.case.ops.flatMap((o) => (o.op === 'text' ? [o.bytes] : []));
+      if (texts.some((bytes) => bytes.some((b) => FALLBACK_BYTES.includes(b)))) {
+        fallback.cases++;
+        if (!samePicture) fallback.picturesDiffer++;
+        if (!samePen) {
+          fallback.pensDiffer.push(r.case.id);
+          // each of them also has a byte of $80 or above
+          expect(
+            texts.some((bytes) => bytes.some((b) => b >= 0x80)),
+            r.case.id,
+          ).toBe(true);
+        }
+      } else {
+        others.cases++;
+        if (!samePicture || !samePen) others.differ.push(r.case.id);
+      }
+    });
+    expect(fallback.cases).toBe(90);
+    expect(fallback.picturesDiffer).toBe(72);
+    expect(fallback.pensDiffer).toEqual([
+      'text-control-00089',
+      'text-control-00103',
+      'text-control-00113',
+      'text-control-00114',
+      'text-control-00124',
+    ]);
+    // undefined bytes, $0C / "@" / $80, italic itemization, the zero-width bar: 162 cases, all equal
+    expect(others.cases).toBe(162);
+    expect(others.differ).toEqual([]);
   });
 
   it('the committed record of 10.0.26100 accepts no difference', () => {

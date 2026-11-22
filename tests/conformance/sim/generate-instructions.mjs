@@ -476,7 +476,7 @@ add('cmpm', GROUP('CMPM (Ay)+,(Ax)+ B/W/L'), (c) =>
   repeat(24, (i) => caseLines(c, { body: [`CMPM.${SIZES[i % 3]}  (A1)+,(A0)+`], memory: true })),
 );
 add('ccr-sr', GROUP('MOVE to and from CCR and SR, ANDI/ORI/EORI to CCR and SR (supervisor mode kept)'), (c) =>
-  repeat(32, (i) => {
+  repeat(36, (i) => {
     const v = c.int(0x100);
     const body = [
       `MOVE    #${hex(v & 0x1f, 4)},CCR`,
@@ -487,7 +487,10 @@ add('ccr-sr', GROUP('MOVE to and from CCR and SR, ANDI/ORI/EORI to CCR and SR (s
       `MOVE    SR,D2`,
       `ORI     #${hex(0x2000 | (v & 0x1f), 4)},SR`,
       `ANDI    #${hex(0x27ff & ~(v & 0x0700), 4)},SR`,
-    ][i % 8];
+      // EORI to SR (sim-core 3.16 entry 1): the interrupt mask and the condition codes toggle; the
+      // S bit (13) and the trace bit (15) are not in the mask, so supervisor mode is kept.
+      `EORI    #${hex(((v << 3) & 0x0700) | (v & 0x1f), 4)},SR`,
+    ][i % 9];
     return caseLines(c, { body: [body], extra: [`    MOVE.W  #${hex(c.int(0x10000), 4)},D1`] });
   }),
 );

@@ -2,16 +2,27 @@
 // container to a manifest entry, and the report.
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  rmdirSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { canonicalHashes } from '../../../conformance/asm/compare.ts';
-import { goldenDirectory, loadManifest, sha256Hex } from '../../../corpus/index.ts';
+import { goldenDirectory, loadManifest, loadOptionSubset, sha256Hex } from '../../../corpus/index.ts';
+import { SINGLE_OPTION_SETS, optionLabel } from './settings.ts';
 import {
   LARGE_SOURCE_BYTES,
   REPORT_PATH,
+  addSingleOptionRuns,
   failureOf,
   fileWorkDirectory,
   ingestRun,
@@ -53,11 +64,12 @@ describe('planPrograms', () => {
   });
 
   it('assembles every example with the shipped and the expansion options', () => {
+    const subset = new Set(loadOptionSubset().files.map((file) => file.id));
     for (const program of programs.filter((candidate) => candidate.set !== 'conformance')) {
       expect(
         program.runs.map((run) => run.label),
         program.id,
-      ).toEqual(['default', 'expand']);
+      ).toEqual(['default', 'expand', ...(subset.has(program.id) ? Object.keys(SINGLE_OPTION_SETS) : [])]);
     }
     const tutorial = programs.find((program) => program.id === 'official/tutorial1.X68');
     expect(tutorial).toMatchObject({
@@ -82,6 +94,40 @@ describe('planPrograms', () => {
     expect(labels).toContain('default');
     expect(labels).toContain('nolist');
     expect(matrix.root).toBe(matrix.file.replace(/\/prog\.X68$/, ''));
+  });
+
+  it('gives each of the 30 programs of option-subset.json one run per option switched alone (6.9 item 1)', () => {
+    const subset = loadOptionSubset();
+    expect(subset.files).toHaveLength(30);
+    expect(new Set(subset.files.map((file) => file.id)).size).toBe(30);
+    for (const { id, why } of subset.files) {
+      expect(id.startsWith('site/'), id).toBe(false);
+      expect(why, id).toBeTruthy();
+      const program = programs.find((candidate) => candidate.id === id);
+      expect(program, id).toBeDefined();
+      for (const [label, options] of Object.entries(SINGLE_OPTION_SETS)) {
+        const runs = program.runs.filter((run) => run.label === label);
+        expect(runs, `${id} (${label})`).toHaveLength(1);
+        expect(runs[0].options, `${id} (${label})`).toEqual(options);
+        expect(optionLabel(options)).toBe(label);
+        expect(Object.keys(options)).toHaveLength(1);
+      }
+    }
+    expect(Object.keys(SINGLE_OPTION_SETS)).toEqual(subset.options);
+  });
+
+  it('refuses a subset that names a missing program, a site program or other options', () => {
+    const plan = () => [{ id: 'official/a.X68', set: 'official', runs: [{ label: 'default', options: {} }] }];
+    const options = Object.keys(SINGLE_OPTION_SETS);
+    expect(() => addSingleOptionRuns(plan(), { options, files: [{ id: 'official/b.X68', why: 'x' }] })).toThrow(
+      /not a program/,
+    );
+    expect(() => addSingleOptionRuns(plan(), { options, files: [{ id: 'site/x/y.X68', why: 'x' }] })).toThrow(
+      /site set/,
+    );
+    expect(() => addSingleOptionRuns(plan(), { options: ['mex'], files: [] })).toThrow(/names the options/);
+    const [one] = addSingleOptionRuns(plan(), { options, files: [{ id: 'official/a.X68', why: 'x' }] });
+    expect(one.runs.map((run) => run.label)).toEqual(['default', ...options]);
   });
 
   it('gives a program of a GitHub repository the repository as its root and names the commit', () => {
@@ -276,7 +322,26 @@ describe('storeRun', () => {
   // repository, so the test can write real files.
   const program = { id: `site/_regenerate-test-${process.pid}/x.X68`, set: 'site' };
   const directory = goldenDirectory(program, false);
-  afterAll(() => rmSync(dirname(directory), { recursive: true, force: true }));
+  // The folders above the program's own that this test creates (build/golden-local/asm/site and up,
+  // where they did not exist), deepest first. They are removed again, each only while it is empty:
+  // empty folders left behind made app/src/core/easybin/ground-truth.test.ts take
+  // build/golden-local/asm for a local golden folder (gate I3 round 3).
+  const createdAbove = [];
+  for (let folder = dirname(dirname(directory)); !existsSync(folder); folder = dirname(folder)) {
+    createdAbove.push(folder);
+    if (dirname(folder) === folder) break;
+  }
+  afterAll(() => {
+    rmSync(dirname(directory), { recursive: true, force: true });
+    for (const folder of createdAbove) {
+      if (existsSync(folder) && readdirSync(folder).length === 0) rmdirSync(folder);
+    }
+    // The clean-up is checked: a folder of this test left behind fails this suite. (A folder above
+    // may stay only while it holds something else, for example a second run of this suite at the
+    // same time.)
+    expect(existsSync(dirname(directory)), dirname(directory)).toBe(false);
+    expect(createdAbove.filter((folder) => existsSync(folder) && readdirSync(folder).length === 0)).toEqual([]);
+  });
 
   const listing = bytes(
     '00001000 Starting Address\r\nAssembler used: EASy68K Editor/Assembler v5.16.01\r\nCreated On: 11/20/2026 9:20:04 PM\r\n\r\n' +

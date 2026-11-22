@@ -31,6 +31,7 @@ import { createAsmEngine } from '../../engine';
 import { MemoryBackend } from '../../fs/memory-backend';
 import { createTestApplication } from '../../state/testing';
 import { canonicalHashes, compareOutputs, createdOn, describeVerdict } from '../../../../tests/conformance/asm/compare';
+import { listingOnLabel } from '../../../../tests/oracle/wine/asm/settings';
 import {
   REPO,
   goldenDirectory,
@@ -158,11 +159,19 @@ async function throughTheApplication(program: CorpusProgram, label: string, run:
   const readBack = async (path: string) => ((await ctx.vfs.stat(path)) ? ctx.vfs.readFile(path) : null);
   const ours = { listing: await readBack(outputs.listing), sRecord: await readBack(outputs.sRecord) };
 
+  // A run without a listing (Generate Listing off) masks by the official listing of the same options
+  // with the listing on (T1 erratum 20).
+  const companion = listingOnLabel(run.options);
+  const companionRun = companion === null ? undefined : program.runs[companion];
+  const maskingListing =
+    ours.listing === null && companion !== null && companionRun?.golden
+      ? readGolden(program, companion, companionRun, 'L68')
+      : null;
   if (run.golden) {
     if ((run.l68 !== null && goldenListing === null) || (run.s68 !== null && goldenSRecord === null)) {
       return 'golden files missing';
     }
-    const verdict = compareOutputs({ listing: goldenListing, sRecord: goldenSRecord }, ours);
+    const verdict = compareOutputs({ listing: goldenListing, sRecord: goldenSRecord, maskingListing }, ours);
     if (!verdict.equal) return describeVerdict(verdict);
     const same = (a: Uint8Array | null, b: Uint8Array | null) =>
       a === null || b === null ? a === b : Buffer.compare(a, b) === 0;
@@ -172,7 +181,7 @@ async function throughTheApplication(program: CorpusProgram, label: string, run:
     else tally.masked++;
     return null;
   }
-  const hashes = canonicalHashes(ours);
+  const hashes = canonicalHashes({ ...ours, maskingListing });
   if (hashes.l68 !== run.l68 || hashes.s68 !== run.s68) return 'the canonical hashes differ from the manifest';
   if (hashes.undefinedSymbols) tally.masked++;
   else tally.identical++;
@@ -218,8 +227,11 @@ describe.skipIf(!asmBuilt)('the corpus through F9 of the application (needs engi
         }
       }
       expect(failures).toEqual([]);
-      if (set === 'official') expect(runs).toBe(20);
-      if (set === 'github-mit') expect(runs).toBeGreaterThanOrEqual(82);
+      // Exact: the default runs and the eight single-option runs of tests/corpus/option-subset.json
+      // (T1 errata 20 and 21). A run that vanishes from the manifest, or loses its official result,
+      // fails here; a run added on purpose changes these numbers with it.
+      if (set === 'official') expect(runs).toBe(68);
+      if (set === 'github-mit') expect(runs).toBe(146);
     }, 600_000);
   }
 

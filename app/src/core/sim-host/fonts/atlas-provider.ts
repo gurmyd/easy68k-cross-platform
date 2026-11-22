@@ -239,6 +239,14 @@ export class AtlasGlyphProvider implements GlyphProvider, FallbackGlyphs {
     return this.fonts ? this.fonts.monospacedOutline(font) : false;
   }
 
+  zeroWidthBar(font: FontSpec): number {
+    return this.fonts ? this.fonts.zeroWidthBar(font) : 0;
+  }
+
+  euroInTextPath(font: FontSpec): Glyph | null {
+    return this.fonts ? this.fonts.euroInTextPath(font) : null;
+  }
+
   /** The path of the atlas a font's glyphs come from, or null. For tests and for diagnosis. */
   atlasOf(font: FontSpec): string | null {
     return this.fonts ? this.fonts.atlasOf(font) : null;

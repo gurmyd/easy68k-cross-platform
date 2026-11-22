@@ -31,4 +31,20 @@ export interface FallbackGlyphs {
    * provider without it gets the rules of the raster faces.
    */
   monospacedOutline?(font: FontSpec): boolean;
+
+  /**
+   * The raster faces at the requested sizes at which Windows' Unicode text path draws a text of
+   * zero-width bytes only (an odd number of them, or two $1F in a row) as a bar instead of the first
+   * byte's cell: the bar's height. The bar is 3 pixels wide from one pixel left of the text position.
+   * 0 for every other font. Optional: a provider without it draws the cell.
+   */
+  zeroWidthBar?(font: FontSpec): number;
+
+  /**
+   * The glyph of $80 in a text that takes Windows' Unicode text path, in a raster face: Windows
+   * draws the euro sign from a fallback font there, with that glyph's width. Without ink (the
+   * glyph's pixels are font-smoothed; docs/differences/SH3.md). Null for a font in which the byte
+   * keeps its own glyph. Optional.
+   */
+  euroInTextPath?(font: FontSpec): Glyph | null;
 }

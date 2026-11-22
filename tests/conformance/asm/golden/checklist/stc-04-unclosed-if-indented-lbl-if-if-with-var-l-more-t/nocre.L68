@@ -1,0 +1,39 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:58:14 AM
+
+00001000                             1      ORG $1000
+00001000                             2      IF D0 <EQ> #1 THEN
+00001008                             3      ENDI
+00001008                             4      IF D0 <EQ> #1 THEN
+00001010                             5      ENDI
+00001010                             6      IF D0 <EQ> #1 THEN
+00001018                             7      ENDI
+00001018                             8      IF D0 <EQ> #1 THEN
+00001020                             9      ENDI
+00001020                            10      IF D0 <EQ> #1 THEN
+00001028                            11      ENDI
+00001028                            12      IF D0 <EQ> #1 THEN
+00001030                            13      ENDI
+00001030                            14      IF D0 <EQ> #1 THEN
+00001038                            15      ENDI
+00001038                            16      IF D0 <EQ> #1 THEN
+00001040                            17      ENDI
+00001040                            18      IF D0 <EQ> #1 THEN
+00001048                            19      ENDI
+00001048                            20      IF D0 <EQ> #1 THEN
+00001050                            21      ENDI
+00001050                            22      IF D0 <EQ> #1 THEN
+00001058                            23      ENDI
+00001058                            24    LBL: IF D0 <EQ> #1 THEN
+00001058                            25    LBL: IF D0 <EQ> #1 THEN
+00001058= 00000001                  26  VAR DC.L 1
+0000105C                            27      IF D0 <EQ> VAR.L THEN
+00001064                            28      ENDI
+00001064                            29      IF D1 <NE> D2 THEN
+Line 30 ERROR: Undefined symbol
+00001066  6700 ACAE                 30s     BEQ _0000000C
+0000106A                            31      END $1000
+
+1 error detected
+No warnings generated

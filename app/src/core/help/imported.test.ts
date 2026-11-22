@@ -10,6 +10,8 @@ import { KEYWORDS, UNREACHABLE_CONTEXTS } from './keywords';
 import { ENTRY_PAGES } from './context';
 import { flattenSitemap, parseLocal, parseSitemap } from './sitemap';
 import { classifyLink } from './urls';
+// @ts-expect-error -- plain JavaScript module without type declarations
+import { pageRefusals } from '../../../../tools/import-help.mjs';
 
 const HELP = new URL('../../../public/help/', import.meta.url);
 const read = (path: string): Buffer => readFileSync(new URL(path.split('/').map(encodeURIComponent).join('/'), HELP));
@@ -137,11 +139,57 @@ describe('the imported help folder', { timeout: 60_000 }, () => {
     expect(manifest.blankTargetsAdded).toBe(4); // the original has the other ones
   });
 
+  it('starts the head of every page with the policy script-src none, and no page holds a script (erratum H1 11)', () => {
+    const POLICY = `<meta http-equiv="Content-Security-Policy" content="script-src 'none'">`;
+    // Every .htm and .html file below the folder, from the folder's own listing (not the manifest).
+    const pages = listing().filter((file) => /\.html?$/i.test(file));
+    expect(pages).toEqual(PAGES);
+    expect(pages.length).toBe(161);
+    for (const page of pages) {
+      const html = text(page);
+      // What may come before the first element of the head: the doctype, comments, white space and
+      // the html and head start tags (in a page without a head tag the parser opens the head at the
+      // first element; nothing that would start the body may come first).
+      const lead = /^(?:\s+|<!--[\s\S]*?-->|<!doctype\b[^>]*>|<html\b[^>]*>|<head\b[^>]*>)*/i.exec(html)?.[0] ?? '';
+      expect(html.slice(lead.length, lead.length + POLICY.length), page).toBe(POLICY);
+      expect(html.split(POLICY).length - 1, page).toBe(1);
+      // None of the three, with character references read; comments are read too (a browser also
+      // ends a comment at "--!>"). Each tag is taken from its "<" twice: up to the first ">", and
+      // up to the first ">" outside quotes. An attribute name starts after white space, a slash or
+      // a quote (gate I3 round 4: <img src="x"/onerror=...>, <body/onload=...>, <a href="x"onclick=...>).
+      expect(html, page).not.toMatch(/<script\b/i);
+      const plain = /<[^>]*>?/y;
+      const quoted = /<(?:[^>"']|"[^"]*"|'[^']*')*>?/y;
+      const read = (pattern: RegExp, at: number) => {
+        pattern.lastIndex = at;
+        return pattern.exec(html)?.[0] ?? '';
+      };
+      const starts = [...html.matchAll(/<(?=\/?[A-Za-z])/g)].map((m) => m.index);
+      for (const tag of starts.flatMap((at) => [read(plain, at), read(quoted, at)])) {
+        expect(tag, page).not.toMatch(/[\s/"']on[a-z]+\s*=/i);
+        const decoded = tag
+          .replace(/&#x([0-9a-f]+);?/gi, (_, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)))
+          .replace(/&#(\d+);?/g, (_, dec: string) => String.fromCodePoint(Number(dec)))
+          .replace(/[\t\n\r]/g, '');
+        expect(decoded, page).not.toMatch(/javascript:/i);
+      }
+    }
+  });
+
+  it('gives the import no reason to refuse a page: no link leaves the help folder for the site', () => {
+    for (const page of PAGES) expect(pageRefusals(page, text(page)), page).toEqual([]);
+  });
+
   it('contains no script and nothing that fetches from another address', () => {
     for (const page of PAGES) {
       const html = text(page);
-      expect(html, page).not.toMatch(/<script\b|<iframe\b|<object\b|<embed\b/i);
-      for (const tag of html.matchAll(/<[A-Za-z][^>]*>/g)) expect(tag[0], page).not.toMatch(/\son[a-z]+\s*=/i);
+      expect(html, page).not.toMatch(
+        /<(script|iframe|object|embed|svg|math|form|frame|frameset|applet)\b|\ssrcdoc\s*=/i,
+      );
+      // A base element only as <base target="_self">, and no meta refresh.
+      for (const base of html.matchAll(/<base\b[^>]*>/gi)) expect(base[0], page).toBe('<base target="_self">');
+      expect(html, page).not.toMatch(/http-equiv\s*=\s*["']?refresh/i);
+      for (const tag of html.matchAll(/<[A-Za-z][^>]*>/g)) expect(tag[0], page).not.toMatch(/[\s/"']on[a-z]+\s*=/i);
     }
   });
 });

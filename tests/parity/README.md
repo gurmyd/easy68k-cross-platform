@@ -51,6 +51,12 @@ Every problem is printed with its row, so a failure can be read from the CI log 
 
 ## Keeping it up to date
 
+- A `web-e2e` entry names a test that runs in Chromium and in WebKit on all three systems (6.9 item 5:
+  every such entry passes in both). A test that skips itself somewhere (the system clipboard, which
+  Playwright grants in Chromium alone; a test of the host's key map only) is not an entry: the row
+  names tests that run everywhere and mentions the other one in its `note` (errata X2 entry 11). The
+  unit test cannot see skips; `tests/integration/rc/item-05-parity.mjs --web <browser>=<log>` reads
+  them from the CI logs of the e2e jobs.
 - A test renamed or moved: change the entries that name it (the unit test says which).
 - A row added to 1.3 or to the added commands of 1.5: add it here with its verification.
 - A finding (a test that is an expected failure because the feature is wrong) keeps its entry and

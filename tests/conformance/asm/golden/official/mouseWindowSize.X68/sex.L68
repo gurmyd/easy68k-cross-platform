@@ -1,0 +1,329 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:50:39 AM
+
+00000000                             1  *----------------------------------------------------------- 
+00000000                             2  * Title         : MouseWindowSize
+00000000                             3  * Written by    : Chuck Kelly 
+00000000                             4  * Date Created  : Feb-9-2007 
+00000000                             5  * Modification  : Oct-18-2008 by CK, Added trap task 32 #5 to enable exception processing
+00000000                             6  *                    Added test for Sim68K version number.
+00000000                             7  * Description   : Mouse read and Output Window size demo
+00000000                             8  *   Displays mouse coordinates, mouse button states,
+00000000                             9  *   double click and keyboard keys Shift, Alt and Ctrl.
+00000000                            10  *   Draws a green crosshair at mouse position.
+00000000                            11  *   Pressing '1', '2', or '3' changes screen size.
+00000000                            12  *
+00000000                            13  *   Trap #15 Task 60 Enable/Disable mouse IRQ
+00000000                            14  *      An IRQ is created when a mouse button is pressed, released or moved in the output window.
+00000000                            15  *      D1.W High Byte = IRQ level (1-7), 0 to turn off
+00000000                            16  *      D1.W Low Byte = Mouse event that triggers IRQ:
+00000000                            17  *                      Bit2 = Move, Bit1 = Button Up, Bit0 = Button Down
+00000000                            18  *      (Example D1.W = $0103, Enable mouse IRQ level 1 for Move, Button Up and Button Down)
+00000000                            19  *      (Example D1.W - $0002, Disable mouse IRQ for Button Up)
+00000000                            20  *
+00000000                            21  *   Trap #15 Task 61 reads mouse 
+00000000                            22  *      D1.B = 00 to read current state of mouse
+00000000                            23  *           = 01 to read mouse up state
+00000000                            24  *           = 02 to read mouse down state
+00000000                            25  *      The mouse data is contained in the following registers
+00000000                            26  *      D0 as bits = Ctrl, Alt, Shift, Double, Middle, Right, Left
+00000000                            27  *           Left is Bit0, Right is Bit 1 etc.
+00000000                            28  *           1 = true, 0 = false
+00000000                            29  *           Shift, Alt, Ctrl represent the state of the corresponding keys.
+00000000                            30  *      D1.L = 16 bits Y, 16 bits X in pixel coordinates. (0,0 is top left)
+00000000                            31  *
+00000000                            32  *   Trap #15 Task 33 - Get/Set Output Window Size
+00000000                            33  *       D1.L High 16 bits = Width in pixels, min = 640
+00000000                            34  *            Low 16 bits  = Height in pixels, min = 480
+00000000                            35  *       D1.L = 0, get current window size as
+00000000                            36  *            High 16 bits = Width
+00000000                            37  *            Low 16 bits  = Height
+00000000                            38  *
+00000000                            39  *----------------------------------------------------------- 
+00001000                            40     ORG   $1000 
+00001000                            41  
+00001000                            42  start 
+00001000                            43      * Initialize Trap #15 vector
+00001000  21FC 0000101A 00BC        44      move.l  #versionTrap,$BC    ; Trap #15
+00001008  123C 0004                 45      move.b  #4,d1               ; request Sim68K version number
+0000100C  103C 0020                 46      move.b  #32,d0              ; task 32 Simulator Environment
+00001010  4E4F                      47      trap    #15
+00001012                            48      * If Sim68K is new enough to have task 32 then the trap will return to here.
+00001012                            49      * D1.L will contain the version number or be unchanged on versions that do not
+00001012                            50      * understand the #4 version number request.
+00001012                            51      * If the simulator is too old to have task 32 then the Trap will be
+00001012                            52      * sent to versionTrap.
+00001012                            53      if.l d1 <lo> #$040000 then.s    ; if version prior to 4.0.0
+00001012  B2BC 00040000             54s     CMP.L   #$040000,D1
+00001018  6412                      55s     BHS.S   _00000000
+0000101A                            56  versionTrap
+0000101A  103C 000E                 57          move.b  #14,d0              ; display text
+0000101E  43F9 00001297             58          lea     oldVerMsg,a1
+00001024  4E4F                      59          trap    #15
+00001026  103C 0009                 60          MOVE.B  #9,D0
+0000102A  4E4F                      61          TRAP    #15                 ; Halt Simulator
+0000102C                            62      endi
+0000102C                            63s _00000000
+0000102C                            64  
+0000102C                            65  ; Initialize IRQ vectors 
+0000102C  21FC 00001150 0064        66      move.l  #mouseDownIRQ,$64       ; IRQ1
+00001034  21FC 0000116C 0068        67      move.l  #mouseUpIRQ,$68         ; IRQ2
+0000103C  21FC 00001188 006C        68      move.l  #mouseMoveIRQ,$6C       ; IRQ3
+00001044  027C 0000                 69      andi.w  #$00,SR                 ; put CPU in User mode 
+00001048                            70  
+00001048  103C 003C                 71      move.b  #60,d0                  ; set mouse IRQ
+0000104C  323C 0101                 72      move.w  #$0101,d1               ; IRQ1 for mouse down
+00001050  4E4F                      73      trap    #15
+00001052  103C 003C                 74      move.b  #60,d0                  ; set mouse IRQ
+00001056  323C 0202                 75      move.w  #$0202,d1               ; IRQ2 for mouse up
+0000105A  4E4F                      76      trap    #15
+0000105C  103C 003C                 77      move.b  #60,d0                  ; set mouse IRQ
+00001060  323C 0304                 78      move.w  #$0304,d1               ; IRQ3 for mouse move
+00001064  4E4F                      79      trap    #15
+00001066                            80  
+00001066  103C 0021                 81      move.b  #33,d0                  ; set window size
+0000106A  223C 03200258             82      move.l  #(800<<16+600),d1       ; 800 x 600
+00001070  4E4F                      83      trap    #15
+00001072                            84  
+00001072  103C 0020                 85      move.b  #32,d0                  ; trap task 32 Hardware/Simulator control
+00001076  123C 0005                 86      move.b  #5,d1                   ; d1.b = 5, enable exception processing
+0000107A  4E4F                      87      trap    #15
+0000107C                            88      
+0000107C  6100 017C                 89      bsr     heading
+00001080                            90  
+00001080                            91  *---- main program loop ----
+00001080  4E71                      92  loop    nop 
+00001082  103C 0007                 93      move.b  #7,d0                   ; check for pending key press
+00001086  4E4F                      94      trap    #15
+00001088                            95      if.b d1 <ne> #0 then.s          ; if key is ready
+00001088  B23C 0000                 96s     CMP.B   #0,D1
+0000108C  673C                      97s     BEQ.S   _00000001
+0000108E  103C 0005                 98        move.b    #5,d0               ; read key
+00001092  4E4F                      99        trap      #15
+00001094                           100        if.b d1 <eq> #'1' then.s      ; if '1' pressed
+00001094  B23C 0031                101s     CMP.B   #'1',D1
+00001098  660C                     102s     BNE.S   _00000002
+0000109A  103C 0021                103          move.b  #33,d0              ; set window size
+0000109E  223C 028001E0            104          move.l  #(640<<16+480),d1   ; 640 x 480
+000010A4  4E4F                     105          trap    #15
+000010A6                           106        endi
+000010A6                           107s _00000002
+000010A6                           108        if.b d1 <eq> #'2' then.s      ; if '2' pressed
+000010A6  B23C 0032                109s     CMP.B   #'2',D1
+000010AA  660C                     110s     BNE.S   _00000003
+000010AC  103C 0021                111          move.b  #33,d0              ; set window size
+000010B0  223C 03200258            112          move.l  #(800<<16+600),d1   ; 800 x 600
+000010B6  4E4F                     113          trap    #15
+000010B8                           114        endi
+000010B8                           115s _00000003
+000010B8                           116        if.b d1 <eq> #'3' then.s      ; if '3' pressed
+000010B8  B23C 0033                117s     CMP.B   #'3',D1
+000010BC  660C                     118s     BNE.S   _00000004
+000010BE  103C 0021                119          move.b  #33,d0              ; set window size
+000010C2  223C 04000300            120          move.l  #(1024<<16+768),d1  ; 1024 x 768
+000010C8  4E4F                     121          trap    #15
+000010CA                           122        endi
+000010CA                           123s _00000004
+000010CA                           124      endi
+000010CA                           125s _00000001
+000010CA  4E71                     126      nop
+000010CC  60B2                     127      bra     loop 
+000010CE                           128  
+000010CE                           129  
+000010CE                           130  *----------------------------------------------------------------------------
+000010CE                           131  * Draw cursor
+000010CE                           132  * Pre: D1.L = 16 bits Y, 16 bits X in pixel coordinates. (0,0 is top left)
+000010CE                           133  
+000010CE                           134  cursor    
+000010CE  48E7 F000                135      movem.l d0-d3,-(a7)             ; save registers
+000010D2  2601                     136      move.l  d1,d3                   ; save mouse X,Y
+000010D4                           137      
+000010D4                           138  * erase old cursor
+000010D4  223C 00000000            139      move.l  #BLACK,d1               ; set pen color
+000010DA  103C 0050                140      move.b  #80,d0
+000010DE  4E4F                     141      trap    #15
+000010E0                           142  
+000010E0  3239 00001308            143      move.w  cursorX,d1
+000010E6  5B41                     144      sub.w   #5,d1
+000010E8  3439 0000130A            145      move.w  cursorY,d2
+000010EE  103C 0056                146      move.b  #86,d0
+000010F2  4E4F                     147      trap    #15                     ; move to X-5,Y of old cursor
+000010F4                           148  
+000010F4  103C 0055                149      move.b  #85,d0                  ; draw line to
+000010F8  0641 000A                150      add.w   #10,d1
+000010FC  4E4F                     151      trap    #15                     ; draw to X,Y (d1 = X, d2 = Y)
+000010FE  5B41                     152      sub.w   #5,d1
+00001100  4E4F                     153      trap    #15
+00001102  5A42                     154      add.w   #5,d2
+00001104  4E4F                     155      trap    #15
+00001106  0442 000A                156      sub.w   #10,d2
+0000110A  4E4F                     157      trap    #15
+0000110C                           158  
+0000110C                           159  
+0000110C                           160  * draw new cursor
+0000110C  223C 0000FF00            161      move.l  #LIME,d1                ; set pen color
+00001112  103C 0050                162      move.b  #80,d0
+00001116  4E4F                     163      trap    #15
+00001118                           164  
+00001118  2203                     165      move.l  d3,d1
+0000111A  2403                     166      move.l  d3,d2
+0000111C  4842                     167      swap    d2
+0000111E  33C1 00001308            168      move.w  d1,cursorX              ; save cursor X
+00001124  33C2 0000130A            169      move.w  d2,cursorY              ; save cursor Y
+0000112A  5B41                     170      sub.w   #5,d1
+0000112C  103C 0056                171      move.b  #86,d0
+00001130  4E4F                     172      trap    #15                     ; move to X-5,Y of current cursor
+00001132                           173  
+00001132  103C 0055                174      move.b  #85,d0                  ; draw line to
+00001136  0641 000A                175      add.w   #10,d1
+0000113A  4E4F                     176      trap    #15                     ; draw to X,Y (d1 = X, d2 = Y)
+0000113C  5B41                     177      sub.w   #5,d1
+0000113E  4E4F                     178      trap    #15
+00001140  5A42                     179      add.w   #5,d2
+00001142  4E4F                     180      trap    #15
+00001144  0442 000A                181      sub.w   #10,d2
+00001148  4E4F                     182      trap    #15
+0000114A  4CDF 000F                183      movem.l (a7)+,d0-d3             ; restore registers
+0000114E  4E75                     184         rts
+00001150                           185  
+00001150                           186  * IRQ handlers
+00001150                           187  
+00001150                           188  ; mouse down handler 
+00001150                           189  mouseDownIRQ
+00001150  48E7 C000                190      movem.l d0-d1,-(a7)
+00001154  6100 00A4                191      bsr     heading
+00001158  103C 003D                192      move.b  #61,d0                  ; read mouse
+0000115C  123C 0002                193      move.b  #2,d1                   ; mouse down state
+00001160  4E4F                     194      trap    #15
+00001162  6100 0040                195      bsr     showMouseData
+00001166  4CDF 0003                196      movem.l (a7)+,d0-d1
+0000116A  4E73                     197      rte
+0000116C                           198  
+0000116C                           199  ; mouse up handler
+0000116C                           200  mouseUpIRQ
+0000116C  48E7 C000                201      movem.l d0-d1,-(a7)
+00001170  6100 0088                202      bsr     heading
+00001174  103C 003D                203      move.b  #61,d0                  ; read mouse
+00001178  123C 0001                204      move.b  #1,d1                   ; mouse up state
+0000117C  4E4F                     205      trap    #15
+0000117E  6100 0024                206      bsr     showMouseData
+00001182  4CDF 0003                207      movem.l (a7)+,d0-d1
+00001186  4E73                     208      rte 
+00001188                           209  
+00001188                           210  ; mouse move handler
+00001188                           211  mouseMoveIRQ
+00001188  48E7 C000                212      movem.l d0-d1,-(a7)
+0000118C  6100 006C                213      bsr     heading
+00001190  103C 003D                214      move.b  #61,d0                  ; read mouse
+00001194  123C 0000                215      move.b  #0,d1                   ; current mouse state
+00001198  4E4F                     216      trap    #15
+0000119A  6100 0008                217      bsr     showMouseData
+0000119E  4CDF 0003                218      movem.l (a7)+,d0-d1
+000011A2  4E73                     219      rte
+000011A4                           220  
+000011A4                           221  * Pre: D0 & D1 contain mouse data
+000011A4                           222  showMouseData
+000011A4  48E7 F840                223      movem.l d0-d4/a1,-(a7)
+000011A8  2800                     224      move.l  d0,d4                   ; save mouse buttons
+000011AA  6100 FF22                225      bsr     cursor                  ; draw cursor
+000011AE  2601                     226      move.l  d1,d3                   ; save mouse Y
+000011B0  C2BC 0000FFFF            227      and.l   #$0000FFFF,d1           ; remove Y from D1
+000011B6  143C 0006                228      move.b  #6,d2                   ; field width 6
+000011BA  103C 0014                229      move.b  #20,d0                  ; display signed number in D1.L in field D2.B columns wide
+000011BE  4E4F                     230      trap    #15                     ; dislay X
+000011C0  2203                     231      move.l  d3,d1
+000011C2  4841                     232      swap    d1
+000011C4  C2BC 0000FFFF            233      and.l   #$0000FFFF,d1           ; mouse Y
+000011CA  4E4F                     234      trap    #15                     ; display Y
+000011CC  103C 000E                235      move.b  #14,d0                  ; task 14, display string without CR,LF
+000011D0                           236      for.b d3 = #1 to #7 do.s
+000011D0  163C 0001                237s     MOVE.B  #1,D3
+000011D4  6018                     238s     BRA.S   _20000001
+000011D6                           239s _20000000
+000011D6  E20C                     240        lsr.b #1,d4                   ; check mouse data bit in d4
+000011D8                           241        if <cs> then.s                ; if set
+000011D8  640A                     242s     BHS.S   _00000005
+000011DA  43F9 00001289            243          lea strYes,a1               ; get Yes message
+000011E0                           244        else
+000011E0  6000 0008                245s     BRA _00000006
+000011E4                           246s _00000005
+000011E4  43F9 00001290            247          lea strNo,a1                ; get No message
+000011EA                           248        endi
+000011EA                           249s _00000006
+000011EA  4E4F                     250        trap  #15                     ; display
+000011EC                           251      endf
+000011EC  5203                     252s     ADD.B   #1,D3
+000011EE                           253s _20000001
+000011EE  B63C 0007                254s     CMP.B   #7,D3
+000011F2  6FE2                     255s     BLE.S   _20000000
+000011F4                           256  
+000011F4  4CDF 021F                257      movem.l (a7)+,d0-d4/a1
+000011F8  4E75                     258      rts 
+000011FA                           259  
+000011FA                           260  * Display Heading
+000011FA                           261  heading
+000011FA  48E7 8040                262      movem.l d0/a1,-(a7)
+000011FE  4241                     263      clr.w   d1
+00001200  103C 000B                264      move.b  #11,d0
+00001204  4E4F                     265      trap    #15                     ; position at text 0,0
+00001206  43F9 00001218            266      lea     strHeading,a1
+0000120C  103C 000E                267      move.b  #14,d0
+00001210  4E4F                     268      trap    #15
+00001212  4CDF 0201                269      movem.l (a7)+,d0/a1
+00001216  4E75                     270      rts
+00001218                           271  
+00001218                           272  * Text
+00001218= 20 20 20 20 58 20 ...    273  strHeading  dc.b    '    X     Y   Left  Rght  Midl   Dbl  Shft   Alt  Ctrl',CR,LF
+00001250= 20 20 2D 2D 2D 2D ...    274              dc.b    '  ----  ----  ----  ----  ----  ----  ----  ----  ----',CR,LF,0
+00001289= 20 20 59 65 73 20 00     275  strYes      dc.b    '  Yes ',0
+00001290= 20 20 20 4E 6F 20 00     276  strNo       dc.b    '   No ',0
+00001297= 54 68 69 73 20 70 ...    277  oldVerMsg   dc.b    'This program requires Sim68K version 4.0.0 or later.',CR,LF
+000012CD= 54 68 65 20 6C 61 ...    278              dc.b    'The latest version may be downloaded from www.easy68k.com',0
+00001307                           279  
+00001307                           280  
+00001308= 0000                     281  cursorX dc.w    0
+0000130A= 0000                     282  cursorY dc.w    0
+0000130C                           283  
+0000130C  =00000000                284  BLACK   EQU    $00000000
+0000130C  =0000FF00                285  LIME    EQU    $0000FF00
+0000130C  =0000000D                286  CR      EQU    $0D
+0000130C  =0000000A                287  LF      EQU    $0A
+0000130C                           288      
+0000130C                           289      END    START 
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+BLACK               0
+CR                  D
+CURSOR              10CE
+CURSORX             1308
+CURSORY             130A
+HEADING             11FA
+LF                  A
+LIME                FF00
+LOOP                1080
+MOUSEDOWNIRQ        1150
+MOUSEMOVEIRQ        1188
+MOUSEUPIRQ          116C
+OLDVERMSG           1297
+SHOWMOUSEDATA       11A4
+START               1000
+STRHEADING          1218
+STRNO               1290
+STRYES              1289
+VERSIONTRAP         101A
+_00000000           102C
+_00000001           10CA
+_00000002           10A6
+_00000003           10B8
+_00000004           10CA
+_00000005           11E4
+_00000006           11EA
+_20000000           11D6
+_20000001           11EE

@@ -12,6 +12,10 @@
 //   letter, or with a character Windows refuses in file names, does not resolve. A name that starts
 //   with '\' or '/' is accepted when it is a path the port hands out (task 58): a VPath of a mount
 //   the program has used, or in the desktop app (a program folder on /disk) a real path.
+// - Devices (deviceOf, measured on Windows 11): NUL is the null device in every view, also where a
+//   file of that name exists (a Mac disk): an open succeeds and creates nothing, a write vanishes, a
+//   read is at end of file, a seek succeeds, a delete fails. CON, PRN, AUX, COMn, LPTn do not open,
+//   as on a PC without such a port, and no file of that name is created or deleted.
 // - Modes: Update needs an existing, writable file; Read an existing file; Create creates the file
 //   or truncates it at once. The engine falls back from Update to Read itself (task 51 result 3).
 // - Streams: handles are positive integers, never reused; each stream has its own position; one
@@ -64,6 +68,46 @@ const DISK_MOUNT = 'disk';
 // eslint-disable-next-line no-control-regex -- control characters are what this looks for
 const INVALID_NAME_CHARS = /[<>:"|?*\u0000-\u001f]/;
 
+/** NUL as the last part of a name: Windows ignores trailing spaces, periods and colons there. */
+const NUL_NAME = /^nul[ .:]*$/i;
+/** The device paths `\\.\NUL` and `\\?\NUL`. */
+const NUL_DEVICE_PATH = /^\\\\[.?]\\nul$/i;
+/** The other DOS devices, which Windows 11 recognises only as the whole name (¹²³ count as digits). */
+const OTHER_DEVICE_NAME = /^(?:con|prn|aux|(?:com|lpt)[1-9\u00b9\u00b2\u00b3])[ .:]*$|^con(?:in|out)\$$/i;
+/** A drive letter at the start of a name. */
+const DRIVE_PREFIX = /^[a-z]:/i;
+
+/**
+ * Whether a program's file name names a Windows device, as Windows 11 (10.0.26300) reads it
+ * (measured with GetFullPathNameW, RtlIsDosDeviceName_U and CreateFileA, errata SH6.md entry 14):
+ *
+ * - 'nul', the null device: `NUL` in any letter case, with any trailing spaces, periods and colons
+ *   (`nul`, `NUL.`, `NUL :`), also as the last part of a path (`sub\NUL`, `..\NUL`, `\NUL`, `C:\NUL`,
+ *   `C:NUL`) and as `\\.\NUL` or `\\?\NUL`. Not with an extension: `NUL.txt` is an ordinary file
+ *   on Windows 11 (Microsoft's naming documentation and older Windows read it as the device).
+ * - 'other': `CON`, `PRN`, `AUX`, `COM1`-`COM9`, `LPT1`-`LPT9` (also with ¹ ² ³), `CONIN$`,
+ *   `CONOUT$`, only as the whole name, with the same trailing characters. Behind a folder or with an
+ *   extension they are ordinary files on Windows 11.
+ * - null: anything else.
+ */
+export function deviceOf(text: string): 'nul' | 'other' | null {
+  if (NUL_DEVICE_PATH.test(text)) return 'nul';
+  const rest = DRIVE_PREFIX.test(text) ? text.slice(2) : text;
+  const cut = Math.max(rest.lastIndexOf('\\'), rest.lastIndexOf('/'));
+  const last = rest.slice(cut + 1);
+  if (NUL_NAME.test(last)) {
+    // A folder part Windows could not open makes the open fail, not reach the device.
+    return INVALID_NAME_CHARS.test(rest.slice(0, Math.max(cut, 0))) ? null : 'nul';
+  }
+  return rest === text && OTHER_DEVICE_NAME.test(text) ? 'other' : null;
+}
+
+/** A stream on the null device: writes vanish, reads are at end of file (task 51-56 on NUL). */
+interface NullStream {
+  readonly writable: boolean;
+  position: number;
+}
+
 interface Stream {
   readonly handle: number;
   readonly path: VPath;
@@ -107,6 +151,8 @@ export class ProgramFiles implements ProgramFilesApi {
   private readonly deps: ProgramFilesDeps;
   private dir: VPath | null = null;
   private readonly streams = new Map<number, Stream>();
+  /** Streams on the null device; their handles come from the same counter as the others'. */
+  private readonly nullStreams = new Map<number, NullStream>();
   private nextHandle = 1;
   /** Every view this instance has used, with what changed through it since it was last settled. */
   private readonly touches = new Map<SyncFiles, Map<VPath, Touch>>();
@@ -147,6 +193,8 @@ export class ProgramFiles implements ProgramFilesApi {
   }
 
   read(name: Bytes): Bytes | null {
+    // A device is no file to read whole (a sound file named NUL plays nothing).
+    if (deviceOf(decode(name)) !== null) return null;
     const found = this.locate(name);
     if (!found) return null;
     const stat = found.view.stat(found.path);
@@ -166,6 +214,7 @@ export class ProgramFiles implements ProgramFilesApi {
   async exit(): Promise<void> {
     this.commitAll();
     this.streams.clear();
+    this.nullStreams.clear();
     await this.settleViews();
   }
 
@@ -205,6 +254,7 @@ export class ProgramFiles implements ProgramFilesApi {
     // exit() has run before (4.7.1); should it not have, the pending bytes still reach the view.
     this.commitAll();
     this.streams.clear();
+    this.nullStreams.clear();
     this.dir = null;
     this.mounts.clear();
     this.parsedNames.clear();
@@ -214,6 +264,16 @@ export class ProgramFiles implements ProgramFilesApi {
   /* ================================================================== HostFiles */
 
   fileOpen(name: Bytes, mode: number): number {
+    const device = deviceOf(decode(name));
+    if (device === 'nul') {
+      // fopen() on the null device succeeds in every mode and creates nothing (SH6.md entry 14).
+      if (mode !== FileMode.Update && mode !== FileMode.Read && mode !== FileMode.Create) return 0;
+      const handle = this.nextHandle++;
+      this.nullStreams.set(handle, { writable: mode !== FileMode.Read, position: 0 });
+      return handle;
+    }
+    // The other devices: what a PC without that port (or without a console) answers.
+    if (device === 'other') return 0;
     const found = this.locate(name);
     if (!found) return 0;
     const { view, path } = found;
@@ -248,6 +308,8 @@ export class ProgramFiles implements ProgramFilesApi {
   }
 
   fileRead(handle: number, count: number): Bytes | null {
+    const nul = this.nullStreams.get(handle);
+    if (nul) return Number.isSafeInteger(count) && count >= 0 ? NO_BYTES : null; // always at end of file
     const stream = this.streams.get(handle);
     if (!stream || !Number.isSafeInteger(count) || count < 0) return null;
     if (!this.commit(stream)) return null;
@@ -279,6 +341,12 @@ export class ProgramFiles implements ProgramFilesApi {
   }
 
   fileWrite(handle: number, data: Bytes): number {
+    const nul = this.nullStreams.get(handle);
+    if (nul) {
+      if (!nul.writable) return -1;
+      nul.position += data.length; // accepted and discarded
+      return data.length;
+    }
     const stream = this.streams.get(handle);
     if (!stream || !stream.writable) return -1;
     stream.readBuffer = NO_BYTES;
@@ -302,6 +370,15 @@ export class ProgramFiles implements ProgramFilesApi {
   }
 
   fileSeek(handle: number, offset: number, whence: number): number {
+    const nul = this.nullStreams.get(handle);
+    if (nul) {
+      // SetFilePointer on NUL succeeds and keeps the position (measured: 0, then 5); the end is 0.
+      const base = whence === 0 || whence === 2 ? 0 : whence === 1 ? nul.position : -1;
+      const position = base + offset;
+      if (base < 0 || !Number.isSafeInteger(position) || position < 0) return -1;
+      nul.position = position;
+      return position;
+    }
     const stream = this.streams.get(handle);
     if (!stream || !Number.isSafeInteger(offset)) return -1;
     stream.readBuffer = NO_BYTES;
@@ -319,6 +396,7 @@ export class ProgramFiles implements ProgramFilesApi {
   }
 
   fileClose(handle: number): boolean {
+    if (this.nullStreams.delete(handle)) return true;
     const stream = this.streams.get(handle);
     if (!stream) return false;
     const committed = this.commit(stream);
@@ -329,6 +407,8 @@ export class ProgramFiles implements ProgramFilesApi {
   }
 
   fileRemove(name: Bytes): boolean {
+    // DeleteFile refuses a device (access denied for NUL, measured); no file of that name is touched.
+    if (deviceOf(decode(name)) !== null) return false;
     const found = this.locate(name);
     if (!found) return false;
     // Windows does not delete a file that is open, also in a stream of an earlier run.

@@ -1,0 +1,23 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:59:32 AM
+
+00001000                             1      ORG $1000
+00001000                             2  M0  MACRO
+00001000                             3      DC.W    NARG    count NARG here
+00001000                             4      ENDM
+00001000                             5m     M0
+00001002                             6m     M0  * a comment
+00001004                             7m     M0  ; a comment
+00001006                             8m     M0  comment words
+00001008                             9m     M0  A,B two arguments
+0000100A                            10      END $1000
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+M0                  0

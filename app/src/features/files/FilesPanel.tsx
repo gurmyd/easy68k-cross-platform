@@ -46,13 +46,14 @@ import {
   STORAGE_NOTICE_DISMISS_CAPTION,
   STORAGE_NOTICE_EXPORT_CAPTION,
   STORAGE_NOTICE_IMPORT_CAPTION,
-  STORAGE_NOTICE_INSTALLED_TEXT,
   STORAGE_NOTICE_LABEL,
-  STORAGE_NOTICE_TAB_TEXT,
   acknowledgeStorageNotice,
+  markStorageNoticeSeen,
+  onScreen,
   readNoticeEnvironment,
   storageNoticeAcknowledged,
   storageNoticeKind,
+  storageNoticeText,
   storeEmptyAtStart,
   storeKindOf,
   type StorageNoticeKind,
@@ -80,6 +81,9 @@ export const DRAG_EXPAND_MS = 800;
 export function revealInFilesPanel(ctx: AppContext, path: VPath): boolean {
   return requestReveal(ctx, path);
 }
+
+/** How long the notice must be visible before it counts as seen (watchFirstWrite). */
+const NOTICE_SEEN_AFTER_MS = 1000;
 
 function rowId(base: string, path: VPath): string {
   return `${base}-${encodeURIComponent(path).replace(/%/g, '_')}`;
@@ -192,7 +196,20 @@ export function FilesPanel() {
     storeEmpty: storeEmpty === true,
     acknowledged,
   });
-
+  // Once on the screen, the first write in this window needs no note of its own (watchFirstWrite).
+  // On the screen means visible for a moment: a panel of Editor mode that is mounted but hidden (a
+  // start that goes straight on to Simulator mode with ?open=) has not shown it to anyone.
+  const noticeRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setInterval(() => {
+      const element = noticeRef.current;
+      if (!element || !onScreen(element)) return;
+      markStorageNoticeSeen(ctx);
+      window.clearInterval(timer);
+    }, NOTICE_SEEN_AFTER_MS);
+    return () => window.clearInterval(timer);
+  }, [ctx, notice]);
   const doImport = (folder: boolean, into?: VPath) => {
     // The chooser must open inside the click: start it before anything is awaited.
     const picking = pickFiles({ multiple: true, folder });
@@ -555,14 +572,13 @@ export function FilesPanel() {
       )}
       {notice && (
         <div
+          ref={noticeRef}
           role="note"
           aria-label={STORAGE_NOTICE_LABEL}
           className="e68-files__notice"
           data-e68-storage-notice={notice}
         >
-          <p className="e68-files__notice-text">
-            {notice === 'tab' ? STORAGE_NOTICE_TAB_TEXT : STORAGE_NOTICE_INSTALLED_TEXT}
-          </p>
+          <p className="e68-files__notice-text">{storageNoticeText(notice)}</p>
           <div className="e68-files__notice-buttons">
             {notice === 'tab' ? (
               <Button

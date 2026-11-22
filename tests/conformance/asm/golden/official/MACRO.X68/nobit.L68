@@ -1,0 +1,155 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:49:19 AM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title        :  Macro
+00000000                             3  * Written by   :  Chuck Kelly
+00000000                             4  * Date Created :  Jan-6-2006
+00000000                             5  * Description  :  Demo of macros
+00000000                             6  * Macro definitions should be placed at the top of the source file.
+00000000                             7  * Dec-25-2012 by CK, Uses SIMHALT
+00000000                             8  *-----------------------------------------------------------
+00000000                             9          OPT     MEX
+00000000  =00000000                 10  CODE    EQU     0
+00000000  =00000001                 11  TEXT    EQU     1
+00000000                            12  
+00000000                            13      SECTION     TEXT
+00002000                            14      ORG         $2000
+00000000                            15      SECTION     CODE
+00001000                            16      ORG         $1000
+00001000                            17  
+00001000                            18  * print the text string
+00001000                            19  * use ENDL as second argument to add return and linefeed
+00001000                            20  PRINT   MACRO
+00001000                            21      SECTION     TEXT
+00001000                            22  MSG\@    DC.B    '\1'
+00001000                            23      IFARG    2
+00001000                            24        IFC      '\2','ENDL'
+00001000                            25          DC.B    $D,$A
+00001000                            26        ENDC
+00001000                            27      ENDC
+00001000                            28      DC.B    0
+00001000                            29      SECTION     CODE
+00001000                            30      MOVEM.L     D0/A1,-(SP)
+00001000                            31      LEA         MSG\@,A1
+00001000                            32      MOVE.B      #14,D0
+00001000                            33      TRAP        #15
+00001000                            34      MOVEM.L     (SP)+,D0/A1
+00001000                            35      ENDM
+00001000                            36  
+00001000                            37  * print the number
+00001000                            38  PRINTN    MACRO
+00001000                            39      SECTION     CODE
+00001000                            40      MOVEM.L     D0/D1,-(SP)
+00001000                            41      IFNC '\1','D1'          if some register other than D1
+00001000                            42        MOVE.L    \1,D1       put number to display in D1
+00001000                            43      ENDC
+00001000                            44      MOVE.B  #3,D0
+00001000                            45      TRAP    #15             display number in D1
+00001000                            46      MOVEM.L (SP)+,D0/D1
+00001000                            47      ENDM
+00001000                            48  
+00001000                            49  
+00001000                            50  * Usage POWER N, P
+00001000                            51  * Raises N to the P power
+00001000                            52  * Resulting number is in D1
+00001000                            53  POWER    MACRO
+00001000                            54      MOVEM.L     D0/D2,-(A7) save
+00001000                            55      IFNC '\2','D2'
+00001000                            56        MOVE.W    \2,D2
+00001000                            57      ENDC
+00001000                            58      IFNC '\1','D1'          if first param is not D1
+00001000                            59        MOVE.W    \1,D1
+00001000                            60      ENDC
+00001000                            61      IFNC '\1','D0'
+00001000                            62        MOVE.W    \1,D0
+00001000                            63      ENDC
+00001000                            64      WHILE.W D2 <HI> #1 DO.S
+00001000                            65        MULU  D0,D1           compute power
+00001000                            66        SUB.W #1,D2
+00001000                            67      ENDW
+00001000                            68      MOVEM.L (A7)+,D0/D2
+00001000                            69      ENDM
+00001000                            70  
+00001000                            71  **********************
+00001000                            72  *    Program Start
+00001000                            73  **********************
+00001000                            74  START
+00001000                            75m     PRINT   <Macro Demonstration Program>,ENDL
+00002000                            76m     SECTION     TEXT
+00002000= 4D 41 43 52 4F 20 ...     77m MSG_1    DC.B    'MACRO DEMONSTRATION PROGRAM'
+0000201B                 TRUE       78m     IFARG    2
+0000201B                 TRUE       79m       IFC      'ENDL','ENDL'
+0000201B= 0D 0A                     80m         DC.B    $D,$A
+0000201D                            81m       ENDC
+0000201D                            82m     ENDC
+0000201D= 00                        83m     DC.B    0
+00001000                            84m     SECTION     CODE
+00001000  48E7 8040                 85m     MOVEM.L     D0/A1,-(SP)
+00001004  43F8 2000                 86m     LEA         MSG_1,A1
+00001008  103C 000E                 87m     MOVE.B      #14,D0
+0000100C  4E4F                      88m     TRAP        #15
+0000100E  4CDF 0201                 89m     MOVEM.L     (SP)+,D0/A1
+00001012                            90m     ENDM
+00001012                            91  
+00001012                            92m     POWER   #4,#3
+00001012  48E7 A000                 93m     MOVEM.L     D0/D2,-(A7) SAVE
+00001016                 TRUE       94m     IFNC '#3','D2'
+00001016  343C 0003                 95m       MOVE.W    #3,D2
+0000101A                            96m     ENDC
+0000101A                 TRUE       97m     IFNC '#4','D1'          IF FIRST PARAM IS NOT D1
+0000101A  323C 0004                 98m       MOVE.W    #4,D1
+0000101E                            99m     ENDC
+0000101E                 TRUE      100m     IFNC '#4','D0'
+0000101E  303C 0004                101m       MOVE.W    #4,D0
+00001022                           102m     ENDC
+00001022                           103m     WHILE.W D2 <HI> #1 DO.S
+00001028  C2C0                     104m       MULU  D0,D1           COMPUTE POWER
+0000102A  5342                     105m       SUB.W #1,D2
+0000102C                           106m     ENDW
+0000102E  4CDF 0005                107m     MOVEM.L (A7)+,D0/D2
+00001032                           108m     ENDM
+00001032                           109m     PRINT   <4^3 = >
+0000201E                           110m     SECTION     TEXT
+0000201E= 34 5E 33 20 3D 20        111m MSG_3    DC.B    '4^3 = '
+00002024                 FALSE     112m     IFARG    2
+00002024                           113m     ENDC
+00002024= 00                       114m     DC.B    0
+00001032                           115m     SECTION     CODE
+00001032  48E7 8040                116m     MOVEM.L     D0/A1,-(SP)
+00001036  43F8 201E                117m     LEA         MSG_3,A1
+0000103A  103C 000E                118m     MOVE.B      #14,D0
+0000103E  4E4F                     119m     TRAP        #15
+00001040  4CDF 0201                120m     MOVEM.L     (SP)+,D0/A1
+00001044                           121m     ENDM
+00001044                           122m     PRINTN  D1
+00001044                           123m     SECTION     CODE
+00001044  48E7 C000                124m     MOVEM.L     D0/D1,-(SP)
+00001048                 FALSE     125m     IFNC 'D1','D1'          IF SOME REGISTER OTHER THAN D1
+00001048                           126m     ENDC
+00001048  103C 0003                127m     MOVE.B  #3,D0
+0000104C  4E4F                     128m     TRAP    #15             DISPLAY NUMBER IN D1
+0000104E  4CDF 0003                129m     MOVEM.L (SP)+,D0/D1
+00001052                           130m     ENDM
+00001052                           131  
+00001052  FFFF FFFF                132      SIMHALT                 Halt the program
+00001056                           133      END     START
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+CODE                0
+MSG_1               2000
+MSG_3               201E
+POWER               250
+PRINT               0
+PRINTN              136
+START               1000
+TEXT                1
+_10000000           1022
+_10000001           102E

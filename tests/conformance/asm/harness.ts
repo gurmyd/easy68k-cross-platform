@@ -22,8 +22,8 @@ import {
   type CorpusProgram,
   type ExpectedRun,
 } from '../../corpus/index';
-import { SHIPPED_OPTIONS } from '../../oracle/wine/asm/settings';
-import { canonicalHashes, compareOutputs, createdOn, describeVerdict, editorLoad } from './compare';
+import { SHIPPED_OPTIONS, listingOnLabel } from '../../oracle/wine/asm/settings';
+import { canonicalHashes, compareOutputs, createdOn, describeVerdict, editorLoad, type Outputs } from './compare';
 
 /** True when the assembler engine is built (engine/dist is not in the repository). */
 export const asmBuilt =
@@ -124,7 +124,18 @@ export async function compareRun(program: CorpusProgram, label: string): Promise
   if (result.fatal !== null)
     return { ...base, verdict: 'differs', detail: `the assembler ended abnormally: ${result.fatal}` };
 
-  const ours = { listing: result.listing, sRecord: result.sRecord };
+  // Without a listing the undefined-symbol statements are read off the listing of the same program
+  // and options with the listing on: the port's own (assembled again), and the official one where
+  // the golden folder holds it (erratum T1 20).
+  const companion = listingOnLabel(run.options);
+  let ours: Outputs = { listing: result.listing, sRecord: result.sRecord };
+  let officialMasking: Uint8Array | null = null;
+  if (companion !== null && result.listing === null && result.sRecord !== null) {
+    const withListing = await (await engine).assemble(mainName, files, { ...options, generateListing: true }, time);
+    ours = { ...ours, maskingListing: withListing.listing };
+    const companionRun = program.runs[companion];
+    if (companionRun?.golden) officialMasking = readGolden(golden, outputStem(companion, companionRun), 'L68');
+  }
   const hashes = canonicalHashes(ours);
   const hashesEqual = hashes.l68 === run.l68 && hashes.s68 === run.s68;
   const fingerprint: Fingerprint = {
@@ -140,7 +151,10 @@ export async function compareRun(program: CorpusProgram, label: string): Promise
     if ((run.l68 !== null && goldenListing === null) || (run.s68 !== null && goldenSRecord === null)) {
       return { ...outcome, verdict: 'differs', detail: `the golden files of "${stem}" are missing in ${golden}` };
     }
-    const verdict = compareOutputs({ listing: goldenListing, sRecord: goldenSRecord }, ours);
+    const verdict = compareOutputs(
+      { listing: goldenListing, sRecord: goldenSRecord, maskingListing: officialMasking },
+      ours,
+    );
     if (counts || !verdict.equal) {
       const detail = [counts, describeVerdict(verdict)].filter(Boolean).join('\n');
       return { ...outcome, verdict: 'differs', detail };

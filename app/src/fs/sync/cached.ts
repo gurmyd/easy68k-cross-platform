@@ -499,7 +499,11 @@ export class CachedSyncFiles implements SyncFiles {
     }
     const running = this.refreshing.get(change.path);
     if (running) {
-      running.again = change;
+      // One more refresh reads what storage holds by then, so it covers every change waiting for it.
+      // An append can stand for them only when it is the one change waiting: if another change waits
+      // already (another window's write, say), that change is not in the append's bytes, and the
+      // file must be read whole (errata SH6.md entry 15).
+      running.again = running.again === null ? change : { path: change.path, kind: change.kind, origin: change.origin };
       return;
     }
     const state = { again: null as VfsChange | null };
@@ -586,6 +590,12 @@ export class CachedSyncFiles implements SyncFiles {
   private async reload(found: Found): Promise<void> {
     const before = this.lookupFile(found.path);
     const generation = before ? (this.files.get(before) as CachedFile).generation : -1;
+    // A file new to the view counts against limits.maxFiles as in prepare() (loadTree): revalidate()
+    // and the changes others report must not load more files than prepare() would.
+    if (!before && this.files.size >= this.limits.maxFiles) {
+      this.markUnavailable(found.path, 'too-many');
+      return;
+    }
     if (found.size > this.limits.maxFileBytes || this.totalBytes(before) + found.size > this.limits.maxTotalBytes) {
       if (before) this.dropFile(before);
       this.markUnavailable(found.path, 'too-large');

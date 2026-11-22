@@ -20,7 +20,9 @@ For every program of the corpus (`tests/corpus/manifest.json`) and every option 
    program without undefined symbols. Where the listing reports an undefined symbol, the original
    encodes uninitialised memory; `canonicalListing` and `canonicalSRecord` mask exactly the
    object code of the affected statements, in the listing and at their addresses in the S-records,
-   and every other byte must be equal. Error and warning counts must agree.
+   and every other byte must be equal. A run without a listing (Generate Listing off) takes those
+   statements from the listing of the same options with the listing on. Error and warning counts
+   must agree.
 
 A run that differs fails its test, unless `known-differences.json` lists it with its reason and
 with what the port produces for it (`ours`: counts and hashes); a listed run that starts to match,

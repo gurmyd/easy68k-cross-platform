@@ -4,7 +4,7 @@
 //
 //     node tests/oracle/gdi-capture/run.mjs            regenerate and compare (what CI runs)
 //     node tests/oracle/gdi-capture/run.mjs --write    regenerate and update the committed files
-//     options: --only cases,spots,nibs,fonts   --all (also compare the machine-dependent outputs)
+//     options: --only cases,spots,nibs,modes,fonts   --all (also compare the machine-dependent outputs)
 //              --replace-references-from-other-windows (let --write replace references captured on
 //              another Windows; see "Another Windows" in README.md)
 //              --as-windows "10.0.26100 cp1252 96dpi" (judge as that Windows; to try the policy)
@@ -18,6 +18,7 @@
 //                                                     cases-ellipse.ts once it exists), packed
 //   tests/conformance/gdi/golden/spots.json           the spot values of trap15-b, measured
 //   tests/conformance/gdi/golden/nibs.json            the polygon of every wide pen 2-255 (WidenPath)
+//   tests/conformance/gdi/golden/modes.json           SetROP2 with the values task 92 passes for modes above 15
 //   app/public/fonts/metrics.json                     the metric table of 3.5.1 + the raster rules
 //   app/public/fonts/bitmap/*.bin                     the raster-font atlases (Fixedsys, Courier)
 //   tools/fonts-src/windows-outline-metrics.tsv       what make-font-atlases.mjs needs from Windows
@@ -62,7 +63,9 @@ const asWindows = asWindowsIndex >= 0 ? args[asWindowsIndex + 1] : undefined;
 const fromIndex = args.indexOf('--from');
 const from = fromIndex >= 0 ? resolve(args[fromIndex + 1] ?? '.') : undefined;
 const onlyIndex = args.indexOf('--only');
-const only = new Set(onlyIndex >= 0 ? (args[onlyIndex + 1] ?? '').split(',') : ['cases', 'spots', 'nibs', 'fonts']);
+const only = new Set(
+  onlyIndex >= 0 ? (args[onlyIndex + 1] ?? '').split(',') : ['cases', 'spots', 'nibs', 'modes', 'fonts'],
+);
 
 const { generateCases, serializeCases, SUITES } = await import(pathToFileURL(join(GDI, 'cases.ts')).href);
 const { encodePack, decodePack, decodeAtlas } = await import(pathToFileURL(join(GDI, 'pix.ts')).href);
@@ -73,7 +76,9 @@ const STYLE_NAMES = { '-': 'plain', b: 'bold', i: 'italic', u: 'underline', s: '
 
 function exec(file, argv) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(file, argv, { stdio: ['ignore', 'pipe', 'pipe'] });
+    // windowsHide: the capture program is a console program and draws into memory only; it must
+    // never open a console window on the desktop, whatever this process is attached to.
+    const child = spawn(file, argv, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     let out = '';
     child.stdout.on('data', (d) => (out += d));
     child.stderr.on('data', (d) => (out += d));
@@ -162,6 +167,7 @@ async function captureCases(exe, out) {
   );
   const machine = new Map(SUITES.map((s) => [s.name, s.machine]));
   const suites = [...new Set(cases.map((c) => c.suite))];
+  comparePensOfOneBuild(cases, pens);
   for (const suite of suites) {
     const packed = cases
       .filter((c) => c.suite === suite)
@@ -174,6 +180,50 @@ async function captureCases(exe, out) {
       packContent,
       !isMachine || all,
       isMachine ? 'depends on the machine (theme or font smoothing)' : undefined,
+    );
+  }
+}
+
+// The suites of Windows' text path captured on one Windows build only (erratum T2 29). Machine-
+// dependent, so their packs are not compared; but decision 3 of 6.5.3 turns on whether another
+// Windows gives the same pens, so their pens are compared with the committed references and printed
+// in the report (one line per suite). Nothing here fails the run: a person reads the lines.
+const ONE_BUILD_SUITES = ['text-path-euro', 'text-path-fallback', 'text-path-formfeed'];
+const onePensLines = [];
+function comparePensOfOneBuild(cases, pens) {
+  const pinnedFile = join(GOLDEN, 'text-path-euro-pens.json');
+  const pinned = existsSync(pinnedFile)
+    ? new Set(JSON.parse(readFileSync(pinnedFile, 'utf8')).cases.map((c) => c.slice(0, 4).join('|')))
+    : new Set();
+  const hex = (bytes) => bytes.map((b) => b.toString(16).padStart(2, '0')).join('');
+  for (const suite of ONE_BUILD_SUITES) {
+    const file = join(GOLDEN, `${suite}.pixpack.gz`);
+    const list = cases.filter((c) => c.suite === suite);
+    if (!existsSync(file) || list.length === 0) continue;
+    const committed = new Map(decodePack(readFileSync(file)).cases.map((c) => [c.id, c.pen]));
+    let equal = 0;
+    let pinnedCount = 0;
+    let pinnedEqual = 0;
+    const differing = [];
+    for (const c of list) {
+      const [mine, theirs] = [pens.get(c.id), committed.get(c.id)];
+      const same = mine !== undefined && theirs !== undefined && mine[0] === theirs[0] && mine[1] === theirs[1];
+      const font = c.ops.find((o) => o.op === 'font');
+      const text = c.ops.find((o) => o.op === 'text');
+      const isPinned = pinned.has([font.name, font.size, font.style, hex(text.bytes)].join('|'));
+      if (same) equal++;
+      else differing.push(`${c.id} ${theirs?.join(',')} -> ${mine?.join(',')}${isPinned ? ' (pinned)' : ''}`);
+      if (isPinned) {
+        pinnedCount++;
+        if (same) pinnedEqual++;
+      }
+    }
+    onePensLines.push(
+      `  ${suite}: ${equal} of ${list.length} pens equal the committed references` +
+        (suite === 'text-path-euro'
+          ? `; of the ${pinnedCount} pinned in golden/text-path-euro-pens.json, ${pinnedEqual} equal`
+          : '') +
+        (differing.length ? `; differing (committed -> this capture): ${differing.slice(0, 8).join('; ')}` : ''),
     );
   }
 }
@@ -209,6 +259,23 @@ async function captureNibs(exe, out) {
   };
   canon(Buffer.from(json)); // must be valid
   add(relative(repo, join(GOLDEN, 'nibs.json')), Buffer.from(json), canon);
+}
+
+/** SetROP2 with the values task 92 passes above mode 15 (errata SH1.md entry 17); without capturedOn. */
+async function captureModes(exe, out) {
+  if (from && !existsSync(join(out, 'modes.json'))) {
+    console.log(`  (modes: the capture in ${from} has no modes.json; not compared)`);
+    return;
+  }
+  process.stdout.write(await capture(exe, ['modes', out]));
+  const json = readFileSync(join(out, 'modes.json'), 'utf8').replaceAll('\r\n', '\n');
+  const canon = (b) => {
+    const value = JSON.parse(b.toString());
+    delete value.capturedOn;
+    return JSON.stringify(value);
+  };
+  canon(Buffer.from(json)); // must be valid
+  add(relative(repo, join(GOLDEN, 'modes.json')), Buffer.from(json), canon);
 }
 
 async function captureFonts(exe, out) {
@@ -277,6 +344,16 @@ async function captureFonts(exe, out) {
   );
   if (unruled.length)
     console.log(`no rule reproduces ${unruled.length} raster cells on this Windows: ${unruled.join(', ')}`);
+  // Windows' text path in the raster faces (README.md, "Windows' text path"): per requested name,
+  // style and point size, the height of the bar a text of zero-width bytes only may be drawn as,
+  // and the width of $80 drawn from the fallback font on that path.
+  const zeroWidthBar = {};
+  const fallbackEuro = {};
+  for (const [name, size, style, bar, euro] of tsvRows(readFileSync(join(out, 'text-path.tsv'), 'utf8'))) {
+    const styleName = STYLE_NAMES[style];
+    if (bar !== '-') ((zeroWidthBar[name] ??= {})[styleName] ??= {})[size] = Number(bar);
+    ((fallbackEuro[name] ??= {})[styleName] ??= Array(256).fill(null))[Number(size)] = Number(euro);
+  }
   const metrics = {
     about:
       'Measured by tests/oracle/gdi-capture (npm run oracle:gdi) with GetTextFace and GetTextExtentPoint32 on fonts made as the VCL makes them. fonts[name][style][size] = [colWidth = TextWidth("W"), rowHeight = TextHeight("Xp"), index into faces]. raster: how every raster cell is made from the atlases (see tests/oracle/gdi-capture/README.md).',
@@ -295,6 +372,12 @@ async function captureFonts(exe, out) {
       },
       atlases,
       cells,
+      textPath: {
+        about:
+          'Windows takes a text through its Unicode text path (README.md, "Windows\' text path"). zeroWidthBar[name][style][size]: the height of the bar, 3 pixels wide from x - 1, that a text of zero-width bytes only is drawn as at that requested size when it has an odd number of bytes or two $1F in a row (otherwise, and at every size not listed, the first byte\'s cell). fallbackEuro[name][style][size]: the width of $80 in a text on that path, drawn from a fallback font (null where the face is not a raster face).',
+        zeroWidthBar,
+        fallbackEuro,
+      },
     },
   };
   add(
@@ -425,6 +508,7 @@ async function main() {
   if (only.has('cases')) await captureCases(exe, out);
   if (only.has('spots')) await captureSpots(exe, out);
   if (only.has('nibs')) await captureNibs(exe, out);
+  if (only.has('modes')) await captureModes(exe, out);
   if (only.has('fonts')) await captureFonts(exe, out);
 
   const differences = [];
@@ -485,6 +569,13 @@ async function main() {
           ? `; ${otherFontOnly.filter((l) => !l.startsWith(' ')).length} apart from the other-font bytes)`
           : ')'),
       ...verdict.lines,
+      ...(onePensLines.length
+        ? [
+            '',
+            'Pens of the text-path suites captured on one Windows build only (erratum T2 29; machine-dependent, not judged here, read by a person):',
+            ...onePensLines,
+          ]
+        : []),
       ...(details.length
         ? [
             '',

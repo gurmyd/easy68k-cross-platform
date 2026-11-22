@@ -1,11 +1,16 @@
 // Tests of the service worker's logic under Node, with fake caches, clients and server (DV1).
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import {
   CLIENT_GRACE_MS,
   CLIENTS_CACHE,
   Easy68kServiceWorker,
   HASH_HEADER,
+  HELP_FOLDER,
+  helpFramePath,
+  isFrameNavigation,
   SKIP_WAITING_MESSAGE,
   cacheNameFor,
   contentTypeFor,
@@ -14,6 +19,7 @@ import {
   type PrecacheEntry,
   type WorkerScopeLike,
 } from './sw';
+import { HELP_FOLDER as CORE_HELP_FOLDER } from './core/help/urls';
 
 const SCOPE = 'https://example.test/easy68k-mac/';
 
@@ -129,6 +135,13 @@ function navigationRequest(url: string): Request {
   }
 }
 
+/** A navigation of a frame: Node's Request has no destination either, so it is given one. */
+function frameNavigation(url: string, destination = 'iframe'): Request {
+  const request = navigationRequest(url);
+  Object.defineProperty(request, 'destination', { value: destination });
+  return request;
+}
+
 // --- tests ------------------------------------------------------------------------------------
 
 describe('install', () => {
@@ -222,6 +235,132 @@ describe('fetch', () => {
     expect(await text(t.worker.respond(navigationRequest(`${SCOPE}help/Quick Reference.htm`), '', 'frame'))).toBe(
       '<p>quick</p>',
     );
+  });
+
+  it('answers a frame navigation below help/ as any other, and every other frame navigation with an error (erratum H1 11)', async () => {
+    const t = await installed();
+    const before = t.server.requests.length;
+    // The help page itself, from the cache.
+    expect(await text(t.worker.respond(frameNavigation(`${SCOPE}help/Quick%20Reference.htm`), '', 'frame'))).toBe(
+      '<p>quick</p>',
+    );
+    // With a query or a fragment it is the same page.
+    expect(await text(t.worker.respond(frameNavigation(`${SCOPE}help/Quick%20Reference.htm?x=1#top`), '', 'f'))).toBe(
+      '<p>quick</p>',
+    );
+    // The application page, any other file of the site, addresses outside the scope, and a help
+    // address that is not in the build: an error, never index.html, and nothing is asked of the
+    // server (gate I3 round 4: a server that decodes %2F answers help/..%2Findex.html with the
+    // application's page, so nothing of a frame navigation may reach it).
+    for (const url of [
+      SCOPE,
+      `${SCOPE}index.html`,
+      `${SCOPE}?open=/browser/a.X68`,
+      `${SCOPE}check/fixture.txt`,
+      `${SCOPE}helpx/main.htm`,
+      `${SCOPE}Help/Quick%20Reference.htm`,
+      `${SCOPE}help/not-in-the-build.htm`,
+      `${SCOPE}help/`,
+      `${SCOPE}help`,
+      'https://example.test/index.html',
+      'https://example.test/help/main.htm',
+      'https://other.test/easy68k-mac/help/Quick%20Reference.htm',
+      // encoded separators and dots, in either letter case, and double encoding
+      `${SCOPE}help/..%2Findex.html`,
+      `${SCOPE}help/..%2findex.html`,
+      `${SCOPE}help/..%5Cindex.html`,
+      `${SCOPE}help/..%5cindex.html`,
+      `${SCOPE}help/%2E%2E%2Findex.html`,
+      `${SCOPE}help/.%2e/index.html`,
+      `${SCOPE}help/..%252Findex.html`,
+      `${SCOPE}help/%252E%252E/index.html`,
+      `${SCOPE}help/Quick%20Reference.htm%2F..%2F..%2Findex.html`,
+      `${SCOPE}help/..%2F..%2Feasy68k-mac/index.html`,
+      `${SCOPE}help/..%2Findex.html?x=1`,
+      `${SCOPE}help/..%2Findex.html#top`,
+      `${SCOPE}help/..\\index.html`,
+      `${SCOPE}help//Quick%20Reference.htm`,
+      `${SCOPE}help/%2FQuick%20Reference.htm`,
+      // escapes that do not decode, and control characters
+      `${SCOPE}help/%E0%A4%A.htm`,
+      `${SCOPE}help/%C0%AF.htm`,
+      `${SCOPE}help/%00.htm`,
+      `${SCOPE}help/Quick%0AReference.htm`,
+    ]) {
+      for (const destination of ['iframe', 'frame']) {
+        const response = await t.worker.respond(frameNavigation(url, destination), '', 'frame');
+        expect(response?.type, `${destination} ${url}`).toBe('error');
+      }
+    }
+    expect(t.server.requests.length).toBe(before);
+    // A navigation of the page itself (destination document) is unchanged.
+    expect(await text(t.worker.respond(navigationRequest(`${SCOPE}index.html`), '', 'page'))).toBe(
+      '<!doctype html><title>A</title>',
+    );
+    // A request of a frame's page that is not a navigation (an image of a help page) is unchanged.
+    expect(await text(t.worker.respond(new Request(`${SCOPE}check/fixture.txt`), 'frame', ''))).toBe('version A');
+  });
+
+  it('answers a frame navigation to a help page only from its cache, never from the network', async () => {
+    const t = await installed();
+    t.server.online = true;
+    // The cache lost the page (storage pressure): an error, not the network.
+    await (await t.storage.open(cacheNameFor('A'))).entries.delete(`${SCOPE}help/Quick%20Reference.htm`);
+    const before = t.server.requests.length;
+    const response = await t.worker.respond(frameNavigation(`${SCOPE}help/Quick%20Reference.htm`), '', 'frame');
+    expect(response?.type).toBe('error');
+    expect(t.server.requests.length).toBe(before);
+    // A frame navigation that is not a GET: an error.
+    const post = new Request(`${SCOPE}help/Quick%20Reference.htm`, { method: 'POST', body: 'x' });
+    Object.defineProperty(post, 'mode', { value: 'navigate' });
+    Object.defineProperty(post, 'destination', { value: 'iframe' });
+    expect((await t.worker.respond(post, '', 'frame'))?.type).toBe('error');
+  });
+
+  it('helpFramePath: the decoded path below help/, or null', () => {
+    expect(helpFramePath('help/main.htm')).toBe('help/main.htm');
+    expect(helpFramePath('help/Quick%20Reference.htm')).toBe('help/Quick Reference.htm');
+    expect(helpFramePath('help/Directives/org.htm')).toBe('help/Directives/org.htm');
+    for (const raw of [
+      '',
+      'help',
+      'help/',
+      'index.html',
+      'Help/main.htm',
+      'help/..%2Findex.html',
+      'help%2Fmain.htm',
+      'help/..%5Cindex.html',
+      'help/%2e%2e%2fx',
+      'help/%25',
+      'help/%252F',
+      'help/%',
+      'help/%zz',
+      'help/%C0%AF',
+      'help/a%09b.htm',
+      'help/a\\b.htm',
+      'help//main.htm',
+    ])
+      expect(helpFramePath(raw), raw).toBeNull();
+  });
+
+  it('accepts the name of every page of the imported help folder', () => {
+    const manifest = JSON.parse(
+      readFileSync(fileURLToPath(new URL('../public/help/manifest.json', import.meta.url)), 'utf8'),
+    ) as { files: string[] };
+    const pages = manifest.files.filter((file) => /\.html?$/i.test(file));
+    expect(pages.length).toBeGreaterThan(100);
+    for (const file of pages) {
+      const raw = `help/${file.split('/').map(encodeURIComponent).join('/')}`;
+      expect(helpFramePath(raw), file).toBe(`help/${file}`);
+    }
+  });
+
+  it('names the same help folder as core/help', () => {
+    expect(HELP_FOLDER).toBe(CORE_HELP_FOLDER);
+    expect(isFrameNavigation(frameNavigation(`${SCOPE}help/main.htm`))).toBe(true);
+    expect(isFrameNavigation(frameNavigation(`${SCOPE}help/main.htm`, 'frame'))).toBe(true);
+    expect(isFrameNavigation(navigationRequest(`${SCOPE}help/main.htm`))).toBe(false);
+    expect(isFrameNavigation(new Request(`${SCOPE}help/main.htm`))).toBe(false);
   });
 
   it('leaves everything else to the network', async () => {

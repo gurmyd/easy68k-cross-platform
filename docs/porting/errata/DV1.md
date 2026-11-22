@@ -193,3 +193,79 @@ The worker precaches all 242 help files and answers them offline (a `fetch()` of
 from the page: 200 from the worker; a frame without sandbox or with `allow-scripts`: loads offline
 in WebKit). WebKit simply never asks the worker for a frame sandboxed without `allow-scripts`. No
 change to `sw.ts`; the decision is the help frame's (H1 errata, `docs/requests/H1-help-offline-webkit.md`).
+
+## 15. The worker answers a frame only below help/ (third round before I3; erratum H1 11)
+
+- The architect took option 1 of `docs/requests/H1-help-offline-webkit.md`: in WebKit, under the
+  worker, the Help frame has `allow-scripts`, so that WebKit hands its navigations to the worker
+  (entry 14). In return the frame must be able to show nothing but Help.
+- `sw.ts`: a navigation whose destination is a frame (`request.mode` `navigate` and
+  `request.destination` `iframe` or `frame`, `isFrameNavigation`) is answered as before only when
+  its address is below `<scope>help/` (`inHelpFolder`; a help file that is not precached still goes
+  to the network); every other one gets `Response.error()`, so the application's own page, any
+  other file of the site and any address outside the scope never load in a frame of a controlled
+  page. A navigation of the page itself and every request that is not a navigation are unchanged.
+  The folder is repeated in the worker (`HELP_FOLDER`, which imports nothing) and a test compares it
+  with `core/help`'s.
+- Tests: `sw.test.ts` (Node): a frame navigation to a help page is answered from the cache, one
+  below help/ that is not precached is left to the network, and the scope, `index.html`, `?open=`,
+  a fixture file, `helpx/`, `Help/` (another letter case) and addresses outside the scope give an
+  error for both destinations without a request to the server. `check-pwa.mjs` (both browsers):
+  after the offline part, with the page controlled, the Help panel's frame is given a help page
+  (`fixtures/frame-guard.htm`, added to the build by the check, as import-help would refuse it)
+  with links to `../../index.html` and `../../?open=...`: clicking each does not load the application
+  in the frame (no script, no `#root`, no application title; Chromium shows an error page, WebKit
+  stays on the page), and its link to `main.htm` still loads that page. WebKit reports each refused
+  navigation in the console ("Response served by service worker is an error", "Cannot load .");
+  the check allows exactly those messages in that step. The frame's sandbox is checked there too
+  (`allow-scripts` in WebKit only).
+- Evidence that the rule is what keeps the application out: with the rule cut out of `sw.js`
+  (`build/H1R3/probe-frame-guard.mjs`), the same click in WebKit ran the whole application inside
+  the Help frame (`.e68-shell` present, title "EASy68K Editor/Assembler v5.16.01 - unofficial port
+  ..."), and in Chromium loaded `index.html` into the frame (scripts not run there, the sandbox
+  has none); with the rule, neither.
+
+## 16. A frame navigation is answered only from the worker's copy of help/ (round 4 before I3)
+
+- Defect (independent review of the third round, `build/gate3/round3-result.json`, review.defects
+  1): `inHelpFolder` tested the raw, still encoded path, so `<scope>help/..%2Findex.html` counted as
+  below help/; `entryFor` decoded it to `help/../index.html`, found no entry and left the navigation
+  to the network, and a server that decodes `%2F` (GitHub Pages does) answered with the
+  application's `index.html`. In WebKit, where the Help frame has `allow-scripts` under the worker,
+  the whole application then ran inside the Help frame (the reviewer's probe
+  `build/review-I3r3/probe-slash.mjs`, reproduced here against the reviewer's build: title
+  "EASy68K Editor/Assembler v5.16.01 - unofficial port 0.0.0", the menu bar in the frame).
+- Repair at the root (`sw.ts`): a frame navigation is answered **only** from the active version's
+  cache, never from the network. `helpEntryForFrame` takes the path relative to the scope,
+  `helpFramePath` decodes it (an escape that does not decode: refused) and refuses it when an escape
+  made a separator (`%2F`, `%5C`: the decoded path has more segments than the raw one), when a
+  segment is empty, `.` or `..`, when the decoded path holds `%` (double encoding), a backslash or a
+  control character, or when it does not start with `help/`; what is left must be an entry of the
+  build's list (`help/` and a case-exact name). Anything else, a help address that is not in the
+  build included, and a cached page that the cache lost, gets `Response.error()`. `inHelpFolder`
+  is gone. A help page with a query or a fragment is still that page.
+- Tests: `sw.test.ts` adds 23 addresses that must give an error without a request to the server
+  (`%2F`/`%2f`, `%5C`/`%5c`, `%2E%2E%2F`, `.%2e/`, `%252F`, `%252E%252E/`, `..%2F..%2F`,
+  `main.htm%2F..%2F..%2F`, with a query, with a fragment, a backslash, `//`, an escape that does not
+  decode, an over-long UTF-8 escape, `%00`, `%0A`, `help/`, `help`, a help page not in the build,
+  another origin), a test that a lost cache entry gives an error and not the network, one for a
+  frame navigation that is not a GET, unit tests of `helpFramePath`, and one that every page of the
+  imported help folder passes it. `check-pwa.mjs` (both browsers) navigates the frame itself, with
+  the page controlled, to 19 addresses (`FRAME_ADDRESSES`: the forms above, `index.html`, `?open=`,
+  the scope without its slash, which the server redirects into the scope, and
+  `help/check/redirect.htm`, which the server redirects to `index.html`); for each, the frame shows
+  no page of the site but Help and, for the 18 addresses below the scope, nothing reaches the
+  server (its request log; `sw.js` update checks aside). A help page with `?x=..%2Findex.html#top`
+  still loads. Its static server decodes the path as GitHub Pages does.
+- The first visit, before a worker controls the page: the frame's navigations go to the network,
+  and `help/..%2Findex.html` is the application's page there. That is safe because the frame's
+  sandbox has no `allow-scripts` until a worker controls the page (`helpFrameSandbox`; the first
+  installation claims no page). `check-pwa.mjs` checks it in both browsers: no controller, no
+  `allow-scripts`, and after `help/..%2Findex.html` and the redirect, no shell, no `#root` content and
+  no application global in the frame (WebKit shows `index.html` without running it; Chromium refuses
+  to show it in the frame). Measured on 2026-11-22: `check-pwa --browser all` 114 of 114; the
+  reviewer's probe against the reviewer's old build boots the application in the frame in WebKit,
+  against this build the frame stays on the help page (WebKit) or shows an error page (Chromium).
+- What the worker cannot see: a navigation outside its scope (another path of the same host, such
+  as another project site of the same GitHub account) never reaches it. Only a link or a script
+  could start one; the import refuses such links (erratum H1 12) and no script runs in a help page.

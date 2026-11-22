@@ -13,7 +13,10 @@
 //   - the `Log File Options` question: Cancel (nothing starts, nothing is written), Append, Replace;
 //   - the Rewind and Reload notes after the dialog has been shown with the types selected;
 //   - Log Start while a program runs and the file exists, with the question open for seconds:
-//     every byte the program writes after the click is in the log;
+//     every byte the program writes after the click is in the log, judged exactly from D2 and the
+//     PC read while the question is open (the program can be held before any of its instructions);
+//   - the same with the program brought before each of the eight instructions of its loop by
+//     Trace Into, and the judge failing for that log with a line removed;
 //   - the cost of a flush in the real browser store (IndexedDB) with a 30 MB log and a small one;
 //   - the Log panel from View > Log; Auto Trace Options; Enable Exceptions and Enable Bit Field (saved at once,
 //     still set after a reload of the page); the three font dialogs; Fullscreen Options;
@@ -152,6 +155,97 @@ const COUNTER = [
   '    END     START',
 ];
 const SOURCES = { hello: HELLO, count: COUNTER };
+
+/**
+ * The eight instructions of the counter's loop, in order: a program that is held (by Pause, by the
+ * Log File Options question, by the end of a sub-slice) is held before one of them, and which one
+ * decides where the log of a Log Start must begin. The run controller bounds a sub-slice by time
+ * as well as by count (errata SH8.md entry 40), so a running program can be held before any of the
+ * eight (errata U4.md entry 17).
+ */
+const COUNTER_PLACES = [
+  'MOVE.L D2,D1',
+  'MOVEQ #3,D0',
+  'TRAP #15 (task 3, the number)',
+  'LEA CRLF,A1',
+  'MOVEQ #14,D0',
+  'TRAP #15 (task 14, CR LF)',
+  'ADDQ.L #1,D2',
+  'BRA LOOP',
+];
+
+/**
+ * The address of each of COUNTER_PLACES, read from the counter's listing (listing lines 5 to 12):
+ * not written down here, so that a change of the program or of the assembler cannot make them wrong.
+ */
+function counterAddresses(listing) {
+  const text = String.fromCharCode(...listing);
+  const byLine = new Map();
+  for (const line of text.split('\r\n')) {
+    const match = /^([0-9A-F]{8}) {2}[0-9A-F]{4}(?: [0-9A-F]{4,8})*\s+(\d+)\s/.exec(line);
+    if (match) byLine.set(Number(match[2]), Number.parseInt(match[1], 16));
+  }
+  const addresses = COUNTER_PLACES.map((_, i) => byLine.get(5 + i));
+  if (addresses.some((a) => a === undefined)) throw new Error(`The counter's listing has no address for lines 5 to 12`);
+  return addresses;
+}
+
+/**
+ * The one correct beginning of the counter's log after a Log Start while the program is held
+ * before place `place` (an index of COUNTER_PLACES) with D2 = `d2`: what the program writes next.
+ *   - before the MOVE, the MOVEQ #3 or the first TRAP: the number d2 is not written yet: "d2 CR LF";
+ *   - before the LEA, the MOVEQ #14 or the second TRAP: d2 is written, its CR LF not: "CR LF", then
+ *     "d2+1 CR LF";
+ *   - before the ADDQ: line d2 is complete, D2 not yet counted on: "d2+1 CR LF";
+ *   - before the BRA: D2 is already counted on, line d2-1 is complete: "d2 CR LF".
+ */
+function counterLogStart(place, d2) {
+  if (place <= 2) return { lead: '', first: d2 };
+  if (place <= 5) return { lead: '\r\n', first: d2 + 1 };
+  if (place === 6) return { lead: '', first: d2 + 1 };
+  return { lead: '', first: d2 };
+}
+
+/**
+ * Judges the body of the counter's output log (after its header) exactly: it begins as
+ * counterLogStart says, then holds consecutive numbers each with its CR LF, at least `minLines` of
+ * them, and ends either after a CR LF or with the whole next number (Log Stop holds the program
+ * between two instructions, so nothing else can be the last thing written).
+ */
+function judgeCounterLog(body, place, d2, minLines = 10) {
+  const { lead, first } = counterLogStart(place, d2);
+  const where = `held before ${COUNTER_PLACES[place] ?? `an address outside the loop (place ${place})`} with D2 = ${d2}`;
+  const describe = `${where}, so the log must begin ${JSON.stringify(`${lead}${first}\r\n`)}`;
+  if (place < 0 || place >= COUNTER_PLACES.length) return { ok: false, detail: describe };
+  if (!body.startsWith(lead))
+    return { ok: false, detail: `${describe}; it begins ${JSON.stringify(body.slice(0, 24))}` };
+  const pieces = body.slice(lead.length).split('\r\n');
+  const tail = pieces.pop();
+  for (let i = 0; i < pieces.length; i++) {
+    if (pieces[i] !== String(first + i)) {
+      return {
+        ok: false,
+        detail: `${describe}; line ${i + 1} after the click is ${JSON.stringify(pieces[i])}, not ${first + i} (it begins ${JSON.stringify(body.slice(0, 24))})`,
+      };
+    }
+  }
+  if (tail !== '' && tail !== String(first + pieces.length)) {
+    return {
+      ok: false,
+      detail: `${describe}; it ends with ${JSON.stringify(tail)}, not "" or "${first + pieces.length}"`,
+    };
+  }
+  if (pieces.length < minLines) return { ok: false, detail: `${describe}; only ${pieces.length} lines` };
+  return { ok: true, detail: `${where}: ${pieces.length} lines from ${JSON.stringify(body.slice(0, 16))}` };
+}
+
+/** The log with its line `index` (0 the first after the click) removed, to prove the judge fails. */
+function withoutLine(body, place, d2, index) {
+  const { lead } = counterLogStart(place, d2);
+  const pieces = body.slice(lead.length).split('\r\n');
+  pieces.splice(index, 1);
+  return lead + pieces.join('\r\n');
+}
 
 /** The execution log of sim-ui §13.4, type 1, after its header. */
 const TYPE1_BODY = [
@@ -469,10 +563,48 @@ async function resetWith(page, id) {
   return done;
 }
 
+/** Where the program is held: D2 and the PC, read together (one call into the page). */
+const heldAt = (page, when) =>
+  read(page, `D2 and the PC ${when}`, () => {
+    const { engine } = window.__easy68k.ctx.sim;
+    return { d2: engine.getRegister(2), pc: engine.getRegister(17) }; // Reg.D2, Reg.PC
+  });
+
+/**
+ * After Append (or Replace) on the counter's question: lets the program write 30 lines into the
+ * log, stops the log and the run, and judges the output log in the store against `held`, the D2
+ * and PC read while the question was open. The file held `an older log` before.
+ */
+async function countedLog(page, addresses, held) {
+  // Until the program has written some lines into the log (by the log's own count, not a pause).
+  await waitFor(
+    page,
+    'the program to write 30 lines into the log',
+    () => window.__easy68k.ctx.sim.log.tail('output', 40).length >= 30,
+    undefined,
+  );
+  await toolbarButton(page, 'sim.run.logStop').click();
+  await toolbarButton(page, 'sim.run.pause').click();
+  await waitFor(page, 'the run to be paused', () => window.__easy68k.ctx.store.getState().sim.phase === 'idle');
+  await settled(page);
+  const counted = (await readText(page, '/browser/logcheck/count_OutLog.txt')) ?? '';
+  const prefix = /^an older log\r\nEASy68K output log file: [^\r]*\r\n\r\n/;
+  if (!prefix.test(counted)) {
+    return {
+      ok: false,
+      detail: `the file does not begin with the older log and a header: ${JSON.stringify(counted.slice(0, 80))}`,
+    };
+  }
+  const body = counted.replace(prefix, '');
+  const place = addresses.indexOf(held.pc);
+  return { ...judgeCounterLog(body, place, held.d2), body, place };
+}
+
 // --- the parts -----------------------------------------------------------------------------------
 
 async function loggingPart(browser, name, programs) {
   const p = `${name}/logging:`;
+  const addresses = counterAddresses(programs.count.l68);
   const context = await newContext(browser);
   const { page, errors } = await openPage(context);
   const shot = (label) => page.screenshot({ path: join(outDir, `${name}-${label}.png`) });
@@ -719,41 +851,70 @@ async function loggingPart(browser, name, programs) {
   );
   await toolbarButton(page, 'sim.run.logStart').click();
   await question.waitFor({ timeout: UI_TIMEOUT });
-  const d2Asked = await read(page, 'D2 while the question is open', () =>
-    window.__easy68k.ctx.sim.engine.getRegister(2),
-  );
+  const asked = await heldAt(page, 'while the question is open');
   await page.waitForTimeout(3000); // the user takes their time
-  const d2Later = await read(page, 'D2 three seconds later', () => window.__easy68k.ctx.sim.engine.getRegister(2));
-  check(`${p} the program stands still while the question is open`, d2Asked === d2Later, `D2 ${d2Asked} -> ${d2Later}`);
-  await question.getByRole('button', { name: 'Append' }).click();
-  // Until the program has written some lines into the log (by the log's own count, not a pause).
-  await waitFor(
-    page,
-    'the program to write 30 lines into the log',
-    () => window.__easy68k.ctx.sim.log.tail('output', 40).length >= 30,
-    undefined,
-  );
-  await toolbarButton(page, 'sim.run.logStop').click();
-  await toolbarButton(page, 'sim.run.pause').click();
-  await settled(page);
-  const counted = (await readText(page, '/browser/logcheck/count_OutLog.txt')) ?? '';
-  const prefix = /^an older log\r\nEASy68K output log file: [^\r]*\r\n\r\n/;
-  const body = counted.replace(prefix, '');
-  // The program was held between two of its instructions: the log goes on exactly where the
-  // screen went on, with "q\r\n" or with the CR LF of q - 1 and then "q\r\n".
-  let expected = '';
-  const startsAt = body.startsWith('\r\n') ? d2Asked + 1 : d2Asked;
-  if (body.startsWith('\r\n')) expected += '\r\n';
-  const lines = body.slice(expected.length).split('\r\n');
-  lines.pop(); // the part after the last CR LF (maybe a number without its CR LF)
-  for (let i = 0; i < lines.length; i++) expected += `${startsAt + i}\r\n`;
-  const consecutive = lines.length > 10 && body.startsWith(expected);
+  const later = await heldAt(page, 'three seconds later');
   check(
-    `${p} Log Start during a run: every byte written after the click is in the log`,
-    prefix.test(counted) && consecutive,
-    `${lines.length} lines, first ${JSON.stringify(body.slice(0, 24))}, question asked at D2 = ${d2Asked}`,
+    `${p} the program stands still while the question is open`,
+    asked.d2 === later.d2 && asked.pc === later.pc,
+    `D2 ${asked.d2} -> ${later.d2}, PC $${asked.pc.toString(16)} -> $${later.pc.toString(16)}`,
   );
+  await question.getByRole('button', { name: 'Append' }).click();
+  const judged = await countedLog(page, addresses, asked);
+  check(`${p} Log Start during a run: every byte written after the click is in the log`, judged.ok, judged.detail);
 
+  check(`${p} no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await context.close();
+}
+
+/**
+ * Log Start with the counter held before each of the eight instructions of its loop (brought there
+ * with Trace Into), then Run: the log must begin exactly where counterLogStart says for the D2 and
+ * PC read while the question is open, and the same judge must fail for that log with its first line
+ * or a later line removed. This proves the judge of the run case above, where the place is wherever
+ * the run controller happened to hold the program (errata U4.md entry 17).
+ */
+async function placesPart(browser, name, programs) {
+  const p = `${name}/places:`;
+  const addresses = counterAddresses(programs.count.l68);
+  const context = await newContext(browser);
+  const { page, errors } = await openPage(context);
+  await setMode(page, 'simulator');
+  await putPrograms(page, programs);
+  await openProgram(page, 'count');
+  await read(page, 'the log types to be set (output log only)', () => {
+    const { log } = window.__easy68k.ctx.sim;
+    log.applyDialog({ ...log.state, execType: 0, outputType: 1 });
+  });
+  const question = dialogNamed(page, 'Log File Options');
+  for (let place = 0; place < COUNTER_PLACES.length; place++) {
+    const what = `${p} held before ${COUNTER_PLACES[place]}`;
+    if (place > 0) await resetWith(page, 'sim.run.rewind');
+    // From START: one step for MOVEQ #0,D2, then `place` steps into the loop.
+    for (let i = 0; i <= place; i++) await traceOnce(page);
+    await writeText(page, '/browser/logcheck/count_OutLog.txt', 'an older log\r\n');
+    await toolbarButton(page, 'sim.run.logStart').click();
+    await question.waitFor({ timeout: UI_TIMEOUT });
+    const held = await heldAt(page, 'while the question is open');
+    const there = held.pc === addresses[place];
+    await question.getByRole('button', { name: 'Append' }).click();
+    await loggingLabel(page).waitFor({ timeout: UI_TIMEOUT });
+    await toolbarButton(page, 'sim.run.run').click();
+    const judged = await countedLog(page, addresses, held);
+    check(
+      `${what}: Trace Into brought it there, and the log begins as computed from D2 and the PC`,
+      there && judged.ok,
+      `${there ? '' : `PC $${held.pc.toString(16)}, not $${addresses[place].toString(16)}; `}${judged.detail}`,
+    );
+    const body = judged.body ?? '';
+    const firstGone = judgeCounterLog(withoutLine(body, judged.place, held.d2, 0), judged.place, held.d2);
+    const laterGone = judgeCounterLog(withoutLine(body, judged.place, held.d2, 5), judged.place, held.d2);
+    check(
+      `${what}: the same log with its first line or its sixth line removed fails`,
+      judged.body !== undefined && !firstGone.ok && !laterGone.ok,
+      `first removed: ${firstGone.detail}; sixth removed: ${laterGone.detail}`,
+    );
+  }
   check(`${p} no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   await context.close();
 }
@@ -1086,6 +1247,7 @@ async function main() {
       try {
         for (const [part, run] of [
           ['logging', () => loggingPart(browser, name, programs)],
+          ['places', () => placesPart(browser, name, programs)],
           ['flush', () => flushPart(browser, name, programs)],
           ['options light', () => optionsPart(browser, name, 'light')],
           ['options dark', () => optionsPart(browser, name, 'dark')],

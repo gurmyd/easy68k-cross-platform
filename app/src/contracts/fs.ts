@@ -74,12 +74,18 @@ export interface VfsChange {
   path: VPath;
   kind: 'write' | 'remove';
   origin: 'local' | 'external';
-  /** Set when the change was an append through this Vfs (origin 'local'): the file was `at` bytes
-   *  long just before, inside the queue of its path, and `data` (a copy; do not modify) was added at
-   *  its end. Absent for every other change, and for an append whose size before could not be
-   *  learnt. A listener that keeps a copy of the file may apply `data` when its copy is exactly
-   *  `at` bytes long, and reads the file otherwise. Added in the round before gate I3
-   *  (docs/requests/SH6-append-change.md; docs/porting/errata/W1.md, entry 16). */
+  /** Set when the change was an append through this Vfs (origin 'local'): `data` (a copy; do not
+   *  modify) was added at the end of the file, and `at` is how long this Vfs knew the file to be
+   *  just before, inside the queue of its path (from its own last write or append, or a stat).
+   *  `at` is what this window knew: another window's change whose report has not arrived yet is
+   *  not in it (a BroadcastChannel's reports arrive late), so `at` may be stale. Absent for every
+   *  other change, and for an append whose size before could not be learnt or during which a
+   *  report arrived. A listener that keeps a copy of the file may apply `data` only when its copy
+   *  is exactly `at` bytes long AND the file, asked after the append, is exactly `at +
+   *  data.length` bytes long; otherwise it reads the file. (Where the sizes match although another
+   *  window changed the bytes, that window's report follows and makes the listener read the file.)
+   *  Added in the round before gate I3 (docs/requests/SH6-append-change.md; docs/porting/errata/
+   *  W1.md, entries 16 and 17). */
   appended?: { at: number; data: Bytes };
 }
 

@@ -261,6 +261,23 @@
         }
       }
     },
+    "exceptions/e16-line-a-opcodes": {
+      "sourceSha256": "e8431c6ab20504c0a00d3f3c37d8a6f83699acbb74a27c5cf7b7a538a14e30a8",
+      "s68Sha256": "22643f43e9ac65f8f5f72f7d46fdeba185b000993b5d071f1a9ba6c97119e0ef",
+      "l68Sha256": "cdaf59c7a5fdf9ab7008da7e6177ec330da169271fb29df2a1c39d8c3060503a",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 28.19,
+          "artifacts": {
+            "result": {
+              "sha256": "1eeb8d6b3d7b4de7dcb5c8e21b41fed34a90de6ec4e43230f5942d9f13d7b985",
+              "bytes": 1233
+            }
+          }
+        }
+      }
+    },
     "hardware/h01-device-bytes-at-start": {
       "sourceSha256": "4afe8e822c84a5c16d3df4a92bbdbf79e8454006a31a41f511da37fb200de528",
       "s68Sha256": "7f6237c607f9f6c33dd351898b9f7492f7008c5d8bd3ea2c7aac88c3884e823e",
@@ -409,6 +426,23 @@
             "result": {
               "sha256": "2dcb7a0404d1876eb0e3c1d5ed5262dc62c18ad8d9e874db4fc20c3c525dfe2c",
               "bytes": 60
+            }
+          }
+        }
+      }
+    },
+    "hardware/h10-task32-show-window": {
+      "sourceSha256": "b2e8ed73c3a3303a2b2a3e5d5f09dc67ca73f4274b33f9985e4f6ba8c6f45fc1",
+      "s68Sha256": "1b1b3cea0f4ffe67064ca4df431bd0e275dfb0d75e4c2e7ad5e0ec180bed3544",
+      "l68Sha256": "37bf727e4e0ddd3768a584e6415c84fba7a99a2eadc8121ecadfef1b92f01c0e",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 24.21,
+          "artifacts": {
+            "result": {
+              "sha256": "3943d08351474664551ed25052ba904d661211517b8266024c004605a8919761",
+              "bytes": 415
             }
           }
         }
@@ -704,17 +738,17 @@
       }
     },
     "instructions/g-ccr-sr": {
-      "sourceSha256": "6d1c85aa8ef3010c7cccc26a36481173bc83cad3cd0a9073ea08ad0928c499a9",
-      "s68Sha256": "d87fa55fb33acb08e72b764d8e875d455f407f8da5a5ea72f4711bfa601c2ca7",
-      "l68Sha256": "e0f93c89207c27174cfbd154473a52454becfbebac9a017f148269936ddb85d1",
+      "sourceSha256": "20c0b9ce968a5a68def1935bf85c9b584f130623ff305a86a18bd8084631fcad",
+      "s68Sha256": "523e33e25881c4cf921c927396076510e7705ad282cc0a84228f9daa1fab8ec2",
+      "l68Sha256": "791691721db5e18a29d095ef8c8a706b1b5caa4098f68fc3f7181f755ce60241",
       "recipes": {
         "report": {
           "status": "ok",
-          "seconds": 43.3,
+          "seconds": 46.18,
           "artifacts": {
             "result": {
-              "sha256": "c43aaeec4c9bf27e9be66aa89571d01dd4f06b7cb9ac0a9c3b5e5f456f426358",
-              "bytes": 6893
+              "sha256": "36d751e282963f18410d86308bb31300d64e838543d309c264a3ee86fa9dc1c7",
+              "bytes": 7753
             }
           }
         }
@@ -1953,6 +1987,100 @@
             }
           },
           "instructions": 10918
+        }
+      }
+    },
+    "logs/l26-alu-walk": {
+      "sourceSha256": "45e0fb2749d60d19b8a506688cf515ea6e0ac0ce17cb7c70965656f60d6fd261",
+      "s68Sha256": "e3d6e513c243b9616929b57c7030bd95362a742d08347c42bad3677b3b4dada1",
+      "l68Sha256": "34dfd744d4ed99068dfb4a63ef46c2afedb7336e6bfb6d841f19568ae32eda41",
+      "recipes": {
+        "log:2": {
+          "status": "ok",
+          "seconds": 2511.61,
+          "artifacts": {
+            "runlog": {
+              "sha256": "17974edeba1dc1b7a47778434b0d02120918c4802414ce307e653e0502583692",
+              "bytes": 6646372
+            }
+          },
+          "instructions": 20065
+        }
+      }
+    },
+    "logs/l27-shift-muldiv-walk": {
+      "sourceSha256": "7328aee75094a5a3cbbb0ce82dc619d86d11dc4b8a831d10975edfe094074b74",
+      "s68Sha256": "c1be0d1569fab8a955be540df0af9d23c86fe1c2b06bc175353eed1e9e5f3509",
+      "l68Sha256": "e48b6ed539eeb47042efb0a428e87f6c425e239473672de2ad0e85481c69dc0e",
+      "recipes": {
+        "log:2": {
+          "status": "ok",
+          "seconds": 2374.28,
+          "artifacts": {
+            "runlog": {
+              "sha256": "ca6768ad3f96c728ee4e8aba51078a4f1853bf7df345609f61d00b49080e9a56",
+              "bytes": 6215963
+            }
+          },
+          "instructions": 18624
+        }
+      }
+    },
+    "logs/l28-exceptions-walk": {
+      "sourceSha256": "820abc07a7f9b490e68a2d4a00495322d205d79ceb14f6cf9ae5fda13b0ab083",
+      "s68Sha256": "2c5fc3da9cd794d78897863e4acfaaec9beb9effb3eba3f79be336ab964860b3",
+      "l68Sha256": "d1986e7595fba061d166b98416f152d7fd5a86176df09785126ba9e8d4473113",
+      "recipes": {
+        "log:2": {
+          "status": "ok",
+          "seconds": 908.27,
+          "artifacts": {
+            "runlog": {
+              "sha256": "b1630b5d70fa108fb84658891ff563d6e045a9de5dc9417f729c54f8a4c75b3c",
+              "bytes": 3228826
+            }
+          },
+          "instructions": 9703
+        }
+      }
+    },
+    "logs/l29-bits-bcd-moves": {
+      "sourceSha256": "eacd986478b32c1a404e4a81105dcc6ef6d499eba42b6e4fc455ef082507cf92",
+      "s68Sha256": "a7bb79bed6bd797ce1a2676296d5189691f5b50355136eae08a0d5be1ec14e58",
+      "l68Sha256": "a9dd7c595db268e7bed6a349182612aa37313ac9851ccebb198a46868591e046",
+      "recipes": {
+        "log:2": {
+          "status": "ok",
+          "seconds": 1864.09,
+          "artifacts": {
+            "runlog": {
+              "sha256": "d8a7921b74a4953143307a84a99688e784b9a148380a45fa0a4d948f1924734e",
+              "bytes": 5535123
+            }
+          },
+          "instructions": 16564
+        }
+      }
+    },
+    "logs/l30-number-output": {
+      "sourceSha256": "6ad8759c776641c9dad3b9de17ba5fc59b9da822dd365384c7eeefdf69b4f066",
+      "s68Sha256": "e6390cd09e0dfc94859698cdf3c6df6276dfc5d433e53f8f03b2bc217460d9e7",
+      "l68Sha256": "f440a0334a9feb817244d0274e4812abbaca32dfb2110a10d46debb433ed884d",
+      "recipes": {
+        "log:2+out": {
+          "status": "ok",
+          "seconds": 1536.53,
+          "artifacts": {
+            "runlog": {
+              "sha256": "ef1719798b0ae055e8cf51a346fd5f2dab8e069531d8c6b338087f84ee6bdcc0",
+              "bytes": 4637396
+            },
+            "outlog": {
+              "sha256": "1cdf5c60dfefceef524507bb1fed8332f939c030f997897315c5e91a55aa8c21",
+              "bytes": 5423
+            }
+          },
+          "instructions": 13812
         }
       }
     },
@@ -3549,6 +3677,125 @@
             "result": {
               "sha256": "3df0c6907d156d124cc80fac8419818821822c45e447aff4fd8105e17fb8f47b",
               "bytes": 1420
+            }
+          }
+        }
+      }
+    },
+    "trap15-b/b14-dx-sound-without-file": {
+      "sourceSha256": "231fdba3f385b9de5374beadb61980894b22cc457d8e7ed4c430c0740bf7abd8",
+      "s68Sha256": "ebc99cc820c3ea4cdc68427873f0e9af93e6476fc95f2e9f57b9b1162f2dfa7f",
+      "l68Sha256": "a2453a32d4e823b5952463b9fccf3a8db8add4f43765487d0ed1e1920aca6ab0",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 25.97,
+          "artifacts": {
+            "result": {
+              "sha256": "4f5e936aa591d11c0a4fefd25f93ea24f53663eaf7eced1a6e8562fa8daa43dd",
+              "bytes": 1621
+            }
+          }
+        }
+      }
+    },
+    "trap15-b/b15-dx-sound-loaded": {
+      "sourceSha256": "b598bd847d62f172cd57a8db2ece3302413a248a789e2a2c79a098925b23452a",
+      "s68Sha256": "55912708aad3d9436dd9ad37086b9c4c9b76eada88599c1ab97037b0478aa2fd",
+      "l68Sha256": "c230f7801078d608f972f31b39d069cbd0b7fb6565551cb5639783b2e852622e",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 30.1,
+          "artifacts": {
+            "result": {
+              "sha256": "265f431ac9fe02c137e594dc53daf5b871d3c2f6a5d362a3024c474b91406204",
+              "bytes": 2626
+            }
+          }
+        }
+      }
+    },
+    "trap15-b/b16-task94-repaint": {
+      "sourceSha256": "b767d2b7fd84bc9be530b0fd0b51ffc346eb2ef1acab7f551cf1e907d58d29f2",
+      "s68Sha256": "552dcfb52257a9c662caa864cf23935f87528cccd0608987100788f006903cf3",
+      "l68Sha256": "0a20d13f515ef475d1357df315e9908d0a6445a47eb1681e43382f57d09e4213",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 27.09,
+          "artifacts": {
+            "result": {
+              "sha256": "6469dbedb064e7d24a15a4532798df47040100410393c9ca6b6d73bf3e241bd7",
+              "bytes": 1621
+            }
+          }
+        }
+      }
+    },
+    "trap15-b/b17-task105-local-ip": {
+      "sourceSha256": "ec079ca44dffe3a12d53a109c6d1e581c527332086a88a6bc2c0339c464688f9",
+      "s68Sha256": "2061f54dbc711164a76519dafc9662f29ef36c95ddb23a951fcbad340a5425d9",
+      "l68Sha256": "579ff2c87be6832ed67e6da01bfbd1efb0c3f60f9f6364744f7a3caeaefc4ecc",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 22.08,
+          "artifacts": {
+            "result": {
+              "sha256": "9bc6be378d65028941ca3bcfa7c2605c3b0e9ae87d525bb33514d48af842f398",
+              "bytes": 296
+            }
+          }
+        }
+      }
+    },
+    "trap15-b/b18-net-uninitialised": {
+      "sourceSha256": "8894b5bf88b9922a8633b8c1f975ae32bb39b2a0e24a770e16f423f0b9256c83",
+      "s68Sha256": "d29c873c640b50dbe4ee59e4007750a18886d7f5c91186086dda7d50ed91e4cb",
+      "l68Sha256": "524405224a4d3d31a8272bd67b81f8cd408d81cc03ac2f4334e9c359aa614ec3",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 27.68,
+          "artifacts": {
+            "result": {
+              "sha256": "86bc66f64a290f0908d788a71eb1b0b3fe8c469a7911743490359828cd095231",
+              "bytes": 1053
+            }
+          }
+        }
+      }
+    },
+    "trap15-b/b19-net-send-uninitialised": {
+      "sourceSha256": "28199b28d06fa6e681babbbc712348b85e7d3d3c45d05827258a72defbc2876e",
+      "s68Sha256": "31a6ef54ae689315a17f42cff0c874dac71ec8f91a4321f8fd72aa2da0f5acca",
+      "l68Sha256": "9de1ac5859ea2d69767611612a4baa61f982e958cfc90d980332e32f7352ee72",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 25.24,
+          "artifacts": {
+            "result": {
+              "sha256": "a7bb74bc6ad7204fcd41b6eee55405c855f3220b9020b899660b314ff9719eac",
+              "bytes": 474
+            }
+          }
+        }
+      }
+    },
+    "trap15-b/b20-net-receive-port-uninitialised": {
+      "sourceSha256": "74f352ea3b99e74e08e3b5c30259d33efff9522746cc47afff29154f05e17685",
+      "s68Sha256": "7f4e8aa163c11b5b267f7604ac5b1f02267dcb56b63a9443113a55ee4857636d",
+      "l68Sha256": "ede8c93abe7006e76ea4edf97d0f157efb9c83a761ec82427dcf8f9fb45829d4",
+      "recipes": {
+        "report": {
+          "status": "ok",
+          "seconds": 18.4,
+          "artifacts": {
+            "result": {
+              "sha256": "12795cd1ae62b87a251bcb6975db17ecc7010423ba6e80a5d58b285df925b751",
+              "bytes": 332
             }
           }
         }

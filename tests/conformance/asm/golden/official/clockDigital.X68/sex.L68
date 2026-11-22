@@ -1,0 +1,236 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:49:36 AM
+
+00000000                             1  *-----------------------------------------------------------
+00000000                             2  * Title         : clockDigital
+00000000                             3  * Written by    : Chuck Kelly
+00000000                             4  * Date Created  : Jan-9-2007
+00000000                             5  * Description   : A digital clock for EASy68K.
+00000000                             6  *
+00000000                             7  * Simulator Trap task for timer
+00000000                             8  * 8 - Return time in hundredths of a second since midnight in D1.L. 
+00000000                             9  *
+00000000                            10  * A2 & A4 - Address of 7-segment display
+00000000                            11  * A3 - Address of LEDs
+00000000                            12  * Modifications:
+00000000                            13  * Oct-17-2008 by CK, Added DELAY
+00000000                            14  * Dec-25-2012 by CK, Uses SIMHALT
+00000000                            15  *-----------------------------------------------------------
+00000000                            16  
+00000000  =0041EB00                 17  NOON    EQU    12*60*60*100    noon in 100's of a second
+00000000                            18  
+00000000                            19  * Delay for hundredths of a second in param 1
+00000000                            20  DELAY    MACRO
+00000000                            21      move.b  #23,d0          trap task 23
+00000000                            22      move.l  #\1,d1          delay amount
+00000000                            23      trap    #15
+00000000                            24      ENDM
+00000000                            25  
+00000000                            26  
+00000000                            27  *-------------------------- PROGRAM START ---------------------------
+00001000                            28      ORG    $1000
+00001000                            29  
+00001000                            30  START
+00001000                            31      * initialize
+00001000  4279 00001142             32      clr.w   seconds
+00001006  103C 0020                 33      move.b  #32,d0          trap task to get address of hardware
+0000100A  123C 0000                 34      move.b  #0,d1
+0000100E  4E4F                      35      trap    #15             display hardware window
+00001010  123C 0001                 36      move.b  #1,d1
+00001014  4E4F                      37      trap    #15             get address of 7-segment display
+00001016  2841                      38      move.l  d1,a4           A4 = Address of 7-segment display
+00001018  123C 0002                 39      move.b  #2,d1
+0000101C  4E4F                      40      trap    #15             get address of LEDs
+0000101E  2641                      41      move.l  d1,a3           A3 = Address of LEDs
+00001020                            42  
+00001020                            43  loop
+00001020  244C                      44      move.l  a4,a2
+00001022                            45      repeat
+00001022                            46s _30000000
+00001022  103C 0008                 47          move.b  #8,d0       Read timer, get 100ths of a second since midnight in D1.L
+00001026  4E4F                      48          trap    #15
+00001028                            49          if.l d1 <hs> #NOON then.s
+00001028  B2BC 0041EB00             50s     CMP.L   #NOON,D1
+0000102E  6506                      51s     BLO.S   _00000000
+00001030  0481 0041EB00             52              sub.l #NOON,d1      time = time - NOON
+00001036                            53          endi
+00001036                            54s _00000000
+00001036                            55          * Calculate total minutes (D5), minutes this hour (D6), seconds (D7)
+00001036  82FC 0064                 56          divu    #100,d1         convert to seconds
+0000103A  2801                      57          move.l  d1,d4           save fractional seconds
+0000103C  0281 0000FFFF             58          andi.l  #$0000ffff,d1   discard fractional seconds
+00001042  82FC 003C                 59          divu    #60,d1          convert to minutes
+00001046  2E01                      60          move.l  d1,d7
+00001048  7010                      61          move.l  #16,d0    
+0000104A  E0AF                      62          lsr.l   d0,d7           d7 = seconds
+0000104C  0281 0000FFFF             63          andi.l  #$0000ffff,d1   discard seconds from d1
+00001052  2A01                      64          move.l  d1,d5           d5 = total minutes
+00001054  82FC 003C                 65          divu    #60,d1          convert to hours
+00001058  2C01                      66          move.l  d1,d6
+0000105A  7010                      67          move.l  #16,d0
+0000105C  E0AE                      68          lsr.l   d0,d6           minutes this hour to d6
+0000105E  4844                      69          swap    d4              display fractional seconds on LEDs
+00001060  1684                      70          move.b  d4,(a3)
+00001062                            71m         DELAY    1              1/100 sec delay to reduce CPU workload
+0000106A                            72      until.w d7 <ne> seconds do  until a second has elapsed
+0000106A  BE79 00001142             73s     CMP.W   SECONDS,D7
+00001070  67B0                      74s     BEQ _30000000
+00001072                            75  
+00001072                            76  * update the display on the 7-segment readouts
+00001072                            77  
+00001072                            78  * display hour as digits
+00001072  8AFC 003C                 79      divu    #60,d5              hours as 1-11 with 0 for 12
+00001076                            80      if.w d5 <eq> #0 then.s      if hours = 0
+00001076  BA7C 0000                 81s     CMP.W   #0,D5
+0000107A  6604                      82s     BNE.S   _00000001
+0000107C  3A3C 000C                 83          move.w    #12,d5        hours as 1-12
+00001080                            84      endi
+00001080                            85s _00000001
+00001080  163C 000A                 86      move.b  #10,d3              blank digit code
+00001084                            87      if.b d5 <hi> #9 then.s      if hours > 9
+00001084  BA3C 0009                 88s     CMP.B   #9,D5
+00001088  6308                      89s     BLS.S   _00000002
+0000108A  0445 000A                 90          sub     #10,d5        
+0000108E  163C 0001                 91          move.b  #1,d3           display a 1
+00001092                            92      endi
+00001092                            93s _00000002
+00001092  6100 0076                 94      bsr    segment7             hour 10s digit
+00001096  3605                      95      move.w d5,d3
+00001098  6100 0070                 96      bsr    segment7             hour 1s digit
+0000109C                            97  
+0000109C                            98  * dash after hours
+0000109C  163C 000B                 99      move.b #11,d3               dash digit code
+000010A0  6100 0068                100      bsr    segment7             display dash
+000010A4                           101  
+000010A4                           102  * display minutes as digits
+000010A4  1006                     103      move.b d6,d0
+000010A6  6100 007C                104      bsr    Hex2BCD
+000010AA  163C 0000                105      move.b #0,d3                0 digit code
+000010AE                           106      if.b d0 <hi> #9 then.s      if minutes > 9
+000010AE  B03C 0009                107s     CMP.B   #9,D0
+000010B2  6304                     108s     BLS.S   _00000003
+000010B4  1600                     109          move.b  d0,d3
+000010B6  E80B                     110          lsr.b   #4,d3           10's minute digit
+000010B8                           111      endi
+000010B8                           112s _00000003
+000010B8  6100 0050                113      bsr     segment7
+000010BC  1600                     114      move.b  d0,d3
+000010BE  C63C 000F                115      and.b   #$F,d3              1's minute digit
+000010C2  6100 0046                116      bsr     segment7
+000010C6                           117  
+000010C6                           118  * dash after minutes
+000010C6  163C 000B                119      move.b  #11,d3              dash digit code
+000010CA  6100 003E                120      bsr     segment7            display dash
+000010CE                           121  
+000010CE                           122  * display seconds as digits
+000010CE  33C7 00001142            123      move.w  d7,seconds          save seconds
+000010D4  3007                     124      move.w  d7,d0
+000010D6  6100 004C                125      bsr     Hex2BCD
+000010DA  163C 0000                126      move.b  #0,d3               0 digit code
+000010DE                           127      if.b d0 <hi> #9 then.s
+000010DE  B03C 0009                128s     CMP.B   #9,D0
+000010E2  6304                     129s     BLS.S   _00000004
+000010E4  1600                     130          move.b  d0,d3
+000010E6  E80B                     131          lsr.b   #4,d3           10's seconds digit
+000010E8                           132      endi
+000010E8                           133s _00000004
+000010E8  6100 0020                134      bsr     segment7
+000010EC  1600                     135      move.b  d0,d3
+000010EE  C63C 000F                136      and.b   #$F,d3              1's second digit
+000010F2  6100 0016                137      bsr     segment7
+000010F6                           138  
+000010F6  6000 FF28                139      bra     loop                loop forever
+000010FA                           140  
+000010FA                           141      * Halt the Simulator
+000010FA  FFFF FFFF                142      SIMHALT
+000010FE                           143  
+000010FE                           144  
+000010FE                           145  *-----------------------------------------------------------
+000010FE                           146  *         A
+000010FE                           147  *       -----
+000010FE                           148  *     F|     |B
+000010FE                           149  *      |  G  |
+000010FE                           150  *       -----
+000010FE                           151  *     E|     |C
+000010FE                           152  *      |  D  |
+000010FE                           153  *       -----   .H
+000010FE                           154  *
+000010FE                           155  * Bit Number  7 6 5 4 3 2 1 0
+000010FE                           156  * Segment     H G F E D C B A
+000010FE                           157  
+000010FE                           158  * bit patterns to form digits on readout
+000010FE                           159  digits:
+000010FE= 3F                       160      dc.b  $3F           digit 0
+000010FF= 06                       161      dc.b  $06           digit 1
+00001100= 5B                       162      dc.b  $5B           digit 2
+00001101= 4F                       163      dc.b  $4F           digit 3
+00001102= 66                       164      dc.b  $66           digit 4
+00001103= 6D                       165      dc.b  $6D           digit 5
+00001104= 7D                       166      dc.b  $7D           digit 6
+00001105= 07                       167      dc.b  $07           digit 7
+00001106= 7F                       168      dc.b  $7F           digit 8
+00001107= 6F                       169      dc.b  $6F           digit 9
+00001108= 00                       170      dc.b  $00           digit off
+00001109= 40                       171      dc.b  $40           dash
+0000110A                           172  
+0000110A                           173      ds.w  0             force word boundary
+0000110A                           174  
+0000110A                           175  *----------------------------------------------------------
+0000110A                           176  * Display a digit on the 7-segment display
+0000110A                           177  * Pre:  D3.B contains 1 digit to display
+0000110A                           178  *       A2 points to 7-segment LED to use
+0000110A                           179  * Post: A2 points to next 7-segment LED
+0000110A                           180  
+0000110A                           181  segment7:
+0000110A  48E7 1080                182      movem.l d3/a0,-(a7)     save registers
+0000110E  41F8 10FE                183      lea     digits,a0       bit pattern table
+00001112  C6BC 000000FF            184      and.l   #$00ff,d3
+00001118  14B0 3000                185      move.b  (a0,d3),(a2)    display digit
+0000111C  548A                     186      adda.l  #2,a2
+0000111E  4CDF 0108                187      movem.l (a7)+,d3/a0     restore registers
+00001122  4E75                     188      rts
+00001124                           189  
+00001124                           190  
+00001124                           191  *-----------------------------------
+00001124                           192  * Convert 2 digit Hex to 2 digit BCD
+00001124                           193  * Pre:  D0.B 2 digit Hex
+00001124                           194  * Post: D0.B 2 digit BCD
+00001124                           195  Hex2BCD:
+00001124  48E7 4000                196      movem.l d1,-(a7)        save registers
+00001128  4241                     197      clr     d1
+0000112A  C0BC 000000FF            198      and.l   #$00FF,d0
+00001130  80FC 000A                199      divu    #10,d0
+00001134  2200                     200      move.l  d0,d1
+00001136  E940                     201      asl.w   #4,d0           shift tens to proper location
+00001138  4841                     202      swap    d1              put units in proper location
+0000113A  8001                     203      or.b    d1,d0           combine units with tens
+0000113C  4CDF 0002                204      movem.l (a7)+,d1        restore registers
+00001140  4E75                     205      rts
+00001142                           206  
+00001142                           207  * variables
+00001142                           208  seconds     ds.w    1
+00001144                           209  
+00001144                           210      END     START
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+DELAY               0
+DIGITS              10FE
+HEX2BCD             1124
+LOOP                1020
+NOON                41EB00
+SECONDS             1142
+SEGMENT7            110A
+START               1000
+_00000000           1036
+_00000001           1080
+_00000002           1092
+_00000003           10B8
+_00000004           10E8
+_30000000           1022

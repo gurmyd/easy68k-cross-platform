@@ -43,6 +43,11 @@ export interface Metrics {
       blankBytes: number[];
     }[];
     cells: RasterCell[];
+    /** Windows' text path (README.md "Windows' text path"; erratum T2 26). */
+    textPath?: {
+      zeroWidthBar: Record<string, Partial<Record<StyleName, Record<string, number>>>>;
+      fallbackEuro: Record<string, Partial<Record<StyleName, (number | null)[]>>>;
+    };
   };
 }
 

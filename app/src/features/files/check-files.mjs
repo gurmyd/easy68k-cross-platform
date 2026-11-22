@@ -2631,6 +2631,163 @@ async function openedFolderPass(browser, name) {
   await context.close();
 }
 
+/** Opens the application without waiting for the Files panel (it may be hidden, or absent in Simulator mode). */
+async function openAppAnyMode(context, query = '') {
+  const page = await context.newPage();
+  page.setDefaultTimeout(60_000);
+  page.setDefaultNavigationTimeout(180_000);
+  const errors = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  page.on('pageerror', (error) => errors.push(String(error)));
+  await page.goto(`${baseUrl}${query}`);
+  await page.waitForSelector('.e68-shell');
+  await page.waitForFunction(() => window.__easy68k !== undefined);
+  return { page, errors };
+}
+
+const TOAST = '.e68-toast';
+
+/** The toasts of a page: text and buttons. */
+const toastsOf = (page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll('.e68-toast')].map((toast) => ({
+      text: toast.querySelector('.e68-toast__text')?.textContent ?? toast.textContent ?? '',
+      buttons: [...toast.querySelectorAll('button')].map((b) => b.getAttribute('aria-label') ?? b.textContent.trim()),
+    })),
+  );
+
+/** Writes a file into /browser through the Vfs, as Save and a program's file tasks do. */
+const writeIntoStore = (page, path, bytes) =>
+  page.evaluate(([target, data]) => window.__easy68k.ctx.vfs.writeFile(target, new Uint8Array(data)), [path, bytes]);
+
+/**
+ * R-10, third round (errata FS1.md entry 28): a document must not become the only copy without the
+ * notice having been on the screen. When the Files panel is hidden (its visibility is remembered)
+ * or absent (a first visit that starts in Simulator mode), the first write into the browser's store
+ * shows the same text as a note that stays until it is answered; Got it there is the panel's Got it.
+ * Nothing of this in Chromium, or once the panel has shown the notice.
+ */
+async function firstWriteNoticePass(browser, name) {
+  const p = `${name}: storage notice at the first write:`;
+  const safariEngine = name === 'webkit';
+  const texts = { tab: null };
+
+  // 1. The Files panel hidden before the first start with the parameter (its visibility is remembered).
+  progress('panel hidden');
+  const context = await newContext(browser);
+  const before = await openApp(context);
+  await before.page.evaluate(() => window.__easy68k.ctx.commands.run('app.files.toggle'));
+  await before.page.waitForSelector('[data-e68-panel="files"] [role=tree]', { state: 'detached', timeout: 10_000 });
+  await before.page.close();
+  const hidden = await openAppAnyMode(context, NOTICE_QUERY);
+  const { page } = hidden;
+  texts.tab = await page.evaluate(
+    async () => (await import('/src/features/files/storage-notice.ts')).STORAGE_NOTICE_TAB_TEXT,
+  );
+  await page.waitForTimeout(1000);
+  check(
+    `${p} the Files panel is hidden at the start (remembered), so the panel's notice is not on the screen`,
+    (await page.locator('[data-e68-panel="files"] [role=tree]').count()) === 0 &&
+      (await page.locator(NOTICE).count()) === 0,
+  );
+  check(`${p} nothing is shown before anything is written`, (await page.locator(TOAST).count()) === 0);
+  await writeIntoStore(page, '/browser/only-copy.X68', [42, 13, 10]);
+  if (!safariEngine) {
+    await page.waitForTimeout(1500);
+    check(
+      `${p} Chromium shows no note at the first write`,
+      (await page.locator(TOAST).count()) === 0,
+      JSON.stringify(await toastsOf(page)),
+    );
+    check(`${p} no console errors`, hidden.errors.length === 0, hidden.errors.slice(0, 3).join(' | '));
+    await context.close();
+    return;
+  }
+  await page.locator(TOAST).first().waitFor({ timeout: 15_000 });
+  const shown = await toastsOf(page);
+  check(
+    `${p} panel hidden: the first file written shows the notice's text with Got it`,
+    shown.length === 1 && shown[0].text.includes(texts.tab) && shown[0].buttons.includes('Got it'),
+    JSON.stringify(shown),
+  );
+  await page.screenshot({ path: join(outDir, `${name}-storage-notice-first-write.png`) });
+  await page.waitForTimeout(9000); // longer than a toast of the kit's default duration (8 s)
+  check(`${p} the note stays until it is answered`, (await page.locator(TOAST).count()) === 1);
+  await writeIntoStore(page, '/browser/second.X68', [42, 13, 10]);
+  await page.waitForTimeout(1000);
+  check(`${p} shown once: a second write adds nothing`, (await page.locator(TOAST).count()) === 1);
+  await page.locator(TOAST).getByRole('button', { name: 'Got it' }).click();
+  await page.locator(TOAST).waitFor({ state: 'detached', timeout: 10_000 });
+  const seen = await page.evaluate(() => window.__easy68k.ctx.settings.get().app.storageNoticeSeen);
+  check(`${p} Got it in the note is the panel's Got it (remembered for this browser)`, seen === true, String(seen));
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('app.files.toggle'));
+  await page.waitForSelector('[data-e68-panel="files"] [role=tree]');
+  await page.waitForTimeout(500);
+  check(`${p} and the panel, shown again, has no notice`, (await page.locator(NOTICE).count()) === 0);
+  check(`${p} panel hidden: no console errors`, hidden.errors.length === 0, hidden.errors.slice(0, 3).join(' | '));
+  await context.close();
+
+  // 2. A first visit that starts in Simulator mode (?open= a program), where there is no Files panel.
+  progress('simulator mode');
+  const simContext = await newContext(browser);
+  const prepare = await openApp(simContext);
+  // An S-record of ORG $1000, SIMHALT, put into the store by a page without the parameter (no notice).
+  const record = 'S1071000FFFFFFFFEC\r\nS9031000EC\r\n';
+  await writeIntoStore(
+    prepare.page,
+    '/browser/start.S68',
+    [...record].map((c) => c.charCodeAt(0)),
+  );
+  await prepare.page.waitForTimeout(500);
+  check(
+    `${p} a write without the parameter shows no note (automation)`,
+    (await prepare.page.locator(TOAST).count()) === 0,
+  );
+  await prepare.page.close();
+  const sim = await openAppAnyMode(simContext, `?open=/browser/start.S68&${NOTICE_QUERY.slice(1)}`);
+  await sim.page.waitForFunction(() => window.__easy68k.ctx.store.getState().mode === 'simulator', undefined, {
+    timeout: 30_000,
+  });
+  await sim.page.waitForTimeout(1000);
+  check(
+    `${p} Simulator mode at the start: no Files panel, no notice, no note yet`,
+    !(await sim.page.locator('[data-e68-panel="files"] [role=tree]').first().isVisible()) &&
+      (await sim.page.locator(TOAST).count()) === 0,
+    JSON.stringify(await toastsOf(sim.page)),
+  );
+  await writeIntoStore(sim.page, '/browser/output.txt', [79, 75, 13, 10]);
+  await sim.page
+    .locator(TOAST)
+    .first()
+    .waitFor({ timeout: 15_000 })
+    .catch(() => {});
+  const inSim = await toastsOf(sim.page);
+  check(
+    `${p} Simulator mode: the first file written shows the notice's text with Got it`,
+    inSim.length === 1 && inSim[0].text.includes(texts.tab) && inSim[0].buttons.includes('Got it'),
+    JSON.stringify(inSim),
+  );
+  await sim.page.screenshot({ path: join(outDir, `${name}-storage-notice-first-write-simulator.png`) });
+  await scan(sim.page, `${name} Simulator mode with the storage note`);
+  check(`${p} Simulator mode: no console errors`, sim.errors.length === 0, sim.errors.slice(0, 3).join(' | '));
+  await simContext.close();
+
+  // 3. The panel showed the notice: the first write needs no note of its own.
+  progress('panel visible');
+  const visibleContext = await newContext(browser);
+  const visible = await openApp(visibleContext, { query: NOTICE_QUERY });
+  await visible.page.locator(NOTICE).waitFor({ timeout: 15_000 });
+  await writeIntoStore(visible.page, '/browser/a.X68', [42, 13, 10]);
+  await visible.page.waitForTimeout(1500);
+  check(
+    `${p} with the notice on the screen in the panel, a write shows no note`,
+    (await visible.page.locator(TOAST).count()) === 0,
+  );
+  await visibleContext.close();
+}
+
 /** Lists and tests a .zip with whatever archive tool this system has. */
 function archiveToolCheck(zipPath) {
   const attempts = [
@@ -2693,6 +2850,7 @@ async function main() {
           ['a page killed in the middle of a write', killPass],
           ['dialogs, panel, drop, export, import', uiPass],
           ['the Safari storage notice', storageNoticePass],
+          ['the storage notice at the first write', firstWriteNoticePass],
           // ARCHITECTURE-PLUS P3.2 (N5): both key maps on every system.
           ['selection and keys, Windows key map', (b, n) => selectionPass(b, n, 'windows')],
           ['selection and keys, macOS key map', (b, n) => selectionPass(b, n, 'mac')],

@@ -1,0 +1,37 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:55:52 AM
+
+00000000                             1  M   MACRO
+00000000                             2      DC.\0 \1,\2,\A
+00000000                             3  L\@ DC.B NARG
+00000000                             4      ENDM
+00001000                             5      ORG $1000
+00001000                             6m     M 1,2,3,4,5,6,7,8,9,10
+00001007                             7m     M.B 3,4
+Line 8 ERROR: Invalid syntax
+00001007= 03 04                      8m     DC.B 3,4,
+0000100A                             9m     M.L 5
+Line 10 ERROR: Invalid syntax
+0000100A= 00000005                  10m     DC.L 5,,
+0000100F                            11m     M.S 6
+Line 12 ERROR: Invalid syntax
+00001010= 0006                      12m     DC.W 6,,
+00001013                            13m     M
+Line 14 ERROR: Invalid syntax
+00001014=                           14m     DC.W ,,
+00001015                            15      END $1000
+
+4 errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+L_1                 1006
+L_2                 1009
+L_3                 100E
+L_4                 1012
+L_5                 1014
+M                   0

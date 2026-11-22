@@ -1,0 +1,32 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:56:47 AM
+
+00001000                             1      ORG $1000
+00001000                             2m     FWD
+00001002                             3      ENDM
+Line 4 ERROR: Symbol value differs between first and second pass
+00001002                             4  AFTER   NOP
+00001002                             5  FWD MACRO
+00001002                             6      NOP
+00001002                             7      ENDM
+Line 8 ERROR: Symbol defined more than once
+00001002                             8  FWD MACRO
+00001002= 0001                       9      DC.W 1
+Line 10 ERROR: Invalid opcode
+00001004                            10      ENDM
+00001004                            11      MACRO
+00001004                            12      NOP
+00001004                            13      ENDM
+00001004                            14      END $1000
+
+3 errors detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+AFTER               1000
+FWD                 0
+                    D

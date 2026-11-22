@@ -176,8 +176,8 @@ export interface Scenario {
   /** The /e and /b switches. */
   exceptions?: boolean;
   bitField?: boolean;
-  /** Text typed at each keyboard wait, in order (`\n` is Enter). */
-  keys?: string[];
+  /** Typed at each keyboard wait, in order: text (`\n` is Enter) or key strokes with modifiers. */
+  keys?: (string | KeyStroke[])[];
   /** Answers to the task 58 dialog, in order. */
   dialogs?: FileDialogAnswer[];
   /** Data files in the program's folder, beyond the program's own: name -> bytes (read-only optional). */
@@ -207,6 +207,8 @@ export interface Outcome {
   textRows: string[];
   /** The grid: columns and rows (trap15-a §3.2). */
   grid: { cols: number; rows: number };
+  /** The text cursor in cells at the end (trap15-a §3.3). */
+  cursor: { row: number; col: number };
   /** SHA-256 of the back buffer's pixels and its size. */
   surfaceHash: string;
   /** Files of the program's folder after the run, by name: what storage has (bytes still buffered in an open stream of the real ProgramFiles are not there yet). */
@@ -359,7 +361,8 @@ export async function runScenario(scenario: Scenario): Promise<Outcome> {
           end = 'waiting for input';
           break;
         }
-        typeKeys(s, next);
+        if (typeof next === 'string') typeKeys(s, next);
+        else for (const stroke of next) typeStroke(s, stroke);
         continue;
       }
       s.time.advance(VIRTUAL_FRAME_MS);
@@ -437,6 +440,32 @@ function perform(session: HeadlessSession, action: PanelAction): void {
   }
 }
 
+/** One key as the Output panel's keyboard gets it, e.g. `{ key: 'i', code: 'KeyI', ctrlKey: true }`. */
+export interface KeyStroke {
+  key: string;
+  code: string;
+  ctrlKey?: boolean;
+  shiftKey?: boolean;
+  altKey?: boolean;
+}
+
+/** Presses and releases one key (a frame of virtual time after each). */
+export function typeStroke(session: HeadlessSession, stroke: KeyStroke): void {
+  const event = {
+    key: stroke.key,
+    code: stroke.code,
+    ctrlKey: stroke.ctrlKey ?? false,
+    shiftKey: stroke.shiftKey ?? false,
+    altKey: stroke.altKey ?? false,
+    metaKey: false,
+    repeat: false,
+  };
+  session.keyboard.keydown(event, false);
+  session.time.advance(VIRTUAL_FRAME_MS);
+  session.keyboard.keyup(event);
+  session.time.advance(VIRTUAL_FRAME_MS);
+}
+
 /** Types text as key presses into the Output panel's keyboard; `\n` is Enter. */
 export function typeKeys(session: HeadlessSession, text: string): void {
   const plain = { ctrlKey: false, altKey: false, metaKey: false, repeat: false };
@@ -489,6 +518,7 @@ function collect(
     messages: [...session.messages()],
     textRows: rows,
     grid: { cols: state.textCols, rows: state.textRows },
+    cursor: { row: state.row, col: state.col },
     surfaceHash: hash.digest('hex'),
     files,
     execLog: logs.exec,

@@ -1,0 +1,46 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:57:29 AM
+
+00001000                             1      ORG $1000
+00001000                             2      IF.B D0 <GT> #5 THEN.S
+00001006  4E71                       3      NOP
+00001008                             4      ELSE
+0000100C  4E71                       5      NOP
+0000100E                             6      ENDI
+0000100E                             7      IF D1 <EQ> D2 AND.L D3 <NE> #0 THEN
+0000101E  4E71                       8      NOP
+00001020                             9      ENDI
+00001020                            10      IF <CS> OR <VS> THEN
+00001026  4E71                      11      NOP
+00001028                            12      ENDI
+00001028                            13      WHILE.W (A0)+ <NE> (A1)+ DO
+0000102E  4E71                      14      NOP
+00001030                            15      ENDW
+00001032                            16      WHILE <T> DO
+00001032  4E71                      17      NOP
+00001034                            18      ENDW
+00001036                            19      REPEAT
+00001036  4E71                      20      NOP
+00001038                            21      UNTIL.L #5 <LE> D4
+Line 22 WARNING: DO expected
+0000103E  6DF6                      22      UNTIL.L #5 <LE> D4
+00001040                            23      END $1000
+
+No errors detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+_00000000           100C
+_00000001           100E
+_00000002           1020
+_00000003           1026
+_00000004           1028
+_10000000           1028
+_10000001           1032
+_10000002           1032
+_10000003           1036
+_30000000           1036

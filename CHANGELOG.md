@@ -18,9 +18,16 @@ The first version is being prepared. What the repository holds today:
 
 - The original EASy68K v5.16.1 assembler and simulator, compiled to WebAssembly from the original
   C++ sources with a documented set of patches (`engine/asm/PATCHES.md`, `engine/sim/PATCHES.md`).
-- Checked against the official EASy68K v5.16.1 for Windows run under Wine: 420 of 420 error-free
-  test programs assemble to byte-identical listing and S-record files, and 9 of 9 execution logs
-  match.
+- Checked against the official EASy68K v5.16.1 for Windows run under Wine (`npm run
+  test:conformance`). Assembler: every test file with default options and 30 files with each of
+  the eight options switched alone; of 801 runs with an official result, 654 are byte-identical,
+  143 identical once the bytes of statements with an undefined symbol are masked, and 4 differ for
+  recorded causes (part T1 of `docs/DIFFERENCES.md`, which also lists the 6 runs the official
+  program gives no result for). Simulator: 172 of 178 self-reporting programs and 31 of 32
+  execution logs (126,427 instructions) give the official result; the 7 others are listed in
+  `docs/DIFFERENCES.md`: 3 accepted, 2 defects of the port with a repair pending (a read right
+  after a write, or a write right after a read, on one file without a seek), and 2 not yet
+  confirmed on real Windows.
 
 ### The application
 
@@ -35,13 +42,25 @@ The first version is being prepared. What the repository holds today:
   the execution speed.
 - EASyBIN: open, edit and save S-records and binary files.
 - Files: the browser keeps the files ("My Programs", with Import and Export as `.zip`); Chrome and
-  Edge can also work in a folder of the computer. In Safari (and every browser on an iPhone or
-  iPad) a notice in the Files panel explains that Safari deletes the programs after seven days
-  without a visit and that an app added to the Dock has its own files, with Export... and Got it.
-- The original's help pages and example programs; Help > Differences from EASy68K.
+  Edge can also work in a folder of the computer. In Safari on a Mac and in every browser on an
+  iPhone or iPad, a notice in the Files panel (`About keeping your programs`) says that the browser
+  may delete the programs after seven days without a visit and that an app made with "Add to Dock"
+  or "Add to Home Screen" starts with its own, empty My Programs, with Export... and Got it; when the
+  Files panel is not on the screen, the same text appears as a note at the first save into My
+  Programs. In such an app, while its My Programs is empty, a notice points to Import....
+- The original's help pages and example programs; Help > Differences from EASy68K. After the first
+  visit the help pages, their links and the Differences page also show without a network, in
+  Safari's engine too (tested in Playwright's WebKit; real Safari is a step of
+  `docs/MANUAL-TEST-MAC.md`). Every help page carries a rule that forbids scripts, and the offline
+  copy gives the help panel only pages of the help folder (erratum H1 11).
 - Light and dark themes; installable as an app from the browser; works offline after the first
   visit; several windows at once.
 - Import and export of the original's settings files `settings.dat` and `sim68K.dat`.
+- A program's file tasks treat the name `NUL` as Windows' null device (nothing is written, a read is
+  at end of file), as measured on Windows 11.
+- Cut, Copy and Paste in the editor from the keys, the Edit menu, the toolbar and the context menu,
+  tested in the engines of Chrome and Safari; with another program they are a step of the manual
+  list.
 
 ### The macOS app
 
@@ -56,16 +75,21 @@ The first version is being prepared. What the repository holds today:
 ### Known limitations
 
 - Listed in part 5 of [docs/DIFFERENCES.md](docs/DIFFERENCES.md): among them, nobody has tried the
-  port on a real Mac yet, Firefox is not tested, and a folder holding a large Git repository can
-  crowd a program's own files out of what it may open in the web version, the help pages stay
-  empty without a network in Safari's test engine, and the speed at `Maximum` and the frame rate
-  while a program draws are decided only by the performance job of a manual test run on GitHub's
-  Linux machine (on a Windows PC at a quieter moment, 22 November 2026: 237 and 248 million
-  instructions in 10 s at `Maximum` with 60 Hz and 120 Hz frames, against the 200 million asked
-  for; `docs/porting/speed.md` 4.6).
+  port on a real Mac yet, Firefox is not tested, a folder holding a large Git repository can
+  crowd a program's own files out of what it may open in the web version, and the speed at
+  `Maximum` and the frame rate while a program draws are decided only by the performance job of a
+  manual test run on GitHub's Linux machine, which has not run since the rule for `Maximum` was
+  corrected (at least 100 million instructions in 10 s and at least 85 % of what the engine alone
+  executes in 5 s in the same job, instead of 200 million; erratum P1 13, `docs/porting/speed.md`
+  4.2).
 
 ### Documentation
 
 - [README.md](README.md), [docs/USER-GUIDE.md](docs/USER-GUIDE.md),
   [docs/DIFFERENCES.md](docs/DIFFERENCES.md), [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md),
   [docs/MANUAL-TEST-MAC.md](docs/MANUAL-TEST-MAC.md).
+- Part 4 of `docs/DIFFERENCES.md` lists each detail of the original that is not yet confirmed, one
+  row each, with what the port does and how it could be confirmed; the one session on real Windows
+  that would settle several of them is described in `docs/porting/windows-confirmation.md`.
+- The manual list has a test program for every sound task (70 to 77), loops included, and steps
+  for Cut, Copy and Paste with another program and for installing the web version from Chrome.

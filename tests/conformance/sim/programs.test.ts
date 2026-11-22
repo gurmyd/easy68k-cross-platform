@@ -109,6 +109,18 @@ describe('the suite', () => {
     expect(wrong).toEqual([]);
   });
 
+  it('the network tasks 102-107 each have a self-reporting program that calls them before any task 100 or 101 (errata T3 11)', () => {
+    // The not-initialised paths need no peer (trap15-b 12.2): they are not interactive.
+    const task = (n: number) => new RegExp(`MOVE\\.L\\s+#\\$ABCD00${n.toString(16).toUpperCase()},D0`, 'i');
+    const callers = (n: number) =>
+      programs
+        .filter((p) => p.recipes.some((r) => r.kind === 'report'))
+        .map((p) => readFileSync(join(SIM_CONFORMANCE_DIR, p.source), 'latin1'))
+        .filter((text) => task(n).test(text) && !task(100).test(text) && !task(101).test(text));
+    const missing = [102, 103, 104, 105, 106, 107].filter((n) => callers(n).length === 0);
+    expect(missing).toEqual([]);
+  });
+
   it('the generated instruction programs are what generate-instructions.mjs writes', () => {
     const script = join(SIM_CONFORMANCE_DIR, 'generate-instructions.mjs');
     expect(() => execFileSync(process.execPath, [script, '--check'], { stdio: 'pipe' })).not.toThrow();

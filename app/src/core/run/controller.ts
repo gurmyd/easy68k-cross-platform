@@ -15,7 +15,9 @@
 //                     that polls sees each.
 //   wait states       input, delay (task 23, in real time), the task 58 dialog, message boxes.
 //   loads             open, reload, close, cold start: phase 'loading' from beginning to end, during
-//                     which nothing else reaches the engine.
+//                     which nothing else reaches the engine. A run command given meanwhile is kept
+//                     and carried out, in order, by the code that ends the load (`kept`), as the
+//                     original's message queue delivers a key after its synchronous load.
 //   afterEngineCall   after EVERY engine call: what the host calls recorded (ui-bridge.ts) is turned
 //                     into a refreshed snapshot, revision counters and message boxes.
 //   failure           an engine call that throws (a WebAssembly trap) shows the original's box for
@@ -108,6 +110,12 @@ export interface ControllerUi {
   commandLine(): CommandLineSwitches;
   /** Something failed that the user cannot be shown in the simulator's own terms. */
   report(what: string, error: unknown): void;
+  /**
+   * The listing row selected now (-1 = none). A Run To Cursor kept during a load reads the row
+   * when the load has ended, as the original's handler reads it when its message is delivered;
+   * without this member it uses the row it was given.
+   */
+  cursorRow?(): number;
 }
 
 export interface RunControllerDeps {
@@ -172,6 +180,17 @@ export function engineFaultText(pc: string, opcode: number): string {
 
 type QueueEntry = InputEvent68k | ControllerRequest;
 
+/**
+ * A command given while a load (or the Caution question before it) was under way, carried out when
+ * it has ended (errata SH8.md entry 47). `replacesProgram`: a second Execute, which ends what was
+ * kept for the program it replaces; `drop` settles its caller when it is not carried out.
+ */
+interface KeptCommand {
+  carryOut(): void;
+  drop?(): void;
+  replacesProgram?: boolean;
+}
+
 /** Entries between which the original always executes an instruction (4.3). */
 const INPUT_EDGES: ReadonlySet<QueueEntry['kind']> = new Set([
   'keyDown',
@@ -223,7 +242,6 @@ export interface RepaintCounts {
 /** Every panel a RepaintBit names. */
 const ALL_PANELS = RepaintBit.Listing | RepaintBit.Breakpoints | RepaintBit.Memory | RepaintBit.Stack;
 
-/** The governor's figures, for tests and for the performance package. */
 /** The command that set execution going last: a Trace Into step, Auto Trace, or any other run command. */
 export type StopCause = 'run' | 'trace' | 'autoTrace';
 
@@ -239,6 +257,7 @@ export interface StopRecord {
   readonly wasRunning: boolean;
 }
 
+/** The governor's figures, for tests and for the performance package. */
 export interface GovernorReading {
   allowance: number;
   frameInterval: number;
@@ -258,6 +277,8 @@ export class SimRunController implements RunController {
   private alertList: Alert[] = [];
   private alertsView: readonly PendingAlert[] = [];
   private readonly queue: QueueEntry[] = [];
+  /** Commands given during a load, in the order given (`keepsCommands`). */
+  private kept: KeptCommand[] = [];
   private readonly governor = new Governor();
   private readonly listeners = new Set<() => void>();
   private readonly replacedListeners = new Set<() => void>();
@@ -371,6 +392,20 @@ export class SimRunController implements RunController {
   get lastStop(): StopRecord {
     return this.stopNow;
   }
+  /**
+   * True while a run command (Run, Run To Cursor, Step Over, Trace Into, Auto Trace), Pause, Rewind,
+   * Reload or a second Execute is kept instead of carried out: during a load, and from the answer
+   * to the Caution question until the load begins. In the original a load is one synchronous call
+   * and the message queue delivers a key pressed meanwhile when it returns (errata SH8.md entry 47).
+   * Not during the recovery from an engine failure, which nothing waits for.
+   */
+  get keepsCommands(): boolean {
+    return (this.phaseNow === 'loading' || this.asking) && !this.recovering && !this.disposed;
+  }
+  /** How many commands are kept (`keepsCommands`). */
+  get keptLength(): number {
+    return this.kept.length;
+  }
 
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
@@ -399,8 +434,14 @@ export class SimRunController implements RunController {
       const { lifecycle } = this.deps;
       this.startup = this.attempt('apply what the last session left behind', async () => lifecycle.recover?.())
         .then(() => this.coldStartSteps())
-        .catch((error: unknown) => this.deps.ui.report('The simulator could not be started', error))
-        .then(() => this.finishLoading());
+        .catch((error: unknown) => {
+          this.deps.ui.report('The simulator could not be started', error);
+          return false;
+        })
+        .then((started) => {
+          if (!started) this.loadFailed();
+          this.finishLoading();
+        });
     }
     return this.startup;
   }
@@ -413,6 +454,7 @@ export class SimRunController implements RunController {
     this.cancelTickTimer?.();
     this.cancelDelayTimer?.();
     this.queue.length = 0;
+    this.dropKept(() => true);
     if (this.live) this.deps.engines.release(this.current);
     this.live = false;
     this.current = createStartupEngine();
@@ -430,7 +472,21 @@ export class SimRunController implements RunController {
    * got OK, and step 2 is skipped.
    */
   async open(path: VPath, origin: LoadOrigin, options?: LoadOptions): Promise<void> {
+    // Kept before the await, so that it keeps its place among commands given in the same moment.
+    if (origin === 'execute' && this.keepsCommands) {
+      const kept = this.keepExecute(path, options);
+      void this.start(); // a load requested before the start begins it, as below
+      return kept;
+    }
     await this.start();
+    return this.openStarted(path, origin, options);
+  }
+
+  /**
+   * `open` once the start is over. Synchronous up to the point where the phase is 'loading' or the
+   * Caution question is asked, so that a kept command after it is kept again (`deliverKept`).
+   */
+  private async openStarted(path: VPath, origin: LoadOrigin, options?: LoadOptions): Promise<void> {
     if (this.phaseNow === 'loading' || this.asking) return;
     if (options?.confirmed !== true && this.needsCaution(origin)) {
       if (!(await this.confirmThenLoad())) return;
@@ -439,6 +495,24 @@ export class SimRunController implements RunController {
     }
     this.publish();
     await this.load(path, origin);
+  }
+
+  /**
+   * A second Execute during the load of the first (errata SH8.md entry 47). The original starts a
+   * new simulator process for each Execute; a key given to the first went to the first's window,
+   * never to the second. Here the second program replaces the first, so what was kept for the
+   * first is dropped, and the second is loaded when the first load has ended. The promise resolves
+   * when that load has ended, or at once if it is dropped.
+   */
+  private keepExecute(path: VPath, options?: LoadOptions): Promise<void> {
+    this.dropKept(() => true);
+    return new Promise<void>((resolve) => {
+      this.kept.push({
+        carryOut: () => void this.openStarted(path, 'execute', options).then(resolve, resolve),
+        drop: resolve,
+        replacesProgram: true,
+      });
+    });
   }
 
   /**
@@ -463,6 +537,9 @@ export class SimRunController implements RunController {
     }
     this.asking = false;
     release();
+    // What was given after the answer is carried out now: the caller's load, if it follows, is not
+    // under way yet (errata SH8.md entry 47).
+    this.deliverKept();
     return confirmed && !this.disposed;
   }
 
@@ -473,7 +550,17 @@ export class SimRunController implements RunController {
   }
 
   async reload(): Promise<void> {
-    await this.start();
+    // Outside a load the start is over (the phase leaves 'loading' only at its end), so the reload
+    // begins at once and a command given right after it is kept for its end.
+    if (this.keep(() => void this.reloadStarted(), false)) {
+      void this.start(); // a reload requested before the start begins it, as open does
+      return;
+    }
+    await this.reloadStarted();
+  }
+
+  /** `reload` once the start is over; synchronous up to the 'loading' phase (as `openStarted`). */
+  private async reloadStarted(): Promise<void> {
     if (this.phaseNow === 'loading' || this.asking || !this.programNow) return;
     this.setPhase('loading');
     this.publish();
@@ -489,6 +576,7 @@ export class SimRunController implements RunController {
     this.publish();
     try {
       const bytes = await this.readOrNull(path);
+      if (bytes === null) this.loadFailed();
       const name = encode(this.deps.ui.displayName(path)).bytes;
       this.call((engine) => engine.loadData(bytes, name));
       // The original's file dialog moved the process's current directory (3.8.4) and now names the
@@ -498,6 +586,7 @@ export class SimRunController implements RunController {
     } catch (error) {
       if (error === ENGINE_FAILED) return;
       this.deps.ui.report('Open Data failed', error);
+      this.loadFailed();
     }
     // Nothing was reset: the program goes on where it was.
     this.finishLoading(before);
@@ -524,7 +613,7 @@ export class SimRunController implements RunController {
     if (this.phaseNow === 'loading' || this.asking) return;
     this.setPhase('loading');
     this.publish();
-    await this.coldStartSteps();
+    if (!(await this.coldStartSteps())) this.loadFailed();
     this.finishLoading();
   }
 
@@ -542,6 +631,8 @@ export class SimRunController implements RunController {
     // 'loading' before the hold ends: the old program must not execute another instruction.
     if (confirmed && !this.disposed) this.setPhase('loading');
     release();
+    // Cancel: nothing is loaded, and what was given after the answer is carried out now.
+    if (!confirmed) this.deliverKept();
     return confirmed && !this.disposed;
   }
 
@@ -550,6 +641,7 @@ export class SimRunController implements RunController {
     try {
       if (origin === 'execute' || origin === 'commandLine' || origin === 'association') {
         if (!(await this.coldStartSteps())) {
+          this.loadFailed();
           this.finishLoading();
           return;
         }
@@ -580,6 +672,8 @@ export class SimRunController implements RunController {
         this.setProgram({ ...this.programNow, path, hasListing: false });
       }
       if (origin !== 'reload') this.deps.log.setLogFileNames(path);
+      // Nothing was loaded: the original's queued key would find no program (errata SH8.md entry 47).
+      if (s68 === null) this.loadFailed();
 
       const switches = origin === 'commandLine' ? this.deps.ui.commandLine() : null;
       if (switches?.exceptions || switches?.bitField) {
@@ -589,13 +683,16 @@ export class SimRunController implements RunController {
           if (switches.bitField) engine.setOption(SimOption.BitField, true);
         });
       }
-      this.finishLoading();
+      // The switches act as part of the load; what was kept comes after them.
+      this.finishLoading('idle', false, false);
       if (switches?.fullScreen) this.deps.ui.enterFullScreen();
       if (switches?.run) this.run();
+      this.deliverKept();
     } catch (error) {
       if (error === ENGINE_FAILED) return; // the recovery of fail() ends the 'loading' phase
       // A host part failed. The load must not leave the simulator locked in 'loading'.
       this.deps.ui.report(`Loading ${path} failed`, error);
+      this.loadFailed();
       this.finishLoading();
     }
   }
@@ -715,17 +812,66 @@ export class SimRunController implements RunController {
   }
 
   /**
-   * The end of a load: the phase leaves 'loading' and what waited in the queue is delivered. While
-   * the recovery from an engine failure is under way, only the recovery itself ends the phase.
+   * The end of a load: the phase leaves 'loading', what waited in the queue is delivered, and the
+   * commands kept meanwhile are carried out (`deliver`; `load` does it itself after the switches of
+   * a command line). While the recovery from an engine failure is under way, only the recovery
+   * itself ends the phase, and what was kept for the program before it is dropped.
    */
-  private finishLoading(to: SimPhase = 'idle', endOfRecovery = false): void {
+  private finishLoading(to: SimPhase = 'idle', endOfRecovery = false, deliver = true): void {
     if (this.disposed || (this.recovering && !endOfRecovery)) return;
+    if (endOfRecovery) this.loadFailed();
     if (this.phaseNow === 'loading') {
       this.setPhase(to);
       this.updateFreeze();
     }
     if (this.queue.length > 0 || this.phaseNow !== 'idle') this.requestTick();
     this.publish();
+    if (deliver) this.deliverKept();
+  }
+
+  /**
+   * Keeps `command` if commands are kept now (`keepsCommands`) and says whether it did. A run
+   * command is a user gesture: audio is unlocked now, as `runCommand` does when it must wait.
+   */
+  private keep(command: () => void, gesture = true): boolean {
+    if (!this.keepsCommands) return false;
+    if (gesture) this.deps.ui.resumeAudio();
+    this.kept.push({ carryOut: command });
+    return true;
+  }
+
+  /**
+   * Carries out the kept commands in the order given, each as if it were given now, so each finds
+   * the commands enabled or not as the original's would when its queue delivered it. One that
+   * begins a load (Reload, a second Execute) or asks the Caution question stops the delivery: the
+   * rest waits for the end of that load.
+   */
+  private deliverKept(): void {
+    while (this.kept.length > 0 && this.phaseNow !== 'loading' && !this.asking && !this.disposed) {
+      const next = this.kept.shift();
+      try {
+        next?.carryOut();
+      } catch (error) {
+        this.deps.ui.report('A command given during the load failed', error);
+      }
+    }
+  }
+
+  /**
+   * The load failed: no engine, a host part failed, the program could not be read, the engine
+   * failed. The original would run nothing, so what was kept is dropped; a second Execute and what
+   * came after it are for the next program and stay.
+   */
+  private loadFailed(): void {
+    const next = this.kept.findIndex((command) => command.replacesProgram === true);
+    this.dropKept((_, index) => next < 0 || index < next);
+  }
+
+  /** Drops the kept commands that `which` names; a dropped Execute's caller is settled. */
+  private dropKept(which: (command: KeptCommand, index: number) => boolean): void {
+    const dropped = this.kept.filter(which);
+    this.kept = this.kept.filter((command, index) => !which(command, index));
+    for (const command of dropped) command.drop?.();
   }
 
   private async readOrNull(path: VPath): Promise<Uint8Array | null> {
@@ -763,6 +909,7 @@ export class SimRunController implements RunController {
   /* ================================================================== commands (4.8) */
 
   run(): void {
+    if (this.keep(() => this.run())) return;
     this.runCommand(() => {
       this.runCause = 'run';
       this.call((engine) => engine.cmdRun());
@@ -773,6 +920,8 @@ export class SimRunController implements RunController {
   }
 
   runToCursor(row: number): void {
+    // Kept: the row is the one selected when the load has ended (a cold start selects none).
+    if (this.keep(() => this.runToCursor(this.deps.ui.cursorRow?.() ?? row))) return;
     if (!this.runCommandsAvailable()) return;
     // The port checks the row itself: the engine, like the original, would show its box and then
     // run the program anyway (note 23).
@@ -791,6 +940,7 @@ export class SimRunController implements RunController {
   }
 
   stepOver(): void {
+    if (this.keep(() => this.stepOver())) return;
     this.runCommand(() => {
       this.runCause = 'run';
       this.call((engine) => engine.cmdStepOver());
@@ -801,6 +951,7 @@ export class SimRunController implements RunController {
   }
 
   traceInto(): void {
+    if (this.keep(() => this.traceInto())) return;
     this.runCommand(() => {
       this.runCause = 'trace';
       const status = this.call((engine) => engine.cmdTraceInto());
@@ -810,6 +961,7 @@ export class SimRunController implements RunController {
   }
 
   autoTrace(): void {
+    if (this.keep(() => this.autoTrace())) return;
     this.runCommand(() => {
       this.runCause = 'autoTrace';
       this.call((engine) => engine.cmdAutoTrace());
@@ -818,6 +970,7 @@ export class SimRunController implements RunController {
   }
 
   pause(): void {
+    if (this.keep(() => this.pause(), false)) return;
     if (this.phaseNow === 'loading') return;
     this.guard(() => {
       this.call((engine) => engine.cmdPause());
@@ -829,6 +982,7 @@ export class SimRunController implements RunController {
   }
 
   rewind(): void {
+    if (this.keep(() => this.rewind(), false)) return;
     if (this.phaseNow === 'loading') return;
     this.guard(() => {
       this.call((engine) => engine.rewind());

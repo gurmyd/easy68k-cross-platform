@@ -625,9 +625,10 @@ describe('text references against the font data', () => {
     'ZERO_WIDTH_BAR_SIZES is exact: a lone $0D at every raster size is in text unless GDI drew a bar there',
     () => {
       // Review round 2: the list had not been measured above 72 pt. The barSweep cases put a lone $0D
-      // at every size at which the face is raster: those at the listed sizes are in text-control and
-      // must really differ from the model there (no size listed for nothing); the others are in
-      // text, which the test above reproduces pixel for pixel (no size missing).
+      // at every size at which the face is raster: those at the listed sizes are in text-control, and
+      // the model draws them as the bar of raster.textPath (gate I3 item 3b; that a listed size really
+      // is a bar is the test of raster.textPath below); the others are in text, which the test above
+      // reproduces pixel for pixel (no size missing).
       const isLoneCr = (c: GdiCase) => {
         const t = c.ops.find((o) => o.op === 'text');
         return c.ops.length === 3 && t?.op === 'text' && t.bytes.length === 1 && t.bytes[0] === 13 && t.x === 3;
@@ -647,8 +648,9 @@ describe('text references against the font data', () => {
             listed ? 'text-control' : 'text',
           ]);
           if (listed) {
+            // Drawn as the bar, which the model draws since gate I3 item 3b (Windows' text path).
             const model = drawTextCase(metrics, r.case);
-            expect([r.case.id, firstDifference(r.image, model) !== null]).toEqual([r.case.id, true]);
+            expect([r.case.id, firstDifference(r.image, model)]).toEqual([r.case.id, null]);
           }
         }
       }
@@ -657,6 +659,48 @@ describe('text references against the font data', () => {
         expect(cellOf(metrics, { name, size: limit, style: 0 }).kind).toBe('raster');
         expect(cellOf(metrics, { name, size: limit + 1, style: 0 }).kind).toBe('outline');
       }
+    },
+    T,
+  );
+
+  it(
+    'metrics.json raster.textPath: the bar sizes are ZERO_WIDTH_BAR_SIZES in plain, bold and italic, none in underline and strike-out, and every lone $0D of text-path is a bar exactly there',
+    () => {
+      // Gate I3, item 3b: capture.cpp measures the bar for the font data (raster.textPath), the suite
+      // text-path draws a lone $0D in every style at every raster size; both must agree with the list.
+      const raw = JSON.parse(readFileSync(`${FONTS_DIR}metrics.json`, 'utf8')) as {
+        raster: { textPath: { zeroWidthBar: Record<string, Record<string, Record<string, number>>> } };
+      };
+      const bars = raw.raster.textPath.zeroWidthBar;
+      for (const [name, sizes] of Object.entries(ZERO_WIDTH_BAR_SIZES)) {
+        for (const style of ['plain', 'bold', 'italic'])
+          expect([name, style, Object.keys(bars[name]?.[style] ?? {}).map(Number)]).toEqual([name, style, sizes]);
+        for (const style of ['underline', 'strikeOut']) expect(bars[name]?.[style]).toBeUndefined();
+      }
+      let lone = 0;
+      for (const r of references('text-path')) {
+        const t = r.case.ops.find((o) => o.op === 'text');
+        const font = r.case.ops[0] as { op: 'font'; name: string; size: number; style: number };
+        if (!(t?.op === 'text' && t.bytes.length === 1 && t.bytes[0] === 13 && t.x === 3 && t.y === 2)) continue;
+        lone++;
+        // painted columns of the row at the top of the text: the bar is x - 1 .. x + 1
+        const row = Array.from(
+          { length: r.case.width },
+          (_, x) => (r.image.pixels[2 * r.case.width + x] as number) & 0xffffff,
+        );
+        const bar = row[1] === 0 && row[2] !== 0 && row[5] === 0;
+        const height =
+          bars[font.name]?.[['plain', 'bold', 'italic', 'underline', 'strikeOut'][font.style] as string]?.[font.size];
+        expect([r.case.id, bar]).toEqual([r.case.id, height !== undefined]);
+        if (height !== undefined) {
+          const column = Array.from(
+            { length: r.case.height },
+            (_, y) => (r.image.pixels[y * r.case.width + 2] as number) & 0xffffff,
+          );
+          expect([r.case.id, column.filter((p) => p !== 0).length]).toEqual([r.case.id, height]);
+        }
+      }
+      expect(lone).toBe((RASTER_SIZE_LIMIT['Fixedsys']! + 1 + RASTER_SIZE_LIMIT['Courier']! + 1) * 5);
     },
     T,
   );
@@ -786,6 +830,38 @@ describe('text references against the font data', () => {
   it('layoutText: the 6.7 measurement, two Fixedsys bytes fill exactly 16 x 15', () => {
     const l = layoutText(metrics, { name: 'Fixedsys', size: 9, style: 0 }, [65, 66]);
     expect([l.boxWidth, l.cellHeight, l.extent]).toEqual([16, 15, 16]);
+  });
+
+  it('"@" on the text path in Courier: the pen where Windows gives the same in every history (golden/text-path-at-pens.json; erratum T2 28)', () => {
+    const doc = JSON.parse(readFileSync(new URL('./golden/text-path-at-pens.json', import.meta.url), 'utf8')) as {
+      cases: [number, number, string, number][];
+    };
+    expect(doc.cases.length).toBe(1000);
+    const wrong: string[] = [];
+    for (const [size, style, hex, pen] of doc.cases) {
+      const bytes = (hex.match(/../g) ?? []).map((h) => parseInt(h, 16));
+      expect(bytes).toContain(0x40);
+      expect(bytes.every((b) => b < 0x80)).toBe(true);
+      const extent = layoutText(metrics, { name: 'Courier', size, style }, bytes).extent;
+      if (extent !== pen) wrong.push(`Courier ${size} ${STYLE_NAMES[style]} ${hex}: ${extent}, Windows ${pen}`);
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it('$80 on the text path: the pen where Windows gives the same in every history (golden/text-path-euro-pens.json; erratum T2 29)', () => {
+    const doc = JSON.parse(readFileSync(new URL('./golden/text-path-euro-pens.json', import.meta.url), 'utf8')) as {
+      cases: [string, number, number, string, number][];
+    };
+    // every Fixedsys text of the list, and the Courier texts whose euro width does not depend on history
+    expect(doc.cases.length).toBe(1125);
+    const wrong: string[] = [];
+    for (const [name, size, style, hex, pen] of doc.cases) {
+      const bytes = (hex.match(/../g) ?? []).map((h) => parseInt(h, 16));
+      expect(bytes).toContain(0x80);
+      const extent = layoutText(metrics, { name, size, style }, bytes).extent;
+      if (extent !== pen) wrong.push(`${name} ${size} ${STYLE_NAMES[style]} ${hex}: ${extent}, Windows ${pen}`);
+    }
+    expect(wrong).toEqual([]);
   });
 });
 

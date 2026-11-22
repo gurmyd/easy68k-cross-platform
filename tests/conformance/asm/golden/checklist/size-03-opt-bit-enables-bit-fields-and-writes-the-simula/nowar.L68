@@ -1,0 +1,19 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:55:16 AM
+
+00001000                             1      ORG $1000
+00001000                             2  *[sim68k]bitfield
+00001000                             3      OPT BIT
+00001000  E8C0 0084                  4      BFTST D0{2:4}
+00001004  EFD0 10C4                  5      BFINS D1,(A0){3:4}
+00001008  E9D1 48A3                  6      BFEXTU (A1){D2:D3},D4
+0000100C                             7      END $1000
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------

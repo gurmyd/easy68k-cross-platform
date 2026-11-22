@@ -1,0 +1,312 @@
+00000000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:54:38 AM
+
+00000000                             1  ; =============================================================================
+00000000                             2  ; SYSTEM
+00000000                             3  ; =============================================================================
+00000000                             4              
+00000000                             5  ; -----------------------------------------------------------------------------
+00000000                             6  SYSINIT
+00000000                             7  ; INITIALIZE SYSTEM.
+00000000                             8  ; INPUT    : NONE
+00000000                             9  ; OUTPUT   : NONE
+00000000                            10  ; MODIFIES : NONE
+00000000                            11  ; -----------------------------------------------------------------------------
+00000000                            12                            ; INSTALL TRAPS ANT INTERRUPTIONS
+00000000  21FC 00000134 0080        13                            MOVE.L  #SCRPLOT,($80)
+00000008  21FC 00000176 0084        14                            MOVE.L  #KBDUPD,($84)
+00000010  21FC 000001DC 0088        15                            MOVE.L  #MSUPD,($88)
+00000018  21FC 000000DA 008C        16                            MOVE.L  #SNDPLAY,($8C)
+00000020  21FC 0000015A 007C        17                            MOVE.L  #SCRTIM,($7C)
+00000028                            18              
+00000028  4EB9 000000EC             19                            JSR     SCRINIT
+0000002E  4EB9 00000168             20                            JSR     KBDINIT
+00000034  4EB9 00000042             21                            JSR     SNDINIT
+0000003A                            22              
+0000003A                            23                            ; USER MODE
+0000003A  40E7                      24                            MOVE.W SR,-(A7)
+0000003C  0257 D8FF                 25                            ANDI.W #$D8FF,(A7)
+00000040  4E73                      26                            RTE 
+00000042                            27  
+00000042                            28  ; -----------------------------------------------------------------------------
+00000042                            29  SNDINIT
+00000042                            30  ; SOUND SYSTEM INIT.
+00000042                            31  ; INPUT    : NONE
+00000042                            32  ; OUTPUT   : NONE
+00000042                            33  ; MODIFIES : NONE
+00000042                            34  ; -----------------------------------------------------------------------------
+00000042  48E7 C0C0                 35                            MOVEM.L D0-D1/A0-A1,-(A7)
+00000046  4201                      36                            CLR.B   D1
+00000048  41F9 000000BE             37                            LEA     .SNDLIST,A0
+0000004E  2018                      38  .LOOP                     MOVE.L  (A0)+,D0
+00000050  6700 000E                 39                            BEQ     .DONE
+00000054  2240                      40                            MOVE.L  D0,A1
+00000056  103C 004A                 41                            MOVE.B  #74,D0
+0000005A  4E4F                      42                            TRAP    #15
+0000005C  5201                      43                            ADDQ.B  #1,D1
+0000005E  60EE                      44                            BRA     .LOOP
+00000060  4CDF 0303                 45  .DONE                     MOVEM.L (A7)+,D0-D1/A0-A1
+00000064  4E75                      46                            RTS
+00000066                            47                            
+00000066= 53 4E 44 2F 53 54 ...     48  .SNDSTART                 DC.B    'SND/START.wav',0
+00000074= 53 4E 44 2F 42 49 ...     49  .SNDBIGDOT                DC.B    'SND/BIGDOT.wav',0
+00000083= 53 4E 44 2F 43 48 ...     50  .SNDCHOMP                 DC.B    'SND/CHOMP.wav',0
+00000091= 53 4E 44 2F 43 48 ...     51  .SNDCHOMP2                DC.B    'SND/CHOMP2.wav',0
+000000A0= 53 4E 44 2F 44 45 ...     52  .SNDDEATH                 DC.B    'SND/DEATH.wav',0
+000000AE= 53 4E 44 2F 45 41 ...     53  .SNDEATGHOS               DC.B    'SND/EATGHOS.wav',0
+000000BE                            54  
+000000BE= 00000066 00000074 ...     55  .SNDLIST                  DC.L    .SNDSTART,.SNDBIGDOT,.SNDCHOMP,.SNDCHOMP2
+000000CE= 000000A0 000000AE ...     56                            DC.L    .SNDDEATH,.SNDEATGHOS,0
+000000DA                            57              
+000000DA                            58  ; -----------------------------------------------------------------------------
+000000DA                            59  SNDPLAY
+000000DA                            60  ; PLAY SOUND.
+000000DA                            61  ; INPUT    : D7 SOUND ID
+000000DA                            62  ; OUTPUT   : NONE
+000000DA                            63  ; MODIFIES : NONE
+000000DA                            64  ; -----------------------------------------------------------------------------
+000000DA  48A7 C000                 65                            MOVEM.W D0-D1,-(A7)
+000000DE  103C 004B                 66                            MOVE.B  #75,D0
+000000E2  1207                      67                            MOVE.B  D7,D1
+000000E4  4E4F                      68                            TRAP    #15
+000000E6  4C9F 0003                 69                            MOVEM.W (A7)+,D0-D1
+000000EA  4E73                      70                            RTE
+000000EC                            71  
+000000EC                            72  ; -----------------------------------------------------------------------------
+000000EC                            73  SCRINIT
+000000EC                            74  ; INIT SCREEN. SET SCREEN RESOLUTION, SET WINDOWED MODE, CLEAR SCREEN,
+000000EC                            75  ; ENABLE DOUBLE BUFFER, ENABLE TIMED INTERRUPT.
+000000EC                            76  ; INPUT    : NONE
+000000EC                            77  ; OUTPUT   : NONE
+000000EC                            78  ; MODIFIES : NONE
+000000EC                            79  ; -----------------------------------------------------------------------------
+000000EC                            80  
+000000EC  48E7 C000                 81                            MOVEM.L D0-D1,-(A7)
+000000F0                            82  
+000000F0                            83                            ; SET SCREEN RESOLUTION
+000000F0  103C 0021                 84                            MOVE.B  #33,D0
+Line 85 ERROR: Invalid syntax
+000000F4                            85                            MOVE.L  #SCRWIDTH<<16|SCRHEIGH,D1
+000000F4  4E4F                      86                            TRAP    #15
+000000F6                            87              
+000000F6                            88                            ; SET WINDOWED MODE
+000000F6  7201                      89                            MOVE.L  #1,D1
+000000F8  4E4F                      90                            TRAP    #15
+000000FA                            91              
+000000FA                            92                            ; CLEAR SCREEN
+000000FA  103C 000B                 93                            MOVE.B  #11,D0
+000000FE  323C FF00                 94                            MOVE.W  #$FF00,D1
+00000102  4E4F                      95                            TRAP    #15
+00000104                            96              
+00000104                            97                            ; ENABLE DOUBLE BUFFER
+00000104  103C 005C                 98                            MOVE.B  #92,D0
+00000108  123C 0011                 99                            MOVE.B  #17,D1
+0000010C  4E4F                     100                            TRAP    #15
+0000010E                           101              
+0000010E                           102                            ;ENABLE TIMED INTERRUPT
+0000010E  103C 0020                103                            MOVE.B  #32,D0
+00000112  123C 0006                104                            MOVE.B  #6,D1
+00000116  143C 0087                105                            MOVE.B  #$87,D2
+Line 106 ERROR: Undefined symbol
+0000011A  263C 004DBD16            106                            MOVE.L  #DELAY,D3
+00000120  4E4F                     107                            TRAP    #15
+00000122                           108              
+00000122                           109                            ; CLEAR INTERUPT COUNTER
+Line 110 ERROR: Undefined symbol
+00000122  4279 004DBD16            110                            CLR.W   (SCRINTCT)
+00000128                           111  
+00000128  4CDF 0003                112                            MOVEM.L (A7)+,D0-D1
+0000012C                           113              
+0000012C  4E75                     114                            RTS
+0000012E                           115  
+0000012E                           116  ; -----------------------------------------------------------------------------
+Line 117 ERROR: Symbol value differs between first and second pass
+0000012E                           117  SCRPLOT
+0000012E                           118  ; UPDATES DOUBLE BUFFER.
+0000012E                           119  ; INPUT    : NONE
+0000012E                           120  ; OUTPUT   : NONE
+0000012E                           121  ; MODIFIES : NONE
+0000012E                           122  ; -----------------------------------------------------------------------------
+0000012E  48A7 C000                123                            MOVEM.W D0-D1,-(A7)
+Line 124 ERROR: Undefined symbol
+00000132  0C79 0000 005455B8       124                            CMP.W   #0,(STANEXT)
+0000013A  6700 0018                125                            BEQ     .SALTAR
+0000013E                           126                            ; SWITCH BUFFERS
+0000013E  103C 005E                127                            MOVE.B  #94,D0
+00000142  4E4F                     128                            TRAP    #15
+00000144                           129              
+00000144                           130                            ; CLEAR HIDDEN BUFFER
+00000144  103C 000B                131                            MOVE.B  #11,D0
+00000148  323C FF00                132                            MOVE.W  #$FF00,D1
+0000014C  4E4F                     133                            TRAP    #15
+Line 134 ERROR: Symbol value differs between first and second pass
+0000014E  4C9F 0003                134  .SALTAR                   MOVEM.W (A7)+,D0-D1
+00000152  4E73                     135                            RTE
+00000154                           136  
+00000154                           137  ; -----------------------------------------------------------------------------
+Line 138 ERROR: Symbol value differs between first and second pass
+00000154                           138  SCRTIM
+00000154                           139  ; TIMED INTERRUPT SERVICE ROUTINE.
+00000154                           140  ; INPUT    : NONE
+00000154                           141  ; OUTPUT   : NONE
+00000154                           142  ; MODIFIES : NONE
+00000154                           143  ; -----------------------------------------------------------------------------
+Line 144 ERROR: Undefined symbol
+00000154  5239 005455B8            144                            ADDQ.B  #1,(SCRINTCT)
+Line 145 ERROR: Undefined symbol
+0000015A  5239 005455B8            145                            ADDQ.B  #1,(SCRCYCCT)
+00000160  4E73                     146                            RTE
+00000162                           147  
+00000162                           148  ; -----------------------------------------------------------------------------
+Line 149 ERROR: Symbol value differs between first and second pass
+00000162                           149  KBDINIT
+00000162                           150  ; INIT KEYBOARD.
+00000162                           151  ; INPUT    : NONE
+00000162                           152  ; OUTPUT   : NONE
+00000162                           153  ; MODIFIES : NONE
+00000162                           154  ; -----------------------------------------------------------------------------
+00000162                           155  
+Line 156 ERROR: Undefined symbol
+00000162  4239 004DBD16            156                            CLR.B   (KBDVAL)
+Line 157 ERROR: Undefined symbol
+00000168  4239 004DBD16            157                            CLR.B   (KBDEDGE)
+0000016E                           158  
+0000016E  4E75                     159                            RTS
+00000170                           160  
+00000170                           161  ; -----------------------------------------------------------------------------
+Line 162 ERROR: Symbol value differs between first and second pass
+00000170                           162  KBDUPD
+00000170                           163  ; UPDATE KEYBOARD INFO.
+00000170                           164  ; 5 -> DEBUG
+00000170                           165  ; 4 -> START
+00000170                           166  ; 3 -> DOWN
+00000170                           167  ; 2 -> RIGHT
+00000170                           168  ; 1 -> UP
+00000170                           169  ; 0 -> LEFT
+00000170                           170  ; INPUT    : NONE
+00000170                           171  ; OUTPUT   : NONE
+00000170                           172  ; MODIFIES : NONE
+00000170                           173  ; -----------------------------------------------------------------------------
+00000170                           174  
+00000170                           175              
+00000170  48E7 F000                176                            MOVEM.L D0-D3,-(A7)
+00000174                           177              
+00000174                           178                            ; READ FIRST PART
+00000174  103C 0013                179                            MOVE.B  #19,D0
+Line 180 ERROR: Invalid syntax
+00000178                           180                            MOVE.L  #DEBUGKEY<<8|STARTKEY,D1
+00000178  4E4F                     181                            TRAP    #15
+0000017A                           182              
+0000017A                           183                            ; CONVERT TO DESIRED FORMAT
+0000017A  4EB9 000001BA            184                            JSR     .PACK
+00000180                           185              
+00000180                           186                            ; READ SECOND PART
+00000180  103C 0013                187                            MOVE.B  #19,D0
+Line 188 ERROR: Invalid syntax
+00000184                           188                            MOVE.L  #KBDDOWN<<24|KBDRIGHT<<16|KBDUP<<8|KBDLEFT,D1
+00000184  4E4F                     189                            TRAP    #15
+00000186                           190              
+00000186                           191                            ; CONVERT TO DESIRED FORMAT
+00000186  4EB9 000001BA            192                            JSR     .PACK
+0000018C                           193              
+0000018C                           194                            ; COMPUTE KBDEDGE
+Line 195 ERROR: Undefined symbol
+0000018C  1039 004DBD16            195                            MOVE.B  (KBDVAL),D0
+00000192  4600                     196                            NOT.B   D0
+00000194  C002                     197                            AND.B   D2,D0
+Line 198 ERROR: Undefined symbol
+00000196  13C0 005455B8            198                            MOVE.B  D0,(KBDEDGE)
+0000019C                           199              
+0000019C                           200                            ; STORE KBDVAL
+Line 201 ERROR: Undefined symbol
+0000019C  13C2 005455B8            201                            MOVE.B  D2,(KBDVAL)
+000001A2                           202              
+000001A2  4CDF 000F                203                            MOVEM.L (A7)+,D0-D3
+000001A6                           204              
+000001A6  4E73                     205                            RTE
+000001A8                           206              
+Line 207 ERROR: Symbol value differs between first and second pass
+000001A8                           207  .PACK                     MOVE.W  #3,D3
+Line 208 ERROR: Symbol value differs between first and second pass
+000001A8                           208  .LOOP                     LSL.L   #8,D1
+000001A8  E312                     209                            ROXL.B  #1,D2
+000001AA  51CB 0012                210                            DBRA.W  D3,.LOOP
+000001AE  4E75                     211                            RTS
+000001B0                           212  
+000001B0                           213  
+000001B0                           214  ; -----------------------------------------------------------------------------
+Line 215 ERROR: Symbol value differs between first and second pass
+000001B0                           215  MSINIT
+000001B0                           216  ; INIT MOUSE.
+000001B0                           217  ; INPUT    : NONE
+000001B0                           218  ; OUTPUT   : NONE
+000001B0                           219  ; MODIFIES : NONE
+000001B0                           220  ; -----------------------------------------------------------------------------
+000001B0                           221  
+Line 222 ERROR: Undefined symbol
+000001B0  4279 004DBD16            222                            CLR.W   (MSPOSY)
+Line 223 ERROR: Undefined symbol
+000001B6  4279 004DBD16            223                            CLR.W   (MSPOSX)
+Line 224 ERROR: Undefined symbol
+000001BC  4279 004DBD16            224                            CLR.W   (MSBUT)
+000001C2  4E75                     225                            RTS
+000001C4                           226  
+000001C4                           227  ; -----------------------------------------------------------------------------
+Line 228 ERROR: Symbol value differs between first and second pass
+000001C4                           228  MSUPD
+000001C4                           229  ; UPDATE MOUSE INFO
+000001C4                           230  ; INPUT    : NONE
+000001C4                           231  ; OUTPUT   : NONE
+000001C4                           232  ; MODIFIES : NONE
+000001C4                           233  ; -----------------------------------------------------------------------------
+000001C4                           234                            ; TRAP ROUTINE TO READ
+000001C4  48A7 C000                235                            MOVEM.W D0-D1,-(A7)
+000001C8  103C 003D                236                            MOVE.B  #61,D0
+000001CC  123C 0000                237                            MOVE.B  #0,D1
+000001D0  4E4F                     238                            TRAP    #15
+Line 239 ERROR: Undefined symbol
+000001D2  13C0 005455B8            239                            MOVE.B  D0,(MSBUT)
+Line 240 ERROR: Undefined symbol
+000001D8  33C1 005455B8            240                            MOVE.W  D1,(MSPOSX)
+000001DE  4841                     241                            SWAP    D1
+Line 242 ERROR: Undefined symbol
+000001E0  33C1 005455B8            242                            MOVE.W  D1,(MSPOSY)
+000001E6                           243              
+000001E6  4C9F 0003                244                            MOVEM.W (A7)+,D0-D1
+000001EA  4E73                     245                            RTE
+000001EC                           246  
+000001EC                           247  
+000001EC                           248  
+000001EC                           249  
+Line 250 WARNING: END directive missing, starting address not set
+
+28 errors detected
+1 warning generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+KBDINIT             168
+KBDUPD              176
+KBDUPD:LOOP         1BE
+KBDUPD:PACK         1BA
+MSINIT              1C8
+MSUPD               1DC
+SCRINIT             EC
+SCRPLOT             134
+SCRPLOT:SALTAR      154
+SCRTIM              15A
+SNDINIT             42
+SNDINIT:DONE        60
+SNDINIT:LOOP        4E
+SNDINIT:SNDBIGDOT   74
+SNDINIT:SNDCHOMP    83
+SNDINIT:SNDCHOMP2   91
+SNDINIT:SNDDEATH    A0
+SNDINIT:SNDEATGHOS  AE
+SNDINIT:SNDLIST     BE
+SNDINIT:SNDSTART    66
+SNDPLAY             DA
+SYSINIT             0

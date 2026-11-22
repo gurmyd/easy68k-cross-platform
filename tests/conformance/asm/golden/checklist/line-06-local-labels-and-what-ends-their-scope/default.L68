@@ -1,0 +1,31 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:54:38 AM
+
+00001000                             1      ORG $1000
+00001000  4E71                       2  MAIN    NOP
+00001002  60FE                       3  .loop   BRA .loop
+00001004  =00000005                  4  VAL EQU 5
+00001004  4E71                       5  .a  NOP
+00001006  60FC                       6      BRA .a
+00001008                             7  M   MACRO
+00001008                             8  .x  NOP
+00001008                             9      ENDM
+00001008  4E71                      10  .y  NOP
+0000100A                            11m     M
+0000100C                            12      END $1000
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+M                   0
+M:X                 100A
+M:Y                 1008
+MAIN                1000
+MAIN:LOOP           1002
+VAL                 5
+VAL:A               1004

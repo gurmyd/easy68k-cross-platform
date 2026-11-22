@@ -97,17 +97,20 @@ export function replayOnSurface(c: GdiCase, text: 'raster' | 'outline' = 'raster
             { advance: w, width: w, height: layout.cellHeight, coverage: new Uint8Array(w * layout.cellHeight) },
           ];
         }
+        const height = layout.boxHeight ?? layout.cellHeight;
         if (layout.boxWidth > 0 && list.length === 0) {
           list = [
             {
               advance: layout.boxWidth,
               width: layout.boxWidth,
-              height: layout.cellHeight,
-              coverage: new Uint8Array(layout.boxWidth * layout.cellHeight),
+              height,
+              coverage: new Uint8Array(layout.boxWidth * height),
             },
           ];
         }
-        surface.textOut(o.x, o.y, list, layout.extent, fontColor, 'both');
+        // A box that starts left of the text position (the bar) moves the pen by as much less.
+        const left = layout.boxLeft ?? 0;
+        surface.textOut(o.x + left, o.y, list, layout.extent - left, fontColor, 'both');
         break;
       }
     }

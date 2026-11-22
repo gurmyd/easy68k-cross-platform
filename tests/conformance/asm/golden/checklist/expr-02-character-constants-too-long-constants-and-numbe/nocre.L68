@@ -1,0 +1,21 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 11/22/2026 8:55:33 AM
+
+00001000                             1      ORG $1000
+00001000= 00000041 00004142 ...      2      DC.L 0+'A',0+'AB',0+'ABC',0+'ABCD'
+Line 3 WARNING: ASCII constant exceeds 4 characters
+00001010= 42434445                   3      DC.L 0+'ABCDE'
+00001014= 41424300                   4      DC.L 'ABC'
+00001018= 41424344 45000000          5      DC.L 'ABCDE'
+00001020= 49542753                   6      DC.L 'IT''S'
+Line 7 WARNING: Numeric constant exceeds 32 bits
+00001024= 23456789                   7      DC.L $123456789
+Line 8 WARNING: Numeric constant exceeds 32 bits
+00001028= 00000000                   8      DC.L 4294967296
+Line 9 ERROR: Invalid syntax
+0000102C                             9      MOVE.L #'',D0
+0000102C                            10      END $1000
+
+1 error detected
+3 warnings generated

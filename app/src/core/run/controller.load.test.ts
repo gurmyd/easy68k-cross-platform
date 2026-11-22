@@ -551,16 +551,10 @@ describe.skipIf(!enginesBuilt)('loading (needs engine/dist)', { timeout: ENGINE_
       kit.forgetEngineLog();
       const engineReads = kit.engineLog.length;
 
-      // Everything a user, a panel, a timer or a host part could do meanwhile:
+      // Everything a user, a panel, a timer or a host part could do meanwhile (the run commands,
+      // Pause, Rewind and Reload are kept and carried out afterwards: controller.kept.test.ts):
       const { controller } = kit;
       kit.time.advance(500); // frames
-      controller.run();
-      controller.runToCursor(5);
-      controller.stepOver();
-      controller.traceInto();
-      controller.autoTrace();
-      controller.pause();
-      controller.rewind();
       controller.editBox(Box.D0, '00000001');
       controller.pokeMemory(0x1000, 0);
       controller.clearCycles();
@@ -570,7 +564,6 @@ describe.skipIf(!enginesBuilt)('loading (needs engine/dist)', { timeout: ENGINE_
       controller.post({ kind: 'ioActivated' });
       const hold = controller.hold();
       hold();
-      void controller.reload();
       void controller.open(KIT_PROGRAM_PATH, 'drop');
       void controller.openData(KIT_PROGRAM_PATH);
       void controller.close();
@@ -590,7 +583,7 @@ describe.skipIf(!enginesBuilt)('loading (needs engine/dist)', { timeout: ENGINE_
       expect(kit.engineCalls()).toEqual(['load', 'setOption', 'keyDown', 'keyChar', 'ioActivated']);
     });
 
-    it('the same when Reload is requested twice: the second request is ignored', async () => {
+    it('the same when Reload is requested twice: the second is kept and loads again afterwards', async () => {
       await start();
       await kit.open(counter);
       const release = kit.block('revalidate');
@@ -601,11 +594,15 @@ describe.skipIf(!enginesBuilt)('loading (needs engine/dist)', { timeout: ENGINE_
       expect(kit.controller.phase).toBe('loading');
       kit.time.advance(300);
       expect(kit.engineCalls()).toEqual([]);
-      await second; // already over: it was ignored
+      await second; // already over: it was kept (errata SH8.md entry 47)
+      expect(kit.controller.keptLength).toBe(1);
       release();
       await first;
-      expect(kit.engineCalls()).toEqual(['load']);
-      expect(kit.events.filter((event) => event === 'revalidate')).toHaveLength(1);
+      await settle();
+      // The original's queue delivers the second Reload after the first: the program loads twice.
+      expect(kit.engineCalls()).toEqual(['load', 'load']);
+      expect(kit.events.filter((event) => event === 'revalidate')).toHaveLength(2);
+      expect(kit.controller.phase).toBe('idle');
     });
 
     it('the same when a program was running: it does not execute another instruction', async () => {
