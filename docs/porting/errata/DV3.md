@@ -293,7 +293,8 @@ and why. No entry concerns `app/src/contracts/`, so there is no **Contract** sec
 - `association.spec.ts` required only that a `.e68-listing__row` be attached, which the rows of
   the text "A matching .L68 file was not found. ..." are too, so check 3 passed while the
   packaged app had no listing (`docs/porting/errata/DV5.md` entry D1). It now waits up to 30 s for
-  the first row to begin with an eight-digit address, as every row of a listing does (the first
-  row is the "Starting Address" line, `00001000 Starting Address` for a program at $1000), prints
-  that row, and fails otherwise. The
+  the first rendered row to begin with an eight-digit address, as every row of a listing does
+  (which row that is depends on where the panel has scrolled to: release run 44967365766 printed
+  `00001000 Starting Address` on x64 and `00000000 ... 10  * This program is public domain.` on
+  arm64), prints that row, and fails otherwise. The
   repair of D1 itself is in `app/src/fs/vfs.ts` (`docs/porting/errata/W1.md` entry 15).

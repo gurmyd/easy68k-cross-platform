@@ -149,3 +149,25 @@ is no **Contract** section.
   the check reads the fields from the page, not the picture.
 - The unit tests and the build step (`--project=packaged programs/`) pass on this PC: 6 passed, the
   three Mac checks skipped.
+
+### 10. Repair of D1 (W1, with DV2's and DV3's tests)
+
+- Repaired in `app/src/fs/vfs.ts` (`docs/porting/errata/W1.md` entry 15): a folder that may not
+  be listed no longer makes `resolve` return null; its segment is kept as given and the path is
+  confirmed by a later listing or a `stat`. No file of DV5 changed; check 3 (DV3) now fails on the
+  "not found" text, and the development suite has `tests/desktop/dev/programs.spec.ts`.
+- Run 44967365766 (commit e4f0106, manual, `draft_release` unticked): every job passed
+  (`publish` skipped as it should). `mac-arm64` (job 137039373000) and `mac-x64` (job
+  137039373023): 59 passed each. Check 7 passed on both with the message area
+  `["S0 = 68KPROG   20CREATED BY EASY68K",".S68 file read successful"]` (no
+  `Unable to open .L68 file.`); checks 6 and 8 passed; check 3 printed a first listing row
+  beginning with an address on both.
+- CI run 44967358502 (push of e4f0106), job desktop-dev (macos-15, job 137045009543): 67 passed,
+  1 skipped; the three tests of `programs.spec.ts` passed on the Mac (status dialog 0 errors, first
+  listing row `00001000 Starting Address`, PC row marked, output rows `Data file read` and both
+  included texts, the case-only rename kept `CASE.TXT`). The jobs unit ("Integration scenarios
+  under Node (I1)") and browser-checks (integration) fail on all three systems in this run as in
+  the run before the repair (44961997281), outside the paths of this repair: unit fails in the
+  wave-2 scenario's settings import ("the first Execute after the import ... exceptions"), and
+  browser-checks (integration) in check:wave2's graphicSound.X68 sequence (0.wav starts about 280 ms
+  after 1.wav, which lasts 302 ms), which fails the same way here on the code before the repair.
