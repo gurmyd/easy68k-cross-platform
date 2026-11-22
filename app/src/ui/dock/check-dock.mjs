@@ -437,6 +437,25 @@ async function boxesPass(browser, name) {
     same(names(screen), [...DEFAULT_NAMES.simulatorTools].sort()),
     JSON.stringify(names(screen)),
   );
+  // The tab strip's keys: the arrows move along it and wrap at its ends, Enter selects.
+  const focusedTab = () => page.evaluate(() => document.activeElement?.textContent?.trim() ?? '');
+  await page.locator('[id="flexlayout-tabbutton-simulator:memory"]').focus();
+  const tabKeys = [];
+  for (const key of ['ArrowRight', 'ArrowRight', 'ArrowRight', 'ArrowLeft']) {
+    await page.keyboard.press(key);
+    tabKeys.push(await focusedTab());
+  }
+  await page.keyboard.press('Enter');
+  await settle(page);
+  const selectedTab = await page.evaluate(
+    () =>
+      document.querySelector('[data-e68-dock="simulator"] [role=tab][aria-selected="true"]')?.textContent?.trim() ?? '',
+  );
+  check(
+    `${p} the tool strip's arrows move along it and wrap; Enter selects`,
+    same(tabKeys, ['Stack', 'Log', 'Memory', 'Log']) && selectedTab === 'Log',
+    `${JSON.stringify(tabKeys)}, selected ${selectedTab}`,
+  );
   const columns = page.locator(
     '[data-e68-workspace="simulator"] [role=separator][aria-label="Resize the two columns"]',
   );
@@ -776,14 +795,12 @@ async function tabMenu(page, workspaceMode, panel, caption) {
   await page.keyboard.press('Shift+F10');
   const menu = page.locator('[role=menu][data-e68-menu]').first();
   await menu.waitFor({ timeout: 5000 });
-  const items = await menu
-    .locator('[role^=menuitem]')
-    .evaluateAll((elements) =>
-      elements.map((element) => ({
-        text: element.textContent.trim(),
-        disabled: element.getAttribute('aria-disabled') === 'true',
-      })),
-    );
+  const items = await menu.locator('[role^=menuitem]').evaluateAll((elements) =>
+    elements.map((element) => ({
+      text: element.textContent.trim(),
+      disabled: element.getAttribute('aria-disabled') === 'true',
+    })),
+  );
   for (let i = 0; i < 12; i++) {
     const focused = await page.evaluate(() => document.activeElement?.textContent?.trim() ?? '');
     if (focused === caption) break;
@@ -1341,37 +1358,8 @@ async function dragsPass(browser, name) {
     check(`${p} ...announced`, (await announcedText()) === words, await announcedText());
   }
 
-  // Esc cancels a drag.
+  // Output into a large group is a drop.
   await resetLayout(page);
-  const resetShape = await shape();
-  source = await tabBox(page, 'simulator', 'memory');
-  target = await groupContentBox(page, 'simulator', 'listing');
-  await dragPointer(page, centre(source), centre(target), () => page.keyboard.press('Escape'));
-  const afterEscape = await shape();
-  if (afterEscape === resetShape) check(`${p} Esc cancels a drag`, true);
-  else {
-    check(`${p} Esc cancels a drag`, false, `${afterEscape}`);
-  }
-
-  // A drop of Output into a place smaller than 160 x 120 px is not offered (the Messages group is 99 px tall).
-  await resetLayout(page);
-  source = await tabBox(page, 'simulator', 'output');
-  target = await groupContentBox(page, 'simulator', 'messages');
-  let outline = null;
-  await dragPointer(page, centre(source), centre(target), async () => {
-    outline = await page.evaluate(() => {
-      const element = document.querySelector('[data-e68-dock="simulator"] .flexlayout__outline_rect');
-      if (!element) return null;
-      const b = element.getBoundingClientRect();
-      return element.checkVisibility() ? [b.width, b.height] : null;
-    });
-  });
-  check(
-    `${p} Output over a group under 160 x 120 px: no drop offered, nothing moves`,
-    outline === null && (await groupOfPanel('output')).length === 1 && (await shape()) === resetShape,
-    `outline ${JSON.stringify(outline)}, ${await shape()}`,
-  );
-  // ...but over a large one it is.
   source = await tabBox(page, 'simulator', 'output');
   target = await groupContentBox(page, 'simulator', 'listing');
   await dragPointer(page, centre(source), centre(target));
@@ -1399,6 +1387,58 @@ async function dragsPass(browser, name) {
     `${p} ...and back along it`,
     same(await groupOfPanel('log'), ['log', 'stack', 'memory']),
     JSON.stringify(await groupOfPanel('log')),
+  );
+
+  // A drop of Output into a place smaller than 160 x 120 px is not offered (the Messages group is 99 px tall).
+  await resetLayout(page);
+  const smallShape = await shape();
+  source = await tabBox(page, 'simulator', 'output');
+  target = await groupContentBox(page, 'simulator', 'messages');
+  let outline = null;
+  await dragPointer(page, centre(source), centre(target), async () => {
+    // Over the Messages group no outline is offered; give a slow engine time to drop the preview
+    // it drew on the way there (WebKit lags a few dragover events).
+    for (let i = 0; i < 15; i++) {
+      outline = await page.evaluate(() => {
+        const element = document.querySelector('[data-e68-dock="simulator"] .flexlayout__outline_rect');
+        if (!element || !element.checkVisibility({ visibilityProperty: true })) return null;
+        const b = element.getBoundingClientRect();
+        return [b.left, b.top, b.width, b.height];
+      });
+      if (outline === null) break;
+      await page.mouse.move(centre(target).x + (i % 2), centre(target).y);
+      await sleep(100);
+    }
+  });
+  check(
+    `${p} Output over a group under 160 x 120 px: no drop offered, nothing moves`,
+    outline === null && (await groupOfPanel('output')).length === 1 && (await shape()) === smallShape,
+    `outline ${JSON.stringify(outline)}, ${await shape()}`,
+  );
+
+  // Esc cancels a drag: nothing moves, and FlexLayout ends its drag (no outline, no overlay). The
+  // drag after an Escape is not checked: Playwright's emulated drag session does not always deliver
+  // the next drag's dragenter after an emulated Escape (seen in both browsers on this PC).
+  await resetLayout(page);
+  const resetShape = await shape();
+  source = await tabBox(page, 'simulator', 'memory');
+  target = await groupContentBox(page, 'simulator', 'listing');
+  await dragPointer(page, centre(source), centre(target), () => page.keyboard.press('Escape'));
+  const afterEscape = await shape();
+  const ended = await until(
+    page,
+    () =>
+      document.querySelector('[data-e68-dock="simulator"] .flexlayout__outline_rect') === null &&
+      !Array.from(document.querySelectorAll('[data-e68-dock="simulator"] .flexlayout__layout_overlay')).some(
+        (element) => element.checkVisibility(),
+      ),
+    null,
+    3000,
+  );
+  check(
+    `${p} Esc cancels a drag (nothing moves; the drop preview is gone)`,
+    afterEscape === resetShape && ended,
+    `${afterEscape}, ended ${ended}`,
   );
 
   // The arrangement is stored; visibility unchanged by any of it.

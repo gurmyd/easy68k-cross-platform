@@ -133,6 +133,8 @@ const ROUTES = {
   'options.assembler': { mode: 'editor', open: (page) => run(page, 'ed.options.assembler'), modal: false },
   'options.editor': { mode: 'editor', open: (page) => run(page, 'ed.options.editor'), tabs: true },
   'settings.transfer': { mode: 'editor', open: (page) => run(page, 'ed.options.transfer') },
+  // Move Panel To... (ARCHITECTURE-PLUS P3.1.4, N1)
+  'layout.move': { mode: 'editor', open: (page) => run(page, 'app.layout.move') },
   'files.name': {
     mode: 'editor',
     open: (page) => page.locator('[data-e68-panel="files"] button[aria-label="New Folder..."]').first().click(),

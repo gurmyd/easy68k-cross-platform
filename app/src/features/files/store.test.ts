@@ -80,20 +80,33 @@ describe('locations', { timeout: 60_000 }, () => {
     expect(displayPath(vfs, '/browser')).toBe('My Programs');
   });
 
-  it('shows a linked file by its name under the linked label, never as /linked/<id>/ (gate I2 review)', () => {
+  // ARCHITECTURE-PLUS P3.2.5 (N5): displayPath is placeShort, so a linked file reads
+  // "lab1.X68 (on this computer)" instead of "Linked files/lab1.X68".
+  it('shows a linked file by its name, "(on this computer)", never as /linked/<id>/ (gate I2 review; P3.2.5)', () => {
     const vfs = createVfs();
     vfs.mount(new MemoryBackend({ mount: 'browser', kind: 'browser', label: 'My Programs' }));
     vfs.mount(new MemoryBackend({ mount: 'linked', kind: 'browser', label: 'Linked files' }));
-    expect(displayPath(vfs, '/linked/21d878e9/prog.X68')).toBe('Linked files/prog.X68');
+    expect(displayPath(vfs, '/linked/21d878e9/prog.X68')).toBe('prog.X68 (on this computer)');
     expect(displayPath(vfs, '/linked/21d878e9')).toBe('Linked files');
     expect(displayPath(vfs, '/linked')).toBe('Linked files');
     for (const path of ['/linked/21d878e9/prog.X68', '/linked/21d878e9', '/linked'] as const) {
       expect(displayPath(vfs, path)).not.toContain('/linked');
       expect(displayPath(vfs, path)).not.toContain('21d878e9');
     }
-    // Without a linked backend mounted, the label is the one FS2 gives it.
+    // Without a linked backend mounted, the same words.
     const bare = createVfs();
-    expect(displayPath(bare, '/linked/0a1b2c3d/lab.X68')).toBe('Linked files/lab.X68');
+    expect(displayPath(bare, '/linked/0a1b2c3d/lab.X68')).toBe('lab.X68 (on this computer)');
+  });
+
+  it('with { linked: true } (the Files panel) the linked files come last as "Opened from this computer"', () => {
+    const vfs = createVfs();
+    vfs.mount(new MemoryBackend({ mount: 'linked', kind: 'browser', label: 'Linked files' }));
+    vfs.mount(new MemoryBackend({ mount: 'browser', kind: 'browser', label: 'My Programs' }));
+    expect(locations(vfs, { linked: true }).map((l) => [l.root, l.label])).toEqual([
+      ['/browser', 'My Programs'],
+      ['/linked', 'Opened from this computer'],
+    ]);
+    expect(locations(vfs).map((l) => l.root)).toEqual(['/browser']);
   });
 
   it('chooses the first existing folder as start, else the browser store', async () => {

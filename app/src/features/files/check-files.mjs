@@ -37,7 +37,7 @@
 // Screenshots go to build/FS1/files-check (git-ignored). Exit code 0 = everything passed.
 // The page object `window.__easy68k` exists in development builds only (main.tsx).
 
-/* global console, process, window, document, indexedDB, IDBFactory, IDBObjectStore, setTimeout, DataTransfer, DragEvent, File, performance, Navigator, DOMException, URL, TextEncoder, TextDecoder, Buffer, MutationObserver, clearTimeout */
+/* global console, process, window, document, indexedDB, IDBFactory, IDBObjectStore, setTimeout, DataTransfer, DragEvent, File, performance, Navigator, DOMException, URL, TextEncoder, TextDecoder, Buffer, MutationObserver, clearTimeout, navigator, requestAnimationFrame, FileSystemDirectoryHandle, FileSystemFileHandle */
 
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -736,7 +736,7 @@ async function uiPass(browser, name) {
       '/browser/demo/all.bin',
       Uint8Array.from({ length: 2048 }, (_, i) => i & 0xff),
     );
-    await vfs.writeFile('/browser/Übung 1/Prüfung.X68', enc('x'));
+    await vfs.writeFile('/browser/Ãœbung 1/PrÃ¼fung.X68', enc('x'));
     window.__filters = await import('/src/features/files/filters.ts');
   });
 
@@ -1106,9 +1106,10 @@ async function uiPass(browser, name) {
   await page.locator('[data-e68-panel="files"] [role=treeitem][aria-selected=true]', { hasText: 'demo' }).waitFor();
   await page.screenshot({ path: join(outDir, `${name}-files-panel-light.png`) });
   await scan(page, `${name} light editor with Files panel`);
+  // ARCHITECTURE-PLUS P3.2.3 (N5): the Export button's name says what it will export.
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.locator('[data-e68-panel="files"] button[aria-label="Export..."]').click(),
+    page.locator('[data-e68-panel="files"] button[aria-label="Export the folder \\"demo\\" as demo.zip"]').click(),
   ]);
   const zipPath = join(outDir, `${name}-demo.zip`);
   await download.saveAs(zipPath);
@@ -1161,7 +1162,7 @@ async function uiPass(browser, name) {
   });
   const [storeDownload] = await Promise.all([
     page.waitForEvent('download'),
-    page.locator('[data-e68-panel="files"] button[aria-label="Export..."]').click(),
+    page.locator('[data-e68-panel="files"] button[aria-label="Export all of My Programs as My Programs.zip"]').click(),
   ]);
   const storeZip = join(outDir, `${name}-store.zip`);
   await storeDownload.saveAs(storeZip);
@@ -1647,6 +1648,889 @@ async function storageNoticePass(browser, name) {
   await emptyContext.close();
 }
 
+// ---- the stage of additions: the Files panel of ARCHITECTURE-PLUS P3.2 (N5) -------------------------
+
+const FILES = '[data-e68-panel="files"]';
+const TREE = `${FILES} [role=tree]`;
+
+/** Runs in the page before the application: the key map of `platform` (tests/e2e/fixtures/keys.ts). */
+function pretendPlatform(platform) {
+  Object.defineProperty(Navigator.prototype, 'platform', { get: () => platform, configurable: true });
+  Object.defineProperty(Navigator.prototype, 'userAgentData', { get: () => undefined, configurable: true });
+}
+
+/** A chord of the table (`Shift+Cmd+Z`) as Playwright's key name (tests/e2e/fixtures/keys.ts). */
+function playwrightKey(chord) {
+  const mods = { Ctrl: 'Control', Alt: 'Alt', Option: 'Alt', Shift: 'Shift', Cmd: 'Meta' };
+  const names = { Esc: 'Escape', Up: 'ArrowUp', Down: 'ArrowDown', Left: 'ArrowLeft', Right: 'ArrowRight' };
+  const parts = chord.split('+');
+  const key = parts.pop() ?? '';
+  const name = /^[A-Z]$/.test(key) ? `Key${key}` : (names[key] ?? key);
+  return [...parts.map((m) => mods[m]), name].join('+');
+}
+
+/** A context whose page has the key map of `keys` ('windows' or 'mac'). */
+async function keyMapContext(browser, keys, options = {}) {
+  const context = await browser.newContext({
+    viewport: { width: 1400, height: 900 },
+    reducedMotion: 'reduce',
+    acceptDownloads: true,
+    ...options,
+  });
+  await context.addInitScript(pretendPlatform, keys === 'mac' ? 'MacIntel' : 'Win32');
+  return context;
+}
+
+/** The names of the selected rows, the focused row's name, and the status line. */
+function treeState(page) {
+  return page.evaluate((tree) => {
+    const element = document.querySelector(tree);
+    const rows = [...element.querySelectorAll('[role=treeitem]')];
+    const nameOf = (row) => row.querySelector('.e68-files__name')?.textContent ?? '';
+    const focusedId = element.getAttribute('aria-activedescendant');
+    return {
+      selected: rows.filter((row) => row.getAttribute('aria-selected') === 'true').map(nameOf),
+      focused: focusedId ? nameOf(document.getElementById(focusedId)) : null,
+      count: document.querySelector('[data-e68-panel="files"] .e68-files__count')?.textContent ?? '',
+      active: document.activeElement === element,
+      multi: element.getAttribute('aria-multiselectable'),
+      owns: element.getAttribute('data-e68-own-keys'),
+    };
+  }, TREE);
+}
+
+/** Writes files into the page's Vfs (a path ending in / is a folder). */
+function seedFiles(page, paths) {
+  return page.evaluate(async (list) => {
+    const { vfs } = window.__easy68k.ctx;
+    for (const path of list) {
+      if (path.endsWith('/')) await vfs.mkdirp(path.slice(0, -1));
+      else await vfs.writeFile(path, new TextEncoder().encode(`* ${path}\r\n`));
+    }
+  }, paths);
+}
+
+const exists = (page, path) => page.evaluate(async (p) => (await window.__easy68k.ctx.vfs.stat(p)) !== null, path);
+
+/** Waits until every path of `present` exists and none of `absent` does (polled from here). */
+async function waitForPaths(page, present, absent = [], timeout = 15_000) {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    const ok = await page.evaluate(
+      async ({ yes, no }) => {
+        const { vfs } = window.__easy68k.ctx;
+        for (const p of yes) if ((await vfs.stat(p)) === null) return false;
+        for (const p of no) if ((await vfs.stat(p)) !== null) return false;
+        return true;
+      },
+      { yes: present, no: absent },
+    );
+    if (ok || Date.now() > deadline) return ok;
+    await page.waitForTimeout(100);
+  }
+}
+
+/**
+ * Polls `fn(arg)` in the page from here until it resolves truthy (an async predicate cannot go to
+ * page.waitForFunction, which takes the Promise itself as truthy and returns at once).
+ */
+async function waitInPage(page, fn, arg, timeout = 15_000) {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    const ok = await page.evaluate(fn, arg);
+    if (ok || Date.now() > deadline) return ok;
+    await page.waitForTimeout(100);
+  }
+}
+
+/** Polls the tree's state until `test(state)` holds or the time is up; resolves to the last state. */
+async function waitForTree(page, test, timeout = 10_000) {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    const s = await treeState(page);
+    if (test(s) || Date.now() > deadline) return s;
+    await page.waitForTimeout(100);
+  }
+}
+
+async function revealRow(page, path) {
+  await page.evaluate(async (p) => {
+    const { revealInFilesPanel } = await import('/src/features/files/FilesPanel.tsx');
+    revealInFilesPanel(window.__easy68k.ctx, p);
+  }, path);
+  await page.locator(`${FILES} [role=treeitem][data-e68-path="${path}"][aria-selected=true]`).waitFor();
+}
+
+const row = (page, path) => page.locator(`${FILES} [role=treeitem][data-e68-path="${path}"]`);
+
+/** Drags the rows of `from` (as the panel's own drag) onto the row of `to`; `drop` false: hover only. */
+function syntheticDrag(page, from, to, { drop = true, hoverMs = 0 } = {}) {
+  return page.evaluate(
+    async ({ fromPath, toPath, doDrop, wait }) => {
+      const find = (p) => document.querySelector(`[data-e68-panel="files"] [data-e68-path="${p}"]`);
+      const source = find(fromPath);
+      const dt = new DataTransfer();
+      // A DataTransfer made by a page keeps no dropEffect outside a real drag: record what the
+      // panel's handler sets (the cursor the browser would show).
+      let effect = 'none';
+      Object.defineProperty(dt, 'dropEffect', {
+        get: () => effect,
+        set: (value) => {
+          effect = value;
+        },
+        configurable: true,
+      });
+      source.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      await new Promise((r) => setTimeout(r, 50));
+      const target = find(toPath);
+      const over = () => {
+        const event = new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt });
+        target.dispatchEvent(event);
+        return { accepted: event.defaultPrevented, effect: dt.dropEffect };
+      };
+      let result = over();
+      const until = performance.now() + wait;
+      while (performance.now() < until) {
+        await new Promise((r) => setTimeout(r, 100));
+        result = over();
+      }
+      await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 30)));
+      const title = find(toPath)?.getAttribute('title') ?? null;
+      const outlined = find(toPath)?.classList.contains('e68-files__row--drop') ?? false;
+      if (doDrop)
+        find(toPath).dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      source.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      return { ...result, title, outlined, types: [...dt.types] };
+    },
+    { fromPath: from, toPath: to, doDrop: drop, wait: hoverMs },
+  );
+}
+
+/** The chords of a command on the page's key map, as Playwright keys. */
+function chordsInPage(page, id) {
+  return page.evaluate(async (command) => {
+    const { chordsOn } = await import('/src/commands/specs.ts');
+    return chordsOn(command, window.__easy68k.ctx.platform.os, false);
+  }, id);
+}
+
+async function answerBox(page, button) {
+  const box = page.locator('[role=alertdialog]').last();
+  await box.waitFor({ timeout: 10_000 });
+  const textShown = (await box.innerText()).replace(/\s+/g, ' ');
+  await box.getByRole('button', { name: button, exact: true }).click();
+  await box.waitFor({ state: 'detached', timeout: 10_000 }).catch(() => {});
+  return textShown;
+}
+
+/**
+ * P3.2.1 and P1.3 on one key map: Shift+click, Ctrl/Cmd+click, every key of the tree, Ctrl/Cmd+A,
+ * the undo and redo chords staying in the tree, Delete with the focus after it, Move To... by
+ * keyboard. Screenshots and an axe scan of a multiple selection in both themes.
+ */
+async function selectionPass(browser, name, keys) {
+  const p = `${name} (${keys} keys):`;
+  const context = await keyMapContext(browser, keys);
+  await context.addInitScript(withoutFileSystemAccess);
+  const { page, errors } = await openApp(context);
+  const os = await page.evaluate(() => window.__easy68k.ctx.platform.os);
+  check(`${p} the page has the ${keys} key map`, os === keys, os);
+  const mod = keys === 'mac' ? 'Meta' : 'Control';
+  const alt = keys === 'mac' ? 'Alt' : 'Control'; // Option on a Mac, Ctrl elsewhere (P1.3)
+  await seedFiles(page, [
+    '/browser/sel/a.X68',
+    '/browser/sel/b.X68',
+    '/browser/sel/c.X68',
+    '/browser/sel/d.X68',
+    '/browser/sel/sub/x.X68',
+  ]);
+  await revealRow(page, '/browser/sel/a.X68');
+
+  const state0 = await treeState(page);
+  const expectedOwn = keys === 'mac' ? 'Cmd+A Ctrl+A Cmd+Z Ctrl+Z Shift+Cmd+Z Ctrl+Alt+Z' : 'Ctrl+A Ctrl+Z Ctrl+Alt+Z';
+  check(
+    `${p} the tree is multiselectable and owns exactly the chords of Select All, Undo and Redo`,
+    state0.multi === 'true' && state0.owns === expectedOwn,
+    `${state0.multi} / ${state0.owns}`,
+  );
+
+  // Clicks.
+  await row(page, '/browser/sel/a.X68').click();
+  await row(page, '/browser/sel/c.X68').click({ modifiers: ['Shift'] });
+  let s = await treeState(page);
+  check(
+    `${p} Shift+click selects the range from the anchor`,
+    same(s.selected, ['a.X68', 'b.X68', 'c.X68']),
+    JSON.stringify(s),
+  );
+  check(`${p} a line says "3 items selected"`, s.count === '3 items selected', s.count);
+  await row(page, '/browser/sel/sub').click({ modifiers: [mod] });
+  s = await treeState(page);
+  check(
+    `${p} ${mod}+click adds a row`,
+    same(s.selected, ['sub', 'a.X68', 'b.X68', 'c.X68']),
+    JSON.stringify(s.selected),
+  );
+  await row(page, '/browser/sel/b.X68').click({ modifiers: [mod] });
+  s = await treeState(page);
+  check(`${p} ${mod}+click removes a row`, same(s.selected, ['sub', 'a.X68', 'c.X68']), JSON.stringify(s.selected));
+  await page.screenshot({ path: join(outDir, `${name}-${keys}-multi-selection-light.png`) });
+  await scan(page, `${name} ${keys} light Files panel with a multiple selection`);
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('app.theme.set', 'dark'));
+  await page.waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'dark');
+  await page.locator(FILES).screenshot({ path: join(outDir, `${name}-${keys}-multi-selection-dark.png`) });
+  await scan(page, `${name} ${keys} dark Files panel with a multiple selection`);
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('app.theme.set', 'light'));
+
+  // Keys (P1.3).
+  await row(page, '/browser/sel/a.X68').click();
+  await page.locator(TREE).focus();
+  await page.keyboard.press('Shift+ArrowDown');
+  await page.keyboard.press('Shift+ArrowDown');
+  s = await treeState(page);
+  check(
+    `${p} Shift+Down twice extends to three rows`,
+    same(s.selected, ['a.X68', 'b.X68', 'c.X68']),
+    JSON.stringify(s),
+  );
+  await page.keyboard.press('Shift+ArrowUp');
+  s = await treeState(page);
+  check(`${p} Shift+Up takes one back`, same(s.selected, ['a.X68', 'b.X68']), JSON.stringify(s.selected));
+  await page.keyboard.press('Shift+End');
+  s = await treeState(page);
+  check(
+    `${p} Shift+End extends to the last row`,
+    s.selected[0] === 'a.X68' && s.focused === s.selected.at(-1),
+    JSON.stringify(s),
+  );
+  await page.keyboard.press('Shift+Home');
+  s = await treeState(page);
+  check(
+    `${p} Shift+Home extends to the first row; the store's root is not part of it`,
+    !s.selected.includes('My Programs') && s.selected.at(-1) === 'a.X68' && s.focused === 'My Programs',
+    JSON.stringify(s),
+  );
+  await row(page, '/browser/sel/b.X68').click();
+  await page.keyboard.press(`${alt}+ArrowDown`);
+  s = await treeState(page);
+  check(
+    `${p} ${alt === 'Alt' ? 'Option' : 'Ctrl'}+Down moves the focus without selecting`,
+    same(s.selected, ['b.X68']) && s.focused === 'c.X68',
+    JSON.stringify(s),
+  );
+  await page.keyboard.press(`${alt}+ArrowUp`);
+  await page.keyboard.press(`${alt}+ArrowUp`);
+  await page.keyboard.press(`${alt}+Space`);
+  s = await treeState(page);
+  check(
+    `${p} ${alt === 'Alt' ? 'Option' : 'Ctrl'}+Space adds the focused row`,
+    same(s.selected, ['a.X68', 'b.X68']) && s.focused === 'a.X68',
+    JSON.stringify(s),
+  );
+  await page.keyboard.press('Escape');
+  s = await treeState(page);
+  check(
+    `${p} Esc clears the multiple selection to the focused row`,
+    same(s.selected, ['a.X68']),
+    JSON.stringify(s.selected),
+  );
+
+  // Ctrl/Cmd+A, the undo and redo chords: the tree's, never the editor's.
+  await page.locator('.cm-content').first().click();
+  await page.keyboard.type('XYZ');
+  await page.waitForFunction(() => document.querySelector('.cm-content')?.textContent.includes('XYZ'));
+  const editorBefore = await page.evaluate(() => document.querySelector('.cm-content').textContent);
+  await row(page, '/browser/sel/a.X68').click();
+  await page.locator(TREE).focus();
+  for (const chord of await chordsInPage(page, 'ed.edit.selectAll')) {
+    await row(page, '/browser/sel/a.X68').click();
+    await page.keyboard.press(playwrightKey(chord));
+    s = await treeState(page);
+    const rowCount = await page.locator(`${FILES} [role=treeitem]:not(.e68-files__row--root)`).count();
+    check(
+      `${p} ${chord} in the tree selects every visible row (not the editor's text)`,
+      s.selected.length === rowCount && s.active,
+      `${s.selected.length} of ${rowCount}; tree focused ${s.active}`,
+    );
+  }
+  for (const id of ['ed.edit.undo', 'ed.edit.redo']) {
+    for (const chord of await chordsInPage(page, id)) {
+      await page.keyboard.press(playwrightKey(chord));
+      const after = await page.evaluate(() => document.querySelector('.cm-content').textContent);
+      check(
+        `${p} ${chord} (${id}) in the tree leaves the editor's text and undo alone`,
+        after === editorBefore && after.includes('XYZ'),
+        after.slice(0, 60),
+      );
+    }
+  }
+
+  // Delete, and the focus after it (P3.2.2): the row after the last deleted row.
+  await row(page, '/browser/sel/b.X68').click();
+  await page.locator(TREE).focus();
+  await page.keyboard.press('Delete');
+  const asked = await answerBox(page, 'Yes');
+  check(
+    `${p} Delete asks "Delete "b.X68"? You can restore it from the Trash."`,
+    asked.includes('Delete "b.X68"? You can restore it from the Trash.'),
+    asked,
+  );
+  const deletedB = await waitForPaths(page, [], ['/browser/sel/b.X68']);
+  s = await waitForTree(page, (t) => t.focused === 'c.X68' && t.active);
+  check(
+    `${p} after a delete the focus is on the row after it`,
+    deletedB && s.focused === 'c.X68' && s.active,
+    `deleted ${deletedB}; ${JSON.stringify(s)}`,
+  );
+  // The toast's Undo brings it back and puts the focus on its row (P3.2.7).
+  const toast = page.locator('.e68-toast', { hasText: 'Deleted "b.X68".' });
+  await toast.waitFor({ timeout: 10_000 });
+  await toast.getByRole('button', { name: 'Undo' }).click();
+  const backB = await waitForPaths(page, ['/browser/sel/b.X68'], [], 10_000);
+  s = await waitForTree(page, (t) => t.focused === 'b.X68' && t.active);
+  check(
+    `${p} the toast's Undo brings it back with the focus on its row`,
+    backB && s.focused === 'b.X68' && s.active,
+    `back ${backB}; ${JSON.stringify(s)}`,
+  );
+  if (keys === 'mac') {
+    await row(page, '/browser/sel/c.X68').click();
+    await page.keyboard.press('Meta+Backspace');
+    const macAsked = await answerBox(page, 'No');
+    check(`${p} Cmd+Backspace deletes too (asks)`, macAsked.includes('Delete "c.X68"?'), macAsked);
+  }
+
+  // Move To... by keyboard: Shift+F10, the access key, arrows, Enter.
+  await row(page, '/browser/sel/d.X68').click();
+  await page.locator(TREE).focus();
+  await page.keyboard.press('Shift+F10');
+  const menu = page.getByRole('menu', { name: 'Files' });
+  await menu.waitFor({ timeout: 5000 });
+  const items = await menu.getByRole('menuitem').allInnerTexts();
+  check(
+    `${p} the context menu has Move To..., Earlier Versions... and Undo after the original items`,
+    items.some((t) => t.startsWith('Move To...')) &&
+      items.some((t) => t.startsWith('Earlier Versions...')) &&
+      items.some((t) => /^Undo/.test(t)),
+    JSON.stringify(items.map((t) => t.split('\n')[0])),
+  );
+  await page.keyboard.press('m');
+  const moveDialog = page.getByRole('dialog', { name: 'Move To' });
+  await moveDialog.waitFor({ timeout: 10_000 });
+  await page.screenshot({ path: join(outDir, `${name}-${keys}-move-to.png`) });
+  await scan(page, `${name} ${keys} Move To dialog`);
+  // The list has the focus; type-ahead finds "sub".
+  for (let i = 0; i < 20; i++) {
+    const current = await moveDialog.locator('[role=option][aria-selected=true]').innerText();
+    if (current.trim() === 'sub') break;
+    await page.keyboard.press('ArrowDown');
+  }
+  const button = await moveDialog.getByRole('button', { name: /^(Move|Copy)$/ }).innerText();
+  await page.keyboard.press('Enter');
+  await waitForPaths(page, ['/browser/sel/sub/d.X68'], ['/browser/sel/d.X68']);
+  const afterMove = await page.evaluate(async () => {
+    const { vfs } = window.__easy68k.ctx;
+    const names = async (dir) => (await vfs.list(dir).catch(() => [])).map((e) => e.name).join(',');
+    return {
+      sel: await names('/browser/sel'),
+      sub: await names('/browser/sel/sub'),
+      box: document.querySelector('[role=alertdialog]')?.textContent ?? null,
+    };
+  });
+  check(
+    `${p} Move To... by keyboard moves d.X68 into sub (button "${button.trim()}")`,
+    !(await exists(page, '/browser/sel/d.X68')) &&
+      (await exists(page, '/browser/sel/sub/d.X68')) &&
+      button.trim() === 'Move',
+    JSON.stringify(afterMove),
+  );
+  check(`${p} no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await context.close();
+}
+
+/**
+ * P3.2.4 and P3.2.6: dragging rows onto a folder, the 800 ms expand, the copy cursor and tool-tip
+ * across stores, the storage line with and without an estimate and its refresh at most once per
+ * second, the large import question.
+ */
+async function dragAndStoragePass(browser, name) {
+  const p = `${name}:`;
+  const context = await keyMapContext(browser, 'windows');
+  await context.addInitScript(withoutFileSystemAccess);
+  const { page, errors } = await openApp(context);
+  await seedFiles(page, [
+    '/browser/drag/a.X68',
+    '/browser/drag/b.X68',
+    '/browser/drag/into/x.X68',
+    '/browser/drag/closed/y.X68',
+  ]);
+  await revealRow(page, '/browser/drag/a.X68');
+  await page.evaluate(async () => {
+    const { MemoryBackend } = await import('/src/fs/memory-backend.ts');
+    window.__easy68k.ctx.vfs.mount(new MemoryBackend({ mount: 'folder', kind: 'fsaccess', label: 'Folder: Lab' }));
+  });
+  await row(page, '/folder').waitFor({ timeout: 10_000 });
+
+  // Drag to move, onto a folder row.
+  await row(page, '/browser/drag/a.X68').click();
+  await row(page, '/browser/drag/b.X68').click({ modifiers: ['Control'] });
+  await revealRow(page, '/browser/drag/into').catch(() => {});
+  await row(page, '/browser/drag/a.X68').click();
+  await row(page, '/browser/drag/b.X68').click({ modifiers: ['Control'] });
+  const moved = await syntheticDrag(page, '/browser/drag/b.X68', '/browser/drag/into');
+  await waitForPaths(
+    page,
+    ['/browser/drag/into/a.X68', '/browser/drag/into/b.X68'],
+    ['/browser/drag/a.X68', '/browser/drag/b.X68'],
+  );
+  await page
+    .locator('.e68-toast', { hasText: 'Moved 2 items to into.' })
+    .waitFor({ timeout: 10_000 })
+    .catch(() => {});
+  check(
+    `${p} dragging two selected rows onto a folder moves both (drag type ${moved.types.join(', ')}, outlined ${moved.outlined})`,
+    (await exists(page, '/browser/drag/into/a.X68')) &&
+      (await exists(page, '/browser/drag/into/b.X68')) &&
+      !(await exists(page, '/browser/drag/a.X68')) &&
+      moved.effect === 'move' &&
+      moved.outlined &&
+      same(moved.types, ['application/x-e68-paths']),
+    JSON.stringify(moved),
+  );
+  const movedToast = await page.locator('.e68-toast', { hasText: 'Moved 2 items to into.' }).count();
+  check(`${p} the toast "Moved 2 items to into." with Undo`, movedToast === 1);
+
+  // A folder row under the pointer for 800 ms opens.
+  await row(page, '/browser/drag/into/a.X68').click();
+  const early = await syntheticDrag(page, '/browser/drag/into/a.X68', '/browser/drag/closed', {
+    drop: false,
+    hoverMs: 400,
+  });
+  const earlyOpen = await row(page, '/browser/drag/closed').getAttribute('aria-expanded');
+  const late = await syntheticDrag(page, '/browser/drag/into/a.X68', '/browser/drag/closed', {
+    drop: false,
+    hoverMs: 1200,
+  });
+  const lateOpen = await row(page, '/browser/drag/closed').getAttribute('aria-expanded');
+  check(
+    `${p} a folder row under the pointer opens after 800 ms (closed at 400 ms, open at 1200 ms)`,
+    earlyOpen === 'false' && lateOpen === 'true' && early.accepted && late.accepted,
+    `${earlyOpen} / ${lateOpen}`,
+  );
+
+  // Across stores: the copy cursor and the target's tool-tip; the drop copies.
+  const across = await syntheticDrag(page, '/browser/drag/into/a.X68', '/folder');
+  await waitForPaths(page, ['/folder/a.X68']);
+  check(
+    `${p} across stores the drag shows the copy cursor and "Copy to Folder: Lab"; the drop copies`,
+    across.effect === 'copy' &&
+      across.title === 'Copy to Folder: Lab' &&
+      (await exists(page, '/folder/a.X68')) &&
+      (await exists(page, '/browser/drag/into/a.X68')),
+    JSON.stringify(across),
+  );
+  // Refused targets: a folder into itself; "Opened from this computer" is never shown without links.
+  const self = await syntheticDrag(page, '/browser/drag/into', '/browser/drag/into', { drop: false });
+  check(`${p} a folder cannot be dropped into itself`, !self.accepted, JSON.stringify(self));
+
+  // The storage line, with the browser's estimate.
+  const line = page.locator(`${FILES} [data-e68-storage-line]`);
+  await page.waitForFunction(
+    () => /^This site uses /.test(document.querySelector('[data-e68-storage-line]')?.textContent ?? ''),
+    null,
+    { timeout: 10_000 },
+  );
+  const lineText = await line.innerText();
+  check(
+    `${p} the storage line: "This site uses ... in this browser - Earlier versions and Trash: ... - About ... free"`,
+    /^This site uses \d+(\.\d)? (bytes|kB|MB|GB) in this browser - Earlier versions and Trash: \d+(\.\d)? (bytes|kB|MB|GB) - About \d+(\.\d)? (bytes|kB|MB|GB) free$/.test(
+      lineText.trim(),
+    ),
+    lineText,
+  );
+  // At most once per second, however many changes arrive (measured by the page's own clock).
+  const refreshes = await page.evaluate(async () => {
+    const element = document.querySelector('[data-e68-storage-line]');
+    const times = [];
+    const observer = new MutationObserver(() => times.push(performance.now()));
+    observer.observe(element, { attributes: true, attributeFilter: ['data-e68-storage-refreshes'] });
+    const { vfs } = window.__easy68k.ctx;
+    const started = performance.now();
+    for (let i = 0; i < 40; i++) {
+      await vfs.writeFile(`/browser/drag/burst${i % 4}.X68`, new TextEncoder().encode(`* ${i}\r\n`));
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    await new Promise((r) => setTimeout(r, 1500));
+    observer.disconnect();
+    const gaps = times.slice(1).map((t, i) => Math.round(t - times[i]));
+    return { count: times.length, gaps, spanMs: Math.round(performance.now() - started) };
+  });
+  check(
+    `${p} the storage line is refreshed after changes, at most once per second`,
+    refreshes.count >= 1 && refreshes.gaps.every((gap) => gap >= 950),
+    JSON.stringify(refreshes),
+  );
+  // It is a button that opens the Storage group of Port Additions (P3.5).
+  const ran = await page.evaluate(async () => {
+    const { commands } = window.__easy68k.ctx;
+    const calls = [];
+    const real = commands.run.bind(commands);
+    commands.run = (id, arg) => {
+      calls.push([id, arg]);
+      return id === 'app.additions.options' ? Promise.resolve() : real(id, arg);
+    };
+    document.querySelector('[data-e68-storage-line]').click();
+    await new Promise((r) => setTimeout(r, 100));
+    commands.run = real;
+    return calls;
+  });
+  check(
+    `${p} the storage line runs app.additions.options with { group: 'storage' }`,
+    same(ran, [['app.additions.options', { group: 'storage' }]]),
+    JSON.stringify(ran),
+  );
+
+  // The question before a large import (101 files).
+  await row(page, '/browser').click();
+  await page.locator(`${FILES} button[aria-label="Import..."]`).click();
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    page.getByRole('menuitem', { name: /Files or \.zip/ }).click(),
+  ]);
+  await chooser.setFiles(
+    Array.from({ length: 101 }, (_, i) => ({
+      name: `many${i}.X68`,
+      mimeType: 'text/plain',
+      buffer: Buffer.from('* x\r\n'),
+    })),
+  );
+  const largeText = await answerBox(page, 'No');
+  check(
+    `${p} importing 101 files asks first, with the free space; No imports nothing`,
+    /^Import Import 101 files \(505 bytes\) into My Programs\? The browser has about \d+(\.\d)? (kB|MB|GB) free for this site\./.test(
+      largeText,
+    ) && !(await exists(page, '/browser/many0.X68')),
+    largeText,
+  );
+  await page.locator(FILES).screenshot({ path: join(outDir, `${name}-storage-line.png`) });
+  check(`${p} no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await context.close();
+
+  // A page without navigator.storage.estimate: only the history's part.
+  const bare = await keyMapContext(browser, 'windows');
+  await bare.addInitScript(() => {
+    if (window.StorageManager) delete window.StorageManager.prototype.estimate;
+  });
+  const second = await openApp(bare);
+  await second.page.waitForTimeout(1500);
+  const bareText = (await second.page.locator(`${FILES} [data-e68-storage-line]`).innerText()).trim();
+  check(
+    `${p} without an estimate the line says only "Earlier versions and Trash: ..."`,
+    /^Earlier versions and Trash: \d+(\.\d)? (bytes|kB|MB|GB)$/.test(bareText),
+    bareText,
+  );
+  check(
+    `${p} no console errors without an estimate`,
+    second.errors.length === 0,
+    second.errors.slice(0, 3).join(' | '),
+  );
+  await bare.close();
+}
+
+/** Logs, in the page, every write and remove made through a FileSystemHandle of the origin's private file system. */
+function logHandleWrites() {
+  window.__fsLog = [];
+  const where = async (handle, name) => {
+    const root = await navigator.storage.getDirectory();
+    const parts = (await root.resolve(handle)) ?? ['?'];
+    return [...parts, ...(name === undefined ? [] : [name])].join('/');
+  };
+  const dir = FileSystemDirectoryHandle.prototype;
+  const file = FileSystemFileHandle.prototype;
+  const getFile = dir.getFileHandle;
+  dir.getFileHandle = async function (name, options) {
+    if (options?.create) window.__fsLog.push(`create ${await where(this, name)}`);
+    return getFile.call(this, name, options);
+  };
+  const getDir = dir.getDirectoryHandle;
+  dir.getDirectoryHandle = async function (name, options) {
+    if (options?.create) window.__fsLog.push(`mkdir ${await where(this, name)}`);
+    return getDir.call(this, name, options);
+  };
+  const removeEntry = dir.removeEntry;
+  dir.removeEntry = async function (name, options) {
+    window.__fsLog.push(`remove ${await where(this, name)}`);
+    return removeEntry.call(this, name, options);
+  };
+  const createWritable = file.createWritable;
+  file.createWritable = async function (options) {
+    window.__fsLog.push(`write ${await where(this)}`);
+    return createWritable.call(this, options);
+  };
+}
+
+/**
+ * Chromium, an opened folder on a fake directory handle (the origin private file system, as
+ * check-fsaccess.mjs does) with a log of every write and remove: the root's text, Delete keeps a
+ * Trash copy, delete, move, copy, rename and a Trash restore touch only the files they name and
+ * nothing below .git; a linked file listed by its name and removed from the list, its real file
+ * untouched.
+ */
+async function openedFolderPass(browser, name) {
+  const p = `${name}: opened folder:`;
+  const context = await keyMapContext(browser, 'windows');
+  await context.addInitScript(logHandleWrites);
+  const { page, errors } = await openApp(context);
+  await page.evaluate(async () => {
+    const root = await navigator.storage.getDirectory();
+    const write = async (path, content) => {
+      const parts = path.split('/');
+      let d = root;
+      for (const part of parts.slice(0, -1)) d = await d.getDirectoryHandle(part, { create: true });
+      const f = await d.getFileHandle(parts.at(-1), { create: true });
+      const w = await f.createWritable();
+      await w.write(new TextEncoder().encode(content));
+      await w.close();
+    };
+    for (const path of [
+      'Lab/prog.X68',
+      'Lab/demo/a.X68',
+      'Lab/demo/b.X68',
+      'Lab/repo/.git/HEAD',
+      'Lab/repo/main.X68',
+      'Lab/other/keep.X68',
+      'Outside/lab1.X68',
+    ])
+      await write(path, `* ${path}\r\n`);
+    const lab = await root.getDirectoryHandle('Lab');
+    const { FolderBackend } = await import('/src/fs/fsaccess-backend.ts');
+    window.__easy68k.ctx.vfs.mount(new FolderBackend(lab));
+    window.__fsLog.length = 0;
+  });
+  await row(page, '/folder').waitFor({ timeout: 10_000 });
+  const rootRow = await page.evaluate(() => {
+    const r = document.querySelector('[data-e68-panel="files"] [data-e68-path="/folder"]');
+    const repo = document.querySelector('[data-e68-panel="files"] [data-e68-path="/folder/repo"]');
+    return {
+      text: r?.innerText.replace(/\s+/g, ' ').trim(),
+      title: r?.getAttribute('title'),
+      repo: repo?.getAttribute('title'),
+    };
+  });
+  check(
+    `${p} the root reads "Folder: Lab on this computer" with its tool-tip`,
+    rootRow.text === 'Folder: Lab on this computer' &&
+      rootRow.title === 'Files here are the files of the folder "Lab" on this computer.',
+    JSON.stringify(rootRow),
+  );
+  await revealRow(page, '/folder/repo/main.X68');
+  const listedGit = await page.locator(`${FILES} [role=treeitem]`, { hasText: '.git' }).count();
+  const repoTitle = await row(page, '/folder/repo').getAttribute('title');
+  check(
+    `${p} .git is not listed; the repository's row says "Git repository (its .git folder is not shown)"`,
+    listedGit === 0 && repoTitle.endsWith('\nGit repository (its .git folder is not shown)'),
+    `${listedGit} rows; ${JSON.stringify(repoTitle)}`,
+  );
+  const log = () => page.evaluate(() => window.__fsLog.splice(0));
+  // A write or remove names one of `allowed`; `mkdir` of a folder above one of them is the backend
+  // finding its way there (getDirectoryHandle with create of a folder that exists).
+  const onlyNamed = (entries, allowed) =>
+    entries.every((e) =>
+      e.startsWith('mkdir ')
+        ? allowed.some((a) => a.startsWith(`${e.slice(6)}/`))
+        : allowed.some((a) => e.endsWith(` ${a}`)),
+    );
+  const gitTouched = [];
+  const note = (entries) => gitTouched.push(...entries.filter((e) => /\/\.git(\/|$)/i.test(e)));
+
+  // Delete from it: a copy in the Trash; only Lab/prog.X68 removed.
+  await row(page, '/folder/prog.X68').click();
+  await page.locator(TREE).focus();
+  await page.keyboard.press('Delete');
+  const asked = await answerBox(page, 'Yes');
+  await waitForPaths(page, [], ['/folder/prog.X68']);
+  await page.waitForTimeout(300);
+  const trash = await page.evaluate(async () => (await window.__easy68k.ctx.history.trashItems()).map((i) => i.path));
+  let entries = await log();
+  note(entries);
+  check(
+    `${p} Delete says where it deletes and keeps a Trash copy; it removes only the file it names`,
+    asked.includes(
+      'It is deleted from the folder "Lab" on this computer. A copy stays in the Trash of EASy68K for up to 30 days.',
+    ) &&
+      same(trash, ['/folder/prog.X68']) &&
+      same(entries, ['remove Lab/prog.X68']),
+    `${asked} | ${JSON.stringify(trash)} | ${JSON.stringify(entries)}`,
+  );
+
+  // Trash restore writes only the file it names.
+  await page.evaluate(async () => {
+    const { history } = window.__easy68k.ctx;
+    const [item] = await history.trashItems();
+    await history.restoreTrash(item.id, {
+      ask: async () => 'cancel',
+      fallback: async () => null,
+      confirm: async () => false,
+    });
+  });
+  entries = await log();
+  note(entries);
+  check(
+    `${p} a Trash restore writes only the file it names`,
+    (await exists(page, '/folder/prog.X68')) && entries.length > 0 && onlyNamed(entries, ['Lab/prog.X68']),
+    JSON.stringify(entries),
+  );
+
+  // Move (drag within the folder): writes the target, removes the source, nothing else.
+  await revealRow(page, '/folder/demo/a.X68');
+  await revealRow(page, '/folder/other/keep.X68');
+  await row(page, '/folder/demo/a.X68').click();
+  await syntheticDrag(page, '/folder/demo/a.X68', '/folder/other');
+  await waitForPaths(page, ['/folder/other/a.X68'], ['/folder/demo/a.X68'], 10_000);
+  await page.waitForTimeout(300);
+  entries = await log();
+  note(entries);
+  check(
+    `${p} a move writes and removes only the files it names`,
+    onlyNamed(entries, ['Lab/other/a.X68', 'Lab/demo/a.X68']) && entries.includes('remove Lab/demo/a.X68'),
+    JSON.stringify(entries),
+  );
+
+  // Copy (to My Programs): nothing written or removed in the folder.
+  await row(page, '/folder/demo/b.X68').click();
+  await syntheticDrag(page, '/folder/demo/b.X68', '/browser');
+  await waitForPaths(page, ['/browser/b.X68'], [], 10_000);
+  await page.waitForTimeout(300);
+  entries = await log();
+  note(entries);
+  check(`${p} a copy to My Programs writes nothing in the folder`, entries.length === 0, JSON.stringify(entries));
+
+  // Rename, and a change of letter case only (through its temporary name, gone at the end).
+  await revealRow(page, '/folder/demo/b.X68');
+  await page.locator(TREE).focus();
+  await page.keyboard.press('F2');
+  let nameDialog = page.getByRole('dialog', { name: 'Rename' });
+  await nameDialog.waitFor();
+  await nameDialog.getByRole('textbox').fill('c.X68');
+  await page.keyboard.press('Enter');
+  await waitInPage(page, async () => {
+    const names = (await window.__easy68k.ctx.vfs.list('/folder/demo')).map((e) => e.name);
+    return names.includes('c.X68') && !names.includes('b.X68');
+  });
+  await page.waitForTimeout(300);
+  entries = await log();
+  note(entries);
+  check(
+    `${p} a rename writes and removes only the files it names`,
+    onlyNamed(entries, ['Lab/demo/b.X68', 'Lab/demo/c.X68']),
+    JSON.stringify(entries),
+  );
+  await revealRow(page, '/folder/demo/c.X68');
+  await page.locator(TREE).focus();
+  await page.keyboard.press('F2');
+  nameDialog = page.getByRole('dialog', { name: 'Rename' });
+  await nameDialog.waitFor();
+  await nameDialog.getByRole('textbox').fill('C.X68');
+  await page.keyboard.press('Enter');
+  await waitInPage(page, async () => {
+    const names = (await window.__easy68k.ctx.vfs.list('/folder/demo')).map((e) => e.name);
+    return names.length === 1 && names[0] === 'C.X68';
+  });
+  await page.waitForTimeout(300);
+  entries = await log();
+  note(entries);
+  const leftovers = await page.evaluate(async () =>
+    (await window.__easy68k.ctx.vfs.list('/folder/demo')).map((e) => e.name),
+  );
+  check(
+    `${p} a change of letter case passes through its temporary name only, which is gone at the end`,
+    entries.length > 0 &&
+      entries.every((e) => /^mkdir Lab\/demo$|Lab\/demo\/(c\.X68|C\.X68|C\.X68\.renaming-\d+)$/.test(e)) &&
+      same(leftovers, ['C.X68']),
+    `${JSON.stringify(entries)} | ${JSON.stringify(leftovers)}`,
+  );
+
+  // The repository: not deleted, moved or renamed; .git never touched.
+  await row(page, '/folder/repo').click();
+  await page.locator(TREE).focus();
+  await page.keyboard.press('Delete');
+  const refusal = await answerBox(page, 'OK');
+  await page.keyboard.press('F2');
+  const renameRefusal = await answerBox(page, 'OK');
+  await syntheticDrag(page, '/folder/repo', '/folder/other');
+  const moveRefusal = await answerBox(page, 'OK');
+  entries = await log();
+  note(entries);
+  check(
+    `${p} a folder that holds .git is not deleted, renamed or moved, with the texts of P3.2.2 and P3.2.4`,
+    refusal.includes(
+      'The folder "repo" holds a Git repository. Nothing was deleted. Delete it with your own tools if you are sure.',
+    ) &&
+      renameRefusal.includes('The folder "repo" holds a Git repository. Rename it with your own tools.') &&
+      moveRefusal.includes('The folder "repo" holds a Git repository. Move it with your own tools.') &&
+      entries.length === 0,
+    `${refusal} | ${renameRefusal} | ${moveRefusal} | ${JSON.stringify(entries)}`,
+  );
+  check(`${p} no command wrote or removed a path below .git`, gitTouched.length === 0, JSON.stringify(gitTouched));
+
+  // A linked file: listed by its name, removed from the list, the real file untouched.
+  const linkedOk = await page.evaluate(async () => {
+    const linked = window.__easy68k.ctx.vfs.backends().find((b) => b.mount === 'linked');
+    if (!linked) return null;
+    const root = await navigator.storage.getDirectory();
+    const handle = await (await root.getDirectoryHandle('Outside')).getFileHandle('lab1.X68');
+    window.__linkedPath = await linked.link(handle);
+    // As "From this computer..." does: the linked file is opened as a document.
+    await window.__easy68k.ctx.documents.open(window.__linkedPath);
+    window.__fsLog.length = 0;
+    return window.__linkedPath;
+  });
+  if (linkedOk === null) {
+    check(`${p} the linked store is mounted in Chromium`, false, 'no /linked backend');
+  } else {
+    const linkedRow = page.locator(`${FILES} [role=treeitem][data-e68-path="${linkedOk}"]`);
+    await linkedRow.waitFor({ timeout: 10_000 });
+    const shown = await page.evaluate((path) => {
+      const r = document.querySelector(`[data-e68-panel="files"] [data-e68-path="${path}"]`);
+      const root = document.querySelector('[data-e68-panel="files"] [data-e68-path="/linked"]');
+      return {
+        text: r.innerText.replace(/\s+/g, ' ').trim(),
+        title: r.getAttribute('title'),
+        root: root?.innerText.trim(),
+      };
+    }, linkedOk);
+    check(
+      `${p} a linked file is listed by its name under "Opened from this computer", "edited in place"`,
+      shown.text === 'lab1.X68 edited in place' &&
+        shown.title === 'Saving writes to the file "lab1.X68" on this computer.' &&
+        shown.root === 'Opened from this computer',
+      JSON.stringify(shown),
+    );
+    await page.locator(FILES).screenshot({ path: join(outDir, `${name}-opened-folder-and-linked.png`) });
+    await linkedRow.click();
+    await page.locator(TREE).focus();
+    await page.keyboard.press('Delete');
+    const removeText = await answerBox(page, 'Yes');
+    await linkedRow.waitFor({ state: 'detached', timeout: 10_000 }).catch(() => {});
+    const real = await page.evaluate(async () => {
+      const root = await navigator.storage.getDirectory();
+      const f = await (await (await root.getDirectoryHandle('Outside')).getFileHandle('lab1.X68')).getFile();
+      return new TextDecoder().decode(await f.arrayBuffer());
+    });
+    entries = await log();
+    check(
+      `${p} Remove from List: the question of P3.2.2, the row goes, the real file stays as it was`,
+      removeText.includes('Remove "lab1.X68" from the Files panel? The file on this computer is not changed.') &&
+        (await linkedRow.count()) === 0 &&
+        real === '* Outside/lab1.X68\r\n' &&
+        !entries.some((e) => e.includes('Outside/')),
+      `${removeText} | ${JSON.stringify(real)} | ${JSON.stringify(entries)}`,
+    );
+  }
+  check(`${p} no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await context.close();
+}
+
 /** Lists and tests a .zip with whatever archive tool this system has. */
 function archiveToolCheck(zipPath) {
   const attempts = [
@@ -1709,6 +2593,11 @@ async function main() {
           ['a page killed in the middle of a write', killPass],
           ['dialogs, panel, drop, export, import', uiPass],
           ['the Safari storage notice', storageNoticePass],
+          // ARCHITECTURE-PLUS P3.2 (N5): both key maps on every system.
+          ['selection and keys, Windows key map', (b, n) => selectionPass(b, n, 'windows')],
+          ['selection and keys, macOS key map', (b, n) => selectionPass(b, n, 'mac')],
+          ['drag, storage line, large import', dragAndStoragePass],
+          ...(name === 'chromium' ? [['opened folder with a write log', openedFolderPass]] : []),
         ];
         for (const [label, pass] of passes) {
           if (onlyPass && !label.includes(onlyPass)) continue;

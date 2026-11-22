@@ -107,7 +107,11 @@ const kept = (versions: Dated[], keep: Set<number>) =>
 
 describe('the thinning schedule (P3.3.4), hand-made timelines', () => {
   it.each<[string, number[], number[]]>([
-    ['ten saves a minute apart: all ten kept', Array.from({ length: 10 }, (_, i) => i * MINUTE), Array.from({ length: 10 }, (_, i) => 9 - i)],
+    [
+      'ten saves a minute apart: all ten kept',
+      Array.from({ length: 10 }, (_, i) => i * MINUTE),
+      Array.from({ length: 10 }, (_, i) => 9 - i),
+    ],
     [
       // the newest 10 (0..9 min), then one per 5-minute slot for the rest
       'twenty saves a minute apart today',
@@ -132,7 +136,7 @@ describe('the thinning schedule (P3.3.4), hand-made timelines', () => {
       // 7 to 60 days: the newest in each day; older than 60 days: dropped, except the newest
       'old days',
       [...Array.from({ length: 10 }, (_, i) => i * MINUTE), 10 * DAY, 10 * DAY + HOUR, 59 * DAY, 61 * DAY],
-      [59 * DAY / MINUTE, (10 * DAY) / MINUTE, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+      [(59 * DAY) / MINUTE, (10 * DAY) / MINUTE, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
     ],
   ])('%s', (_name, ages, expected) => {
     const versions = timeline(ages);

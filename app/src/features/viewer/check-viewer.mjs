@@ -752,7 +752,6 @@ async function dockPass(browser, name) {
   );
 
   // Simulator Open... of an .S68 and EASyBIN's Open Binary are unchanged with the viewer on.
-  const before = (await describe()).length;
   const blobsBefore = (await recorded(page)).blobs.length;
   const sim = await page.evaluate(async () => {
     const { ctx } = window.__easy68k;
@@ -777,7 +776,8 @@ async function dockPass(browser, name) {
   const blobsAfter = (await recorded(page)).blobs.slice(blobsBefore);
   check(
     `${p} Simulator Open... of an .S68 and EASyBIN's Open Binary open no viewer`,
-    (await describe()).length === before &&
+    // A mode change closes the viewers (P4.4), so only new tabs for these files would count.
+    (await describe()).every((tab) => tab.title !== 'prog.S68' && tab.title !== 'data.bin') &&
       blobsAfter.every((blob) => blob.type !== 'application/pdf' && !String(blob.type).startsWith('image/')),
     JSON.stringify({ sim, blobsAfter }),
   );

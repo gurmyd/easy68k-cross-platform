@@ -48,6 +48,7 @@ import {
   SIM_OPTIONS_MENU,
   SIM_TOOLBAR,
   SR_FLAGS_CAPTION,
+  TRASH_SAMPLE_ROWS,
   moveItemBefore,
   type ToolSample,
 } from './samples';
@@ -1342,6 +1343,11 @@ function ListsSection({ report }: { report: Report }) {
           <ScrollingGridSample />
         </Specimen>
       </Row>
+      <Row>
+        <Specimen label="DataGrid with multiSelect (the Trash): Shift and Ctrl (Cmd) click, Shift+Up / Down, Ctrl (Option) + Up / Down and Space, Ctrl (Cmd) + A">
+          <MultiSelectGridSample report={report} />
+        </Specimen>
+      </Row>
       <Specimen
         label={`VirtualList: 1 MB of memory, 65,536 rows - row $${(memoryRow * 16).toString(16).toUpperCase().padStart(8, '0')}`}
         wide
@@ -1726,6 +1732,37 @@ function ScrollingGridSample() {
       onSelectRow={setRow}
       height={6 * 22}
       className="e68-gallery__scroll-grid"
+    />
+  );
+}
+
+// --- A grid with several selected rows (the Trash, ARCHITECTURE-PLUS P3.3.8; N4) -------------
+
+function MultiSelectGridSample({ report }: { report: Report }) {
+  const [focus, setFocus] = useState(0);
+  const [selected, setSelected] = useState<ReadonlySet<number>>(() => new Set([0]));
+  return (
+    <DataGrid
+      label="Items in the Trash"
+      columns={[
+        { id: 'name', header: 'Name', width: 'minmax(100px, 1fr)' },
+        { id: 'wasIn', header: 'Was in', width: 'minmax(120px, 1fr)' },
+        { id: 'why', header: 'Why', width: '80px' },
+      ]}
+      rows={TRASH_SAMPLE_ROWS}
+      rowKey={(row) => row.name}
+      selectedRow={focus}
+      onSelectRow={setFocus}
+      multiSelect={{
+        selected,
+        onChange: (rows) => {
+          setSelected(rows);
+          const names = [...rows].sort((a, b) => a - b).map((row) => TRASH_SAMPLE_ROWS[row]?.name);
+          report(`Selected: ${names.length ? names.join(', ') : 'none'}`);
+        },
+      }}
+      height={6 * 22}
+      className="e68-gallery__multi-grid"
     />
   );
 }

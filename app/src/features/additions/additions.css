@@ -1,0 +1,49 @@
+/* Options > Port Additions... (ARCHITECTURE-PLUS P3.5). Owner: N7.
+   Tokens: app/src/styles/tokens.css (main 2.8); both themes come from them. */
+
+.e68-additions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.e68-additions__switches {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.e68-additions__figures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-height: 7em;
+}
+
+.e68-additions__figure {
+  display: grid;
+  grid-template-columns: 12em 1fr;
+  gap: var(--sp-2);
+}
+
+.e68-additions__text {
+  margin: 0;
+  line-height: var(--lh-body);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.e68-additions__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+
+@media (max-width: 480px) {
+  .e68-additions__figure {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}

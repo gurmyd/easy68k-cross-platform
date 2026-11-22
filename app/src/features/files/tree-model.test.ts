@@ -105,6 +105,80 @@ describe('FilesTreeModel', { timeout: 60_000 }, () => {
     expect(model.keyAction('x')).toBeNull();
   });
 
+  // ---- ARCHITECTURE-PLUS P3.2.1, P3.2.5, P3.3.10 (N5) ----
+
+  it('several rows can be selected; a removed item leaves the selection, the others stay', async () => {
+    const { vfs, model } = await setup();
+    await model.expand('/browser/demo');
+    model.select('/browser/demo/sub');
+    model.selectRange('/browser/a.txt');
+    expect(model.selectedPaths()).toEqual(['/browser/demo/sub', '/browser/demo/prog.X68', '/browser/a.txt']);
+    await vfs.remove('/browser/demo/prog.X68');
+    await until(() => !shown(model).includes('    prog.X68'), 'file gone');
+    expect(model.selectedPaths()).toEqual(['/browser/demo/sub', '/browser/a.txt']);
+  });
+
+  it('a .git folder is never listed; the folder or root that holds one says so in its tool-tip', async () => {
+    const { vfs, model } = await setup();
+    await vfs.writeFile('/browser/.git/HEAD', ascii('ref'));
+    await vfs.writeFile('/browser/demo/.GIT/HEAD', ascii('ref'));
+    await model.refreshAll();
+    await model.expand('/browser/demo');
+    expect(shown(model)).toEqual(['-My Programs', '  -demo', '    +sub', '    prog.X68', '  a.txt']);
+    const rows = model.rows();
+    expect(rows[0]?.tooltip).toBe('My Programs\nGit repository (its .git folder is not shown)');
+    expect(rows[1]?.tooltip).toBe('demo\nGit repository (its .git folder is not shown)');
+  });
+
+  it('the opened folder: its label, the secondary text and the tool-tip of P3.2.5', async () => {
+    const { vfs, model } = await setup();
+    vfs.mount(new MemoryBackend({ mount: 'folder', kind: 'fsaccess', label: 'Folder: Lab' }));
+    await model.refreshAll();
+    const root = model.rows().find((row) => row.path === '/folder');
+    expect(root).toMatchObject({
+      name: 'Folder: Lab',
+      secondary: 'on this computer',
+      tooltip: 'Files here are the files of the folder "Lab" on this computer.',
+    });
+  });
+
+  it('"Opened from this computer" lists each linked file by its name, only while one is linked', async () => {
+    const { vfs, model } = await setup();
+    const linked = new MemoryBackend({ mount: 'linked', kind: 'browser', label: 'Linked files' });
+    vfs.mount(linked);
+    await model.refreshAll();
+    await model.settled();
+    expect(shown(model)).toEqual(['-My Programs', '  +demo', '  a.txt']);
+    await vfs.writeFile('/linked/ab12/lab1.X68', ascii('x'));
+    await vfs.writeFile('/linked/ab12/lab1.L68', ascii('listing'));
+    await vfs.writeFile('/linked/ab12/lab1.S68', ascii('S0'));
+    await until(() => shown(model).includes('  lab1.X68'), 'linked file listed');
+    expect(shown(model)).toEqual(['-My Programs', '  +demo', '  a.txt', '-Opened from this computer', '  lab1.X68']);
+    const row = model.rows().at(-1);
+    expect(row).toMatchObject({
+      path: '/linked/ab12/lab1.X68',
+      secondary: 'edited in place',
+      tooltip: 'Saving writes to the file "lab1.X68" on this computer.',
+      linked: true,
+    });
+    await vfs.remove('/linked/ab12');
+    await until(() => !shown(model).includes('  lab1.X68'), 'linked file gone');
+    expect(shown(model)).toEqual(['-My Programs', '  +demo', '  a.txt']);
+  });
+
+  it('the expanded folders of an opened folder are listed again when the window regains the focus', async () => {
+    const { vfs, model } = await setup();
+    const folder = new MemoryBackend({ mount: 'folder', kind: 'fsaccess', label: 'Folder: Lab' });
+    vfs.mount(folder);
+    await model.refreshAll();
+    await model.settled();
+    // Git or another program writes there; the backend has no change events (3.8.1).
+    await folder.writeFile('from-git.X68', ascii('g'));
+    expect(shown(model)).not.toContain('  from-git.X68');
+    await model.windowFocused();
+    expect(shown(model)).toContain('  from-git.X68');
+  });
+
   it('collapsing a folder moves a selection inside it to the folder', async () => {
     const { model } = await setup();
     await model.expand('/browser/demo');

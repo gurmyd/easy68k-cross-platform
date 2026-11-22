@@ -28,7 +28,12 @@ export function createMemoryHistoryService(deps: {
   quota?: number;
 }): HistoryService {
   const factory = new IDBFactory();
-  const store = createHistoryStore(memoryHistoryDeps({ ...deps, factory }), {});
+  // No timers of its own: the tests that use it drive time themselves and may count pending
+  // timers (the global pass runs when a test calls it through createMemoryHistoryStore).
+  const store = createHistoryStore(memoryHistoryDeps({ ...deps, factory }), {
+    schedulePass: false,
+    openTimeout: false,
+  });
   DATABASES.set(store, factory);
   return store;
 }
@@ -97,11 +102,7 @@ export function memoryHistoryDeps(deps: {
     locks: deps.locks === undefined ? shared.locks : deps.locks,
     channel: (name) => shared.hub.open(name),
     estimate:
-      deps.estimate !== undefined
-        ? deps.estimate
-        : quota === undefined
-          ? null
-          : async () => ({ quota, usage: 0 }),
+      deps.estimate !== undefined ? deps.estimate : quota === undefined ? null : async () => ({ quota, usage: 0 }),
   };
 }
 

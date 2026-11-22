@@ -16,7 +16,9 @@ import {
   matchName,
   splitVPath,
 } from '../../core/paths/winpath';
+import { placeShort } from '../../core/places/display';
 import { looksLikeZip, readZip, writeZip, type ZipInput, type ZipSkipped } from '../../fs/zip';
+import { LINKED_ROOT_LABEL } from './texts';
 
 /** The folder "From this computer..." and dropped files are copied into (3.8.1). */
 export const IMPORTED_DIR: VPath = '/browser/Imported';
@@ -32,13 +34,21 @@ export interface Location {
  * The stores the dialogs and the Files panel show, in mount order: the browser store, an opened
  * folder, the desktop app's disk. Linked files (/linked) are copies the port manages for itself,
  * and memory backends serve tests, except the stand-in at /browser.
+ *
+ * With `{ linked: true }` (the Files panel, ARCHITECTURE-PLUS P3.2.5) the linked files' store comes
+ * last as the root "Opened from this computer"; the file dialogs keep today's list (errata N5.md).
  */
-export function locations(vfs: Vfs): Location[] {
-  return vfs
+export function locations(vfs: Vfs, options: { linked?: boolean } = {}): Location[] {
+  const out: Location[] = vfs
     .backends()
     .filter((b) => b.mount !== 'linked' && (b.kind !== 'memory' || b.mount === 'browser'))
     .sort((a, b) => (a.mount === 'browser' ? -1 : b.mount === 'browser' ? 1 : 0))
     .map((backend) => ({ root: `/${backend.mount}`, label: backend.label, backend }));
+  if (options.linked) {
+    const linked = vfs.backends().find((b) => b.mount === 'linked');
+    if (linked) out.push({ root: '/linked', label: LINKED_ROOT_LABEL, backend: linked });
+  }
+  return out;
 }
 
 /** The location a path lies in, or undefined. */
@@ -49,23 +59,16 @@ export function locationOf(vfs: Vfs, path: VPath): Location | undefined {
 }
 
 /**
- * "My Programs/demo/prog.X68": a path as the user reads it. A linked file (FS2) is shown by its
- * name under the linked backend's label, "Linked files/prog.X68": the folder `/linked/<id>/` is the
- * port's own copy, and the store's internal path is never shown (gate I2 review; errata FS1.md
- * entry 22).
+ * "My Programs/demo/prog.X68": a path as the user reads it, the short place text of
+ * ARCHITECTURE-PLUS P4.5 (`placeShort`): a linked file is "lab1.X68 (on this computer)", and the
+ * store's internal path `/linked/<id>/` is never shown (gate I2 review; errata FS1.md entry 22).
  */
 export function displayPath(vfs: Vfs, path: VPath): string {
   if (!isVPath(path)) return path;
-  const { mount, rel } = splitVPath(path);
-  if (mount === 'linked') {
-    const backend = vfs.backends().find((b) => b.mount === 'linked');
-    const name = rel.split('/').slice(1).join('/');
-    const label = backend?.label ?? 'Linked files';
-    return name === '' ? label : `${label}/${name}`;
-  }
-  const location = locationOf(vfs, path);
-  if (!location) return path;
-  return rel === '' ? location.label : `${location.label}/${rel}`;
+  return placeShort(
+    vfs.backends().map(({ mount, label, kind }) => ({ mount, label, kind })),
+    path,
+  );
 }
 
 /** The first of `candidates` that is an existing folder; else the browser store; else the first location. */
@@ -215,6 +218,22 @@ export async function renameEntry(vfs: Vfs, from: VPath, newName: string): Promi
   return to;
 }
 
+/**
+ * renameEntry, refused first when the folder holds another entry whose name equals `newName` but
+ * for letter case: a store that keeps case apart (a Linux disk, a memory store) can hold `r.X68`
+ * beside `R.X68`, and renameEntry's case-only path would write over that other file (it takes the
+ * exact match that resolve finds for the entry being renamed). The Files panel's Rename and Undo
+ * Rename go through here; renameEntry itself is not changed (P5 N5).
+ */
+export async function renameChecked(vfs: Vfs, from: VPath, newName: string): Promise<VPath> {
+  const own = basename(from);
+  const entries = await vfs.list(dirname(from)).catch(() => null);
+  if (entries?.some((entry) => entry.name !== own && foldCase(entry.name) === foldCase(newName))) {
+    throw new Error(`"${newName}" already exists.`);
+  }
+  return renameEntry(vfs, from, newName);
+}
+
 // ---- import ----------------------------------------------------------------------------------------
 
 /** One thing to import: a file (read() gives its bytes) or a folder (rel ends in '/'). */
@@ -222,7 +241,14 @@ export interface ImportItem {
   /** Path below the import folder, '/' separators; a folder ends in '/'. */
   rel: string;
   read(): Promise<Bytes>;
+  /** The size in bytes when it is known before reading (a File; a .zip entry), for the question
+   *  before a large import (ARCHITECTURE-PLUS P3.2.6). */
+  size?: number;
 }
+
+/** Called before an import writes over an existing file (ARCHITECTURE-PLUS P3.2.4, P3.3.4: the
+ *  import keeps the current bytes as `before-import`, without waiting for the history). */
+export type BeforeReplace = (path: VPath) => Promise<void>;
 
 export interface ImportPlan {
   dir: VPath;
@@ -283,6 +309,7 @@ export async function runImport(
   vfs: Vfs,
   plan: ImportPlan,
   replace: (item: ImportItem) => boolean,
+  beforeReplace?: BeforeReplace,
 ): Promise<ImportResult> {
   const result: ImportResult = { written: [], skipped: [] };
   const conflicts = new Set(plan.conflicts);
@@ -307,6 +334,7 @@ export async function runImport(
         continue;
       }
       const data = await item.read();
+      if (stat?.kind === 'file' && beforeReplace) await beforeReplace(target).catch(() => {});
       await vfs.writeFile(target, data);
       result.written.push(target);
       written.add(foldCase(target));
@@ -321,7 +349,7 @@ export async function runImport(
 export async function itemsFromZip(bytes: Bytes): Promise<{ items: ImportItem[]; skipped: ZipSkipped[] }> {
   const { entries, skipped } = await readZip(bytes);
   return {
-    items: entries.map((entry) => ({ rel: entry.path, read: async () => entry.data })),
+    items: entries.map((entry) => ({ rel: entry.path, read: async () => entry.data, size: entry.data.length })),
     skipped,
   };
 }
@@ -334,7 +362,9 @@ export function isZipName(name: string, bytes?: Bytes): boolean {
 /**
  * Copies one file into a folder for opening (From this computer..., a dropped file). An existing
  * file with the same bytes is reused; one with other bytes is replaced only if `replace` says so,
- * otherwise the existing file is kept and its path returned.
+ * otherwise the existing file is kept and its path returned. Before it replaces a file with other
+ * bytes, `keep` receives the current bytes (ARCHITECTURE-PLUS P3.2.4: such a copy is an import and
+ * keeps a `Before import` version; `keep` must not wait for the history).
  */
 export async function importOne(
   vfs: Vfs,
@@ -342,6 +372,7 @@ export async function importOne(
   name: string,
   data: Bytes,
   replace: (path: VPath) => Promise<boolean>,
+  keep?: (path: VPath, current: Bytes) => void,
 ): Promise<VPath> {
   const target = await storedSpelling(vfs, childPath(dir, name));
   const stat = await vfs.stat(target).catch(() => null);
@@ -352,6 +383,11 @@ export async function importOne(
       const same = old.length === data.length && old.every((b, i) => b === data[i]);
       if (same) return existing;
       if (!(await replace(existing))) return existing;
+      try {
+        keep?.(existing, old);
+      } catch {
+        // the history never makes an import fail (P3.3.1 property 3)
+      }
       await vfs.writeFile(existing, data);
       return existing;
     }
@@ -388,7 +424,14 @@ export async function buildExport(vfs: Vfs, path: VPath, now: number): Promise<E
   const inputs: ZipInput[] = [];
   if (!isRoot) inputs.push({ path: prefix, mtime: stat.mtime || now });
   let files = 0;
-  for (const item of await listTree(vfs, path)) {
+  // Folders named .git (any letter case) and everything below them are left out of every export
+  // (ARCHITECTURE-PLUS P3.2.3).
+  const isGit = (segment: string) => foldCase(segment) === foldCase('.git');
+  const tree = (await listTree(vfs, path)).filter(
+    (item) =>
+      !item.rel.split('/').some((segment, i, all) => isGit(segment) && (i < all.length - 1 || item.kind === 'dir')),
+  );
+  for (const item of tree) {
     const source = childPath(path, ...item.rel.split('/'));
     if (item.kind === 'dir') {
       const dirStat = await vfs.stat(source);

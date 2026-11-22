@@ -47,7 +47,12 @@ interface Env {
   settings: SettingsService & { setHistory(on: boolean): void };
   factory: IDBFactory;
   events: PlanEvent[];
-  make(options?: { quota?: number; estimate?: () => Promise<StorageEstimate>; locks?: LockManager | null; compression?: object }): HistoryStore;
+  make(options?: {
+    quota?: number;
+    estimate?: () => Promise<StorageEstimate>;
+    locks?: LockManager | null;
+    compression?: object;
+  }): HistoryStore;
 }
 
 function setup(): Env {
@@ -240,8 +245,18 @@ describe('versions (P3.3.3, P3.3.5)', () => {
   it('record keeps nothing below .git or for an untracked file', async () => {
     const env = setup();
     const h = env.make();
-    for (const path of ['/browser/r/.git/HEAD', '/browser/p.L68', '/memory/a.X68', '/browser/big.X68', '/browser/b.bin']) {
-      const data = path.endsWith('big.X68') ? noise(MB + 1) : path.endsWith('.bin') ? new Uint8Array([1, 0, 2]) : text('x');
+    for (const path of [
+      '/browser/r/.git/HEAD',
+      '/browser/p.L68',
+      '/memory/a.X68',
+      '/browser/big.X68',
+      '/browser/b.bin',
+    ]) {
+      const data = path.endsWith('big.X68')
+        ? noise(MB + 1)
+        : path.endsWith('.bin')
+          ? new Uint8Array([1, 0, 2])
+          : text('x');
       await h.record(path, data, 'saved', START);
     }
     expect((await dump(env.factory)).versions).toHaveLength(0);
@@ -395,7 +410,9 @@ describe('guard (P3.3.4)', () => {
     const confirm = vi.fn(yes);
     expect((await h.guard('/browser/a.pdf', 'delete', remover(env, '/browser/a.pdf'), confirm)).outcome).toBe('kept');
     expect(confirm).not.toHaveBeenCalled();
-    expect((await h.guard('/browser/b.pdf', 'delete', remover(env, '/browser/b.pdf'), confirm)).outcome).toBe('not-kept');
+    expect((await h.guard('/browser/b.pdf', 'delete', remover(env, '/browser/b.pdf'), confirm)).outcome).toBe(
+      'not-kept',
+    );
     expect(confirm).toHaveBeenCalledTimes(1);
     // A folder of two 18 MB files is 36 MB: above B / 2 = 32 MB, so not kept (whole or not at all).
     await env.vfs.writeFile('/browser/d/x.pdf', noise(18 * MB, 5));
@@ -440,16 +457,26 @@ describe('guard (P3.3.4)', () => {
     const h = env.make();
     await save(env, h, '/browser/a.X68', text('a'));
     await expect(
-      h.guard('/browser/a.X68', 'delete', async () => {
-        throw new Error('the disk failed');
-      }, yes),
+      h.guard(
+        '/browser/a.X68',
+        'delete',
+        async () => {
+          throw new Error('the disk failed');
+        },
+        yes,
+      ),
     ).rejects.toThrow('the disk failed');
     expect(await h.trashItems()).toEqual([]);
     expect((await h.versions('/browser/a.X68')).length).toBe(1);
     await expect(
-      h.guard('/browser/a.X68', 'replace', async () => {
-        throw new Error(changedWhileReplacing('a.X68'));
-      }, yes),
+      h.guard(
+        '/browser/a.X68',
+        'replace',
+        async () => {
+          throw new Error(changedWhileReplacing('a.X68'));
+        },
+        yes,
+      ),
     ).rejects.toThrow(/changed while/);
     expect(await h.trashItems()).toEqual([]);
     expect((await h.versions('/browser/a.X68')).length).toBe(1);
@@ -457,10 +484,15 @@ describe('guard (P3.3.4)', () => {
     await save(env, h, '/browser/d/x.X68', text('x'));
     await save(env, h, '/browser/d/y.X68', text('y'));
     await expect(
-      h.guard('/browser/d', 'delete', async () => {
-        await env.vfs.remove('/browser/d/x.X68');
-        throw new Error('the disk failed');
-      }, yes),
+      h.guard(
+        '/browser/d',
+        'delete',
+        async () => {
+          await env.vfs.remove('/browser/d/x.X68');
+          throw new Error('the disk failed');
+        },
+        yes,
+      ),
     ).rejects.toThrow('the disk failed');
     const [item] = await h.trashItems();
     expect(item?.files).toBe(1);
@@ -494,7 +526,12 @@ describe('guard (P3.3.4)', () => {
     await save(env, h, '/browser/a.X68', text('small'));
     await env.vfs.writeFile('/browser/a.X68', noise(MB + 10));
     const confirm = vi.fn(yes);
-    const result = await h.guard('/browser/a.X68', 'restore', writer(env, '/browser/a.X68', text('small'), 'restore'), confirm);
+    const result = await h.guard(
+      '/browser/a.X68',
+      'restore',
+      writer(env, '/browser/a.X68', text('small'), 'restore'),
+      confirm,
+    );
     expect(result.outcome).toBe('not-kept');
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(decode(await env.vfs.readFile('/browser/a.X68'))).toBe('small');
@@ -512,7 +549,13 @@ describe('guard (P3.3.4)', () => {
     if (state === 'tight') h = env.make({ estimate: async () => ({ quota: 100 * MB, usage: 90 * MB }) });
     if (state === 'unavailable') {
       // A store without subtle (not a secure context) is unavailable, whatever the database holds.
-      const deps = memoryHistoryDeps({ vfs: env.vfs, clock: env.clock, scheduler: env.scheduler, settings: env.settings, factory: env.factory });
+      const deps = memoryHistoryDeps({
+        vfs: env.vfs,
+        clock: env.clock,
+        scheduler: env.scheduler,
+        settings: env.settings,
+        factory: env.factory,
+      });
       h = createHistoryStore({ ...deps, subtle: undefined as unknown as SubtleCrypto }, { schedulePass: false });
     }
     if (state === 'tight') await h.usage();
@@ -788,7 +831,14 @@ describe('states and the database (P3.3.5, P3.3.7, P4.4)', () => {
     }
     env.settings.setHistory(true);
     // unavailable: an IDBFactory of null.
-    const none = createHistoryService({ ...browserHistoryDeps({ vfs: env.vfs, settings: env.settings, clock: env.clock, scheduler: env.scheduler } as never) });
+    const none = createHistoryService({
+      ...browserHistoryDeps({
+        vfs: env.vfs,
+        settings: env.settings,
+        clock: env.clock,
+        scheduler: env.scheduler,
+      } as never),
+    });
     expect(none.state()).toBe('unavailable');
     await expect(none.record('/browser/a.X68', text('x'), 'saved', 1)).resolves.toBeUndefined();
     expect(await none.versions('/browser/a.X68')).toEqual([]);
@@ -796,13 +846,89 @@ describe('states and the database (P3.3.5, P3.3.7, P4.4)', () => {
     expect(await none.usage()).toEqual({ versions: 0, versionBytes: 0, trashItems: 0, trashBytes: 0, budget: 0 });
     await expect(none.read('/browser/a.X68', 1)).rejects.toThrow();
     expect(await none.restoreTrash('x', RESTORE_ALL)).toEqual({ restored: [], left: [], lost: [], gone: true });
-    for (const p of [none.dropTrash(['x']), none.moved('/browser/a', '/browser/b'), none.clearVersions(), none.deleteAll()]) {
+    for (const p of [
+      none.dropTrash(['x']),
+      none.moved('/browser/a', '/browser/b'),
+      none.clearVersions(),
+      none.deleteAll(),
+    ]) {
       await expect(p).resolves.toBeUndefined();
     }
     const act = vi.fn(async () => {});
     expect(await none.guard('/browser/a.X68', 'delete', act, yes)).toEqual({ outcome: 'not-kept' });
     expect(act).toHaveBeenCalled();
   });
+
+  it.each(['off', 'tight'] as const)(
+    'in state %s moved, dropTrash, clearVersions and a restore change records',
+    async (state) => {
+      const env = setup();
+      const ready = env.make();
+      await save(env, ready, '/browser/a.X68', text('a1'));
+      await save(env, ready, '/browser/a.X68', text('a2'));
+      await save(env, ready, '/browser/b.X68', text('b'));
+      await save(env, ready, '/browser/c.X68', text('c'));
+      const { item: b } = await ready.guard('/browser/b.X68', 'delete', remover(env, '/browser/b.X68'), yes);
+      const { item: c } = await ready.guard('/browser/c.X68', 'delete', remover(env, '/browser/c.X68'), yes);
+      let h: HistoryStore = ready;
+      if (state === 'off') env.settings.setHistory(false);
+      else {
+        h = env.make({ estimate: async () => ({ quota: 100 * MB, usage: 90 * MB }) });
+        await h.usage();
+      }
+      expect(h.state()).toBe(state);
+      await env.vfs.writeFile('/browser/z.X68', await env.vfs.readFile('/browser/a.X68'));
+      await env.vfs.remove('/browser/a.X68');
+      await h.moved('/browser/a.X68', '/browser/z.X68');
+      expect((await h.versions('/browser/z.X68')).length).toBe(2);
+      expect((await h.restoreTrash(b ?? '', RESTORE_ALL)).restored).toEqual(['/browser/b.X68']);
+      expect((await h.versions('/browser/b.X68')).length).toBe(1); // the copy moved back by admission
+      await h.dropTrash([c ?? '']);
+      expect(await h.trashItems()).toEqual([]);
+      await h.clearVersions();
+      expect((await h.usage()).versions).toBe(0);
+    },
+  );
+
+  it('re-importing a folder with a .git of 300 files and five 5 MB PDFs keeps nothing and removes nothing', async () => {
+    const env = setup();
+    const h = env.make({ quota: 40 * MB });
+    await save(env, h, '/browser/other.X68', text('o1'));
+    await save(env, h, '/browser/other.X68', text('o2'));
+    const files: [VPath, Bytes][] = [];
+    for (let i = 0; i < 300; i++) files.push([`/browser/repo/.git/objects/${i}`, text(`object ${i}`)]);
+    for (let i = 0; i < 5; i++) files.push([`/browser/repo/doc${i}.pdf`, noise(5 * MB, 600 + i)]);
+    for (const [path, data] of files) await env.vfs.writeFile(path, data);
+    const before = await dump(env.factory);
+    // Import with Replace: the import's keep (P3.3.4) for each file it replaces, then the write.
+    for (const [path, data] of files) {
+      await h.record(path, await env.vfs.readFile(path), 'before-import', env.clock.t);
+      await env.vfs.writeFile(path, data);
+    }
+    await h.settled();
+    const after = await dump(env.factory);
+    expect(after.versions).toEqual(before.versions);
+    expect(after.files).toEqual(before.files);
+    expect(env.events.filter((e) => e.kind === 'prune')).toEqual([]);
+  }, 120_000);
+
+  it('over 1,000 saves at the budget a half is pruned at most once per 0.1 x B / 2 of new counted bytes', async () => {
+    const env = setup();
+    const h = env.make({ quota: 40 * MB }); // B / 2 = 2 MB
+    for (let i = 0; i < 1000; i++) {
+      env.clock.t += 7 * MINUTE;
+      await save(env, h, `/browser/s${i % 40}.X68`, noise(20_000 + (i % 7) * 1000, 9000 + i));
+    }
+    const prunes = env.events.filter((e) => e.kind === 'prune' && e.half === 'versions').length;
+    // Each kept version adds its stored size plus 128; the noise does not compress.
+    const added = Array.from({ length: 1000 }, (_, i) => 20_000 + (i % 7) * 1000 + 128).reduce(
+      (a, b) => a + b,
+      128 * 40,
+    );
+    const tenth = 0.1 * 2 * MB;
+    expect(prunes).toBeGreaterThan(0);
+    expect(prunes).toBeLessThanOrEqual(Math.ceil(added / tenth));
+  }, 120_000);
 
   it('the global pass runs in state off; locks null: the pass still runs', async () => {
     const env = setup();
@@ -817,8 +943,15 @@ describe('states and the database (P3.3.5, P3.3.7, P4.4)', () => {
 
   it('an open that never completes gives unavailable after 5 s (fake clock)', async () => {
     const env = setup();
-    const never = { open: () => ({}) as IDBOpenDBRequest, deleteDatabase: () => ({}) as IDBOpenDBRequest, cmp: () => 0 } as unknown as IDBFactory;
-    const h = createMemoryHistoryStore({ vfs: env.vfs, clock: env.clock, scheduler: env.scheduler, settings: env.settings, factory: never as never }, { schedulePass: false });
+    const never = {
+      open: () => ({}) as IDBOpenDBRequest,
+      deleteDatabase: () => ({}) as IDBOpenDBRequest,
+      cmp: () => 0,
+    } as unknown as IDBFactory;
+    const h = createMemoryHistoryStore(
+      { vfs: env.vfs, clock: env.clock, scheduler: env.scheduler, settings: env.settings, factory: never as never },
+      { schedulePass: false },
+    );
     expect(h.state()).toBe('ready');
     env.scheduler.advance(4999);
     await Promise.resolve();
@@ -836,16 +969,19 @@ describe('states and the database (P3.3.5, P3.3.7, P4.4)', () => {
     await save(env, h, '/browser/b.X68', text('b'));
     await h.guard('/browser/b.X68', 'delete', remover(env, '/browser/b.X68'), yes);
     h.close();
-    await poke(env.factory, 'files', (store) =>
-      new Promise<void>((resolve) => {
-        const r = store.openCursor();
-        r.onsuccess = () => {
-          const c = r.result;
-          if (!c) return resolve();
-          if ((c.value as { trash?: unknown }).trash) c.update({ ...(c.value as object), count: -1 });
-          c.continue();
-        };
-      }),
+    await poke(
+      env.factory,
+      'files',
+      (store) =>
+        new Promise<void>((resolve) => {
+          const r = store.openCursor();
+          r.onsuccess = () => {
+            const c = r.result;
+            if (!c) return resolve();
+            if ((c.value as { trash?: unknown }).trash) c.update({ ...(c.value as object), count: -1 });
+            c.continue();
+          };
+        }),
     );
     const again = env.make();
     expect(await again.trashItems()).toEqual([]);
@@ -875,7 +1011,10 @@ describe('states and the database (P3.3.5, P3.3.7, P4.4)', () => {
     expect(h.state()).toBe('tight');
     const lowered = (await h.usage()).versionBytes;
     expect(lowered).toBeLessThanOrEqual(full / 2);
-    const notice = (await dump(env.factory)).meta.find((m) => m.key === 'notice')?.value as { armed: boolean; halvedAt?: number };
+    const notice = (await dump(env.factory)).meta.find((m) => m.key === 'notice')?.value as {
+      armed: boolean;
+      halvedAt?: number;
+    };
     expect(notice).toEqual({ armed: false, halvedAt: env.clock.t });
     await h.globalPass();
     expect((await h.usage()).versionBytes).toBe(lowered);
@@ -897,10 +1036,11 @@ describe('states and the database (P3.3.5, P3.3.7, P4.4)', () => {
     const env = setup();
     const failures: string[] = [];
     const h = env.make();
-    const watch = <T,>(p: Promise<T>) => p.catch((e: unknown) => {
-      failures.push(String(e));
-      throw e;
-    });
+    const watch = <T>(p: Promise<T>) =>
+      p.catch((e: unknown) => {
+        failures.push(String(e));
+        throw e;
+      });
     await save(env, h, '/browser/d/a.X68', text('a'));
     await save(env, h, '/browser/d/b.X68', text('b'));
     await watch(h.versions('/browser/d/a.X68'));
@@ -939,8 +1079,12 @@ describe('states and the database (P3.3.5, P3.3.7, P4.4)', () => {
     expect(cannotKeepQuestion('undo-copy', 'prog.X68', false)).toBe(
       'EASy68K cannot keep a copy of "prog.X68" in the Trash. Remove the copy anyway? This cannot be undone.',
     );
-    expect(changedWhileReplacing('prog.X68')).toBe('"prog.X68" changed while it was being replaced. It was not replaced.');
-    expect(changedWhileRestoring('prog.X68')).toBe('"prog.X68" changed while it was being restored. It was not restored.');
+    expect(changedWhileReplacing('prog.X68')).toBe(
+      '"prog.X68" changed while it was being replaced. It was not replaced.',
+    );
+    expect(changedWhileRestoring('prog.X68')).toBe(
+      '"prog.X68" changed while it was being restored. It was not restored.',
+    );
     expect(CANNOT_BE_UNDONE).toBe('This cannot be undone.');
     expect(STORAGE_TIGHT_TOAST).toBe(
       "The browser's storage for this site is nearly full. To keep room for your files, EASy68K keeps no new earlier versions or Trash items until there is room again, and removes its oldest ones.",

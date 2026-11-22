@@ -130,6 +130,8 @@ export interface HistoryStoreOptions {
   newId?: () => string;
   /** Starts the global pass on the scheduler (default true). */
   schedulePass?: boolean;
+  /** Gives up an open after 5 s on the scheduler (default true; an IndexedDB in memory always opens). */
+  openTimeout?: boolean;
 }
 
 /** The history with the members its tests use besides HistoryService. */
@@ -212,32 +214,6 @@ function upgrade(db: IDBDatabase): void {
   if (!names.contains('contents')) db.createObjectStore('contents');
 }
 
-/** The end of a cursor walk: its keyed values, at most `limit`. */
-function collect<T>(
-  request: IDBRequest<IDBCursorWithValue | null>,
-  limit: number,
-  map: (cursor: IDBCursorWithValue) => T | null,
-): Promise<T[]> {
-  return new Promise<T[]>((resolve, reject) => {
-    const out: T[] = [];
-    request.onsuccess = () => {
-      const cursor = request.result;
-      if (!cursor || out.length >= limit) {
-        resolve(out);
-        return;
-      }
-      const value = map(cursor);
-      if (value !== null) out.push(value);
-      if (out.length >= limit) {
-        resolve(out);
-        return;
-      }
-      cursor.continue();
-    };
-    request.onerror = () => reject(request.error);
-  });
-}
-
 function done<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
@@ -273,18 +249,20 @@ class IdbTx implements HistoryTx {
     this.onRequest?.('write');
   }
 
-  private keyedFile = (cursor: IDBCursorWithValue): Keyed<FileRecord> | null => {
-    const value = parseFileRecord(cursor.value);
-    if (!value) {
-      this.skipped('files', cursor.primaryKey);
-      return null;
-    }
-    return { id: String(cursor.primaryKey), value };
-  };
-
-  private walk(request: IDBRequest<IDBCursorWithValue | null>, limit = Infinity): Promise<Keyed<FileRecord>[]> {
-    this.onRequest?.('read');
-    return collect(request, limit, this.keyedFile);
+  /** The records of an index range with their keys: two requests, whatever their number. */
+  private async walk(index: string, range: IDBKeyRange | null, limit?: number): Promise<Keyed<FileRecord>[]> {
+    const source = this.files.index(index);
+    const [values, keys] = await Promise.all([
+      this.read(source.getAll(range, limit)),
+      this.read(source.getAllKeys(range, limit)),
+    ]);
+    const out: Keyed<FileRecord>[] = [];
+    values.forEach((raw, i) => {
+      const value = parseFileRecord(raw);
+      if (value) out.push({ id: String(keys[i]), value });
+      else this.skipped('files', keys[i]);
+    });
+    return out;
   }
 
   async file(id: string): Promise<FileRecord | null> {
@@ -296,29 +274,28 @@ class IdbTx implements HistoryTx {
   }
 
   async living(place: string): Promise<Keyed<FileRecord> | null> {
-    const found = await this.walk(this.files.index('byLive').openCursor(this.range.only(place)), 1);
+    const found = await this.walk('byLive', this.range.only(place), 1);
     return found[0] ?? null;
   }
 
   livingFrom(prefix: string): Promise<Keyed<FileRecord>[]> {
-    return this.walk(this.files.index('byLive').openCursor(this.range.bound(prefix, `${prefix}￿`)));
+    return this.walk('byLive', this.range.bound(prefix, prefix + String.fromCharCode(0xffff)));
   }
 
   livingPage(after: string | null, limit: number): Promise<Keyed<FileRecord>[]> {
-    const range = after === null ? null : this.range.lowerBound(after, true);
-    return this.walk(this.files.index('byLive').openCursor(range), limit);
+    return this.walk('byLive', after === null ? null : this.range.lowerBound(after, true), limit);
   }
 
   item(item: string): Promise<Keyed<FileRecord>[]> {
-    return this.walk(this.files.index('byItem').openCursor(this.range.only(item)));
+    return this.walk('byItem', this.range.only(item));
   }
 
   trashed(): Promise<Keyed<FileRecord>[]> {
-    return this.walk(this.files.index('byTrashed').openCursor());
+    return this.walk('byTrashed', null);
   }
 
   trashedBefore(before: number, limit: number): Promise<Keyed<FileRecord>[]> {
-    return this.walk(this.files.index('byTrashed').openCursor(this.range.upperBound([before], true)), limit);
+    return this.walk('byTrashed', this.range.upperBound([before], true), limit);
   }
 
   putFile(id: string, record: FileRecord): void {
@@ -461,7 +438,10 @@ function concat(parts: readonly Uint8Array[]): Uint8Array {
 }
 
 /** Sends `data` through a transform stream (CompressionStream, DecompressionStream). */
-async function pump(stream: { readable: ReadableStream<Uint8Array>; writable: WritableStream<BufferSource> }, data: Bytes) {
+async function pump(
+  stream: { readable: ReadableStream<Uint8Array>; writable: WritableStream<BufferSource> },
+  data: Bytes,
+) {
   const writer = stream.writable.getWriter();
   const writing = writer.write(data as BufferSource).then(() => writer.close());
   const reader = stream.readable.getReader();
@@ -476,12 +456,7 @@ async function pump(stream: { readable: ReadableStream<Uint8Array>; writable: Wr
 }
 
 /** The files and empty folders below `path` (or `path` itself), as guard reads them (P3.3.4). */
-async function walk(
-  vfs: Vfs,
-  path: VPath,
-  files: SeenFile[],
-  dirs: VPath[],
-): Promise<void> {
+async function walk(vfs: Vfs, path: VPath, files: SeenFile[], dirs: VPath[]): Promise<void> {
   const stat = await vfs.stat(path).catch(() => null);
   if (!stat) return;
   if (stat.kind === 'file') {
@@ -573,7 +548,7 @@ class Store implements HistoryStore {
     }
     this.lastState = this.state();
     this.cancelSettings = deps.settings.subscribe(() => this.stateMayHaveChanged());
-    let channel: BroadcastChannel | null = null;
+    let channel: BroadcastChannel | null;
     try {
       channel = deps.channel(HISTORY_CHANNEL);
     } catch {
@@ -709,11 +684,14 @@ class Store implements HistoryStore {
     const factory = this.deps.indexedDB as IDBFactory;
     return new Promise<IDBDatabase>((resolve, reject) => {
       let settled = false;
-      const cancel = this.deps.scheduler.setTimer(OPEN_TIMEOUT, () => {
-        if (settled) return;
-        settled = true;
-        reject(new Error(`the browser did not open it within ${OPEN_TIMEOUT / 1000} s`));
-      });
+      const timed = this.options.openTimeout !== false;
+      const cancel = !timed
+        ? () => {}
+        : this.deps.scheduler.setTimer(OPEN_TIMEOUT, () => {
+            if (settled) return;
+            settled = true;
+            reject(new Error(`the browser did not open it within ${OPEN_TIMEOUT / 1000} s`));
+          });
       const finish = (fn: () => void) => {
         if (settled) return;
         settled = true;
@@ -856,7 +834,6 @@ class Store implements HistoryStore {
     this.budget = budgetFor(estimate?.quota);
     this.tightEstimate = isTight(estimate);
     this.estimateFree = freeSpace(estimate);
-    if (this.estimateFree !== null && this.estimateFree > REARM_FREE) this.quotaTight = false;
     this.stateMayHaveChanged();
   }
 
@@ -1099,7 +1076,8 @@ class Store implements HistoryStore {
         const after = await this.deps.vfs.stat(file.path).catch(() => null);
         if (!data || !after || after.kind !== 'file') break;
         const now: SeenFile = { path: file.path, mtime: after.mtime, size: after.size };
-        if (now.mtime === before.mtime && now.size === before.size && data.length === now.size) entry = { seen: now, data };
+        if (now.mtime === before.mtime && now.size === before.size && data.length === now.size)
+          entry = { seen: now, data };
         before = now;
       }
       if (!entry) {
@@ -1278,7 +1256,8 @@ class Store implements HistoryStore {
       const groups = await this.run('readonly', async (tx) => {
         const work = await Work.start(tx, this.readEnv());
         const out: { group: ReturnType<typeof groupItems>[number]; bytes: number }[] = [];
-        for (const group of groupItems(await tx.trashed())) out.push({ group, bytes: await work.itemBytes(group.records) });
+        for (const group of groupItems(await tx.trashed()))
+          out.push({ group, bytes: await work.itemBytes(group.records) });
         return out;
       });
       const infos: TrashItemInfo[] = [];
@@ -1513,7 +1492,9 @@ class Store implements HistoryStore {
       const place = await this.place(path);
       if (place) {
         const env = await this.phase1();
-        await this.run('readwrite', (tx) => planRestoreFile(tx, env, { record: record.id, item, place, spelling: path }));
+        await this.run('readwrite', (tx) =>
+          planRestoreFile(tx, env, { record: record.id, item, place, spelling: path }),
+        );
         this.changed([place]);
       }
     } catch {
@@ -1537,7 +1518,7 @@ class Store implements HistoryStore {
     const left: VPath[] = [];
     const lost: VPath[] = [];
     if (notWritten.length > 0) {
-      let still = new Set<string>();
+      let still: Set<string>;
       try {
         still = await this.run('readonly', async (tx) => new Set((await tx.item(item)).map(({ id }) => id)));
       } catch {
@@ -1546,9 +1527,7 @@ class Store implements HistoryStore {
       for (const { record, path } of notWritten) (still.has(record) ? left : lost).push(path);
     }
     this.changed();
-    return error === undefined
-      ? { restored, left, lost, gone: false }
-      : { restored, left, lost, gone: false, error };
+    return error === undefined ? { restored, left, lost, gone: false } : { restored, left, lost, gone: false, error };
   }
 
   // ---- other changes ------------------------------------------------------------------------------
@@ -1656,7 +1635,8 @@ class Store implements HistoryStore {
     let changed = false;
     try {
       // Marks that protect nothing any more (open case 2).
-      changed = (await this.run('readwrite', (tx) => planClearMarks(tx, env, (mark, item) => !env.honored(mark, item)))) > 0;
+      changed =
+        (await this.run('readwrite', (tx) => planClearMarks(tx, env, (mark, item) => !env.honored(mark, item)))) > 0;
       // Expiry: items older than 30 days, versions older than 60 days.
       while ((await this.run('readwrite', (tx) => planExpireTrash(tx, env, PASS_RECORDS))) > 0) changed = true;
       let after: TimeKey | null = null;
@@ -1669,7 +1649,9 @@ class Store implements HistoryStore {
       const tight = this.tightEstimate || this.quotaTight;
       const roomy = this.estimateFree !== null && this.estimateFree > REARM_FREE;
       const targets = await this.run('readwrite', (tx) => planNotice(tx, env, { tight, roomy, now: env.now }));
-      if (this.estimateFree === null) this.quotaTight = false;
+      // A refusal for the quota keeps the state tight until a pass sees room again (or has no
+      // estimate to tell, and tries again).
+      if (roomy || this.estimateFree === null) this.quotaTight = false;
       if (targets) {
         await this.pruneHalf(env, 'versions', targets.versions, 'lower');
         await this.pruneHalf(env, 'trash', targets.trash, 'lower');

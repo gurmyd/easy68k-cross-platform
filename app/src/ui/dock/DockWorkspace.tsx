@@ -254,6 +254,21 @@ export function DockWorkspace({ mode }: { mode: DockMode }) {
         openMenu(tab.panel, box.left, box.bottom);
         return;
       }
+      // The arrows wrap around at the ends of a strip, as the kit's tab strips do (FlexLayout's
+      // stop there).
+      if (tab && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) {
+        const forward = event.key === 'ArrowRight' || event.key === 'ArrowDown';
+        const back = event.key === 'ArrowLeft' || event.key === 'ArrowUp';
+        const list = tab.button.closest('[role="tablist"]');
+        const tabs = list ? Array.from(list.querySelectorAll<HTMLElement>('[role="tab"]')) : [];
+        const at = tabs.indexOf(tab.button);
+        if (tabs.length > 1 && ((forward && at === tabs.length - 1) || (back && at === 0))) {
+          event.preventDefault();
+          event.stopPropagation();
+          tabs[forward ? 0 : tabs.length - 1]?.focus();
+          return;
+        }
+      }
       const splitter = target?.closest?.('.flexlayout__splitter[data-e68-split]');
       if (!splitter || event.ctrlKey || event.altKey || event.metaKey) return;
       const role = splitter.getAttribute('data-e68-split') as SplitRole;
@@ -274,11 +289,25 @@ export function DockWorkspace({ mode }: { mode: DockMode }) {
       if (!splitter) return;
       engine.restoreSplit(splitter.getAttribute('data-e68-split') as SplitRole);
     };
+    // FlexLayout 0.11.1 keeps the last drop preview where a dragover finds no place (a refused
+    // drop, P2.2 setOnAllowDrop): the browser then drops nothing, so the preview is hidden too
+    // (errata N1). Runs after FlexLayout's own handler, which cancels the event when it has a place.
+    const document = element.ownerDocument;
+    const onDragOver = (event: DragEvent) => {
+      if (event.defaultPrevented || !element.contains(event.target as globalThis.Node | null)) return;
+      for (const outline of Array.from(
+        element.querySelectorAll<HTMLElement>('.flexlayout__outline_rect, .flexlayout__outline_rect_edge'),
+      )) {
+        outline.style.visibility = 'hidden';
+      }
+    };
     element.addEventListener('keydown', onKeyDown, true);
     element.addEventListener('dblclick', onDoubleClick);
+    document.addEventListener('dragover', onDragOver);
     return () => {
       element.removeEventListener('keydown', onKeyDown, true);
       element.removeEventListener('dblclick', onDoubleClick);
+      document.removeEventListener('dragover', onDragOver);
     };
   }, [engine, openMenu]);
 

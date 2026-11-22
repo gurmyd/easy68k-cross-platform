@@ -130,7 +130,8 @@ describe('services (3.12.3)', () => {
         },
         createViewerService: (ctx) => {
           order.push('viewer');
-          expect(ctx.history?.state()).toBe('unavailable');
+          // N3's store over an IndexedDB in memory (it was N0's stub, 'unavailable', before N3).
+          expect(ctx.history?.state()).toBe('ready');
           expect(() => ctx.documents).toThrow(/fileDialogs, history, viewer, documents/);
           return STUB_SERVICES.createViewerService!(ctx);
         },
@@ -294,11 +295,7 @@ describe('features', () => {
   // Empty since U4 gave sim.view.log its handler (gate I2); an entry reads
   // 'some.command.id': 'PACKAGE (what is missing)'. The stage of additions (ARCHITECTURE-PLUS P3.6)
   // adds its commands without handlers (N0); each package removes its own when the handler arrives.
-  const OWED_HANDLERS: Readonly<Record<string, string>> = {
-    'ed.file.history': 'N4 (Earlier Versions dialog)',
-    'app.files.trash': 'N4 (Trash dialog)',
-    'app.additions.options': 'N7 (Port Additions dialog)',
-  };
+  const OWED_HANDLERS: Readonly<Record<string, string>> = {};
   for (const kind of ['web', 'desktop'] as const) {
     it(`with the features of wave two, every command has a handler (${kind}; gate I2, 9.5)`, () => {
       const app = createTestApplication({ features: FEATURES, platform: createFakePlatform({ kind }) });

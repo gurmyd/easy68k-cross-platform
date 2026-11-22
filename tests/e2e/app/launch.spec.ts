@@ -48,7 +48,8 @@ test.describe('launched files (installed app, 5.7)', () => {
     expect(await app.mode()).toBe('editor');
     expect(await app.text()).toBe('* launched\n');
     const windowStatus = page.locator('[data-e68-editor-status="path"]');
-    await expect(windowStatus).toHaveText('Linked files/launched.X68');
+    // ARCHITECTURE-PLUS P3.2.5 (N8): the place text of a linked file.
+    await expect(windowStatus).toHaveText('launched.X68 - on this computer, edited in place');
     expect(await page.locator('body').innerText()).not.toContain('/linked/');
 
     await app.replaceText('* saved back');

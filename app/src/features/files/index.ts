@@ -6,15 +6,19 @@
 //   feature.commands         app.files.toggle - shows or hides the Files panel; with { reveal }
 //                            (FilesRevealArg) shows it and reveals that path (reveal.ts)
 //   feature.panels           the Files panel of Editor mode (FilesPanel.tsx)
-//   feature.dialogs          file.open, file.save (FileDialog.tsx), files.name (NameDialog.tsx)
+//   feature.dialogs          file.open, file.save (FileDialog.tsx), files.name (NameDialog.tsx),
+//                            files.moveTo (MoveToDialog.tsx, ARCHITECTURE-PLUS P3.2.4)
 //   feature.init             drops on the window (drop.ts), and the store's problems as messages
 //
-// Owner: W3 > FS1.
+// Owner: W3 > FS1 > N5.
 
 import type { AppContext, FeatureModule, FileDialogs, FileSourceProvider, FolderRequest, VPath } from '../../contracts';
 import { onStoreProblem, storageProblem } from '../../fs/browser-backend';
 import { panelVisible, showPanel, togglePanel } from '../../state/panels';
-import { NAME_DIALOG_ID } from './actions';
+import { NAME_DIALOG_ID, keepImportedCopy } from './actions';
+import { guardImport, pageEstimator } from './import-guard';
+import { MOVE_TO_DIALOG_ID } from './move';
+import { MoveToDialog } from './MoveToDialog';
 import { carriesFiles, droppedItems, hasDom, pickFiles, readFileBytes } from './browser-io';
 import { createFileDialogService, OPEN_DIALOG_ID, SAVE_DIALOG_ID, type FileDialogService } from './dialogs';
 import { handleDrop, type DropDeps } from './drop';
@@ -79,7 +83,16 @@ export function createUploadProvider(ctx: AppContext): FileSourceProvider {
         const paths: VPath[] = [];
         for (const file of request.multiple ? files : files.slice(0, 1)) {
           const data = await readFileBytes(file);
-          paths.push(await importOne(ctx.vfs, IMPORTED_DIR, file.name, data, askReplace(ctx, request.title)));
+          paths.push(
+            await importOne(
+              ctx.vfs,
+              IMPORTED_DIR,
+              file.name,
+              data,
+              askReplace(ctx, request.title),
+              keepImportedCopy(ctx),
+            ),
+          );
         }
         return paths.length > 0 ? paths : null;
       });
@@ -108,7 +121,15 @@ export function dropDeps(ctx: AppContext): DropDeps {
     programLoaded: ctx.sim.controller.program !== null,
     messageBox: (request) => ctx.dialogs.messageBox(request),
     toast: (text) => ctx.dialogs.toast(text),
-    importFile: (name, data) => importOne(ctx.vfs, IMPORTED_DIR, name, data, askReplace(ctx, 'Drop')),
+    importFile: (name, data) =>
+      importOne(ctx.vfs, IMPORTED_DIR, name, data, askReplace(ctx, 'Drop'), keepImportedCopy(ctx)),
+    guardImport: (count, bytes) =>
+      guardImport(
+        { vfs: ctx.vfs, dialogs: ctx.dialogs, estimate: pageEstimator(), where: (dir) => displayPath(ctx.vfs, dir) },
+        IMPORTED_DIR,
+        count,
+        bytes,
+      ),
     openDocument: (path) => ctx.documents.open(path),
     openProgram: (path, confirmed) =>
       confirmed ? ctx.sim.controller.open(path, 'drop', { confirmed: true }) : ctx.sim.controller.open(path, 'drop'),
@@ -207,6 +228,7 @@ export const feature: FeatureModule = {
     [OPEN_DIALOG_ID]: FileDialog,
     [SAVE_DIALOG_ID]: FileDialog,
     [NAME_DIALOG_ID]: NameDialog,
+    [MOVE_TO_DIALOG_ID]: MoveToDialog,
   },
   init(ctx) {
     const stopDrops = listenForDrops(ctx);

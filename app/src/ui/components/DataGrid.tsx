@@ -11,6 +11,17 @@
 // In-place editing: the caller sets `editing` and supplies renderEditor,
 // which renders an input into that cell and ends the edit itself (Enter,
 // Escape, blur) by clearing `editing`; the grid takes the focus back.
+//
+// Several selected rows (ARCHITECTURE-PLUS P3.2.1, P1.3, P3.3.8: the Trash; added by N4): with
+// `multiSelect`, `selectedRow` is the focused row and `multiSelect.selected` the selected rows; the
+// grid is aria-multiselectable and each row's aria-selected follows the set. Click selects one row,
+// Shift+click the range from the anchor (the row clicked last without Shift), Ctrl+click (macOS
+// Cmd+click) adds or removes a row and makes it the anchor. Up / Down (Page Up / Page Down,
+// Ctrl+Home / Ctrl+End) select one row as before; with Shift they extend the range from the anchor
+// (Shift+Home / Shift+End to the first and last row); Ctrl+Up / Ctrl+Down (macOS Option+Up /
+// Option+Down) move the focus without selecting; Ctrl+Space (macOS Option+Space) adds or removes
+// the focused row; Ctrl+A (macOS Cmd+A, Ctrl+A) selects every row. The kit does not know the key
+// map, so it takes both forms. Without `multiSelect` the grid behaves exactly as before.
 
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import '../../styles/components.css';
@@ -56,9 +67,66 @@ export interface DataGridProps<R> {
   /** Shown when there are no rows. */
   emptyText?: string;
   className?: string;
+  /**
+   * Several selected rows (ARCHITECTURE-PLUS P3.2.1, P1.3; added by N4). `selectedRow` is then the
+   * focused row. Absent: one selected row, exactly as before.
+   */
+  multiSelect?: { selected: ReadonlySet<number>; onChange(rows: ReadonlySet<number>): void };
 }
 
 const ROW_HEIGHT = 22;
+
+/** The selection of a grid with `multiSelect`: the focused row, the anchor and the selected rows. */
+export interface GridMultiState {
+  focus: number;
+  anchor: number;
+  selected: ReadonlySet<number>;
+}
+
+/** What a click or a key does to a multi-selection (P3.2.1). */
+export type GridMultiStep =
+  | { kind: 'click'; row: number; shift: boolean; toggle: boolean }
+  | { kind: 'move'; row: number; extend: boolean; focusOnly: boolean }
+  | { kind: 'toggle' }
+  | { kind: 'all'; rows: number };
+
+const rangeSet = (a: number, b: number): Set<number> => {
+  const out = new Set<number>();
+  for (let row = Math.min(a, b); row <= Math.max(a, b); row++) out.add(row);
+  return out;
+};
+
+/** The multi-selection after one step (pure; ARCHITECTURE-PLUS P3.2.1 and P1.3). */
+export function gridMultiSelectStep(state: GridMultiState, step: GridMultiStep): GridMultiState {
+  const anchor = state.anchor >= 0 ? state.anchor : Math.max(0, state.focus);
+  switch (step.kind) {
+    case 'click':
+      if (step.shift) return { focus: step.row, anchor, selected: rangeSet(anchor, step.row) };
+      if (step.toggle) {
+        const selected = new Set(state.selected);
+        if (selected.has(step.row)) selected.delete(step.row);
+        else selected.add(step.row);
+        return { focus: step.row, anchor: step.row, selected };
+      }
+      return { focus: step.row, anchor: step.row, selected: new Set([step.row]) };
+    case 'move':
+      if (step.focusOnly) return { ...state, focus: step.row };
+      if (step.extend) return { focus: step.row, anchor, selected: rangeSet(anchor, step.row) };
+      return { focus: step.row, anchor: step.row, selected: new Set([step.row]) };
+    case 'toggle': {
+      if (state.focus < 0) return state;
+      const selected = new Set(state.selected);
+      if (selected.has(state.focus)) selected.delete(state.focus);
+      else selected.add(state.focus);
+      return { ...state, anchor: state.focus, selected };
+    }
+    case 'all':
+      return { ...state, selected: step.rows > 0 ? rangeSet(0, step.rows - 1) : new Set() };
+  }
+}
+
+/** Same members, in any order. */
+const sameSet = (a: ReadonlySet<number>, b: ReadonlySet<number>) => a.size === b.size && [...a].every((x) => b.has(x));
 
 export function DataGrid<R>({
   label,
@@ -75,12 +143,28 @@ export function DataGrid<R>({
   height,
   emptyText,
   className,
+  multiSelect,
 }: DataGridProps<R>) {
   const baseId = useId();
   const gridRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const headRef = useRef<HTMLDivElement>(null);
   const [column, setColumn] = useState(0);
+  // The anchor of a multi-selection: the row clicked or moved to last without Shift (P3.2.1).
+  const anchorRef = useRef(-1);
+  if (anchorRef.current >= rows.length) anchorRef.current = -1;
+  /** Applies one step of a multi-selection: the focused row and the selected set follow. */
+  const multiStep = (step: GridMultiStep): void => {
+    if (!multiSelect) return;
+    const next = gridMultiSelectStep(
+      { focus: selectedRow, anchor: anchorRef.current, selected: multiSelect.selected },
+      step,
+    );
+    anchorRef.current = next.anchor;
+    if (next.focus !== selectedRow) onSelectRow(next.focus);
+    if (!sameSet(next.selected, multiSelect.selected)) multiSelect.onChange(next.selected);
+  };
+  const isSelected = (r: number) => (multiSelect ? multiSelect.selected.has(r) : r === selectedRow);
   const activeColumn = Math.min(column, Math.max(0, columns.length - 1));
   const cellId = (row: number, col: number) => `${baseId}-r${row}c${col}`;
   const tracks = [rowNumbers ? '44px' : null, ...columns.map((c) => c.width ?? '1fr')].filter(Boolean).join(' ');
@@ -114,6 +198,7 @@ export function DataGrid<R>({
       ref={gridRef}
       role="grid"
       aria-label={label}
+      aria-multiselectable={multiSelect ? 'true' : undefined}
       aria-rowcount={rows.length + 1}
       aria-colcount={columns.length + (rowNumbers ? 1 : 0)}
       aria-activedescendant={
@@ -133,6 +218,45 @@ export function DataGrid<R>({
         const current = Math.max(0, selectedRow);
         let nextRow: number | null = null;
         let nextColumn: number | null = null;
+        if (multiSelect) {
+          // The keys of P1.3 for several rows; every other key as without multiSelect.
+          const command = event.ctrlKey || event.metaKey;
+          if ((event.key === 'a' || event.key === 'A') && command && !event.altKey && !event.shiftKey) {
+            event.preventDefault();
+            multiStep({ kind: 'all', rows: rows.length });
+            return;
+          }
+          // By the key's position as well: macOS Option+Space reports a no-break space as its key.
+          const space = event.key === ' ' || event.code === 'Space';
+          if (space && (event.ctrlKey || event.altKey) && !event.shiftKey && !event.metaKey) {
+            event.preventDefault();
+            multiStep({ kind: 'toggle' });
+            return;
+          }
+          const vertical =
+            event.key === 'ArrowDown' || event.key === 'ArrowUp'
+              ? moveIndex(rows.length, selectedRow, event.key, { orientation: 'vertical', wrap: false })
+              : event.key === 'PageDown'
+                ? Math.min(rows.length - 1, current + page)
+                : event.key === 'PageUp'
+                  ? Math.max(0, current - page)
+                  : (event.key === 'Home' || event.key === 'End') && (event.shiftKey || command)
+                    ? event.key === 'Home'
+                      ? 0
+                      : rows.length - 1
+                    : null;
+          if (vertical !== null) {
+            event.preventDefault();
+            const arrow = event.key === 'ArrowDown' || event.key === 'ArrowUp';
+            multiStep({
+              kind: 'move',
+              row: vertical,
+              extend: event.shiftKey,
+              focusOnly: arrow && !event.shiftKey && (event.ctrlKey || event.altKey),
+            });
+            return;
+          }
+        }
         switch (event.key) {
           case 'ArrowDown':
           case 'ArrowUp':
@@ -204,7 +328,7 @@ export function DataGrid<R>({
             key={rowKey(row, r)}
             role="row"
             aria-rowindex={r + 2}
-            aria-selected={r === selectedRow}
+            aria-selected={isSelected(r)}
             data-row={r}
             title={rowTitle?.(row, r)}
             className="e68-grid__row"
@@ -231,7 +355,10 @@ export function DataGrid<R>({
                 onPointerDown={(event) => {
                   if (event.button !== 0 || isEditingCell(r, c)) return;
                   gridRef.current?.focus({ preventScroll: true });
-                  if (r !== selectedRow) onSelectRow(r);
+                  if (multiSelect) {
+                    multiStep({ kind: 'click', row: r, shift: event.shiftKey, toggle: event.ctrlKey || event.metaKey });
+                    event.preventDefault();
+                  } else if (r !== selectedRow) onSelectRow(r);
                   setColumn(c);
                 }}
                 onDoubleClick={() => onActivate?.(r, c)}

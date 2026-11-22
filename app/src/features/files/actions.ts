@@ -3,19 +3,28 @@
 // messages included; what needs the DOM (choosing files, downloading) is passed in, so that the
 // tests drive these functions under Node.
 //
-// Owner: FS1.
+// ARCHITECTURE-PLUS (N5): Delete is the one-item case of bulk.ts; Import passes the question of
+// import-guard.ts and keeps a replaced file's bytes as `Before import`; Rename refuses a folder
+// that holds .git and lets the history and an open document follow.
+//
+// Owner: FS1 > N5.
 
 import type { AppContext, VPath } from '../../contracts';
 import { basename, childPath, dirname, splitVPath } from '../../core/paths/winpath';
+import { deleteItems, exportItems, inform, openDocumentsAt, type FilesDeps } from './bulk';
 import { invalidNameReason } from './filters';
+import { findGitHolder, innerName } from './git-guard';
+import { guardImport, type StorageEstimator } from './import-guard';
+import { RENAME_TITLE, exportedToast, gitRefusal, openInEditor } from './texts';
+import { filesDeps } from './undo';
 import {
-  buildExport,
+  type BeforeReplace,
   displayPath,
   isZipName,
   itemsFromZip,
   makeFolder,
   planImport,
-  renameEntry,
+  renameChecked,
   runImport,
   type ImportItem,
   type ImportResult,
@@ -56,6 +65,7 @@ export async function importInto(
   ctx: AppContext,
   dir: VPath,
   items: readonly ImportItem[],
+  options: { estimate?: StorageEstimator } = {},
 ): Promise<ImportResult | null> {
   const expanded: ImportItem[] = [];
   const notes: string[] = [];
@@ -85,11 +95,22 @@ export async function importInto(
           continue;
         }
       }
-      expanded.push({ rel: item.rel, read: async () => bytes });
+      expanded.push({ rel: item.rel, read: async () => bytes, size: bytes.length });
       continue;
     }
     expanded.push(item);
   }
+
+  // ARCHITECTURE-PLUS P3.2.6: a question before a large import into the browser's storage.
+  const fileItems = expanded.filter((item) => !item.rel.endsWith('/'));
+  const bytes = fileItems.reduce((sum, item) => sum + (item.size ?? 0), 0);
+  const goOn = await guardImport(
+    { vfs: ctx.vfs, dialogs: ctx.dialogs, estimate: options.estimate ?? null, where: (d) => displayPath(ctx.vfs, d) },
+    dir,
+    fileItems.length,
+    bytes,
+  );
+  if (!goOn) return null;
 
   const plan = await planImport(ctx.vfs, dir, expanded);
   const where = displayPath(ctx.vfs, dir);
@@ -108,7 +129,7 @@ export async function importInto(
     if (answer === 'Cancel') return null;
     replaceAll = answer === 'Yes';
   }
-  const result = await runImport(ctx.vfs, plan, () => replaceAll);
+  const result = await runImport(ctx.vfs, plan, () => replaceAll, keepBeforeImport(ctx));
   for (const refused of plan.refused) result.skipped.push({ rel: refused, reason: 'not a valid name' });
   const other = result.skipped.filter((s) => s.reason !== 'exists');
   const kept = result.skipped.length - other.length;
@@ -122,16 +143,49 @@ export async function importInto(
   return result;
 }
 
-/** Export...: downloads a file as itself, a folder or a whole store as a .zip. */
+/**
+ * ARCHITECTURE-PLUS P3.3.4: an import that replaces a file keeps its current bytes as `Before
+ * import`, for a file that gets versions, without waiting for the history.
+ */
+export function keepBeforeImport(ctx: AppContext): BeforeReplace | undefined {
+  const history = ctx.history;
+  if (!history) return undefined;
+  return async (path) => {
+    const stat = await ctx.vfs.stat(path).catch(() => null);
+    if (stat?.kind !== 'file' || stat.size > LARGEST_VERSIONED) return;
+    const current = await ctx.vfs.readFile(path).catch(() => null);
+    if (!current || history.untracked(path, current.length, current.subarray(0, 8192)) !== null) return;
+    void history.record(path, current, 'before-import', ctx.clock.wallTime().getTime()).catch(() => {});
+  };
+}
+
+/** The largest file the history gives versions (P3.3.4); larger ones are not read for it. */
+const LARGEST_VERSIONED = 1024 * 1024;
+
+/** `keep` of importOne: the current bytes of a file the copy replaces, as `Before import`. */
+export function keepImportedCopy(ctx: AppContext): ((path: VPath, current: Uint8Array) => void) | undefined {
+  const history = ctx.history;
+  if (!history) return undefined;
+  return (path, current) => {
+    if (history.untracked(path, current.length, current.subarray(0, 8192)) !== null) return;
+    void history.record(path, current, 'before-import', ctx.clock.wallTime().getTime()).catch(() => {});
+  };
+}
+
+/**
+ * Export...: downloads a file as itself, a folder or a whole store as a .zip, several items as one
+ * `EASy68K export.zip` (ARCHITECTURE-PLUS P3.2.3). Folders named .git are left out.
+ */
 export async function exportPath(
   ctx: AppContext,
-  path: VPath,
+  path: VPath | readonly VPath[],
   download: (name: string, bytes: Uint8Array) => void,
 ): Promise<boolean> {
+  const paths = typeof path === 'string' ? [path] : path;
   try {
-    const file = await buildExport(ctx.vfs, path, ctx.clock.wallTime().getTime());
+    const file = await exportItems(ctx.vfs, paths, ctx.clock.wallTime().getTime());
     download(file.name, file.bytes);
-    if (file.kind === 'zip') ctx.dialogs.toast(`Exported ${plural(file.files, 'file')} as ${file.name}.`);
+    if (file.kind === 'zip') ctx.dialogs.toast(exportedToast(file.files, file.name));
     return true;
   } catch (error) {
     await showError(ctx, 'Export', error);
@@ -139,22 +193,14 @@ export async function exportPath(
   }
 }
 
-/** Delete: after a question, removes a file or a folder with everything in it. */
+/**
+ * Delete: the one-item case of the Files panel's Delete (bulk.ts, ARCHITECTURE-PLUS P3.2.2): the
+ * question, then the item through ctx.history.guard. True when it was deleted.
+ */
 export async function deletePath(ctx: AppContext, path: VPath): Promise<boolean> {
   if (splitVPath(path).rel === '') return false; // a store itself cannot be deleted
-  const stat = await ctx.vfs.stat(path).catch(() => null);
-  if (!stat) return false;
-  const name = basename(path);
-  const text = stat.kind === 'dir' ? `Delete the folder "${name}" and everything in it?` : `Delete "${name}"?`;
-  const answer = await ctx.dialogs.messageBox({ title: 'Delete', text, icon: 'confirmation', buttons: ['Yes', 'No'] });
-  if (answer !== 'Yes') return false;
-  try {
-    await ctx.vfs.remove(path);
-    return true;
-  } catch (error) {
-    await showError(ctx, 'Delete', error);
-    return false;
-  }
+  const outcome = await deleteItems(filesDeps(ctx), [path]);
+  return outcome.deleted.includes(path) || outcome.removedLinked.includes(path);
 }
 
 /** New Folder...: asks for a name and creates the folder in `parent`. Returns its path. */
@@ -187,9 +233,49 @@ export async function newFolder(ctx: AppContext, parent: VPath): Promise<VPath |
   }
 }
 
-/** Rename...: asks for the new name of a file or folder. Returns the new path. */
+/**
+ * Rename...: asks for the new name of a file or folder. Returns the new path. ARCHITECTURE-PLUS
+ * P3.2.4: a folder that holds .git is not renamed; while DocumentService.relocate does not exist an
+ * open file is not renamed; otherwise its document follows, and so does its history (moved).
+ */
 export async function renamePath(ctx: AppContext, path: VPath): Promise<VPath | null> {
-  if (splitVPath(path).rel === '') return null;
+  if (splitVPath(path).rel === '' || splitVPath(path).mount === 'linked') return null;
+  const deps = filesDeps(ctx);
+  if (await renameRefused(deps, path)) return null;
+  const renamed = await askAndRename(ctx, path);
+  if (renamed === null) return null;
+  await afterRename(deps, path, renamed);
+  return renamed;
+}
+
+/** Rename's refusals (P3.2.4): a folder that holds .git; an open file while relocate is missing. */
+export async function renameRefused(deps: FilesDeps, path: VPath): Promise<boolean> {
+  const stat = await deps.vfs.stat(path).catch(() => null);
+  if (stat?.kind === 'dir') {
+    const holder = await findGitHolder(deps.vfs, path);
+    if (holder) {
+      await inform(deps, RENAME_TITLE, gitRefusal(basename(path), innerName(path, holder), 'rename'));
+      return true;
+    }
+  }
+  if (!deps.documents.relocate) {
+    const open = openDocumentsAt(deps.documents, path)[0];
+    if (open?.path) {
+      await inform(deps, RENAME_TITLE, openInEditor(basename(open.path), 'rename'));
+      return true;
+    }
+  }
+  return false;
+}
+
+/** After renameEntry: the history and an open document follow, and Undo Rename is offered. */
+export async function afterRename(deps: FilesDeps, from: VPath, to: VPath): Promise<void> {
+  await deps.history?.moved(from, to).catch(() => {});
+  if (openDocumentsAt(deps.documents, from).length > 0) await deps.documents.relocate?.(from, to).catch(() => {});
+  deps.undo.push({ kind: 'rename', pairs: [[from, to]], folders: [], created: [], replaced: [] });
+}
+
+async function askAndRename(ctx: AppContext, path: VPath): Promise<VPath | null> {
   let initial = basename(path);
   for (;;) {
     const name = await askName(ctx, { title: 'Rename', label: '&Name:', initial });
@@ -203,7 +289,7 @@ export async function renamePath(ctx: AppContext, path: VPath): Promise<VPath | 
       continue;
     }
     try {
-      return await renameEntry(ctx.vfs, path, trimmed);
+      return await renameChecked(ctx.vfs, path, trimmed);
     } catch (error) {
       await showError(ctx, 'Rename', error);
       initial = trimmed;

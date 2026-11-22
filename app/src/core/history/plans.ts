@@ -361,7 +361,14 @@ export class Work {
     let trashed = 0;
     const report = () => {
       if (living + trashed > 0) {
-        this.env.log?.({ kind: 'prune', half: 'versions', by, items: [], livingVersions: living, trashVersions: trashed });
+        this.env.log?.({
+          kind: 'prune',
+          half: 'versions',
+          by,
+          items: [],
+          livingVersions: living,
+          trashVersions: trashed,
+        });
       }
     };
     if (cursor.step === 1) {
@@ -436,7 +443,12 @@ export class Work {
       return;
     }
     const current = (await this.tx.file(id)) ?? record;
-    await this.toTrash(id, current, { item: this.env.newId(), at: this.env.now, cause: 'replaced', path: current.spelling });
+    await this.toTrash(id, current, {
+      item: this.env.newId(),
+      at: this.env.now,
+      cause: 'replaced',
+      path: current.spelling,
+    });
     this.env.log?.({ kind: 'pushed-out', file: id, kept: true });
   }
 
@@ -454,7 +466,8 @@ export class Work {
     const copy = record.count > 0 ? await this.tx.version(id, record.newestSeq) : null;
     const copyBytes = copy ? countedVersion(copy) : 0;
     this.count('trash', -(RECORD_BYTES + copyBytes));
-    const copyKept = !!copy && copy.size <= LARGEST_VERSION && (await this.admit('versions', RECORD_BYTES + copyBytes, guard));
+    const copyKept =
+      !!copy && copy.size <= LARGEST_VERSION && (await this.admit('versions', RECORD_BYTES + copyBytes, guard));
     const current = (await this.tx.file(id)) ?? record;
     const { trash: _trash, ...rest } = current;
     let rec: FileRecord = { ...rest, place, live: place, spelling };
@@ -622,7 +635,9 @@ export async function planGuardKeep(
       id = kept.id;
       record = kept.record;
     }
-    const trashed = await work.toTrash(id, record, { ...mark });
+    // The path guard read is the file's spelling now (a move the history missed, an aborted
+    // transaction, a change of letter case): a restore writes it back there.
+    const trashed = await work.toTrash(id, { ...record, spelling: file.spelling }, { ...mark });
     await work.thin(id, trashed);
   }
   for (const dir of args.dirs) {
@@ -797,7 +812,12 @@ export async function planClearVersions(tx: HistoryTx, env: PlanEnv, limit: numb
       if (touched >= limit) break;
       if (value.count <= 1) continue;
       const versions = await tx.versions(id);
-      work.removeVersions(id, value, versions, new Set(versions.filter((v) => v.seq !== value.newestSeq).map((v) => v.seq)));
+      work.removeVersions(
+        id,
+        value,
+        versions,
+        new Set(versions.filter((v) => v.seq !== value.newestSeq).map((v) => v.seq)),
+      );
       touched++;
     }
   }

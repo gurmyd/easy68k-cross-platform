@@ -999,6 +999,58 @@ async function keyboardPass(browser, name) {
     JSON.stringify(paged),
   );
 
+  // A grid with several selected rows (DataGrid's `multiSelect`, ARCHITECTURE-PLUS P3.2.1, P1.3; N4):
+  // the keys of the system the check runs on (macOS: Option where Windows has Ctrl, Cmd+A).
+  const multi = page.locator('#lists .e68-gallery__multi-grid');
+  await multi.scrollIntoViewIfNeeded();
+  await multi.focus();
+  const onMac = process.platform === 'darwin';
+  const multiRows = () =>
+    multi.evaluate((el) =>
+      [...el.querySelectorAll('[role=row][aria-selected=true]')].map((row) => row.getAttribute('data-row')).join(','),
+    );
+  check(`${p} multi grid: aria-multiselectable`, (await multi.getAttribute('aria-multiselectable')) === 'true');
+  await k('Shift+ArrowDown');
+  await k('Shift+ArrowDown');
+  check(`${p} multi grid: Shift+Down twice selects rows 0 to 2`, (await multiRows()) === '0,1,2', await multiRows());
+  await k(onMac ? 'Alt+ArrowDown' : 'Control+ArrowDown');
+  await k(onMac ? 'Alt+ArrowDown' : 'Control+ArrowDown');
+  await k(onMac ? 'Alt+Space' : 'Control+Space');
+  check(
+    `${p} multi grid: ${onMac ? 'Option' : 'Ctrl'}+Down twice, then +Space adds row 4`,
+    (await multiRows()) === '0,1,2,4',
+    await multiRows(),
+  );
+  await k(onMac ? 'Alt+Space' : 'Control+Space');
+  check(`${p} multi grid: +Space again removes it`, (await multiRows()) === '0,1,2', await multiRows());
+  await k(onMac ? 'Meta+a' : 'Control+a');
+  check(
+    `${p} multi grid: ${onMac ? 'Cmd' : 'Ctrl'}+A selects every row`,
+    (await multiRows()) === '0,1,2,3,4,5',
+    await multiRows(),
+  );
+  await k('ArrowUp');
+  check(`${p} multi grid: Up without modifiers selects one row`, (await multiRows()) === '3', await multiRows());
+  await multi.locator('[data-row="1"] [role=gridcell]').first().click();
+  await multi
+    .locator('[data-row="4"] [role=gridcell]')
+    .first()
+    .click({ modifiers: ['Shift'] });
+  check(`${p} multi grid: click, Shift+click selects the range`, (await multiRows()) === '1,2,3,4', await multiRows());
+  await multi
+    .locator('[data-row="2"] [role=gridcell]')
+    .first()
+    .click({ modifiers: [onMac ? 'Meta' : 'Control'] });
+  check(
+    `${p} multi grid: ${onMac ? 'Cmd' : 'Ctrl'}+click removes a row`,
+    (await multiRows()) === '1,3,4',
+    await multiRows(),
+  );
+  check(
+    `${p} multi grid: the selection is reported`,
+    (await output(page)).includes('Selected: demo, notes.txt, macros.X68'),
+  );
+
   // Tree view keys (treeViewKeyAction, drawn by the gallery as a caller would).
   const tree = page.locator('[data-testid=tree-sample]');
   const treeFocus = () =>

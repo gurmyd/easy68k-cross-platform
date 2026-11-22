@@ -209,6 +209,16 @@ export const MESSAGE_ROWS = [
 /** The fixed caption above the SR field (sim-ui §4.1), one character per bit. Verbatim: two and three spaces. */
 export const SR_FLAGS_CAPTION = 'T S  INT   XNZVC';
 
+/** Rows of the gallery's grid with several selected rows (DataGrid's optional `multiSelect`, ARCHITECTURE-PLUS P5 N4: the Trash). */
+export const TRASH_SAMPLE_ROWS = [
+  { name: 'prog.X68', wasIn: 'My Programs/demo', why: 'Deleted' },
+  { name: 'demo', wasIn: 'My Programs', why: 'Deleted' },
+  { name: 'lab1.X68', wasIn: 'Lab', why: 'Replaced' },
+  { name: 'notes.txt', wasIn: 'My Programs', why: 'Deleted' },
+  { name: 'macros.X68', wasIn: 'My Programs/lib', why: 'Deleted' },
+  { name: 'old.X68', wasIn: 'My Programs/demo', why: 'Replaced' },
+];
+
 /** The drag type of the gallery's draggable tabs (Tabs' optional `drag`, ARCHITECTURE-PLUS P5 N2). */
 export const GALLERY_TAB_DRAG_TYPE = 'application/x-e68-gallery-tab';
 

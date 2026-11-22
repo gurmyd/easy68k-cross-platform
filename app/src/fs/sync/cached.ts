@@ -13,6 +13,10 @@
 // result of a missing file). Files beyond the limits are not loaded; each is named once in the
 // message area as `Not available to the program: <path> (<reason>)` (from a timer, so that the
 // load that prepared the folder does not clear it) and cannot be opened, created or removed. A file can be created only in a folder that exists, as fopen() on Windows.
+// Files below a folder named `.git` (any letter case) are taken after all other files, with the
+// same limits, and those the limits leave out are not named in the message area (ARCHITECTURE-PLUS
+// P3.3.10, N8): while everything fits, the same files are loaded as before. They gain no write
+// guard: a program writes there as before (P1.1 rule 2).
 //
 // How the copy stays current:
 // - Every prepared folder is subscribed to (`vfs.subscribe`). A change made by someone else - a
@@ -28,7 +32,7 @@
 // added, not its whole size. A write that fails is reported once in the message area and kept: the
 // next settled() tries again.
 //
-// Owner: W1 > SH6.
+// Owner: W1 > SH6 (the order of `.git` files: N8 in the stage of additions).
 
 import {
   DEFAULT_SNAPSHOT_LIMITS,
@@ -41,7 +45,7 @@ import {
   type VPath,
 } from '../../contracts';
 import { basename, dirname, foldCase, isVPath, matchName, resolveLexically } from '../../core/paths/winpath';
-import { fsError } from '../vfs';
+import { belowGitFolder, fsError } from '../vfs';
 import { WriteBehind } from '../write-behind';
 
 export type { CachedSyncFilesDeps } from '../../contracts';
@@ -116,6 +120,14 @@ interface Found {
   size: number;
   mtime: number;
   readOnly: boolean;
+}
+
+/** A file or folder found while a tree is listed that is beyond the limits or unreadable. */
+interface Skipped {
+  path: VPath;
+  reason: UnavailableReason;
+  /** A folder (too deep, or not listable) rather than a file. */
+  dir: boolean;
 }
 
 const EMPTY = new Uint8Array(0);
@@ -218,7 +230,7 @@ export class CachedSyncFiles implements SyncFiles {
         if (cached && this.behind.isPending(cached)) continue; // our own write is landing
         await this.reload(found);
       }
-      for (const { path, reason } of listed.skipped) this.markUnavailable(path, reason);
+      for (const { path, reason, dir } of listed.skipped) this.markUnavailable(path, reason, dir);
       // Files that are gone from storage (and not changed by the program meanwhile).
       for (const path of [...this.files.keys()]) {
         if (!isBelowFold(path, root.path) || seen.has(path)) continue;
@@ -528,7 +540,7 @@ export class CachedSyncFiles implements SyncFiles {
       const listed = await this.listTree(change.path, this.depthBelow(root.path, change.path));
       for (const dir of listed.dirs) this.addDir(dir);
       for (const found of listed.files) if (!this.lookupFile(found.path)) await this.reload(found);
-      for (const { path, reason } of listed.skipped) this.markUnavailable(path, reason);
+      for (const { path, reason, dir } of listed.skipped) this.markUnavailable(path, reason, dir);
       return;
     }
     const depth = this.depthBelow(root.path, dirname(change.path));
@@ -663,7 +675,7 @@ export class CachedSyncFiles implements SyncFiles {
       count++;
       total += data.length;
     }
-    for (const { path, reason } of listed.skipped) this.markUnavailable(path, reason);
+    for (const { path, reason, dir } of listed.skipped) this.markUnavailable(path, reason, dir);
   }
 
   /**
@@ -671,14 +683,12 @@ export class CachedSyncFiles implements SyncFiles {
    * contents. `depth` is how far `dir` already lies below its root; folders deeper than
    * limits.maxDepth below the root are reported as skipped.
    */
-  private async listTree(
-    dir: VPath,
-    depth: number,
-  ): Promise<{ dirs: VPath[]; files: Found[]; skipped: { path: VPath; reason: UnavailableReason }[] }> {
+  private async listTree(dir: VPath, depth: number): Promise<{ dirs: VPath[]; files: Found[]; skipped: Skipped[] }> {
     const { vfs } = this.deps;
     const dirs: VPath[] = [dir];
     const files: Found[] = [];
-    const skipped: { path: VPath; reason: UnavailableReason }[] = [];
+    const inGit: Found[] = [];
+    const skipped: Skipped[] = [];
     const queue: { path: VPath; depth: number }[] = [{ path: dir, depth }];
     while (queue.length > 0) {
       const next = queue.shift() as { path: VPath; depth: number };
@@ -686,14 +696,14 @@ export class CachedSyncFiles implements SyncFiles {
       try {
         entries = await vfs.list(next.path);
       } catch {
-        if (next.path !== dir) skipped.push({ path: next.path, reason: 'unreadable' });
+        if (next.path !== dir) skipped.push({ path: next.path, reason: 'unreadable', dir: true });
         continue;
       }
       entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
       for (const entry of entries) {
         const path: VPath = `${next.path}/${entry.name}`;
         if (entry.kind === 'dir') {
-          if (next.depth + 1 > this.limits.maxDepth) skipped.push({ path, reason: 'too-deep' });
+          if (next.depth + 1 > this.limits.maxDepth) skipped.push({ path, reason: 'too-deep', dir: true });
           else {
             dirs.push(path);
             queue.push({ path, depth: next.depth + 1 });
@@ -702,13 +712,29 @@ export class CachedSyncFiles implements SyncFiles {
         }
         const stat = await vfs.stat(path).catch(() => null);
         if (!stat || stat.kind !== 'file') {
-          skipped.push({ path, reason: 'unreadable' });
+          skipped.push({ path, reason: 'unreadable', dir: false });
           continue;
         }
-        files.push({ path, size: stat.size, mtime: stat.mtime, readOnly: stat.readOnly });
+        const found = { path, size: stat.size, mtime: stat.mtime, readOnly: stat.readOnly };
+        (this.inGitFolder(path, false) ? inGit : files).push(found);
       }
     }
-    return { dirs, files, skipped };
+    // Files below a folder named .git come after all others, in the same order (ARCHITECTURE-PLUS
+    // P3.3.10, N8): while everything fits, the same files are loaded as without this rule.
+    return { dirs, files: files.concat(inGit), skipped };
+  }
+
+  /**
+   * True when `path` (a file, or a folder when `isDir`) is below a folder named `.git` (any letter
+   * case) of its prepared root, or is such a folder. Its files are taken last, and when the limits
+   * leave them out they are not named in the message area (ARCHITECTURE-PLUS P3.3.10, N8). There
+   * is no write guard for them (P1.1 rule 2).
+   */
+  private inGitFolder(path: VPath, isDir: boolean): boolean {
+    const root = this.rootOf(path)?.path;
+    if (root === undefined || path.length <= root.length) return false;
+    const rel = path.slice(root.length + 1);
+    return belowGitFolder(isDir ? `${rel}/.` : rel);
   }
 
   // ==================================================================== the index
@@ -786,10 +812,13 @@ export class CachedSyncFiles implements SyncFiles {
     return set;
   }
 
-  private markUnavailable(path: VPath, reason: UnavailableReason): void {
+  /** A file (or a folder, `isDir`) beyond the limits: it cannot be reached, and is named once. */
+  private markUnavailable(path: VPath, reason: UnavailableReason, isDir = false): void {
     const key = foldCase(path);
     this.unavailable.set(key, reason);
     if (this.reported.has(key)) return;
+    // Files of a .git folder left out are not named (ARCHITECTURE-PLUS P3.3.10).
+    if (this.inGitFolder(path, isDir)) return;
     this.reported.add(key);
     this.say(unavailableMessage(path, reason));
   }
