@@ -6,10 +6,10 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { FileDialogs, OpenRequest, SaveRequest } from '../../contracts';
-import { TITLE } from '../../core/easybin';
+import { EasybinModel, TITLE } from '../../core/easybin';
 import { shellStateOf } from '../../state/shell';
 import { createFakePlatform, createTestApplication } from '../../state/testing';
-import { asciiRuns, hexRuns, keyByte, reuseRows, sameRow } from './EasybinWorkspace';
+import { asciiRuns, hexRuns, keyByte, reuseRows, sameRow, typeAddress } from './EasybinWorkspace';
 import { ABOUT_DIALOG_ID, aboutBoxKey, openDropped } from './commands';
 import { feature } from './index';
 import { easybinOf } from './session';
@@ -401,5 +401,18 @@ describe('keys typed into the memory area (7.4)', () => {
     expect(key('Shift')).toBeNull();
     expect(key('a', { metaKey: true })).toBeNull();
     expect(key('Tab')).toBeNull();
+  });
+});
+
+describe('the Address field rounds what is typed (docs/porting/easybin.md 6.1; errata X2.md entry 5)', () => {
+  it('a last digit other than 0 is undone at once, and the field is drawn again to show it', () => {
+    const model = new EasybinModel();
+    expect(typeAddress(model, '003000')).toEqual({ shown: '003000', redraw: false });
+    // The rounded text equals the text before the key: only a redraw replaces the typed 003005.
+    expect(typeAddress(model, '003005')).toEqual({ shown: '003000', redraw: true });
+    expect(model.getState().memAddr).toBe(0x3000);
+    expect(typeAddress(model, '00301F')).toEqual({ shown: '003010', redraw: true });
+    expect(model.getState().memAddr).toBe(0x3010);
+    expect(typeAddress(model, '003020')).toEqual({ shown: '003020', redraw: false });
   });
 });

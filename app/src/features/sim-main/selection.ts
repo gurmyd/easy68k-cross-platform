@@ -42,6 +42,23 @@ export function listingMetrics(points: number): { fontPx: number; rowHeight: num
   return { fontPx, rowHeight: Math.max(12, Math.round(fontPx * 1.2)) };
 }
 
+/**
+ * How far the heading follows the rows sideways, in character cells. The original scrolls the rows
+ * by whole characters from position 1 and redraws the heading from the same position only while it
+ * is below `HEADING_LIMIT` = 41 (SIM68Ku.cpp:34, 912-919): the heading follows up to 39 cells and
+ * then keeps its last text, so `Source----->>` stays in view (sim-ui §6.3).
+ */
+export const HEADING_FOLLOW_CELLS = 39;
+
+/**
+ * The horizontal scroll position of the heading for the rows' position `rowsLeft` (px), where one
+ * character cell is `cellWidth` px wide (section 1.4 note 33: ordinary scrolling, in pixels).
+ */
+export function headingScroll(rowsLeft: number, cellWidth: number): number {
+  const limit = Math.max(0, HEADING_FOLLOW_CELLS * (Number.isFinite(cellWidth) ? cellWidth : 0));
+  return Math.min(Math.max(0, rowsLeft), limit);
+}
+
 /** Expands tab characters to 8-column stops, as ListBox1DrawItem does (sim-ui §6.1). */
 export function expandTabs(text: string, stop = 8): string {
   if (!text.includes('\t')) return text;

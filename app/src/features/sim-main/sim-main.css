@@ -119,14 +119,34 @@
   font-size: var(--e68-listing-size, var(--fs-md));
 }
 
+/* The heading strip scrolls sideways with the rows (ListingPanel's onScroll sets its scrollLeft):
+   its text has room to its right as wide as the strip, so that it can move by up to 39 character
+   cells (sim-ui §6.3) however wide the panel is. A strip as wide as the gutter stays at the left,
+   as the rows' gutter does, and hides what scrolled past it. */
 .e68-listing__heading {
+  display: flex;
   flex: none;
   overflow: hidden;
-  padding-left: calc(var(--e68-listing-gutter) + var(--sp-1));
   color: var(--c-text-muted);
   background: var(--c-panel);
   border-bottom: 1px solid var(--c-border);
   white-space: pre;
+}
+
+.e68-listing__heading::before {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  flex: none;
+  width: var(--e68-listing-gutter);
+  background: var(--c-panel);
+  content: '';
+}
+
+.e68-listing__heading-text {
+  flex: none;
+  padding-right: 100%;
+  padding-left: var(--sp-1);
 }
 
 /* The gutter strip is the scroll container's own background, so it also fills the space below the
