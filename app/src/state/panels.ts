@@ -14,8 +14,17 @@
 // A region is a DOM element with `data-e68-panel="<id>"`. To choose where the focus lands inside
 // its panel, a feature marks one element with `data-e68-panel-focus`; otherwise the first control
 // that can take the focus gets it.
+//
+// The workspaces of Editor and Simulator mode are docks (ARCHITECTURE-PLUS P3.1.5, N1): these
+// functions keep their meaning and also tell the window's dock controller (state/dock.ts):
+// showPanel asks it to put the panel's tab back and select it (`reveal`, no action when it is
+// there and selected already), hidePanel asks it to take the tab out and remember its place
+// (`park`, never for the Output panel, which only collapses), focusPanel and focusNextPanel select
+// the panel's tab first. Moving, docking, locking or resetting the layout never changes
+// `layout.panels[id].visible` (P1.1 rule 4): only these functions do.
 
 import type { AppContext, FeatureModule, Mode, PanelSpec } from '../contracts';
+import { dockOf } from './dock';
 import { PANEL_CYCLE, TOOL_PANELS, isPanelVisible, withPanelVisible } from './layout';
 import { shellStateOf } from './shell';
 
@@ -69,6 +78,7 @@ export function showPanel(ctx: AppContext, id: string, options: { focus?: boolea
       );
     }
   }
+  dockOf(ctx).reveal(id);
   if (options.focus !== false) focusPanel(ctx, id);
 }
 
@@ -81,6 +91,7 @@ export function hidePanel(ctx: AppContext, id: string): void {
   }
   ctx.settings.update((settings) => withPanelVisible(settings, id, false));
   shell.setState((state) => (state.activeTool === id ? { ...state, activeTool: null } : state));
+  dockOf(ctx).park(id);
 }
 
 export function togglePanel(ctx: AppContext, id: string): void {
@@ -88,8 +99,12 @@ export function togglePanel(ctx: AppContext, id: string): void {
   else showPanel(ctx, id);
 }
 
-/** Asks the shell to move the keyboard focus into a panel (it does so once the panel is rendered). */
+/**
+ * Asks the shell to move the keyboard focus into a panel (it does so once the panel is rendered).
+ * The dock selects the panel's tab first.
+ */
 export function focusPanel(ctx: AppContext, id: string): void {
+  dockOf(ctx).present(id);
   shellStateOf(ctx).setState((state) => ({ ...state, focusRequest: { panel: id, serial: serial.next++ } }));
 }
 
@@ -168,14 +183,38 @@ function focusTarget(target: FocusTarget): void {
 }
 
 /**
+ * Whether a region is rendered visible (ARCHITECTURE-PLUS P3.1.5). The workspaces of the other
+ * modes stay mounted but `hidden`, and the dock hides the panels behind another tab with styles, so
+ * "not inside `[hidden]`" is not enough: `checkVisibility({ visibilityProperty: true })` where the
+ * browser has it, otherwise `offsetParent !== null` and a computed `visibility` that is not
+ * `hidden`, or the element is the full-screen element.
+ */
+export function isRenderedVisible(element: HTMLElement): boolean {
+  const target = element as HTMLElement & { checkVisibility?: (options?: { visibilityProperty?: boolean }) => boolean };
+  const document = element.ownerDocument as Document | undefined;
+  if (
+    document?.fullscreenElement &&
+    (document.fullscreenElement === element || document.fullscreenElement.contains(element))
+  ) {
+    return true;
+  }
+  if (typeof target.checkVisibility === 'function') return target.checkVisibility({ visibilityProperty: true });
+  if (element.closest('[hidden]') !== null) return false;
+  if (element.offsetParent === null) return false;
+  const view = document?.defaultView;
+  return !view || view.getComputedStyle(element).visibility !== 'hidden';
+}
+
+/**
  * Puts the focus into the region `id` under `root`: on the element marked data-e68-panel-focus,
  * else on the first focusable control, else on the region itself. False when the region is not
  * rendered (yet). The element may take the focus its own way (PANEL_FOCUS_EVENT).
  */
 export function focusPanelElement(root: ParentNode, id: string): boolean {
   const regions = Array.from(root.querySelectorAll<HTMLElement>(panelSelector(id)));
-  // Workspaces of the other modes stay mounted but hidden; take the region that is shown.
-  const region = regions.find((candidate) => candidate.closest('[hidden]') === null);
+  // Workspaces of the other modes stay mounted but hidden, and a dock hides the panels behind
+  // another tab: take the region that is shown.
+  const region = regions.find(isRenderedVisible);
   if (!region) return false;
   const target =
     region.querySelector<HTMLElement>('[data-e68-panel-focus]') ??

@@ -16,6 +16,7 @@ import {
   Menu,
   MenuBar,
   MessageBox,
+  messageBoxDefaultIndex,
   RadioGroup,
   REGISTER_FIELD,
   Select,
@@ -156,6 +157,40 @@ describe('Dialog and MessageBox', () => {
     expect(out).toContain(`id="${describedBy}" class="e68-messagebox__text"`);
     const ok = html(<MessageBox title="Information" text="Done" icon="information" buttons={['OK']} onResult={noop} />);
     expect(ok).toContain('aria-label="Close"');
+  });
+
+  // docs/requests/N5-default-button.md: MessageBoxRequest.defaultButton names the default button.
+  const defaultOf = (out: string): string | undefined =>
+    /<button[^>]*data-e68-default="true"[^>]*>(.*?)<\/button>/.exec(out)?.[1]?.replace(/<[^>]+>/g, '');
+
+  it('makes the first button the default when nothing else is asked (as before)', () => {
+    const out = html(<MessageBox title="Q" text="t" icon="warning" buttons={['Yes', 'No']} onResult={noop} />);
+    expect(out.match(/data-e68-default="true"/g)).toHaveLength(1);
+    expect(defaultOf(out)).toBe('Yes');
+  });
+
+  it('makes the named button the default: No for the question of P3.3.4', () => {
+    const buttons = ['Yes', 'No'] as const;
+    const out = html(
+      <MessageBox
+        title="Q"
+        text="t"
+        icon="warning"
+        buttons={buttons}
+        defaultButton={messageBoxDefaultIndex(buttons, 'No')}
+        onResult={noop}
+      />,
+    );
+    expect(out.match(/data-e68-default="true"/g)).toHaveLength(1);
+    expect(defaultOf(out)).toBe('No');
+  });
+
+  it("messageBoxDefaultIndex: the caption's position, else the first button", () => {
+    expect(messageBoxDefaultIndex(['Yes', 'No'], undefined)).toBe(0);
+    expect(messageBoxDefaultIndex(['Yes', 'No'], 'Yes')).toBe(0);
+    expect(messageBoxDefaultIndex(['Yes', 'No'], 'No')).toBe(1);
+    expect(messageBoxDefaultIndex(['Yes', 'No', 'Cancel'], 'Cancel')).toBe(2);
+    expect(messageBoxDefaultIndex(['Yes', 'No'], 'OK')).toBe(0);
   });
 });
 

@@ -1,0 +1,119 @@
+/* The Earlier Versions and Trash dialogs (ARCHITECTURE-PLUS P3.3.8). Owner: N4. Theme tokens only. */
+
+.e68-history__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.e68-history__lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.e68-history__line,
+.e68-history__empty {
+  margin: 0;
+  color: var(--c-text);
+  white-space: pre-wrap;
+}
+
+.e68-history__empty {
+  padding: var(--sp-3) 0;
+  color: var(--c-text-muted);
+}
+
+.e68-history__problem {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2);
+}
+
+.e68-history__spacer {
+  flex: 1 1 auto;
+}
+
+.e68-history__compare {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.e68-history__headings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--c-text-muted);
+}
+
+.e68-history__headings[data-unified] {
+  display: flex;
+  gap: var(--sp-3);
+}
+
+.e68-history__view {
+  height: min(360px, 45vh);
+  overflow: auto;
+  border: 1px solid var(--c-border-strong);
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+
+.e68-history .e68-history__view .cm-mergeView,
+.e68-history__view > .cm-editor {
+  min-height: 100%;
+}
+
+.e68-history .e68-history__view .cm-editor {
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+
+.e68-history .e68-history__view .cm-gutters {
+  background: var(--c-panel);
+  color: var(--c-text-muted);
+  border-right: 1px solid var(--c-border);
+}
+
+/* Inserted lines: --c-ok at 15 %; deleted lines: --c-danger at 15 % (P3.3.8). */
+.e68-history .e68-history__view .cm-merge-b .cm-changedLine,
+.e68-history .e68-history__view .cm-insertedLine,
+.e68-history .e68-history__view .cm-merge-b .cm-changedText {
+  background: color-mix(in srgb, var(--c-ok) 15%, transparent);
+}
+
+.e68-history .e68-history__view .cm-merge-a .cm-changedLine,
+.e68-history .e68-history__view .cm-deletedChunk,
+.e68-history .e68-history__view .cm-deletedLine,
+.e68-history .e68-history__view .cm-merge-a .cm-changedText,
+.e68-history .e68-history__view .cm-deletedChunk .cm-deletedText {
+  background: color-mix(in srgb, var(--c-danger) 15%, transparent);
+}
+
+.e68-history .e68-history__view .cm-deletedLine del {
+  text-decoration: none;
+}
+
+.e68-diff-gutter .cm-gutterElement {
+  padding: 0 var(--sp-1);
+  text-align: center;
+}
+
+.e68-diff-mark {
+  display: block;
+  white-space: pre;
+  font-weight: bold;
+}
+
+.e68-diff-mark--inserted {
+  color: var(--c-ok);
+}
+
+.e68-diff-mark--deleted {
+  color: var(--c-danger);
+}

@@ -23,6 +23,10 @@ export const EDITOR_MENUS: MenuTable[] = [
       command('ed.file.close'),
       separator,
       command('ed.file.exit'),
+      // added by the stage of additions (ARCHITECTURE-PLUS P3.3.3, P3.6)
+      separator,
+      command('ed.file.history'),
+      command('app.files.trash'),
     ],
   },
   {
@@ -61,6 +65,9 @@ export const EDITOR_MENUS: MenuTable[] = [
       // added (1.5)
       separator,
       command('ed.options.transfer'),
+      // added by the stage of additions (ARCHITECTURE-PLUS P3.5)
+      separator,
+      command('app.additions.options'),
     ],
   },
   {
@@ -73,6 +80,16 @@ export const EDITOR_MENUS: MenuTable[] = [
       command('ed.window.tileV'),
       command('ed.window.minimizeAll'),
       { type: 'documents' },
+      // added by the stage of additions, after the document list (ARCHITECTURE-PLUS P3.1.4); with no
+      // document open, resolveNodes drops the doubled separator.
+      separator,
+      command('app.layout.move'),
+      command('ed.window.splitRight'),
+      command('ed.window.splitDown'),
+      command('ed.window.unsplit'),
+      separator,
+      command('app.layout.lock'),
+      command('app.layout.reset'),
     ],
   },
   {

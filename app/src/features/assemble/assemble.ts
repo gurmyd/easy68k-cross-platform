@@ -229,7 +229,7 @@ async function routeMessages(
         }
         targets.set(folded, open.id);
       } else {
-        const opened = await deps.documents.open(path).catch(() => null);
+        const opened = await deps.documents.open(path, { asText: true }).catch(() => null);
         targets.set(folded, opened ? opened.id : null);
         // The assembled document keeps its identity and stays active (1.4 note 18).
         deps.documents.activate(id);

@@ -9,13 +9,14 @@ import { writeError } from './messages';
 import { createAppStore } from '../../state/store';
 import { defaultSettings, DEFAULT_TEMPLATE } from '../settings/defaults';
 import { encodeFile } from './format';
-import { DocumentManager, isListPath, kindAfterSaveAs } from './service';
+import { DocumentManager, isListPath, kindAfterSaveAs, type DocumentServiceDeps, type WrittenEvent } from './service';
 
 const bytes = (text: string) => Uint8Array.from(text, (ch) => ch.charCodeAt(0));
 const latin = (data: Uint8Array) => String.fromCharCode(...data);
 const TRAILER = '*~Font name~Courier New~\r\n*~Font size~10~\r\n*~Tab type~1~\r\n*~Tab size~4~\r\n';
 
-function setup() {
+/** `extra`: further deps (the viewer and the clock of ARCHITECTURE-PLUS P4.4, N6's cases). */
+function setup(extra: Partial<DocumentServiceDeps> = {}) {
   let time = 1000;
   const backend = new MemoryBackend({
     mount: 'browser',
@@ -52,6 +53,7 @@ function setup() {
         return saveTargets.shift() ?? null;
       },
     },
+    ...extra,
   });
   const type = (id: string, text: string, at = 0) =>
     manager.registry.dispatch(id, { changes: { from: at, insert: text } });
@@ -77,6 +79,27 @@ describe('New (editor-ui §12.1)', () => {
     expect(first).toMatchObject({ fontName: 'Courier New', fontSize: 10, insertMode: true, revision: 0 });
     expect(t.manager.text(first.id)).toBe(DEFAULT_TEMPLATE);
     expect(t.store.getState().documents).toEqual({ items: [first, second], activeId: second.id });
+  });
+
+  it('newSourceWithText (ARCHITECTURE-PLUS P3.3.8) makes the next untitled document with the text, modified', () => {
+    const t = setup();
+    t.settings.editor.tabType = TabType.Assembly;
+    t.settings.editor.fixedTabSize = 6;
+    const first = t.manager.newSource();
+    const doc = t.manager.newSourceWithText('  ORG $1000\n  END $1000\n');
+    expect(doc).toMatchObject({
+      name: 'untitled2.x68',
+      kind: 'source',
+      hasName: false,
+      path: null,
+      modified: true,
+      tabType: 0,
+      tabSize: 6,
+      insertMode: true,
+    });
+    expect(t.manager.text(doc.id)).toBe('  ORG $1000\n  END $1000\n');
+    expect(t.manager.text(first.id)).toBe(DEFAULT_TEMPLATE);
+    expect(t.store.getState().documents).toEqual({ items: [first, doc], activeId: doc.id });
   });
 
   it('counts a text change in revision and modified, and undoing to the saved text clears modified', () => {
@@ -573,5 +596,430 @@ describe('update and restore', () => {
     expect(encodeFile(t.manager.get(restored.id)!, 'draft text').length).toBe(
       (await t.vfs.readFile('/browser/r.X68')).length,
     );
+  });
+});
+
+// ------------------------------------------------------------------------------------------------
+// The hooks of the stage of additions (ARCHITECTURE-PLUS P3.4.1, P4.4; package N6).
+
+/** A viewer that wants the files whose name ends in one of `wanted`, and records what it showed. */
+function fakeViewer(...wanted: string[]) {
+  const asked: string[] = [];
+  const shown: { path: string; bytes: number[] }[] = [];
+  return {
+    asked,
+    shown,
+    viewer: {
+      wants: (path: string) => {
+        asked.push(path);
+        return wanted.some((suffix) => path.endsWith(suffix));
+      },
+      show: (path: string, data: Uint8Array) => void shown.push({ path, bytes: [...data] }),
+    },
+  };
+}
+
+/** A clock whose wall time moves by one second at each reading. */
+function steppingClock(start = Date.UTC(2026, 10, 22, 12, 0, 0)) {
+  let at = start;
+  return { wallTime: () => new Date((at += 1000)) };
+}
+
+/** Waits until the reactions of resolved promises have run. */
+const settled = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+describe('open asks the viewer (ARCHITECTURE-PLUS P3.4.1, P4.4)', () => {
+  it('a file the viewer wants is shown there with the bytes read; open returns null and opens no document', async () => {
+    const f = fakeViewer('.pdf');
+    const t = setup({ viewer: f.viewer });
+    await t.vfs.writeFile('/browser/report.pdf', bytes('%PDF-1.4\r\n'));
+    expect(await t.manager.open('/browser/report.pdf')).toBeNull();
+    expect(f.shown).toEqual([{ path: '/browser/report.pdf', bytes: [...bytes('%PDF-1.4\r\n')] }]);
+    expect(t.manager.list()).toEqual([]);
+    expect(t.store.getState().documents.items).toEqual([]);
+    expect(t.asked).toEqual([]);
+  });
+
+  it('{ asText: true } does not ask the viewer and opens the file as a document', async () => {
+    const f = fakeViewer('.pdf');
+    const t = setup({ viewer: f.viewer });
+    await t.vfs.writeFile('/browser/report.pdf', bytes('%PDF-1.4\r\n'));
+    const doc = await t.manager.open('/browser/report.pdf', { asText: true });
+    expect(doc).toMatchObject({ name: 'report.pdf', path: '/browser/report.pdf', kind: 'source' });
+    expect(f.asked).toEqual([]);
+    expect(f.shown).toEqual([]);
+  });
+
+  it('a file the viewer does not want opens as text, as before', async () => {
+    const f = fakeViewer('.pdf');
+    const t = setup({ viewer: f.viewer });
+    await t.vfs.writeFile('/browser/p.X68', bytes('A\r\n'));
+    expect(await t.manager.open('/browser/p.X68')).toMatchObject({ name: 'p.X68' });
+    expect(f.asked).toEqual(['/browser/p.X68']);
+    expect(f.shown).toEqual([]);
+  });
+
+  it('a missing file shows the File Access Error box and never reaches the viewer', async () => {
+    const f = fakeViewer('.pdf');
+    const t = setup({ viewer: f.viewer });
+    t.answers.push('OK');
+    expect(await t.manager.open('/browser/missing.pdf')).toBeNull();
+    expect(f.asked).toEqual([]);
+    expect(t.asked.map((box) => box.title)).toEqual(['Error']);
+  });
+
+  // An Open never closes what a person has open (errata N6 12): a file open as text (Open as Text)
+  // that the viewer takes is shown in the viewer, and its text document stays as it is.
+  it('a file open as text that the viewer takes: an Open shows the viewer and keeps the document open', async () => {
+    const f = fakeViewer('.svg');
+    const t = setup({ viewer: f.viewer });
+    await t.vfs.writeFile('/browser/p.svg', bytes('<svg/>\r\n'));
+    const doc = (await t.manager.open('/browser/p.svg', { asText: true }))!;
+    const text = t.manager.text(doc.id);
+    expect(await t.manager.open('/browser/p.svg')).toBeNull();
+    expect(f.shown.map((entry) => entry.path)).toEqual(['/browser/p.svg']);
+    expect(t.manager.list().map((entry) => entry.id)).toEqual([doc.id]);
+    expect(t.manager.get(doc.id)).toEqual(doc);
+    expect(t.manager.text(doc.id)).toBe(text);
+    expect(t.asked).toEqual([]);
+  });
+
+  it('the same with unsaved changes: no question, the viewer shows the file, the changes stay', async () => {
+    const f = fakeViewer('.pdf');
+    const t = setup({ viewer: f.viewer });
+    await t.vfs.writeFile('/browser/report.pdf', bytes('%PDF\r\n'));
+    const doc = (await t.manager.open('/browser/report.pdf', { asText: true }))!;
+    t.type(doc.id, 'X');
+    expect(await t.manager.open('/browser/report.pdf')).toBeNull();
+    expect(t.asked).toEqual([]);
+    expect(f.shown.map((entry) => entry.path)).toEqual(['/browser/report.pdf']);
+    expect(t.manager.get(doc.id)?.modified).toBe(true);
+    expect(t.manager.text(doc.id).startsWith('X')).toBe(true);
+  });
+
+  it('a text file that is already open: the "already open" question as before; Yes reads the file again', async () => {
+    const f = fakeViewer('.pdf');
+    const t = setup({ viewer: f.viewer });
+    await t.vfs.writeFile('/browser/p.X68', bytes('OLD\r\n'));
+    const doc = (await t.manager.open('/browser/p.X68'))!;
+    t.type(doc.id, 'X');
+    // No: the document stays, modified.
+    t.answers.push('No');
+    expect(await t.manager.open('/browser/p.X68')).toBeNull();
+    expect(t.manager.get(doc.id)?.modified).toBe(true);
+    // Yes, after the file changed: the new bytes, read after the question, replace it in its tab.
+    await t.vfs.writeFile('/browser/p.X68', bytes('NEW\r\n'));
+    t.answers.push('Yes');
+    const again = (await t.manager.open('/browser/p.X68'))!;
+    expect(t.asked.map((box) => box.text)).toEqual([
+      'p.X68 is already open. Do you want to discard changes and reopen?',
+      'p.X68 is already open. Do you want to discard changes and reopen?',
+    ]);
+    expect(t.manager.text(again.id).startsWith('NEW')).toBe(true);
+    expect(t.manager.list().map((entry) => entry.path)).toEqual(['/browser/p.X68']);
+    expect(f.shown).toEqual([]);
+  });
+
+  it('a file that is not open is read once, with or without a viewer', async () => {
+    for (const viewer of [undefined, fakeViewer('.pdf').viewer]) {
+      const t = setup(viewer ? { viewer } : {});
+      await t.vfs.writeFile('/browser/p.X68', bytes('A\r\n'));
+      let reads = 0;
+      const read = t.vfs.readFile.bind(t.vfs);
+      t.vfs.readFile = (path) => {
+        reads++;
+        return read(path);
+      };
+      await t.manager.open('/browser/p.X68');
+      expect(reads).toBe(1);
+    }
+  });
+});
+
+describe('relocate (ARCHITECTURE-PLUS P3.2.4, P4.4)', () => {
+  it("a file: path, name and tab title follow; text, modified and revision stay; the time is the new file's", async () => {
+    const t = setup();
+    await t.vfs.writeFile('/browser/a/p.X68', bytes('A\r\n'));
+    const doc = (await t.manager.open('/browser/a/p.X68'))!;
+    t.type(doc.id, 'B');
+    const before = t.manager.get(doc.id)!;
+    await t.vfs.writeFile('/browser/b/q.X68', bytes('BA\r\n'));
+    const newTime = (await t.vfs.stat('/browser/b/q.X68'))!.mtime;
+    await t.manager.relocate('/browser/a/p.X68', '/browser/b/q.X68');
+    const after = t.manager.get(doc.id)!;
+    expect(after).toEqual({ ...before, path: '/browser/b/q.X68', name: 'q.X68' });
+    expect(t.manager.text(doc.id)).toBe('BA\n');
+    expect(t.manager.fileTime(doc.id)).toBe(newTime);
+    expect(t.store.getState().documents.items[0]).toEqual(after);
+    // The next Save goes to the new place without the "changed outside" question.
+    expect(await t.manager.save(doc.id)).toBe(true);
+    expect(t.asked).toEqual([]);
+    expect(latin(await t.vfs.readFile('/browser/b/q.X68')).startsWith('BA\r\n')).toBe(true);
+  });
+
+  it('a folder: every document below it follows, others and untitled ones do not', async () => {
+    const t = setup();
+    await t.vfs.writeFile('/browser/lab/one.X68', bytes('1\r\n'));
+    await t.vfs.writeFile('/browser/lab/sub/two.X68', bytes('2\r\n'));
+    await t.vfs.writeFile('/browser/lab2/three.X68', bytes('3\r\n'));
+    const one = (await t.manager.open('/browser/lab/one.X68'))!;
+    const two = (await t.manager.open('/browser/lab/sub/two.X68'))!;
+    const three = (await t.manager.open('/browser/lab2/three.X68'))!;
+    const untitled = t.manager.newSource();
+    t.type(two.id, 'Z');
+    await t.vfs.writeFile('/browser/done/lab/one.X68', bytes('1\r\n'));
+    await t.vfs.writeFile('/browser/done/lab/sub/two.X68', bytes('2\r\n'));
+    await t.manager.relocate('/browser/lab', '/browser/done/lab');
+    expect(t.manager.list().map((doc) => [doc.name, doc.path, doc.modified, doc.revision])).toEqual([
+      ['one.X68', '/browser/done/lab/one.X68', false, 0],
+      ['two.X68', '/browser/done/lab/sub/two.X68', true, 1],
+      ['three.X68', '/browser/lab2/three.X68', false, 0],
+      [untitled.name, null, false, 0],
+    ]);
+    expect(t.manager.get(one.id)?.id).toBe(one.id);
+    expect(t.manager.get(three.id)?.path).toBe('/browser/lab2/three.X68');
+  });
+
+  it('tells the relocation listeners which documents moved before it resolves; one that throws does not fail it', async () => {
+    const t = setup();
+    await t.vfs.writeFile('/browser/p.X68', bytes('A\r\n'));
+    const doc = (await t.manager.open('/browser/p.X68'))!;
+    const told: (readonly string[])[] = [];
+    t.manager.onRelocated(() => {
+      throw new Error('listener failed');
+    });
+    const stop = t.manager.onRelocated(async (ids) => {
+      await Promise.resolve();
+      told.push(ids);
+    });
+    await t.manager.relocate('/browser/p.X68', '/browser/q.X68');
+    expect(told).toEqual([[doc.id]]);
+    await t.manager.relocate('/browser/nothing.X68', '/browser/else.X68');
+    expect(told).toHaveLength(1);
+    stop();
+    await t.manager.relocate('/browser/q.X68', '/browser/r.X68');
+    expect(told).toHaveLength(1);
+    expect(t.manager.get(doc.id)?.path).toBe('/browser/r.X68');
+  });
+});
+
+describe('onWritten (ARCHITECTURE-PLUS P3.3.3, P4.4)', () => {
+  it('once per Save, Save As and open, with the exact bytes and the time of the clock; not for Reload', async () => {
+    const clock = steppingClock();
+    const t = setup({ clock });
+    const events: WrittenEvent[] = [];
+    t.manager.onWritten((event) => void events.push(event));
+    await t.vfs.writeFile('/browser/p.X68', bytes('A\r\n'));
+
+    const doc = (await t.manager.open('/browser/p.X68'))!;
+    await settled();
+    expect(events).toEqual([
+      { path: '/browser/p.X68', bytes: bytes('A\r\n'), reason: 'opened', time: Date.UTC(2026, 10, 22, 12, 0, 1) },
+    ]);
+
+    t.type(doc.id, 'B');
+    expect(await t.manager.save(doc.id)).toBe(true);
+    await settled();
+    const written = await t.vfs.readFile('/browser/p.X68');
+    expect(events.slice(1)).toEqual([
+      { path: '/browser/p.X68', bytes: written, reason: 'saved', time: Date.UTC(2026, 10, 22, 12, 0, 2) },
+    ]);
+
+    t.saveTargets.push('/browser/q.X68');
+    expect(await t.manager.saveAs(doc.id)).toBe(true);
+    await settled();
+    expect(events.slice(2)).toEqual([
+      {
+        path: '/browser/q.X68',
+        bytes: await t.vfs.readFile('/browser/q.X68'),
+        reason: 'saved',
+        time: Date.UTC(2026, 10, 22, 12, 0, 3),
+      },
+    ]);
+
+    await t.manager.reload(doc.id);
+    await settled();
+    expect(events).toHaveLength(3);
+  });
+
+  it('nothing for a cancelled Save As, a failed write, a file the viewer takes or a missing file', async () => {
+    const f = fakeViewer('.pdf');
+    const t = setup({ viewer: f.viewer });
+    const events: WrittenEvent[] = [];
+    t.manager.onWritten((event) => void events.push(event));
+    const doc = t.manager.newSource();
+    t.saveTargets.push(null);
+    expect(await t.manager.save(doc.id)).toBe(false);
+    t.saveTargets.push('/nowhere/x.X68');
+    t.answers.push('OK');
+    expect(await t.manager.save(doc.id)).toBe(false);
+    await t.vfs.writeFile('/browser/r.pdf', bytes('%PDF'));
+    expect(await t.manager.open('/browser/r.pdf')).toBeNull();
+    t.answers.push('OK');
+    expect(await t.manager.open('/browser/missing.X68')).toBeNull();
+    await settled();
+    expect(events).toEqual([]);
+  });
+
+  it('Auto Save (save of a modified document before assembling) and the save of a closing document are announced', async () => {
+    const t = setup();
+    const reasons: string[] = [];
+    t.manager.onWritten((event) => void reasons.push(`${event.reason} ${event.path}`));
+    await t.vfs.writeFile('/browser/p.X68', bytes('A\r\n'));
+    const doc = (await t.manager.open('/browser/p.X68'))!;
+    t.type(doc.id, 'B');
+    await t.manager.save(doc.id); // what features/assemble does for Auto Save
+    t.type(doc.id, 'C');
+    t.answers.push('Yes');
+    expect(await t.manager.close(doc.id)).toBe(true);
+    await settled();
+    expect(reasons).toEqual(['opened /browser/p.X68', 'saved /browser/p.X68', 'saved /browser/p.X68']);
+  });
+
+  it('a listener that throws does not make Save fail, and the other listeners still run', async () => {
+    const t = setup();
+    let calls = 0;
+    t.manager.onWritten(() => {
+      throw new Error('listener failed');
+    });
+    t.manager.onWritten(() => void calls++);
+    const doc = t.manager.newSource();
+    t.saveTargets.push('/browser/t.X68');
+    await expect(t.manager.save(doc.id)).resolves.toBe(true);
+    await settled();
+    expect(calls).toBe(1);
+  });
+
+  it("listeners run only after the operation's promise has resolved, and never while it runs", async () => {
+    const t = setup();
+    const doc = t.manager.newSource();
+    let resolved = false;
+    const seenResolved: boolean[] = [];
+    t.manager.onWritten(() => void seenResolved.push(resolved));
+    t.saveTargets.push('/browser/t.X68');
+    const saving = t.manager.save(doc.id);
+    void saving.then(() => {
+      resolved = true;
+    });
+    // Nothing is announced while the save is still running.
+    await t.vfs.stat('/browser/t.X68');
+    expect(seenResolved).toEqual([]);
+    expect(await saving).toBe(true);
+    await settled();
+    expect(seenResolved).toHaveLength(1);
+  });
+
+  it('the unsubscribe function stops the events', async () => {
+    const t = setup();
+    let calls = 0;
+    const stop = t.manager.onWritten(() => void calls++);
+    stop();
+    const doc = t.manager.newSource();
+    t.saveTargets.push('/browser/t.X68');
+    await t.manager.save(doc.id);
+    await settled();
+    expect(calls).toBe(0);
+  });
+});
+
+describe('fileTime (ARCHITECTURE-PLUS P4.4: part of the contract)', () => {
+  it('the time recorded at open and at the last save; null for a new document', async () => {
+    const t = setup();
+    const service: DocumentService = t.manager;
+    const fresh = t.manager.newSource();
+    expect(service.fileTime?.(fresh.id)).toBeNull();
+    await t.vfs.writeFile('/browser/p.X68', bytes('A\r\n'));
+    const doc = (await t.manager.open('/browser/p.X68'))!;
+    expect(service.fileTime?.(doc.id)).toBe((await t.vfs.stat('/browser/p.X68'))!.mtime);
+    t.type(doc.id, 'B');
+    await t.manager.save(doc.id);
+    expect(service.fileTime?.(doc.id)).toBe((await t.vfs.stat('/browser/p.X68'))!.mtime);
+    expect(service.fileTime?.('doc-unknown')).toBeNull();
+  });
+});
+
+describe('shown (ARCHITECTURE-PLUS P1.2; errata N6 15): every way a document becomes the one in front', () => {
+  function watched() {
+    const told: string[] = [];
+    const t = setup({ shown: (id) => void told.push(id) });
+    return { ...t, told };
+  }
+
+  it('New, Open as New Document, Open and a draft brought back tell the new document', async () => {
+    const t = watched();
+    const fresh = t.manager.newSource();
+    const withText = t.manager.newSourceWithText('A\n');
+    await t.vfs.writeFile('/browser/p.X68', bytes('A\r\n'));
+    const opened = (await t.manager.open('/browser/p.X68'))!;
+    const restored = t.manager.restore({ state: { ...fresh, name: 'untitled9.x68' }, text: 'B', mtime: null });
+    expect(t.told).toEqual([fresh.id, withText.id, opened.id, restored.id]);
+  });
+
+  it('activate tells the document also when it is the active one already (the Window menu, a tab, an error row)', () => {
+    const t = watched();
+    const a = t.manager.newSource();
+    const b = t.manager.newSource();
+    t.told.length = 0;
+    let published = 0;
+    const stop = t.store.subscribe(() => void published++);
+    t.manager.activate(b.id);
+    expect(published).toBe(0); // nothing else changes: the store is not published again
+    t.manager.activate(a.id);
+    t.manager.activate('doc-unknown');
+    stop();
+    expect(t.told).toEqual([b.id, a.id]);
+    expect(published).toBe(1);
+  });
+
+  it('an open of a modified, already open file answered No tells the document that stays', async () => {
+    const t = watched();
+    await t.vfs.writeFile('/browser/p.X68', bytes('A\r\n'));
+    const doc = (await t.manager.open('/browser/p.X68'))!;
+    t.type(doc.id, 'X');
+    t.told.length = 0;
+    t.answers.push('No');
+    expect(await t.manager.open('/browser/p.X68')).toBeNull();
+    expect(t.told).toEqual([doc.id]);
+  });
+
+  it('a reload tells the document when it is the active one, not when it is another', async () => {
+    const t = watched();
+    await t.vfs.writeFile('/browser/p.X68', bytes('A\r\n'));
+    await t.vfs.writeFile('/browser/q.X68', bytes('B\r\n'));
+    const p = (await t.manager.open('/browser/p.X68'))!;
+    const q = (await t.manager.open('/browser/q.X68'))!;
+    t.told.length = 0;
+    await t.manager.reload(p.id);
+    expect(t.told).toEqual([]);
+    await t.manager.reload(q.id);
+    expect(t.told).toEqual([q.id]);
+  });
+
+  it('a close that makes the neighbour active, a file the viewer takes and a missing file tell nothing', async () => {
+    const f = fakeViewer('.pdf');
+    const told: string[] = [];
+    const t = setup({ viewer: f.viewer, shown: (id) => void told.push(id) });
+    const a = t.manager.newSource();
+    const b = t.manager.newSource();
+    told.length = 0;
+    expect(await t.manager.close(b.id)).toBe(true);
+    expect(t.manager.active()?.id).toBe(a.id);
+    await t.vfs.writeFile('/browser/report.pdf', bytes('%PDF-1.4\r\n'));
+    expect(await t.manager.open('/browser/report.pdf')).toBeNull();
+    t.answers.push('OK');
+    expect(await t.manager.open('/browser/missing.X68')).toBeNull();
+    expect(told).toEqual([]);
+  });
+
+  it('a listener that throws changes nothing: the document still opens and is active', async () => {
+    const t = setup({
+      shown: () => {
+        throw new Error('dock');
+      },
+    });
+    await t.vfs.writeFile('/browser/p.X68', bytes('A\r\n'));
+    const doc = await t.manager.open('/browser/p.X68');
+    expect(doc).not.toBeNull();
+    expect(t.manager.active()?.id).toBe(doc!.id);
   });
 });

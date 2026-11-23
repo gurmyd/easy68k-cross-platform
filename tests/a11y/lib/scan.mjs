@@ -7,7 +7,10 @@
 // dialog, the log file question) by opening them with the props of their contract
 // (contracts/features.ts SimFileDialogProps, LogFileExistsProps). Every dialog the features
 // register is scanned: the list is read from the running application (`dialogComponents`), and
-// a dialog without a route here fails the part.
+// a dialog without a route here fails the part. The stage of additions (ARCHITECTURE-PLUS P5) adds
+// the routes of its dialogs (layout.move, history.versions, history.trash, plus.options,
+// files.moveTo) and its screens (plusStates: the Files panel with a multiple selection and the
+// storage line, the viewer with a picture, each mode with the dock unlocked).
 //
 // For each dialog it also checks the dialog rules of 2.11: the dialog role, `aria-modal` exactly
 // when modal, a title that labels it, the focus inside a modal dialog, Tab and Shift+Tab staying
@@ -100,6 +103,149 @@ async function closeAll(page) {
   }
 }
 
+// --- the stage of additions (ARCHITECTURE-PLUS P5): what its dialogs and states need ----------
+
+const FILES_PANEL = '[data-e68-panel="files"]';
+const FILES_TREE = `${FILES_PANEL} [role=tree]`;
+const HISTORY_FILE = '/browser/a11y/history.X68';
+const SELECTED_FILES = ['/browser/a11y/one.X68', '/browser/a11y/two.X68'];
+
+/** A file of My Programs with two earlier versions in the history (N3's store, real IndexedDB). */
+const seedHistory = (page) =>
+  page.evaluate(async (path) => {
+    const { vfs, history } = window.__easy68k.ctx;
+    const bytes = (text) => new TextEncoder().encode(text);
+    await vfs.mkdirp('/browser/a11y');
+    const now = Date.now();
+    for (const [index, text] of ['* first\r\n', '* second\r\n'].entries()) {
+      await vfs.writeFile(path, bytes(text));
+      await history?.record(path, bytes(text), 'saved', now - 60_000 + index * 1000);
+    }
+  }, HISTORY_FILE);
+
+/** One file deleted through the history's guard, so that the Trash has an item. */
+const seedTrash = (page) =>
+  page.evaluate(async () => {
+    const { vfs, history } = window.__easy68k.ctx;
+    const path = `/browser/a11y/deleted-${Date.now()}.X68`;
+    await vfs.mkdirp('/browser/a11y');
+    await vfs.writeFile(path, new TextEncoder().encode('* deleted\r\n'));
+    await history?.guard(
+      path,
+      'delete',
+      async () => vfs.remove(path),
+      async () => true,
+    );
+  });
+
+/** The modifier that adds a row to the Files tree's selection on the page's key map (P3.2.1). */
+const addModifier = async (page) =>
+  (await page.evaluate(() => window.__easy68k.ctx.platform.os)) === 'mac' ? 'Meta' : 'Control';
+
+/** Two files of My Programs selected in the Files tree: a click, then a click with the modifier. */
+async function selectTwoFiles(page) {
+  await page.evaluate(async (paths) => {
+    const { vfs } = window.__easy68k.ctx;
+    await vfs.mkdirp('/browser/a11y');
+    for (const path of paths) await vfs.writeFile(path, new TextEncoder().encode(`* ${path}\r\n`));
+    const { revealInFilesPanel } = await import('/src/features/files/FilesPanel.tsx');
+    revealInFilesPanel(window.__easy68k.ctx, paths[0]);
+  }, SELECTED_FILES);
+  const row = (path) => page.locator(`${FILES_PANEL} [role=treeitem][data-e68-path="${path}"]`);
+  await row(SELECTED_FILES[0]).waitFor({ timeout: 10_000 });
+  await row(SELECTED_FILES[0]).click();
+  await row(SELECTED_FILES[1]).click({ modifiers: [await addModifier(page)] });
+  return waitFor(
+    page,
+    (count) =>
+      document.querySelectorAll('[data-e68-panel="files"] [role=treeitem][aria-selected=true]').length === count,
+    SELECTED_FILES.length,
+    5000,
+  );
+}
+
+/** A PNG made by the page's canvas, opened through the document service: the viewer in the dock. */
+const openPicture = (page) =>
+  page.evaluate(async () => {
+    const { ctx } = window.__easy68k;
+    const canvas = document.createElement('canvas');
+    canvas.width = 320;
+    canvas.height = 200;
+    const g = canvas.getContext('2d');
+    g.fillStyle = '#1f6feb';
+    g.fillRect(0, 0, 320, 200);
+    g.fillStyle = '#ffd33d';
+    g.fillRect(80, 50, 160, 100);
+    const blob = await new Promise((done) => canvas.toBlob(done, 'image/png'));
+    await ctx.vfs.mkdirp('/browser/a11y');
+    await ctx.vfs.writeFile('/browser/a11y/picture.png', new Uint8Array(await blob.arrayBuffer()));
+    await ctx.documents.open('/browser/a11y/picture.png');
+  });
+
+const setDockLocked = (page, on) =>
+  page.evaluate(async (value) => {
+    const { dockOf } = await import('/src/state/dock.ts');
+    dockOf(window.__easy68k.ctx).setLocked(value);
+  }, on);
+
+/**
+ * The screens the stage of additions adds (ARCHITECTURE-PLUS P5; Q1's audit at the gate of the
+ * stage): the Files panel with a multiple selection and its storage line, the viewer with a
+ * picture, and each mode with the dock unlocked (its tab strips, drop targets' handles and menus).
+ */
+async function plusStates(page, prefix, report, all, outDir) {
+  await setMode(page, 'editor');
+  const selected = await selectTwoFiles(page);
+  const storageLine = await waitFor(
+    page,
+    () => /\S/.test(document.querySelector('[data-e68-storage-line]')?.textContent ?? ''),
+    null,
+    10_000,
+  );
+  report.check(
+    `${prefix}: the Files panel shows a multiple selection and its storage line`,
+    selected && storageLine,
+    `selected ${selected}, storage line ${storageLine}`,
+  );
+  await axeScan(page, `${prefix} editor, Files panel with two selected files and the storage line`, report, all);
+  await shoot(page, outDir, `${prefix}-files-selection`.replace(/\s+/g, '-'));
+
+  await openPicture(page);
+  const picture = await waitFor(
+    page,
+    () => document.querySelector('[data-e68-panel^="viewer:"] img[alt="picture.png"]')?.complete === true,
+    null,
+    15_000,
+  );
+  report.check(`${prefix}: the viewer shows a picture in the dock`, picture);
+  await axeScan(page, `${prefix} editor with the viewer showing a picture`, report, all);
+  await shoot(page, outDir, `${prefix}-viewer-picture`.replace(/\s+/g, '-'));
+  await page.evaluate(async () => {
+    const { dockOf } = await import('/src/state/dock.ts');
+    const dock = dockOf(window.__easy68k.ctx);
+    for (const entry of dock.describe()) if (entry.panel.startsWith('viewer:')) dock.closeTransient(entry.panel);
+  });
+
+  await setDockLocked(page, false);
+  await page.waitForTimeout(300);
+  const unlocked = await page.evaluate(async () => {
+    const { dockOf } = await import('/src/state/dock.ts');
+    return dockOf(window.__easy68k.ctx).locked() === false;
+  });
+  report.check(`${prefix}: the dock is unlocked (Lock Layout off)`, unlocked);
+  try {
+    for (const mode of ['editor', 'simulator', 'easybin']) {
+      await setMode(page, mode);
+      await page.waitForTimeout(300);
+      await axeScan(page, `${prefix} ${mode}, dock unlocked`, report, all);
+      await shoot(page, outDir, `${prefix}-${mode}-unlocked`.replace(/\s+/g, '-'));
+    }
+  } finally {
+    await setDockLocked(page, true);
+    await setMode(page, 'editor');
+  }
+}
+
 /**
  * The route to each dialog the features register: the mode it belongs to and how it is opened.
  * `focus` is where the focus is put before it opens (2.10: it must come back there).
@@ -134,6 +280,40 @@ const ROUTES = {
   'options.assembler': { mode: 'editor', open: (page) => run(page, 'ed.options.assembler'), modal: false },
   'options.editor': { mode: 'editor', open: (page) => run(page, 'ed.options.editor'), tabs: true },
   'settings.transfer': { mode: 'editor', open: (page) => run(page, 'ed.options.transfer') },
+  // Move Panel To... (ARCHITECTURE-PLUS P3.1.4, N1)
+  'layout.move': { mode: 'editor', open: (page) => run(page, 'app.layout.move') },
+  // Earlier Versions... of a file with two versions (ARCHITECTURE-PLUS P3.3.8, N4), as the Files
+  // panel asks for it: ed.file.history { path } while the active document is untitled (the run is
+  // judged by its own argument, docs/requests/N4-history-ui.md item 6).
+  'history.versions': {
+    mode: 'editor',
+    open: async (page) => {
+      await seedHistory(page);
+      await run(page, 'ed.file.history', { path: HISTORY_FILE });
+    },
+  },
+  // Trash... with one deleted file in it (ARCHITECTURE-PLUS P3.3.8, N4).
+  'history.trash': {
+    mode: 'editor',
+    open: async (page) => {
+      await seedTrash(page);
+      await run(page, 'app.files.trash');
+    },
+  },
+  // Options > Port Additions... (ARCHITECTURE-PLUS P3.5, N7).
+  'plus.options': { mode: 'editor', open: (page) => run(page, 'app.additions.options') },
+  // Move To... of two selected files, from the Files tree's context menu by keyboard (P3.2.4, N5).
+  'files.moveTo': {
+    mode: 'editor',
+    focus: FILES_TREE,
+    open: async (page) => {
+      await selectTwoFiles(page);
+      await page.locator(FILES_TREE).focus();
+      await page.keyboard.press('Shift+F10');
+      await page.getByRole('menu', { name: 'Files' }).waitFor({ timeout: 5000 });
+      await page.keyboard.press('m');
+    },
+  },
   'files.name': {
     mode: 'editor',
     open: (page) => page.locator('[data-e68-panel="files"] button[aria-label="New Folder..."]').first().click(),
@@ -460,6 +640,7 @@ export async function scanPart({ browser, name, os, baseUrl, report, outDir, eng
       await axeScan(page, `${prefix} editor with the Help panel`, report, all);
       await shoot(page, outDir, `${prefix}-help`.replace(/\s+/g, '-'));
       await hidePanel(page, 'help');
+      await plusStates(page, prefix, report, all, outDir);
 
       if (!enginesPresent) {
         report.note(`${prefix}: engine/dist is missing - Simulator mode is scanned without a program`);

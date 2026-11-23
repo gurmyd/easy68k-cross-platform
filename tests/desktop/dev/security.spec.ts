@@ -58,6 +58,15 @@ test('the window loads app://easy68k/index.html with the web preferences of 7.6'
     webviewTag: false,
     backgroundThrottling: false,
   });
+  // ARCHITECTURE-PLUS P3.4.2, R5: the application window has Electron's PDF viewer, for the
+  // viewer's blob: frame. What this proves is that the viewer is present in the application
+  // window, which the viewer needs; it does NOT prove that `plugins: true` is set. Measured in
+  // Electron 45.4.1, navigator.pdfViewerEnabled is true whether `plugins` is true, false or absent
+  // (errata N0 entry 5), and getLastWebPreferences() does not report `plugins` at all. The flag
+  // itself is checked only as a constant, in unit.spec.ts.
+  const pdfViewer = await desktop.page.evaluate(() => navigator.pdfViewerEnabled);
+  console.log(`app window: navigator.pdfViewerEnabled = ${String(pdfViewer)}`);
+  expect(pdfViewer).toBe(true);
 });
 
 test('the page has no require and no process, and exactly the documented bridge', async () => {

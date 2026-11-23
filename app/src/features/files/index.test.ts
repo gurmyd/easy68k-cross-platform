@@ -37,10 +37,15 @@ function answer(application: TestApplication, results: unknown[]): DialogInstanc
 }
 
 describe('feature "files"', { timeout: 60_000 }, () => {
-  it('contributes app.files.toggle, the Files panel of Editor mode and three dialogs', () => {
+  it('contributes app.files.toggle, the Files panel of Editor mode and four dialogs (files.moveTo: P3.2.4)', () => {
     const application = app();
     expect(application.panels.find('editor', 'files')?.title).toBe('Files');
-    expect([...application.dialogComponents.keys()].sort()).toEqual(['file.open', 'file.save', 'files.name']);
+    expect([...application.dialogComponents.keys()].sort()).toEqual([
+      'file.open',
+      'file.save',
+      'files.moveTo',
+      'files.name',
+    ]);
     // Shown by default in a browser (2.2); the toolbar button is checked while it is.
     expect(application.ctx.commands.isChecked('app.files.toggle')).toBe(true);
     void application.ctx.commands.run('app.files.toggle');
@@ -120,9 +125,13 @@ describe('feature "files"', { timeout: 60_000 }, () => {
     answer(application, ['main.X68']);
     expect(await renamePath(ctx, '/browser/demo/prog.X68')).toBe('/browser/demo/main.X68');
 
+    // ARCHITECTURE-PLUS P3.2.2: the folder's file count, and the Trash's sentence (the test
+    // application's history is createMemoryHistoryService, state 'ready').
     const seen = answer(application, ['No']);
     expect(await deletePath(ctx, '/browser/demo')).toBe(false);
-    expect((seen[0]?.props as MessageBoxRequest).text).toBe('Delete the folder "demo" and everything in it?');
+    expect((seen[0]?.props as MessageBoxRequest).text).toBe(
+      'Delete the folder "demo" and everything in it (1 file)? You can restore it from the Trash.',
+    );
     answer(application, ['Yes']);
     expect(await deletePath(ctx, '/browser/demo')).toBe(true);
     expect(await ctx.vfs.stat('/browser/demo')).toBeNull();

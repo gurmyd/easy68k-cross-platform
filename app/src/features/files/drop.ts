@@ -26,7 +26,10 @@
 // Import... for a folder.` In Simulator mode a dropped folder is ignored silently, as the original
 // ignores everything that is not an .S68.
 //
-// Owner: FS1.
+// ARCHITECTURE-PLUS P3.2.6 (N5): before dropped files are copied into the browser's storage,
+// DropDeps.guardImport asks the question of a large import (import-guard.ts).
+//
+// Owner: FS1 > N5.
 
 import type { Bytes, DialogService, Mode, VPath } from '../../contracts';
 import { changeFileExt, foldCase } from '../../core/paths/winpath';
@@ -75,6 +78,17 @@ export interface DropDeps {
   locate?(item: DroppedItem): Promise<LocatedItem | null>;
   /** The desktop app: shows the Open dialog in a dropped folder and opens what is chosen. */
   openFolder?(dir: VPath): Promise<void>;
+  /**
+   * ARCHITECTURE-PLUS P3.2.6: asked before dropped files are copied into the browser's storage,
+   * with their number and total size; false: nothing is imported.
+   */
+  guardImport?(count: number, bytes: number): Promise<boolean>;
+}
+
+/** The size of a dropped file as the File gives it (0 when unknown). */
+function sizeOf(item: DroppedItem): number {
+  const size = (item.file as { size?: unknown } | null | undefined)?.size;
+  return typeof size === 'number' && Number.isFinite(size) ? size : 0;
 }
 
 async function locate(item: DroppedItem, deps: DropDeps): Promise<LocatedItem | null> {
@@ -164,6 +178,14 @@ export async function handleDrop(items: readonly DroppedItem[], deps: DropDeps):
   }
 
   if (deps.mode !== 'editor') return outcome;
+  if (deps.guardImport && !deps.locate) {
+    const copied = items.filter((item) => !item.isFolder);
+    const bytes = copied.reduce((sum, item) => sum + sizeOf(item), 0);
+    if (copied.length > 0 && !(await deps.guardImport(copied.length, bytes))) {
+      outcome.skipped.push(...copied.map((item) => item.name));
+      return outcome;
+    }
+  }
   let toldAboutFolders = false;
   for (const item of items) {
     const located = await locate(item, deps);
@@ -182,6 +204,8 @@ export async function handleDrop(items: readonly DroppedItem[], deps: DropDeps):
       continue;
     }
     if (item.isFolder) {
+      // A folder named .git is offered as any other, as on main: FS2's Open Folder... can choose
+      // one too, and in such an opened folder the stage's own commands refuse (errata N5 entry 19).
       if (await offerFolder(item, deps)) {
         outcome.folders = 'taken';
       } else {

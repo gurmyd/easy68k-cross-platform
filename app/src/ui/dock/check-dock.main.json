@@ -1,0 +1,1262 @@
+{
+  "chromium|editor|gone at the end, window back, Shift+Tab": [
+    [
+      "grid|Assembler messages|messages",
+      "separator|Resize the Messages panel|-",
+      "textbox|untitled1.x68|editor",
+      "tab|untitled1.x68|editor",
+      "separator|Resize the Files panel|-",
+      "tree|Files|files",
+      "button|New Folder...|files",
+      "button|Files|-",
+      "radio|Editor|-",
+      "menuitem|File|-",
+      "body"
+    ]
+  ],
+  "chromium|editor|gone at the start, window back, Tab": [
+    [
+      "menuitem|File|-",
+      "radio|Editor|-",
+      "button|Files|-",
+      "button|New Folder...|files",
+      "tree|Files|files",
+      "separator|Resize the Files panel|-",
+      "tab|untitled1.x68|editor",
+      "textbox|untitled1.x68|editor",
+      "separator|Resize the Messages panel|-",
+      "grid|Assembler messages|messages",
+      "body"
+    ]
+  ],
+  "chromium|editor|gone beside each stop, Tab": [
+    "menuitem|File|-",
+    "radio|Editor|-",
+    "button|Files|-",
+    "button|New Folder...|files",
+    "tree|Files|files",
+    "separator|Resize the Files panel|-",
+    "tab|untitled1.x68|editor",
+    "textbox|untitled1.x68|editor",
+    "separator|Resize the Messages panel|-",
+    "grid|Assembler messages|messages",
+    "body"
+  ],
+  "chromium|editor|gone beside each stop, Shift+Tab": [
+    "grid|Assembler messages|messages",
+    "separator|Resize the Messages panel|-",
+    "textbox|untitled1.x68|editor",
+    "tab|untitled1.x68|editor",
+    "separator|Resize the Files panel|-",
+    "tree|Files|files",
+    "button|New Folder...|files",
+    "button|Files|-",
+    "radio|Editor|-",
+    "menuitem|File|-",
+    "body"
+  ],
+  "chromium|editor|a click on the status bar, Tab": {
+    "from": "body",
+    "to": "body"
+  },
+  "chromium|editor|a click on the status bar, Shift+Tab": {
+    "from": "body",
+    "to": "grid|Assembler messages|messages"
+  },
+  "chromium|editor|a click on the menu row beside the menus, Tab": {
+    "from": "body",
+    "to": "menuitem|File|-"
+  },
+  "chromium|editor|a click on the menu row beside the menus, Shift+Tab": {
+    "from": "body",
+    "to": "body"
+  },
+  "chromium|editor|a menu opened and closed with Escape, Tab": {
+    "from": "menuitem|File|-",
+    "to": "radio|Editor|-"
+  },
+  "chromium|editor|a menu opened and closed with Escape, Shift+Tab": {
+    "from": "menuitem|File|-",
+    "to": "body"
+  },
+  "chromium|editor|Help > About opened and closed with Escape, Tab": {
+    "from": "body",
+    "to": "body"
+  },
+  "chromium|editor|Help > About opened and closed with Escape, Shift+Tab": {
+    "from": "body",
+    "to": "grid|Assembler messages|messages"
+  },
+  "chromium|editor|a mode switch by a click and back, Tab": {
+    "from": "radio|Editor|-",
+    "to": "button|Files|-"
+  },
+  "chromium|editor|a mode switch by a click and back, Shift+Tab": {
+    "from": "radio|Editor|-",
+    "to": "menuitem|File|-"
+  },
+  "chromium|editor (1000 px)|gone at the end, window back, Shift+Tab": [
+    [
+      "grid|Assembler messages|messages",
+      "separator|Resize the Messages panel|-",
+      "textbox|untitled1.x68|editor",
+      "tab|untitled1.x68|editor",
+      "separator|Resize the Files panel|-",
+      "tree|Files|files",
+      "button|New Folder...|files",
+      "button|Files|-",
+      "radio|Editor|-",
+      "menuitem|File|-",
+      "body"
+    ]
+  ],
+  "chromium|editor (1000 px)|gone at the start, window back, Tab": [
+    [
+      "menuitem|File|-",
+      "radio|Editor|-",
+      "button|Files|-",
+      "button|New Folder...|files",
+      "tree|Files|files",
+      "separator|Resize the Files panel|-",
+      "tab|untitled1.x68|editor",
+      "textbox|untitled1.x68|editor",
+      "separator|Resize the Messages panel|-",
+      "grid|Assembler messages|messages",
+      "body"
+    ]
+  ],
+  "chromium|editor (1000 px)|gone beside each stop, Tab": [
+    "menuitem|File|-",
+    "radio|Editor|-",
+    "button|Files|-",
+    "button|New Folder...|files",
+    "tree|Files|files",
+    "separator|Resize the Files panel|-",
+    "tab|untitled1.x68|editor",
+    "textbox|untitled1.x68|editor",
+    "separator|Resize the Messages panel|-",
+    "grid|Assembler messages|messages",
+    "body"
+  ],
+  "chromium|editor (1000 px)|gone beside each stop, Shift+Tab": [
+    "grid|Assembler messages|messages",
+    "separator|Resize the Messages panel|-",
+    "textbox|untitled1.x68|editor",
+    "tab|untitled1.x68|editor",
+    "separator|Resize the Files panel|-",
+    "tree|Files|files",
+    "button|New Folder...|files",
+    "button|Files|-",
+    "radio|Editor|-",
+    "menuitem|File|-",
+    "body"
+  ],
+  "chromium|editor (1000 px)|a click on the status bar, Tab": {
+    "from": "body",
+    "to": "body"
+  },
+  "chromium|editor (1000 px)|a click on the status bar, Shift+Tab": {
+    "from": "body",
+    "to": "grid|Assembler messages|messages"
+  },
+  "chromium|editor (1000 px)|a click on the menu row beside the menus, Tab": {
+    "from": "body",
+    "to": "menuitem|File|-"
+  },
+  "chromium|editor (1000 px)|a click on the menu row beside the menus, Shift+Tab": {
+    "from": "body",
+    "to": "body"
+  },
+  "chromium|editor (1000 px)|a menu opened and closed with Escape, Tab": {
+    "from": "menuitem|File|-",
+    "to": "radio|Editor|-"
+  },
+  "chromium|editor (1000 px)|a menu opened and closed with Escape, Shift+Tab": {
+    "from": "menuitem|File|-",
+    "to": "body"
+  },
+  "chromium|editor (1000 px)|Help > About opened and closed with Escape, Tab": {
+    "from": "body",
+    "to": "body"
+  },
+  "chromium|editor (1000 px)|Help > About opened and closed with Escape, Shift+Tab": {
+    "from": "body",
+    "to": "grid|Assembler messages|messages"
+  },
+  "chromium|editor (1000 px)|a mode switch by a click and back, Tab": {
+    "from": "radio|Editor|-",
+    "to": "button|Files|-"
+  },
+  "chromium|editor (1000 px)|a mode switch by a click and back, Shift+Tab": {
+    "from": "radio|Editor|-",
+    "to": "menuitem|File|-"
+  },
+  "chromium|simulator wide|gone at the end, window back, Shift+Tab": [
+    ["textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"]
+  ],
+  "chromium|simulator wide|gone at the start, window back, Tab": [
+    [
+      "menuitem|File|-",
+      "radio|Simulator|-",
+      "button|Open (Ctrl+O)|-",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "button|Clear Cycles|registers",
+      "input||registers",
+      "listbox|Listing|listing",
+      "separator|Resize the Messages panel|-",
+      "list|Messages|messages",
+      "separator|Resize the two columns|-",
+      "select|Fit100%200%|output",
+      "button|Full Screen (Alt+Enter)|output",
+      "button|Collapse the Output panel|output",
+      "region|Output picture|output",
+      "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+    ]
+  ],
+  "chromium|simulator wide|gone beside each stop, Tab": [
+    "menuitem|File|-",
+    "radio|Simulator|-",
+    "button|Open (Ctrl+O)|-",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "button|Clear Cycles|registers",
+    "input||registers",
+    "listbox|Listing|listing",
+    "separator|Resize the Messages panel|-",
+    "list|Messages|messages",
+    "separator|Resize the two columns|-",
+    "select|Fit100%200%|output",
+    "button|Full Screen (Alt+Enter)|output",
+    "button|Collapse the Output panel|output",
+    "region|Output picture|output",
+    "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+  ],
+  "chromium|simulator wide|gone beside each stop, Shift+Tab": [
+    "region|Output picture|output",
+    "button|Collapse the Output panel|output",
+    "button|Full Screen (Alt+Enter)|output",
+    "select|Fit100%200%|output",
+    "separator|Resize the two columns|-",
+    "list|Messages|messages",
+    "separator|Resize the Messages panel|-",
+    "listbox|Listing|listing",
+    "input||registers",
+    "button|Clear Cycles|registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "button|Open (Ctrl+O)|-",
+    "radio|Simulator|-",
+    "menuitem|File|-",
+    "body"
+  ],
+  "chromium|simulator wide|a click on the status bar, Tab": {
+    "from": "body",
+    "to": "body"
+  },
+  "chromium|simulator wide|a click on the status bar, Shift+Tab": {
+    "from": "body",
+    "to": "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+  },
+  "chromium|simulator wide|a click on the menu row beside the menus, Tab": {
+    "from": "body",
+    "to": "menuitem|File|-"
+  },
+  "chromium|simulator wide|a click on the menu row beside the menus, Shift+Tab": {
+    "from": "body",
+    "to": "body"
+  },
+  "chromium|simulator wide|a menu opened and closed with Escape, Tab": {
+    "from": "menuitem|File|-",
+    "to": "radio|Simulator|-"
+  },
+  "chromium|simulator wide|a menu opened and closed with Escape, Shift+Tab": {
+    "from": "menuitem|File|-",
+    "to": "body"
+  },
+  "chromium|simulator wide|Help > About opened and closed with Escape, Tab": {
+    "from": "body",
+    "to": "body"
+  },
+  "chromium|simulator wide|Help > About opened and closed with Escape, Shift+Tab": {
+    "from": "body",
+    "to": "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+  },
+  "chromium|simulator wide|a mode switch by a click and back, Tab": {
+    "from": "radio|Simulator|-",
+    "to": "button|Open (Ctrl+O)|-"
+  },
+  "chromium|simulator wide|a mode switch by a click and back, Shift+Tab": {
+    "from": "radio|Simulator|-",
+    "to": "menuitem|File|-"
+  },
+  "chromium|simulator narrow|gone at the end, window back, Shift+Tab": [
+    ["textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"]
+  ],
+  "chromium|simulator narrow|gone at the start, window back, Tab": [
+    [
+      "menuitem|File|-",
+      "radio|Simulator|-",
+      "button|Open (Ctrl+O)|-",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "button|Clear Cycles|registers",
+      "input||registers",
+      "listbox|Listing|listing",
+      "separator|Resize the Messages panel|-",
+      "list|Messages|messages",
+      "separator|Resize the two columns|-",
+      "tab|Output|-",
+      "select|Fit100%200%|output",
+      "button|Full Screen (Alt+Enter)|output",
+      "region|Output picture|output",
+      "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+    ]
+  ],
+  "chromium|simulator narrow|gone beside each stop, Tab": [
+    "menuitem|File|-",
+    "radio|Simulator|-",
+    "button|Open (Ctrl+O)|-",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "button|Clear Cycles|registers",
+    "input||registers",
+    "listbox|Listing|listing",
+    "separator|Resize the Messages panel|-",
+    "list|Messages|messages",
+    "separator|Resize the two columns|-",
+    "tab|Output|-",
+    "select|Fit100%200%|output",
+    "button|Full Screen (Alt+Enter)|output",
+    "region|Output picture|output",
+    "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+  ],
+  "chromium|simulator narrow|gone beside each stop, Shift+Tab": [
+    "region|Output picture|output",
+    "button|Full Screen (Alt+Enter)|output",
+    "select|Fit100%200%|output",
+    "tab|Output|-",
+    "separator|Resize the two columns|-",
+    "list|Messages|messages",
+    "separator|Resize the Messages panel|-",
+    "listbox|Listing|listing",
+    "input||registers",
+    "button|Clear Cycles|registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "button|Open (Ctrl+O)|-",
+    "radio|Simulator|-",
+    "menuitem|File|-",
+    "body"
+  ],
+  "chromium|simulator narrow|a click on the status bar, Tab": {
+    "from": "body",
+    "to": "body"
+  },
+  "chromium|simulator narrow|a click on the status bar, Shift+Tab": {
+    "from": "body",
+    "to": "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+  },
+  "chromium|simulator narrow|a click on the menu row beside the menus, Tab": {
+    "from": "body",
+    "to": "menuitem|File|-"
+  },
+  "chromium|simulator narrow|a click on the menu row beside the menus, Shift+Tab": {
+    "from": "body",
+    "to": "body"
+  },
+  "chromium|simulator narrow|a menu opened and closed with Escape, Tab": {
+    "from": "menuitem|File|-",
+    "to": "radio|Simulator|-"
+  },
+  "chromium|simulator narrow|a menu opened and closed with Escape, Shift+Tab": {
+    "from": "menuitem|File|-",
+    "to": "body"
+  },
+  "chromium|simulator narrow|Help > About opened and closed with Escape, Tab": {
+    "from": "body",
+    "to": "body"
+  },
+  "chromium|simulator narrow|Help > About opened and closed with Escape, Shift+Tab": {
+    "from": "body",
+    "to": "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+  },
+  "chromium|simulator narrow|a mode switch by a click and back, Tab": {
+    "from": "radio|Simulator|-",
+    "to": "button|Open (Ctrl+O)|-"
+  },
+  "chromium|simulator narrow|a mode switch by a click and back, Shift+Tab": {
+    "from": "radio|Simulator|-",
+    "to": "menuitem|File|-"
+  },
+  "chromium|easybin|gone at the end, window back, Shift+Tab": [
+    [
+      "button|Page down|easybin",
+      "button|Page up|easybin",
+      "button|Row down|easybin",
+      "button|Row up|easybin",
+      "group|Memory|easybin",
+      "input|Address|easybin",
+      "button|Fill|easybin",
+      "input|Fill byte|easybin",
+      "button|Copy|easybin",
+      "input|Size|easybin",
+      "input|To|easybin",
+      "input|From|easybin",
+      "button|Save Binary...|easybin",
+      "input|Length of the binary files|easybin",
+      "input|First Address|easybin",
+      "input||easybin",
+      "button|Open S-Record...|easybin",
+      "input|Start Address|easybin",
+      "button|Theme|-",
+      "radio|EASyBIN|-",
+      "menuitem|File|-",
+      "body"
+    ]
+  ],
+  "chromium|easybin|gone at the start, window back, Tab": [
+    [
+      "menuitem|File|-",
+      "radio|EASyBIN|-",
+      "button|Theme|-",
+      "input|Start Address|easybin",
+      "button|Open S-Record...|easybin",
+      "input||easybin",
+      "input|First Address|easybin",
+      "input|Length of the binary files|easybin",
+      "button|Save Binary...|easybin",
+      "input|From|easybin",
+      "input|To|easybin",
+      "input|Size|easybin",
+      "button|Copy|easybin",
+      "input|Fill byte|easybin",
+      "button|Fill|easybin",
+      "input|Address|easybin",
+      "group|Memory|easybin",
+      "button|Row up|easybin",
+      "button|Row down|easybin",
+      "button|Page up|easybin",
+      "button|Page down|easybin",
+      "body"
+    ]
+  ],
+  "chromium|easybin|gone beside each stop, Tab": [
+    "menuitem|File|-",
+    "radio|EASyBIN|-",
+    "button|Theme|-",
+    "input|Start Address|easybin",
+    "button|Open S-Record...|easybin",
+    "input||easybin",
+    "input|First Address|easybin",
+    "input|Length of the binary files|easybin",
+    "button|Save Binary...|easybin",
+    "input|From|easybin",
+    "input|To|easybin",
+    "input|Size|easybin",
+    "button|Copy|easybin",
+    "input|Fill byte|easybin",
+    "button|Fill|easybin",
+    "input|Address|easybin",
+    "group|Memory|easybin",
+    "button|Row up|easybin",
+    "button|Row down|easybin",
+    "button|Page up|easybin",
+    "button|Page down|easybin",
+    "body"
+  ],
+  "chromium|easybin|gone beside each stop, Shift+Tab": [
+    "button|Page down|easybin",
+    "button|Page up|easybin",
+    "button|Row down|easybin",
+    "button|Row up|easybin",
+    "group|Memory|easybin",
+    "input|Address|easybin",
+    "button|Fill|easybin",
+    "input|Fill byte|easybin",
+    "button|Copy|easybin",
+    "input|Size|easybin",
+    "input|To|easybin",
+    "input|From|easybin",
+    "button|Save Binary...|easybin",
+    "input|Length of the binary files|easybin",
+    "input|First Address|easybin",
+    "input||easybin",
+    "button|Open S-Record...|easybin",
+    "input|Start Address|easybin",
+    "button|Theme|-",
+    "radio|EASyBIN|-",
+    "menuitem|File|-",
+    "body"
+  ],
+  "chromium|easybin|a click on the status bar, Tab": {
+    "from": "body",
+    "to": "body"
+  },
+  "chromium|easybin|a click on the status bar, Shift+Tab": {
+    "from": "body",
+    "to": "button|Page down|easybin"
+  },
+  "chromium|easybin|a click on the menu row beside the menus, Tab": {
+    "from": "body",
+    "to": "menuitem|File|-"
+  },
+  "chromium|easybin|a click on the menu row beside the menus, Shift+Tab": {
+    "from": "body",
+    "to": "body"
+  },
+  "chromium|easybin|a menu opened and closed with Escape, Tab": {
+    "from": "menuitem|File|-",
+    "to": "radio|EASyBIN|-"
+  },
+  "chromium|easybin|a menu opened and closed with Escape, Shift+Tab": {
+    "from": "menuitem|File|-",
+    "to": "body"
+  },
+  "chromium|easybin|Help > About opened and closed with Escape, Tab": {
+    "from": "body",
+    "to": "body"
+  },
+  "chromium|easybin|Help > About opened and closed with Escape, Shift+Tab": {
+    "from": "body",
+    "to": "button|Page down|easybin"
+  },
+  "chromium|easybin|a mode switch by a click and back, Tab": {
+    "from": "radio|EASyBIN|-",
+    "to": "button|Theme|-"
+  },
+  "chromium|easybin|a mode switch by a click and back, Shift+Tab": {
+    "from": "radio|EASyBIN|-",
+    "to": "menuitem|File|-"
+  },
+  "webkit|editor|gone at the end, window back, Shift+Tab": [
+    [
+      "grid|Assembler messages|messages",
+      "separator|Resize the Messages panel|-",
+      "textbox|untitled1.x68|editor",
+      "tab|untitled1.x68|editor",
+      "separator|Resize the Files panel|-",
+      "tree|Files|files",
+      "button|New Folder...|files",
+      "button|Files|-",
+      "radio|Editor|-",
+      "menuitem|File|-",
+      "body"
+    ]
+  ],
+  "webkit|editor|gone at the start, window back, Tab": [
+    [
+      "menuitem|File|-",
+      "radio|Editor|-",
+      "button|Files|-",
+      "button|New Folder...|files",
+      "tree|Files|files",
+      "separator|Resize the Files panel|-",
+      "tab|untitled1.x68|editor",
+      "textbox|untitled1.x68|editor",
+      "separator|Resize the Messages panel|-",
+      "grid|Assembler messages|messages",
+      "body"
+    ]
+  ],
+  "webkit|editor|gone beside each stop, Tab": [
+    "menuitem|File|-",
+    "radio|Editor|-",
+    "button|Files|-",
+    "button|New Folder...|files",
+    "tree|Files|files",
+    "separator|Resize the Files panel|-",
+    "tab|untitled1.x68|editor",
+    "textbox|untitled1.x68|editor",
+    "separator|Resize the Messages panel|-",
+    "grid|Assembler messages|messages",
+    "body"
+  ],
+  "webkit|editor|gone beside each stop, Shift+Tab": [
+    "grid|Assembler messages|messages",
+    "separator|Resize the Messages panel|-",
+    "textbox|untitled1.x68|editor",
+    "tab|untitled1.x68|editor",
+    "separator|Resize the Files panel|-",
+    "tree|Files|files",
+    "button|Files|-",
+    "radio|Editor|-",
+    "menuitem|File|-",
+    "body"
+  ],
+  "webkit|editor|a click on the status bar, Tab": {
+    "from": "body",
+    "to": "menuitem|File|-"
+  },
+  "webkit|editor|a click on the status bar, Shift+Tab": {
+    "from": "body",
+    "to": "grid|Assembler messages|messages"
+  },
+  "webkit|editor|a click on the menu row beside the menus, Tab": {
+    "from": "body",
+    "to": "menuitem|File|-"
+  },
+  "webkit|editor|a click on the menu row beside the menus, Shift+Tab": {
+    "from": "body",
+    "to": "body"
+  },
+  "webkit|editor|a menu opened and closed with Escape, Tab": {
+    "from": "menuitem|File|-",
+    "to": "radio|Editor|-"
+  },
+  "webkit|editor|a menu opened and closed with Escape, Shift+Tab": {
+    "from": "menuitem|File|-",
+    "to": "body"
+  },
+  "webkit|editor|Help > About opened and closed with Escape, Tab": {
+    "from": "body",
+    "to": "menuitem|Help|-"
+  },
+  "webkit|editor|Help > About opened and closed with Escape, Shift+Tab": {
+    "from": "body",
+    "to": "grid|Assembler messages|messages"
+  },
+  "webkit|editor|a mode switch by a click and back, Tab": {
+    "from": "radio|Editor|-",
+    "to": "button|Files|-"
+  },
+  "webkit|editor|a mode switch by a click and back, Shift+Tab": {
+    "from": "radio|Editor|-",
+    "to": "radio|Editor|-"
+  },
+  "webkit|editor (1000 px)|gone at the end, window back, Shift+Tab": [
+    [
+      "grid|Assembler messages|messages",
+      "separator|Resize the Messages panel|-",
+      "textbox|untitled1.x68|editor",
+      "tab|untitled1.x68|editor",
+      "separator|Resize the Files panel|-",
+      "tree|Files|files",
+      "button|New Folder...|files",
+      "button|Files|-",
+      "radio|Editor|-",
+      "menuitem|File|-",
+      "body"
+    ]
+  ],
+  "webkit|editor (1000 px)|gone at the start, window back, Tab": [
+    [
+      "menuitem|File|-",
+      "radio|Editor|-",
+      "button|Files|-",
+      "button|New Folder...|files",
+      "tree|Files|files",
+      "separator|Resize the Files panel|-",
+      "tab|untitled1.x68|editor",
+      "textbox|untitled1.x68|editor",
+      "separator|Resize the Messages panel|-",
+      "grid|Assembler messages|messages",
+      "body"
+    ]
+  ],
+  "webkit|editor (1000 px)|gone beside each stop, Tab": [
+    "menuitem|File|-",
+    "radio|Editor|-",
+    "button|Files|-",
+    "button|New Folder...|files",
+    "tree|Files|files",
+    "separator|Resize the Files panel|-",
+    "tab|untitled1.x68|editor",
+    "textbox|untitled1.x68|editor",
+    "separator|Resize the Messages panel|-",
+    "grid|Assembler messages|messages",
+    "body"
+  ],
+  "webkit|editor (1000 px)|gone beside each stop, Shift+Tab": [
+    "grid|Assembler messages|messages",
+    "separator|Resize the Messages panel|-",
+    "textbox|untitled1.x68|editor",
+    "tab|untitled1.x68|editor",
+    "separator|Resize the Files panel|-",
+    "tree|Files|files",
+    "button|Files|-",
+    "radio|Editor|-",
+    "menuitem|File|-",
+    "body"
+  ],
+  "webkit|editor (1000 px)|a click on the status bar, Tab": {
+    "from": "body",
+    "to": "menuitem|File|-"
+  },
+  "webkit|editor (1000 px)|a click on the status bar, Shift+Tab": {
+    "from": "body",
+    "to": "grid|Assembler messages|messages"
+  },
+  "webkit|editor (1000 px)|a click on the menu row beside the menus, Tab": {
+    "from": "body",
+    "to": "menuitem|File|-"
+  },
+  "webkit|editor (1000 px)|a click on the menu row beside the menus, Shift+Tab": {
+    "from": "body",
+    "to": "body"
+  },
+  "webkit|editor (1000 px)|a menu opened and closed with Escape, Tab": {
+    "from": "menuitem|File|-",
+    "to": "radio|Editor|-"
+  },
+  "webkit|editor (1000 px)|a menu opened and closed with Escape, Shift+Tab": {
+    "from": "menuitem|File|-",
+    "to": "body"
+  },
+  "webkit|editor (1000 px)|Help > About opened and closed with Escape, Tab": {
+    "from": "body",
+    "to": "menuitem|Help|-"
+  },
+  "webkit|editor (1000 px)|Help > About opened and closed with Escape, Shift+Tab": {
+    "from": "body",
+    "to": "grid|Assembler messages|messages"
+  },
+  "webkit|editor (1000 px)|a mode switch by a click and back, Tab": {
+    "from": "radio|Editor|-",
+    "to": "button|Files|-"
+  },
+  "webkit|editor (1000 px)|a mode switch by a click and back, Shift+Tab": {
+    "from": "radio|Editor|-",
+    "to": "radio|Editor|-"
+  },
+  "webkit|simulator wide|gone at the end, window back, Shift+Tab": [
+    ["textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"]
+  ],
+  "webkit|simulator wide|gone at the start, window back, Tab": [
+    [
+      "menuitem|File|-",
+      "radio|Simulator|-",
+      "button|Open (Ctrl+O)|-",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "button|Clear Cycles|registers",
+      "input||registers",
+      "listbox|Listing|listing",
+      "separator|Resize the Messages panel|-",
+      "list|Messages|messages",
+      "separator|Resize the two columns|-",
+      "select|Fit100%200%|output",
+      "button|Full Screen (Alt+Enter)|output",
+      "button|Collapse the Output panel|output",
+      "region|Output picture|output",
+      "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+    ]
+  ],
+  "webkit|simulator wide|gone beside each stop, Tab": [
+    "menuitem|File|-",
+    "radio|Simulator|-",
+    "button|Open (Ctrl+O)|-",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "button|Clear Cycles|registers",
+    "input||registers",
+    "listbox|Listing|listing",
+    "separator|Resize the Messages panel|-",
+    "list|Messages|messages",
+    "separator|Resize the two columns|-",
+    "select|Fit100%200%|output",
+    "button|Full Screen (Alt+Enter)|output",
+    "button|Collapse the Output panel|output",
+    "region|Output picture|output",
+    "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+  ],
+  "webkit|simulator wide|gone beside each stop, Shift+Tab": [
+    "region|Output picture|output",
+    "button|Collapse the Output panel|output",
+    "button|Full Screen (Alt+Enter)|output",
+    "select|Fit100%200%|output",
+    "separator|Resize the two columns|-",
+    "list|Messages|messages",
+    "separator|Resize the Messages panel|-",
+    "listbox|Listing|listing",
+    "input||registers",
+    "button|Clear Cycles|registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "button|Open (Ctrl+O)|-",
+    "radio|Simulator|-",
+    "menuitem|File|-",
+    "body"
+  ],
+  "webkit|simulator wide|a click on the status bar, Tab": {
+    "from": "body",
+    "to": "menuitem|File|-"
+  },
+  "webkit|simulator wide|a click on the status bar, Shift+Tab": {
+    "from": "body",
+    "to": "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+  },
+  "webkit|simulator wide|a click on the menu row beside the menus, Tab": {
+    "from": "body",
+    "to": "menuitem|File|-"
+  },
+  "webkit|simulator wide|a click on the menu row beside the menus, Shift+Tab": {
+    "from": "body",
+    "to": "body"
+  },
+  "webkit|simulator wide|a menu opened and closed with Escape, Tab": {
+    "from": "menuitem|File|-",
+    "to": "radio|Simulator|-"
+  },
+  "webkit|simulator wide|a menu opened and closed with Escape, Shift+Tab": {
+    "from": "menuitem|File|-",
+    "to": "body"
+  },
+  "webkit|simulator wide|Help > About opened and closed with Escape, Tab": {
+    "from": "body",
+    "to": "menuitem|Help|-"
+  },
+  "webkit|simulator wide|Help > About opened and closed with Escape, Shift+Tab": {
+    "from": "body",
+    "to": "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+  },
+  "webkit|simulator wide|a mode switch by a click and back, Tab": {
+    "from": "radio|Simulator|-",
+    "to": "button|Open (Ctrl+O)|-"
+  },
+  "webkit|simulator wide|a mode switch by a click and back, Shift+Tab": {
+    "from": "radio|Simulator|-",
+    "to": "radio|Simulator|-"
+  },
+  "webkit|simulator narrow|gone at the end, window back, Shift+Tab": [
+    ["textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"]
+  ],
+  "webkit|simulator narrow|gone at the start, window back, Tab": [
+    [
+      "menuitem|File|-",
+      "radio|Simulator|-",
+      "button|Open (Ctrl+O)|-",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "button|Clear Cycles|registers",
+      "input||registers",
+      "listbox|Listing|listing",
+      "separator|Resize the Messages panel|-",
+      "list|Messages|messages",
+      "separator|Resize the two columns|-",
+      "tab|Output|-",
+      "select|Fit100%200%|output",
+      "button|Full Screen (Alt+Enter)|output",
+      "region|Output picture|output",
+      "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+    ]
+  ],
+  "webkit|simulator narrow|gone beside each stop, Tab": [
+    "menuitem|File|-",
+    "radio|Simulator|-",
+    "button|Open (Ctrl+O)|-",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "button|Clear Cycles|registers",
+    "input||registers",
+    "listbox|Listing|listing",
+    "separator|Resize the Messages panel|-",
+    "list|Messages|messages",
+    "separator|Resize the two columns|-",
+    "tab|Output|-",
+    "select|Fit100%200%|output",
+    "button|Full Screen (Alt+Enter)|output",
+    "region|Output picture|output",
+    "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+  ],
+  "webkit|simulator narrow|gone beside each stop, Shift+Tab": [
+    "region|Output picture|output",
+    "button|Full Screen (Alt+Enter)|output",
+    "select|Fit100%200%|output",
+    "tab|Output|-",
+    "separator|Resize the two columns|-",
+    "list|Messages|messages",
+    "separator|Resize the Messages panel|-",
+    "listbox|Listing|listing",
+    "input||registers",
+    "button|Clear Cycles|registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "input||registers",
+    "button|Open (Ctrl+O)|-",
+    "radio|Simulator|-",
+    "menuitem|File|-",
+    "body"
+  ],
+  "webkit|simulator narrow|a click on the status bar, Tab": {
+    "from": "body",
+    "to": "menuitem|File|-"
+  },
+  "webkit|simulator narrow|a click on the status bar, Shift+Tab": {
+    "from": "body",
+    "to": "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+  },
+  "webkit|simulator narrow|a click on the menu row beside the menus, Tab": {
+    "from": "body",
+    "to": "menuitem|File|-"
+  },
+  "webkit|simulator narrow|a click on the menu row beside the menus, Shift+Tab": {
+    "from": "body",
+    "to": "body"
+  },
+  "webkit|simulator narrow|a menu opened and closed with Escape, Tab": {
+    "from": "menuitem|File|-",
+    "to": "radio|Simulator|-"
+  },
+  "webkit|simulator narrow|a menu opened and closed with Escape, Shift+Tab": {
+    "from": "menuitem|File|-",
+    "to": "body"
+  },
+  "webkit|simulator narrow|Help > About opened and closed with Escape, Tab": {
+    "from": "body",
+    "to": "menuitem|Help|-"
+  },
+  "webkit|simulator narrow|Help > About opened and closed with Escape, Shift+Tab": {
+    "from": "body",
+    "to": "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+  },
+  "webkit|simulator narrow|a mode switch by a click and back, Tab": {
+    "from": "radio|Simulator|-",
+    "to": "button|Open (Ctrl+O)|-"
+  },
+  "webkit|simulator narrow|a mode switch by a click and back, Shift+Tab": {
+    "from": "radio|Simulator|-",
+    "to": "radio|Simulator|-"
+  },
+  "webkit|easybin|gone at the end, window back, Shift+Tab": [
+    [
+      "button|Page down|easybin",
+      "button|Page up|easybin",
+      "button|Row down|easybin",
+      "button|Row up|easybin",
+      "group|Memory|easybin",
+      "input|Address|easybin",
+      "button|Fill|easybin",
+      "input|Fill byte|easybin",
+      "button|Copy|easybin",
+      "input|Size|easybin",
+      "input|To|easybin",
+      "input|From|easybin",
+      "button|Save Binary...|easybin",
+      "input|Length of the binary files|easybin",
+      "input|First Address|easybin",
+      "input||easybin",
+      "button|Open S-Record...|easybin",
+      "input|Start Address|easybin",
+      "button|Theme|-",
+      "radio|EASyBIN|-",
+      "menuitem|File|-",
+      "body"
+    ]
+  ],
+  "webkit|easybin|gone at the start, window back, Tab": [
+    [
+      "menuitem|File|-",
+      "radio|EASyBIN|-",
+      "button|Theme|-",
+      "input|Start Address|easybin",
+      "button|Open S-Record...|easybin",
+      "input||easybin",
+      "input|First Address|easybin",
+      "input|Length of the binary files|easybin",
+      "button|Save Binary...|easybin",
+      "input|From|easybin",
+      "input|To|easybin",
+      "input|Size|easybin",
+      "button|Copy|easybin",
+      "input|Fill byte|easybin",
+      "button|Fill|easybin",
+      "input|Address|easybin",
+      "group|Memory|easybin",
+      "button|Row up|easybin",
+      "button|Row down|easybin",
+      "button|Page up|easybin",
+      "button|Page down|easybin",
+      "body"
+    ]
+  ],
+  "webkit|easybin|gone beside each stop, Tab": [
+    "menuitem|File|-",
+    "radio|EASyBIN|-",
+    "button|Theme|-",
+    "input|Start Address|easybin",
+    "button|Open S-Record...|easybin",
+    "input||easybin",
+    "input|First Address|easybin",
+    "input|Length of the binary files|easybin",
+    "button|Save Binary...|easybin",
+    "input|From|easybin",
+    "input|To|easybin",
+    "input|Size|easybin",
+    "button|Copy|easybin",
+    "input|Fill byte|easybin",
+    "button|Fill|easybin",
+    "input|Address|easybin",
+    "group|Memory|easybin",
+    "button|Row up|easybin",
+    "button|Row down|easybin",
+    "button|Page up|easybin",
+    "button|Page down|easybin",
+    "body"
+  ],
+  "webkit|easybin|gone beside each stop, Shift+Tab": [
+    "button|Page down|easybin",
+    "button|Page up|easybin",
+    "button|Row down|easybin",
+    "button|Row up|easybin",
+    "group|Memory|easybin",
+    "input|Address|easybin",
+    "button|Fill|easybin",
+    "button|Copy|easybin",
+    "input|To|easybin",
+    "input|From|easybin",
+    "button|Save Binary...|easybin",
+    "input|Length of the binary files|easybin",
+    "input|First Address|easybin",
+    "input||easybin",
+    "button|Open S-Record...|easybin",
+    "input|Start Address|easybin",
+    "button|Theme|-",
+    "radio|EASyBIN|-",
+    "menuitem|File|-",
+    "body"
+  ],
+  "webkit|easybin|a click on the status bar, Tab": {
+    "from": "body",
+    "to": "menuitem|File|-"
+  },
+  "webkit|easybin|a click on the status bar, Shift+Tab": {
+    "from": "body",
+    "to": "button|Page down|easybin"
+  },
+  "webkit|easybin|a click on the menu row beside the menus, Tab": {
+    "from": "body",
+    "to": "menuitem|File|-"
+  },
+  "webkit|easybin|a click on the menu row beside the menus, Shift+Tab": {
+    "from": "body",
+    "to": "body"
+  },
+  "webkit|easybin|a menu opened and closed with Escape, Tab": {
+    "from": "menuitem|File|-",
+    "to": "radio|EASyBIN|-"
+  },
+  "webkit|easybin|a menu opened and closed with Escape, Shift+Tab": {
+    "from": "menuitem|File|-",
+    "to": "body"
+  },
+  "webkit|easybin|Help > About opened and closed with Escape, Tab": {
+    "from": "body",
+    "to": "menuitem|Help|-"
+  },
+  "webkit|easybin|Help > About opened and closed with Escape, Shift+Tab": {
+    "from": "body",
+    "to": "button|Page down|easybin"
+  },
+  "webkit|easybin|a mode switch by a click and back, Tab": {
+    "from": "radio|EASyBIN|-",
+    "to": "button|Theme|-"
+  },
+  "webkit|easybin|a mode switch by a click and back, Shift+Tab": {
+    "from": "radio|EASyBIN|-",
+    "to": "radio|EASyBIN|-"
+  }
+}

@@ -8,12 +8,13 @@
 //   panels    `editor` (Editor mode): the editor area, one or two panes;
 //             `status` (Editor mode): the window's status bar, showing the active document's path
 //             (each pane has the original's status bar under its document, 2.2)
-//   commands  see commands.ts
+//   commands  see commands.ts (with the editor split of ARCHITECTURE-PLUS P3.1.4, ui/editor/split.ts)
 //   init      ends the window's editor session with the application
 //
-// Owner: W3 > E2.
+// Owner: W3 > E2; the split commands N2 (ARCHITECTURE-PLUS P5).
 
 import type { FeatureModule } from '../../contracts';
+import { splitActionsOf } from '../../ui/editor/split';
 import { editorCommands } from './commands';
 import { editorUi } from './ui-link';
 
@@ -23,7 +24,10 @@ export const feature: FeatureModule = {
     { id: 'editor', title: 'Editor', mode: 'editor', component: editorUi.EditorArea },
     { id: 'status', title: 'Status', mode: 'editor', component: editorUi.EditorWindowStatus },
   ],
-  commands: editorCommands((ctx) => editorUi.editorFor(ctx)),
+  commands: editorCommands(
+    (ctx) => editorUi.editorFor(ctx),
+    (ctx) => splitActionsOf(ctx),
+  ),
   init(ctx) {
     // Create the session at start, so that focus tracking works before the first command.
     const session = editorUi.editorFor(ctx) as { dispose?: () => void };

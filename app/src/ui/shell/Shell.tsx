@@ -14,6 +14,11 @@
 // mode keeps its state while another is in front and a program keeps running while the editor is
 // shown. The Help panel is a drawer on the right edge in every mode. In the macOS app the menu
 // bar is the system's and the in-window one is not drawn.
+//
+// Editor mode and Simulator mode are docks (ui/dock/DockWorkspace.tsx, ARCHITECTURE-PLUS P3.1,
+// N1): their panels can be moved and grouped; the default arrangement is today's. A dock lays out
+// its panels once it is shown for the first time (its panels mount then) and keeps them mounted
+// while its workspace is hidden. EASyBIN has one panel and the Help drawer stays a drawer.
 
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { Mode } from '../../contracts';
@@ -24,13 +29,12 @@ import { focusPanelElement } from '../../state/panels';
 import { EXIT_TEXT } from '../../state/shell';
 import { applyThemeSetting } from '../../styles';
 import { Splitter } from '../components';
+import { DockWorkspace } from '../dock/DockWorkspace';
 import { DialogHost, ToastHost } from './DialogHost';
-import { EditorWorkspace } from './EditorWorkspace';
 import { ModeSwitch } from './ModeSwitch';
 import { PanelRegion } from './PanelRegion';
 import { ShellMenuBar } from './ShellMenuBar';
 import { ShellToolbar } from './ShellToolbar';
-import { SimWorkspace } from './SimWorkspace';
 import { useElementSize, useSplit } from './SplitPane';
 import { StatusBar } from './StatusBar';
 import './shell.css';
@@ -38,9 +42,9 @@ import './shell.css';
 function Workspace({ mode }: { mode: Mode }) {
   switch (mode) {
     case 'editor':
-      return <EditorWorkspace />;
+      return <DockWorkspace mode="editor" />;
     case 'simulator':
-      return <SimWorkspace />;
+      return <DockWorkspace mode="simulator" />;
     case 'easybin':
       return <PanelRegion id="easybin" mode="easybin" className="e68-region--fill" />;
   }
@@ -65,7 +69,21 @@ function useTheme() {
   useLayoutEffect(() => applyThemeSetting(theme), [theme]);
 }
 
-/** Carries out the focus requests of state/panels.ts once the panel is on screen. */
+/** Frames a focus request waits for its panel: a dock lays a panel out a few frames after it is put in. */
+const FOCUS_FRAMES = 12;
+/**
+ * The least time a focus request waits, whatever the frame rate: a browser that delivers few or no
+ * display frames (GitHub's macOS runners at times) must not drop the request after a few frames.
+ */
+const FOCUS_WAIT_MS = 1000;
+
+/**
+ * Carries out the focus requests of state/panels.ts once the panel is on screen. The dock renders a
+ * panel that was just put in by a commit of its own after this effect, and lays out a group in a
+ * later frame, so the request is tried again at once after each change of the DOM (a mutation
+ * observer, which runs before any other task can see the panel without the focus), at each frame and
+ * at a timer, until it succeeds, FOCUS_FRAMES frames have passed and FOCUS_WAIT_MS is over.
+ */
 function usePanelFocus() {
   const { shell } = useApplication();
   const request = useShellState((state) => state.focusRequest);
@@ -76,12 +94,49 @@ function usePanelFocus() {
         state.focusRequest?.serial === request.serial ? { ...state, focusRequest: null } : state,
       );
     if (focusPanelElement(document, request.panel)) return done();
-    // The panel may be rendered by an update that has not been committed yet.
-    const frame = requestAnimationFrame(() => {
-      focusPanelElement(document, request.panel);
-      done();
-    });
-    return () => cancelAnimationFrame(frame);
+    let finished = false;
+    let frames = 0;
+    let frame = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let observer: MutationObserver | null = null;
+    const started = performance.now();
+    const stop = () => {
+      finished = true;
+      observer?.disconnect();
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+    };
+    /** Tries once; true when the request is over (focused, given up, or stopped). */
+    const attempt = (): boolean => {
+      if (finished) return true;
+      const elapsed = performance.now() - started;
+      const over = (frames >= FOCUS_FRAMES && elapsed >= FOCUS_WAIT_MS) || elapsed >= 3 * FOCUS_WAIT_MS;
+      if (focusPanelElement(document, request.panel) || over) {
+        stop();
+        done();
+        return true;
+      }
+      return false;
+    };
+    const onFrame = () => {
+      frames++;
+      if (!attempt()) frame = requestAnimationFrame(onFrame);
+    };
+    const onTimer = () => {
+      if (!attempt()) timer = setTimeout(onTimer, 50);
+    };
+    if (typeof MutationObserver === 'function') {
+      observer = new MutationObserver(() => void attempt());
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style', 'class', 'hidden'],
+      });
+    }
+    frame = requestAnimationFrame(onFrame);
+    timer = setTimeout(onTimer, 50);
+    return stop;
   }, [request, shell]);
 }
 

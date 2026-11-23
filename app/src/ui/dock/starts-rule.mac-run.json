@@ -1,0 +1,857 @@
+{
+  "webkit|editor|gone at the end, window back, Shift+Tab": {
+    "line": 3789,
+    "passed": true,
+    "observed": [
+      [
+        "grid|Assembler messages|messages",
+        "separator|Resize the Messages panel|-",
+        "textbox|untitled1.x68|editor",
+        "tab|untitled1.x68|editor",
+        "separator|Resize the Files panel|-",
+        "tree|Files|files",
+        "button|New Folder...|files",
+        "button|Files|-",
+        "radio|Editor|-",
+        "menuitem|File|-",
+        "body"
+      ]
+    ]
+  },
+  "webkit|editor|gone at the start, window back, Tab": {
+    "line": 3790,
+    "passed": true,
+    "observed": [
+      [
+        "menuitem|File|-",
+        "radio|Editor|-",
+        "button|Files|-",
+        "button|New Folder...|files",
+        "tree|Files|files",
+        "separator|Resize the Files panel|-",
+        "tab|untitled1.x68|editor",
+        "textbox|untitled1.x68|editor",
+        "separator|Resize the Messages panel|-",
+        "grid|Assembler messages|messages",
+        "body"
+      ]
+    ]
+  },
+  "webkit|editor|gone beside each stop, Tab": {
+    "line": 3791,
+    "passed": true,
+    "observed": [
+      "menuitem|File|-",
+      "radio|Editor|-",
+      "button|Files|-",
+      "button|New Folder...|files",
+      "tree|Files|files",
+      "separator|Resize the Files panel|-",
+      "tab|untitled1.x68|editor",
+      "textbox|untitled1.x68|editor",
+      "separator|Resize the Messages panel|-",
+      "grid|Assembler messages|messages",
+      "body"
+    ]
+  },
+  "webkit|editor|gone beside each stop, Shift+Tab": {
+    "line": 3792,
+    "passed": true,
+    "observed": [
+      "grid|Assembler messages|messages",
+      "separator|Resize the Messages panel|-",
+      "textbox|untitled1.x68|editor",
+      "tab|untitled1.x68|editor",
+      "separator|Resize the Files panel|-",
+      "tree|Files|files",
+      "button|Files|-",
+      "radio|Editor|-",
+      "menuitem|File|-",
+      "body"
+    ]
+  },
+  "webkit|editor|a click on the status bar, Tab": {
+    "line": 3793,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "menuitem|File|-"
+    }
+  },
+  "webkit|editor|a click on the status bar, Shift+Tab": {
+    "line": 3794,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "grid|Assembler messages|messages"
+    }
+  },
+  "webkit|editor|a click on the menu row beside the menus, Tab": {
+    "line": 3795,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "menuitem|File|-"
+    }
+  },
+  "webkit|editor|a click on the menu row beside the menus, Shift+Tab": {
+    "line": 3796,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "body"
+    }
+  },
+  "webkit|editor|a menu opened and closed with Escape, Tab": {
+    "line": 3797,
+    "passed": true,
+    "observed": {
+      "from": "menuitem|File|-",
+      "to": "radio|Editor|-"
+    }
+  },
+  "webkit|editor|a menu opened and closed with Escape, Shift+Tab": {
+    "line": 3798,
+    "passed": true,
+    "observed": {
+      "from": "menuitem|File|-",
+      "to": "body"
+    }
+  },
+  "webkit|editor|Help > About opened and closed with Escape, Tab": {
+    "line": 3799,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "menuitem|Help|-"
+    }
+  },
+  "webkit|editor|Help > About opened and closed with Escape, Shift+Tab": {
+    "line": 3800,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "grid|Assembler messages|messages"
+    }
+  },
+  "webkit|editor|a mode switch by a click and back, Tab": {
+    "line": 3801,
+    "passed": true,
+    "observed": {
+      "from": "radio|Editor|-",
+      "to": "button|Files|-"
+    }
+  },
+  "webkit|editor|a mode switch by a click and back, Shift+Tab": {
+    "line": 3802,
+    "passed": true,
+    "observed": {
+      "from": "radio|Editor|-",
+      "to": "radio|Editor|-"
+    }
+  },
+  "webkit|editor (1000 px)|gone at the end, window back, Shift+Tab": {
+    "line": 3804,
+    "passed": true,
+    "observed": [
+      [
+        "grid|Assembler messages|messages",
+        "separator|Resize the Messages panel|-",
+        "textbox|untitled1.x68|editor",
+        "tab|untitled1.x68|editor",
+        "separator|Resize the Files panel|-",
+        "tree|Files|files",
+        "button|New Folder...|files",
+        "button|Files|-",
+        "radio|Editor|-",
+        "menuitem|File|-",
+        "body"
+      ]
+    ]
+  },
+  "webkit|editor (1000 px)|gone at the start, window back, Tab": {
+    "line": 3805,
+    "passed": true,
+    "observed": [
+      [
+        "menuitem|File|-",
+        "radio|Editor|-",
+        "button|Files|-",
+        "button|New Folder...|files",
+        "tree|Files|files",
+        "separator|Resize the Files panel|-",
+        "tab|untitled1.x68|editor",
+        "textbox|untitled1.x68|editor",
+        "separator|Resize the Messages panel|-",
+        "grid|Assembler messages|messages",
+        "body"
+      ]
+    ]
+  },
+  "webkit|editor (1000 px)|gone beside each stop, Tab": {
+    "line": 3806,
+    "passed": true,
+    "observed": [
+      "menuitem|File|-",
+      "radio|Editor|-",
+      "button|Files|-",
+      "button|New Folder...|files",
+      "tree|Files|files",
+      "separator|Resize the Files panel|-",
+      "tab|untitled1.x68|editor",
+      "textbox|untitled1.x68|editor",
+      "separator|Resize the Messages panel|-",
+      "grid|Assembler messages|messages",
+      "body"
+    ]
+  },
+  "webkit|editor (1000 px)|gone beside each stop, Shift+Tab": {
+    "line": 3807,
+    "passed": true,
+    "observed": [
+      "grid|Assembler messages|messages",
+      "separator|Resize the Messages panel|-",
+      "textbox|untitled1.x68|editor",
+      "tab|untitled1.x68|editor",
+      "separator|Resize the Files panel|-",
+      "tree|Files|files",
+      "button|Files|-",
+      "radio|Editor|-",
+      "menuitem|File|-",
+      "body"
+    ]
+  },
+  "webkit|editor (1000 px)|a click on the status bar, Tab": {
+    "line": 3808,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "menuitem|File|-"
+    }
+  },
+  "webkit|editor (1000 px)|a click on the status bar, Shift+Tab": {
+    "line": 3809,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "grid|Assembler messages|messages"
+    }
+  },
+  "webkit|editor (1000 px)|a click on the menu row beside the menus, Tab": {
+    "line": 3810,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "menuitem|File|-"
+    }
+  },
+  "webkit|editor (1000 px)|a click on the menu row beside the menus, Shift+Tab": {
+    "line": 3811,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "body"
+    }
+  },
+  "webkit|editor (1000 px)|a menu opened and closed with Escape, Tab": {
+    "line": 3812,
+    "passed": true,
+    "observed": {
+      "from": "menuitem|File|-",
+      "to": "radio|Editor|-"
+    }
+  },
+  "webkit|editor (1000 px)|a menu opened and closed with Escape, Shift+Tab": {
+    "line": 3813,
+    "passed": true,
+    "observed": {
+      "from": "menuitem|File|-",
+      "to": "body"
+    }
+  },
+  "webkit|editor (1000 px)|Help > About opened and closed with Escape, Tab": {
+    "line": 3814,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "menuitem|Help|-"
+    }
+  },
+  "webkit|editor (1000 px)|Help > About opened and closed with Escape, Shift+Tab": {
+    "line": 3815,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "grid|Assembler messages|messages"
+    }
+  },
+  "webkit|editor (1000 px)|a mode switch by a click and back, Tab": {
+    "line": 3816,
+    "passed": true,
+    "observed": {
+      "from": "radio|Editor|-",
+      "to": "button|Files|-"
+    }
+  },
+  "webkit|editor (1000 px)|a mode switch by a click and back, Shift+Tab": {
+    "line": 3817,
+    "passed": true,
+    "observed": {
+      "from": "radio|Editor|-",
+      "to": "radio|Editor|-"
+    }
+  },
+  "webkit|simulator wide|gone at the end, window back, Shift+Tab": {
+    "line": 3819,
+    "passed": true,
+    "observed": [["textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"]]
+  },
+  "webkit|simulator wide|gone at the start, window back, Tab": {
+    "line": 3820,
+    "passed": false,
+    "observed": [
+      [
+        "menuitem|File|-",
+        "radio|Simulator|-",
+        "button|Open (Ctrl+O)|-",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "listbox|Listing|listing",
+        "separator|Resize the Messages panel|-",
+        "list|Messages|messages",
+        "separator|Resize the two columns|-",
+        "select|Fit100%200%|output",
+        "region|Output picture|output",
+        "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+      ]
+    ]
+  },
+  "webkit|simulator wide|gone beside each stop, Tab": {
+    "line": 3821,
+    "passed": false,
+    "observed": [
+      "menuitem|File|-",
+      "radio|Simulator|-",
+      "button|Open (Ctrl+O)|-",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "listbox|Listing|listing",
+      "separator|Resize the Messages panel|-",
+      "list|Messages|messages",
+      "separator|Resize the two columns|-",
+      "select|Fit100%200%|output",
+      "region|Output picture|output",
+      "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+    ]
+  },
+  "webkit|simulator wide|gone beside each stop, Shift+Tab": {
+    "line": 3822,
+    "passed": false,
+    "observed": [
+      "region|Output picture|output",
+      "select|Fit100%200%|output",
+      "separator|Resize the two columns|-",
+      "list|Messages|messages",
+      "separator|Resize the Messages panel|-",
+      "listbox|Listing|listing",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "button|Open (Ctrl+O)|-",
+      "radio|Simulator|-",
+      "menuitem|File|-",
+      "body"
+    ]
+  },
+  "webkit|simulator wide|a click on the status bar, Tab": {
+    "line": 3823,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "menuitem|File|-"
+    }
+  },
+  "webkit|simulator wide|a click on the status bar, Shift+Tab": {
+    "line": 3824,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+    }
+  },
+  "webkit|simulator wide|a click on the menu row beside the menus, Tab": {
+    "line": 3825,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "menuitem|File|-"
+    }
+  },
+  "webkit|simulator wide|a click on the menu row beside the menus, Shift+Tab": {
+    "line": 3826,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "body"
+    }
+  },
+  "webkit|simulator wide|a menu opened and closed with Escape, Tab": {
+    "line": 3827,
+    "passed": true,
+    "observed": {
+      "from": "menuitem|File|-",
+      "to": "radio|Simulator|-"
+    }
+  },
+  "webkit|simulator wide|a menu opened and closed with Escape, Shift+Tab": {
+    "line": 3828,
+    "passed": true,
+    "observed": {
+      "from": "menuitem|File|-",
+      "to": "body"
+    }
+  },
+  "webkit|simulator wide|Help > About opened and closed with Escape, Tab": {
+    "line": 3829,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "menuitem|Help|-"
+    }
+  },
+  "webkit|simulator wide|Help > About opened and closed with Escape, Shift+Tab": {
+    "line": 3830,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+    }
+  },
+  "webkit|simulator wide|a mode switch by a click and back, Tab": {
+    "line": 3831,
+    "passed": true,
+    "observed": {
+      "from": "radio|Simulator|-",
+      "to": "button|Open (Ctrl+O)|-"
+    }
+  },
+  "webkit|simulator wide|a mode switch by a click and back, Shift+Tab": {
+    "line": 3832,
+    "passed": true,
+    "observed": {
+      "from": "radio|Simulator|-",
+      "to": "radio|Simulator|-"
+    }
+  },
+  "webkit|simulator narrow|gone at the end, window back, Shift+Tab": {
+    "line": 3834,
+    "passed": true,
+    "observed": [["textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"]]
+  },
+  "webkit|simulator narrow|gone at the start, window back, Tab": {
+    "line": 3835,
+    "passed": false,
+    "observed": [
+      [
+        "menuitem|File|-",
+        "radio|Simulator|-",
+        "button|Open (Ctrl+O)|-",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "input||registers",
+        "listbox|Listing|listing",
+        "separator|Resize the Messages panel|-",
+        "list|Messages|messages",
+        "separator|Resize the two columns|-",
+        "tab|Output|-",
+        "select|Fit100%200%|output",
+        "region|Output picture|output",
+        "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+      ]
+    ]
+  },
+  "webkit|simulator narrow|gone beside each stop, Tab": {
+    "line": 3836,
+    "passed": false,
+    "observed": [
+      "menuitem|File|-",
+      "radio|Simulator|-",
+      "button|Open (Ctrl+O)|-",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "listbox|Listing|listing",
+      "separator|Resize the Messages panel|-",
+      "list|Messages|messages",
+      "separator|Resize the two columns|-",
+      "tab|Output|-",
+      "select|Fit100%200%|output",
+      "region|Output picture|output",
+      "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+    ]
+  },
+  "webkit|simulator narrow|gone beside each stop, Shift+Tab": {
+    "line": 3837,
+    "passed": false,
+    "observed": [
+      "region|Output picture|output",
+      "select|Fit100%200%|output",
+      "tab|Output|-",
+      "separator|Resize the two columns|-",
+      "list|Messages|messages",
+      "separator|Resize the Messages panel|-",
+      "listbox|Listing|listing",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "input||registers",
+      "button|Open (Ctrl+O)|-",
+      "radio|Simulator|-",
+      "menuitem|File|-",
+      "body"
+    ]
+  },
+  "webkit|simulator narrow|a click on the status bar, Tab": {
+    "line": 3838,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "menuitem|File|-"
+    }
+  },
+  "webkit|simulator narrow|a click on the status bar, Shift+Tab": {
+    "line": 3839,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+    }
+  },
+  "webkit|simulator narrow|a click on the menu row beside the menus, Tab": {
+    "line": 3840,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "menuitem|File|-"
+    }
+  },
+  "webkit|simulator narrow|a click on the menu row beside the menus, Shift+Tab": {
+    "line": 3841,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "body"
+    }
+  },
+  "webkit|simulator narrow|a menu opened and closed with Escape, Tab": {
+    "line": 3842,
+    "passed": true,
+    "observed": {
+      "from": "menuitem|File|-",
+      "to": "radio|Simulator|-"
+    }
+  },
+  "webkit|simulator narrow|a menu opened and closed with Escape, Shift+Tab": {
+    "line": 3843,
+    "passed": true,
+    "observed": {
+      "from": "menuitem|File|-",
+      "to": "body"
+    }
+  },
+  "webkit|simulator narrow|Help > About opened and closed with Escape, Tab": {
+    "line": 3844,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "menuitem|Help|-"
+    }
+  },
+  "webkit|simulator narrow|Help > About opened and closed with Escape, Shift+Tab": {
+    "line": 3845,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "textarea|Keyboard of the running program. Ctrl+Alt+O moves to the next panel.|output"
+    }
+  },
+  "webkit|simulator narrow|a mode switch by a click and back, Tab": {
+    "line": 3846,
+    "passed": true,
+    "observed": {
+      "from": "radio|Simulator|-",
+      "to": "button|Open (Ctrl+O)|-"
+    }
+  },
+  "webkit|simulator narrow|a mode switch by a click and back, Shift+Tab": {
+    "line": 3847,
+    "passed": true,
+    "observed": {
+      "from": "radio|Simulator|-",
+      "to": "radio|Simulator|-"
+    }
+  },
+  "webkit|easybin|gone at the end, window back, Shift+Tab": {
+    "line": 3849,
+    "passed": false,
+    "observed": [
+      [
+        "group|Memory|easybin",
+        "input|Address|easybin",
+        "input|Fill byte|easybin",
+        "input|Size|easybin",
+        "input|To|easybin",
+        "input|From|easybin",
+        "input|Length of the binary files|easybin",
+        "input|First Address|easybin",
+        "input|Start Address|easybin",
+        "button|Theme|-",
+        "radio|EASyBIN|-",
+        "menuitem|File|-",
+        "body"
+      ]
+    ]
+  },
+  "webkit|easybin|gone at the start, window back, Tab": {
+    "line": 3850,
+    "passed": false,
+    "observed": [
+      [
+        "menuitem|File|-",
+        "radio|EASyBIN|-",
+        "button|Theme|-",
+        "input|Start Address|easybin",
+        "input|First Address|easybin",
+        "input|Length of the binary files|easybin",
+        "input|From|easybin",
+        "input|To|easybin",
+        "input|Size|easybin",
+        "input|Fill byte|easybin",
+        "input|Address|easybin",
+        "group|Memory|easybin",
+        "body"
+      ]
+    ]
+  },
+  "webkit|easybin|gone beside each stop, Tab": {
+    "line": 3851,
+    "passed": false,
+    "observed": [
+      "menuitem|File|-",
+      "radio|EASyBIN|-",
+      "button|Theme|-",
+      "input|Start Address|easybin",
+      "input|First Address|easybin",
+      "input|Length of the binary files|easybin",
+      "input|From|easybin",
+      "input|To|easybin",
+      "input|Size|easybin",
+      "input|Fill byte|easybin",
+      "input|Address|easybin",
+      "group|Memory|easybin",
+      "body"
+    ]
+  },
+  "webkit|easybin|gone beside each stop, Shift+Tab": {
+    "line": 3852,
+    "passed": false,
+    "observed": [
+      "group|Memory|easybin",
+      "input|Address|easybin",
+      "input|Fill byte|easybin",
+      "input|Size|easybin",
+      "input|To|easybin",
+      "input|From|easybin",
+      "input|Length of the binary files|easybin",
+      "input|First Address|easybin",
+      "input|Start Address|easybin",
+      "button|Theme|-",
+      "radio|EASyBIN|-",
+      "menuitem|File|-",
+      "body"
+    ]
+  },
+  "webkit|easybin|a click on the status bar, Tab": {
+    "line": 3853,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "menuitem|File|-"
+    }
+  },
+  "webkit|easybin|a click on the status bar, Shift+Tab": {
+    "line": 3854,
+    "passed": false,
+    "observed": {
+      "from": "body",
+      "to": "group|Memory|easybin"
+    }
+  },
+  "webkit|easybin|a click on the menu row beside the menus, Tab": {
+    "line": 3855,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "menuitem|File|-"
+    }
+  },
+  "webkit|easybin|a click on the menu row beside the menus, Shift+Tab": {
+    "line": 3856,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "body"
+    }
+  },
+  "webkit|easybin|a menu opened and closed with Escape, Tab": {
+    "line": 3857,
+    "passed": true,
+    "observed": {
+      "from": "menuitem|File|-",
+      "to": "radio|EASyBIN|-"
+    }
+  },
+  "webkit|easybin|a menu opened and closed with Escape, Shift+Tab": {
+    "line": 3858,
+    "passed": true,
+    "observed": {
+      "from": "menuitem|File|-",
+      "to": "body"
+    }
+  },
+  "webkit|easybin|Help > About opened and closed with Escape, Tab": {
+    "line": 3859,
+    "passed": true,
+    "observed": {
+      "from": "body",
+      "to": "menuitem|Help|-"
+    }
+  },
+  "webkit|easybin|Help > About opened and closed with Escape, Shift+Tab": {
+    "line": 3860,
+    "passed": false,
+    "observed": {
+      "from": "body",
+      "to": "group|Memory|easybin"
+    }
+  },
+  "webkit|easybin|a mode switch by a click and back, Tab": {
+    "line": 3861,
+    "passed": true,
+    "observed": {
+      "from": "radio|EASyBIN|-",
+      "to": "button|Theme|-"
+    }
+  },
+  "webkit|easybin|a mode switch by a click and back, Shift+Tab": {
+    "line": 3862,
+    "passed": true,
+    "observed": {
+      "from": "radio|EASyBIN|-",
+      "to": "radio|EASyBIN|-"
+    }
+  }
+}

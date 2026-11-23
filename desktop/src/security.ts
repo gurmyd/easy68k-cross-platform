@@ -28,7 +28,7 @@ export const CONTENT_SECURITY_POLICY = [
   "media-src 'self' blob:",
   "connect-src 'self' https://api.github.com",
   "worker-src 'self'",
-  "frame-src 'self'",
+  "frame-src 'self' blob:",
   "manifest-src 'self'",
   "base-uri 'none'",
   "form-action 'none'",
@@ -51,6 +51,9 @@ export const APP_WEB_PREFERENCES: Readonly<WebPreferences> = Object.freeze({
   spellcheck: false,
   navigateOnDragDrop: false,
   safeDialogs: true,
+  // ARCHITECTURE-PLUS P3.4.2, R5: Electron's only plugin since Flash is its PDF viewer, which the
+  // viewer's blob: frame needs. The application window only; content windows switch it off.
+  plugins: true,
 });
 
 /**
@@ -60,6 +63,8 @@ export const APP_WEB_PREFERENCES: Readonly<WebPreferences> = Object.freeze({
 export const CONTENT_WEB_PREFERENCES: Readonly<WebPreferences> = Object.freeze({
   ...APP_WEB_PREFERENCES,
   javascript: false,
+  // set explicitly: the spread above carries the application window's `plugins: true` (R5)
+  plugins: false,
 });
 
 // ---- Links to other sites ---------------------------------------------------------------------

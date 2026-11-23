@@ -20,11 +20,33 @@
 //     (1.4 note 3).
 //   - untitledN numbers increase by one per new document (1.4 note 15).
 //
-// Owner: E1. Runs under Node and in browsers (core/ rules, 3.1).
+// The hooks of the stage of additions (ARCHITECTURE-PLUS P3.4.1, P4.4; package N6). None of them
+// changes anything for a caller that does not use it:
+//   - open(path, options): once the bytes are read, before they are decoded, the viewer
+//     (deps.viewer) is asked; when it wants the file it shows it and open returns null, and a
+//     document of the same path that is open as text stays open (it is asked before the "already
+//     open" step: an Open never closes what a person has open; errata N6 12). { asText: true }
+//     skips that question (Open as Text).
+//   - relocate(from, to): open documents of a moved file or folder follow it, with text, modified
+//     state and revision unchanged; the modification time is taken from the new file, and the
+//     relocation listeners (onRelocated: the drafts) run before the promise resolves.
+//   - onWritten(listener): after each successful Save, Save As and Auto Save (the bytes written,
+//     'saved') and each open of a file as a document (the bytes read, 'opened'); not for Reload.
+//     Listeners run after the operation's promise has resolved, each in its own try/catch.
+//   - fileTime(id): as it was (DocumentManager.fileTime), now part of the contract.
+//   - deps.shown(id): told whenever a document is made the one a person works on (every
+//     activate(), also of the active document, and a reload of the active document), so that the
+//     dock brings the editor in front of a viewer (P1.2: today the opened document is shown;
+//     errata N6 15). Without the dep nothing is told and nothing else changes.
+//
+// Owner: E1 (the hooks: N6 in the stage of additions). Runs under Node and in browsers (core/
+// rules, 3.1).
 
 import {
   TabType,
   type AppState,
+  type Bytes,
+  type Clock,
   type DialogService,
   type DocDefaults,
   type DocumentPatch,
@@ -34,6 +56,7 @@ import {
   type FileDialogs,
   type SettingsService,
   type Store,
+  type ViewerService,
   type VPath,
   type Vfs,
 } from '../../contracts';
@@ -62,7 +85,30 @@ export interface DocumentServiceDeps {
   fileDialogs: Pick<FileDialogs, 'open' | 'save'>;
   /** Default: a new registry. */
   registry?: DocumentRegistry;
+  /** The viewer of files that are not text (ARCHITECTURE-PLUS P3.4); absent = every file is text. */
+  viewer?: Pick<ViewerService, 'wants' | 'show'>;
+  /** The time of onWritten's events (ARCHITECTURE-PLUS P4.4): its wall time; absent = time 0. */
+  clock?: Pick<Clock, 'wallTime'>;
+  /**
+   * ARCHITECTURE-PLUS P1.2 (errata N6 15): told that the document `id` was made the one a person
+   * works on, so that a viewer in front of the editor gives way to it. Called by every activate()
+   * (also of the active document: a Window menu choice of it, an "already open" No), and so by New,
+   * Open, Open as New Document and a draft brought back, and after a reload of the active document.
+   * Not called when a close makes another document active. A listener that throws changes nothing.
+   */
+  shown?: (id: string) => void;
 }
+
+/** An event of DocumentService.onWritten (ARCHITECTURE-PLUS P4.4). */
+export interface WrittenEvent {
+  path: VPath;
+  bytes: Bytes;
+  reason: 'saved' | 'opened';
+  time: number;
+}
+
+/** Told which documents relocate() moved, before its promise resolves (the drafts rewrite theirs). */
+export type RelocatedListener = (ids: readonly string[]) => void | Promise<void>;
 
 /** The settings a document can change after it is open (E2: Insert/Replace; E4: Editor Options). */
 export type { DocumentPatch } from '../../contracts';
@@ -123,6 +169,8 @@ export class DocumentManager implements DocumentService {
   private activeId: string | null = null;
   private untitled = 0;
   private nextId = 1;
+  private readonly writtenListeners = new Set<(event: WrittenEvent) => void>();
+  private readonly relocatedListeners = new Set<RelocatedListener>();
 
   constructor(deps: DocumentServiceDeps) {
     this.deps = deps;
@@ -185,12 +233,55 @@ export class DocumentManager implements DocumentService {
     return state;
   }
 
-  async open(path: VPath): Promise<DocumentState | null> {
+  /**
+   * ARCHITECTURE-PLUS P3.3.8 (`Open as New Document`): like newSource, but holding `text` ("\n" line
+   * ends) instead of the template, and modified, so that closing it asks whether to save it.
+   */
+  newSourceWithText(text: string): DocumentState {
+    const defaults = docDefaults(this.deps.settings);
+    const state = this.add(
+      {
+        path: null,
+        name: `untitled${++this.untitled}.x68`,
+        kind: 'source',
+        hasName: false,
+        ...defaults,
+        insertMode: true,
+      },
+      text,
+      null,
+      null,
+      true,
+    );
+    this.activate(state.id);
+    return state;
+  }
+
+  open(path: VPath, options?: { asText?: boolean }): Promise<DocumentState | null> {
+    const events: WrittenEvent[] = [];
+    return this.announcing(this.openFile(path, options?.asText === true, events), events);
+  }
+
+  private async openFile(path: VPath, asText: boolean, events: WrittenEvent[]): Promise<DocumentState | null> {
     const { vfs, dialogs } = this.deps;
     const stat = await vfs.stat(path).catch(() => null);
     if (!stat || stat.kind !== 'file') {
       await dialogs.messageBox(fileAccessError());
       return null;
+    }
+    // ARCHITECTURE-PLUS P3.4.1: a file that is not text goes to the viewer (never with Open as Text).
+    // The viewer is asked before the "already open" step, so that a document of this path that is
+    // open as text (Open as Text) stays open: nothing a person has open is closed by an Open
+    // (errata N6 12). A file the viewer does not take goes on exactly as before; when no document of
+    // this path is open, the bytes read here are the ones loaded (one read, as before).
+    const viewer = asText ? undefined : this.deps.viewer;
+    let early: Bytes | null = null;
+    if (viewer) {
+      early = await vfs.readFile(path).catch(() => null);
+      if (early !== null && viewer.wants(path, early)) {
+        viewer.show(path, early);
+        return null;
+      }
     }
     // editor-ui §6.2 step 2: every document with exactly this path (case-sensitive), last first.
     let position: number | null = null;
@@ -208,14 +299,21 @@ export class DocumentManager implements DocumentService {
       this.discard(id);
     }
 
-    let bytes;
-    try {
-      bytes = await vfs.readFile(path);
-    } catch {
-      await dialogs.messageBox(loadFileError());
-      return null;
+    let bytes: Bytes;
+    if (early !== null && position === null) {
+      bytes = early;
+    } else {
+      // Read (again) after the "already open" step, as editor-ui §6.2 orders it.
+      try {
+        bytes = await vfs.readFile(path);
+      } catch {
+        await dialogs.messageBox(loadFileError());
+        return null;
+      }
     }
+    const time = this.now();
     const loaded = this.load(path, bytes);
+    events.push({ path, bytes, reason: 'opened', time });
     const state = this.add(
       {
         path,
@@ -240,13 +338,23 @@ export class DocumentManager implements DocumentService {
 
   /* ---------------------------------------------------------------- save */
 
-  async save(id: string): Promise<boolean> {
-    const entry = this.entry(id);
-    if (!entry.state.hasName || entry.state.path === null) return this.saveAs(id);
-    return this.write(id, entry.state, true);
+  save(id: string): Promise<boolean> {
+    const events: WrittenEvent[] = [];
+    return this.announcing(this.saveFile(id, events), events);
   }
 
-  async saveAs(id: string): Promise<boolean> {
+  saveAs(id: string): Promise<boolean> {
+    const events: WrittenEvent[] = [];
+    return this.announcing(this.saveFileAs(id, events), events);
+  }
+
+  private async saveFile(id: string, events: WrittenEvent[]): Promise<boolean> {
+    const entry = this.entry(id);
+    if (!entry.state.hasName || entry.state.path === null) return this.saveFileAs(id, events);
+    return this.write(id, entry.state, true, events);
+  }
+
+  private async saveFileAs(id: string, events: WrittenEvent[]): Promise<boolean> {
     const entry = this.entry(id);
     const request = {
       title: SAVE_TITLE,
@@ -264,11 +372,16 @@ export class DocumentManager implements DocumentService {
       kind: kindAfterSaveAs(current.kind, target),
       hasName: true,
     };
-    return this.write(id, renamed, false);
+    return this.write(id, renamed, false, events);
   }
 
   /** Writes the document as `target` describes it (its path, name and kind) and adopts that state. */
-  private async write(id: string, target: DocumentState, checkConflict: boolean): Promise<boolean> {
+  private async write(
+    id: string,
+    target: DocumentState,
+    checkConflict: boolean,
+    events: WrittenEvent[],
+  ): Promise<boolean> {
     const { vfs, dialogs } = this.deps;
     const entry = this.entry(id);
     const path = target.path as VPath;
@@ -288,12 +401,14 @@ export class DocumentManager implements DocumentService {
       }
     }
 
+    const data = encodeFile(target, text);
     try {
-      await vfs.writeFile(path, encodeFile(target, text));
+      await vfs.writeFile(path, data);
     } catch (error) {
       await dialogs.messageBox(writeError(path, reasonOf(error), codeOf(error)));
       return false;
     }
+    events.push({ path, bytes: data, reason: 'saved', time: this.now() });
     const stat = await vfs.stat(path).catch(() => null);
     if (!this.entries.has(id)) return true; // closed while the file was written
     const after = this.entry(id);
@@ -347,6 +462,7 @@ export class DocumentManager implements DocumentService {
       revision: after.state.revision + 1,
     };
     this.publish();
+    if (this.activeId === id) this.tellShown(id);
     if (looksLikeUtf8(bytes)) dialogs.toast(UTF8_BANNER);
     if (loaded.loadError) await dialogs.messageBox(loadFileError());
   }
@@ -389,9 +505,21 @@ export class DocumentManager implements DocumentService {
   }
 
   activate(id: string): void {
-    if (!this.entries.has(id) || this.activeId === id) return;
-    this.activeId = id;
-    this.publish();
+    if (!this.entries.has(id)) return;
+    if (this.activeId !== id) {
+      this.activeId = id;
+      this.publish();
+    }
+    this.tellShown(id);
+  }
+
+  /** deps.shown (ARCHITECTURE-PLUS P1.2), in its own try/catch. */
+  private tellShown(id: string): void {
+    try {
+      this.deps.shown?.(id);
+    } catch {
+      // The dock's reaction never makes an open, a choice or a reload fail.
+    }
   }
 
   /* ---------------------------------------------------------------- for other packages */
@@ -448,7 +576,96 @@ export class DocumentManager implements DocumentService {
     return restored;
   }
 
+  /* ---------------------------------------------------------------- hooks of ARCHITECTURE-PLUS P4.4 */
+
+  /**
+   * The file `from`, or the folder `from` and everything below it, is now at `to` (a move or a
+   * rename in the Files panel, P3.2.4). Open documents follow: path and name change; text, modified
+   * state, revision and the editor's history do not. The recorded modification time is taken from
+   * the new file. Paths are compared exactly, as open() compares them. The relocation listeners (the
+   * drafts) have run when the promise resolves.
+   */
+  async relocate(from: VPath, to: VPath): Promise<void> {
+    if (from === to) return;
+    const moved: { id: string; path: VPath }[] = [];
+    for (const id of this.order) {
+      const path = this.entries.get(id)?.state.path ?? null;
+      if (path === null) continue;
+      if (path === from) moved.push({ id, path: to });
+      else if (path.startsWith(`${from}/`)) moved.push({ id, path: `${to}${path.slice(from.length)}` as VPath });
+    }
+    if (moved.length === 0) return;
+    const times = await Promise.all(
+      moved.map(({ path }) =>
+        this.deps.vfs
+          .stat(path)
+          .then((stat) => stat?.mtime ?? null)
+          .catch(() => null),
+      ),
+    );
+    const ids: string[] = [];
+    moved.forEach(({ id, path }, index) => {
+      const entry = this.entries.get(id);
+      if (!entry) return; // closed meanwhile
+      entry.mtime = times[index] ?? null;
+      entry.state = { ...entry.state, path, name: basename(path) };
+      ids.push(id);
+    });
+    if (ids.length === 0) return;
+    this.publish();
+    for (const listener of [...this.relocatedListeners]) {
+      try {
+        await listener(ids);
+      } catch {
+        // A listener (the drafts) never makes a move fail.
+      }
+    }
+  }
+
+  /** ARCHITECTURE-PLUS P4.4: told after each successful save and each open as a document. */
+  onWritten(listener: (event: WrittenEvent) => void): () => void {
+    this.writtenListeners.add(listener);
+    return () => void this.writtenListeners.delete(listener);
+  }
+
+  /** Told which documents relocate() moved (features/documents/drafts.ts rewrites their drafts). */
+  onRelocated(listener: RelocatedListener): () => void {
+    this.relocatedListeners.add(listener);
+    return () => void this.relocatedListeners.delete(listener);
+  }
+
   /* ---------------------------------------------------------------- internals */
+
+  /**
+   * The time of an onWritten event: the wall clock, which every window shares (P3.3.3). Without a
+   * clock (unit tests of other packages that build the service by hand) it is 0.
+   */
+  private now(): number {
+    return this.deps.clock ? this.deps.clock.wallTime().getTime() : 0;
+  }
+
+  /**
+   * Returns `work` itself, and once it has resolved, gives each event that the work collected to
+   * every onWritten listener, each in its own try/catch. The listeners run in a reaction to the
+   * promise, so they never delay it and an exception of one never reaches the caller.
+   */
+  private announcing<T>(work: Promise<T>, events: WrittenEvent[]): Promise<T> {
+    void work.then(
+      () => {
+        for (const event of events.splice(0)) {
+          for (const listener of [...this.writtenListeners]) {
+            try {
+              listener(event);
+            } catch {
+              // A listener that throws never makes a save or an open fail (P4.4).
+            }
+          }
+        }
+      },
+      () => {},
+    );
+    return work;
+  }
 
   /** What TTextStuff::LoadFile makes of a file's bytes (editor-ui §6.3). */
   private load(path: VPath, bytes: Uint8Array) {

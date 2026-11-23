@@ -4,8 +4,8 @@ None of these changes what a student's program can observe.
 
 - **Dropped files are copied before they are opened (browser).** The original opens a dropped file
   where it lies. A browser gives the page the file's bytes but no path it can keep, so the port
-  copies it into `My Programs/Imported/` and opens the copy; saving writes the copy. Use Export...
-  to take it out again. The desktop app opens a dropped file where it lies, as the original does,
+  copies it into `My Programs/Imported/` and opens the copy; saving writes the copy. Use the Export
+  button of the Files panel to take it out again. The desktop app opens a dropped file where it lies, as the original does,
   and shows the Open dialog in a dropped folder.
 - **Names that differ only in letter case are one name in every store.** As on Windows, Rename...
   refuses a name that exists in another spelling, and Import... and dropped files replace (after the
@@ -29,7 +29,7 @@ None of these changes what a student's program can observe.
   that exported files work on Windows. Only one file can be chosen from the list; several files can
   be brought in at once with `From this computer...` where the opener asks for several.
 - **The Files panel** (an addition, 1.5): the browser store as a tree with New Folder...,
-  Import..., Export..., Rename... and Delete. Delete and Import ask before removing or replacing
+  Import..., an Export button, Rename... and Delete. Delete and Import ask before removing or replacing
   anything.
 - **A browser storage that is slow to answer does not hold up the start.** After three seconds the
   application is shown and the Files panel says that My Programs is still opening; what is opened

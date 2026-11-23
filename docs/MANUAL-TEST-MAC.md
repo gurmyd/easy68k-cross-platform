@@ -18,7 +18,7 @@ want to know.
   first visit. For a report on a release candidate, test the web version as it is after the
   commit the candidate names (the web version is rebuilt from the main branch a few minutes after
   every change, so write the date and time of your test into the report).
-- The checks marked "Mac app" (B3, B6, the app rows D6 to D10 and F2) need **a download of the
+- The checks marked "Mac app" (B3, B6, the app rows D6 to D10 and F2, and E4) need **a download of the
   macOS app**. None exists yet: there is no release and no pre-release. The project's owner has to
   publish one (with the `.dmg` and `.zip` for Apple silicon and Intel) at
   <https://github.com/gurmyd/easy68k-cross-platform/releases> before anyone can do those checks.
@@ -505,12 +505,12 @@ example French, or U.S. International - PC, or ABC - Extended). Switch to it wit
 | W0 | First, in Safari > Settings > Privacy > Manage Website Data..., remove the site of the web version if it is listed. Open the web version | Above `My Programs` in the Files panel a notice says: `This browser may delete the programs kept here after seven days without a visit to this page. An app made with "Add to Dock" or "Add to Home Screen" starts with its own, empty My Programs. Use Export... in the Files panel to save them all as a .zip, and Import... in the app to bring them over.` Click its **Export...**: `My Programs.zip` is downloaded. Click **Got it**: the notice goes, and it does not come back when you reload the page. (Chrome shows no such notice) |
 | W1 | Open the web version, wait until it shows the editor, close the tab and open the web version again (the second visit is the one the stored copy serves). Switch Wi-Fi off. Reload the page. Then Help > Help, click two links from one help page to another, and Help > Differences from EASy68K | The application loads and works (assemble tutorial1) without a network. The help pages show, their links lead to the other help pages, and the Differences page shows, all with Wi-Fi off (Playwright's WebKit is not Safari: this is the only test of it in Safari itself; erratum H1 11) |
 | W2 | Safari > File > Add to Dock... (macOS 14 Sonoma or later), then open EASy68K from the Dock | It opens in a window of its own. Its Files panel (My Programs) is empty: a Dock app has its own storage. That is Apple's rule, not a defect. Above the empty My Programs a notice says: `This app keeps its own programs, apart from the browser's: Import... in the Files panel brings over programs exported there.`, with **Import...** and **Got it** (leave it; W4 uses Import...) |
-| W3 | In the Safari tab: click `My Programs` in the Files panel, then the Export... button of the panel | A file `My Programs.zip` is downloaded |
+| W3 | In the Safari tab: click `My Programs` in the Files panel, then the Export button of the panel (its tool tip reads Export all of My Programs as My Programs.zip) | A file `My Programs.zip` is downloaded |
 | W4 | In the Dock app: Import... in the Files panel, choose that `My Programs.zip` | The files of the Safari tab appear in the Dock app |
 | W5 | Safari > File > New Private Window, open the web version, run **fonts**. Then close the private window, open a new one and run it again | `Sum: B4818F4C` both times (Safari changes some pictures in private windows to stop tracking; this checks that the application's text is not affected) |
 | W6 | Normal Safari window: run **fonts** | `Sum: B4818F4C` |
 | W7 | Only if you have an iPhone or iPad at hand (it is not tested anywhere else): open the web version in Safari there, after removing its website data (Settings > Apps > Safari > Advanced > Website Data). Then Share > Add to Home Screen, and open it from the Home Screen | In Safari, the Files panel (left; the toolbar button at the far left shows it) has the notice of W0, word for word. The Home Screen app has an empty My Programs with the notice of W2, word for word. Write down the device and its iOS or iPadOS version |
-| W8 | You need one large file of 200 MB or more, for example a film. (Or make one: open Terminal, type `mkfile 200m ~/Desktop/big.bin` and press Return; the file `big.bin` appears on the Desktop.) In a normal Safari window open the web version and choose Help > Examples... so that My Programs holds something. In the Files panel click Import... and choose the large file. At once, while it is being imported, force Safari to quit: press Option+Cmd+Esc, select Safari, click Force Quit. Open Safari and the web version again. Then do it all a second time, but this time close the tab with Cmd+W during the import instead of force-quitting | Each time, within a few seconds the editor is shown and My Programs lists the folder `Examples` and everything saved before. The large file is either not there or whole (the same size as the original), never cut short. If the Files panel says `My Programs is still opening`, count the seconds: within 20 s it must show your files, or this text: `Files are NOT being saved right now: the browser's storage did not answer (reading the list of files took longer than 20 s; another tab of this site, or a page that was closed during a save, may still be holding it). The programs you saved before are still in the browser: reload the page in a minute to see them. What you save until then is lost when this tab closes. Use Export... in the Files panel to keep it.` If you see that text, wait a minute and reload the page: every file saved before must be there. If they are not there yet, reload again once a minute, up to five minutes, and write down after how many minutes they came back. If they still have not come back, quit Safari completely (Safari > Quit Safari), open it and the web version again, and write down whether they are there now. Write down which of these you saw, for each of the two tries how many seconds the Files panel took to show your files, and the macOS and Safari versions |
+| W8 | You need one large file of 200 MB or more, for example a film. (Or make one: open Terminal, type `mkfile 200m ~/Desktop/big.bin` and press Return; the file `big.bin` appears on the Desktop.) In a normal Safari window open the web version and choose Help > Examples... so that My Programs holds something. In the Files panel click Import... and choose the large file. At once, while it is being imported, force Safari to quit: press Option+Cmd+Esc, select Safari, click Force Quit. Open Safari and the web version again. Then do it all a second time, but this time close the tab with Cmd+W during the import instead of force-quitting | Each time, within a few seconds the editor is shown and My Programs lists the folder `Examples` and everything saved before. The large file is either not there or whole (the same size as the original), never cut short. If the Files panel says `My Programs is still opening`, count the seconds: within 20 s it must show your files, or this text: `Files are NOT being saved right now: the browser's storage did not answer (reading the list of files took longer than 20 s; another tab of this site, or a page that was closed during a save, may still be holding it). The programs you saved before are still in the browser: reload the page in a minute to see them. What you save until then is lost when this tab closes. Use the Export button of the Files panel to keep it.` If you see that text, wait a minute and reload the page: every file saved before must be there. If they are not there yet, reload again once a minute, up to five minutes, and write down after how many minutes they came back. If they still have not come back, quit Safari completely (Safari > Quit Safari), open it and the web version again, and write down whether they are there now. Write down which of these you saw, for each of the two tries how many seconds the Files panel took to show your files, and the macOS and Safari versions |
 
 ### B3. The Mac app (only once a release exists)
 
@@ -610,7 +610,7 @@ type `xattr -dr com.apple.quarantine ` and then drag the app onto the Terminal w
 
 ### B7. VoiceOver and the keyboard alone
 
-For V1 to V7, switch VoiceOver on with Cmd+F5 (Fn+Cmd+F5). Write down what it says, and anything you
+For V1 to V7, V10 and V11, switch VoiceOver on with Cmd+F5 (Fn+Cmd+F5). Write down what it says, and anything you
 cannot reach. V8 and V9 are done without VoiceOver.
 
 | # | Do | Expected |
@@ -624,6 +624,8 @@ cannot reach. V8 and V9 are done without VoiceOver.
 | V7 | Execute tutorial1; Options > Log Output..., set the execution log to anything but Disabled, OK; Run > Log Start (Shift+F4), accept the log file; then run the program to its end with F9 | When the program halts, the message box `Current Log Stopped.` (title `Information`) appears, and VoiceOver reads it as soon as it appears |
 | V8 | VoiceOver off. Do A1 in Safari with the keyboard only: Tab, the arrow keys, Return, Space, F9 and Ctrl+Option+O, no mouse or trackpad. Once with Safari > Settings > Advanced > "Press Tab to highlight each item on a webpage" off (the default), once on | You can open the example, assemble, Execute, run, set a breakpoint on a listing line (Space) and step (F7), and you always see where the focus is. Write down any place where the focus disappeared or got stuck |
 | V9 | In the light and in the dark theme (the button at the top right): Tab into the Output panel | The frame that shows the panel has the keyboard is clearly visible against the black panel and the window around it |
+| V10 | VoiceOver on, Editor mode. Window > Move Panel To... Choose the panel Files, the choice `Into the group of`, the panel Editor, and press OK | The dialog's controls are read with their names. After OK VoiceOver says `Files moved into the group of Editor.` without you moving to it, and the keyboard is inside the moved panel |
+| V11 | VoiceOver on, in Simulator mode, with the Memory panel shown (View menu), at any window size. View > Lock Layout (so that it is unchecked). In a wide window the Memory panel has a group of its own; put it into the group of the Output panel first: View > Move Panel To..., the panel Memory, the choice `Into the group of`, the panel Output, OK (in a window narrower than about 1100 pixels the two already share a group: skip this). Then move to the tab of the Memory panel, open its menu (Shift+F10, or VoiceOver's own context menu command) and choose Move Tab Earlier; then open the menu of the Registers tab and choose Move Right | The menu is read (`Panel tab`) with its items; each choice is announced, in one of the forms `<panel> moved into the group of <panel>.`, `<panel> moved to position <n> of its group.`, `<panel> moved beside <panel>, right.` or `<panel> moved to the right edge of the window.`; the panels are read in the order they are on the screen, from left to right and top to bottom |
 
 ### B8. A long session in Safari (30 minutes)
 
@@ -699,6 +701,18 @@ saved in `Examples` as its section says (about three minutes).
 | S7 | Run **sound** (the fourth test program, saved in `Examples` as it says) and press Space after each step, up to step 8 | Each step sounds as its line says: 1 "one", "zero", "roger", each once, in this order, not overlapping; 2 the chime; 3 "roger"; 4 "roger" again; 5 tick, repeating; 6 the ticking stops at once; 7 tick repeating again (the port keeps a slot looping until it is loaded again or the program is reset; write down what you hear); 8 silence |
 | S8 | Go on with Space to step 9, wait until the program has halted (status bar `Halted`), listen for five seconds, then press Shift+F2 (Rewind Program) | After the halt tock and tick go on repeating; Shift+F2 stops both at once |
 
+### B15. A PDF in the viewer (Safari, Chrome and Edge; 10 minutes)
+
+This is the check that `docs/requests/N0.md` (section 5) and `docs/ARCHITECTURE-PLUS.md` P3.4.2 leave to a person: that the browser's own PDF viewer draws a PDF inside the viewer's frame under the production policy. Use any small PDF file (a page of your course notes will do) and a picture (a `.png`). Repeat E1 and E2 in each browser you have: Safari, Chrome and Edge on the Mac, and, on a Windows PC, Chrome and Edge.
+
+| # | Do | Expected |
+|---|---|---|
+| E1 | Open the web version. Files panel: Import..., choose the PDF. Double-click it in the Files panel | A tab named after the file opens beside the Editor, and the browser's own PDF viewer shows the pages, with its toolbar. Under the strip: `If the PDF does not appear, use Export and open it with another program.` If the box stays empty, write down the browser and its version: that is risk R4 for that browser. Open the browser's developer console (Safari: Develop > Show JavaScript Console; Chrome and Edge: Option+Cmd+J on a Mac, Ctrl+Shift+J on Windows) and write down any red line that names `frame-src` or `object-src` |
+| E2 | In the viewer's strip: click Export, then Open as Text | Export downloads the PDF. Open as Text closes the viewer and opens the PDF's bytes as a text document (nonsense, as in the original). Reload the page: no viewer tab comes back |
+| E3 | Import the picture and double-click it. Click Actual Size twice | The picture is shown scaled to fit, then at one pixel to one pixel with scroll bars, then scaled again. The button is pressed in the second state |
+| E4 | Only with the Mac app (once a release exists): open the PDF from the Files panel of the app | The PDF is drawn. The strip has no Export. Under it: `If the PDF does not appear, open it from its folder with another program.` |
+| E5 | Only with the Mac app (once a release exists): open a PDF that contains a link to a web page and a link to `index.html`, and click each in the viewer | Each time the viewer shows the PDF again within two seconds, never a second copy of the application, and the PDF does not flicker or reload by itself while you read it |
+
 ## Part C (optional): on real Windows, once (for the project's maintainers)
 
 These need the official EASy68K on a real Windows PC, which the project's rules allow only once and
@@ -731,6 +745,7 @@ Sandbox or a throw-away virtual machine.
 | Printing a source file and task 10 output on a real printer | R1, R2 |
 | A serial adapter with tasks 40-43; two windows, and two machines on a LAN, with the network tasks | N1-N4, D9 |
 | VoiceOver: menu bar, dialogs, message area, the Output text mirror | V1-V7 |
+| The PDF viewer of the stage of additions: a PDF appears under the production policy in Chrome and Edge on macOS and on Windows, in Safari, and in the desktop app | E1-E4 |
 | Safari itself: the web app, offline reload, Add to Dock, a `.zip` exported from the Safari tab imported into the Dock app; Private Browsing: text in every font the same on every run; My Programs after Safari was force-quit or the tab closed during a save | A1, W1-W6, W8 |
 | A long session: one hundred Execute cycles and several hundred assemblies in Safari | T1, T2 |
 | On real Windows, once: the UNVERIFIED items, the RichEdit spot check, the speed measurement | C1-C7 |
@@ -748,6 +763,9 @@ And what the parts of the port left for a person:
 | `docs/ENGINE-BINDING.md` section 7 (many cold starts and assemblies in real Safari) | T1, T2 |
 | `docs/porting/errata/DV4.md` (a real USB serial adapter, the packaged app loading the serial module, the Serial Ports dialog on a real Mac; entry 14: a host name of `255.255.255.255` on Windows; entry 8 and V14: a TCP connection still pending after five seconds) | N1, N4, D9, C4, C5 |
 | `docs/porting/errata/DV5.md` and `docs/porting/errata/DV3.md` (the downloaded app on an Intel Mac, whose screenshots in CI nobody has looked at) | D2, D6 |
+| `docs/requests/N0.md` section 5.2 and 5.4 (the PDF in a real Safari, Chrome and Edge, not tried by a person), `docs/ARCHITECTURE-PLUS.md` P3.4.2 | E1-E4 |
+| `docs/porting/errata/N6.md` entry 14 (the viewer's frame sent to another address in the desktop app, which has no service worker) | E5 |
+| `docs/ARCHITECTURE-PLUS.md` P3.1.8 (a screen reader over a move of a panel and over the order of the panels) | V10, V11 |
 | `docs/integration/rc.md`, the accessibility audit (the walk-throughs on a real Mac with Safari's Tab setting, a halt and `Current Log Stopped.` announced, the focus frame of the Output panel, real screen readers) | V6-V9, X4 |
 | `docs/porting/errata/X3.md` entry 6 (a real Safari's canvas keeps colours exact; whole-program pictures against the original) | W5, W6, C6 |
 | `docs/porting/errata/DOC1.md` (the README's build steps followed literally on a Mac) | B12 |
@@ -794,9 +812,10 @@ A6 key recording: attached yes/no
 B1 layouts (which layout): L1:   L2:   L3:   L4:
 B2 Safari: W0:   W1:   W2:   W3:   W4:   W5 (both sums):   W6 (sum):   W7 (device, version):   W8 (what you saw, seconds for each try, minutes until a reload showed the files or whether quitting Safari was needed, macOS and Safari versions):
 B3 Mac app (exact first-start message, which way worked): D1:   D2:   D3:   D4:   D5:   D6:   D7:   D8:   D9:   D10:
-B7 VoiceOver and keyboard only: V1:   V2:   V3:   V4:   V5:   V6:   V7:   V8:   V9:
+B7 VoiceOver and keyboard only: V1:   V2:   V3:   V4:   V5:   V6:   V7:   V8:   V9:   V10:   V11:
 B13 Chrome install (its exact words): I1:
 B14 sound program (browser): S7 (step 7: looping or once?):   S8:
+B15 PDF viewer (browser and version for each): E1:   E2:   E3:   E4:   E5:
 Other parts of B (any you did):
 Anything else you noticed:
 ```

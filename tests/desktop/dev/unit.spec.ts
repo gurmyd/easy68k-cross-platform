@@ -35,6 +35,7 @@ import { APP_SCHEME_PRIVILEGES, CONTENT_TYPES, parseRange, resolveAppRequest } f
 import {
   APP_WEB_PREFERENCES,
   CONTENT_SECURITY_POLICY,
+  CONTENT_WEB_PREFERENCES,
   developmentOverrides,
   GrantedRoots,
   isAllowedExternalUrl,
@@ -85,7 +86,27 @@ test.describe('security.ts', () => {
       allowRunningInsecureContent: false,
       webviewTag: false,
       backgroundThrottling: false,
+      // ARCHITECTURE-PLUS P3.4.2, R5: the PDF viewer, in the application window only
+      plugins: true,
     });
+    expect(CONTENT_WEB_PREFERENCES).toMatchObject({ ...APP_WEB_PREFERENCES, javascript: false, plugins: false });
+  });
+
+  test('the policy lets a frame show a blob: (ARCHITECTURE-PLUS P3.4.2) and is otherwise that of 7.6', () => {
+    expect(CONTENT_SECURITY_POLICY.split('; ')).toEqual([
+      "default-src 'none'",
+      "script-src 'self' 'wasm-unsafe-eval'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob:",
+      "font-src 'self'",
+      "media-src 'self' blob:",
+      "connect-src 'self' https://api.github.com",
+      "worker-src 'self'",
+      "frame-src 'self' blob:",
+      "manifest-src 'self'",
+      "base-uri 'none'",
+      "form-action 'none'",
+    ]);
   });
 
   test('the external-link allow list is the page one (platform/web.ts)', () => {

@@ -82,6 +82,8 @@ const ITEMS = [
   ['The UNVERIFIED items', /^On real Windows/],
   ['The RichEdit spot check', /^On real Windows/],
   ['The speed measurement for `DEFAULT_IPS`', /^On real Windows/],
+  // The stage of additions (ARCHITECTURE-PLUS P3.4.2; errata N10 entry 2): the sixteenth item.
+  ['The PDF viewer of the stage of additions', /^The PDF viewer/],
 ];
 check(
   `6.8 has ${ITEMS.length} bullets and each is one this script knows`,

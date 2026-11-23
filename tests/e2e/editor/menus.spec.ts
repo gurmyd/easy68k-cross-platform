@@ -44,7 +44,11 @@ const MENUS: Record<string, Row[]> = {
 
 /** Items the port added after the original's items of a menu (1.5), in order. */
 const ADDED: Record<string, string[]> = {
-  Options: ['Import/Export Settings...'],
+  // the stage of additions (ARCHITECTURE-PLUS P3.6)
+  File: ['Earlier Versions...', 'Trash...'],
+  Options: ['Import/Export Settings...', 'Port Additions...'],
+  // after the document list (`1 untitled1.x68`, ...), which the Window test below checks
+  Window: ['Move Panel To...', 'Split Editor Right', 'Split Editor Down', 'Close Split', 'Lock Layout', 'Reset Layout'],
   Help: ['Examples...', 'Differences from EASy68K'],
 };
 
@@ -81,7 +85,16 @@ test.describe('menu bar', () => {
         .evaluateAll((items) => items.map((item) => item.querySelector('.e68-mnemonic')?.textContent ?? null));
       expect(keys.slice(0, rows.length)).toEqual(rows.map(([caption]) => shownKey(caption, app.keys)));
       const added = ADDED[title];
-      if (added) expect(entries.slice(rows.length).map((e) => e.caption)).toEqual(added);
+      // The Window menu's document list (`1 <name>`, ...) stands between its items and the additions.
+      const isDocument = (e: { role: string; caption: string }) =>
+        title === 'Window' && e.role === 'menuitemradio' && /^\d+ /.test(e.caption);
+      if (added)
+        expect(
+          entries
+            .slice(rows.length)
+            .filter((e) => !isDocument(e))
+            .map((e) => e.caption),
+        ).toEqual(added);
       await app.page.keyboard.press('Escape');
       await expect(menu).toBeHidden();
     });
@@ -95,14 +108,16 @@ test.describe('menu bar', () => {
     const entries = await app.menuEntries('Window');
     expect(entries.find((e) => e.caption === 'Arrange')?.disabled).toBe(true);
     expect(entries.find((e) => e.caption === 'Minimize All')?.disabled).toBe(true);
-    const documents = entries.slice(5);
+    const documents = entries.slice(5, 7);
     expect(documents.map((e) => [e.caption, e.role, e.checked])).toEqual([
       ['1 untitled1.x68', 'menuitemradio', false],
       ['2 untitled2.x68', 'menuitemradio', true],
     ]);
+    // The stage of additions follows the document list (ARCHITECTURE-PLUS P3.1.4).
+    expect(entries.slice(7).map((e) => e.caption)).toEqual(ADDED['Window']);
     await app.chooseMenu('Window', '1 untitled1.x68');
     await expect.poll(async () => (await app.tabs()).find((tab) => tab.selected)?.name).toBe('untitled1.x68');
-    const after = (await app.menuEntries('Window')).slice(5);
+    const after = (await app.menuEntries('Window')).slice(5, 7);
     expect(after.map((e) => e.checked)).toEqual([true, false]);
   });
 
@@ -188,10 +203,12 @@ test.describe('toolbar (editor-ui §3)', () => {
 });
 
 test.describe('context menus (editor-ui §4)', () => {
+  // The original's nine items come first, in their order, Reload File the last of them; the stage of
+  // additions puts its own items below them (the next test). The name is the parity matrix's row.
   test('the editor context menu holds the nine items of the original, Reload File last', async ({ app }) => {
     await app.content().click({ button: 'right' });
     const entries = await app.entriesOf(app.openMenuList);
-    expect(entries.map((e) => e.caption)).toEqual([
+    expect(entries.slice(0, 9).map((e) => e.caption)).toEqual([
       'Undo',
       'Redo',
       'Cut',
@@ -202,6 +219,26 @@ test.describe('context menus (editor-ui §4)', () => {
       'Uncomment Selection',
       'Reload File',
     ]);
+    // Everything after Reload File is an addition of the stage (ARCHITECTURE-PLUS P1.1 rule 3).
+    expect(entries.slice(9).map((e) => e.caption)).toEqual(['Earlier Versions...']);
+    await app.page.keyboard.press('Escape');
+    await expect(app.page.locator('[role=menu][data-e68-menu]')).toHaveCount(0);
+  });
+
+  test('below a separator after Reload File the context menu adds Earlier Versions... (ARCHITECTURE-PLUS P3.6)', async ({
+    app,
+  }) => {
+    await app.content().click({ button: 'right' });
+    const order = await app.openMenuList
+      .locator(':scope > [role^=menuitem], :scope > [role=separator]')
+      .evaluateAll((items) =>
+        items.map((item) =>
+          item.getAttribute('role') === 'separator'
+            ? '-'
+            : (item.querySelector('.e68-menu__caption')?.textContent ?? ''),
+        ),
+      );
+    expect(order.slice(order.indexOf('Reload File'))).toEqual(['Reload File', '-', 'Earlier Versions...']);
     await app.page.keyboard.press('Escape');
     await expect(app.page.locator('[role=menu][data-e68-menu]')).toHaveCount(0);
   });

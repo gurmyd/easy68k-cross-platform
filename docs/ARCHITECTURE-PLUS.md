@@ -2343,6 +2343,7 @@ as N3, merged after it (P6.2)
   the integration pass); `tools/diff-menus.mjs` (new: compares the resolved menus of `main` and
   `plus`); the version `1.1.0` in the package files and the tag `v1.1.0` on `main` after the final
   merge.
+  (Corrected, P6.1: no version and no tag are set by the stage.)
 - Acceptance: a package is merged only when every existing suite passes on `plus` with it merged;
   P6.4.
 
@@ -2351,6 +2352,8 @@ as N3, merged after it (P6.2)
 ## P6. The order, the branch and integration
 
 ### P6.1 After the release, on a branch of its own
+
+> **Corrected (the owner's decisions of 21 and 22 November 2026).** The stage was not held back until after a release. On 21 November the owner decided that it is built alongside the last work on the faithful port; on 22 November, that there is **one first public release, and it contains the additions**: no version of the faithful port alone is released before it. So in this section and the following ones: "the released version", "the 1.0.0 tag" and "from that tag" mean the `main` branch, whose changes are merged into `plus` between the stage's rounds; `plus` is merged into `main` after the integration pass of P6.4, and the definition of done of the main document (§6.9) is then checked on the merged `main`, which is what is released. No package sets a version or a tag: the version number of the first release is set when the release is made, and no document names a version of its own for the additions. Unchanged: nothing of the stage reaches `main` before the integration pass; no `v*` tag on `plus`; `pages.yml` and `release.yml` are never dispatched from a branch of the stage.
 
 The stage starts after the faithful port is tagged (version 1.0.0 per main §6.9) and is built on the
 branch `plus` from that tag. It does not hold the release back: nothing of it is merged into `main`
@@ -2435,6 +2438,8 @@ NI runs it on `plus` once every package is merged, and records it in `docs/integ
   separator at the end of a menu, the Window menu's after its document list.
 - Then NI sets the version 1.1.0, merges `plus` into `main` and sets the tag `v1.1.0` on `main`;
   `pages.yml` publishes it and `release.yml` builds the tag.
+
+> **Corrected (the owner's decision of 22 November 2026, see P6.1).** The last point is void: no version 1.1.0 and no tag `v1.1.0`. After the pass `plus` is merged into `main`; `pages.yml` then publishes the preview of `main` as it does for every push, and the first release is made from the merged `main` when its definition of done holds.
 
 ---
 

@@ -12,8 +12,18 @@
 // panel that is not rendered, as long as no tab points at it):
 //   <Tabs idBase="tools" items={...} selectedId={id} onSelect={setId} label="Tools" />
 //   <TabPanel idBase="tools" tabId={id}>...</TabPanel>
+//
+// Dragging (optional, ARCHITECTURE-PLUS P5 N2): with `drag` the tabs are `draggable`; a dragged tab
+// carries `drag.data(id)` under the type `drag.type`, and, with `onDropAt`, the strip accepts a drop
+// of that type and reports it with the tab it was dropped on (null: the strip beside the tabs).
+// Without `drag` nothing is draggable and the strip accepts no drop, exactly as before.
+// A browser may drop a custom type from the drag data (Playwright's WebKit on Windows keeps only
+// text/plain, text/uri-list and text/html); for a tab dragged in this page the strip then reads the
+// type and data from the drag the page started (`pageDrag`), which is forgotten when the drag ends
+// anywhere in the window. With `drag.positional` false the strip takes a drop as a whole (no tab is
+// marked) for a caller that puts the dropped tab by an order of its own.
 
-import { useRef, type HTMLAttributes, type KeyboardEvent, type ReactNode } from 'react';
+import { useRef, useState, type DragEvent, type HTMLAttributes, type KeyboardEvent, type ReactNode } from 'react';
 import '../../styles/components.css';
 import './Tabs.css';
 import { Icon } from './Icon';
@@ -27,6 +37,23 @@ export interface TabItem {
   /** A modified document: a dot before the name (2.4). */
   modified?: boolean;
   closable?: boolean;
+}
+
+/** Dragging tabs (ARCHITECTURE-PLUS P5 N2). */
+export interface TabsDrag {
+  /** The drag data's type, e.g. `application/x-e68-document` (lower case: browsers report types so). */
+  type: string;
+  /** The data a dragged tab carries. */
+  data(id: string): string;
+  /** A drop of `type` on the strip: on the tab `id`, or beside the tabs (null). */
+  onDropAt?(id: string | null, data: string): void;
+  /**
+   * Whether a drop lands at the tab it is dropped on (default true: the tab shows the mark where the
+   * dropped tab would go). False: the caller puts a dropped tab by an order of its own (the editor
+   * keeps its documents in their order of opening), so the strip is outlined as a whole, no tab is
+   * marked, and onDropAt gets null.
+   */
+  positional?: boolean;
 }
 
 export interface TabsProps {
@@ -43,6 +70,35 @@ export interface TabsProps {
   /** Content at the right end of the strip (not part of the tab list). */
   end?: ReactNode;
   className?: string;
+  /** Tabs can be dragged (and dropped on the strip); absent: no dragging. */
+  drag?: TabsDrag;
+}
+
+/** The tab drag this page started, for browsers that drop custom types from the drag data. */
+let pageDrag: { type: string; data: string } | null = null;
+
+/**
+ * Starts a page drag and forgets it when the drag ends anywhere: a drop elsewhere (the editor's
+ * pane body) can unmount the dragged tab, whose own `dragend` then never runs. The window's
+ * `drop` and `dragend` (capture, so no handler can stop them) clear it once the event is handled.
+ */
+function startPageDrag(drag: { type: string; data: string }): void {
+  pageDrag = drag;
+  if (typeof window === 'undefined') return;
+  const end = () => {
+    window.removeEventListener('drop', end, true);
+    window.removeEventListener('dragend', end, true);
+    setTimeout(() => {
+      if (pageDrag === drag) pageDrag = null;
+    }, 0);
+  };
+  window.addEventListener('drop', end, true);
+  window.addEventListener('dragend', end, true);
+}
+
+/** The page drag of a tab strip, for tests and browser checks (null when none is going on). */
+export function currentTabDrag(): { type: string; data: string } | null {
+  return pageDrag;
 }
 
 export const tabId = (idBase: string, id: string) => `${idBase}-tab-${id}`;
@@ -58,8 +114,11 @@ export function Tabs({
   variant = 'document',
   end,
   className,
+  drag,
 }: TabsProps) {
   const refs = useRef(new Map<string, HTMLDivElement | null>());
+  // The tab a drop would land on while something is dragged over the strip ('' = beside the tabs).
+  const [dropAt, setDropAt] = useState<string | null>(null);
   const selectedIndex = items.findIndex((item) => item.id === selectedId);
   const tabStop = selectedIndex >= 0 ? selectedIndex : 0;
 
@@ -86,8 +145,52 @@ export function Tabs({
     focusTab(next);
   };
 
+  const accepts = (event: DragEvent<HTMLElement>) =>
+    drag?.onDropAt !== undefined &&
+    (Array.from(event.dataTransfer.types).includes(drag.type) || pageDrag?.type === drag.type);
+  const dataOf = (event: DragEvent<HTMLElement>, type: string) => {
+    const data = event.dataTransfer.getData(type);
+    return data === '' && pageDrag?.type === type ? pageDrag.data : data;
+  };
+  /** The tab under a drag event, or null beside the tabs (always null when drops are not positional). */
+  const tabUnder = (event: DragEvent<HTMLElement>): string | null => {
+    if (drag?.positional === false) return null;
+    for (const item of items) {
+      const element = refs.current.get(item.id);
+      if (element && event.target instanceof Node && element.contains(event.target)) return item.id;
+    }
+    return null;
+  };
+  const dropProps = drag?.onDropAt
+    ? {
+        onDragOver: (event: DragEvent<HTMLDivElement>) => {
+          if (!accepts(event)) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'move';
+          const at = tabUnder(event) ?? '';
+          if (at !== dropAt) setDropAt(at);
+        },
+        onDragLeave: (event: DragEvent<HTMLDivElement>) => {
+          const next = event.relatedTarget;
+          if (!(next instanceof Node) || !event.currentTarget.contains(next)) setDropAt(null);
+        },
+        onDrop: (event: DragEvent<HTMLDivElement>) => {
+          setDropAt(null);
+          if (!accepts(event)) return;
+          event.preventDefault();
+          const data = dataOf(event, drag.type);
+          pageDrag = null;
+          drag.onDropAt?.(tabUnder(event), data);
+        },
+      }
+    : {};
+
   return (
-    <div className={['e68-tabs', `e68-tabs--${variant}`, className ?? ''].filter(Boolean).join(' ')}>
+    <div
+      className={['e68-tabs', `e68-tabs--${variant}`, className ?? ''].filter(Boolean).join(' ')}
+      data-e68-drop={dropAt === '' ? 'true' : undefined}
+      {...dropProps}
+    >
       <div role="tablist" aria-label={label} aria-orientation="horizontal" className="e68-tabs__list">
         {items.map((item, index) => {
           const selected = item.id === selectedId;
@@ -108,6 +211,22 @@ export function Tabs({
               title={item.title}
               className="e68-tabs__tab"
               data-modified={item.modified ? 'true' : undefined}
+              data-e68-drop={dropAt === item.id ? 'true' : undefined}
+              {...(drag
+                ? {
+                    draggable: true,
+                    onDragStart: (event: DragEvent<HTMLDivElement>) => {
+                      const data = drag.data(item.id);
+                      startPageDrag({ type: drag.type, data });
+                      event.dataTransfer.setData(drag.type, data);
+                      event.dataTransfer.effectAllowed = 'move';
+                    },
+                    onDragEnd: () => {
+                      pageDrag = null;
+                      setDropAt(null);
+                    },
+                  }
+                : {})}
               onClick={() => onSelect(item.id)}
               onAuxClick={(event) => {
                 if (event.button === 1 && item.closable && onClose) {

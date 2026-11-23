@@ -14,16 +14,40 @@
 //   ed.window.cascade, tileH, tileV    one pane / two panes (note 9); enabled while a document is
 //                                      open, as the VCL window actions are; checked = current layout
 //   ed.window.arrange, minimizeAll     shown, always disabled (note 9)
+//   ed.window.splitRight, splitDown,   the editor split of ARCHITECTURE-PLUS P3.1.4 (N2), in terms of
+//   ed.window.unsplit                  Tile Vertically / Tile Horizontally / Cascade
+//                                      (ui/editor/split.ts); Split while a document is open, Close
+//                                      Split while there are two panes
 //
 // The handlers call the editor of the window (EditorActions); they are plain functions of it so
 // that the unit tests can pass a fake.
+//
+// A Window command that changes the arrangement of the editor area (Cascade, Tile Horizontally,
+// Tile Vertically, the three split commands) shows its result, as today (ARCHITECTURE-PLUS P1.2),
+// also while a viewer's tab is in front of the Editor's in its group: the dock brings the Editor's
+// tab forward (`dockOf(ctx).documentShown()`, the rule of errata N1 28). One that changes nothing
+// (Cascade with one pane, a Tile of the layout there is already) and a disabled one change nothing.
 
 import type { AppContext, CommandHandler, CommandId } from '../../contracts';
+import { dockOf } from '../../state/dock';
+import type { SplitActions, SplitCommand } from '../../ui/editor/split';
 import type { EditorActions, EditorPaneLayout } from './editor-api';
 
 export type EditorFor = (ctx: AppContext) => EditorActions;
+export type SplitFor = (ctx: AppContext) => SplitActions;
+/** Told when a command changed what the editor area shows (the dock; tests pass their own). */
+export type EditorShown = (ctx: AppContext) => void;
 
-export function editorCommands(editorFor: EditorFor): Record<CommandId, CommandHandler> {
+/** Without a split (the tests of the other commands): the split commands are disabled. */
+const NO_SPLIT: SplitActions = { run: () => {}, enabled: () => false };
+
+const dockShown: EditorShown = (ctx) => dockOf(ctx).documentShown();
+
+export function editorCommands(
+  editorFor: EditorFor,
+  splitFor: SplitFor = () => NO_SPLIT,
+  shown: EditorShown = dockShown,
+): Record<CommandId, CommandHandler> {
   const withDocument = (state: { documents: { activeId: string | null } }, ctx: AppContext) =>
     state.documents.activeId !== null || editorFor(ctx).hasDocument();
   const action = (run: (editor: EditorActions) => void | Promise<void>, enabled?: CommandHandler['enabled']) => {
@@ -32,12 +56,28 @@ export function editorCommands(editorFor: EditorFor): Record<CommandId, CommandH
     return handler;
   };
   const focused: CommandHandler['enabled'] = (_state, ctx) => editorFor(ctx).editorHasFocus();
+  const panesOf = (ctx: AppContext) => ctx.settings.get().app.layout.editorPanes;
   const layout = (value: EditorPaneLayout): CommandHandler => ({
-    run: (ctx) => editorFor(ctx).setLayout(value),
+    run: (ctx) => {
+      const before = panesOf(ctx);
+      editorFor(ctx).setLayout(value);
+      if (panesOf(ctx) !== before) shown(ctx);
+    },
     enabled: withDocument,
     checked: (state) => state.settings.app.layout.editorPanes === value,
   });
   const never: CommandHandler = { run: () => {}, enabled: () => false };
+  const split = (command: SplitCommand): CommandHandler => ({
+    run: (ctx) => {
+      // An enabled split command always changes the panes (splitEditor): the layout, or the pane
+      // of the active document.
+      const actions = splitFor(ctx);
+      const enabled = actions.enabled(command);
+      actions.run(command);
+      if (enabled) shown(ctx);
+    },
+    enabled: (_state, ctx) => splitFor(ctx).enabled(command),
+  });
 
   return {
     'ed.edit.undo': action(
@@ -68,5 +108,8 @@ export function editorCommands(editorFor: EditorFor): Record<CommandId, CommandH
     'ed.window.tileH': layout('horizontal'),
     'ed.window.tileV': layout('vertical'),
     'ed.window.minimizeAll': never,
+    'ed.window.splitRight': split('splitRight'),
+    'ed.window.splitDown': split('splitDown'),
+    'ed.window.unsplit': split('unsplit'),
   };
 }

@@ -144,7 +144,10 @@ for (const [config, files] of byConfig) {
   const cwd = join(repo, dirname(config));
   const report = join(out, `unit-${dirname(config).replace(/[\\/]/g, '-')}.json`);
   const filters = files.map((f) => relative(cwd, join(repo, f)).replace(/\\/g, '/'));
-  judge('5', 'npx', ['vitest', 'run', '--config', 'vitest.config.ts', ...filters, ...vitestJson(report)], {
+  // The config by its full path: npx runs in the nearest folder with a package.json (for a file
+  // under tests/ that is tests/, the workspace), not in `cwd`, so a bare `vitest.config.ts` named
+  // tests/vitest.config.ts, which does not exist (integration pass of the stage of additions).
+  judge('5', 'npx', ['vitest', 'run', '--config', join(repo, config), ...filters, ...vitestJson(report)], {
     timeout: 900_000,
     cwd,
   });

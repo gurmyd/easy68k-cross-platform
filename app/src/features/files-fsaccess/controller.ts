@@ -343,7 +343,7 @@ export class FsAccess {
     for (const doc of this.ctx.documents.list()) {
       if (doc.path !== linkedPath || doc.modified) continue;
       if (!(await this.ctx.documents.close(doc.id))) continue;
-      await this.ctx.documents.open(target);
+      await this.ctx.documents.open(target, { asText: true });
       this.ctx.dialogs.toast(FSACCESS_TEXTS.moved(doc.name, folder.handle.name));
     }
     return true;

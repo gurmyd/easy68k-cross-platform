@@ -60,6 +60,31 @@ export interface SimSettings {
   highlightChangedRegisters: boolean; // port; default true
 }
 
+/** A stored dock arrangement (ARCHITECTURE-PLUS P3.1). Independent of the docking library's model. */
+export type DockNode =
+  | { type: 'row' | 'column'; weight: number; children: DockNode[] }
+  | { type: 'tabs'; weight: number; panels: string[]; selected: string };
+
+/** Where a hidden panel was, to put it back there when it is shown again. */
+export interface DockParked {
+  near: string;
+  side: 'tab' | 'left' | 'right' | 'above' | 'below';
+}
+
+export interface DockLayouts {
+  version: 1;
+  locked?: boolean; // absent = true (D2)
+  editor?: DockNode; // absent = the default arrangement (P3.1.3)
+  simulator?: DockNode;
+  parked?: Record<string, DockParked>; // key = panel id
+}
+
+/** The two switches of `Options > Port Additions...` (ARCHITECTURE-PLUS P1.2, P3.5). */
+export interface PlusSettings {
+  viewer: boolean; // default true (P3.4)
+  history: boolean; // default true (P3.3)
+}
+
 export interface AppSettings {
   theme: 'system' | 'light' | 'dark';
   layout: {
@@ -67,6 +92,8 @@ export interface AppSettings {
     splits: Record<string, number>; // key = splitter id, value = fraction 0..1
     editorPanes: 'one' | 'horizontal' | 'vertical';
     outputZoom: 'fit' | 1 | 2;
+    /** ARCHITECTURE-PLUS P4.2; validated where it is read (ui/dock/stored.ts readDock). */
+    dock?: DockLayouts;
   };
   serialPortMap: Record<string, string>; // desktop: "COM4" -> device path (3.3.4)
   /**
@@ -77,6 +104,8 @@ export interface AppSettings {
    * every key it has no default for.
    */
   storageNoticeSeen?: boolean;
+  /** ARCHITECTURE-PLUS P4.2; validated where it is read (core/plus/settings.ts readPlus). */
+  plus?: PlusSettings;
 }
 
 export interface Settings {

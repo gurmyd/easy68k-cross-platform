@@ -16,9 +16,10 @@
 // This file is for unit tests only; nothing in the application imports it.
 
 import { bootstrap, type BootstrapEnv } from '../bootstrap';
-import type { CommandId, FeatureModule, NativeMenuItem, Platform } from '../contracts';
+import type { CommandId, FeatureModule, NativeMenuItem, Platform, ViewerService } from '../contracts';
 import { MemorySettingsStorage, type SettingsStorage } from '../core/settings/service';
 import { FakeAsmEngine } from '../engine/fake-asm';
+import { createMemoryHistoryService } from '../fs/history-memory';
 import { MemoryBackend } from '../fs/memory-backend';
 import { MemorySyncFiles } from '../fs/sync/memory';
 import type { Application } from './context';
@@ -113,7 +114,17 @@ export const STUB_SERVICES: ServiceFactories = {
   createDocumentService: (ctx) => createStubDocumentService(ctx),
   createAudioBackend: () => createSilentAudioBackend(),
   createSimSession: (ctx) => createInertSimSession(ctx),
+  // ARCHITECTURE-PLUS P4.4: the history store over an IndexedDB in memory, and a viewer that wants
+  // nothing (every file opens as text, as without a dock that accepts transient panels).
+  createHistoryService: (ctx) =>
+    createMemoryHistoryService({ vfs: ctx.vfs, clock: ctx.clock, scheduler: ctx.scheduler, settings: ctx.settings }),
+  createViewerService: () => createStubViewerService(),
 };
+
+/** A viewer service for tests: it never wants a file (ARCHITECTURE-PLUS P3.4.2, `acceptsTransient()` false). */
+export function createStubViewerService(): ViewerService {
+  return { wants: () => false, show: () => {} };
+}
 
 export interface TestApplicationOptions extends Partial<Omit<BootstrapEnv, 'services' | 'features'>> {
   features?: readonly FeatureModule[];

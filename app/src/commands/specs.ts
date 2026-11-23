@@ -61,6 +61,11 @@ const ROWS: Record<KnownCommandId, Row> = {
   'ed.edit.toggleInsert': { caption: 'Insert/Replace' },
   'ed.edit.indent': { caption: 'Indent Selection' },
   'ed.edit.outdent': { caption: 'Outdent Selection' },
+  // ---- Editor: the stage of additions (ARCHITECTURE-PLUS P3.6; no keys, P1.3)
+  'ed.window.splitRight': { caption: 'Split Editor &Right' },
+  'ed.window.splitDown': { caption: 'Split Editor &Down' },
+  'ed.window.unsplit': { caption: 'Close &Split' },
+  'ed.file.history': { caption: 'Earlier &Versions...' },
 
   // ---- Simulator: File, Search
   'sim.file.open': { caption: '&Open...', hint: 'Open', icon: 'file-open' },
@@ -135,6 +140,13 @@ const ROWS: Record<KnownCommandId, Row> = {
   'app.help.differences': { caption: 'Differences from EASy68K' },
   'app.window.new': { caption: 'New Window' },
   'app.files.toggle': { caption: 'Files', kind: 'check', hint: 'Files', icon: 'folder' },
+  // ---- Every mode: the stage of additions (ARCHITECTURE-PLUS P3.6; no keys, P1.3)
+  'app.layout.move': { caption: 'Mo&ve Panel To...' },
+  'app.layout.lock': { caption: 'Loc&k Layout', kind: 'check' },
+  // The Simulator's View menu shows it as 'Reset La&yout' (caption override in tables/sim-menu.ts).
+  'app.layout.reset': { caption: 'R&eset Layout' },
+  'app.files.trash': { caption: 'Tras&h...' },
+  'app.additions.options': { caption: 'Port Ad&ditions...' },
 };
 
 function modeOf(id: KnownCommandId): Mode | 'app' {

@@ -286,7 +286,7 @@ describe('BrowserBackend', { timeout: 60_000 }, () => {
     expect(problem).toBe(
       'Files are NOT being saved: this browser does not let the page keep files ' +
         '(SecurityError: The operation is insecure; for example in a private window, or when storage is blocked for this site). ' +
-        'Everything you save is lost when this tab closes. Use Export... in the Files panel to keep your work.',
+        'Everything you save is lost when this tab closes. Use the Export button of the Files panel to keep your work.',
     );
     // The stand-in still works for the session.
     await backend.writeFile('a.txt', ascii('ok'));
@@ -302,7 +302,7 @@ describe('BrowserBackend', { timeout: 60_000 }, () => {
       "Files are NOT being saved right now: the browser's storage did not answer " +
         '(opening the database took longer than 0.05 s; another tab of this site, or a page that was closed during a save, may still be holding it). ' +
         'The programs you saved before are still in the browser: reload the page in a minute to see them. ' +
-        'What you save until then is lost when this tab closes. Use Export... in the Files panel to keep it.',
+        'What you save until then is lost when this tab closes. Use the Export button of the Files panel to keep it.',
     );
   });
 

@@ -28,8 +28,10 @@ export interface CommandHandler {
   /** Default true. Menus and toolbars ask again whenever the store notifies. A handler whose answer
    *  depends on something outside the store (the editor's undo history, selection or focus) makes
    *  them ask again with `ctx.store.setState((state) => ({ ...state }))`, a new state object with
-   *  the same contents (docs/porting/errata/W1.md, entry 11). */
-  enabled?(state: AppState, ctx: AppContext): boolean;
+   *  the same contents (docs/porting/errata/W1.md, entry 11). `arg`: the argument of the run that
+   *  asks (CommandRegistry.run passes it on), absent when a menu, a toolbar or a key asks; added by
+   *  the stage of additions for `ed.file.history { path }` (docs/requests/N4-history-ui.md item 6). */
+  enabled?(state: AppState, ctx: AppContext, arg?: unknown): boolean;
   checked?(state: AppState, ctx: AppContext, arg?: unknown): boolean;
 }
 /** Options of CommandRegistry.run. Added at gate I1 (docs/porting/errata/W1.md, entry 11). */
@@ -58,6 +60,7 @@ export interface CommandRegistry {
   /** Does nothing when the command is disabled and while a modal dialog is open (2.9.1), unless
    *  `options.allowInModal` is set (see CommandRunOptions). */
   run(id: CommandId, arg?: unknown, options?: CommandRunOptions): Promise<void>;
-  isEnabled(id: CommandId): boolean;
+  /** `arg`: as for CommandHandler.enabled; run() asks with its own argument. */
+  isEnabled(id: CommandId, arg?: unknown): boolean;
   isChecked(id: CommandId, arg?: unknown): boolean;
 }

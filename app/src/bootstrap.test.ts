@@ -13,6 +13,7 @@ import { FEATURES } from './features';
 import { MemoryBackend } from './fs/memory-backend';
 import { MemorySyncFiles } from './fs/sync/memory';
 import { panelVisible, showPanel } from './state/panels';
+import type { ServiceFactories } from './state/services';
 import { setModeTitle } from './state/shell';
 import { STUB_SERVICES, createFakePlatform, createTestApplication } from './state/testing';
 import { withSplit } from './state/layout';
@@ -114,6 +115,49 @@ describe('services (3.12.3)', () => {
     expect(app.ctx.clock.now()).toBe(0);
     expect(typeof app.ctx.scheduler.setTimer).toBe('function');
     expect(typeof app.ctx.editorExtensions.register).toBe('function');
+  });
+
+  it('creates history and viewer after fileDialogs and before documents (ARCHITECTURE-PLUS P4.4)', () => {
+    const order: string[] = [];
+    const app = createTestApplication({
+      services: {
+        createFileDialogs: (ctx) => (order.push('fileDialogs'), STUB_SERVICES.createFileDialogs(ctx)),
+        createHistoryService: (ctx) => {
+          order.push('history');
+          expect(ctx.fileDialogs).toBeDefined();
+          expect(() => ctx.viewer).toThrow(/AppContext\.viewer does not exist yet/);
+          return STUB_SERVICES.createHistoryService!(ctx);
+        },
+        createViewerService: (ctx) => {
+          order.push('viewer');
+          // N3's store over an IndexedDB in memory (it was N0's stub, 'unavailable', before N3).
+          expect(ctx.history?.state()).toBe('ready');
+          expect(() => ctx.documents).toThrow(/fileDialogs, history, viewer, documents/);
+          return STUB_SERVICES.createViewerService!(ctx);
+        },
+        createDocumentService: (ctx) => {
+          order.push('documents');
+          expect(ctx.viewer?.wants('/browser/a.pdf', new Uint8Array())).toBe(false);
+          return STUB_SERVICES.createDocumentService(ctx);
+        },
+      },
+    });
+    expect(order).toEqual(['fileDialogs', 'history', 'viewer', 'documents']);
+    expect(app.ctx.history).toBeDefined();
+    expect(app.ctx.viewer).toBeDefined();
+  });
+
+  it('sets history and viewer to undefined when their factories are absent, so reading them never throws', () => {
+    // A test that replaces the two factories with nothing (exactOptionalPropertyTypes forbids writing
+    // `undefined` directly; the bootstrap meets it when a spread carries it).
+    const absent = {
+      createHistoryService: undefined,
+      createViewerService: undefined,
+    } as unknown as Partial<ServiceFactories>;
+    const app = createTestApplication({ services: absent });
+    expect(app.ctx.history).toBeUndefined();
+    expect(app.ctx.viewer).toBeUndefined();
+    expect(Object.keys(app.ctx)).toEqual(expect.arrayContaining(['history', 'viewer']));
   });
 
   it('a factory that reads a later service gets a clear error, not undefined', () => {
@@ -245,20 +289,31 @@ describe('features', () => {
     }
   });
 
-  // Gate I2 (9.5): no command id is left without a handler once wave two is in. The commands
-  // below are owed by the package named; remove one from the list when its handler arrives (the
-  // test fails until then, so the list can only shrink).
-  // Empty since U4 gave sim.view.log its handler (gate I2); an entry reads
-  // 'some.command.id': 'PACKAGE (what is missing)'.
-  const OWED_HANDLERS: Readonly<Record<string, string>> = {};
+  // Gate I2 (9.5): no command id is left without a handler once wave two is in. The stage of
+  // additions (ARCHITECTURE-PLUS P3.6) added its nine commands without handlers (N0) and listed them
+  // here as owed by N1, N2, N4 and N7; every one of them has its handler now (the gate of the stage),
+  // so the list of owed handlers is gone and no command at all may be without one.
+  const PLUS_COMMANDS = [
+    'app.layout.move',
+    'app.layout.lock',
+    'app.layout.reset',
+    'ed.window.splitRight',
+    'ed.window.splitDown',
+    'ed.window.unsplit',
+    'ed.file.history',
+    'app.files.trash',
+    'app.additions.options',
+  ] as const;
   for (const kind of ['web', 'desktop'] as const) {
-    it(`with the features of wave two, every command has a handler (${kind}; gate I2, 9.5)`, () => {
+    it(`with the features of wave two and of the stage, every command has a handler (${kind}; gate I2, 9.5)`, () => {
       const app = createTestApplication({ features: FEATURES, platform: createFakePlatform({ kind }) });
-      const missing = COMMAND_IDS.filter((id) => !app.commands.hasHandler(id));
       expect(
-        missing.map((id) => `${id}: ${OWED_HANDLERS[id] ?? 'no owner recorded'}`),
+        COMMAND_IDS.filter((id) => !app.commands.hasHandler(id)),
         'commands without a handler',
-      ).toEqual(Object.keys(OWED_HANDLERS).map((id) => `${id}: ${OWED_HANDLERS[id]}`));
+      ).toEqual([]);
+      // The stage's nine commands of P3.6 are command ids, so the line above covers them; named here
+      // so that a later edit cannot drop one from COMMAND_IDS unnoticed.
+      expect(PLUS_COMMANDS.filter((id) => !(COMMAND_IDS as readonly string[]).includes(id))).toEqual([]);
     }, 60_000);
   }
 });

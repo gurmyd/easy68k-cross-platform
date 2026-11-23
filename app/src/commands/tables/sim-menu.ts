@@ -71,6 +71,11 @@ export const SIM_MENUS: MenuTable[] = [
       // added (1.5): the Log panel (docs/requests/U4-log-panel-command.md)
       separator,
       command('sim.view.log'),
+      // added by the stage of additions (ARCHITECTURE-PLUS P3.1.4)
+      separator,
+      command('app.layout.move'),
+      command('app.layout.lock'),
+      command('app.layout.reset', undefined, 'Reset La&yout'),
     ],
   },
   {
@@ -105,6 +110,9 @@ export const SIM_MENUS: MenuTable[] = [
       // greyed in a browser, where the handler reports it disabled
       separator,
       command('sim.options.serialPorts'),
+      // added by the stage of additions (ARCHITECTURE-PLUS P3.5)
+      separator,
+      command('app.additions.options'),
     ],
   },
   {

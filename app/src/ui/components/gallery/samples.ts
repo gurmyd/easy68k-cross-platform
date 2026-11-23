@@ -195,6 +195,15 @@ export const MESSAGE_SAMPLES = [
   },
   { title: 'Warning', text: 'Breakpoint Limit Reached!', icon: 'warning', buttons: ['OK'] },
   { title: 'Error', text: 'File exists! OK to overwrite?', icon: 'error', buttons: ['Yes', 'No'] },
+  // MessageBoxRequest.defaultButton (the stage of additions, docs/requests/N5-default-button.md):
+  // the question of ARCHITECTURE-PLUS P3.3.4, where No has the focus and Enter answers No.
+  {
+    title: 'Delete',
+    text: 'EASy68K cannot keep a copy of "prog.X68" in the Trash. Delete it anyway? This cannot be undone.',
+    icon: 'warning',
+    buttons: ['Yes', 'No'],
+    defaultButton: 'No',
+  },
 ] as const;
 
 /** Rows of the editor's message list (2.2). */
@@ -208,3 +217,29 @@ export const MESSAGE_ROWS = [
 
 /** The fixed caption above the SR field (sim-ui §4.1), one character per bit. Verbatim: two and three spaces. */
 export const SR_FLAGS_CAPTION = 'T S  INT   XNZVC';
+
+/** Rows of the gallery's grid with several selected rows (DataGrid's optional `multiSelect`, ARCHITECTURE-PLUS P5 N4: the Trash). */
+export const TRASH_SAMPLE_ROWS = [
+  { name: 'prog.X68', wasIn: 'My Programs/demo', why: 'Deleted' },
+  { name: 'demo', wasIn: 'My Programs', why: 'Deleted' },
+  { name: 'lab1.X68', wasIn: 'Lab', why: 'Replaced' },
+  { name: 'notes.txt', wasIn: 'My Programs', why: 'Deleted' },
+  { name: 'macros.X68', wasIn: 'My Programs/lib', why: 'Deleted' },
+  { name: 'old.X68', wasIn: 'My Programs/demo', why: 'Replaced' },
+];
+
+/** The drag type of the gallery's draggable tabs (Tabs' optional `drag`, ARCHITECTURE-PLUS P5 N2). */
+export const GALLERY_TAB_DRAG_TYPE = 'application/x-e68-gallery-tab';
+
+/** Moves the item `moved` before the item `before` (null: to the end); an unknown id changes nothing. */
+export function moveItemBefore<T extends { id: string }>(
+  items: readonly T[],
+  moved: string,
+  before: string | null,
+): T[] {
+  const item = items.find((entry) => entry.id === moved);
+  if (!item || moved === before) return [...items];
+  const rest = items.filter((entry) => entry.id !== moved);
+  const at = before === null ? rest.length : rest.findIndex((entry) => entry.id === before);
+  return at < 0 ? [...items] : [...rest.slice(0, at), item, ...rest.slice(at)];
+}

@@ -22,6 +22,9 @@
 //     offer the drafts of a window that is still open; after that window is gone (closed without
 //     its unload handlers, as in a crash) a new window offers them with the exact text, Escape does
 //     not dismiss the offer, and Restore brings the document back, modified, with its text;
+//   - opening a binary file (ARCHITECTURE-PLUS P3.4.1, N6): the viewer takes it when the dock
+//     accepts transient panels, `{ asText: true }` opens it as a document, and with the viewer
+//     switched off it opens as text;
 //   - drafts held by a read-write transaction that never ends (what a page that died while writing
 //     its drafts can leave; E1 errata entry 22): the next page says within 20 s that drafts are
 //     off, offers nothing and goes on working; once the transaction has ended a new page offers the
@@ -438,6 +441,64 @@ async function draftsPass(browser, name) {
 }
 
 /**
+ * Opening a binary file (ARCHITECTURE-PLUS P3.4.1; this pass is N6's): with the viewer on and a dock
+ * that accepts transient panels, open() shows the viewer and opens no document; `{ asText: true }`
+ * opens it as a document; with the viewer off it opens as text, as in the original.
+ */
+async function binaryPass(browser, name) {
+  const p = `${name}:`;
+  const context = await newContext(browser);
+  const { page, errors } = await openApp(context);
+  await page.evaluate(() =>
+    window.__easy68k.ctx.vfs.writeFile('/browser/data.bin', Uint8Array.of(0x7f, 0x45, 0x4c, 0x46, 0, 1, 0, 2)),
+  );
+  const accepts = await page.evaluate(async () => {
+    const { dockOf } = await import('/src/state/dock.ts');
+    return dockOf(window.__easy68k.ctx).acceptsTransient();
+  });
+  const opened = await page.evaluate(async () => {
+    const doc = await window.__easy68k.ctx.documents.open('/browser/data.bin');
+    return doc ? doc.path : null;
+  });
+  if (accepts) {
+    check(`${p} binary file: open() hands it to the viewer and opens no document`, opened === null, `${opened}`);
+    const shown = await page
+      .locator('[data-e68-panel^="viewer:"]', { hasText: 'does not look like text' })
+      .first()
+      .waitFor({ timeout: 15_000 })
+      .then(() => true)
+      .catch(() => false);
+    check(`${p} binary file: the viewer shows its notice`, shown);
+    await page.screenshot({ path: join(outDir, `${name}-binary-viewer.png`) });
+  } else {
+    check(`${p} binary file without a dock for viewers: it opens as text`, opened === '/browser/data.bin', `${opened}`);
+  }
+  const asText = await page.evaluate(async () => {
+    const doc = await window.__easy68k.ctx.documents.open('/browser/data.bin', { asText: true });
+    return doc ? [doc.name, doc.path, doc.kind] : null;
+  });
+  check(
+    `${p} binary file: open(path, { asText: true }) opens it as a document`,
+    same(asText, ['data.bin', '/browser/data.bin', 'source']),
+    JSON.stringify(asText),
+  );
+  const switchedOff = await page.evaluate(async () => {
+    const { ctx } = window.__easy68k;
+    ctx.settings.update((s) => ({ ...s, app: { ...s.app, plus: { viewer: false, history: true } } }));
+    await ctx.vfs.writeFile('/browser/other.bin', Uint8Array.of(1, 0, 2));
+    const doc = await ctx.documents.open('/browser/other.bin');
+    return doc ? doc.path : null;
+  });
+  check(
+    `${p} binary file with the viewer switched off: it opens as text`,
+    switchedOff === '/browser/other.bin',
+    `${switchedOff}`,
+  );
+  check(`${p} binary file: no console errors`, errors.length === 0, errors.join(' | '));
+  await context.close();
+}
+
+/**
  * What a page that died in the middle of writing its drafts can leave behind (E1 errata entry 22;
  * FS1 entry 29 for the browser store): a read-write transaction on the drafts store that the browser
  * does not end. Here another page holds one open, with a torn draft in it, by asking for a record
@@ -611,6 +672,7 @@ async function main() {
         for (const [label, pass] of [
           ['documents', documentsPass],
           ['drafts', draftsPass],
+          ['binary', binaryPass],
           ['drafts held by a transaction that never ends', heldDraftsPass],
         ]) {
           console.log(`\n[${name}, ${label}]`);

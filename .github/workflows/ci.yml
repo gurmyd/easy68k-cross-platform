@@ -44,8 +44,17 @@
 #       examples      tests/conformance/examples/check-examples.mjs      X3
 #       desktop_devices app/src/features/desktop-devices/check-desktop-devices.mjs DV4
 #       a11y          tests/a11y/check-a11y.mjs                          Q1 (group accessibility)
+#     the stage of additions (ARCHITECTURE-PLUS P5; branch plus):
+#       dock          app/src/ui/dock/check-dock.mjs                     N1
+#       history       app/src/fs/check-history.mjs                       N3
+#       history_ui    app/src/features/history/check-history-ui.mjs      N4
+#       viewer        app/src/features/viewer/check-viewer.mjs           N6
+#       status        app/src/ui/editor/check-status.mjs                 N8
+#       additions     app/src/features/additions/check-additions.mjs     N7
+#       frame_policy  tools/check-frame-policy.mjs                       N0
 #   check: packaging unit tests  tests/desktop/packaged/playwright.config.ts (project unit, DV3)
 #   check: documents           tools/check-docs.test.mjs            (npm run check:docs, DOC1)
+#   check: guide texts         tools/check-guide-strings.mjs        (npm run check:guide, N10)
 #   check: check scripts' ending tests/browser-checks/ending.test.mjs (npm run test:check-ending, W0)
 #   e2e-stability              as e2e, on a manual run (input e2e_stability) or a push of a v* tag (6.9 item 10, X1);
 #                              --repeat-each=20 split by --shard: Chromium in 2 jobs, WebKit in 4;
@@ -63,7 +72,8 @@
 #   windows-oracles uploads build/gdi-capture/run when the GDI step fails (for other-windows.json),
 #   and its report.txt and differences/ after every GDI step (gdi-capture-report)
 #
-# check and unit run on every push and pull request.
+# check and unit run on every push and pull request, and so does history-model (branch plus:
+# the history store's model test, seeds 1 to 2,000 in two parts on runners of their own; P5 N3).
 #
 # The weekly schedule exists for the Windows engine comparison of 7.3 and for
 # the README job: on a scheduled run, plan sets every guard but engines_weekly
@@ -162,6 +172,13 @@ jobs:
       examples: ${{ steps.guards.outputs.examples }}
       desktop_devices: ${{ steps.guards.outputs.desktop_devices }}
       a11y: ${{ steps.guards.outputs.a11y }}
+      dock: ${{ steps.guards.outputs.dock }}
+      history: ${{ steps.guards.outputs.history }}
+      history_ui: ${{ steps.guards.outputs.history_ui }}
+      viewer: ${{ steps.guards.outputs.viewer }}
+      status: ${{ steps.guards.outputs.status }}
+      additions: ${{ steps.guards.outputs.additions }}
+      frame_policy: ${{ steps.guards.outputs.frame_policy }}
       e2e_stability: ${{ steps.guards.outputs.e2e_stability }}
       perf: ${{ steps.guards.outputs.perf }}
       perf_full: ${{ steps.guards.outputs.perf_full }}
@@ -232,6 +249,13 @@ jobs:
             examples        tests/conformance/examples/check-examples.mjs
             desktop_devices app/src/features/desktop-devices/check-desktop-devices.mjs
             a11y            tests/a11y/check-a11y.mjs
+            dock            app/src/ui/dock/check-dock.mjs
+            history         app/src/fs/check-history.mjs
+            history_ui      app/src/features/history/check-history-ui.mjs
+            viewer          app/src/features/viewer/check-viewer.mjs
+            status          app/src/ui/editor/check-status.mjs
+            additions       app/src/features/additions/check-additions.mjs
+            frame_policy    tools/check-frame-policy.mjs
           '
           check_names=""
           browser_checks=false
@@ -375,6 +399,12 @@ jobs:
       - name: Documents (DOC1)
         if: ${{ !cancelled() && hashFiles('tools/check-docs.test.mjs') != '' }}
         run: npm run check:docs
+      # docs/requests/N10-check-guide.md: every caption and text that docs/USER-GUIDE.md quotes in
+      # "Beyond the original" is a text of the stage's texts.ts files or of commands/specs.ts.
+      # Node only, no browser, ~10 s.
+      - name: Guide texts (N10)
+        if: ${{ !cancelled() && hashFiles('tools/check-guide-strings.mjs') != '' }}
+        run: npm run check:guide
       # docs/requests/W0-check-ending-test.md: the guarded ending every browser check script imports
       # (tests/browser-checks/ending.mjs, errata W0 entry 12). Node's test runner, no browser, ~1.5 s.
       # The file is named: on Windows Node 24's `node --test <folder>` does not find it.
@@ -431,13 +461,58 @@ jobs:
         if: contains(needs.engines.outputs.available, 'sim')
         working-directory: engine/sim
         run: node --test "test/*.test.mjs"
+      # The model test of the history store (app/src/fs/history-model.test.ts) runs a quick 200 seeds
+      # here; its whole range, seeds 1 to 2,000, runs in the job history-model on runners of its own
+      # (ARCHITECTURE-PLUS P5 N3; docs/requests/N3-model-test-ci.md).
       - name: Unit tests
         run: npm test
+        env:
+          EASY68K_HISTORY_SEEDS: '200'
       # The Node halves of the integration scenarios (9.3): real engines, no browser. They run
       # even when a unit test failed, so that one run shows both.
       - name: Integration scenarios under Node (I1)
         if: ${{ !cancelled() && needs.plan.outputs.integration == 'true' }}
         run: npm run test:integration
+
+  # ARCHITECTURE-PLUS P5 N3: the model test, the judge of the safety net (P3.3.1), runs seeds 1 to
+  # 2,000 in at most 5 minutes on ubuntu-latest. Inside npm test it shares the runner with every
+  # other test file and took 420-530 s there (runs 45020779731, 45024648916), so its range is split
+  # into two parts of 1,000 seeds, each on a runner of its own, in the test's own 4 processes
+  # (docs/requests/N3-model-test-ci.md). The test prints "history model: 1000 seeds in 4 processes
+  # in <s> s", the figure to read against the 5 minutes. No engines, no browser.
+  history-model:
+    name: history model (${{ matrix.os }}, seeds ${{ matrix.seeds.first }} to ${{ matrix.seeds.last }})
+    needs: [plan]
+    if: github.event_name != 'schedule'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        seeds:
+          - { first: 1, last: 1000 }
+          - { first: 1001, last: 2000 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Model test of the safety net (P3.3.1, P5 N3)
+        working-directory: app
+        run: npx vitest run src/fs/history-model.test.ts
+        env:
+          CI: '1'
+          EASY68K_HISTORY_FIRST: ${{ matrix.seeds.first }}
+          EASY68K_HISTORY_SEEDS: '1000'
+          EASY68K_HISTORY_SHARDS: '4'
 
   conformance:
     name: conformance (${{ matrix.os }})
@@ -571,6 +646,11 @@ jobs:
   # stalling it until the job's limit of 180, which would upload nothing. 120 min is about 2.6 times
   # the longest expected shard (WebKit, 184 / 4 = 46 min) and 3 times Chromium's (76 / 2 = 38 min),
   # and leaves the job about 60 min for the install, the build and the upload (errata W0.md entry 11).
+  # The stage of additions (tests/e2e/plus, 17 tests per browser) was weighed at its integration pass
+  # (docs/integration/plus.md): on the development PC it adds 11.8 % to WebKit's test time and 10.2 %
+  # to Chromium's. The longest shards of main's run 45034021673 took 50.6 min (WebKit) and 60.5 min
+  # (Chromium), so about 57 and 67 min are expected with the stage: under 60 % of the 120 min, so the
+  # shards stay as they are; a fifth WebKit shard is for when one comes near 80 min.
   e2e-stability:
     name: e2e stability (ubuntu-latest, ${{ matrix.browser }}, 20 repetitions, shard ${{ matrix.shard }} of ${{ matrix.shards }})
     needs: [plan, engines]
@@ -956,6 +1036,19 @@ jobs:
         if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.assemble == 'true' }}
         timeout-minutes: 15
         run: npm run check:assemble
+      # The stage of additions (ARCHITECTURE-PLUS P5), group `interface`: none needs engine/dist.
+      - name: Dock layout check (N1)
+        if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.dock == 'true' }}
+        timeout-minutes: 15
+        run: npm run check:dock
+      - name: Viewer check (N6)
+        if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.viewer == 'true' }}
+        timeout-minutes: 15
+        run: npm run check:viewer
+      - name: Status bar place texts check (N8)
+        if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.status == 'true' }}
+        timeout-minutes: 15
+        run: npm run check:status
       # Group `simulator`:
       - name: Engine binding in the browser (W4)
         if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.engine_browsers == 'true' && needs.engines.outputs.available == 'asm sim' }}
@@ -1057,6 +1150,28 @@ jobs:
         if: ${{ !cancelled() && matrix.group == 'integration' && needs.plan.outputs.wave2 == 'true' && needs.engines.outputs.available == 'asm sim' }}
         timeout-minutes: 15
         run: npm run check:wave2
+      # The stage of additions (ARCHITECTURE-PLUS P5), group `integration` (the shortest group):
+      # the history store on real IndexedDB, its dialogs, and the Port Additions dialog (its Empty
+      # Trash and storage figures; docs/requests/N7.md item 1). None needs engine/dist.
+      - name: History store check (N3)
+        if: ${{ !cancelled() && matrix.group == 'integration' && needs.plan.outputs.history == 'true' }}
+        timeout-minutes: 15
+        run: npm run check:history
+      - name: History and Trash dialogs check (N4)
+        if: ${{ !cancelled() && matrix.group == 'integration' && needs.plan.outputs.history_ui == 'true' }}
+        timeout-minutes: 15
+        run: npm run check:history-ui
+      - name: Port Additions dialog check (N7)
+        if: ${{ !cancelled() && matrix.group == 'integration' && needs.plan.outputs.additions == 'true' }}
+        timeout-minutes: 15
+        run: npm run check:additions
+      # The two frames under the production policy with the service worker in control, offline:
+      # Help and the viewer's PDF and picture, and nothing else in either frame (gate of the stage,
+      # round 2; tools/check-frame-policy.mjs). It makes its own production build.
+      - name: Frame policy check (N0)
+        if: ${{ !cancelled() && matrix.group == 'integration' && needs.plan.outputs.frame_policy == 'true' }}
+        timeout-minutes: 15
+        run: npm run check:frame-policy
       - name: Upload the screenshots of the browser checks
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -1101,6 +1216,16 @@ jobs:
             build/X3/check/
             build/DV4/desktop-devices-check/
             build/Q1/a11y-check/
+            build/dock-check/
+            build/history-check/
+            build/history-ui-check/
+            build/viewer-check/
+            !build/viewer-check/dist/
+            !build/viewer-check/vite-cache/
+            build/N8-plus/status-check/
+            build/N7-plus/additions-check/
+            build/frame-policy-check/
+            !build/frame-policy-check/dist/
           if-no-files-found: ignore
           retention-days: 14
 

@@ -34,8 +34,11 @@
 //   given; it does not make the name "not found" (defect D1, errata W1.md entry 15). Only an
 //   FsError counts as such a refusal: any other exception of list() gives null (entry 16.1).
 // - Failures reject with an FsError (fsError(), isFsError()).
+// - snapshot() takes files breadth first with sorted names; files below a folder named `.git` (any
+//   letter case) come after all others, with the same limits (ARCHITECTURE-PLUS P3.3.10). There is
+//   no write guard for `.git`: a program and Save write there as before (P1.1 rule 2).
 //
-// Owner: W1.
+// Owner: W1 (the order of `.git` files: N8 in the stage of additions).
 
 import type {
   BackendChange,
@@ -52,6 +55,24 @@ import type {
   VPath,
 } from '../contracts';
 import { foldCase, isVPath, isWithin, joinVPath, matchName, resolveLexically, splitVPath } from '../core/paths/winpath';
+
+/**
+ * True when `rel`, a path relative to a folder being snapshot or prepared, names something below a
+ * folder named `.git` (any letter case): such files are taken after all others (ARCHITECTURE-PLUS
+ * P3.3.10, N8). `rel` itself may be named `.git` (a file of that name is not below one).
+ */
+export function belowGitFolder(rel: string): boolean {
+  const segments = rel.split('/');
+  segments.pop();
+  return segments.some(isGitName);
+}
+
+/** True for the name `.git` in any letter case. */
+export function isGitName(name: string): boolean {
+  return foldCase(name) === GIT_FOLDED;
+}
+
+const GIT_FOLDED = foldCase('.git');
 
 /** An Error with an FsErrorCode in `code`. */
 export function fsError(code: FsErrorCode, message: string): FsError {
@@ -289,9 +310,36 @@ class VirtualFileSystem implements Vfs {
     const snapshot: DirSnapshot = { root: dir, files: new Map(), skipped: [] };
     let totalBytes = 0;
     const join = (a: string, b: string) => (a === '' ? b : b === '' ? a : `${a}/${b}`);
+    /** Takes one file within the limits, or records why it is skipped. */
+    const take = async (path: string): Promise<void> => {
+      if (snapshot.files.size >= limits.maxFiles) {
+        snapshot.skipped.push({ path, reason: 'too-many' });
+        return;
+      }
+      try {
+        const stat = await backend.stat(join(rootRel, path));
+        if (!stat || stat.kind !== 'file') throw fsError('not-found', path);
+        if (stat.size > limits.maxFileBytes || totalBytes + stat.size > limits.maxTotalBytes) {
+          snapshot.skipped.push({ path, reason: 'too-large' });
+          return;
+        }
+        const data = await backend.readFile(join(rootRel, path));
+        if (data.length > limits.maxFileBytes || totalBytes + data.length > limits.maxTotalBytes) {
+          snapshot.skipped.push({ path, reason: 'too-large' });
+          return;
+        }
+        totalBytes += data.length;
+        snapshot.files.set(path, { data, mtime: stat.mtime });
+      } catch {
+        snapshot.skipped.push({ path, reason: 'unreadable' });
+      }
+    };
     // Breadth first, names sorted: files near the root are taken before deeper ones when a limit
-    // is reached, and the result does not depend on the backend's listing order.
+    // is reached, and the result does not depend on the backend's listing order. Files below a
+    // folder named .git are taken after all others, in the same order and with the same limits
+    // (ARCHITECTURE-PLUS P3.3.10, N8): while everything fits, the set of files is the same.
     const queue: { rel: string; depth: number }[] = [{ rel: '', depth: 0 }];
+    const inGit: string[] = [];
     while (queue.length > 0) {
       const { rel, depth } = queue.shift() as { rel: string; depth: number };
       let entries: DirEntry[];
@@ -309,29 +357,11 @@ class VirtualFileSystem implements Vfs {
           else queue.push({ rel: path, depth: depth + 1 });
           continue;
         }
-        if (snapshot.files.size >= limits.maxFiles) {
-          snapshot.skipped.push({ path, reason: 'too-many' });
-          continue;
-        }
-        try {
-          const stat = await backend.stat(join(rootRel, path));
-          if (!stat || stat.kind !== 'file') throw fsError('not-found', path);
-          if (stat.size > limits.maxFileBytes || totalBytes + stat.size > limits.maxTotalBytes) {
-            snapshot.skipped.push({ path, reason: 'too-large' });
-            continue;
-          }
-          const data = await backend.readFile(join(rootRel, path));
-          if (data.length > limits.maxFileBytes || totalBytes + data.length > limits.maxTotalBytes) {
-            snapshot.skipped.push({ path, reason: 'too-large' });
-            continue;
-          }
-          totalBytes += data.length;
-          snapshot.files.set(path, { data, mtime: stat.mtime });
-        } catch {
-          snapshot.skipped.push({ path, reason: 'unreadable' });
-        }
+        if (belowGitFolder(path)) inGit.push(path);
+        else await take(path);
       }
     }
+    for (const path of inGit) await take(path);
     return snapshot;
   }
 

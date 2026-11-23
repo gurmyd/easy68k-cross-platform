@@ -790,15 +790,28 @@ async function linkedPass(browser, name) {
     JSON.stringify(layout),
   );
   await page.screenshot({ path: join(outDir, `${name}-linked-banner.png`) });
+  // ARCHITECTURE-PLUS P3.2.5 (N5): the Files panel now lists the linked file by its name under
+  // "Opened from this computer", edited in place.
+  const listedRow = page.locator(`[data-e68-panel="files"] [role=treeitem][data-e68-path="${path}"]`);
+  const listed = await listedRow.waitFor({ timeout: 10_000 }).then(
+    () => listedRow.innerText(),
+    () => null,
+  );
+  check(
+    `${p} ... and the Files panel lists it by its name under "Opened from this computer"`,
+    listed !== null && listed.replace(/\s+/g, ' ').trim() === 'prog.X68 edited in place',
+    JSON.stringify(listed),
+  );
   // Gate I2 review: the port's internal folder of a linked file is never shown, the status lines
-  // included; Editor mode's window status line reads "Linked files/prog.X68".
+  // included; Editor mode's window status line reads "prog.X68 - on this computer, edited in place"
+  // (ARCHITECTURE-PLUS P3.2.5, N8).
   const visible = await page.evaluate(() => ({
     text: document.body.innerText,
     status: document.querySelector('[data-e68-editor-status="path"]')?.textContent ?? null,
   }));
   check(
-    `${p} no visible text names /linked/; the status line reads "Linked files/prog.X68"`,
-    !visible.text.includes('/linked/') && visible.status === 'Linked files/prog.X68',
+    `${p} no visible text names /linked/; the status line reads "prog.X68 - on this computer, edited in place"`,
+    !visible.text.includes('/linked/') && visible.status === 'prog.X68 - on this computer, edited in place',
     `status ${JSON.stringify(visible.status)}; ` +
       (visible.text.match(/.{0,40}\/linked\/.{0,40}/)?.[0] ?? 'no /linked/ in the text'),
   );

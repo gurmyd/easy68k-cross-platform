@@ -161,8 +161,16 @@ describe('resolveMenus', () => {
         (menu) => menu.id === 'editor.window',
       )?.items ?? [];
 
-    // No document: the five commands and no separator.
-    expect(windowMenu(state).map((node) => node.type)).toEqual(['item', 'item', 'item', 'item', 'item']);
+    // No document: the five commands, then the stage's additions below one separator (ARCHITECTURE-PLUS
+    // P3.1.4; the document list's own separator is not drawn twice).
+    expect(windowMenu(state).map((node) => node.type)).toEqual([
+      ...new Array(5).fill('item'),
+      'separator',
+      ...new Array(4).fill('item'),
+      'separator',
+      'item',
+      'item',
+    ]);
 
     const documents = [
       document('a', 'prog.X68'),
@@ -172,7 +180,18 @@ describe('resolveMenus', () => {
     const open: AppState = { ...state, documents: { items: documents, activeId: 'b' } };
     const nodes = windowMenu(open);
     expect(nodes[5]).toEqual({ type: 'separator' });
-    const list = nodes.slice(6) as ResolvedItem[];
+    const list = nodes.slice(6, 16) as ResolvedItem[];
+    // The stage's additions follow the document list, below a separator (ARCHITECTURE-PLUS P3.1.4).
+    expect(nodes[16]).toEqual({ type: 'separator' });
+    expect(nodes.slice(17).map((node) => (node.type === 'item' ? node.id : node.type))).toEqual([
+      'app.layout.move',
+      'ed.window.splitRight',
+      'ed.window.splitDown',
+      'ed.window.unsplit',
+      'separator',
+      'app.layout.lock',
+      'app.layout.reset',
+    ]);
     expect(list.map((item) => item.caption).slice(0, 3)).toEqual(['&1 prog.X68', '&2 R&&D notes.X68', '&3 f0.X68']);
     // Windows gives an access key to the first nine only.
     expect(list[9]?.caption).toBe('10 f7.X68');
@@ -190,6 +209,204 @@ describe('resolveMenus', () => {
         types.forEach((type, index) => {
           if (type === 'separator') expect(types[index + 1], menu.id).not.toBe('separator');
         });
+      }
+    }
+  });
+});
+
+/* ---- the stage of additions (ARCHITECTURE-PLUS P1.1 rule 3, P3.6) ---- */
+
+/** Where each command of the stage is, by menu id (P3.6). */
+const PLUS_PLACES: Record<string, string[]> = {
+  'editor.file': ['ed.file.history', 'app.files.trash'],
+  'editor.options': ['app.additions.options'],
+  'editor.window': [
+    'app.layout.move',
+    'ed.window.splitRight',
+    'ed.window.splitDown',
+    'ed.window.unsplit',
+    'app.layout.lock',
+    'app.layout.reset',
+  ],
+  'simulator.view': ['app.layout.move', 'app.layout.lock', 'app.layout.reset'],
+  'simulator.options': ['app.additions.options'],
+};
+const PLUS_IDS = new Set(Object.values(PLUS_PLACES).flat());
+
+/**
+ * The original captions of every menu, with `&` before the access key and `---` for a separator, as
+ * on main before the stage (Windows key map, no document open). The Window menu's document list
+ * is checked separately.
+ */
+const ORIGINAL_CAPTIONS: Record<string, string> = {
+  'editor.file':
+    '&New X68 Source File|&Open File...|---|&Save|Save &As...|---|&Print|Printer Setup...|---|C&lose File|---|E&xit',
+  'editor.edit':
+    '&Undo|&Redo|---|Cu&t|&Copy|&Paste|Select &All|---|C&omment Selection|Unco&mment Selection|---|&Find...|Find &Next|Find And &Replace...',
+  'editor.project': '&Assemble Source...',
+  'editor.options': '&Assembler Options...|---|&Editor Options...|---|Import/Export Settings...',
+  'editor.window': '&Arrange|&Cascade|Tile &Horizontally|&Tile Vertically|&Minimize All',
+  'editor.help': 'Hel&p|---|&About|---|Examples...|Differences from EASy68K',
+  'simulator.file': '&Open...|Open &Data...|---|&Close|---|&Printer Setup...|---|E&xit',
+  'simulator.search': '&Find...|---|&Go to PC',
+  'simulator.run':
+    '&Run|---|Run To &Cursor|&Auto Trace|&Step Over|&Trace Into|&Pause|---|R&ewind Program|Re&load Program|---|L&og Start|Lo&g Stop',
+  'simulator.view': '&Output Window|&Memory|&Stack|&Hardware|&Break Points|&EASyBIN|---|&Log',
+  'simulator.options':
+    'Source Window Font...|Output Window Font...|Printer Font...|---|&Log Output...|---|&Enable Exceptions|---|&Auto Trace Options...|---|&Fullscreen Options...|---|Enable &Bit Field Instructions|---|Output Window &Size >|Output Window Text &Wrap|---|Import/Export Settings...|Execution Speed...|---|Serial &Ports...',
+  'simulator.help': '&Sim68K Help|&About Sim68K|---|Examples...|Differences from EASy68K',
+  'easybin.file': '&New|---|&Open S-Record...|Open &Binary...|---|Save S-&Record...|&Save Binary...|---|E&xit',
+  'easybin.help': '&EASyBIN Help|&About EASyBIN|---|Examples...|Differences from EASy68K',
+};
+
+const accessKeyOf = (caption: string) => /&([^&])/.exec(caption.replaceAll('&&', ''))?.[1]?.toLowerCase() ?? null;
+
+describe('the stage of additions in the menus (ARCHITECTURE-PLUS P1.1 rule 3, P3.6)', () => {
+  const withDocuments = (): AppState => {
+    const state = initialAppState(defaultSettings());
+    return { ...state, documents: { items: [document('a', 'prog.X68'), document('b', 'lab.X68')], activeId: 'a' } };
+  };
+  const cases = (['windows', 'mac'] as const).flatMap((os) =>
+    [false, true].flatMap((desktop) =>
+      [false, true].map((documents) => ({
+        os,
+        desktop,
+        documents,
+        label: `${os}, ${desktop ? 'desktop' : 'web'}, ${documents ? 'documents' : 'none'}`,
+      })),
+    ),
+  );
+
+  it.each(cases)(
+    'every original caption and access key is unchanged and in its place ($label)',
+    ({ os, desktop, documents }) => {
+      const state = documents ? withDocuments() : initialAppState(defaultSettings());
+      for (const mode of ['editor', 'simulator', 'easybin'] as const) {
+        for (const menu of resolveMenus(mode, env({ os, desktop, state }))) {
+          const original = menu.items.filter(
+            (node) =>
+              !(node.type === 'item' && PLUS_IDS.has(node.id)) &&
+              !(node.type === 'item' && node.id === 'ed.window.select'),
+          );
+          const text = original
+            .map((node) =>
+              node.type === 'separator' ? '---' : node.type === 'submenu' ? `${node.caption} >` : node.caption,
+            )
+            .join('|')
+            .replace(/(\|---)+$/, '') // the separators that led to the additions
+            .replace(/\|---\|---/g, '|---'); // the document list's separator next to the additions'
+          expect(text, menu.id).toBe(ORIGINAL_CAPTIONS[menu.id]);
+        }
+      }
+    },
+  );
+
+  it.each(cases)(
+    'the additions are at the places of P3.6, after the original items ($label)',
+    ({ os, desktop, documents }) => {
+      const state = documents ? withDocuments() : initialAppState(defaultSettings());
+      for (const mode of ['editor', 'simulator'] as const) {
+        for (const menu of resolveMenus(mode, env({ os, desktop, state }))) {
+          const ids = menu.items.map((node) => (node.type === 'item' ? node.id : node.type));
+          const plus = ids.filter((id) => PLUS_IDS.has(id));
+          expect(plus, menu.id).toEqual(PLUS_PLACES[menu.id] ?? []);
+          if (plus.length === 0) continue;
+          const first = ids.indexOf(plus[0] as string);
+          // a separator before the first addition, and nothing original after it
+          expect(ids[first - 1], menu.id).toBe('separator');
+          expect(
+            ids.slice(first).every((id) => id === 'separator' || PLUS_IDS.has(id)),
+            menu.id,
+          ).toBe(true);
+          // the Window menu's document list stays directly after Minimize All
+          if (menu.id === 'editor.window' && documents) {
+            expect(ids.slice(4, 9)).toEqual([
+              'ed.window.minimizeAll',
+              'separator',
+              'ed.window.select',
+              'ed.window.select',
+              'separator',
+            ]);
+          }
+        }
+      }
+      expect(
+        resolveMenus('simulator', env({ os, desktop, state }))
+          .find((m) => m.id === 'simulator.view')
+          ?.items.at(-1),
+      ).toMatchObject({
+        id: 'app.layout.reset',
+        caption: 'Reset La&yout',
+      });
+    },
+  );
+
+  it('no item added by this stage shares its access key with another item of its menu', () => {
+    for (const mode of ['editor', 'simulator', 'easybin'] as const) {
+      for (const documents of [false, true]) {
+        const state = documents ? withDocuments() : initialAppState(defaultSettings());
+        for (const menu of resolveMenus(mode, env({ state }))) {
+          const entries = menu.items.flatMap((node) =>
+            node.type === 'item'
+              ? [{ id: node.id, key: accessKeyOf(node.caption) }]
+              : node.type === 'submenu'
+                ? [{ id: node.caption, key: accessKeyOf(node.caption) }]
+                : [],
+          );
+          for (const entry of entries) {
+            if (!PLUS_IDS.has(entry.id)) continue;
+            expect(entry.key, `${menu.id} ${entry.id} has an access key`).not.toBeNull();
+            const clashes = entries
+              .filter((other) => other !== entry && other.key === entry.key)
+              .map((other) => other.id);
+            expect(clashes, `${menu.id} ${entry.id} (${entry.key})`).toEqual([]);
+          }
+        }
+      }
+    }
+  });
+
+  it('the additions have no shortcut on either key map, in a browser or the desktop app', () => {
+    for (const os of ['windows', 'linux', 'mac'] as const) {
+      for (const desktop of [false, true]) {
+        for (const mode of ['editor', 'simulator'] as const) {
+          for (const item of resolveMenus(mode, env({ os, desktop })).flatMap((menu) => items(menu.items))) {
+            if (PLUS_IDS.has(item.id)) expect(item.shortcut, `${os} ${item.id}`).toBeNull();
+          }
+        }
+      }
+    }
+  });
+
+  it('the native menu shows them in the same places, without an accelerator', () => {
+    const flatten = (menu: NativeMenuItem[]): NativeMenuItem[] =>
+      menu.flatMap((item) => [item, ...flatten(item.items ?? [])]);
+    for (const os of ['mac', 'windows'] as const) {
+      for (const mode of ['editor', 'simulator'] as const) {
+        const native = buildNativeMenu(mode, { ...env({ os, desktop: true }), modalOpen: false });
+        const plus = flatten(native).filter((item) => item.id !== undefined && PLUS_IDS.has(item.id));
+        expect(plus.length, `${os} ${mode}`).toBe(mode === 'editor' ? 9 : 4);
+        for (const item of plus) expect(item.accelerator, `${os} ${item.id}`).toBeUndefined();
+        const lock = plus.find((item) => item.id === 'app.layout.lock');
+        expect(lock?.type).toBe('checkbox');
+      }
+    }
+    const view = buildNativeMenu('simulator', { ...env({ os: 'mac', desktop: true }), modalOpen: false }).find(
+      (menu) => menu.label === 'View',
+    );
+    expect(view?.items?.map((item) => item.label ?? item.type).slice(-5)).toEqual([
+      'Log',
+      'separator',
+      'Move Panel To...',
+      'Lock Layout',
+      'Reset Layout',
+    ]);
+  });
+
+  it('every command of the stage is disabled while it has no handler', () => {
+    for (const mode of ['editor', 'simulator'] as const) {
+      for (const item of resolveMenus(mode, env()).flatMap((menu) => items(menu.items))) {
+        if (PLUS_IDS.has(item.id)) expect(item.enabled, item.id).toBe(false);
       }
     }
   });
@@ -458,6 +675,15 @@ describe('buildNativeMenu (7.6)', () => {
       'Minimize All',
       'separator',
       '1 prog.X68',
+      // the stage of additions (ARCHITECTURE-PLUS P3.6: the same places, no accelerator)
+      'separator',
+      'Move Panel To...',
+      'Split Editor Right',
+      'Split Editor Down',
+      'Close Split',
+      'separator',
+      'Lock Layout',
+      'Reset Layout',
       'separator',
       'minimize',
       'zoom',

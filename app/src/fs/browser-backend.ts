@@ -65,10 +65,10 @@ export const STORE_MESSAGES = {
   full: (rel: string) =>
     `The browser's storage for this site is full, so "${rel}" was not saved. ` +
     'Nothing that was saved before has been lost. Delete files you no longer need in the Files panel, ' +
-    'or use Export... to keep a copy on this computer, then save again.',
+    'or use its Export button to keep a copy on this computer, then save again.',
   failed: (rel: string, detail: string) =>
     `The browser could not save "${rel}" (${detail}). Nothing that was saved before has been lost. ` +
-    'Use Export... in the Files panel to keep a copy on this computer.',
+    'Use the Export button of the Files panel to keep a copy on this computer.',
   closed: 'The browser closed the file store (site data may have been cleared). Reload the page to continue.',
   opening:
     'My Programs is still opening: the browser has not answered yet (another tab of this site may be ' +
@@ -76,7 +76,7 @@ export const STORE_MESSAGES = {
   unavailable: (detail: string) =>
     'Files are NOT being saved: this browser does not let the page keep files ' +
     `(${detail.replace(/\.$/, '')}; for example in a private window, or when storage is blocked for this site). ` +
-    'Everything you save is lost when this tab closes. Use Export... in the Files panel to keep your work.',
+    'Everything you save is lost when this tab closes. Use the Export button of the Files panel to keep your work.',
   /**
    * The store did not answer within OPEN_TIMEOUT_MS (either step of BrowserBackend.open). The files
    * are still in the browser's storage, unlike in the cases of `unavailable` (errata FS1 entry 30).
@@ -85,7 +85,7 @@ export const STORE_MESSAGES = {
     "Files are NOT being saved right now: the browser's storage did not answer " +
     `(${detail.replace(/\.$/, '')}; another tab of this site, or a page that was closed during a save, may still be holding it). ` +
     'The programs you saved before are still in the browser: reload the page in a minute to see them. ' +
-    'What you save until then is lost when this tab closes. Use Export... in the Files panel to keep it.',
+    'What you save until then is lost when this tab closes. Use the Export button of the Files panel to keep it.',
 } as const;
 
 /** The errors of BrowserBackend.open that mean "the time limit passed", not "refused". */

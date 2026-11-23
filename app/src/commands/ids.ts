@@ -46,6 +46,11 @@ export const COMMAND_IDS = [
   'ed.edit.toggleInsert',
   'ed.edit.indent',
   'ed.edit.outdent',
+  // Editor - the stage of additions (ARCHITECTURE-PLUS P3.6)
+  'ed.window.splitRight',
+  'ed.window.splitDown',
+  'ed.window.unsplit',
+  'ed.file.history',
 
   // Simulator - menus (1.3.4)
   'sim.file.open',
@@ -114,6 +119,12 @@ export const COMMAND_IDS = [
   'app.help.differences',
   'app.window.new',
   'app.files.toggle',
+  // Every mode - the stage of additions (ARCHITECTURE-PLUS P3.6)
+  'app.layout.move',
+  'app.layout.lock',
+  'app.layout.reset',
+  'app.files.trash',
+  'app.additions.options',
 ] as const;
 
 /** The union of the ids above. `CommandId` of the contracts is `string`; use this where a typo should not compile. */

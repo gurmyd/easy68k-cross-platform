@@ -20,7 +20,7 @@ describe('feature "editor"', () => {
     expect(feature.panels?.map((panel) => `${panel.mode}/${panel.id}`)).toEqual(['editor/editor', 'editor/status']);
   });
 
-  it('owns exactly the commands of 9.7', () => {
+  it('owns exactly the commands of 9.7 and the split commands of ARCHITECTURE-PLUS P3.1.4', () => {
     expect(Object.keys(feature.commands ?? {}).sort()).toEqual(
       [
         'ed.edit.undo',
@@ -39,6 +39,9 @@ describe('feature "editor"', () => {
         'ed.window.tileH',
         'ed.window.tileV',
         'ed.window.minimizeAll',
+        'ed.window.splitRight',
+        'ed.window.splitDown',
+        'ed.window.unsplit',
       ].sort(),
     );
   });
@@ -120,6 +123,36 @@ describe('feature "editor"', () => {
   });
 });
 
+describe('the split commands (ARCHITECTURE-PLUS P3.1.4, N2)', () => {
+  it('Split Editor Right / Down and Close Split drive the layout and the panes of the window', async () => {
+    const { app, session, id } = setup();
+    const { commands, documents } = app.ctx;
+    const panes = () => app.ctx.settings.get().app.layout.editorPanes;
+    expect(commands.isEnabled('ed.window.splitRight')).toBe(true);
+    expect(commands.isEnabled('ed.window.splitDown')).toBe(true);
+    expect(commands.isEnabled('ed.window.unsplit')).toBe(false);
+    // One pane: Split Editor Right is Tile Vertically (one document: the second pane is empty).
+    await commands.run('ed.window.splitRight');
+    expect(panes()).toBe('vertical');
+    expect(commands.isEnabled('ed.window.unsplit')).toBe(true);
+    expect(session.panes.state.pane[id] ?? session.panes.state.activePane).toBe(0);
+    // Side by side: the active document goes to the other pane.
+    await commands.run('ed.window.splitRight');
+    expect(panes()).toBe('vertical');
+    expect(session.panes.state.pane[id]).toBe(1);
+    // One above the other, and across again.
+    await commands.run('ed.window.splitDown');
+    expect(panes()).toBe('horizontal');
+    expect(session.panes.state.pane[id]).toBe(0);
+    // Close Split is Cascade.
+    await commands.run('ed.window.unsplit');
+    expect(panes()).toBe('one');
+    expect(commands.isChecked('ed.window.cascade')).toBe(true);
+    expect(commands.isEnabled('ed.window.unsplit')).toBe(false);
+    expect(documents.active()?.id ?? id).toBe(id);
+  });
+});
+
 describe('commands without a document (editor-ui §2.2 quirk: the port does nothing)', () => {
   it('are disabled and call nothing', async () => {
     const calls: string[] = [];
@@ -137,6 +170,10 @@ describe('commands without a document (editor-ui §2.2 quirk: the port does noth
       'ed.edit.comment',
       'ed.edit.uncomment',
       'ed.window.tileV',
+      // Without split operations (the default), the split commands are disabled too.
+      'ed.window.splitRight',
+      'ed.window.splitDown',
+      'ed.window.unsplit',
     ]) {
       expect(handlers[id]?.enabled?.(state, {} as never)).toBe(false);
     }

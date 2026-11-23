@@ -79,6 +79,30 @@ describe('CommandRegistry', () => {
     expect(registry.isChecked('sim.options.exceptions', 'off')).toBe(false);
   });
 
+  // docs/requests/N4-history-ui.md item 6: ed.file.history { path } from the Files panel is judged
+  // by its path, not by the active document's (which may be untitled).
+  it("judges a run by its own argument; a menu's question has none", async () => {
+    const { registry } = setup();
+    const run = vi.fn();
+    const asked: unknown[][] = [];
+    registry.register('ed.file.history', {
+      run,
+      enabled: (...args: unknown[]) => {
+        asked.push(args.slice(2));
+        const arg = args[2] as { path?: string } | undefined;
+        return arg?.path !== undefined; // the active document is untitled: only an explicit path counts
+      },
+    });
+    expect(registry.isEnabled('ed.file.history')).toBe(false);
+    await registry.run('ed.file.history');
+    expect(run).not.toHaveBeenCalled();
+    await registry.run('ed.file.history', { path: '/browser/a.X68' });
+    expect(run).toHaveBeenCalledExactlyOnceWith(expect.anything(), { path: '/browser/a.X68' });
+    expect(registry.isEnabled('ed.file.history', { path: '/browser/b.X68' })).toBe(true);
+    // Without an argument the handler is asked with two arguments, exactly as before.
+    expect(asked).toEqual([[], [], [{ path: '/browser/a.X68' }], [{ path: '/browser/b.X68' }]]);
+  });
+
   it('runs nothing while a modal dialog is open (2.9.1 step 1)', async () => {
     let modal = true;
     const { registry } = setup({ modal: () => modal });

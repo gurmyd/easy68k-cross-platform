@@ -24,7 +24,7 @@ import { ADDRESS_FIELD, INTERVAL_FIELD, REGISTER_FIELD, SR_FIELD, formatMaskedVa
 import { Menu } from '../Menu';
 import { MenuBar } from '../MenuBar';
 import type { MenuSelectable } from '../menu-model';
-import { MessageBox, type MessageBoxButton, type MessageBoxIcon } from '../MessageBox';
+import { MessageBox, messageBoxDefaultIndex, type MessageBoxButton, type MessageBoxIcon } from '../MessageBox';
 import { RadioGroup } from '../RadioGroup';
 import { Select } from '../Select';
 import { SpinField } from '../SpinField';
@@ -42,13 +42,24 @@ import {
   EDITOR_CONTEXT_MENU,
   EDITOR_MENUS,
   EDITOR_TOOLBAR,
+  GALLERY_TAB_DRAG_TYPE,
   MESSAGE_ROWS,
   MESSAGE_SAMPLES,
   SIM_OPTIONS_MENU,
   SIM_TOOLBAR,
   SR_FLAGS_CAPTION,
+  TRASH_SAMPLE_ROWS,
+  moveItemBefore,
   type ToolSample,
 } from './samples';
+
+/** A sample's default button as the kit's index, as DialogHost turns MessageBoxRequest.defaultButton into it. */
+function sampleDefaultIndex(sample: (typeof MESSAGE_SAMPLES)[number]): number {
+  return messageBoxDefaultIndex(
+    sample.buttons as readonly MessageBoxButton[],
+    'defaultButton' in sample ? sample.defaultButton : undefined,
+  );
+}
 
 export interface GalleryProps {
   initialTheme?: ThemeSetting;
@@ -516,6 +527,8 @@ function TabsSection({ report }: { report: Report }) {
   const [doc, setDoc] = useState<string | null>('demo');
   const [tools, setTools] = useState(TOOLS);
   const [tool, setTool] = useState<string | null>('stack');
+  const [dragged, setDragged] = useState(DOCUMENTS);
+  const [draggedDoc, setDraggedDoc] = useState<string | null>('demo');
   const close = (
     list: TabItem[],
     id: string,
@@ -537,7 +550,8 @@ function TabsSection({ report }: { report: Report }) {
         <>
           Document tabs of the editor (a dot marks a modified document; the tool-tip is the full path, 2.4) and the
           simulator&apos;s tool tabs (2.3). Left / Right move and select, Home / End, Delete closes; the <code>x</code>{' '}
-          is for the mouse, so the tab list contains only tabs.
+          is for the mouse, so the tab list contains only tabs. With the optional <code>drag</code> property the tabs
+          can be dragged, and the strip reports a drop of its type with the tab it landed on.
         </>
       }
     >
@@ -591,6 +605,39 @@ function TabsSection({ report }: { report: Report }) {
         {tool && (
           <TabPanel idBase="gallery-tools" tabId={tool} className="e68-gallery__tabpanel">
             <span className="e68-gallery__muted">The {tools.find((t) => t.id === tool)?.label} panel.</span>
+          </TabPanel>
+        )}
+      </Specimen>
+      <Specimen label="Draggable tabs (drag: drop a tab on another to put it before that one)" wide>
+        <Tabs
+          idBase="gallery-drag"
+          label="Draggable documents"
+          items={dragged}
+          selectedId={draggedDoc}
+          onSelect={setDraggedDoc}
+          drag={{
+            type: GALLERY_TAB_DRAG_TYPE,
+            data: (id) => id,
+            onDropAt: (at, data) => {
+              setDragged((list) => moveItemBefore(list, data, at));
+              report(`Tab dropped: ${data} before ${at ?? 'the end'}`);
+            },
+          }}
+          end={
+            <Button
+              size="small"
+              variant="quiet"
+              caption="Reset"
+              onClick={() => {
+                setDragged(DOCUMENTS);
+                setDraggedDoc('demo');
+              }}
+            />
+          }
+        />
+        {draggedDoc && (
+          <TabPanel idBase="gallery-drag" tabId={draggedDoc} className="e68-gallery__tabpanel">
+            <span className="e68-gallery__muted">{`Order: ${dragged.map((t) => t.label).join(', ')}`}</span>
           </TabPanel>
         )}
       </Specimen>
@@ -1304,6 +1351,11 @@ function ListsSection({ report }: { report: Report }) {
           <ScrollingGridSample />
         </Specimen>
       </Row>
+      <Row>
+        <Specimen label="DataGrid with multiSelect (the Trash): Shift and Ctrl (Cmd) click, Shift+Up / Down, Ctrl (Option) + Up / Down and Space, Ctrl (Cmd) + A">
+          <MultiSelectGridSample report={report} />
+        </Specimen>
+      </Row>
       <Specimen
         label={`VirtualList: 1 MB of memory, 65,536 rows - row $${(memoryRow * 16).toString(16).toUpperCase().padStart(8, '0')}`}
         wide
@@ -1380,9 +1432,17 @@ function DialogsSection({ report }: { report: Report }) {
             {MESSAGE_SAMPLES.map((sample, index) => (
               <Button
                 key={sample.title}
-                caption={`Message box: ${sample.icon}`}
+                caption={
+                  'defaultButton' in sample
+                    ? `Message box: ${sample.icon}, ${sample.defaultButton} the default`
+                    : `Message box: ${sample.icon}`
+                }
                 onClick={() => setOpen({ kind: 'message', index })}
-                data-testid={`open-message-${sample.icon}`}
+                data-testid={
+                  'defaultButton' in sample
+                    ? `open-message-default-${sample.defaultButton.toLowerCase()}`
+                    : `open-message-${sample.icon}`
+                }
               />
             ))}
           </div>
@@ -1413,6 +1473,7 @@ function DialogsSection({ report }: { report: Report }) {
             text={sample.text}
             icon={sample.icon as MessageBoxIcon}
             buttons={sample.buttons as readonly MessageBoxButton[]}
+            defaultButton={sampleDefaultIndex(sample)}
             onResult={(button) => report(`${sample.title}: ${button}`)}
           />
         ))}
@@ -1566,6 +1627,7 @@ function DialogsSection({ report }: { report: Report }) {
           text={message.text}
           icon={message.icon as MessageBoxIcon}
           buttons={message.buttons as readonly MessageBoxButton[]}
+          defaultButton={sampleDefaultIndex(message)}
           onResult={(button) => {
             setOpen(null);
             report(`${message.title}: ${button}`);
@@ -1688,6 +1750,37 @@ function ScrollingGridSample() {
       onSelectRow={setRow}
       height={6 * 22}
       className="e68-gallery__scroll-grid"
+    />
+  );
+}
+
+// --- A grid with several selected rows (the Trash, ARCHITECTURE-PLUS P3.3.8; N4) -------------
+
+function MultiSelectGridSample({ report }: { report: Report }) {
+  const [focus, setFocus] = useState(0);
+  const [selected, setSelected] = useState<ReadonlySet<number>>(() => new Set([0]));
+  return (
+    <DataGrid
+      label="Items in the Trash"
+      columns={[
+        { id: 'name', header: 'Name', width: 'minmax(100px, 1fr)' },
+        { id: 'wasIn', header: 'Was in', width: 'minmax(120px, 1fr)' },
+        { id: 'why', header: 'Why', width: '80px' },
+      ]}
+      rows={TRASH_SAMPLE_ROWS}
+      rowKey={(row) => row.name}
+      selectedRow={focus}
+      onSelectRow={setFocus}
+      multiSelect={{
+        selected,
+        onChange: (rows) => {
+          setSelected(rows);
+          const names = [...rows].sort((a, b) => a - b).map((row) => TRASH_SAMPLE_ROWS[row]?.name);
+          report(`Selected: ${names.length ? names.join(', ') : 'none'}`);
+        },
+      }}
+      height={6 * 22}
+      className="e68-gallery__multi-grid"
     />
   );
 }

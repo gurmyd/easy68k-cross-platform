@@ -120,7 +120,7 @@ export async function hasPermission(handle: FsaHandleBase, mode: FsaPermissionMo
 export const FSACCESS_MESSAGES = {
   notAllowed: (where: string) =>
     `The browser does not allow this page to use "${where}" at the moment. ` +
-    'Open the folder or the file again (File > Open), and allow access when the browser asks.',
+    'Open the folder or the file again (File > Open File...), and allow access when the browser asks.',
   inUse: (rel: string) =>
     `"${rel}" could not be written because another program is using it. Close it there and try again.`,
   full: (rel: string) => `"${rel}" could not be written: the disk is full.`,
@@ -248,6 +248,11 @@ export class FolderBackend implements FileSystemBackend {
   ) {
     this.mount = options.mount ?? FOLDER_MOUNT;
     this.label = options.label ?? folderLabel(handle.name);
+  }
+
+  /** The handle the backend was made with, so that the history finds its root (ARCHITECTURE-PLUS P4.3, N3). */
+  get rootHandle(): FsaDirectoryHandle {
+    return this.handle;
   }
 
   async stat(rel: string): Promise<FileStat | null> {

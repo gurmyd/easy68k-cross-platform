@@ -1135,6 +1135,24 @@ async function reopenPart(browser, name, os, fx) {
   await closeWithin(context);
 }
 
+/**
+ * The nine commands of the stage of additions (ARCHITECTURE-PLUS P3.6). N0 declared them without
+ * handlers and this part let them be without one while they were disabled (errata N0 entry 9); every
+ * one has its handler now (the gate of the stage), so they are held to the rule of 9.5 like every
+ * other id, and this part also checks that all nine are command ids.
+ */
+const PLUS_COMMANDS = [
+  'app.layout.move',
+  'app.layout.lock',
+  'app.layout.reset',
+  'ed.window.splitRight',
+  'ed.window.splitDown',
+  'ed.window.unsplit',
+  'ed.file.history',
+  'app.files.trash',
+  'app.additions.options',
+];
+
 /** 9.5: no command id without a handler, in each of the three modes. */
 async function commandsPart(browser, name, os) {
   const p = `${name}/commands:`;
@@ -1143,19 +1161,23 @@ async function commandsPart(browser, name, os) {
   for (const mode of ['editor', 'simulator', 'easybin']) {
     await setMode(page, mode);
     await page.waitForTimeout(500);
-    const found = await page.evaluate((mode) => {
-      const { commands, store } = window.__easy68k.ctx;
-      const ids = commands.ids();
-      const missing = ids.filter((id) => !commands.hasHandler(id));
-      const ofMode = ids.filter((id) => [mode, 'app'].includes(commands.spec(id).mode));
-      return {
-        mode: store.getState().mode,
-        all: ids.length,
-        ofMode: ofMode.length,
-        missing,
-        missingOfMode: missing.filter((id) => ofMode.includes(id)),
-      };
-    }, mode);
+    const found = await page.evaluate(
+      ({ mode, plus }) => {
+        const { commands, store } = window.__easy68k.ctx;
+        const ids = commands.ids();
+        const missing = ids.filter((id) => !commands.hasHandler(id));
+        const ofMode = ids.filter((id) => [mode, 'app'].includes(commands.spec(id).mode));
+        return {
+          mode: store.getState().mode,
+          all: ids.length,
+          ofMode: ofMode.length,
+          missing,
+          missingOfMode: missing.filter((id) => ofMode.includes(id)),
+          plusNotIds: plus.filter((id) => !ids.includes(id)),
+        };
+      },
+      { mode, plus: PLUS_COMMANDS },
+    );
     check(
       `${p} in ${mode} mode every command id of the mode and of the application has a handler`,
       found.mode === mode && found.missingOfMode.length === 0,
@@ -1166,6 +1188,11 @@ async function commandsPart(browser, name, os) {
         `${p} no command id at all is without a handler`,
         found.missing.length === 0,
         `${found.all} ids; without a handler: ${JSON.stringify(found.missing)}`,
+      );
+      check(
+        `${p} the nine commands of the stage of additions (P3.6) are command ids, each with its handler`,
+        found.plusNotIds.length === 0 && PLUS_COMMANDS.every((id) => !found.missing.includes(id)),
+        `not ids: ${JSON.stringify(found.plusNotIds)}; without a handler: ${JSON.stringify(found.missing.filter((id) => PLUS_COMMANDS.includes(id)))}`,
       );
     }
   }

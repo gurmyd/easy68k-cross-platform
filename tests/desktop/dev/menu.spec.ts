@@ -143,6 +143,44 @@ for (const mode of ['editor', 'simulator', 'easybin']) {
       expect(chords).toEqual(expect.arrayContaining(['Cmd+Z', 'Shift+Cmd+Z']));
     }
     expect(chords).toEqual(expect.arrayContaining(['Cmd+X', 'Cmd+C', 'Cmd+V', 'Cmd+A']));
+
+    // The stage of additions (ARCHITECTURE-PLUS P3.6): its items in the native menu, at the end of
+    // their menus, without an accelerator.
+    const PLUS: Record<string, [menu: RegExp, ids: string[]][]> = {
+      editor: [
+        [/^&?File$/, ['ed.file.history', 'app.files.trash']],
+        [/^&?Options$/, ['app.additions.options']],
+        [
+          /^&?Window$/,
+          [
+            'app.layout.move',
+            'ed.window.splitRight',
+            'ed.window.splitDown',
+            'ed.window.unsplit',
+            'app.layout.lock',
+            'app.layout.reset',
+          ],
+        ],
+      ],
+      simulator: [
+        [/^&?View$/, ['app.layout.move', 'app.layout.lock', 'app.layout.reset']],
+        [/^&?Options$/, ['app.additions.options']],
+      ],
+      easybin: [],
+    };
+    for (const [label, ids] of PLUS[mode] ?? []) {
+      const menu = description.find((item) => label.test(item.label ?? ''));
+      const found = (menu?.items ?? []).filter((item) => item.id && ids.includes(item.id));
+      expect(
+        found.map((item) => item.id),
+        `${mode} ${label}`,
+      ).toEqual(ids);
+      for (const item of found) expect(item.accelerator, item.id).toBeUndefined();
+      const own = (menu?.items ?? []).filter((item) => item.id || item.type === 'separator');
+      const last = own.map((item) => item.id ?? 'separator').filter((id) => id !== 'separator');
+      // nothing of the original after the additions (the Window menu's system items are roles)
+      expect(last.slice(-ids.length), `${mode} ${label}`).toEqual(ids);
+    }
   });
 }
 

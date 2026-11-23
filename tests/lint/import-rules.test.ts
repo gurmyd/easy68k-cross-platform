@@ -74,6 +74,30 @@ const FORBIDDEN: [string, string][] = [
   ['app/src/engine/browser.test.tsx', "import { build } from 'vite';"],
   ['app/src/engine/browser.ts', "import { build } from 'vite';"],
   ['app/src/engine/browser.test.ts', "import { x } from 'playwright-core';"],
+  // The stage of additions (ARCHITECTURE-PLUS P2.4): each allowance below fails outside its place.
+  ['app/src/ui/shell/Shell.tsx', "import { Layout } from 'flexlayout-react';"],
+  ['app/src/state/dock.ts', "import { Model } from 'flexlayout-react';"],
+  ['app/src/features/layout/index.ts', "import 'flexlayout-react/style/light.css';"],
+  ['app/src/ui/components/x.test.ts', "import { Model } from 'flexlayout-react';"],
+  ['app/src/features/files/index.ts', "import { MergeView } from '@codemirror/merge';"],
+  ['app/src/ui/editor/compare.ts', "const m = () => import('@codemirror/merge');"],
+  ['app/src/core/history/x.ts', "import { MergeView } from '@codemirror/merge';"],
+  ['app/src/engine/sim.ts', "import { prune } from '../core/history/schedule';"],
+  ['app/src/fs/vfs.ts', "import { x } from '../core/places/display';"],
+  ['app/src/features/files/index.ts', "import { fonts } from '../../ui/editor/fonts';"],
+  ['app/src/features/history/index.ts', "import { editorUi } from '../../ui/editor/index';"],
+  ['app/src/features/history/index.ts', "import { theme } from '../../ui/editor/theme';"],
+  ['app/src/ui/dock/DockWorkspace.tsx', "import { shell } from '../shell/Shell';"],
+  ['app/src/ui/dock/DockWorkspace.tsx', "import { feature } from '../../features/files/index';"],
+  ['app/src/ui/dock/DockWorkspace.tsx', "import { web } from '../../platform/web';"],
+  ['app/src/ui/dock/DockWorkspace.tsx', "import { vfs } from '../../fs/vfs';"],
+  ['app/src/ui/dock/DockWorkspace.tsx', "import lodash from 'lodash';"],
+  ['app/src/features/layout/index.ts', "import { DockWorkspace } from '../../ui/dock/DockWorkspace';"],
+  // fake-indexeddb only in the one test-only file fs/history-memory.ts (N0.md section 7 item 1).
+  ['app/src/fs/history-db.ts', "import { IDBFactory } from 'fake-indexeddb';"],
+  ['app/src/fs/history-memory-other.ts', "import { IDBFactory } from 'fake-indexeddb';"],
+  ['app/src/state/testing.ts', "import { IDBFactory } from 'fake-indexeddb';"],
+  ['app/src/fs/history-memory.ts', "import lodash from 'lodash';"],
 ];
 
 /** [file, code] pairs that must pass. */
@@ -114,6 +138,35 @@ const ALLOWED: [string, string][] = [
   [
     'app/src/engine/browser.test.ts',
     "import { chromium, type Page } from '@playwright/test';\nimport { build, type Plugin } from 'vite';",
+  ],
+  // The stage of additions (ARCHITECTURE-PLUS P2.4).
+  [
+    'app/src/ui/dock/DockWorkspace.tsx',
+    "import { Layout, Model } from 'flexlayout-react';\nimport 'flexlayout-react/style/light.css';",
+  ],
+  ['app/src/ui/dock/model.test.ts', "import { Model } from 'flexlayout-react';\nimport { describe } from 'vitest';"],
+  ['app/src/features/history/compare.ts', "export const load = () => import('@codemirror/merge');"],
+  ['app/src/features/history/compare.test.ts', "import { MergeView } from '@codemirror/merge';"],
+  [
+    'app/src/fs/history-db.ts',
+    "import { prune } from '../core/history/schedule';\nimport { x } from '../core/paths/winpath';",
+  ],
+  ['app/src/features/history/compare.ts', "import { editorFont } from '../../ui/editor/fonts';"],
+  ['app/src/features/history/compare.ts', "import { editorFont } from '../../ui/editor/fonts.ts';"],
+  [
+    'app/src/ui/dock/DockWorkspace.tsx',
+    "import type { AppContext } from '../../contracts';\nimport { readPlus } from '../../core/plus/settings';\nimport { dockOf } from '../../state/dock';\nimport { COMMAND_SPECS } from '../../commands/specs';\nimport { Button } from '../components/Button';\nimport { useState } from 'react';",
+  ],
+  [
+    'app/src/ui/dock/DockWorkspace.tsx',
+    "import { PanelRegion } from '../shell/PanelRegion';\nimport { useElementSize } from '../shell/SplitPane';",
+  ],
+  ['app/src/state/panels.ts', "import { dockOf } from './dock';"],
+  ['app/src/features/viewer/index.ts', "import { dockOf } from '../../state/dock';"],
+  // The history store over a fake IndexedDB, imported only by tests (N0.md section 7 item 1).
+  [
+    'app/src/fs/history-memory.ts',
+    "import { IDBFactory, IDBKeyRange } from 'fake-indexeddb';\nimport { createHistoryStore } from './history-db';",
   ],
 ];
 

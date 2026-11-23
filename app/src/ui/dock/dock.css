@@ -1,0 +1,325 @@
+/*
+ * The dock (ARCHITECTURE-PLUS P3.1, P3.1.8 Themes). Owner: N1.
+ *
+ * FlexLayout's stylesheet (flexlayout-react/style/light.css) is imported once, in DockWorkspace.tsx,
+ * and overridden here: every --flexlayout-* variable is set once, on .flexlayout__layout, to a
+ * token of main 2.8 (the tokens switch with the theme, so no second mapping is needed), and the tab
+ * strips look like the kit's tool strip (28 px of tabs and a 1 px border).
+ *
+ * P2.2: no ancestor of a panel's content creates a stacking context or a containing block for fixed
+ * descendants (the Output panel's full screen is position: fixed inside the panel): no transform,
+ * filter, opacity, contain, will-change, isolation or z-index on any dock layer here.
+ */
+
+.e68-dock {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--c-bg);
+}
+
+.e68-dock .flexlayout__layout {
+  --flexlayout-color-text: var(--c-text);
+  --flexlayout-color-background: var(--c-surface);
+  --flexlayout-color-base: var(--c-surface);
+  --flexlayout-color-1: var(--c-panel);
+  --flexlayout-color-2: var(--c-panel);
+  --flexlayout-color-3: var(--c-hover);
+  --flexlayout-color-4: var(--c-border);
+  --flexlayout-color-5: var(--c-panel);
+  --flexlayout-color-6: var(--c-border-strong);
+  --flexlayout-color-drag1: var(--c-accent);
+  --flexlayout-color-drag2: var(--c-accent);
+  --flexlayout-color-drag1-background: var(--c-accent-soft);
+  --flexlayout-color-drag2-background: var(--c-accent-soft);
+  --flexlayout-font-size: var(--fs-sm);
+  --flexlayout-font-family: var(--font-ui);
+  --flexlayout-font-weight: 500;
+  --flexlayout-splitter-size: 1px;
+  --flexlayout-splitter-active-size: 5px;
+  --flexlayout-splitter-handle-visibility: hidden;
+  --flexlayout-color-overflow: var(--c-text-muted);
+  --flexlayout-color-icon: var(--c-text-muted);
+  --flexlayout-color-focus: var(--c-accent);
+  --flexlayout-color-tabset-background: var(--c-panel);
+  --flexlayout-color-tabset-background-selected: var(--c-panel);
+  --flexlayout-color-tabset-background-maximized: var(--c-panel);
+  --flexlayout-color-tabset-divider-line: var(--c-border);
+  --flexlayout-color-border-tab-content: var(--c-surface);
+  --flexlayout-color-border-background: var(--c-panel);
+  --flexlayout-color-border-divider-line: var(--c-border);
+  --flexlayout-color-border: var(--c-text);
+  --flexlayout-color-tab-content: var(--c-surface);
+  --flexlayout-color-tab-selected: var(--c-text);
+  --flexlayout-color-tab-selected-background: transparent;
+  --flexlayout-color-tab-unselected: var(--c-text-muted);
+  --flexlayout-color-tab-unselected-background: transparent;
+  --flexlayout-color-tab-textbox: var(--c-text);
+  --flexlayout-color-tab-textbox-background: var(--c-surface);
+  --flexlayout-color-border-tab-selected: var(--c-text);
+  --flexlayout-color-border-tab-selected-background: var(--c-surface);
+  --flexlayout-color-border-tab-unselected: var(--c-text-muted);
+  --flexlayout-color-border-tab-unselected-background: var(--c-panel);
+  --flexlayout-color-splitter: var(--c-border-strong);
+  --flexlayout-color-splitter-hover: var(--c-accent);
+  --flexlayout-color-splitter-drag: var(--c-accent);
+  --flexlayout-color-splitter-handle: var(--c-accent);
+  --flexlayout-color-drag-rect-border: var(--c-border-strong);
+  --flexlayout-color-drag-rect-background: var(--c-panel);
+  --flexlayout-color-drag-rect: var(--c-text);
+  --flexlayout-color-popup-border: var(--c-border-strong);
+  --flexlayout-color-popup-unselected: var(--c-text);
+  --flexlayout-color-popup-unselected-background: var(--c-surface);
+  --flexlayout-color-popup-selected: var(--c-text);
+  --flexlayout-color-popup-selected-background: var(--c-hover);
+  --flexlayout-color-edge-marker: var(--c-border-strong);
+  --flexlayout-color-edge-icon: var(--c-surface);
+  --flexlayout-color-mini-scroll-indicator: var(--c-border-strong);
+  --flexlayout-color-mini-scroll-indicator-hovered: var(--c-text-muted);
+  --flexlayout-color-toolbar-button-hover: var(--c-pressed);
+  --flexlayout-color-float-window-header-background: var(--c-panel);
+  background: var(--c-bg);
+  color: var(--c-text);
+}
+
+/* ---- splitters: 1 px in the layout, 5 px to grab, as the kit's Splitter ------------------------- */
+
+.e68-dock .flexlayout__splitter {
+  border-radius: 0;
+}
+
+/* Hover, drag and keyboard focus: a 3 px accent bar over the 1 px line (the kit's look). */
+.e68-dock .flexlayout__splitter::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+}
+
+.e68-dock .flexlayout__splitter_horz::after {
+  top: 0;
+  bottom: 0;
+  left: -1px;
+  width: 3px;
+}
+
+.e68-dock .flexlayout__splitter_vert::after {
+  right: 0;
+  left: 0;
+  top: -1px;
+  height: 3px;
+}
+
+.e68-dock .flexlayout__splitter:hover::after,
+.e68-dock .flexlayout__splitter:active::after,
+.e68-dock .flexlayout__splitter:focus-visible::after {
+  background: var(--c-accent);
+}
+
+.e68-dock .flexlayout__splitter:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 0;
+}
+
+/* The inert splitter below a content-sized Registers group (and above the tool group while the
+   Output panel is collapsed): today's decorative 1 px line, not a control. */
+.e68-dock .flexlayout__splitter[data-e68-inert='true'] {
+  background: var(--c-border);
+  cursor: default;
+  pointer-events: none;
+}
+
+.e68-dock .flexlayout__splitter[data-e68-inert='true']::before,
+.e68-dock .flexlayout__splitter[data-e68-inert='true']::after {
+  content: none;
+}
+
+.e68-dock .flexlayout__splitter_drag {
+  border-radius: 0;
+  background: var(--c-accent);
+}
+
+/* ---- tab strips: the kit's tool strip (28 px tabs, 1 px border) -------------------------------- */
+
+.e68-dock .flexlayout__tabset_tabbar_outer {
+  height: 29px;
+  min-height: 29px;
+  padding: 0;
+  background: var(--c-panel);
+  border-bottom: 1px solid var(--c-border);
+  font-size: var(--fs-sm);
+}
+
+/* 1 px before the first tab: FlexLayout offers a drop before the first tab only when the tab
+   does not start at the strip's very edge. */
+.e68-dock .flexlayout__tabset_tabbar_inner_tab_container {
+  padding: 0 0 0 1px;
+  height: 28px;
+}
+
+.e68-dock .flexlayout__tabset_tabbar_inner_tab_container_top {
+  border-top: 0;
+}
+
+.e68-dock .flexlayout__tabset_tab_divider,
+.e68-dock .flexlayout__tabset_tab_spacer {
+  width: 0;
+}
+
+.e68-dock .flexlayout__tab_button {
+  position: relative;
+  gap: 6px;
+  height: 28px;
+  padding: 0 var(--sp-3);
+  color: var(--c-text-muted);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+
+.e68-dock .flexlayout__tab_button:hover {
+  background: var(--c-hover);
+  color: var(--c-text);
+}
+
+.e68-dock .flexlayout__tab_button--selected {
+  background: transparent;
+  color: var(--c-text);
+}
+
+/* The selected tab's accent bar (2.8: accent marks the active tab). */
+.e68-dock .flexlayout__tab_button--selected::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--c-accent);
+}
+
+.e68-dock .flexlayout__tab_button:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.e68-dock .flexlayout__tab_button_trailing {
+  visibility: visible;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-right: -6px;
+  border-radius: var(--r-sm);
+  color: var(--c-text-muted);
+}
+
+.e68-dock .flexlayout__tab_button_trailing:hover {
+  background: var(--c-pressed);
+  color: var(--c-text);
+}
+
+.e68-dock .flexlayout__tab_toolbar {
+  padding: 0 var(--sp-1);
+}
+
+/* The drop preview: an accent outline (P3.1.8); no animation under prefers-reduced-motion. */
+.e68-dock .flexlayout__outline_rect,
+.e68-dock .flexlayout__outline_rect_edge {
+  border: 2px solid var(--c-accent);
+  border-radius: 0;
+  background: var(--c-accent-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .e68-dock .flexlayout__outline_rect,
+  .e68-dock .flexlayout__outline_rect_edge,
+  .e68-dock .flexlayout__splitter {
+    transition: none !important;
+  }
+}
+
+/* ---- the panels inside their tabs ----------------------------------------------------------- */
+
+.e68-dock .flexlayout__tab {
+  background: var(--c-surface);
+}
+
+.e68-dock__content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.e68-dock__content > .e68-region--fill,
+.e68-dock__viewer {
+  flex: 1 1 0;
+  height: 100%;
+}
+
+/* The Registers panel sized by its content (today's `e68-region--auto` of the left column). */
+.e68-dock__auto {
+  flex: none;
+  min-height: 24px;
+}
+
+.e68-dock__output {
+  background: var(--c-surface);
+}
+
+/* Today's expand bar of a collapsed Output panel (`.e68-simws__expand`). */
+.e68-dock__expand {
+  flex: none;
+  height: 24px;
+  padding: 0 var(--sp-2);
+  border: 0;
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-panel);
+  color: var(--c-text);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-align: left;
+}
+
+.e68-dock__expand:hover {
+  background: var(--c-hover);
+}
+
+.e68-dock__expand:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}
+
+/* A slot of a splitter or a strip in the content layer (Lock Layout on, order.ts): a tab stop that
+   hands the focus on at once, and the place where the accessibility tree reads its block. Not seen,
+   and it takes no room. */
+.e68-dock__slot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  outline: none;
+}
+
+/* The live region of the moves (P3.1.8): read, not seen. */
+.e68-dock__live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

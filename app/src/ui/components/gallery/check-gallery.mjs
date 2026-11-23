@@ -155,6 +155,12 @@ async function themePass(browser, name, theme) {
   await scan(page, `${name} ${theme} message box`);
   await page.screenshot({ path: join(outDir, `${name}-${theme}-messagebox.png`) });
   await page.keyboard.press('Escape');
+  // The question of ARCHITECTURE-PLUS P3.3.4 with No the default (MessageBoxRequest.defaultButton).
+  await page.locator('[data-testid=open-message-default-no]').click();
+  await page.waitForSelector('[role=alertdialog][aria-modal=true]');
+  await scan(page, `${name} ${theme} message box with defaultButton No`);
+  await page.screenshot({ path: join(outDir, `${name}-${theme}-messagebox-default-no.png`) });
+  await page.locator('[role=alertdialog][aria-modal=true] button', { hasText: /^No$/ }).click();
 
   // Narrow window.
   await page.setViewportSize({ width: 760, height: 900 });
@@ -360,6 +366,54 @@ async function keyboardPass(browser, name) {
     remaining === 2 && a?.role === 'tab',
     `${remaining} tabs left; focus on ${a?.tag} role=${a?.role} "${a?.text.slice(0, 30)}"`,
   );
+
+  // Tabs with the optional `drag` property (ARCHITECTURE-PLUS P5 N2): without it no tab is
+  // draggable (the strips above); with it every tab is, and a drop on a tab reports that tab.
+  const draggable = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('#tabs [role=tablist]')).map((list) => ({
+      label: list.getAttribute('aria-label'),
+      draggable: Array.from(list.querySelectorAll('[role=tab]')).map((tab) => tab.getAttribute('draggable')),
+    })),
+  );
+  const plainStrips = draggable.filter((list) => list.label !== 'Draggable documents');
+  const withDrag = draggable.find((list) => list.label === 'Draggable documents');
+  check(
+    `${p} tabs without drag are not draggable; with drag every tab is`,
+    plainStrips.length === 2 &&
+      plainStrips.every((list) => list.draggable.every((value) => value === null)) &&
+      withDrag !== undefined &&
+      withDrag.draggable.length === 3 &&
+      withDrag.draggable.every((value) => value === 'true'),
+    JSON.stringify(draggable),
+  );
+  const dragTabs = page.getByRole('tablist', { name: 'Draggable documents' });
+  // The drag's mouse press may move the focus (WebKit focuses the pressed tab); it goes back where
+  // it was afterwards, so that the checks below start as they did before this case existed.
+  await page.evaluate(() => {
+    window.__e68beforeDrag = document.activeElement;
+  });
+  await dragTabs.getByRole('tab', { name: /demo\.L68/ }).dragTo(dragTabs.getByRole('tab', { name: /demo\.X68/ }));
+  await page
+    .waitForFunction(
+      () => document.querySelector('[data-testid=gallery-output]')?.textContent?.includes('Tab dropped'),
+      null,
+      { timeout: 5000 },
+    )
+    .catch(() => undefined);
+  const dropOut = await output(page);
+  const dragOrder = await dragTabs.getByRole('tab').allInnerTexts();
+  check(
+    `${p} a dragged tab dropped on another reports that tab, and the example reorders`,
+    dropOut.includes('Tab dropped: listing before demo') &&
+      JSON.stringify(dragOrder.map((text) => text.trim().split(/\s/)[0])) ===
+        JSON.stringify(['demo.L68', 'demo.X68', 'macros.X68']),
+    `${dropOut}; order ${JSON.stringify(dragOrder)}`,
+  );
+  // Playwright's WebKit dispatches no pointerdown for the first press after a drag, which would
+  // leave the kit's "last pressed control" (focus.ts) on the dragged tab: one press on the example's
+  // panel text (not a control) takes that place.
+  await page.locator('#gallery-drag-panel-demo, [id^=gallery-drag-panel-]').first().click();
+  await page.evaluate(() => window.__e68beforeDrag?.focus?.());
 
   // Modal dialog (2.7, 2.11). The dialog moves the focus on every Tab and Shift+Tab itself
   // (errata W2 entry 13): Safari with the macOS default setting skips buttons and check boxes, so a
@@ -713,6 +767,23 @@ async function keyboardPass(browser, name) {
   check(`${p} a Yes/No message box ignores Escape`, stillOpen === 1, `${stillOpen}`);
   await k('Enter');
   check(`${p} Enter presses the focused default button (Yes)`, (await output(page)).includes('Error: Yes'));
+  // MessageBoxRequest.defaultButton (docs/requests/N5-default-button.md): No is the default of the
+  // question of ARCHITECTURE-PLUS P3.3.4, has the focus, and Enter answers No.
+  await page.locator('[data-testid=open-message-default-no]').click();
+  await page.waitForSelector('[role=alertdialog][aria-modal=true]');
+  const focusedCaption = await page.evaluate(() => document.activeElement?.textContent ?? '');
+  check(
+    `${p} a message box with defaultButton No opens with the focus on No`,
+    focusedCaption === 'No',
+    `focus on "${focusedCaption}"`,
+  );
+  await k('Enter');
+  check(
+    `${p} Enter on a message box with defaultButton No answers No`,
+    (await output(page)).includes('Delete: No') &&
+      (await page.locator('[role=alertdialog][aria-modal=true]').count()) === 0,
+    await output(page),
+  );
 
   // Masked fields (hardware §2.1, sim-ui §4.4).
   const beeps = async () => Number(await page.locator('[data-testid=beep-count]').innerText());
@@ -950,6 +1021,58 @@ async function keyboardPass(browser, name) {
     `${p} tall grid: Page Down, Page Down, Page Up leaves the selected row below the header`,
     paged.selected === '6' && paged.headAtTop && paged.rowBelowHead,
     JSON.stringify(paged),
+  );
+
+  // A grid with several selected rows (DataGrid's `multiSelect`, ARCHITECTURE-PLUS P3.2.1, P1.3; N4):
+  // the keys of the system the check runs on (macOS: Option where Windows has Ctrl, Cmd+A).
+  const multi = page.locator('#lists .e68-gallery__multi-grid');
+  await multi.scrollIntoViewIfNeeded();
+  await multi.focus();
+  const onMac = process.platform === 'darwin';
+  const multiRows = () =>
+    multi.evaluate((el) =>
+      [...el.querySelectorAll('[role=row][aria-selected=true]')].map((row) => row.getAttribute('data-row')).join(','),
+    );
+  check(`${p} multi grid: aria-multiselectable`, (await multi.getAttribute('aria-multiselectable')) === 'true');
+  await k('Shift+ArrowDown');
+  await k('Shift+ArrowDown');
+  check(`${p} multi grid: Shift+Down twice selects rows 0 to 2`, (await multiRows()) === '0,1,2', await multiRows());
+  await k(onMac ? 'Alt+ArrowDown' : 'Control+ArrowDown');
+  await k(onMac ? 'Alt+ArrowDown' : 'Control+ArrowDown');
+  await k(onMac ? 'Alt+Space' : 'Control+Space');
+  check(
+    `${p} multi grid: ${onMac ? 'Option' : 'Ctrl'}+Down twice, then +Space adds row 4`,
+    (await multiRows()) === '0,1,2,4',
+    await multiRows(),
+  );
+  await k(onMac ? 'Alt+Space' : 'Control+Space');
+  check(`${p} multi grid: +Space again removes it`, (await multiRows()) === '0,1,2', await multiRows());
+  await k(onMac ? 'Meta+a' : 'Control+a');
+  check(
+    `${p} multi grid: ${onMac ? 'Cmd' : 'Ctrl'}+A selects every row`,
+    (await multiRows()) === '0,1,2,3,4,5',
+    await multiRows(),
+  );
+  await k('ArrowUp');
+  check(`${p} multi grid: Up without modifiers selects one row`, (await multiRows()) === '3', await multiRows());
+  await multi.locator('[data-row="1"] [role=gridcell]').first().click();
+  await multi
+    .locator('[data-row="4"] [role=gridcell]')
+    .first()
+    .click({ modifiers: ['Shift'] });
+  check(`${p} multi grid: click, Shift+click selects the range`, (await multiRows()) === '1,2,3,4', await multiRows());
+  await multi
+    .locator('[data-row="2"] [role=gridcell]')
+    .first()
+    .click({ modifiers: [onMac ? 'Meta' : 'Control'] });
+  check(
+    `${p} multi grid: ${onMac ? 'Cmd' : 'Ctrl'}+click removes a row`,
+    (await multiRows()) === '1,3,4',
+    await multiRows(),
+  );
+  check(
+    `${p} multi grid: the selection is reported`,
+    (await output(page)).includes('Selected: demo, notes.txt, macros.X68'),
   );
 
   // Tree view keys (treeViewKeyAction, drawn by the gallery as a caller would).
