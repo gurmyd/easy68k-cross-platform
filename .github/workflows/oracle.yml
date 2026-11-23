@@ -244,11 +244,21 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: oracle-wine-work
-          # Logs, job lists and the per-file reports. Not the outputs and not the screenshots of
-          # failures: both can show text of the site set, which may not be redistributed.
+          # Logs, job lists and the per-file reports, of the first runs and of their repetitions
+          # (repeat-N, errata T1 28). Not the assembler's outputs, records or screenshots: they can
+          # show text of the site set, which may not be redistributed. The simulator runs only the
+          # project's own programs, so its records and screenshots are included (run 45050289253
+          # left no trace of its two "Wine Debugger" windows).
           path: |
             build/oracle-wine/asm/*/container-*.log
+            build/oracle-wine/asm/*/repeat-*/container-*.log
             build/oracle-wine/asm/*/job/jobs.jsonl
+            build/oracle-wine/sim/*/container-*.log
+            build/oracle-wine/sim/*/repeat-*/container-*.log
+            build/oracle-wine/sim/*/out/manifest-shard*.jsonl
+            build/oracle-wine/sim/*/repeat-*/out/manifest-shard*.jsonl
+            build/oracle-wine/sim/*/out/_screenshots/
+            build/oracle-wine/sim/*/out/*/fail-screen.png
             build/reports/
           if-no-files-found: ignore
           retention-days: 14

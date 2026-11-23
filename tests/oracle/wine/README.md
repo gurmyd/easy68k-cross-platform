@@ -59,9 +59,10 @@ screenshot of every failure.
 | Path                                    | What                                                                                                                                                                            |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Dockerfile`                            | Debian 12 + `wine32` (Wine 8.0) + Xvfb + xdotool + ImageMagick + Python 3; a 32-bit Wine prefix created at build time; the scripts below copied into one flat folder, `/oracle` |
-| `common/entry.sh`                       | Container entry point: starts Xvfb on `:99`, then runs the command                                                                                                              |
+| `common/entry.sh`                       | Container entry point: starts Xvfb on `:99` and waits until it answers (`xwin.ensure_display`), then runs the command                                                           |
+| `common/infrastructure.mjs`             | Host side: which failures are failures of the machine (no display; Wine's crash dialog at start), and their repetition in fresh containers                                      |
 | `common/stage.sh`                       | Copies the official program folder (and the sources) to writable places inside the container                                                                                    |
-| `common/xwin.py`                        | Window helpers: find windows by title, send keys, screenshots, kill Wine processes                                                                                              |
+| `common/xwin.py`                        | Window helpers: find windows by title, send keys, screenshots, kill Wine processes; `ensure_display` (a display that answers before every run)                                  |
 | `common/docker.mjs`                     | Host side: checks the official folder and the image, starts and removes containers                                                                                              |
 | `common/fetch-official.mjs`             | Host side: downloads and unpacks the official distribution                                                                                                                      |
 | `common/unzip.ts`, `common/make-zip.ts` | A zip reader for the downloads (and a zip writer for its tests)                                                                                                                 |
@@ -90,6 +91,18 @@ Tests of the host-side code are next to it (`*.test.ts`, `*.test.mjs`) and run w
 4. F9; wait for `Assembler Status`; **Alt+C** (Close) - never Enter, which would press Execute;
 5. Alt+F4, answer `n` to a save prompt, wait for the process, kill it if it stays;
 6. collect `prog.L68`, `prog.S68` and the captured text.
+
+## When the machine fails a run
+
+Before every run the driver checks that the X display answers (`xwin.ensure_display`, `xdpyinfo`)
+and starts a fresh Xvfb when it does not, up to three times; no Wine program is started without a
+display. A run that still fails with the marks of the machine (Wine's "no driver could be loaded",
+"The explorer process failed to start", "Make sure that your X server is running", Xlib's "X
+connection to :99 broken", the driver's "no X display: ...", or a "Wine Debugger" window before the
+editor's own window) and that left no output file is run again in a fresh container, at most twice
+(`common/infrastructure.mjs`). Every repetition is printed and counted, also in the job's summary on
+GitHub; the result of the last attempt is compared with the manifest like any other, and a run that
+failed for another reason, or left an output, is never repeated (errata T1 28).
 
 Any window that is not expected is screenshot, dismissed and recorded; a crash of the official
 program is recorded with the Wine error line. Known limits (official-oracle §3.2, §3.4): a source

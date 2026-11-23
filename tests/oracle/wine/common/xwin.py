@@ -134,3 +134,73 @@ def wine_reset():
     """Last resort: stop every Wine process in this prefix."""
     subprocess.run(["wineserver", "-k"], capture_output=True)
     time.sleep(0.5)
+
+
+# --- the X display -----------------------------------------------------------------------------
+#
+# Every container has one Xvfb on $DISPLAY, started by entry.sh. A Wine program started while it
+# does not answer cannot create a window and exits at once with "no driver could be loaded"
+# (oracle run 45050289253: every run of one container failed so, errata T1 28). So no Wine
+# program is started before the display answers: ensure_display() checks it before every run and
+# starts a fresh Xvfb when it does not.
+
+XVFB_LOG = "/tmp/xvfb.log"
+NO_DISPLAY_PREFIX = "no X display: "
+
+
+def display_answers(timeout=10):
+    """True when the X server of $DISPLAY answers a request (xdpyinfo)."""
+    try:
+        r = subprocess.run(["xdpyinfo"], capture_output=True, timeout=timeout)
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+    return r.returncode == 0
+
+
+def start_xvfb(display=None):
+    """Start a fresh Xvfb on `display` (default $DISPLAY), after stopping any other one and the
+    Wine processes that were connected to it. Its output goes to XVFB_LOG."""
+    display = display or os.environ.get("DISPLAY", ":99")
+    subprocess.run(["wineserver", "-k"], capture_output=True)
+    subprocess.run(["pkill", "-x", "Xvfb"], capture_output=True)
+    number = display.lstrip(":").split(".")[0]
+    end = time.monotonic() + 5
+    while time.monotonic() < end and subprocess.run(["pgrep", "-x", "Xvfb"], capture_output=True).returncode == 0:
+        time.sleep(0.1)
+    for stale in ("/tmp/.X%s-lock" % number, "/tmp/.X11-unix/X%s" % number):
+        try:
+            os.remove(stale)
+        except OSError:
+            pass
+    log = open(XVFB_LOG, "ab")
+    try:
+        subprocess.Popen(["Xvfb", display, "-screen", "0", "1280x1024x24", "-nolisten", "tcp"],
+                         stdout=log, stderr=log, start_new_session=True)
+    except OSError as e:
+        # Xvfb cannot be started at all: ensure_display reports it like any start that fails.
+        log.write(("could not start Xvfb: %s\n" % e).encode())
+    log.close()
+
+
+def ensure_display(starts=3, wait=30.0):
+    """Make sure that the display answers before a Wine program is started.
+
+    Returns (error, restarts): error is None when the display answers (after `restarts` fresh
+    starts of Xvfb, 0 when it answered at once), otherwise a text that starts with
+    NO_DISPLAY_PREFIX and quotes the end of Xvfb's log.
+    """
+    if display_answers():
+        return None, 0
+    for attempt in range(1, starts + 1):
+        start_xvfb()
+        end = time.monotonic() + wait
+        while time.monotonic() < end:
+            if display_answers(timeout=5):
+                return None, attempt
+            time.sleep(0.2)
+    try:
+        tail = open(XVFB_LOG, "rb").read().decode("latin-1").strip().splitlines()[-3:]
+    except OSError:
+        tail = []
+    return ("%sXvfb on %s did not answer after %d starts (%s)"
+            % (NO_DISPLAY_PREFIX, os.environ.get("DISPLAY", ":99"), starts, " | ".join(tail) or "no log")), starts

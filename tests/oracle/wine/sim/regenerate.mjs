@@ -69,6 +69,12 @@ import {
   runContainer,
   wineVersion,
 } from '../common/docker.mjs';
+import {
+  infrastructureReason,
+  repetitionSummary,
+  reportRepetitions,
+  runWithRepetitions,
+} from '../common/infrastructure.mjs';
 
 const DRIVER_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const WINE_DIRECTORY = resolve(DRIVER_DIRECTORY, '..');
@@ -177,6 +183,22 @@ async function runJobs(jobs, { image, official, corpus, containers, workDirector
   if (failed.length > 0) console.error(`container(s) ${failed.join(', ')} ended with an error; see ${workDirectory}`);
   console.log(`${records.size} of ${jobs.length} jobs reported in ${((Date.now() - started) / 1000).toFixed(0)} s`);
   return records;
+}
+
+/**
+ * Why a failed record of sim_batch.py is a failure of the machine (../common/infrastructure.mjs), or
+ * null. The texts are its error, the error of its assembly and Wine's error lines; any artifact the
+ * program left (result.bin, an execution or output log) rules it out.
+ */
+export function simInfrastructureReason(record) {
+  if (!record) return null;
+  return infrastructureReason({
+    failed: record.status !== 'ok',
+    texts: [record.error, record.asm?.error, record.wine_err],
+    // The program's own outputs only: the .S68/.L68 and a screenshot of the failure are copied into
+    // the folder before or after any run.
+    outputs: (record.files ?? []).filter((name) => /^result\.bin$|_RunLog\.txt$|_OutLog\.txt$/i.test(name)).length,
+  });
 }
 
 // --- 3. results -------------------------------------------------------------------------------------
@@ -416,7 +438,25 @@ async function main() {
   console.log(
     `${programs.length} programs, ${jobs.length} runs, ${options.containers} containers; work: ${workDirectory}`,
   );
-  const records = await runJobs(jobs, { ...options, corpus: SIM_CONFORMANCE_DIR, workDirectory });
+  // A run that the machine failed (no display; Wine's crash dialog before the editor's window) is
+  // run again in fresh containers, at most twice (../common/infrastructure.mjs, errata T1 28).
+  const { records, repeated } = await runWithRepetitions(
+    jobs,
+    workDirectory,
+    (some, directory) => runJobs(some, { ...options, corpus: SIM_CONFORMANCE_DIR, workDirectory: directory }),
+    simInfrastructureReason,
+  );
+  const restarted = [...records.values()].filter((record) => record.display_restarts).map((record) => record.id);
+  if (restarted.length > 0) {
+    console.log(`the driver started a fresh display before ${restarted.length} run(s): ${restarted.join(', ')}`);
+  }
+  reportRepetitions(
+    repetitionSummary(
+      options.check ? 'Simulator oracle (check)' : 'Simulator oracle',
+      repeated,
+      [...new Set(repeated.map((entry) => entry.id))].filter((id) => records.get(id)?.status !== 'ok'),
+    ),
+  );
 
   const manifest = {
     wine: wineVersion(options.image),

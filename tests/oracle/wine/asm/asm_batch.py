@@ -178,8 +178,12 @@ def check_windows(rec, shots_dir, tag, phase, expected):
 
 def wine_tail(n=3):
     try:
-        lines = open("/tmp/edit68k-wine.log", "rb").read().decode("latin-1").splitlines()
-        return " | ".join(l for l in lines if ":err:" in l)[-400:] or "(no err lines)"
+        # NUL bytes: a Wine process of the run before may still have written at its old offset
+        # after the log was truncated.
+        lines = open("/tmp/edit68k-wine.log", "rb").read().replace(b"\0", b"").decode("latin-1").splitlines()
+        # Wine's error lines, and Xlib's "X connection to :99 broken" when the display went away
+        # under a running program (errata T1 28).
+        return " | ".join(l for l in lines if ":err:" in l or "X connection to" in l)[-400:] or "(no err lines)"
     except OSError:
         return ""
 
@@ -192,6 +196,15 @@ def assemble_one(src, rel, settings, out_dir, shots_dir, timeout):
     rec = {"source": rel, "status": "fail", "error": None, "stray_windows": [], "help_boxes": [],
            "outputs": [], "errors": None, "warnings": None}
     os.makedirs(out_dir, exist_ok=True)
+
+    # No Wine program before the display answers (xwin.ensure_display, errata T1 28).
+    display_error, restarts = xwin.ensure_display()
+    if restarts:
+        rec["display_restarts"] = restarts
+    if display_error:
+        rec["error"] = display_error
+        rec["seconds"] = round(time.monotonic() - t0, 2)
+        return rec
 
     # clean previous outputs and temp files
     for ext in (".L68", ".S68"):
@@ -300,6 +313,9 @@ def assemble_one(src, rel, settings, out_dir, shots_dir, timeout):
     except Exception as e:  # noqa: BLE001
         rec["error"] = str(e)
         rec["windows_at_failure"] = [w[1] for w in xwin.real_windows()]
+        # Wine's own error lines, for the diagnosis of a crash ("Wine Debugger") or of a missing
+        # display; the classification of the host side reads them too (common/infrastructure.mjs).
+        rec["wine_err"] = wine_tail()
         xwin.screenshot(os.path.join(shots_dir, rel.replace("/", "_") + "-fail.png"))
     finally:
         if proc.poll() is None:
@@ -310,6 +326,10 @@ def assemble_one(src, rel, settings, out_dir, shots_dir, timeout):
             except subprocess.TimeoutExpired:
                 xwin.wine_reset()
         log.close()
+        # Wine could not reach the display (its explorer did not start): stop the wineserver, so
+        # that the next run starts a fresh one with a fresh explorer (errata T1 28).
+        if "no driver could be loaded" in (rec.get("error") or ""):
+            xwin.wine_reset()
 
     # collect outputs
     for ext in (".L68", ".S68"):
