@@ -79,6 +79,23 @@ def find_case(directory, name):
     return None
 
 
+# sim_run.py appends the output of every SIM68K.exe it starts to this file.
+SIM_WINE_LOG = "/tmp/sim68k-wine.log"
+
+
+def wine_errors_since(offset):
+    """Wine's error lines (and Xlib's "X connection to ... broken") written to SIM_WINE_LOG after
+    `offset`, joined; at most 400 characters."""
+    try:
+        with open(SIM_WINE_LOG, "rb") as f:
+            f.seek(offset)
+            text = f.read().replace(b"\0", b"").decode("latin-1")
+    except OSError:
+        return ""
+    lines = [l for l in text.splitlines() if ":err:" in l or "X connection to" in l]
+    return " | ".join(lines)[-400:]
+
+
 def run_job(job, corpus, out_root, cache, shots):
     t0 = time.monotonic()
     import sim_run  # noqa: E402
@@ -117,9 +134,19 @@ def run_job(job, corpus, out_root, cache, shots):
     for name in job.get("files", []):
         shutil.copy2(os.path.join(src_dir, name), os.path.join(run_dir, os.path.basename(name)))
 
+    # No Wine program before the display answers (xwin.ensure_display, errata T1 28).
+    display_error, restarts = xwin.ensure_display()
+    if restarts:
+        rec["display_restarts"] = restarts
+    if display_error:
+        rec["error"] = display_error
+        rec["seconds"] = round(time.monotonic() - t0, 2)
+        return rec
+
     a = types.SimpleNamespace(prog=prog, args=job.get("switches", ""), timeout=job.get("timeout", 60),
                               out=out_dir, exceptions=job.get("exceptions"), bitfield=job.get("bitfield"),
                               screenshot=None, settle=1.0)
+    log_start = os.path.getsize(SIM_WINE_LOG) if os.path.exists(SIM_WINE_LOG) else 0
     try:
         if job["recipe"] == "report":
             a.dump = RESULT_FILE
@@ -137,6 +164,12 @@ def run_job(job, corpus, out_root, cache, shots):
         res = {"ok": False, "error": "driver: %s" % e}
     res.pop("dump", None)
     rec["run"] = res
+    if not res.get("ok"):
+        # Wine's error lines of this run (WINEDEBUG=err+all, set in main), for the diagnosis and for
+        # the host side's classification of failures of the machine (common/infrastructure.mjs).
+        rec["wine_err"] = wine_errors_since(log_start)
+        if "no driver could be loaded" in rec["wine_err"]:
+            xwin.wine_reset()  # the next run starts a fresh wineserver and explorer (errata T1 28)
     if os.path.exists("/tmp/sim-fail.png"):
         shutil.move("/tmp/sim-fail.png", os.path.join(out_dir, "fail-screen.png"))
     fail_shot = res.get("fail_screenshot")
@@ -160,6 +193,9 @@ def main():
     ap.add_argument("--shard", default="0/1")
     a = ap.parse_args()
     k, n = (int(x) for x in a.shard.split("/"))
+    # Wine's error lines into SIM_WINE_LOG (the image's default is -all): they change nothing the
+    # program computes, and they say why SIM68K.exe showed no window (errata T1 28).
+    os.environ["WINEDEBUG"] = "err+all"
     jobs = [json.loads(line) for line in open(a.jobs, encoding="utf-8") if line.strip()]
     # Jobs of one source stay in one shard, so that it is assembled once. The sources are dealt out
     # in the order of the job list, which puts the slow ones (execution logs) first.

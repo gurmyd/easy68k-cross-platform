@@ -83,6 +83,12 @@ import {
   runContainer,
   wineVersion,
 } from '../common/docker.mjs';
+import {
+  infrastructureReason,
+  repetitionSummary,
+  reportRepetitions,
+  runWithRepetitions,
+} from '../common/infrastructure.mjs';
 import { CORPUS_OPTION_SETS, SINGLE_OPTION_SETS, buildSettingsDat, listingOnLabel, optionLabel } from './settings.ts';
 
 const WINE_DIRECTORY = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -361,6 +367,22 @@ function findOutput(directory, extension) {
   if (!existsSync(directory)) return null;
   const name = readdirSync(directory).find((entry) => entry.toLowerCase().endsWith(extension));
   return name ? new Uint8Array(readFileSync(join(directory, name))) : null;
+}
+
+/**
+ * Why a failed record of asm_batch.py is a failure of the machine (../common/infrastructure.mjs), or
+ * null. The texts are the error and Wine's error lines; any .L68 or .S68 the run left rules it out.
+ */
+export function asmInfrastructureReason(record) {
+  if (!record) return null;
+  return infrastructureReason({
+    failed: record.status !== 'ok',
+    texts: [record.error, record.wine_err],
+    // Files count as outputs once the editor had finished assembling (its status dialog was up),
+    // as for ingestRun: before that they are half written and never kept (injected in errata T1 28:
+    // the display stopped under an editor that had begun its listing).
+    outputs: typeof record.status_title === 'string' ? (record.outputs ?? []).length : 0,
+  });
 }
 
 /**
@@ -914,20 +936,41 @@ async function main() {
   const mounts = Object.fromEntries(
     [...new Set(programs.map((program) => program.set))].map((set) => [set, join(REPO, SET_DIRECTORIES[set])]),
   );
-  const records =
+  // A run that the machine failed (no display; Wine's crash dialog before the editor's window) is
+  // run again in fresh containers, at most twice (../common/infrastructure.mjs, errata T1 28).
+  const { records, repeated } =
     jobs.length > 0
-      ? await runJobs(jobs, {
-          image: options.image,
-          official: options.official,
-          mounts,
-          containers: options.containers,
-          timeout: options.timeout,
+      ? await runWithRepetitions(
+          jobs,
           workDirectory,
-          cpus: options.cpus,
-        })
-      : new Map();
+          (some, directory) =>
+            runJobs(some, {
+              image: options.image,
+              official: options.official,
+              mounts,
+              containers: Math.min(options.containers, some.length),
+              timeout: options.timeout,
+              workDirectory: directory,
+              cpus: options.cpus,
+            }),
+          asmInfrastructureReason,
+        )
+      : { records: new Map(), repeated: [] };
   console.log(
     `the containers took ${Math.round((Date.now() - started) / 1000)} s; work folder ${relative(REPO, workDirectory)}`,
+  );
+  const restarted = [...records.values()].filter((record) => record.display_restarts).map((record) => record.id);
+  if (restarted.length > 0) {
+    console.log(
+      `the driver started a fresh display before ${plural(restarted.length, 'run')}: ${restarted.join(', ')}`,
+    );
+  }
+  reportRepetitions(
+    repetitionSummary(
+      options.check ? 'Assembler oracle (check)' : 'Assembler oracle',
+      repeated,
+      [...new Set(repeated.map((entry) => entry.id))].filter((id) => failureOf(records.get(id)) !== null),
+    ),
   );
 
   const manifest = existsSync(MANIFEST_PATH) ? loadManifest() : emptyManifest();
