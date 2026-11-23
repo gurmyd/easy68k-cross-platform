@@ -11,7 +11,7 @@ import { MemoryBackend } from '../../fs/memory-backend';
 import type { UndoEntry } from './bulk';
 import { transferItems, unchangedSince } from './move';
 import { renameChecked } from './rename';
-import { changedWhileMoving, goneWhileMoving } from './texts';
+import { changedWhileMoving, changedWhileRenaming, goneWhileMoving, noLongerExists } from './texts';
 import { ascii, filesTestDeps, memoryStores, scriptedDialogs, scriptedHistory, text } from './testing';
 
 /** After the first write of `when`, `then` runs once (the other window's save, at that moment). */
@@ -274,6 +274,199 @@ describe(
         expect(await deps.undo.run(deps.stack.peek() as UndoEntry, false)).toEqual([]);
         expect(await filesOf(vfs, '/browser')).toEqual(how === 'moved out' ? { '/browser/B/p.X68': 'P' } : {});
         expect(deps.dialogs.texts()).toEqual([goneWhileMoving('p.X68', 'My Programs/a', true)]);
+      });
+    }
+  },
+);
+
+/** Before the first read of `when`, `then` runs once: the other window acts before the bytes are taken. */
+function beforeReadOf(vfs: Vfs, when: VPath, then: () => Promise<void>): void {
+  const readFile = vfs.readFile.bind(vfs);
+  let done = false;
+  vfs.readFile = async (path) => {
+    if (!done && path === when) {
+      done = true;
+      await then();
+    }
+    return readFile(path);
+  };
+}
+
+/** After the first read of `when` returned, `then` runs once: between the bytes and their time. */
+function afterReadOf(vfs: Vfs, when: VPath, then: () => Promise<void>): void {
+  const readFile = vfs.readFile.bind(vfs);
+  let done = false;
+  vfs.readFile = async (path) => {
+    const bytes = await readFile(path);
+    if (!done && path === when) {
+      done = true;
+      await then();
+    }
+    return bytes;
+  };
+}
+
+describe(
+  'another window acts just before or just after the bytes of a source are taken (review of the fourth round)',
+  {
+    timeout: 60_000,
+  },
+  () => {
+    async function twoFiles(): Promise<Vfs> {
+      const { vfs } = memoryStores();
+      await vfs.writeFile('/browser/A/p.X68', ascii('P'));
+      await vfs.writeFile('/browser/A/q.X68', ascii('Q'));
+      await vfs.mkdirp('/browser/B');
+      return vfs;
+    }
+
+    it('a move, p saved just before it is read: the new bytes are moved, no duplicate, nothing to tell', async () => {
+      const vfs = await twoFiles();
+      const deps = filesTestDeps({ vfs, history: scriptedHistory(vfs) });
+      beforeReadOf(vfs, '/browser/A/p.X68', () => vfs.writeFile('/browser/A/p.X68', ascii('PNEW')));
+      const outcome = await transferItems(deps, ['/browser/A/p.X68', '/browser/A/q.X68'], '/browser/B');
+      expect(await filesOf(vfs, '/browser')).toEqual({ '/browser/B/p.X68': 'PNEW', '/browser/B/q.X68': 'Q' });
+      expect(deps.dialogs.shown).toEqual([]);
+      expect(outcome.written).toEqual([
+        ['/browser/A/p.X68', '/browser/B/p.X68'],
+        ['/browser/A/q.X68', '/browser/B/q.X68'],
+      ]);
+    });
+
+    it('a move, p saved between its read and its time: it stays, and the copy truly holds the bytes from before', async () => {
+      const vfs = await twoFiles();
+      const deps = filesTestDeps({ vfs, history: scriptedHistory(vfs) });
+      afterReadOf(vfs, '/browser/A/p.X68', () => vfs.writeFile('/browser/A/p.X68', ascii('PNEW')));
+      await transferItems(deps, ['/browser/A/p.X68', '/browser/A/q.X68'], '/browser/B');
+      expect(await filesOf(vfs, '/browser')).toEqual({
+        '/browser/A/p.X68': 'PNEW',
+        '/browser/B/p.X68': 'P',
+        '/browser/B/q.X68': 'Q',
+      });
+      expect(deps.dialogs.texts()).toEqual([changedWhileMoving('p.X68', 'My Programs/B', false)]);
+    });
+
+    it('Undo of a move, p saved at its new place just before it is read: the new bytes go back, no duplicate', async () => {
+      const vfs = await twoFiles();
+      const deps = filesTestDeps({ vfs, history: scriptedHistory(vfs) });
+      await transferItems(deps, ['/browser/A/p.X68', '/browser/A/q.X68'], '/browser/B');
+      beforeReadOf(vfs, '/browser/B/p.X68', () => vfs.writeFile('/browser/B/p.X68', ascii('PNEW')));
+      expect(await deps.undo.run(deps.stack.peek() as UndoEntry, false)).toEqual([
+        '/browser/A/p.X68',
+        '/browser/A/q.X68',
+      ]);
+      expect(await filesOf(vfs, '/browser')).toEqual({ '/browser/A/p.X68': 'PNEW', '/browser/A/q.X68': 'Q' });
+      expect(deps.dialogs.shown).toEqual([]);
+    });
+
+    it('Undo of a move, p saved between its read and its time: it stays, and the copy truly holds the bytes from before', async () => {
+      const vfs = await twoFiles();
+      const deps = filesTestDeps({ vfs, history: scriptedHistory(vfs) });
+      await transferItems(deps, ['/browser/A/p.X68', '/browser/A/q.X68'], '/browser/B');
+      afterReadOf(vfs, '/browser/B/p.X68', () => vfs.writeFile('/browser/B/p.X68', ascii('PNEW')));
+      expect(await deps.undo.run(deps.stack.peek() as UndoEntry, false)).toEqual(['/browser/A/q.X68']);
+      expect(await filesOf(vfs, '/browser')).toEqual({
+        '/browser/A/p.X68': 'P',
+        '/browser/A/q.X68': 'Q',
+        '/browser/B/p.X68': 'PNEW',
+      });
+      expect(deps.dialogs.texts()).toEqual([changedWhileMoving('p.X68', 'My Programs/A', true)]);
+    });
+
+    it('a folder rename, q saved just before it is read: the rename is made with the new bytes', async () => {
+      const vfs = await twoFiles();
+      beforeReadOf(vfs, '/browser/A/q.X68', () => vfs.writeFile('/browser/A/q.X68', ascii('QNEW')));
+      expect(await renameChecked(vfs, '/browser/A', 'A2')).toBe('/browser/A2');
+      expect(await filesOf(vfs, '/browser')).toEqual({ '/browser/A2/p.X68': 'P', '/browser/A2/q.X68': 'QNEW' });
+    });
+
+    it('a folder rename, q saved between its read and its time: refused, nothing changed but the save', async () => {
+      const vfs = await twoFiles();
+      afterReadOf(vfs, '/browser/A/q.X68', () => vfs.writeFile('/browser/A/q.X68', ascii('QNEW')));
+      await expect(renameChecked(vfs, '/browser/A', 'A2')).rejects.toThrow(changedWhileRenaming('A', 'A/q.X68', true));
+      expect(await filesOf(vfs, '/browser')).toEqual({ '/browser/A/p.X68': 'P', '/browser/A/q.X68': 'QNEW' });
+    });
+
+    for (const how of ['moved out', 'deleted'] as const) {
+      const away = async (vfs: Vfs, path: VPath, to: VPath) => {
+        if (how === 'moved out') await vfs.writeFile(to, await vfs.readFile(path));
+        await vfs.remove(path);
+      };
+
+      it(`a move, p ${how} just before it is read: the designed text, not the file system's`, async () => {
+        const vfs = await twoFiles();
+        await vfs.mkdirp('/browser/C');
+        const deps = filesTestDeps({ vfs, history: scriptedHistory(vfs) });
+        beforeReadOf(vfs, '/browser/A/p.X68', () => away(vfs, '/browser/A/p.X68', '/browser/C/p.X68'));
+        const outcome = await transferItems(deps, ['/browser/A/p.X68', '/browser/A/q.X68'], '/browser/B');
+        expect(await filesOf(vfs, '/browser')).toEqual({
+          ...(how === 'moved out' ? { '/browser/C/p.X68': 'P' } : {}),
+          '/browser/B/q.X68': 'Q',
+        });
+        expect(deps.dialogs.shown.map((r) => [r.title, r.icon, r.text])).toEqual([
+          ['Move', 'information', goneWhileMoving('p.X68', 'My Programs/B', false)],
+        ]);
+        expect(outcome.written).toEqual([['/browser/A/q.X68', '/browser/B/q.X68']]);
+      });
+
+      it(`a copy, p ${how} just before it is read: the designed text, not the file system's`, async () => {
+        const vfs = await twoFiles();
+        await vfs.mkdirp('/browser/C');
+        const deps = filesTestDeps({ vfs, history: scriptedHistory(vfs) });
+        beforeReadOf(vfs, '/browser/A/p.X68', () => away(vfs, '/browser/A/p.X68', '/browser/C/p.X68'));
+        await transferItems(deps, ['/browser/A/p.X68', '/browser/A/q.X68'], '/browser/B', 'copy');
+        expect(await filesOf(vfs, '/browser')).toEqual({
+          ...(how === 'moved out' ? { '/browser/C/p.X68': 'P' } : {}),
+          '/browser/A/q.X68': 'Q',
+          '/browser/B/q.X68': 'Q',
+        });
+        expect(deps.dialogs.shown.map((r) => [r.title, r.icon, r.text])).toEqual([
+          ['Copy', 'error', noLongerExists('p.X68')],
+        ]);
+      });
+
+      it(`Undo of a move, p ${how} at its new place just before it is read: the designed text`, async () => {
+        const vfs = await twoFiles();
+        await vfs.mkdirp('/browser/C');
+        const deps = filesTestDeps({ vfs, history: scriptedHistory(vfs) });
+        await transferItems(deps, ['/browser/A/p.X68', '/browser/A/q.X68'], '/browser/B');
+        beforeReadOf(vfs, '/browser/B/p.X68', () => away(vfs, '/browser/B/p.X68', '/browser/C/p.X68'));
+        expect(await deps.undo.run(deps.stack.peek() as UndoEntry, false)).toEqual(['/browser/A/q.X68']);
+        expect(await filesOf(vfs, '/browser')).toEqual({
+          ...(how === 'moved out' ? { '/browser/C/p.X68': 'P' } : {}),
+          '/browser/A/q.X68': 'Q',
+        });
+        expect(deps.dialogs.shown.map((r) => [r.title, r.icon, r.text])).toEqual([
+          ['Undo', 'information', goneWhileMoving('p.X68', 'My Programs/A', true)],
+        ]);
+      });
+
+      it(`a folder rename, q ${how} just before it is read: the designed text, the folder as it was`, async () => {
+        const vfs = await twoFiles();
+        await vfs.mkdirp('/browser/C');
+        beforeReadOf(vfs, '/browser/A/q.X68', () => away(vfs, '/browser/A/q.X68', '/browser/C/q.X68'));
+        const error = await renameChecked(vfs, '/browser/A', 'A2').then(
+          () => null,
+          (e: unknown) => e,
+        );
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).name).toBe('Error');
+        expect((error as Error).message).toBe(noLongerExists('q.X68'));
+        expect(await filesOf(vfs, '/browser')).toEqual({
+          ...(how === 'moved out' ? { '/browser/C/q.X68': 'Q' } : {}),
+          '/browser/A/p.X68': 'P',
+        });
+      });
+
+      it(`a file rename, the file ${how} just before it is read: the designed text, nothing left`, async () => {
+        const vfs = await twoFiles();
+        await vfs.mkdirp('/browser/C');
+        beforeReadOf(vfs, '/browser/A/p.X68', () => away(vfs, '/browser/A/p.X68', '/browser/C/p.X68'));
+        await expect(renameChecked(vfs, '/browser/A/p.X68', 'r.X68')).rejects.toThrow(noLongerExists('p.X68'));
+        expect(await filesOf(vfs, '/browser')).toEqual({
+          ...(how === 'moved out' ? { '/browser/C/p.X68': 'P' } : {}),
+          '/browser/A/q.X68': 'Q',
+        });
       });
     }
   },

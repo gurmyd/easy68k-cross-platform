@@ -35,6 +35,7 @@ import {
   gitRefusal,
   goneWhileMoving,
   movedToast,
+  noLongerExists,
   openInEditor,
   replaceManyQuestion,
   replaceOneQuestion,
@@ -142,6 +143,30 @@ export async function unchangedSince(
   if (now?.kind !== 'file' || now.mtime !== seen.mtime || now.size !== seen.size) return false;
   const bytes = await vfs.readFile(path).catch(() => null);
   return bytes !== null && bytes.length === seen.data.length && bytes.every((b, i) => b === seen.data[i]);
+}
+
+/**
+ * Takes the bytes of a source together with what a later unchangedSince compares them with; null
+ * when the source is not there (another window or a program moved or deleted it before it was
+ * read). The time and size are taken after the bytes: a write before the read gives bytes and a
+ * time that belong together (the new contents are what is copied, so the source counts as
+ * unchanged), and a write between the read and the stat gives a time with other bytes, which
+ * unchangedSince's comparison of the bytes finds (the source counts as changed and the copy holds
+ * the bytes from before that write). Any failure other than not-found is thrown.
+ */
+export async function takeSource(
+  vfs: Pick<FilesDeps['vfs'], 'stat' | 'readFile'>,
+  path: VPath,
+): Promise<SourceSeen | null> {
+  let data: Uint8Array;
+  try {
+    data = await vfs.readFile(path);
+  } catch (error) {
+    if (isFsError(error, 'not-found')) return null;
+    throw error;
+  }
+  const after = await vfs.stat(path);
+  return after?.kind === 'file' ? { mtime: after.mtime, size: after.size, data } : null;
 }
 
 /** A file just written with `data`, as a later unchangedSince compares it; undefined when not read back. */
@@ -361,9 +386,18 @@ export async function transferItems(
     if (file.skip) continue;
     let data;
     try {
-      const before = await vfs.stat(file.from);
-      data = await vfs.readFile(file.from);
-      if (before) taken.set(file.from, { mtime: before.mtime, size: before.size, data });
+      const seen = await takeSource(vfs, file.from);
+      if (seen === null) {
+        // Moved or deleted by someone else before it was read: nothing was written for it, and the
+        // person is told so in the words the same case has one step later (errata N5 entry 18).
+        await (mode === 'move'
+          ? inform(deps, title, goneWhileMoving(basename(file.from), displayPath(vfs, dirname(file.to)), false))
+          : showError(deps, title, new Error(noLongerExists(basename(file.from)))));
+        file.skip = true;
+        continue;
+      }
+      data = seen.data;
+      taken.set(file.from, seen);
     } catch (error) {
       await showError(deps, title, error);
       file.skip = true;

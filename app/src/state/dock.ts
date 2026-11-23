@@ -12,8 +12,9 @@
 //   dockOf(ctx).openTransient({...})    a viewer tab in the group of the Editor panel; called
 //                                       before the Editor dock has attached, it is queued and
 //                                       applied when the dock attaches (P4.4)
-//   dockOf(ctx).documentShown()         a document was opened or chosen: a viewer's tab in front
-//                                       of the Editor's gives way to it (errata N1 28)
+//   dockOf(ctx).documentShown()         a document was opened or chosen, or an Editor command
+//                                       changed what the editor area shows: a viewer's tab in
+//                                       front of the Editor's gives way to it (errata N1 28)
 //   dockOf(ctx).move('files', { kind: 'edge', side: 'right' })     Move Panel To...
 //   dockOf(ctx).setLocked(false), .locked(), .reset(), .describe(), .subscribe(listener)
 //
@@ -42,7 +43,8 @@ export interface DockController {
   closeTransient(id: string): void;
   /**
    * N1's addition (errata N1 28): a document was made the one a person works on (the document
-   * service's `shown`). When a viewer's tab is in front of the Editor's in its group, the Editor's
+   * service's `shown`), or an Editor command changed what the editor area shows (Cascade, Tile,
+   * the split commands, Close File). When a viewer's tab is in front of the Editor's in its group, the Editor's
    * tab comes forward; otherwise nothing happens. Without the Editor dock it does nothing.
    */
   documentShown(): void;

@@ -1059,7 +1059,9 @@ export class DockEngine implements DockLive {
 
   /**
    * A document was made the one a person works on (opened, new, chosen, reloaded: the document
-   * service's `shown`, features/documents). Today the editor always shows it (P1.2); here a viewer's
+   * service's `shown`, features/documents), or an Editor command changed what the editor area shows
+   * (Cascade, Tile, the split commands, Close File: features/editor and features/documents). Today
+   * the editor always shows it (P1.2); here a viewer's
    * tab may be in front of the Editor's in its group, so the Editor's tab comes forward. Nothing
    * else changes: a tool panel a person put in front of the Editor stays (their own arrangement),
    * and the keyboard focus stays where it is, unless it was inside the viewer that is now hidden:

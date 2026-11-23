@@ -21,7 +21,7 @@ import type { Vfs, VPath } from '../../contracts';
 import { basename, childPath, dirname, foldCase, splitVPath } from '../../core/paths/winpath';
 import { removeEmptyFolders } from './bulk';
 import { findGitHolder, innerName } from './git-guard';
-import { removeSource, takeBackCopyOfGone, unchangedSince, writtenAs, type SourceSeen } from './move';
+import { removeSource, takeBackCopyOfGone, takeSource, unchangedSince, writtenAs, type SourceSeen } from './move';
 import { listTree, makeFolder, renameEntry } from './store';
 import { alreadyExists, changedWhileRenaming, gitNameRefused, gitRefusal, noLongerExists } from './texts';
 
@@ -51,18 +51,13 @@ interface Copied {
 }
 
 async function copyFile(vfs: Vfs, source: VPath, dest: VPath): Promise<Copied> {
-  // The time is taken before the bytes: a write in between gives a time that no longer matches, so
-  // the file counts as changed (never the other way round).
-  const before = await vfs.stat(source);
-  if (before?.kind !== 'file') throw new Error(noLongerExists(basename(source)));
-  const data = await vfs.readFile(source);
-  await vfs.writeFile(dest, data);
-  return {
-    source,
-    dest,
-    seen: { mtime: before.mtime, size: before.size, data },
-    written: await writtenAs(vfs, dest, data),
-  };
+  // The bytes and the time that belong to them (takeSource); a file that another window or a program
+  // moved or deleted before it was read no longer exists (the same text as when it is found gone
+  // before the read).
+  const seen = await takeSource(vfs, source);
+  if (seen === null) throw new Error(noLongerExists(basename(source)));
+  await vfs.writeFile(dest, seen.data);
+  return { source, dest, seen, written: await writtenAs(vfs, dest, seen.data) };
 }
 
 /**

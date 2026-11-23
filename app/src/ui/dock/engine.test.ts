@@ -5,7 +5,8 @@
 import { Actions, type Action } from 'flexlayout-react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Settings } from '../../contracts';
-import { createDocumentService } from '../../features/documents';
+import { createDocumentService, createDocumentsFeature } from '../../features/documents';
+import { feature as editorFeature } from '../../features/editor';
 import { MemoryBackend } from '../../fs/memory-backend';
 import { dockOf } from '../../state/dock';
 import { SPLITS, splitFraction, withPanelVisible, withSplit } from '../../state/layout';
@@ -424,6 +425,66 @@ describe('documentShown with the real document service (O-1, errata N1 28 and N6
       await step();
       expect([label, editorInFront()]).toEqual([label, true]);
     }
+  });
+});
+
+describe("the Editor's Window commands and Close File show their result in front of a viewer (errata N1 28)", () => {
+  it('each command that changes the editor area brings the Editor forward; one that changes nothing does not', async () => {
+    const backend = new MemoryBackend({ mount: 'browser', kind: 'memory', label: 'My Programs' });
+    const app = createTestApplication({
+      features: [editorFeature, createDocumentsFeature({ draftStore: () => null, locks: () => null })],
+      services: { createDocumentService },
+      backends: [backend],
+    });
+    const engine = new DockEngine(app.ctx, app.panels, app.shell, 'editor');
+    engine.start();
+    engine.setSize(1400, 813);
+    const dock = dockOf(app.ctx);
+    const editorInFront = () => tabNodeOf(engine.model, 'editor', 'editor')!.isSelected();
+    let n = 0;
+    const viewerInFront = () => {
+      dock.openTransient({ id: `viewer:${++n}`, title: `f${n}.pdf`, tooltip: '', render: () => null, onClose() {} });
+      expect(editorInFront()).toBe(false);
+    };
+    for (const name of ['a', 'b', 'c']) {
+      await app.ctx.vfs.writeFile(`/browser/${name}.X68`, Uint8Array.from([0x41, 0x0d, 0x0a]));
+      await app.ctx.documents.open(`/browser/${name}.X68` as never);
+    }
+    const panes = () => app.ctx.settings.get().app.layout.editorPanes;
+    const steps: [string, string, boolean][] = [
+      // [command, what it does on main, the Editor in front afterwards]
+      ['ed.window.tileV', 'one pane -> side by side', true],
+      ['ed.window.tileV', 'nothing (side by side already)', false],
+      ['ed.window.tileH', 'side by side -> one above the other', true],
+      ['ed.window.cascade', 'two panes -> one', true],
+      ['ed.window.cascade', 'nothing (one pane already)', false],
+      ['ed.window.arrange', 'nothing (disabled)', false],
+      ['ed.window.minimizeAll', 'nothing (disabled)', false],
+      ['ed.window.unsplit', 'nothing (disabled with one pane)', false],
+      ['ed.window.splitRight', 'one pane -> side by side', true],
+      ['ed.window.splitRight', 'the active document to the other pane', true],
+      ['ed.window.splitDown', 'one above the other', true],
+      ['ed.window.unsplit', 'two panes -> one', true],
+      ['ed.file.close', 'c closed, b active', true],
+      ['ed.file.close', 'b closed, a active', true],
+      ['ed.file.close', 'a closed, the start-up document active', true],
+    ];
+    for (const [command, label, front] of steps) {
+      viewerInFront();
+      const before = [panes(), app.ctx.documents.active()?.name];
+      await app.ctx.commands.run(command);
+      const after = [panes(), app.ctx.documents.active()?.name];
+      expect([command, label, editorInFront()]).toEqual([command, label, front]);
+      // Nothing visible changed on main exactly where the Editor stays behind.
+      expect([command, JSON.stringify(after) !== JSON.stringify(before) || command === 'ed.window.splitRight']).toEqual(
+        [command, front],
+      );
+    }
+    // The last document closed: nothing is shown, and the viewer stays in front.
+    viewerInFront();
+    await app.ctx.commands.run('ed.file.close');
+    expect(app.ctx.documents.active()).toBeNull();
+    expect(editorInFront()).toBe(false);
   });
 });
 

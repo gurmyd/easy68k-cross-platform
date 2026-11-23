@@ -30,6 +30,9 @@
 //   front       a document opened or chosen while a viewer's tab is in front of the Editor's is
 //               shown, by each way a person makes a document the one they work on, and the focus
 //               stays where main leaves it (errata N1 28, N6 15); the reverse still shows a viewer;
+//               the Window menu's Tile Vertically, Tile Horizontally, Cascade and the three split
+//               commands, and File > Close File, show their result in front of the viewer, while
+//               one that changes nothing on main (and Arrange, Minimize All) leaves it in front;
 //   production  the production build (vite build with EASY68K_BASE=/easy68k-cross-platform/,
 //               served under that sub-path): a PDF, a PNG, a JPEG and an SVG dropped on the window
 //               open in the viewer with no Content Security Policy violation and no console error,
@@ -958,7 +961,11 @@ async function frontPass(browser, name) {
   if (!/^viewer:/.test(inViewer.focus))
     throw new Error(`the viewer did not take the focus: ${JSON.stringify(inViewer)}`);
   const menu = (caption) =>
-    page.locator('[role=menu] [role=menuitem], [role=menu] [role=menuitemradio]', { hasText: caption }).first();
+    page
+      .locator('[role=menu] [role=menuitem], [role=menu] [role=menuitemradio], [role=menu] [role=menuitemcheckbox]', {
+        hasText: caption,
+      })
+      .first();
   const menuBar = (title) => page.locator('[role=menubar] > [role=menuitem]', { hasText: title }).first();
   await ctxEval(() => {
     const dialogs = window.__easy68k.ctx.fileDialogs;
@@ -1064,7 +1071,97 @@ async function frontPass(browser, name) {
     );
   }
   await second.page.close();
-  // 10. A tab: a viewer in a group of its own stays in front there, and the Editor shows the document.
+  // 10. The Editor's commands that change what the editor area shows (its arrangement, or which
+  //     document is active) show their result in front of the viewer, as main shows it at once;
+  //     one that changes nothing on main (a Tile of the layout there is already, Cascade with one
+  //     pane, a disabled item) leaves the viewer in front. The focus is where main leaves it: back
+  //     where the menu found it (the Files tree), or the editor when it was in the viewer.
+  const arrangement = () =>
+    ctxEval(() => {
+      const { ctx } = window.__easy68k;
+      const panes = [...document.querySelectorAll('[data-e68-panel="editor"] .e68-editor__pane')];
+      return {
+        layout: ctx.settings.get().app.layout.editorPanes,
+        panes: panes.filter((pane) => pane.checkVisibility({ visibilityProperty: true })).length,
+      };
+    });
+  const windowCommand = async (menuTitle, caption, { focus = 'files', changes = true, layout, panes }) => {
+    await viewerInFront();
+    if (focus === 'editor') await focusViewer();
+    else await focusTree();
+    const before = await facts();
+    await menuBar(menuTitle).click();
+    await menu(caption).click();
+    const where = focus === 'editor' ? 'in the editor' : 'still in the Files panel';
+    if (changes) {
+      const state = await until((f) => f.shown && !f.viewerShown && f.focus === focus);
+      const shape = await arrangement();
+      check(
+        `${p} ${menuTitle} > ${caption}: the result is shown in front of the viewer (${shape.layout}, ${shape.panes} pane(s)); the focus is ${where}`,
+        state.shown &&
+          !state.viewerShown &&
+          state.focus === focus &&
+          (layout === undefined || shape.layout === layout) &&
+          (panes === undefined || shape.panes === panes),
+        JSON.stringify({ state, shape }),
+      );
+      return { before, state };
+    }
+    await page.waitForTimeout(400);
+    const state = await facts();
+    check(
+      `${p} ${menuTitle} > ${caption}, which changes nothing here on main: the viewer stays in front; the focus is ${where}`,
+      state.viewerShown && !state.shown && state.focus === focus && state.active === before.active,
+      JSON.stringify(state),
+    );
+    return { before, state };
+  };
+  await windowCommand('Window', 'Tile Vertically', { layout: 'vertical', panes: 2 });
+  await windowCommand('Window', 'Tile Vertically', { changes: false });
+  await windowCommand('Window', 'Tile Horizontally', { layout: 'horizontal', panes: 2 });
+  await windowCommand('Window', 'Cascade', { focus: 'editor', layout: 'one', panes: 1 });
+  await windowCommand('Window', 'Cascade', { changes: false });
+  await windowCommand('Window', 'Split Editor Right', { layout: 'vertical', panes: 2 });
+  await windowCommand('Window', 'Split Editor Right', { focus: 'editor', layout: 'vertical', panes: 2 });
+  await windowCommand('Window', 'Split Editor Down', { layout: 'horizontal', panes: 2 });
+  await windowCommand('Window', 'Close Split', { layout: 'one', panes: 1 });
+  // Arrange, Minimize All and Close Split with one pane are disabled, on main as here.
+  {
+    await viewerInFront();
+    await focusTree();
+    await menuBar('Window').click();
+    const disabled = [];
+    for (const caption of ['Arrange', 'Minimize All', 'Close Split']) {
+      disabled.push((await menu(caption).getAttribute('aria-disabled')) === 'true');
+    }
+    await page.keyboard.press('Escape');
+    for (const id of ['ed.window.arrange', 'ed.window.minimizeAll', 'ed.window.unsplit']) {
+      await ctxEval((command) => window.__easy68k.ctx.commands.run(command), id);
+    }
+    await page.waitForTimeout(400);
+    const state = await facts();
+    check(
+      `${p} Window > Arrange, Minimize All and Close Split (one pane) are disabled and change nothing: the viewer stays in front`,
+      disabled.every(Boolean) && state.viewerShown && !state.shown,
+      JSON.stringify({ disabled, state }),
+    );
+  }
+  // File > Close File: the neighbour that becomes active is shown, as on main.
+  //    (A document without changes, so that no close question comes between.)
+  for (const [focus, closing] of [
+    ['files', 'third.X68'],
+    ['editor', 'other.X68'],
+  ]) {
+    await row(closing).dblclick();
+    await until((f) => f.active === closing && f.shown);
+    const { state } = await windowCommand('File', 'Close File', { focus });
+    check(
+      `${p} File > Close File closed "${closing}" and shows the neighbour "${state.active}"`,
+      state.active !== null && state.active !== closing,
+      JSON.stringify(state),
+    );
+  }
+  // 11. A tab: a viewer in a group of its own stays in front there, and the Editor shows the document.
   await viewerInFront();
   const moved = await ctxEval(async () => {
     const { dockOf } = await import('/src/state/dock.ts');
@@ -1084,7 +1181,7 @@ async function frontPass(browser, name) {
     const { dockOf } = await import('/src/state/dock.ts');
     dockOf(window.__easy68k.ctx).closeTransient(id);
   }, moved);
-  // 11. Simulator mode: nothing visible changes and the mode stays; back in Editor mode the
+  // 12. Simulator mode: nothing visible changes and the mode stays; back in Editor mode the
   //     document is in front, as main shows it.
   const sim = await ctxEval(async () => {
     const { ctx } = window.__easy68k;

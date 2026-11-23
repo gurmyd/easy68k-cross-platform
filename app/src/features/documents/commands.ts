@@ -4,7 +4,8 @@
 //   ed.file.open       Open File... : the Open dialog, then each chosen file (editor-ui §6.2)
 //   ed.file.save       Save, or Save As for a document without a name (editor-ui §6.4)
 //   ed.file.saveAs     Save As...
-//   ed.file.close      Close File: the active document, with the close prompt (editor-ui §6.6)
+//   ed.file.close      Close File: the active document, with the close prompt (editor-ui §6.6); the
+//                      neighbour made active is shown in front of a viewer (errata N1 28)
 //   ed.file.exit       Exit: every close prompt, then quit (desktop) or the exit screen (web, 1.4 note 4)
 //   ed.edit.reload     Reload File (editor context menu, editor-ui §6.5)
 //   ed.window.select   Window menu entry `<n> <name>` (arg: index): activate that document
@@ -17,6 +18,7 @@
 import type { AppContext, AppState, CommandHandler, CommandId } from '../../contracts';
 import { OPEN_FILTERS, OPEN_TITLE } from '../../core/documents/messages';
 import { dirname } from '../../core/paths/winpath';
+import { dockOf } from '../../state/dock';
 import { showExitScreen } from '../../state/shell';
 
 const activeOf = (state: AppState) => state.documents.items.find((doc) => doc.id === state.documents.activeId) ?? null;
@@ -72,7 +74,11 @@ export const documentCommands: Record<CommandId, CommandHandler> = {
   'ed.file.close': {
     run: async (ctx) => {
       const active = ctx.documents.active();
-      if (active) await ctx.documents.close(active.id);
+      if (!active) return;
+      // The neighbour that becomes active is shown, as today (ARCHITECTURE-PLUS P1.2), also while
+      // a viewer's tab is in front of the Editor's (errata N1 28). After the last document nothing
+      // is shown, and a viewer in front stays.
+      if ((await ctx.documents.close(active.id)) && ctx.documents.active()) dockOf(ctx).documentShown();
     },
     enabled: hasActive,
   },

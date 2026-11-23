@@ -305,9 +305,10 @@ errata of its package:
 - **For the orchestrator:** the files engineer edited `docs/differences/N5.md` (N10's file) in the
   fourth round, and N10 kept and completed the edit; confirm the ownership.
 - **For main's owner of `fs/fsaccess-backend.ts` (FS2), not the stage's:** its text `Open the
-  folder or the file again (File > Open), and allow access when the browser asks.` names a menu item
-  the build calls `Open File...`. It is main's text, unchanged by the stage, so the integration pass
-  left it.
+  folder or the file again (File > Open), and allow access when the browser asks.` named a menu item
+  the build calls `Open File...`. The integration pass left it; the repairs after the fourth round
+  corrected it to `(File > Open File...)` (erratum N8), with a test that compares it with the
+  caption of `ed.file.open`.
 - **For N6, information:** in a WebKit walk-through the documents engineer saw the page error
   `ResizeObserver loop completed with undelivered notifications` after the viewport was resized
   with a viewer open; no check of this pass saw it.
