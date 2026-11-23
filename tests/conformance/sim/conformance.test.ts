@@ -5,7 +5,8 @@
 // result in golden/ (masked dates only).
 //
 // A difference fails the test unless known-differences.json lists it with an owner; a listed
-// difference that no longer occurs fails too, so that the list stays true. Owner: T3.
+// difference that no longer occurs fails too, so that the list stays true. For an artifact of
+// programs.ts ARTIFACT_MASKS the entry covers only the masked bytes: the rest must be equal. Owner: T3.
 //
 //   npx vitest run --config tests/conformance/sim/vitest.config.ts
 //   EASY68K_SIM_ONLY=trap15-a      only programs whose id contains the text
@@ -185,9 +186,11 @@ describe.skipIf(!enginesBuilt || manifest === null)(
                 known: known[key] ?? null,
                 lines: differingLines(officialText, portText),
               });
-              if (!known[key]) {
+              // A masked artifact's entry covers only the masked bytes (erratum T3 19): any difference
+              // left after masking is a new one, as for an artifact that is not listed at all.
+              if (!known[key] || ARTIFACT_MASKS[key]) {
                 unknown.push(
-                  `${key}: line ${difference.line}\n  official: ${JSON.stringify(difference.expected)}\n  port:     ${JSON.stringify(difference.actual)}\n  (run ended: ${outcome.end}; messages: ${JSON.stringify(outcome.messages.slice(-3))})`,
+                  `${key}: line ${difference.line}${ARTIFACT_MASKS[key] ? ' (outside the bytes ARTIFACT_MASKS masks)' : ''}\n  official: ${JSON.stringify(difference.expected)}\n  port:     ${JSON.stringify(difference.actual)}\n  (run ended: ${outcome.end}; messages: ${JSON.stringify(outcome.messages.slice(-3))})`,
                 );
               }
             }

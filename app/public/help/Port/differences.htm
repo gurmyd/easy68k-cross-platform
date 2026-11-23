@@ -556,9 +556,9 @@
 </ul>
 <h4 class="subheading">Tasks 0 and 1 with a negative count on a string longer than 255 characters</h4>
 <ul>
-<li>Original (trap15-a §12 item 8; T4's report D1): with D1.W negative the text is copied with <code>strncpy</code> into a 256-byte buffer without a terminating NUL, so after the 255th character the output can carry whatever the host stack holds. <code>trap15-a/a55-task0-negative-count-first</code> printed 255 characters and the byte <code>$C0</code> after <code>NOP</code> and <code>MULU</code>, and exactly 255 after <code>MOVE.L (SP)+</code> and <code>RTS</code>; with other host calls before it (<code>trap15-a/a05</code>) always exactly 255.</li>
+<li>Original (trap15-a §12 item 8; T4's report D1): with D1.W negative the text is copied with <code>strncpy</code> into a 256-byte buffer without a terminating NUL, so after the 255th character the output can carry whatever the host stack holds. <code>trap15-a/a55-task0-negative-count-first</code> printed 255 characters and the byte <code>$C0</code> after <code>NOP</code> and <code>MULU</code>, and exactly 255 after <code>MOVE.L (SP)+</code> and <code>RTS</code>. <code>trap15-a/a05-task0-negative-count</code>, the same calls after other host calls, printed exactly 255 in 9 of 10 runs and once (a regeneration on 23 November 2026) four more bytes after the 255th character of its first line (<code>$C0 $28 $F7 $21</code>).</li>
 <li>Port: always exactly 255 characters (the engine's P24 ends the buffer at character 255).</li>
-<li>Nothing a program can rely on: the extra byte is residue that depends on the Borland code that ran before. Accepted (owner: the engine; <code>known-differences.json</code>).</li>
+<li>Nothing a program can rely on: the extra byte is residue that depends on the Borland code that ran before. Accepted (owner: the engine; <code>known-differences.json</code>). The comparison masks, in the output logs of both programs, the four lines of these calls from the 256th character on, and compares everything else.</li>
 </ul>
 <h4 class="subheading">Live update of the Memory window at address 0</h4>
 <ul>

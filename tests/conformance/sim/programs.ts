@@ -266,6 +266,19 @@ export const ARTIFACT_MASKS: Readonly<Record<string, ArtifactMask>> = {
       'time, $C0 after lines 3 and 4 on Docker Desktop (WSL 2 kernel 6.18.33.1) and $C0 after line 4 only ' +
       "on GitHub's ubuntu-24.04 runner (oracle run 45034017858).",
   },
+  // a05 prints a 300-byte string without a NUL four times with a negative count: line 3 (task 1,
+  // D1.W = -1, after NOP), lines 4 to 6 (task 0 with $8000 after MULU, $FF00 after RTS, -1 after
+  // MOVE.L (SP)+); each can carry residue after its 255th character. Line 7 (task 0 on 'HELLO',0)
+  // ends at its NUL and is not masked, nor is anything before column 256.
+  'trap15-a/a05-task0-negative-count|outlog|outlog': {
+    lines: [3, 4, 5, 6],
+    fromColumn: 256,
+    reason:
+      'What tasks 0 and 1 print after the 255th character of a string without a NUL is the official ' +
+      "program's host-stack residue (strncpy without a terminator). In 1 of 10 runs of the same image on " +
+      'Docker Desktop (the regeneration with --tz Asia/Tokyo, 23 November 2026) line 3 carried the four bytes ' +
+      '$C0 $28 $F7 $21 after its 255 characters; in the other 9 and in the committed golden, nothing.',
+  },
 };
 
 /**

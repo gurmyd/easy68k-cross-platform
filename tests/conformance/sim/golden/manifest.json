@@ -2231,8 +2231,8 @@
           "status": "ok",
           "artifacts": {
             "outlog": {
-              "sha256": "e28f99d1c87b9757fa819e9fd94188efad7b1317ce68204540d59be8a6ab68eb",
-              "bytes": 1066
+              "sha256": "eae38ed837eb8d95d543c8f17f026b84533cdbd4b88a7e29584e7a78dad53680",
+              "bytes": 1098
             }
           }
         },
