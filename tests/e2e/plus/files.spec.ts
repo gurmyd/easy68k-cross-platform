@@ -41,7 +41,11 @@ test('Ctrl+click and Shift+click select several rows; Export of the selection is
     app,
     app.filesPanel.getByRole('button', { name: exportSeveralCaption(2), exact: true }),
   );
-  expect(exported.name).toBe(EXPORT_ZIP_NAME);
+  // Playwright's WebKit build for Linux reports the spaces of a download's name as underscores
+  // (the first run of the stage on GitHub: "EASy68K_export.zip"; main's storage-notice.spec.ts and
+  // check-files.mjs know the same of "My Programs.zip"). Every other browser and system reports the name.
+  const linuxWebKit = process.platform === 'linux' && test.info().project.name === 'webkit';
+  expect(exported.name).toBe(linuxWebKit ? EXPORT_ZIP_NAME.replaceAll(' ', '_') : EXPORT_ZIP_NAME);
   const zip = await readZip(exported.bytes);
   expect(
     zip.entries.filter((entry) => !entry.path.endsWith('/')).map((entry) => [entry.path, latin1(entry.data)]),
