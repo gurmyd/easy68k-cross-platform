@@ -203,7 +203,7 @@ describe('ingestRun', () => {
     expect(files.received).toEqual(received);
   });
 
-  it('notes what a clean run showed: a help-viewer box, another file in the status title, a kill', () => {
+  it('notes another file in the status title; prints what depends on the machine (help boxes, a kill)', () => {
     const record = {
       status: 'ok',
       exit: 'killed (did not exit after Alt+F4)',
@@ -215,14 +215,21 @@ describe('ingestRun', () => {
       ],
       outDirectory: outputs('notes', modelText),
     };
-    const { run } = ingestRun({ options: {}, record, source });
+    const { run, machine } = ingestRun({ options: {}, record, source });
     expect(run.status).toBe('ok');
-    expect(run.notes).toEqual([
-      'status dialog names another file: Assembler Status - MOUSE.X68',
+    expect(run.notes).toEqual(['status dialog names another file: Assembler Status - MOUSE.X68']);
+    expect(machine).toEqual([
       'help-viewer message box dismissed at start-up',
       'help-viewer message box dismissed at exit',
       'the editor was killed (did not exit after Alt+F4)',
     ]);
+    // The same run without them gives the same entry (erratum T3 18).
+    const plain = ingestRun({
+      options: {},
+      record: { ...record, exit: 'clean', help_boxes: [], outDirectory: outputs('notes-plain', modelText) },
+      source,
+    }).run;
+    expect(plain).toEqual(run);
   });
 
   it('records a failed run with the reason and no hashes', () => {
@@ -528,6 +535,11 @@ describe('runDifferences', () => {
 
   it('is empty for the same result, whatever the golden flag and the notes say', () => {
     expect(runDifferences(run, { ...run, golden: false, notes: ['x'] })).toEqual([]);
+    // --check also names every other field a regeneration would write, but not `golden`.
+    expect(runDifferences(run, { ...run, golden: false, notes: ['x'] }, true)).toEqual([
+      expect.stringMatching(/^notes: manifest .*, now \["x"\]$/),
+    ]);
+    expect(runDifferences(run, { ...run, golden: !run.golden }, true)).toEqual([]);
   });
 
   it('names every field that changed', () => {

@@ -10,6 +10,11 @@
 //   --check          change nothing; compare the results with golden/manifest.json, exit 1 when a
 //                    hash or a status differs
 //   --report         only rewrite golden/REPORT.md from the manifest (no Docker needed)
+//   --rehash         only recompute the hash and the masked size of every artifact of the manifest
+//                    from the stored goldens (no Docker needed; exit 1 when a golden is missing)
+//   --tz ZONE        run the official programs with this time zone (TZ in the containers), so that
+//                    their logs carry another date and time: to show that the manifest does not
+//                    depend on when a regeneration runs (erratum T3 18)
 //   --image NAME     Docker image (default easy68k-oracle-wine, from `npm run oracle:wine:build`)
 //   --official DIR   the unpacked official distribution (default reference/official-extracted, or
 //                    $EASY68K_OFFICIAL_DIR; see ../common/fetch-official.mjs)
@@ -140,7 +145,7 @@ export function jobLine(job) {
 
 // --- 2. containers ----------------------------------------------------------------------------------
 
-async function runJobs(jobs, { image, official, corpus, containers, workDirectory }) {
+async function runJobs(jobs, { image, official, corpus, containers, workDirectory, tz }) {
   const jobDirectory = join(workDirectory, 'job');
   const outDirectory = join(workDirectory, 'out');
   mkdirSync(jobDirectory, { recursive: true });
@@ -167,6 +172,7 @@ async function runJobs(jobs, { image, official, corpus, containers, workDirector
         image,
         mounts,
         command: ['bash', '/mnt/sim-driver/sim_corpus.sh', String(shard), String(count)],
+        ...(tz ? { env: { TZ: tz } } : {}),
         logFile: join(workDirectory, `container-${shard}.log`),
       }),
     ),
@@ -249,7 +255,9 @@ export function recipeResult(program, recipe, record, read) {
     }
     bytes[kind] = data;
     const masked = maskArtifact(kind, data, artifactKey(program.id, recipeId(recipe), kind));
-    artifacts[kind] = { sha256: sha256Hex(masked), bytes: data.length };
+    // The size after masking, like the hash: a log's header holds the date and time of the run, and
+    // "9:56:12 PM" is one byte shorter than "12:05:47 AM" (oracle run 45086336888, erratum T3 18).
+    artifacts[kind] = { sha256: sha256Hex(masked), bytes: masked.length };
   }
   const ok = record.status === 'ok' && missing === null;
   const entry = {
@@ -269,6 +277,61 @@ export function updatedDate(previous, next, today) {
   if (!previous?.updated) return today;
   const same = JSON.stringify({ ...previous, updated: '' }) === JSON.stringify({ ...next, updated: '' });
   return same ? previous.updated : today;
+}
+
+/**
+ * What differs between two manifest entries of a program, as `path: was -> now` lines (the hashes
+ * of the artifacts included; empty when the entries are equal).
+ */
+export function manifestEntryChanges(before, after) {
+  const out = [];
+  const walk = (path, a, b) => {
+    if (a !== null && b !== null && typeof a === 'object' && typeof b === 'object') {
+      for (const key of new Set([...Object.keys(a), ...Object.keys(b)]))
+        walk(path ? `${path}.${key}` : key, a[key], b[key]);
+      return;
+    }
+    if (JSON.stringify(a) !== JSON.stringify(b)) {
+      const show = (value) => (value === undefined ? 'none' : JSON.stringify(value).slice(0, 80));
+      out.push(`${path || 'entry'}: ${show(a)} -> ${show(b)}`);
+    }
+  };
+  walk('', before, after);
+  return out;
+}
+
+/**
+ * `--rehash`: the hash and the masked size of every artifact of the manifest again, from the stored
+ * goldens (`read(goldenName)` returns the bytes or null). Changes `manifest` in place, not its
+ * `updated` date (no official result changed); returns { unchanged, changed, missing }.
+ */
+export function rehashManifest(manifest, programs, read) {
+  const result = { unchanged: 0, changed: [], missing: [] };
+  for (const program of programs) {
+    const recipes = manifest.programs[program.id]?.recipes ?? {};
+    for (const artifact of artifactsOf(program)) {
+      const recorded = recipes[artifact.recipe]?.artifacts?.[artifact.kind];
+      if (!recorded) continue;
+      const stored = read(artifact.golden);
+      if (!stored) {
+        result.missing.push(artifact.golden);
+        continue;
+      }
+      const masked = maskArtifact(artifact.kind, stored, artifactKey(program.id, artifact.recipe, artifact.kind));
+      const now = { sha256: sha256Hex(masked), bytes: masked.length };
+      if (now.sha256 === recorded.sha256 && now.bytes === recorded.bytes) {
+        result.unchanged += 1;
+        continue;
+      }
+      const changes = [];
+      if (now.sha256 !== recorded.sha256)
+        changes.push(`sha256 ${recorded.sha256.slice(0, 12)} -> ${now.sha256.slice(0, 12)}`);
+      if (now.bytes !== recorded.bytes) changes.push(`bytes ${recorded.bytes} -> ${now.bytes}`);
+      result.changed.push(`${artifact.golden}: ${changes.join(', ')}`);
+      recipes[artifact.recipe].artifacts[artifact.kind] = now;
+    }
+  }
+  return result;
 }
 
 /** golden/REPORT.md: the counts, and every run without a result. */
@@ -337,6 +400,8 @@ export function parseArguments(argv) {
     containers: 4,
     check: false,
     reportOnly: false,
+    rehash: false,
+    tz: null,
     image: DEFAULT_IMAGE,
     official: process.env.EASY68K_OFFICIAL_DIR ?? join(REPO_ROOT, 'reference', 'official-extracted'),
     file: null,
@@ -355,6 +420,8 @@ export function parseArguments(argv) {
     else if (argument === '--containers') options.containers = Number(value());
     else if (argument === '--check') options.check = true;
     else if (argument === '--report') options.reportOnly = true;
+    else if (argument === '--rehash') options.rehash = true;
+    else if (argument === '--tz') options.tz = value();
     else if (argument === '--image') options.image = value();
     else if (argument === '--official') options.official = resolve(value());
     else if (argument === '--file') options.file = resolve(value());
@@ -428,6 +495,23 @@ async function main() {
     if (!previous) throw new Error(`${relative(REPO_ROOT, GOLDEN_MANIFEST_PATH)} does not exist yet`);
     writeFileSync(REPORT_PATH, renderReport(previous, all));
     return 0;
+  }
+  if (options.rehash) {
+    if (!previous) throw new Error(`${relative(REPO_ROOT, GOLDEN_MANIFEST_PATH)} does not exist yet`);
+    const result = rehashManifest(previous, all, readGolden);
+    writeFileSync(
+      GOLDEN_MANIFEST_PATH,
+      `${JSON.stringify(previous, null, 2)}
+`,
+    );
+    writeFileSync(REPORT_PATH, renderReport(previous, all));
+    console.log(
+      `hash and masked size from the stored goldens: ${result.changed.length} artifact(s) changed, ${result.unchanged} unchanged; ${relative(REPO_ROOT, GOLDEN_MANIFEST_PATH)} written`,
+    );
+    for (const line of result.changed.slice(0, 80)) console.log(`  ${line}`);
+    if (result.changed.length > 80) console.log(`  ... and ${result.changed.length - 80} more`);
+    for (const name of result.missing) console.log(`missing golden: ${name}`);
+    return result.missing.length > 0 ? 1 : 0;
   }
   const programs = options.only.length ? all.filter((p) => options.only.some((text) => p.id.includes(text))) : all;
   if (programs.length === 0) throw new Error('no program matches');
@@ -513,6 +597,14 @@ async function main() {
   // The date moves only when the content does, so that a run that reproduces the goldens writes the
   // same files again (the oracle workflow reports any changed file as a candidate).
   manifest.updated = updatedDate(previous, manifest, new Date().toISOString().slice(0, 10));
+
+  // Anything else of the manifest that this run would change (with --check: what a regeneration would
+  // write); a regeneration that reproduces the official results changes nothing (erratum T3 18).
+  for (const program of programs) {
+    for (const change of manifestEntryChanges(previous?.programs[program.id], manifest.programs[program.id])) {
+      differences.push(`${program.id}: ${change}`);
+    }
+  }
 
   if (options.check) {
     for (const line of differences) console.error(`DIFFERS ${line}`);

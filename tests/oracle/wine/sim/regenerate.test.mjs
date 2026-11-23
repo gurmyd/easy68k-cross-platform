@@ -11,9 +11,11 @@ import {
   fileWorkDirectory,
   isGzipped,
   jobLine,
+  manifestEntryChanges,
   parseArguments,
   planJobs,
   recipeResult,
+  rehashManifest,
   renderReport,
   updatedDate,
 } from './regenerate.mjs';
@@ -149,6 +151,80 @@ describe('what depends on the host stays out of the manifest (run 45034017858)',
       '2026-11-22',
     );
     expect(updatedDate(null, { ...before, updated: '' }, '2026-11-22')).toBe('2026-11-22');
+  });
+});
+
+// Oracle run 45086336888 ran after midnight and changed 53 sizes by one byte: the logs' headers hold
+// the date and time of the run (erratum T3 18). The entry of a run must not depend on them.
+describe('the manifest entry does not depend on when the official program ran', () => {
+  const p = program('* @item a\n* @recipe log:2+out\n', 'logs', 'prog');
+  const recipe = p.recipes[0];
+  const runLog = (when) => bytes(`EASy68K execution log file: ${when}\r\n\r\nx\r\nPC=00001000 a\r\n`);
+  const outLog = (when, text = 'hi') => bytes(`EASy68K output log file: ${when}\r\n\r\n${text}\n`);
+  const entryAt = (when, text) =>
+    recipeResult(p, recipe, { status: 'ok' }, (name) =>
+      name === 'prog_RunLog.txt' ? runLog(when) : name === 'prog_OutLog.txt' ? outLog(when, text) : null,
+    ).entry;
+  const COMMITTED = '11/22/2026 9:56:12 PM';
+
+  it('is the same for a one-digit and a two-digit hour, another day and another month', () => {
+    const times = [
+      COMMITTED,
+      '11/23/2026 12:05:47 AM', // run 45086336888: after midnight, a two-digit hour
+      '1/1/2027 1:00:00 AM', // a one-digit month and day
+      '12/31/2026 11:59:59 PM', // the end of a 31-day month
+      '2/28/2027 10:30:00 AM', // the end of a 28-day month
+    ];
+    const entries = times.map((when) => entryAt(when));
+    for (const entry of entries.slice(1)) expect(entry).toEqual(entries[0]);
+    // The size is that of the masked file, not of the file.
+    expect(entries[0].artifacts.outlog.bytes).toBe('EASy68K output log file: <date>\r\n\r\nhi\n'.length);
+  });
+
+  it('still changes with one byte of what the program wrote', () => {
+    const committed = entryAt(COMMITTED);
+    const changed = entryAt(COMMITTED, 'hI');
+    expect(changed.artifacts.outlog.sha256).not.toBe(committed.artifacts.outlog.sha256);
+    expect(manifestEntryChanges({ recipes: { r: committed } }, { recipes: { r: changed } })).toEqual([
+      expect.stringMatching(/^recipes\.r\.artifacts\.outlog\.sha256: /),
+    ]);
+  });
+
+  it('manifestEntryChanges lists every differing field, and nothing for equal entries', () => {
+    const a = {
+      sourceSha256: 'x',
+      recipes: { report: { status: 'ok', artifacts: { result: { sha256: 'h', bytes: 3 } } } },
+    };
+    expect(manifestEntryChanges(a, structuredClone(a))).toEqual([]);
+    const b = structuredClone(a);
+    b.recipes.report.artifacts.result.bytes = 4;
+    expect(manifestEntryChanges(a, b)).toEqual(['recipes.report.artifacts.result.bytes: 3 -> 4']);
+    expect(manifestEntryChanges(undefined, a)).toEqual([expect.stringMatching(/^entry: none -> /)]);
+  });
+
+  it('--rehash recomputes hash and masked size from the stored goldens, and not the date', () => {
+    const entry = entryAt(COMMITTED);
+    const stored = { 'logs/prog.log2o.RunLog.txt': runLog(COMMITTED), 'logs/prog.log2o.OutLog.txt': outLog(COMMITTED) };
+    const rawSize = stored['logs/prog.log2o.OutLog.txt'].length;
+    const manifest = {
+      updated: '2026-11-22',
+      programs: {
+        'logs/prog': {
+          recipes: {
+            'log:2+out': {
+              ...entry,
+              artifacts: { ...entry.artifacts, outlog: { ...entry.artifacts.outlog, bytes: rawSize } },
+            },
+          },
+        },
+      },
+    };
+    const result = rehashManifest(manifest, [p], (name) => stored[name] ?? null);
+    expect(result.changed).toEqual([`logs/prog.log2o.OutLog.txt: bytes ${rawSize} -> ${entry.artifacts.outlog.bytes}`]);
+    expect(result.unchanged).toBe(1);
+    expect(manifest.programs['logs/prog'].recipes['log:2+out'].artifacts.outlog).toEqual(entry.artifacts.outlog);
+    expect(manifest.updated).toBe('2026-11-22');
+    expect(rehashManifest(manifest, [p], () => null).missing).toHaveLength(2);
   });
 });
 

@@ -16,6 +16,8 @@ node tests/oracle/wine/sim/regenerate.mjs --containers 6    # at most 6 (each co
 node tests/oracle/wine/sim/regenerate.mjs --only trap15-a/a1 --only logs/l0
 node tests/oracle/wine/sim/regenerate.mjs --check           # change nothing, exit 1 on a difference
 node tests/oracle/wine/sim/regenerate.mjs --report          # rewrite golden/REPORT.md only (no Docker)
+node tests/oracle/wine/sim/regenerate.mjs --rehash          # hashes and masked sizes from the goldens (no Docker)
+node tests/oracle/wine/sim/regenerate.mjs --only logs/ --tz Asia/Tokyo   # the logs with another date and time
 bash tests/oracle/wine/sim/run-report.sh my/prog.X68 "/e"   # one program of your own, self-reporting
 bash tests/oracle/wine/sim/run-log.sh my/prog.S68 2+out     # one execution log (and output log)
 npx vitest run --config tests/conformance/sim/vitest.config.ts   # the port against the goldens
@@ -28,12 +30,15 @@ A run writes, below `tests/conformance/sim/golden/`:
 - `<suite>/<program>.log<N>[o].RunLog.txt.gz` - the execution log of an Auto Trace, log type N
   (gzipped: logs are large and repetitive), and `.log<N>o.OutLog.txt` with `+out`;
 - `manifest.json` - per program the SHA-256 of the source, of the official `.S68` and of the
-  official `.L68` with its date line masked, and per recipe the status, the time it took, the
-  number of logged instructions and the SHA-256 of every artifact after masking its date line;
+  official `.L68` with its date line masked, and per recipe the status, the number of logged
+  instructions and the SHA-256 and the size of every artifact after masking its date line (and the
+  bytes `ARTIFACT_MASKS` names); nothing in it depends on when or where the run was made;
 - `REPORT.md` - the counts and every run without an official result, with the reason.
 
-A golden is rewritten only when its masked content changed, so a regeneration on another machine
-changes nothing but `manifest.json`'s date. Work files of a run (job list, one log per container,
+A golden is rewritten only when its masked content changed, and `manifest.json`'s date moves only
+when something else in it changed, so a regeneration that reproduces the official results, on any
+machine, day or hour, leaves every file as it was (errata T3 16 and 18); `--check` names every field
+a regeneration would change. Work files of a run (job list, one log per container,
 every output, screenshots of failed runs) are in `build/oracle-wine/sim/<run>/`; for a `--file`
 run with `--out DIR` (and so for `run-report.sh` and `run-log.sh` with a third argument) they are
 in `DIR/.work-<run>/`, beside the copied outputs.
@@ -88,4 +93,4 @@ Assembling one program takes about 15 s, a self-reporting run 10 to 40 s (the du
 tens of thousands of instructions), an Auto Trace 8 to 12 instructions per second (official-oracle.md
 5.2 measured 61-72 without the CPU limit). The whole suite took 59 minutes, most of it the two
 longest logs (`l24`, 18,183 instructions, and `l25`, 10,918); `regenerate.mjs` now deals the slowest
-programs out first so that they run in parallel. `golden/manifest.json` has the time of every run.
+programs out first so that they run in parallel. The time of every run is in the containers' logs.

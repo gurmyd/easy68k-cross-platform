@@ -468,10 +468,14 @@ export function ingestRun({ options, record, source, maskingListing = null, host
   const receivedDiffers = Buffer.compare(Buffer.from(modelText), Buffer.from(received)) !== 0;
   const notes = [];
   if (record.warning) notes.push(record.warning);
+  // What depends on the machine and not on the official program is printed, not recorded: the
+  // help-viewer boxes depend on the help system of the host, a kill after Alt+F4 on its speed
+  // (erratum T3 18: the manifest of a regeneration that reproduces the results stays the same).
+  const machine = [];
   for (const box of record.help_boxes ?? []) {
-    notes.push(`help-viewer message box dismissed ${box.when === 'exit' ? 'at exit' : 'at start-up'}`);
+    machine.push(`help-viewer message box dismissed ${box.when === 'exit' ? 'at exit' : 'at start-up'}`);
   }
-  if (record.exit && record.exit !== 'clean' && hostDependent === null) notes.push(`the editor was ${record.exit}`);
+  if (record.exit && record.exit !== 'clean' && hostDependent === null) machine.push(`the editor was ${record.exit}`);
   if (hostDependent !== null && reason === null) notes.push(hostDependent.note);
   const run = {
     options,
@@ -494,6 +498,7 @@ export function ingestRun({ options, record, source, maskingListing = null, host
       received: receivedDiffers ? received : null,
       maskingListing: listing === null ? maskingListing : null,
     },
+    machine,
   };
 }
 
@@ -628,12 +633,22 @@ function programEntry(program, previous) {
 }
 
 /** What differs between the recorded and the new result of a run, as text; empty when nothing does. */
-export function runDifferences(recorded, now) {
+export function runDifferences(recorded, now, everything = false) {
   const out = [];
   if (!recorded) return ['not in the manifest'];
   for (const key of ['status', 'received', 'errors', 'warnings', 'l68', 's68']) {
     if ((recorded[key] ?? null) !== (now[key] ?? null))
       out.push(`${key}: manifest ${recorded[key] ?? 'none'}, now ${now[key] ?? 'none'}`);
+  }
+  if (everything) {
+    // With --check: every other field a regeneration would write too, but `golden` (where the files
+    // are kept, which a check does not decide), so that a check that passes means an unchanged tree.
+    for (const key of new Set([...Object.keys(recorded), ...Object.keys(now)])) {
+      if (['status', 'received', 'errors', 'warnings', 'l68', 's68', 'golden'].includes(key)) continue;
+      const was = JSON.stringify(recorded[key]);
+      const is = JSON.stringify(now[key]);
+      if (was !== is) out.push(`${key}: manifest ${was ?? 'none'}, now ${is ?? 'none'}`);
+    }
   }
   return out;
 }
@@ -994,7 +1009,11 @@ async function main() {
         ok++;
         continue;
       }
-      const { run, files } = skipped.has(id)
+      const {
+        run,
+        files,
+        machine = [],
+      } = skipped.has(id)
         ? {
             run: {
               options: runOptions,
@@ -1015,10 +1034,11 @@ async function main() {
             maskingListing: officialListing(program, before, listingOnLabel(runOptions), records),
             hostDependent: HOST_DEPENDENT_RUNS[id] ?? null,
           });
+      for (const event of machine) console.log(`${program.id} (${label}): ${event}`);
       if (run.status === 'ok') ok++;
       else failed++;
       if (recorded?.status === 'ok' && run.status !== 'ok') lost.push(`${program.id} (${label}): ${run.reason}`);
-      const changed = runDifferences(before?.runs[label], run);
+      const changed = runDifferences(before?.runs[label], run, options.check);
       if (changed.length > 0) differences.push(`${program.id} (${label}): ${changed.join('; ')}`);
       if (options.check) run.golden = before?.runs[label]?.golden ?? false;
       else written += storeRun(program, label, run, files);
