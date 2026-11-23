@@ -143,6 +143,33 @@ export function firstStartSection(markdown) {
   return markdown.slice(begin + FIRST_START_BEGIN.length, end).trim();
 }
 
+/** The repository on GitHub, for the absolute links of the release notes. */
+export const REPOSITORY_URL = 'https://github.com/gurmyd/easy68k-cross-platform';
+/** The web version (GitHub Pages, the head of main). */
+export const WEB_VERSION_URL = 'https://gurmyd.github.io/easy68k-cross-platform/';
+
+/**
+ * The sentences near the top of the release notes that say how far the release has been tried
+ * (owner's decisions of 22 November 2026: the first release is published before a person has made
+ * the checks of ARCHITECTURE.md 6.8; the notes must say so plainly). Lines of Markdown. The
+ * links are absolute, because GitHub shows a release's notes outside the repository's tree.
+ *
+ * @param {string} version
+ */
+export function releaseStatus(version) {
+  return [
+    'The Mac app is signed ad hoc and not notarised by Apple, so macOS blocks it the first time you',
+    'open it: the steps below get you past that once. Everything in this release was tested',
+    "automatically on GitHub's Windows, macOS and Linux machines, but no person has worked through",
+    `the manual checks of [docs/MANUAL-TEST-MAC.md](${REPOSITORY_URL}/blob/v${version}/docs/MANUAL-TEST-MAC.md)`,
+    'yet: nobody has tried this release on a real Mac, in Safari itself, with a screen reader, a',
+    'printer or a serial adapter. If you try it, please report what you find, good or bad, in the',
+    `repository's issues: ${REPOSITORY_URL}/issues`,
+    '',
+    `The web version needs no download: ${WEB_VERSION_URL}`,
+  ];
+}
+
 /**
  * The release notes (Markdown).
  *
@@ -158,8 +185,7 @@ export function releaseNotes(version, firstStart, minimumMacOS) {
   return [
     `EASy68K ${version} - unofficial web and macOS port of EASy68K v5.16.1.`,
     '',
-    'This is a draft made by the release workflow. Publish it after the manual checks of',
-    '`docs/MANUAL-TEST-MAC.md` (ARCHITECTURE.md 6.8).',
+    ...releaseStatus(version),
     '',
     '## Downloads',
     '',

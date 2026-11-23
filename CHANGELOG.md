@@ -2,17 +2,25 @@
 
 What changes in easy68k-cross-platform, newest first. The port's own version number is separate
 from the version of the original it reproduces (EASy68K Editor/Assembler v5.16.01, Simulator
-v5.16.1, EASyBIN v2.5.0). No version of the port has been released yet.
+v5.16.1, EASyBIN v2.5.0). The first release of the port is 1.0.0.
 
 The notes of a release on GitHub are written by the release workflow
 (`.github/workflows/release.yml`, `desktop/scripts/release.mjs`). They list the downloads and carry
 the steps for opening the Mac app the first time, which are kept in `docs/differences/DV3.md` and
-repeated in the README. When a version is released, its entry here moves from "Not released yet" to a
-heading with its number.
+repeated in the README. Changes made after the newest release are collected under a heading "Not
+released yet" at the top; when a version is released, that heading becomes its number and date.
 
-## Not released yet
+## 1.0.0 (2026-11-23)
 
-The first version is being prepared. What the repository holds today:
+The first release: the web version at <https://gurmyd.github.io/easy68k-cross-platform/>, and the Mac
+app for Apple silicon and Intel on the
+[Releases page](https://github.com/gurmyd/easy68k-cross-platform/releases).
+
+**No person has tried this release on a Mac yet.** It was tested automatically on GitHub's Windows,
+macOS and Linux machines; the checks only a person can make ([docs/MANUAL-TEST-MAC.md](docs/MANUAL-TEST-MAC.md):
+a real Mac, Safari itself, a screen reader, a printer, a serial adapter) have not been worked through
+by anyone. The Mac app is signed ad hoc and not notarised by Apple, so macOS blocks it the first time
+(the README says what to do).
 
 ### The engines
 
@@ -94,18 +102,19 @@ a file the application writes, or an item, command or key of the original's menu
   can offer, with Options > Serial Ports... to say which device of the Mac each port name opens.
   Tested on GitHub's Mac machines with a simulated serial line and local network connections.
 - Built for Apple silicon and Intel, signed ad hoc, by `.github/workflows/release.yml`. The built
-  app passes its automatic checks on GitHub's Mac machines of both kinds. Not published.
+  app passed its automatic checks on GitHub's Mac machines of both kinds before the release.
 
 ### Known limitations
 
 - Listed in part 5 of [docs/DIFFERENCES.md](docs/DIFFERENCES.md): among them, nobody has tried the
   port on a real Mac yet, Firefox is not tested, a program in the web version can open at most 2,000 files of its folder (a `.git` folder's files are
-  counted last), no person has tried the PDF viewer yet, and the speed at
-  `Maximum` and the frame rate while a program draws are decided only by the performance job of a
-  manual test run on GitHub's Linux machine, which has not run since the rule for `Maximum` was
-  corrected (at least 100 million instructions in 10 s and at least 85 % of what the engine alone
-  executes in 5 s in the same job, instead of 200 million; erratum P1 13, `docs/porting/speed.md`
-  4.2).
+  counted last), no person has tried the PDF viewer yet, and the speed at `Maximum` is about half of
+  what the engine alone could do, by design, and depends on the machine.
+- Speed, measured by the performance job of the release commit's manual test run on GitHub's Linux
+  machine (run 45111581771): `Maximum` 113.5 million instructions in 10 s (the rule, corrected on 22
+  November 2026, asks for at least 100 million and at least 85 % of what the engine alone executes
+  in 5 s, here 107.0 million; erratum P1 13); frame intervals 17.4 ms at 60 Hz and 9.0 ms at 120 Hz;
+  all seven verdicts of `tests/perf` hold.
 
 ### Documentation
 

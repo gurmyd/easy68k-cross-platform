@@ -37,7 +37,10 @@ const args = process.argv.slice(2);
 const jsonOut = args.includes('--json') ? args[args.indexOf('--json') + 1] : null;
 const manifest = JSON.parse(readFileSync(join(repo, 'tests', 'corpus', 'manifest.json'), 'utf8'));
 const known = JSON.parse(readFileSync(join(repo, 'tests', 'conformance', 'asm', 'known-differences.json'), 'utf8'));
-const differencesMd = readFileSync(process.env.EASY68K_RC_DIFFERENCES ?? join(repo, 'docs', 'DIFFERENCES.md'), 'utf8');
+const differencesMd = readFileSync(
+  process.env.EASY68K_RC_DIFFERENCES ?? join(repo, 'docs', 'DIFFERENCES.md'),
+  'utf8',
+).replace(/\r\n?/g, '\n');
 const knownIds = new Set(known.differences.map((d) => d.id));
 const fails = [];
 /** Runs with an official result that the last conformance report did not judge. */

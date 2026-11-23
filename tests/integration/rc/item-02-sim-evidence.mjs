@@ -85,7 +85,10 @@ const fails = [];
 // under part 4 "Not yet confirmed against the original"; an open item of item 11) and everything
 // else, which counts against item 2. EASY68K_RC_KNOWN_SIM=<file> and EASY68K_RC_DIFFERENCES=<file>
 // read other copies (to show that the judge fails when the input is broken).
-const differencesMd = readFileSync(process.env.EASY68K_RC_DIFFERENCES ?? join(repo, 'docs', 'DIFFERENCES.md'), 'utf8');
+const differencesMd = readFileSync(
+  process.env.EASY68K_RC_DIFFERENCES ?? join(repo, 'docs', 'DIFFERENCES.md'),
+  'utf8',
+).replace(/\r\n?/g, '\n');
 const part4Start = differencesMd.indexOf('\n## 4. Not yet confirmed against the original');
 const part4 = part4Start < 0 ? '' : differencesMd.slice(part4Start, differencesMd.indexOf('\n## 5.', part4Start));
 if (part4Start < 0) fails.push('docs/DIFFERENCES.md has no part "## 4. Not yet confirmed against the original"');

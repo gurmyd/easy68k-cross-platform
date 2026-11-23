@@ -6,7 +6,8 @@
 # Both build the web app first (app/dist) and compile desktop/src (desktop/dist). The output goes
 # to desktop/release/ (git-ignored): mac-arm64/EASy68K.app for arm64, mac/EASy68K.app for x64.
 # release.yml adds -c.extraMetadata.version=<root package.json version>, so that the app and its
-# file names carry the port's one version number (7.5); desktop/package.json says 0.0.0.
+# file names carry the port's one version number (7.5); desktop/package.json said 0.0.0 until
+# the first release and carries the same number since 1.0.0.
 #
 # What goes into the app:
 #   app.asar               desktop/dist (the main process and the preload script), desktop's

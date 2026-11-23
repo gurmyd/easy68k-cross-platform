@@ -319,6 +319,16 @@ test.describe('release.mjs', () => {
     expect(() => releaseNotes('0.4.0', section, '')).toThrow(/not a macOS version/);
     expect(notes).toContain('easy68k-cross-platform-web-0.4.0.zip');
     expect(notes).toContain(section);
+    // Near the top, before the downloads: how far the release has been tried (release 1.0.0, the
+    // owner's decisions of 22 November 2026).
+    const top = notes.slice(0, notes.indexOf('## Downloads')).replace(/\s+/g, ' ');
+    expect(top).toContain('signed ad hoc and not notarised by Apple');
+    expect(top).toContain("tested automatically on GitHub's Windows, macOS and Linux machines");
+    expect(top).toContain('no person has worked through the manual checks of');
+    expect(top).toContain('(https://github.com/gurmyd/easy68k-cross-platform/blob/v0.4.0/docs/MANUAL-TEST-MAC.md)');
+    expect(top).toContain('https://github.com/gurmyd/easy68k-cross-platform/issues');
+    expect(top).toContain('https://gurmyd.github.io/easy68k-cross-platform/');
+    expect(top).not.toContain('This is a draft');
     expect(() => firstStartSection('no marks')).toThrow(/first-start/);
     expect(firstStartSection(`a ${FIRST_START_BEGIN}\n x \n${FIRST_START_END} b`)).toBe('x');
   });

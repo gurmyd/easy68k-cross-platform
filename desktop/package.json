@@ -1,6 +1,6 @@
 {
   "name": "@easy68k-mac/desktop",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "description": "The macOS app: the web build inside Electron",
   "license": "GPL-2.0-or-later",

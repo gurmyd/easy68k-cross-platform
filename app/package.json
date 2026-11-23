@@ -1,6 +1,6 @@
 {
   "name": "@easy68k-mac/app",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "description": "The web application (editor, assembler and simulator interface)",
   "license": "GPL-2.0-or-later",

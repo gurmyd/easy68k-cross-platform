@@ -6,36 +6,48 @@
 // Part of easy68k-cross-platform, an unofficial port of EASy68K. GPL-2.0-or-later.
 
 export const REPOSITORY = 'gurmyd/easy68k-cross-platform';
-export const COMMIT = 'b247e17';
+export const COMMIT = '9b2f25b';
 
-/** The runs of commit COMMIT. */
+/**
+ * The runs of commit COMMIT. The push run of ci.yml for this commit (45111564124) was cancelled by
+ * GitHub when the manual run below was queued in the same concurrency group; the manual run runs
+ * every job of a push run as well (and the stability shards, the performance jobs and the readme
+ * jobs besides), so it stands for both. pages.yml run 45111564156 (the push) deployed the web
+ * version; no judge reads it.
+ */
 export const RUNS = {
-  push: { workflow: 'ci.yml', id: 45034018006, what: 'the push of b247e17' },
-  manual: { workflow: 'ci.yml', id: 45034021673, what: 'by hand: e2e stability shards, perf thresholds' },
-  release: { workflow: 'release.yml', id: 45034019734, what: 'by hand, no draft release' },
-  oracle: { workflow: 'oracle.yml', id: 45034017858, what: 'by hand: the Wine reference' },
+  manual: {
+    workflow: 'ci.yml',
+    id: 45111581771,
+    what: 'by hand: every job of a push run, e2e stability shards, perf thresholds',
+  },
+  release: { workflow: 'release.yml', id: 45111584448, what: 'by hand, build and test only, no draft release' },
+  oracle: { workflow: 'oracle.yml', id: 45111588256, what: 'by hand: the Wine reference' },
 };
+
+/** The push run of ci.yml that GitHub cancelled (see RUNS); named, not judged. */
+export const CANCELLED_PUSH = { workflow: 'ci.yml', id: 45111564124 };
 
 /** The jobs whose logs the judges read. */
 export const JOBS = {
-  // ci.yml run 45034018006 (push)
-  windowsOracles: 137243681219,
-  desktopDev: 137243681239,
+  // ci.yml run 45111581771 (by hand)
+  windowsOracles: 137487305824,
+  desktopDev: 137487305808,
   e2e: {
-    'ubuntu chromium': 137243681278,
-    'ubuntu webkit': 137243681322,
-    'windows chromium': 137243681315,
-    'windows webkit': 137243681280,
-    'macos chromium': 137243681307,
-    'macos webkit': 137243681348,
+    'ubuntu chromium': 137487305843,
+    'ubuntu webkit': 137487305869,
+    'windows chromium': 137487305915,
+    'windows webkit': 137487305868,
+    'macos chromium': 137487305785,
+    'macos webkit': 137487305874,
   },
-  accessibility: { ubuntu: 137243681427, windows: 137243681494, macos: 137243681484 },
-  // release.yml run 45034019734
-  releaseArm64: 137243690788,
-  releaseX64: 137243690842,
-  // ci.yml run 45034021673 (by hand)
-  perfUbuntuChromium: 137252708197,
-  stability: [137252708204, 137252708203, 137252708212, 137252708164, 137252708168, 137252708162],
+  accessibility: { ubuntu: 137487305948, windows: 137487305977, macos: 137487305991 },
+  perfUbuntuChromium: 137487305835,
+  // Chromium shards 1 and 2 of 2, then WebKit shards 1 to 4 of 4.
+  stability: [137487305897, 137487306055, 137487305864, 137487305870, 137487305976, 137487305924],
+  // release.yml run 45111584448
+  releaseArm64: 137484985034,
+  releaseX64: 137484985016,
 };
 
 /** Every job id above, in one list. */

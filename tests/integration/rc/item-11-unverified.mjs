@@ -545,7 +545,8 @@ const rowOf = (id) => {
 
 // ---- run -------------------------------------------------------------------------------------------
 const problems = [];
-const read = (f) => readFileSync(f, 'utf8');
+// Line ends normalised: a checkout with core.autocrlf has CRLF in docs/DIFFERENCES.md (release prep).
+const read = (f) => readFileSync(f, 'utf8').replace(/\r\n?/g, '\n');
 const norm = (s) => s.replace(/\s+/g, ' ');
 
 // step 2: DIFFERENCES.md

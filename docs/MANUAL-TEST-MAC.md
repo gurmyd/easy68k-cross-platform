@@ -3,7 +3,9 @@
 The automatic tests of this project run on GitHub's Mac, Windows and Linux machines, in the engines
 of Chrome and Safari. Some things they cannot see: what macOS shows when you open the app, what
 you hear, what a real keyboard sends, what Safari itself (not its test engine) does with a key. This
-list is for a person with a Mac. Nobody has worked through it yet.
+list is for a person with a Mac. Nobody has worked through it yet: version 1.0.0, the first
+release, was published on 23 November 2026 before anyone had, by the decision of the project's owner,
+so every check below is still open.
 
 You do not need to know anything about how the port is built. You need a Mac, Safari, Chrome, and
 about **thirty minutes for part A**, the core of this list: a student with a Mac can do it in one
@@ -15,13 +17,12 @@ want to know.
 **What must exist before you start.**
 
 - Part A and most of part B need only the web version (below) and a network connection for the
-  first visit. For a report on a release candidate, test the web version as it is after the
-  commit the candidate names (the web version is rebuilt from the main branch a few minutes after
-  every change, so write the date and time of your test into the report).
+  first visit. The web version is rebuilt from the main branch a few minutes after every change, so
+  write the date and time of your test into the report (and, for a report on a release, the
+  release's version).
 - The checks marked "Mac app" (B3, B6, the app rows D6 to D10 and F2, and E4) need **a download of the
-  macOS app**. None exists yet: there is no release and no pre-release. The project's owner has to
-  publish one (with the `.dmg` and `.zip` for Apple silicon and Intel) at
-  <https://github.com/gurmyd/easy68k-cross-platform/releases> before anyone can do those checks.
+  macOS app**: the `.dmg` (or `.zip`) for Apple silicon or Intel of the newest release, on
+  <https://github.com/gurmyd/easy68k-cross-platform/releases>.
 - Part C needs a Windows PC and the project owner's permission.
 
 **How to report.** Copy the report form at the end of this page, fill it in as you go, and post it as
@@ -39,7 +40,8 @@ what happened, and that page then tells every user which menu entry to use inste
 **Words used here.**
 
 - The **web version** is <https://gurmyd.github.io/easy68k-cross-platform/>.
-- The **Mac app** is the downloadable app. There is none yet; the checks that need it say so.
+- The **Mac app** is the downloadable app, from the Releases page (above); the checks that need it say
+  so.
 - **Fn**: on most Mac keyboards the keys F1 to F12 change brightness and volume unless you hold
   the Fn (or globe) key. "Press F9" means Fn+F9 on such a keyboard.
 - The **mode switch** is the group of three buttons at the top right: Editor, Simulator, EASyBIN.
@@ -62,8 +64,8 @@ Write down in the report form:
 Some checks use one of these small programs. To use one: open the web version, choose File > New X68
 Source File in Editor mode, delete the text in the new document (Cmd+A, then Delete), copy the program
 from this page and paste it with Cmd+V. Then press F9 (or Cmd+B) to assemble, click **Execute** in the
-window that opens, and press F9 again to run it. Each program was tried in the application before it
-was put here.
+window that opens, and press F9 again to run it. Each program was run in the application by an automatic check
+(`tests/integration/rc/item-12-check-part-a.mjs`) before it was put here.
 
 **echo** and **keys** never end by themselves. If one of them is still running (or waiting for a
 key) when you click Execute for the next program, a box `Caution` asks first:
@@ -512,9 +514,9 @@ example French, or U.S. International - PC, or ABC - Extended). Switch to it wit
 | W7 | Only if you have an iPhone or iPad at hand (it is not tested anywhere else): open the web version in Safari there, after removing its website data (Settings > Apps > Safari > Advanced > Website Data). Then Share > Add to Home Screen, and open it from the Home Screen | In Safari, the Files panel (left; the toolbar button at the far left shows it) has the notice of W0, word for word. The Home Screen app has an empty My Programs with the notice of W2, word for word. Write down the device and its iOS or iPadOS version |
 | W8 | You need one large file of 200 MB or more, for example a film. (Or make one: open Terminal, type `mkfile 200m ~/Desktop/big.bin` and press Return; the file `big.bin` appears on the Desktop.) In a normal Safari window open the web version and choose Help > Examples... so that My Programs holds something. In the Files panel click Import... and choose the large file. At once, while it is being imported, force Safari to quit: press Option+Cmd+Esc, select Safari, click Force Quit. Open Safari and the web version again. Then do it all a second time, but this time close the tab with Cmd+W during the import instead of force-quitting | Each time, within a few seconds the editor is shown and My Programs lists the folder `Examples` and everything saved before. The large file is either not there or whole (the same size as the original), never cut short. If the Files panel says `My Programs is still opening`, count the seconds: within 20 s it must show your files, or this text: `Files are NOT being saved right now: the browser's storage did not answer (reading the list of files took longer than 20 s; another tab of this site, or a page that was closed during a save, may still be holding it). The programs you saved before are still in the browser: reload the page in a minute to see them. What you save until then is lost when this tab closes. Use the Export button of the Files panel to keep it.` If you see that text, wait a minute and reload the page: every file saved before must be there. If they are not there yet, reload again once a minute, up to five minutes, and write down after how many minutes they came back. If they still have not come back, quit Safari completely (Safari > Quit Safari), open it and the web version again, and write down whether they are there now. Write down which of these you saw, for each of the two tries how many seconds the Files panel took to show your files, and the macOS and Safari versions |
 
-### B3. The Mac app (only once a release exists)
+### B3. The Mac app
 
-There is no release yet. When there is one, download the `.dmg` for your Mac from
+Download the `.dmg` for your Mac from the newest release on
 <https://github.com/gurmyd/easy68k-cross-platform/releases>. The first start needs the steps below
 (the same text as in the README and in the notes of every release; `docs/differences/DV3.md` holds
 the original). Follow them exactly, and note in D1 where what you see differs from what they say.
@@ -710,8 +712,8 @@ This is the check that `docs/requests/N0.md` (section 5) and `docs/ARCHITECTURE-
 | E1 | Open the web version. Files panel: Import..., choose the PDF. Double-click it in the Files panel | A tab named after the file opens beside the Editor, and the browser's own PDF viewer shows the pages, with its toolbar. Under the strip: `If the PDF does not appear, use Export and open it with another program.` If the box stays empty, write down the browser and its version: that is risk R4 for that browser. Open the browser's developer console (Safari: Develop > Show JavaScript Console; Chrome and Edge: Option+Cmd+J on a Mac, Ctrl+Shift+J on Windows) and write down any red line that names `frame-src` or `object-src` |
 | E2 | In the viewer's strip: click Export, then Open as Text | Export downloads the PDF. Open as Text closes the viewer and opens the PDF's bytes as a text document (nonsense, as in the original). Reload the page: no viewer tab comes back |
 | E3 | Import the picture and double-click it. Click Actual Size twice | The picture is shown scaled to fit, then at one pixel to one pixel with scroll bars, then scaled again. The button is pressed in the second state |
-| E4 | Only with the Mac app (once a release exists): open the PDF from the Files panel of the app | The PDF is drawn. The strip has no Export. Under it: `If the PDF does not appear, open it from its folder with another program.` |
-| E5 | Only with the Mac app (once a release exists): open a PDF that contains a link to a web page and a link to `index.html`, and click each in the viewer | Each time the viewer shows the PDF again within two seconds, never a second copy of the application, and the PDF does not flicker or reload by itself while you read it |
+| E4 | Only with the Mac app: open the PDF from the Files panel of the app | The PDF is drawn. The strip has no Export. Under it: `If the PDF does not appear, open it from its folder with another program.` |
+| E5 | Only with the Mac app: open a PDF that contains a link to a web page and a link to `index.html`, and click each in the viewer | Each time the viewer shows the PDF again within two seconds, never a second copy of the application, and the PDF does not flicker or reload by itself while you read it |
 
 ## Part C (optional): on real Windows, once (for the project's maintainers)
 

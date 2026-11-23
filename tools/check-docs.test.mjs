@@ -88,6 +88,17 @@ test('the README carries the first-start steps of section 11, the same text as t
   assert.ok(notes.includes('## Opening the Mac app for the first time'));
   for (const phrase of ['Open Anyway', 'xattr -dr com.apple.quarantine /Applications/EASy68K.app'])
     assert.ok(notes.includes(phrase), phrase);
+  // Near the top of the notes: ad hoc, not notarised, tested automatically, and nobody has worked
+  // through the manual checks (release 1.0.0, the owner's decisions of 22 November 2026).
+  const top = notes.slice(0, notes.indexOf('## Downloads')).replace(/\s+/g, ' ');
+  for (const phrase of [
+    'signed ad hoc and not notarised',
+    'tested automatically',
+    'no person has worked through the manual checks of [docs/MANUAL-TEST-MAC.md]',
+    'https://github.com/gurmyd/easy68k-cross-platform/issues',
+  ])
+    assert.ok(top.includes(phrase), phrase);
+  assert.deepEqual(handsOnClaims(notes), [], 'the release notes claim that a person tried it');
 });
 
 test('the manual list carries the same first-start steps as the README and DV3', () => {
@@ -136,17 +147,49 @@ test('every section the coverage table names is about the topic of its row', () 
   }
 });
 
-test('the README says nothing that is not true today', () => {
+/**
+ * The sentences of a text that claim that a person tried the port where only a person can (a Mac,
+ * Safari itself, a screen reader, a printer, a serial adapter, the manual list), as messages; empty
+ * when there is none. A sentence that says it was NOT done (no person, nobody, not, never, yet ...)
+ * is no claim. Release 1.0.0 is published before anyone has made the checks of ARCHITECTURE.md 6.8
+ * (the owner's decisions of 22 November 2026), so no document may say otherwise.
+ */
+export function handsOnClaims(text) {
+  const WHERE =
+    /\b(real Mac|on (a|their|my|our|your) Mac|MacBook|Safari itself|in (real )?Safari|VoiceOver|NVDA|screen reader|real printer|a printer|serial adapter|MANUAL-TEST-MAC|manual (checks|list|test))\b/i;
+  const DONE =
+    /\b(tried|tested|used|checked|verified|confirmed|worked through|signed off|walked through|completed)\b|\bby (hand|a person|people|students|users|testers|volunteers)\b|\bhands-on\b/i;
+  const NOT =
+    /\b(no|not|nobody|no one|none|never|neither|nor|yet|until|unless|only a person|cannot|can't|has to|must|needs?|please|if you|a step of|engines? of (Chrome|Safari)|Playwright's)\b/i;
+  return text
+    .replace(/\r\n?/g, '\n')
+    .split(/(?<=[.!?])\s+|\n\s*\n|\n(?=\s*[-*>] )/)
+    .map((sentence) => sentence.replace(/\s+/g, ' ').trim())
+    .filter((sentence) => WHERE.test(sentence) && DONE.test(sentence) && !NOT.test(sentence));
+}
+
+test('the README says nothing that is not true at the release', () => {
   const readme = read('README.md');
   for (const phrase of [
-    'work in progress',
-    'There is no macOS app to',
-    'No person has tried it on a Mac yet',
-    'not been released yet',
+    // What no person has tried, where a reader looks first (before "What it is").
+    'No person has tried it on a Mac yet.',
+    // Where to get it: the web version first, then the Releases page.
+    'https://gurmyd.github.io/easy68k-cross-platform/',
+    'https://github.com/gurmyd/easy68k-cross-platform/releases',
+    'docs/MANUAL-TEST-MAC.md',
   ]) {
     assert.ok(readme.includes(phrase), phrase);
   }
-  assert.ok(!/\bv?\d+\.\d+\.\d+ (is|has been) released/i.test(readme), 'announces a release');
+  const top = readme.slice(0, readme.indexOf('## What it is'));
+  assert.ok(top.includes('No person has tried it on a Mac yet.'), 'what no person has tried, at the top');
+  assert.ok(
+    top.indexOf('https://gurmyd.github.io/easy68k-cross-platform/') <
+      top.indexOf('https://github.com/gurmyd/easy68k-cross-platform/releases'),
+    'the web version is named before the Mac download',
+  );
+  for (const stale of ['work in progress', 'There is no macOS app to', 'not been released yet', 'No release has been'])
+    assert.ok(!readme.includes(stale), `still says "${stale}"`);
+  assert.deepEqual(handsOnClaims(readme), [], 'the README claims that a person tried it');
   for (const phrase of [
     'Tim Larson',
     'Paul McKee',
@@ -155,6 +198,76 @@ test('the README says nothing that is not true today', () => {
     'GNU General Public License, version 2',
   ])
     assert.ok(readme.includes(phrase), phrase);
+});
+
+test('a claim that a person tried the port is found, a statement that nobody did is not', () => {
+  for (const claim of [
+    'The app was tested on a real Mac.',
+    'We checked it with VoiceOver and it reads every menu.',
+    'Students have used it on their Mac for a term.',
+    'The manual checks were worked through on 23 November.',
+    'Printing was tried on a real printer.',
+  ])
+    assert.equal(handsOnClaims(`Intro.\n\n${claim}\n`).length, 1, claim);
+  for (const denial of [
+    'No person has tried it on a Mac yet.',
+    'Nobody has tried the port on a real Mac, in Safari itself, with a screen reader.',
+    'The checks that only a person can make (docs/MANUAL-TEST-MAC.md) have not been worked through by anyone.',
+    'If you try any of these, the page says what to do.',
+  ])
+    assert.deepEqual(handsOnClaims(denial), [], denial);
+  // The README with one hands-on claim added fails the README test's condition.
+  const broken = `${read('README.md')}\nThe Mac app was tested on a real Mac by the maintainer.\n`;
+  assert.equal(handsOnClaims(broken).length, 1);
+});
+
+/**
+ * Phrases that were true before release 1.0.0 and are not after it, as patterns that match across
+ * line breaks (a phrase broken over two lines hid one in docs/CONTRIBUTING.md: review of the
+ * release preparation, gate 3).
+ */
+const STALE_BEFORE_RELEASE = [
+  /\bno\s+release\s+exists\b/i,
+  /\bno\s+release\s+(and\s+no\s+pre-release\s+)?(yet|has\s+been)\b/i,
+  /\bafter\s+the\s+manual\s+test\b/i,
+  /\bnot\s+been\s+released\s+yet\b/i,
+  /\bno\s+(macOS|Mac)\s+app\s+to\s+download\b/i,
+  /\b(until|once|only\s+once)\s+a\s+release\s+exists\b/i,
+  /\bthere\s+is\s+nothing\s+to\s+download\b/i,
+  /\bwork\s+in\s+progress\b/i,
+  /\bno\s+version\s+of\s+the\s+port\s+has\s+been\s+released\b/i,
+  /\bmoves\s+from\s+"Not\s+released\s+yet"/i,
+];
+
+/** The stale phrases a text contains, each with a little context; empty when none. */
+export function stalePhrases(text) {
+  const flat = text.replace(/\s+/g, ' ');
+  return STALE_BEFORE_RELEASE.flatMap((pattern) => {
+    const m = pattern.exec(flat);
+    return m ? [`${pattern}: ...${flat.slice(Math.max(0, m.index - 40), m.index + m[0].length + 20)}...`] : [];
+  });
+}
+
+/** The README and every Markdown document of the repository it links to. */
+function readmeAndItsDocuments() {
+  const readme = read('README.md');
+  const linked = [...readme.matchAll(/\]\(([^)\s#]+\.md)(?:#[^)]*)?\)/g)].map((m) => m[1]);
+  return ['README.md', ...new Set(linked)];
+}
+
+test('no document the README links to says what was true only before the release', () => {
+  const docs = readmeAndItsDocuments();
+  assert.ok(docs.includes('docs/CONTRIBUTING.md') && docs.length >= 7, docs.join(', '));
+  for (const doc of docs) assert.deepEqual(stalePhrases(read(doc)), [], doc);
+  // A phrase broken over two lines is found, as CONTRIBUTING.md had it before the release.
+  assert.equal(stalePhrases('downloads it from the latest release. No\nrelease exists yet, so').length, 1);
+  assert.equal(stalePhrases('published by a\n  maintainer after the manual\ntest.').length, 1);
+  assert.deepEqual(stalePhrases('Release 1.0.0 was published before a person had worked through it.'), []);
+});
+
+test('the other documents claim no hands-on test either', () => {
+  for (const doc of ['CHANGELOG.md', 'docs/USER-GUIDE.md', 'docs/MANUAL-TEST-MAC.md'])
+    assert.deepEqual(handsOnClaims(read(doc)), [], doc);
 });
 
 test('the manual list has every item of 6.8 and the browser shortcut table', () => {

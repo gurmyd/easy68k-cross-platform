@@ -218,6 +218,6 @@ check(
 
 console.log(`\n${passed} of ${passed + failed} checks passed${failed ? `, ${failed} failed` : ''}.`);
 console.log(
-  'Open for a person: working through docs/MANUAL-TEST-MAC.md on a real Mac for the release candidate (needs a downloadable build for part B3).',
+  'Open for a person: working through docs/MANUAL-TEST-MAC.md on a real Mac (part B3 with the app of the Releases page); nobody has.',
 );
 process.exitCode = failed ? 1 : 0;

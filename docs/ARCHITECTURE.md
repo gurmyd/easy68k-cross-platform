@@ -4238,6 +4238,8 @@ official binaries on the development host):
 - The RichEdit spot check of 6.2.2.
 - The speed measurement for `DEFAULT_IPS` (P1).
 
+> **Corrected (the owner's decisions, 22 November 2026; erratum I3 6).** "On a Mac, before each release": the first release, 1.0.0, is published before a person has made these checks. They stay open in `docs/MANUAL-TEST-MAC.md`, and the README, the release notes (`desktop/scripts/release.mjs`) and part 5 of `docs/DIFFERENCES.md` say plainly that no person has worked through them. A later release may be published the same way; each document says so until a person has made the checks.
+
 > **Corrected (architect's decision, 22 November 2026; erratum DOC1 10).** The item about pasting gains the words "Cut, Copy and Paste between the editor and another program, in each browser and in the desktop app". It reads: "Paste into a task 2 prompt with Cmd+V in Safari, Chrome and the desktop app, and with Shift+Insert in Chrome on Windows; Paste from the editor's menu, toolbar and context menu in each (note 45); Cut, Copy and Paste between the editor and another program, in each browser and in the desktop app."
 
 ### 6.9 Definition of done
@@ -4290,6 +4292,8 @@ Version 1.0.0 may be tagged when all of the following hold on `main`:
 > **Corrected (architect's decision, 22 November 2026; erratum T3 14).** Item 2, "every self-reporting conformance program ... produces the golden result file": the goldens were made with the official program under Wine, and for some programs the golden itself is in doubt, or the original's answer is not reproducible. A program whose difference is **accepted** (the cause is known and recorded: the original's answer depends on memory the program did not write, or on a defect of the original that the port does not reproduce on purpose) is listed in `tests/conformance/sim/known-differences.json` and in `docs/DIFFERENCES.md` with its cause, and does not count against the item. A program whose golden is **unconfirmed** (Wine's own behaviour is suspected and only the official program on real Windows can settle it) is listed in the same file and in `docs/DIFFERENCES.md` under "not yet confirmed against the original" with the port's chosen behaviour, as item 11 asks, and the steps to settle it are in `docs/porting/windows-confirmation.md`; it does not count against item 2, and it does count as an open verification item of item 11. A program that differs for any other reason counts against the item.
 
 > **Corrected (architect's decision, 22 November 2026; erratum U2 S6).** The memory view's Live mode at address 0 (sim-ui §19, row Q19: the original does not update a Live view that starts at address 0): the port updates it. That is a deliberate difference, a display defect of the original that would only mislead and that nothing a program does can observe; it is recorded in the fragment `docs/differences/U2.md`.
+
+> **Corrected (the owner's decisions, 22 November 2026; erratum I3 6).** By the owner's decisions of 22 November 2026 the first release, 1.0.0, contains the additions of `docs/ARCHITECTURE-PLUS.md` (the parity matrix's rows of 1.5, the sixteenth item of 6.8 and the manual list's rows of the additions are judged with the rest), and it is tagged and published before a person has made the checks of 6.8. Items 5, 7, 8 and 12 hold, at most, except the part a person must do: the manual entries of the parity matrix, the manual accessibility list and `docs/MANUAL-TEST-MAC.md` stay open in that file, and the README, the release notes and part 5 of `docs/DIFFERENCES.md` name them. `docs/integration/rc.md` records the verdict of each item on the tagged commit.
 
 ---
 
@@ -4385,13 +4389,15 @@ All actions are pinned by commit hash. Workflows have `permissions: contents: re
 - The update check of the About box reads the latest release tag from the GitHub API and compares it
   with the running version; it sends nothing but the request itself.
 
+> **Corrected (the owner's decisions, 22 November 2026; erratum I3 6).** "A person publishes it after 6.8": the draft of 1.0.0 is published after an independent review of the release commit, before a person has made the checks of 6.8; the release notes say so near the top (signed ad hoc, not notarised, tested automatically, the manual checks not yet worked through, with a link to `docs/MANUAL-TEST-MAC.md` and to the repository's issues).
+
 > **Corrected (erratum DV1 2).** "Versioned by the build hash": the version is the first 20 hex digits of a SHA-256 over the worker's bundled code and the precache list (paths, sizes, hashes); the cache is `easy68k-v-<version>`.
 
 > **Corrected (erratum DV1 3).** Two versions never mix: installation fetches each file with `cache: 'no-cache'` and keeps it only if size and SHA-256 match the list (one mismatch fails the whole installation; unchanged files are copied from the previous cache). The first installation does not claim the page that registered it; a new version waits until the student presses `Reload` on `A new version is available.` (shown with `duration: 0`), and only that page reloads. The worker answers each page from the cache of the version it was loaded with and deletes an old cache once no open page uses it. Known remaining mix: a help page opened in a frame by an old page after the new version took over is answered by the new version.
 
 > **Corrected (erratum DV1 4).** The worker leaves to the network everything that is not a GET for a listed file under its scope (`sw.js`, source maps, `https://api.github.com`, other origins). A navigation to the scope with any query (`?open=`, `?example=`) is answered with `index.html`; paths are compared with percent-escapes decoded; a range request gets the whole file.
 
-> **Corrected (erratum DV3 9).** One version number: release.yml passes `-c.extraMetadata.version=<root version>` (the frozen `desktop/package.json` says `0.0.0`), so the app, its file names and the window title carry the root `package.json`'s version; a tag push fails unless the tag is `v<root version>`. The web zip of a release is built with the relative base `./`, so it works from any folder of any server (erratum DV3 13). Every run of release.yml yields `SHA256SUMS.txt` and checks the downloads (erratum DV3 20).
+> **Corrected (erratum DV3 9).** One version number: release.yml passes `-c.extraMetadata.version=<root version>` (the frozen `desktop/package.json` said `0.0.0` until the first release; since 1.0.0 the three package files carry the same number), so the app, its file names and the window title carry the root `package.json`'s version; a tag push fails unless the tag is `v<root version>`. The web zip of a release is built with the relative base `./`, so it works from any folder of any server (erratum DV3 13). Every run of release.yml yields `SHA256SUMS.txt` and checks the downloads (erratum DV3 20).
 
 ### 7.6 Security posture
 

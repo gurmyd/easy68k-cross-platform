@@ -4,70 +4,80 @@ This file belongs to I3 (ARCHITECTURE.md 8, 9.6), except the section "Q1 - acces
 keyboard audit" at the end, which is Q1's (9.6 Q1: "defect entries in `docs/integration/rc.md`").
 
 It records the check of the twelve conditions of `docs/ARCHITECTURE.md` 6.9, under which version
-1.0.0 may be tagged, with the evidence for each. The correction notes printed under that list
-(errata X1 8, P1 1, P1 13, T1 26, T3 14 and U2 S6) are part of the items, and so are the notes
-under 6.5.3 and 6.8. **No version has been tagged and no release exists.** Not all conditions hold:
-see the table and "Before version 1.0.0 may be tagged".
+1.0.0 may be tagged, with the evidence for each, on commit `9b2f25b`, whose application and engines
+release 1.0.0 carries unchanged (the commit of the tag adds the version 1.0.0, the documents of
+the release, the release notes with their test, and the judges of this check). The
+correction notes printed under that list (errata X1 8, P1 1, P1 13, T1 26, T3 14, U2 S6 and I3 6)
+are part of the items, and so are the notes under 6.5.3 and 6.8.
 
-- **Date of the check**: 22 November 2026.
-- **Commit**: `b247e17` on `main` ("Documents against the evidence, safeguards of the Help frame, a
-  run key during a load"). The local runs were made on its working tree with this step's changes
-  to `tests/integration/rc` and the repairs listed under "Repaired in this step", while other
-  engineers' repairs of the failures named under item 6 were in the tree and not yet committed.
+**By the owner's decisions of 22 November 2026 (erratum I3 6, the correction notes under 6.8, 6.9
+and 7.5), release 1.0.0 contains the additions of `docs/ARCHITECTURE-PLUS.md` and is published
+before a person has made the checks of 6.8.** Items 5, 7 and 8 therefore hold at most "except the
+part a person must do", item 12 (which asks only for that part) is not done by a person, and the list of what a person must do is under "What a person must
+still do". **No person has tried the application on a Mac, in real Safari, with a screen reader,
+with a printer or with a serial adapter.**
+
+- **Date of the check**: 22 and 23 November 2026.
+- **Commit**: `9b2f25b` on `main` ("Merge the additions: movable panels, a Files panel with a safety
+  net, a viewer"), pushed. The local runs were made on its working tree with this step's changes:
+  the version 1.0.0, the documents of the release, and the judges of `tests/integration/rc` (listed
+  under "Changed in this step"; none touches the application, an engine or a test of the product,
+  except the test of the release notes in `tests/desktop/packaged/unit.spec.ts`).
 - **Machine for the local runs**: Windows 11, Node 24, the pinned Playwright Chromium and WebKit,
   `engine/dist` as built on this PC.
-- **CI runs read** (repository `gurmyd/easy68k-cross-platform`, all of commit `b247e17`, all
-  finished when this was written):
-  - `ci.yml` run 45034018006, the push to `main`: 31 of 36 jobs passed, 3 failed, 2 skipped (the
-    stability job, which runs only by hand, and the readme job);
-  - `ci.yml` run 45034021673, by hand (the whole matrix again, and in addition the six shards of the
-    twenty-repetition job, the performance jobs with their thresholds, the readme jobs): 41 of 42
-    jobs passed, 1 failed;
-  - `release.yml` run 45034019734, by hand without a draft release (the packaged macOS app on
-    Apple Silicon and Intel): 4 of 7 passed, `mac-arm64` failed, `checksums` and `publish (draft)`
-    skipped;
-  - `oracle.yml` run 45034017858, by hand (the Wine reference on GitHub): 2 of 4 passed, `wine` and
-    `propose the regenerated goldens` failed.
+- **CI runs read** (repository `gurmyd/easy68k-cross-platform`, all of commit `9b2f25b`):
+  - `ci.yml` push run 45111564124: **cancelled by GitHub** while it was still waiting, when the
+    manual run below was queued in the same concurrency group. The manual run runs every job of a
+    push run as well, so it is read in its place (erratum I3 8);
+  - `ci.yml` run 45111581771, by hand (the whole matrix of a push run, and in addition the six shards
+    of the twenty-repetition job, the six performance jobs with their thresholds and the history
+    model): **46 of 47 jobs passed, 0 failed**, 1 skipped (`readme`, which runs only when its input
+    is ticked; beyond 7.4);
+  - `release.yml` run 45111584448, by hand, build and test only, no draft release (the packaged
+    macOS app on Apple Silicon and Intel): **6 of 7 passed**, `publish (draft)` skipped as on every
+    run without a release;
+  - `oracle.yml` run 45111588256, by hand (the Wine reference on GitHub): **3 of 4 passed**,
+    `propose the regenerated goldens` skipped because nothing changed ("The official programs
+    produced what the repository holds.");
+  - `pages.yml` run 45111564156 (push of `9b2f25b`): success; the web version is that commit.
 - **How to run it again**: `npm run check:rc`, and with the CI logs
-  `node tests/integration/rc/fetch-ci.mjs build/rc-logs` then `npm run check:rc -- --logs
-  build/rc-logs --browsers` (`tests/integration/rc/README.md` says what proves each item and how to
-  run each part alone). On this check it printed every verdict of the table below and exited 1
-  (items 2 and 6 did not hold on `b247e17`). Since the reviews of this check, `check:rc` first runs
-  the comparisons that items 2 and 5 read (the sim project of `npm run test:conformance` and the
-  files the parity matrix's unit entries name) and passes their reports to the judges.
-- **Items 2 and 6 after the merge of the file-stream repair** (commits 49a2e6d and 43282ba): the
-  text of item 2 describes the state after the merge; the commit judged, its runs, the counts and
-  the verdicts of items 2 and 6: TO BE FILLED FROM THE FINAL COMPARISON. Everything else above
-  describes the check of `b247e17`.
+  `node tests/integration/rc/fetch-ci.mjs build/rc-final` then `npm run check:rc -- --logs
+  build/rc-final --browsers` (`tests/integration/rc/README.md` says what proves each item and how to
+  run each part alone; `tests/integration/rc/lib/runs.mjs` holds the run and job ids above).
+- **Result of `npm run check:rc -- --logs build/rc-final --browsers`** on this PC, with every log
+  of the runs above (`fetch-ci.mjs`, 0 jobs not finished): every local and CI judge "holds", items 5, 7, 8
+  and 12 with their parts open for a person (for item 12 that part is the whole requirement, and
+  nobody has done it); "No item found not to hold here; the parts shown only in CI
+  and the parts open for a person are listed above."; **exit 0**.
 
 ## The twelve items
 
 | # | What it asks | Verdict | The evidence in one line |
 |---|---|---|---|
-| 1 | Assembler: every file of the four sets and a fixed 30-file subset with each option, byte-identical with the Wine goldens; every exception in DIFFERENCES.md | Holds | Default runs with an official result: official 10 of 10 equal, github-mit 41 of 41, conformance 118 of 121 equal and 3 accepted differences (`dir-11`, `macro-09`, `stc-03`), site 134 of 134 (4 files without an official result, each named with its cause); 240 of 240 subset runs equal; 10 of 10 exceptions named; the `site` set re-run on GitHub "every run equals the manifest" |
-| 2 | Simulator: at least 150 self-reporting programs, coverage, 20 logs of 100,000 instructions, checklists | TO BE FILLED FROM THE FINAL COMPARISON | The file-stream repair is merged (49a2e6d): `a51`, `a52`, `a53` produce their goldens and are no longer listed; nine new programs `a61` to `a69`; listed: accepted `b06`, `b20` (and `a55`'s output log, the log `l14`), unconfirmed `b19`; counts: TO BE FILLED FROM THE FINAL COMPARISON |
-| 3 | Drawing: the thresholds of 6.5 | Holds | 26,826 of 26,826 primitive cases; ellipses 8,192/8,192, 3,000/3,000; text 16,902 of 16,902 required cases as decided under 6.5.3; check:text 78/78 and check:examples 309/309 in CI |
-| 4 | Twins: zero differences | Holds | windows-oracles of run 45034018006: 935 runs per assembler twin, 1,114 of 1,114 simulator twin runs, "No unexpected differences." |
-| 5 | Parity: every row of 1.3 in the matrix; web-e2e, desktop-e2e and unit entries pass; manual entries signed off | Holds except the part a person must do | 179 of 179 rows; 308 of 308 web-e2e entries of 1.3 (325 with 1.5) in each browser over the six e2e jobs; 13 of 13 desktop-e2e entries of 1.3 (17 with 1.5); 10 of 10 unit entries of 1.3 (12 with 1.5) in local runs; **15 manual entries (8 items) not signed off** |
-| 6 | Platforms: the CI matrix of 7.4 green; the packaged-app checks on arm64 and Intel | TO BE FILLED FROM THE FINAL COMPARISON | Runs of the final commit: TO BE FILLED FROM THE FINAL COMPARISON. On `b247e17`: push run: `e2e (macos-latest, chromium)` failed (it passed in the manual run of the same commit); release run: check 7 failed on arm64; oracle run: `wine` and `propose` failed; three more red jobs beyond 7.4 |
-| 7 | Offline: the offline test passes; the app installs in Chromium | Holds except the part a person must do | offline.spec.ts 4 of 4 in all six e2e jobs; check:pwa 114/114 on three systems; the offline walk 27/27 here; installing from a real Chrome not done by a person |
-| 8 | Accessibility: no serious automated finding; the manual list signed off | Holds except the part a person must do | 324 of 324 axe checks in each of the three audit jobs, no serious or critical finding; a11y.spec.ts 16/16 in all six e2e jobs; **the manual list not signed off** (one keyboard-walk check red on macOS: item 6) |
-| 9 | Performance in Chromium on ubuntu-latest | Holds | Run 45034021673, `perf (ubuntu-latest, chromium)`: 7 of 7 verdicts; TaskDuration 1.11 s; p95 17.5 ms and 9.1 ms; Maximum 143,009,668 (needs 139,480,070); assembly 258 and 270 ms |
-| 10 | Stability: the e2e suites 20 times in a row in each browser | Holds | Run 45034021673, six shards, each on `ubuntu-26.04` (`ubuntu-latest`): Chromium 6,140 of 6,140 passed, WebKit 6,080 passed and 60 skipped of 6,140, 0 failed, 0 flaky, 307 tests per repetition as in the checkout |
-| 11 | Open verification items: confirmed, or listed under "not yet confirmed" with the port's behaviour | Holds | 108 occurrences of UNVERIFIED accounted for; 25 items confirmed; 59 open items each a row of part 4 of DIFFERENCES.md with the port's behaviour (3 of them statements of erratum E4, by the architect's decision); 0 in neither place; 7 occurrences in lower case, each accounted for, 0 awaiting a decision |
-| 12 | Manual: MANUAL-TEST-MAC.md completed for the release candidate | **Open: a person must do it** | The manual covers 6.8 (34 of 34 checks) and part A can be followed as written (71 of 71 browser checks); nobody has worked through it on a Mac, and part B3 needs a downloadable build, which does not exist |
+| 1 | Assembler: every file of the four sets and a fixed 30-file subset with each option, byte-identical with the Wine goldens; every exception in DIFFERENCES.md | Holds | Default runs with an official result: official 10 of 10 equal, github-mit 41 of 41, conformance 118 of 121 equal and 3 accepted differences (`dir-11`, `macro-09`, `stc-03`), site 134 of 134 (4 files without an official result, each named with its cause); 240 of 240 subset runs equal; 801 runs judged: 654 identical, 143 after masking, 4 known differences; 10 of 10 exceptions named; the `site` set re-run on GitHub "every run equals the manifest" |
+| 2 | Simulator: at least 150 self-reporting programs, coverage, 20 logs of 100,000 instructions, checklists | Holds | 188 self-reporting programs, 185 byte-identical as the comparison measured, 3 listed (accepted `b06`, `b20`; unconfirmed `b19`), 0 counted against; 31 of 32 logs, 126,427 instructions identical (`l14` accepted); 86 of 87 table entries plus `LINE_1010` as words; every non-interactive task; checklists 60/60, 37/37, 16/16; the official SIM68K.exe on GitHub gave every committed golden |
+| 3 | Drawing: the thresholds of 6.5 | Holds | 26,826 of 26,826 primitive cases; ellipses 8,192/8,192, 3,000/3,000; text 16,902 of 16,902 required cases as decided under 6.5.3; check:text 78/78, check:examples 309/309, check:surface 28/28 in CI; the second Windows build 56 of 56 outputs |
+| 4 | Twins: zero differences | Holds | windows-oracles of run 45111581771: 957 runs per assembler twin, 1,138 of 1,138 simulator twin runs, "No unexpected differences." |
+| 5 | Parity: every row of 1.3 in the matrix; web-e2e, desktop-e2e and unit entries pass; manual entries signed off | Holds except the part a person must do | 179 of 179 rows; 308 of 308 web-e2e entries of 1.3 (338 with 1.5) in each browser over the six e2e jobs; 13 of 13 desktop-e2e entries of 1.3 (17 with 1.5); 10 of 10 unit entries of 1.3 (14 with 1.5); **15 manual entries (8 items) not signed off** |
+| 6 | Platforms: the CI matrix of 7.4 green; the packaged-app checks on arm64 and Intel | Holds | The workflows against 7.4: 0 problems; every job of the three runs green or skipped as 7.4 allows (0 problems); packaged-app checks 1 to 8 of 6.7: arm64 "59 passed (52.1s)", Intel "59 passed (1.2m)"; the push run cancelled by GitHub, the manual run read in its place |
+| 7 | Offline: the offline test passes; the app installs in Chromium | Holds except the part a person must do | offline.spec.ts in all six e2e jobs; check:pwa 114/114 in CI; the offline walk 27/27 here; installing from a real Chrome not done by a person |
+| 8 | Accessibility: no serious automated finding; the manual list signed off | Holds except the part a person must do | 408 of 408 axe checks in each of the three audit jobs, no serious or critical finding; a11y.spec.ts 16/16 in all six e2e jobs; **the manual list not signed off** |
+| 9 | Performance in Chromium on ubuntu-latest | Holds | Run 45111581771, `perf (ubuntu-latest, chromium)`: 7 of 7 verdicts; TaskDuration 2.41 s; p95 17.4 ms and 9 ms; Maximum 113,543,387 (needs 107,048,618 and 100,000,000); assembly 285 and 311 ms |
+| 10 | Stability: the e2e suites 20 times in a row in each browser | Holds | Run 45111581771, six shards, each on `ubuntu-26.04` (`ubuntu-latest`): Chromium 6,500 of 6,500 passed, WebKit 6,440 passed and 60 skipped of 6,500, 0 failed, 0 flaky, 325 tests per repetition as in the checkout |
+| 11 | Open verification items: confirmed, or listed under "not yet confirmed" with the port's behaviour | Holds | 108 occurrences of UNVERIFIED accounted for; 25 items confirmed; 59 open items each a row of part 4 of DIFFERENCES.md with the port's behaviour; 0 in neither place; 7 occurrences in lower case, each accounted for |
+| 12 | Manual: MANUAL-TEST-MAC.md completed for the release candidate | **Not done by a person** (the release does not wait for it, erratum I3 6); the automatic part holds | The manual covers 6.8 (35 of 35 checks, 16 items) and part A can be followed as written (71 of 71 browser checks); nobody has worked through it on a Mac; by the owner's decisions the release is published before that (erratum I3 6) |
 
 ## Item 1 - Assembler
 
 **Holds.**
 
 `node tests/integration/rc/item-01-asm-evidence.mjs` on this PC, after `npm run test:conformance`
-with the `site` set fetched (`build/corpus-local`), exit 0. Figures of the reports written 22
-November 2026 at 16:46 UTC on the working tree that became commit `b27ae56`, after the manifest's
-last change (16:16 UTC, erratum T1 27); the judge now refuses a report older than the manifest,
-the list of known differences or the assembler in `engine/dist`. Default options, per set (files /
-with a default run / with an official result / identical / identical after masking undefined
-symbols / a known difference / no official result):
+on the working tree of `9b2f25b` with the `site` set fetched (`build/corpus-local`; "Test Files 41
+passed | 1 skipped", "Tests 1317 passed | 141 skipped"), exit 0, "item 1 holds on these counts".
+The reports were written on 23 November 2026 at 04:25 UTC, after the last change of the manifest,
+of the list of known differences and of the assembler in `engine/dist` (the judge refuses an older
+report). Default options, per set (files / with a default run / with an official result /
+identical / identical after masking undefined symbols / a known difference / no official result):
 
 | Set | Files | Default run | Official result | Identical | Masked | Known difference | No official result |
 |---|---|---|---|---|---|---|---|
@@ -85,133 +95,92 @@ symbols / a known difference / no official result):
 - The fixed subset `tests/corpus/option-subset.json`: 30 files, each with one run per option
   switched alone: **240 of 240 runs equal** to the official result (byte for byte, or after masking
   undefined symbols), 0 not shown.
-- Every run with an official result (801 since erratum T1 27; 800 when this check was first
-  written) was judged by the last conformance report; 0 not judged.
+- Every run with an official result (801) was judged by the last conformance report: 654 identical,
+  143 identical after masking, 4 known differences (`dir-11`, `stc-03`, and `macro-09` with the
+  default options and with macros expanded); 0 not judged.
 - Exceptions, all named in `docs/DIFFERENCES.md` (part T1) with their cause: the three accepted
   differences `dir-11`, `macro-09`, `stc-03`; the 143 runs equal only after masking undefined
   symbols; the six runs without an official result (`GFX.X68` default and expanded,
   `ALLGAMES4.1.X68` expanded, `macro-10` and `macro-13`, where the official program crashes with a
   stack overflow, and `s21`, where it stops at a message box). By the correction note of 6.9 (erratum
   T1 26) a run without an official result is an exception like any other.
-- CI: `conformance (ubuntu-latest)` and `conformance (macos-latest)` of run 45034018006 both printed
+- CI, run 45111581771: `conformance (ubuntu-latest)` and `conformance (macos-latest)` both printed
   "320 runs compared with the official assembler: 293 identical, 23 identical after masking
-  undefined symbols, 4 differ" (the four are the known differences) and "214 runs compared ...: 172
-  identical, 42 identical after masking undefined symbols, 0 differ" (CI has no `site` set).
-- The official assembler on GitHub, `oracle.yml` run 45034017858, job `wine`: the site set fetched
-  (77 archives, 330 files) and run again through `EDIT68K.exe` under Wine: "267 runs with a result, 1
-  without" and "**every run equals the manifest**"; the conformance tests there compared 801 runs:
-  "320 ...: 293 identical, 23 identical after masking undefined symbols, 4 differ" and "481 ...: 361
-  identical, 120 identical after masking undefined symbols, 0 differ". Its regeneration found "1 run
-  differ from the manifest: `richedit/s03_long_line_4000.X68` (default): status: manifest failed,
-  now ok": the official editor writes the same `.L68` and `.S68` there and then ends differently on
-  different hosts (erratum T1 27); the port's output equals those files either way.
-- What changed in the judge: a run without an official result fails only when DIFFERENCES.md does
-  not name it; the option part is judged cell by cell on the 30 listed files; a run with an official
-  result that the last report did not judge fails. Shown to fail: with a copy of DIFFERENCES.md
-  without `macro-10`, it exits 1 ("1 of 10 exceptions are not named in docs/DIFFERENCES.md").
-  After the reviews: a report older than `tests/corpus/manifest.json`,
-  `tests/conformance/asm/known-differences.json` or the assembler in `engine/dist` is not judged
-  (exit 2, "item 1 not shown: the conformance reports are STALE", which `check:rc` prints as not
-  shown). Shown on a copy of the two reports dated before the manifest
-  (`EASY68K_RC_REPORTS=<folder>`): exit 2.
+  undefined symbols, 4 differ" (the four known differences) and "214 runs compared ...: 172
+  identical, 42 identical after masking undefined symbols, 0 differ" (CI has no `site` set);
+  "Tests 1048 passed | 410 skipped".
+- The official assembler on GitHub, `oracle.yml` run 45111588256, job `wine` (137497162720): the
+  tracked sets regenerated through `EDIT68K.exe` under Wine ("534 runs with a result, 5 without",
+  "every run equals the manifest"); the site set fetched ("77 of 77 archives unpacked ... (330
+  files)") and run again: "267 runs with a result, 1 without", "**every run equals the
+  manifest**"; the conformance tests there compared 801 runs: "320 ...: 293 identical, 23 ..., 4
+  differ" and "481 ...: 361 identical, 120 identical after masking undefined symbols, 0 differ";
+  "The official programs produced what the repository holds." (so `propose` was skipped).
+- Shown to fail (this step, on a copy of `docs/DIFFERENCES.md` with CRLF line ends and without
+  `macro-10`): "1 of 10 exceptions are not named in docs/DIFFERENCES.md", exit 1; the same copy with
+  `macro-10` holds (erratum I3 7). The judge refuses a report older than its inputs (exit 2), as
+  shown at the first check.
 
 ## Item 2 - Simulator
 
-**Verdict: TO BE FILLED FROM THE FINAL COMPARISON.**
+**Holds.**
 
-On `b247e17` the item did not hold: `trap15-a/a51-files-read-after-write` and
-`trap15-a/a52-files-write-after-read` gave other results than the official simulator, and the port
-was at fault (a read right after a write on one file, or a write right after a read, without a seek
-between them). The repair of the simulator engine is merged since (commit 49a2e6d, from the branch
-`gate3/stdio`; its documents in commit 43282ba): the engine's file streams follow the stream of the
-Borland C run-time inside `SIM68K.exe`, read in the program's machine code and measured in the
-official program under Wine (`engine/sim/shim/STDIO-MODEL.md`, `docs/porting/errata/STDIO.md`,
-parts SH6 and T3 of `docs/DIFFERENCES.md`). What follows describes the state after the merge; the
-figures are those of the final comparison, which runs on the finished suite.
+`npm run check:rc` ran the sim project of `npm run test:conformance` (`EASY68K_SIM_REPORT_JSON`
+set): "Tests 309 passed | 4 skipped (313)", exit 0, and then `node
+tests/integration/rc/item-02-sim-evidence.mjs --sim-report <file> --sim-vitest <file>` on that
+run's reports, exit 0. The comparison wrote: 220 programs, 244 artifacts compared, 240 equal, 4
+measured differences, 0 recipes not compared.
 
-`node tests/integration/rc/item-02-sim-evidence.mjs --sim-report <file> --sim-vitest <file>` (it
-reads the comparison's own result: `--sim-report`, the file the sim project of `npm run
-test:conformance` writes with `EASY68K_SIM_REPORT_JSON`, and `--sim-vitest`, Vitest's report of the
-same run; `check:rc` runs that project and passes both): exit code, Vitest's totals, programs,
-artifacts compared, equal and measured differences: TO BE FILLED FROM THE FINAL COMPARISON.
-
-- `a51`, `a52` and `a53` produce their goldens and are no longer listed in
-  `tests/conformance/sim/known-differences.json`; part 5 of `docs/DIFFERENCES.md` no longer lists
-  the read after a write. One point of `a53` still waits for Windows although the port already
-  gives the result seen under Wine: its close fails because the system refuses a write of more
-  than 4 GB, measured under Wine only; it stays a row of part 4 of `docs/DIFFERENCES.md` and an
-  open item of item 11, not a listed difference of item 2.
-- Nine new programs of trap15-a pin the run-time's stream down against the official program:
-  `a61` to `a68` self-reporting (write state, read state, defined sequences, handles, crossing,
-  the limit of the stream table, edges, reuse of the buffer), and `a69`, whose golden is an output
-  log (a log started on a full stream table).
-- Self-reporting programs (at least 150), by folder, with an official result, and how many write
-  the golden result file byte for byte as the comparison measured them:
-  TO BE FILLED FROM THE FINAL COMPARISON.
-- Sorted by the correction note of 6.9 item 2 (erratum T3 14), from
-  `tests/conformance/sim/known-differences.json` as it is after the merge: accepted (named in
-  DIFFERENCES.md with their cause, not counted): `b06`, `b20` (and, outside the result files, the
-  output log of `a55`, masked, and the execution log `l14`); unconfirmed (part 4 of
-  DIFFERENCES.md, open items of item 11, not counted): `b19`; counted against the item: none is
-  listed. How many produce the golden or an accepted or unconfirmed difference, and whether the
-  comparison finds a difference the list does not name: TO BE FILLED FROM THE FINAL COMPARISON.
-- Execution logs (at least 20 runs and 100,000 instructions; `l14` is the accepted one): runs with
-  an official log, instructions, identical runs and instructions after masking the date:
-  TO BE FILLED FROM THE FINAL COMPARISON.
+- **Self-reporting programs: 188** (exceptions 16, hardware 10, instructions 62, quirks 10,
+  trap15-a 70, trap15-b 20), all with an official result; **185 write the golden result file byte
+  for byte**, as the comparison measured; 3 differ, all listed in
+  `tests/conformance/sim/known-differences.json` and sorted by the correction note of 6.9 item 2
+  (erratum T3 14): accepted (named in DIFFERENCES.md with their cause, not counted) `b06` and `b20`;
+  unconfirmed (part 4 of DIFFERENCES.md, an open item of item 11, not counted) `b19`. **Counted
+  against item 2: none.** 188 of 188 produce the golden or an accepted or unconfirmed difference.
+- **Execution logs: 32 runs with an official log, 126,432 instructions logged; 31 runs and 126,427
+  instructions byte-identical after masking the date** (at least 20 runs and 100,000 instructions
+  are asked for). The one that differs is the accepted `l14` (a listing line with `%`). Outside the
+  result files the output logs of `a05` and `a55` are accepted and masked (the stack residue after
+  the text, erratum T3 14 and commit 45a7d55).
+- The file-stream repair (commits 49a2e6d and 43282ba) is in this commit: `a51`, `a52` and `a53`
+  produce their goldens and are no longer listed; `a61` to `a69` pin the Borland run-time's stream
+  down against the official program. `a53`'s one remaining point (a close that fails because the
+  system refuses a write of more than 4 GB, seen only under Wine) is a row of part 4 of
+  DIFFERENCES.md and an open item of item 11, not a listed difference of item 2.
 - sim-core 3.16: 86 of 87 table entries are present as instructions in the self-reporting
   programs as assembled (the judge decodes the first word of every instruction line of the port's
-  listing of each program; it does not trace a run, so an instruction in code that never runs
-  would count too); the 87th, `LINE_1010`, has no mnemonic and is present as `DC.W` words in `e07`
-  and `e16` (erratum T3 10).
-- TRAP #15: 80 tasks; interactive by erratum T3 11 after its review (2, 4, 5, 10, 18, 58, 61, 100,
-  101): 9; every other task, and every sub-task of task 32, is called by at least one
-  self-reporting program (a `TRAP #15` after an immediate task number in `D0`, in the listing).
+  listing; it does not trace a run); the 87th, `LINE_1010`, has no mnemonic and is present as `DC.W`
+  words in `e07` and `e16` (erratum T3 10).
+- TRAP #15: 80 tasks; interactive by erratum T3 11 (2, 4, 5, 10, 18, 58, 61, 100, 101): 9; every
+  other task, and every sub-task of task 32, is called by at least one self-reporting program.
 - Checklists, `node tests/integration/rc/item-02-checklists.mjs`, exit 0: trap15-a §13 60 of 60,
-  hardware §13 37 of 37, sim-ui §19 (affects program results) 16 of 16 proved; every proof is a
-  program with an official result or a test found by its exact title. The mapping is T3's reviewed
-  one (`build/T3/item-02-checklists-mapping-review.json`, errata T3 12 and 13): every reviewed entry
-  is in the list with its verdict and proofs; Q19 is "proved" where the review left "partial",
-  because its last clause (no live update at address 0) is a deliberate difference by the
-  architect's decision (erratum U2 S6), as the review said it would be.
-- The comparison is the sim project of `npm run test:conformance` (run here by `check:rc`, see
-  above). In CI, the runs of the final commit: TO BE FILLED FROM THE FINAL COMPARISON. On
-  `b247e17`, run 45034018006, `conformance (ubuntu-latest)` and `(macos-latest)` passed ("Test
-  Files 40 passed | 1 skipped", "Tests 1011 passed | 410 skipped"); the unit jobs on three systems
-  "Tests 4230 passed | 61 skipped".
-- The goldens on GitHub, after the merge: TO BE FILLED FROM THE FINAL COMPARISON (no `oracle.yml`
-  run of a commit with `a61` to `a69` is read here). On `b247e17` (`oracle.yml` run 45034017858):
-  the official `SIM68K.exe` was run again for
-  every program; every result file came out as committed, and one other file changed
-  (`a55-task0-negative-count-first.OutLog.txt`, the residue byte of an accepted difference). The job
-  then failed only at "MISMATCHES.md is what this run writes", because it compared the committed
-  report with the regenerated golden (item 6; erratum T1 27).
-- What changed in the judges: the three classes of the correction note (an entry neither accepted
-  nor unconfirmed counts against the item; an accepted one must be named in DIFFERENCES.md, an
-  unconfirmed one in its part 4); the interactive tasks of erratum T3 11 after its review; T3's
-  reviewed mapping of the checklists; a proof is found by its exact title (a template's `${...}`
-  matches any text), not as a substring of the file. Shown to fail (on `b247e17`, when `a53` was
-  still listed): with a copy of `known-differences.json` without `a53`'s `unconfirmed` field, `a53` is counted against the item
-  (exit 1); with a checklist proof whose title lost its last six characters, "has no test titled
-  exactly" (exit 1). After the reviews: the identical programs and logs are those the comparison
-  measured, not "the programs the list does not name". With a copy of `known-differences.json`
-  without `a51` and `a52` and nothing repaired, the judge printed "byte-identical: 174" and exited
-  0 before; now it exits 1: "a51 ... differs from its golden (measured by the comparison) and
-  known-differences.json does not list it" (and the same for `a52`). Without `--sim-report` it
-  compares nothing and exits 2 (not shown) when nothing else fails. It also fails on a report of a
-  partial run ("the comparison ran 20 of the 209 programs"), on a listed difference the run found
-  equal ("the list is stale", shown with `b06` taken out of a copy of the report), and on a failed
-  test of the run.
+  hardware §13 37 of 37, sim-ui §19 (affects program results) 16 of 16 proved; "every named proof
+  exists" (a program with an official result or a test found by its exact title; T3's reviewed
+  mapping, errata T3 12 and 13; Q19 by the architect's decision U2 S6).
+- CI, run 45111581771: `conformance (ubuntu-latest)` and `(macos-latest)` passed ("Test Files 41
+  passed | 1 skipped", "Tests 1048 passed | 410 skipped"); the unit jobs on three systems passed
+  (ubuntu "Tests 5141 passed | 63 skipped").
+- The goldens on GitHub, `oracle.yml` run 45111588256: the official `SIM68K.exe` was run again for
+  every program (step "Regenerate the simulator goldens (T3)"), the conformance tests passed
+  against the regenerated goldens ("Tests 1314 passed | 144 skipped"), and "The official programs
+  produced what the repository holds.": every result file and log of the release commit, `a61` to
+  `a69` included, is what the official program gives there.
+- Shown to fail (this step, on a copy of DIFFERENCES.md with CRLF line ends and without the part-4
+  row of `b19`): "trap15-b/b19-net-send-uninitialised|report|result is unconfirmed but
+  docs/DIFFERENCES.md does not name it under part 4", exit 1. The other broken inputs of the first
+  check (a list without `a51` and `a52`, a partial run, a stale entry, a checklist proof whose title
+  lost its end) are listed in `tests/integration/rc/README.md` and in the Git history of this file.
 
-Open for a person: the Windows session (`docs/porting/windows-confirmation.md`, decision O-2) would
-settle `b19` and the one remaining point of `a53`; it needs the owner's permission. It is not
-required by item 2.
+Open for a person, not required by item 2: the Windows session (`docs/porting/windows-confirmation.md`,
+decision O-2) would settle `b19` and the remaining point of `a53`; it needs the owner's permission.
 
 ## Item 3 - Drawing
 
 **Holds.**
 
 `npx vitest run --config tests/integration/rc/item-03-vitest.config.ts --silent=false` on this PC:
-6 of 6 tests passed.
+exit 0, every test passed.
 
 - 6.5.1: lines 10,000/10,000, polylines 300/300, wide lines 2,000/2,000 (widths 2 to 14),
   wide-line ties 180/180, rectangles 10,000/10,000 (filled 5,008 and unfilled 4,992, widths 0 to 12),
@@ -227,57 +196,41 @@ required by item 2.
   (zero-width bytes and `$7F`), 177/177 (italic), pens 75/75 (visible glyphs); (2) `text-path`
   10,459/10,459 and `text-control` without a fallback byte or `$80` 132/132, every pixel and pen;
   (3) the euro sign where its pen is the same in every history: `text-control` 21/21 and
-  `text-path-euro` 986/986 (pen and every pixel outside the glyph), the 1,125 pinned pens 1,125/1,125;
-  "@" in Courier 1,000/1,000 pinned pens; the fallback-font bytes: pens 85/85 where both captured
-  Windows agree, every pixel 16/16 where they draw the same. **16,902 of 16,902 required cases.**
-  Reported, not required: the 74 fallback-byte texts the two Windows draw differently,
-  `text-path-formfeed` (pens 400 of 640) and `text-path-fallback` (0 of 480), the history-dependent
-  euro texts (9 and 414, all equal to the committed capture), and the proportional substitute at
-  sizes without an atlas (12 of 32; widths estimated, recorded in part SH3).
+  `text-path-euro` 986/986, the 1,125 pinned pens 1,125/1,125; "@" in Courier 1,000/1,000 pinned
+  pens; the fallback-font bytes: pens 85/85 where both captured Windows agree, every pixel 16/16
+  where they draw the same. **16,902 of 16,902 required cases** ("6.5.3 required: 16902 of 16902
+  cases equal in 15 classes; 0 differ"). Reported, not required: the 74 fallback-byte texts the two
+  Windows draw differently, `text-path-formfeed` (pens 400 of 640) and `text-path-fallback` (0 of
+  480), the history-dependent euro texts (9 and 414, all equal to the committed capture), and the
+  proportional substitute at sizes without an atlas (12 of 32; widths estimated, recorded in part
+  SH3).
 - 6.5.4: `tests/conformance/examples/golden/surfaces.json` holds the 10 official examples, 20
   conformance programs and 4 scenes.
-- CI, run 45034018006: `check:text` "78 of 78 checks passed" and `check:examples` "309 of 309" in
-  `browser-checks (<os>, simulator)` on ubuntu, windows and macOS; `check:surface` "28 of 28" in the
-  interface jobs on ubuntu, windows and macOS; the unit jobs on three systems "ellipses: 8192 of
-  8192", "ellipses-large: 3000 of 3000", "ellipses-wide: 496 of 500".
-- The second Windows build (Windows Server 10.0.26100, job windows-oracles 137243681219, step "GDI
-  capture, regenerate and compare (T2)"): "56 of 56 outputs equal the committed references (3 byte
-  for byte; 24 apart from the other-font bytes)"; and, for the suites captured on one build only:
-  "text-path-euro: 1400 of 1400 pens equal the committed references; of the 986 pinned in
-  golden/text-path-euro-pens.json, 986 equal"; "text-path-fallback: 0 of 480 pens equal the
-  committed references"; "text-path-formfeed: 400 of 640 pens equal the committed references". By
-  erratum T2 29: the euro pens pinned as history-stable are the same on the second build, so they
-  are required, and the port gives them (986/986 above); the pens of `text-path-fallback` and of
-  `$0C` on the text path differ between the two builds, so the rule requires none of them and no
-  defect follows.
-- What changed in the judge: `text-path` counted under 6.5.3; `text-control`, `text-path-euro`
-  and the pinned pens judged as item3d's report says; the listed differences reported with their
-  numbers. Shown to fail: with one `text-path` pen moved by a pixel (`EASY68K_RC_SPOIL=text-path`),
-  "10458 of 10459 equal - 1 DIFFER" and exit 1. After the reviews the same spoil reaches the
-  primitive suites of 6.5.1: with `EASY68K_RC_SPOIL=lines`, "6.5.1 lines: 9999 of 10000 cases
-  every pixel and pen equal; differing: lines-00000: pen", "26825 of 26826", the 6.5.1 test failed
-  ("Tests 1 failed | 5 passed (6)"), exit 1.
+- CI, run 45111581771: `check:text` "78 of 78 checks passed" and `check:examples` "309 of 309" in
+  `browser-checks (<os>, simulator)` (ubuntu 137487306036; the jobs on windows and macOS green
+  too); `check:surface` "28 of 28" in the interface jobs (ubuntu 137487305967); the unit jobs on
+  three systems "ellipses: 8192 of 8192", "ellipses-large: 3000 of 3000", "ellipses-wide: 496 of
+  500".
+- The second Windows build (job windows-oracles 137487305824, step "GDI capture, regenerate and
+  compare (T2)"): "56 of 56 outputs equal the committed references (3 byte for byte; 24 apart from
+  the other-font bytes)"; "text-path-euro: 1400 of 1400 pens equal the committed references; of the
+  986 pinned in golden/text-path-euro-pens.json, 986 equal"; "text-path-fallback: 0 of 480 pens";
+  "text-path-formfeed: 400 of 640 pens", which by erratum T2 29 the rule does not require.
+- The judge is unchanged since the first check, where it was shown to fail with one pen moved by a
+  pixel (`EASY68K_RC_SPOIL=text-path` and `=lines`, exit 1).
 
 ## Item 4 - Twins
 
 **Holds.**
 
-`node tests/integration/rc/item-04-twins.mjs --report <log of windows-oracles 137243681219>`, run
-45034018006, exit 0: assembler 95 engine test runs and 420 programs x 2 option sets = 935 runs per
-twin; patched `/O2` and `/Od` 935 same, unpatched 862 same and 73 that differ where a patch applies
-(expected), 0 failed; the tracked programs today are 420, all in the report; simulator "557
-scripts; transcripts identical: 1114 of 1114 twin runs"; the 68000 single-step baseline "124 files,
-1000060 tests, 285116 deviate from the real 68000; matches tests/conformance/cpu/baseline.json";
-"**No unexpected differences.**" The twins were not run on this PC (they take 11 to 25 minutes and
-write T4's folder); the CI job is the evidence.
-
-Not part of the item's evidence, and not shown by it: in the same job the engine's own native test
-of the assembler skips its unpatched twin ("reference tree not found
-(...\reference\src-edit68k\Edit68Kv5.16.1): unpatched twin skipped", then
-"engine/asm/test/native.test.mjs: exit 0"), because the original sources are not in the checkout
-on GitHub. T4's comparison above builds its unpatched twins from the archive it downloads in that
-job, so item 4 holds; that the engine's own test could use the same archive is for T4 and the
-owner of `engine/asm`.
+`node tests/integration/rc/item-04-twins.mjs --report <log of windows-oracles 137487305824>`, run
+45111581771, exit 0: assembler 95 engine test runs and 431 programs x 2 option sets = 957 runs per
+twin; patched `/O2` and `/Od` 957 same, unpatched 884 same and 73 that differ where a patch applies
+(expected), 0 failed; the tracked programs today are 431, all in the report; simulator "569
+scripts, 1138 of 1138 twin runs identical (/O2 and /Od)"; the 68000 single-step baseline "124
+files, 1000060 tests, 285116 deviate; matches tests/conformance/cpu/baseline.json";
+"engine/asm/test/native.test.mjs: exit 0"; "**No unexpected differences.**" The twins were not run
+on this PC (they take 11 to 25 minutes and write T4's folder); the CI job is the evidence.
 
 ## Item 5 - Parity
 
@@ -286,114 +239,78 @@ owner of `engine/asm`.
 - `node tests/integration/rc/item-05-parity.mjs`: 179 rows of 1.3 in the document, 179 matrix
   entries, per section 30/13/37/35/24/7/13/20 on both sides; 0 without an entry, 0 without a row,
   0 duplicated; every named file and test exists. Entries of 1.3 by kind: web-e2e 308, manual 15,
-  desktop-e2e 13, unit 10, browser-check 4 (350); 1.5 adds 23 (web-e2e 17, desktop-e2e 4, unit 2),
-  which item 5 does not count; the judge prints both figures.
-- With the logs of run 45034018006: **308 of 308 web-e2e entries of 1.3** passed in Chromium and
-  308 of 308 in WebKit (325 of 325 with 1.5), over the three e2e jobs of each browser (ubuntu Chromium 137243681278 "307 passed",
-  ubuntu WebKit 137243681322 "3 skipped, 304 passed", windows Chromium 137243681315 "307 passed",
-  windows WebKit 137243681280 "3 skipped, 304 passed", macOS Chromium 137243681307 "1 failed, 1
-  skipped, 305 passed", macOS WebKit 137243681348 "4 skipped, 303 passed"; the one failure,
-  `chords.spec.ts` "Editor mode: every chord of 2.9.3 is cancelled...", is named by no row, see
-  item 6). **13 of 13 desktop-e2e entries of 1.3** (17 of 17 with 1.5; desktop-dev 137243681239
-  and the two release jobs). **10 of 10 unit entries of 1.3** passed (12 of 12 with 1.5), judged
-  by `check:rc` from the Vitest JSON reports of local runs of the files they name and of the sim
-  project: "unit entries passed: 10 of 10 entries of 1.3; with 1.5 12 of 12"; the folder entry
-  `tests/conformance/sim/logs` by a passed test for each of its 30 programs (`logs/l01-arith` to
-  `logs/l30-number-output`) in `conformance.test.ts`. In CI the same files passed in the unit and
+  desktop-e2e 13, unit 10, browser-check 4 (350). The additions bring 18 rows of 1.5 with 38
+  entries (web-e2e 30, desktop-e2e 4, unit 4), which item 5 does not count; the judge prints both
+  figures and judges the entries of 1.5 with the same rules.
+- With the logs of run 45111581771: **308 of 308 web-e2e entries of 1.3** passed in Chromium and
+  308 of 308 in WebKit (**338 of 338 with 1.5**), over the three e2e jobs of each browser (ubuntu
+  Chromium 137487305843 "325 passed", ubuntu WebKit 137487305869 "3 skipped, 322 passed", windows
+  Chromium 137487305915 "325 passed", windows WebKit 137487305868 "3 skipped, 322 passed", macOS
+  Chromium 137487305785 "1 skipped, 324 passed", macOS WebKit 137487305874 "4 skipped, 321
+  passed"; 0 failed in any of them). **13 of 13 desktop-e2e entries of 1.3** (17 of 17 with 1.5;
+  desktop-dev 137487305808 "1 skipped, 79 passed" and the two release jobs). **10 of 10 unit entries
+  of 1.3** passed (14 of 14 with 1.5), judged by `check:rc` from the Vitest JSON reports of local
+  runs of the files they name and of the sim project; the folder entry `tests/conformance/sim/logs`
+  by a passed test for each of its 30 programs. In CI the same files passed in the unit and
   conformance jobs.
 - The manual entries (8 items of 6.8: printing; paste, twice; the browser shortcut table; full
   screen; the keyboard of a real MacBook; sound; serial and network) each open a row of the
   manual's table "Which check covers which item of the plan", whose checks exist. **No person has
   signed any of them off; no person has tried the application on a Mac.**
-- What changed in the judge: a result line whose duration is in minutes ("(1.2m)") is read. Shown
-  to fail: a copy of the ubuntu Chromium log in which one named test
-  (`documents.spec.ts` "File > New X68 Source File opens untitled2.x68 with the template, not
-  modified") has a red cross: "324 of 325", exit 1. After the reviews: a folder of programs without
-  test files is satisfied only by a passed test named after each of its programs (before, any test
-  of the folder above counted, and with reports that lacked that suite the folder entry always
-  failed, which is why `rc.mjs` never passed `--unit`). Shown to fail: a copy of the sim report
-  without the test `logs/l05-branches`: "unit entries passed: 9 of 10 entries of 1.3", "NO PASSED
-  TEST for logs/l05-branches", exit 1; with `logs/l07-bubble-sort` marked failed: "1 of 30 not
-  passed", exit 1.
+- The judge is unchanged since the first check (where it was shown to fail on a log with one red
+  cross on a named test, and on a sim report without the test of one program of `logs`); the rows of
+  1.5 were added to the matrix by the stage of additions and are read by the same code.
 
 ## Item 6 - Platforms
 
-**Verdict: TO BE FILLED FROM THE FINAL COMPARISON.** The runs of the final commit (`ci.yml` push
-and manual, `release.yml`, `oracle.yml`, `pages.yml`; their ids in `tests/integration/rc/lib/runs.mjs`)
-and what the judge prints on them: TO BE FILLED FROM THE FINAL COMPARISON. Everything below is the
-check of `b247e17`, where the item did not hold.
+**Holds.**
 
-On `b247e17`: `node tests/integration/rc/item-06-platforms.mjs --run ci=<push> --run
-ci=<manual> --run release=<release> --run oracle=<oracle> --mac arm64=<log> --mac x64=<log>`: 7
-problems (the jobs of 7.4 below; the failed `browser-checks` jobs are beyond 7.4 and printed as
-notes).
+`node tests/integration/rc/item-06-platforms.mjs --run ci=<jobs of 45111581771> --run
+release=<jobs of 45111584448> --run oracle=<jobs of 45111588256> --mac arm64=<log> --mac x64=<log>`
+(as `npm run check:rc -- --logs build/rc-final` runs it): **problems: 0**, exit 0.
 
 - The workflows against 7.4, alone: 0 problems (every job and trigger of 7.4 is there, every action
-  pinned by commit, `contents: read` by default). The job `propose` of `oracle.yml` opens no pull
-  request itself since erratum T1 27 (the repository does not let GitHub Actions create one); it
-  pushes the branch and names the address at which a person opens it, which the judge accepts
-  (erratum I3 2). Shown to fail on a copy of the workflows with the e2e, unit and windows-oracles
-  jobs on another runner: 4 problems, exit 1.
-- `ci.yml` run 45034018006 (push): every job of 7.4 passed except **`e2e (macos-latest,
-  chromium)`** (137243681307): `tests/e2e/app/chords.spec.ts:85` "Editor mode: every chord of 2.9.3
-  is cancelled, in the editor and in the Files panel" received `["Ctrl+F ([])"]` (no key event was
-  recorded for that chord with the focus on the Files tree); it passed on ubuntu and windows in this
-  run, and 20 times in Chromium on ubuntu in the stability shards (item 10). Beyond 7.4:
-  **`browser-checks (windows-latest, integration)`** (137243681460): in `check:wave2` no check failed
-  (183 "ok" lines, no FAIL line), but no total was printed before the step limit: its last line was
-  written at 14:45:46 and "The action 'Integration scenario in the browser (I2)' has timed out after
-  15 minutes" at 14:58:11, so whether every scenario ran is not shown;
-  **`browser-checks (macos-latest, accessibility)`** (137243681484): "629 of
-  630 checks passed, 1 failed": "chromium/windows walk-run: the typed answer reaches the program (D1
-  = 42) and it goes on running - D1 = 42, phase waitInput".
-- `ci.yml` run 45034021673 (by hand) ran the whole matrix again, with the six stability shards,
-  the six perf jobs and both readme jobs, which all passed. The three jobs that failed in the push
-  run passed there on the same commit: `e2e (macos-latest, chromium)` (137252708159),
-  `browser-checks (windows-latest, integration)` (137252708361) and `browser-checks (macos-latest,
-  accessibility)` (137252708397). On `b247e17` those three failures are therefore intermittent (a
-  chord test on the macOS runner, a hang at the end of a check, a timing race), not failures of
-  every run; that is one more reason to read them again in the runs of the next commit. **`browser-checks (windows-latest, interface)`** (137252708316) failed in
-  `check:files`: "124 of 125 checks passed, 1 failed": "webkit: the pass ran to the end - Error:
-  webkit, a page killed in the middle of a write: did not finish within 360 s; last step: delay 2
-  ms: reading the files in the new page". The same job passed in the push run; this is a failure of its own, not the hang of
-  `check:wave2`.
-- `release.yml` run 45034019734: version, engines, web and **mac-x64** passed ("59 passed (52.4s)",
-  x86_64, macOS 15.7.9; checks 1 to 8 of 6.7). **mac-arm64 failed** (arm64, macOS 15.8.2: "1 failed,
-  58 passed (41.9s)"): check 7 "Execute and Run: the message area and the surface hash equal the
-  headless harness" read the Output panel's text mirror once, right after the canvas matched; the
-  mirror follows at most twice a second (2.11), so the read came too early. `checksums` was skipped
-  because a job it needs failed. Both jobs print, for information, that Apple's distribution check
-  rejects the bundle ("Notary Ticket Missing"): the build is signed for testing only and not
-  notarized, which part B3 of the manual covers.
-- `oracle.yml` run 45034017858: engines and "single-step CPU suites (frozen baseline)" passed; the
-  **wine** job failed at "MISMATCHES.md is what this run writes" (the job compared the committed
-  report with goldens it had just regenerated; see items 1 and 2 for what it showed); **propose the
-  regenerated goldens** failed: "GitHub Actions is not permitted to create or approve pull requests"
-  (erratum T1 27).
-- `pages.yml` run 45034018111 (push of b247e17): success.
-- Repairs in the working tree, made by other engineers during this check, not reviewed here and not
-  yet shown by a run: check 7 waits for the Output panel's text mirror
-  (`tests/desktop/packaged/programs/checks.ts`, erratum DV5 14); the print feature returns the focus
-  after printing (`app/src/features/print`, the suspected cause of the chord not seen); every
-  `check-*.mjs` script closes its browsers and servers in a guarded ending (the hang of
-  `check:wave2`); the walk-run check waits for the phase that the next display frame publishes
-  (`tests/a11y/lib/walk.mjs`, erratum SH8 49); the oracle workflow runs the conformance tests against
-  the committed and against the regenerated goldens, and a person opens its pull request (erratum
-  T1 27). `check:files` in WebKit on Windows has no repair yet.
+  pinned by commit, `contents: read` by default; the job `propose` of `oracle.yml` pushes a branch
+  instead of opening the pull request itself, erratum I3 2). Beyond 7.4 in `ci.yml`: plan,
+  history-model, perf, readme, browser-checks.
+- `ci.yml` run 45111581771 (by hand, standing for the cancelled push run 45111564124, erratum I3
+  8): every job of 7.4 passed: `check`, `unit` on three systems, `conformance` on ubuntu and macOS,
+  `e2e` on three systems in both browsers, the six `e2e stability` shards, `windows-oracles`,
+  `desktop-dev (macos-15)`. Beyond 7.4 every job passed too: the twelve `browser-checks` jobs, the
+  six `perf` jobs, the six `history model` jobs; `readme` was skipped (its input was not ticked).
+  None of the failures of the first check (`chords.spec.ts` on macOS Chromium, `check:wave2` on
+  Windows, the walk-run on macOS, `check:files` in WebKit on Windows) occurred in this run.
+- `release.yml` run 45111584448 (version 0.0.0 at this commit; the tag's run builds 1.0.0):
+  version, engines, web and `checksums` passed; **mac-arm64** (137484985034; arm64, macOS 15.8.2:
+  "59 passed (52.1s)") and **mac-x64** (137484985016; x86_64, macOS 15.7.9: "59 passed (1.2m)"):
+  checks 1 to 8 of 6.7 each passed. `publish (draft)` was skipped, as on every run that makes no
+  release. The mac jobs print, for information, that Apple's distribution check rejects the bundle
+  ("Notary Ticket Missing"): the app is signed ad hoc and not notarised, which the README, the
+  release notes and part B3 of the manual cover.
+- `oracle.yml` run 45111588256: engines, `wine` (137497162720) and "single-step CPU suites (frozen
+  baseline)" passed; `propose the regenerated goldens` was skipped because nothing changed (items 1
+  and 2).
+- `pages.yml` run 45111564156: success.
+- The judge is unchanged in this step; `rc.mjs` gives it the manual run instead of the push run.
+  Before the runs had finished, in this step, it printed "problems: 6" (the six stability shards
+  still running, the oracle run without jobs) and exited 1: a run that has not finished does not
+  pass. At the first check it was shown to fail on a copy of the workflows with jobs on another
+  runner (`EASY68K_RC_WORKFLOWS`).
 
 ## Item 7 - Offline
 
 **Holds, except the part a person must do.**
 
-- `tests/e2e/app/offline.spec.ts`: 4 of 4 in each of the six e2e jobs of run 45034018006 (the
-  offline reload, Help offline, the manifest an installation needs, the file handlers).
-- `check:pwa`: "114 of 114 checks passed" in the three `browser-checks (<os>, simulator)` jobs ("432
-  files, 18056656 bytes precached" on ubuntu and macOS, 18058081 on Windows; all 432 served offline
-  in Chromium and WebKit; Chromium parses the manifest without errors).
-- This PC: `node tests/integration/rc/item-07-check-offline.mjs --browser all --dist <production
-  build of the tree>`: "27 of 27 checks passed" (load, service worker, network off, reload, then
-  check A1 of the manual offline in Chromium and WebKit: tutorial1.X68 assembles and prints its four
-  lines; Help shows its text in WebKit).
+- `tests/e2e/app/offline.spec.ts` passed in each of the six e2e jobs of run 45111581771 (the
+  offline reload, Help offline, the manifest an installation needs, the file handlers; every job
+  green, 0 failed).
+- `check:pwa`: "114 of 114 checks passed" in the `browser-checks (<os>, simulator)` jobs (on ubuntu
+  137487306036 "433 files, 18552116 bytes precached"; all served offline in Chromium and WebKit;
+  Chromium parses the manifest without errors).
+- This PC: `node tests/integration/rc/item-07-check-offline.mjs --browser all` (run by `check:rc
+  --browsers`, a production build of the tree): "27 of 27 checks passed" (load, service worker,
+  network off, reload, then check A1 of the manual offline in Chromium and WebKit: tutorial1.X68
+  assembles and prints its four lines; Help shows its text in WebKit).
 - "Installs in Chromium" is shown by Chromium's own reading of the manifest (no installability
   error) and the worker that controls the page; automation cannot press Install. Open for a person:
   installing from a real Chrome (manual B13), Safari's offline reload and Add to Dock (B2).
@@ -402,69 +319,65 @@ notes).
 
 **Holds, except the part a person must do: the manual list is not signed off.**
 
-- The lists of erratum X1 8: `node tests/integration/rc/item-08-a11y-lists.mjs`: `ALLOWED` in
-  `tests/e2e/app/a11y.spec.ts` holds exactly its one entry (colour contrast of the original's
-  syntax colours); `KNOWN` and `KNOWN_CHECKS` of the audit are empty; Q1-1 to Q1-6 are marked
-  repaired below.
-- With the three audit logs and the six e2e logs of run 45034018006: "60 of 60 checks passed". The
-  automated scan: **324 of 324 axe checks** in each of `browser-checks (ubuntu-latest,
-  accessibility)`, `(windows-latest, ...)` and `(macos-latest, ...)`, no serious or critical finding;
-  the check of each of Q1-1 to Q1-6 passes in both browsers; `a11y.spec.ts` 16 passed, 0 failed in
-  each of the six e2e jobs.
-- One check of the audit beyond the scan failed on macOS: the keyboard walk named under item 6. It
-  makes that job red, which item 6 counts; it is no finding of the scan (erratum I3 1). Shown to
-  fail: a copy of the ubuntu audit log with one axe check marked FAIL: "323 of 324 axe checks ok",
-  exit 1.
+- The lists of erratum X1 8: `ALLOWED` in `tests/e2e/app/a11y.spec.ts` holds exactly its one entry
+  (colour contrast of the original's syntax colours); `KNOWN` and `KNOWN_CHECKS` of the audit are
+  empty; Q1-1 to Q1-6 are marked repaired below.
+- `node tests/integration/rc/item-08-a11y-lists.mjs` with the three audit logs and the six e2e logs
+  of run 45111581771: "60 of 60 checks passed". The automated scan: **408 of 408 axe checks** in each
+  of `browser-checks (ubuntu-latest, accessibility)` 137487305948, `(windows-latest, ...)`
+  137487305977 and `(macos-latest, ...)` 137487305991, no serious or critical finding (the audit
+  printed "738 of 738" and "750 of 750 checks passed" in each, the keyboard walks included);
+  `a11y.spec.ts` 16 passed, 0 failed in each e2e job.
 - Open for a person: `docs/MANUAL-TEST-MAC.md` B7 (VoiceOver, the keyboard alone in Safari with both
-  Tab settings, the focus frame in both themes) and X4. Nobody has done them.
+  Tab settings, the focus frame in both themes; V10 and V11 for moving panels) and X4. Nobody has
+  done them.
 
 ## Item 9 - Performance
 
 **Holds.**
 
 `node tests/integration/rc/item-09-perf-verdict.mjs <log of perf (ubuntu-latest, chromium)
-137252708197> --require-ubuntu`, run 45034021673 (image ubuntu-26.04 as `ubuntu-latest`, `node
-tests/perf/check-perf.mjs --browser chromium --judge auto`), exit 0, "7 of 7 verdicts hold":
+137487305835> --require-ubuntu`, run 45111581771 (image ubuntu-26.04 as `ubuntu-latest`, `node
+tests/perf/check-perf.mjs --browser chromium --judge auto`), exit 0, "7 of 7 verdicts hold
+(Maximum by the document rule)":
 
-- TaskDuration over 30 s of `spin.X68` at the default speed: 1.11 s with the 60 Hz frame source
-  (needs < 4.5 s); 1.15 s with 120 Hz, printed.
-- Frame intervals while `draw.X68` runs, 95th percentile: 17.5 ms at 60 Hz (needs < 20 ms), 9.1 ms
-  at 120 Hz (needs < 12 ms).
+- TaskDuration over 30 s of `spin.X68` at the default speed: 2.41 s with the 60 Hz frame source
+  (needs < 4.5 s); 2.57 s with 120 Hz, printed.
+- Frame intervals while `draw.X68` runs, 95th percentile: 17.4 ms at 60 Hz (needs < 20 ms), 9 ms at
+  120 Hz (needs < 12 ms).
 - At `Maximum`, by the rule of the document with its correction note (erratum P1 13): the engine
-  alone 32,818,840 instructions per second, so 164,094,200 in 5 s, 85 % of that 139,480,070;
-  `engine.stepCount` in 10 s **143,009,668** with the 60 Hz frame source (needs at least 100,000,000
-  and at least 139,480,070: holds, by 3.5 million); 161,540,473 with 120 Hz, printed. The figure as
-  printed before the note (200 million) is missed by 56,990,332, for information only.
-- Assembling the largest corpus file under Node: `GFX.X68` alone 258 ms, `MAIN.X68` with its
-  includes 270 ms (needs < 1 s).
+  alone 25,187,910 instructions per second, so 125,939,550 in 5 s, 85 % of that 107,048,618;
+  `engine.stepCount` in 10 s **113,543,387** with the 60 Hz frame source (needs at least
+  100,000,000 and at least 107,048,618: holds, by 6.5 million); 119,817,810 with 120 Hz, printed.
+  The figure as printed before the note (200 million) is missed by 86,456,613, for information only.
+  This runner was slower than the one of the first check (32.8 million per second for the engine
+  alone there); the rule follows the runner, as the note intends.
+- Assembling the largest corpus file under Node: `GFX.X68` alone 285 ms, `MAIN.X68` with its
+  includes 311 ms (needs < 1 s).
 
-What changed in the judge: the corrected rule is the document's rule (`--rule document`, the
-default); the figure of 200 million is printed for information only; the engine-alone figure is
-read from "the engine alone, the best of N blocks of 5 s". Shown to fail: on a copy of the log with
-a smaller Maximum count, and on one without the engine-alone line, "6 of 7 verdicts hold", exit 1.
+The other five perf jobs of the run (macOS and Windows, both browsers; Ubuntu WebKit) passed; their
+figures are for information (erratum P1 2). The judge is unchanged since the first check, where it
+was shown to fail on a log with a smaller Maximum count and on one without the engine-alone line.
 
 ## Item 10 - Stability
 
-**Holds** on commit `b247e17`.
+**Holds** on commit `9b2f25b`.
 
-`node tests/integration/rc/item-10-stability.mjs --current <the six shard logs>`, run 45034021673,
+`node tests/integration/rc/item-10-stability.mjs --current <the six shard logs>`, run 45111581771,
 exit 0, "problems: 0":
 
 - Every log is of an Ubuntu runner: "runner: ubuntu-26.04" (the image `ubuntu-latest` names), read
-  from the job's "Image:" line. The judge checks this since the reviews; shown to fail on a copy of
-  one WebKit shard log whose image line reads `macos-15-arm64`: "runner image macos-15-arm64, not
-  an Ubuntu runner (item 10 asks for ubuntu-latest)", "problems: 1", exit 1.
-
-- Chromium, `--repeat-each=20`, shards 1 and 2 of 2 (137252708204, 137252708203): 6,140 tests run =
-  307 x 20; **6,140 passed, 0 failed, 0 flaky**, 0 skipped.
-- WebKit, shards 1 to 4 of 4 (137252708212, 137252708164, 137252708168, 137252708162): 6,140 tests
-  run = 307 x 20; **6,080 passed, 0 failed, 0 flaky**, 60 skipped (3 tests that the suites skip in
+  from the job's "Image:" line.
+- Chromium, `--repeat-each=20`, shards 1 and 2 of 2 (137487305897, 137487306055): 6,500 tests run
+  = 325 x 20; **6,500 passed, 0 failed, 0 flaky**, 0 skipped.
+- WebKit, shards 1 to 4 of 4 (137487305864, 137487305870, 137487305976, 137487305924): 6,500 tests
+  run = 325 x 20; **6,440 passed, 0 failed, 0 flaky**, 60 skipped (3 tests that the suites skip in
   WebKit by design, 20 times each).
-- The checkout lists 307 tests in each browser (e2e/app 47, e2e/editor 119, e2e/fixtures 13,
-  e2e/sim 128), as many as the logs ran per repetition.
-
-The item reads "on `main`": the commit that is tagged needs its own twenty-repetition run, because
-the repairs named under item 6 change tests that these suites run.
+- The checkout lists 325 tests in each browser (e2e/app 47, e2e/editor 120, e2e/fixtures 13,
+  e2e/plus 17 (the additions), e2e/sim 128), as many as the logs ran per repetition. The longest
+  shard took 1.0 h (Chromium), within the shards' limit of 120 min.
+- The judge is unchanged since the first check, where it was shown to fail on a log whose image line
+  named a macOS runner.
 
 ## Item 11 - Open verification items
 
@@ -473,140 +386,84 @@ the repairs named under item 6 change tests that these suites run.
 `node tests/integration/rc/item-11-unverified.mjs`, exit 0: 108 occurrences of UNVERIFIED in
 `docs/porting` and its errata, each accounted for (11 define the marker, 16 inside a spec's list,
 65 carried by a list item, 13 errata about one, 2 settled where they stand, 1 superseded, 0 in no
-list); 86 list items, of which 2 are decisions, **25 confirmed** (by the GDI capture or by the
-official programs under Wine; none still a row of part 4) and **59 open, each a row of its own in
-part 4 of `docs/DIFFERENCES.md`** ("Not yet confirmed against the original") whose third cell says
-what the port does; 0 in neither place. The conformance programs `b19` (unconfirmed) and `a53` (its
-one point seen only under Wine) are among the 59, and so are the three statements of erratum E4 (below).
+list); 86 list items, of which 2 are decisions, **25 confirmed** (none still a row of part 4) and
+**59 open, each a row of its own in part 4 of `docs/DIFFERENCES.md`** ("Not yet confirmed against
+the original", 65 table rows) whose third cell says what the port does; 0 in neither place. The
+word in lower or mixed case occurs 7 times, each accounted for (5 carried by a list item, among them
+the three statements of erratum E4 that the architect made open items, 1 settled, 1 not the
+marker), 0 awaiting a decision. The conformance programs `b19` (unconfirmed) and `a53` (its one
+point seen only under Wine) are among the 59.
 
-What changed in the judge: an open item needs a row of its own in part 4 with the port's chosen
-behaviour (before, a mention of its list was enough); a confirmed item must have left part 4; the
-ten statements the old table held as "in no list" now point to their rows; erratum E1 2 and
-trap15-b V8 (b06) are confirmed. Shown to fail: with a copy of DIFFERENCES.md without the row of
-`b19`, "open and in NEITHER place: 1" and exit 1.
-
-After the reviews:
-
-- The search no longer looks at the upper-case marker only. The word in lower or mixed case occurs
-  7 times: 2 carried by a list item (`speed.md`, the original's instructions per second, sim-core
-  13 item 8; erratum SH5, trap15-b V14), 1 settled where it stands (`official-oracle.md`, the
-  oracle tool's own cases under Wine, its section 3.4), 1 not the marker (the name of this judge's
-  file in erratum DOC1), and 3 statements of erratum E4, carried by list items of their own: the
-  settings reader's `atoi` past 32 bits (part 4 row 6 of DIFFERENCES.md is task 4's `atoi`, not
-  this one), Ctrl-Z as an end of file in the settings reader, and the line break after the last
-  line of `template.NEW` on Save Template. The judge first printed these three as awaiting their
-  owner; the architect decided on 22 November 2026 that they are open items of item 11, because
-  each says something about the original that nobody confirmed, so each is now a row of the table
-  "The editor" in part 4 of DIFFERENCES.md and the statement in erratum E4 names its row (erratum
-  I3 4). 0 await a decision. Shown to fail: with a copy of DIFFERENCES.md without one of the three
-  rows (each tried, `EASY68K_RC_DIFFERENCES=<file>`), "open and in NEITHER place: 1" naming that
-  item, exit 1. Any lower-case occurrence that no table accounts for fails the judge too (shown on
-  a copy of `docs/porting` with one more such line in erratum E2: "1 unaccounted", exit 1,
-  `EASY68K_RC_PORTING=<folder>`).
-- A row of part 4 is read cell by cell with empty cells kept, and its third cell ("What the port
-  does") must state something: neither empty nor a dash. Shown to fail: with row 6's third cell
-  emptied, and with it set to "-": "a12.6 atoi overflow (task 4/18) (its row gives no chosen
-  behaviour)", "open and in NEITHER place: 1", exit 1 (before, the emptied cell passed).
+- Changed in the judge in this step: it reads `docs/DIFFERENCES.md` with its line ends normalised.
+  On this PC's working copy (CRLF, from `core.autocrlf`) `npm run check:rc` first printed "does not
+  hold here (open and in NEITHER place: 59)", because the judge did not find the heading of part 4;
+  the document was right (erratum I3 7). Shown to fail after the change: with a CRLF copy of
+  DIFFERENCES.md without the row of `b19`, "open and in NEITHER place: 1", exit 1; the CRLF copy
+  itself holds.
 
 Open for a person, not required by the item: the Windows session would confirm many of the 59.
 
 ## Item 12 - Manual
 
-**Open: only a person can do it, and nobody has.** Part B3 cannot start, because no downloadable
-build of the Mac app exists (no release and no pre-release).
+**Not done by a person (the release does not wait for it, erratum I3 6); the automatic part
+holds.** By the owner's decisions (erratum
+I3 6) the release is published before `docs/MANUAL-TEST-MAC.md` has been completed; it stays open
+there, and the README, the release notes and part 5 of DIFFERENCES.md say so.
 
-- `node tests/integration/rc/item-12-manual-coverage.mjs`: 34 of 34: every bullet of 6.8 has a
-  row in the table of checks, every check named there exists, the shortcut table has the 15 macOS
-  and 10 Windows chords the page cancels, the texts the manual quotes are the application's (the
-  storage notices, the paste message, the Caution box), the first-start text of B3 equals the
-  README's.
-- `node tests/integration/rc/item-12-check-part-a.mjs --browser all --dist <production build of
-  the tree>` (macOS key map): "71 of 71 checks passed" in Chromium and WebKit. The walk follows the
-  manual's wording: Help > Examples... shows the folder selected but closed; a click on its arrow
-  opens it; F9, Execute, F9 give the four lines and Halted; the three test programs assemble and
-  run, and after the Caution box the walk waits for the new program's listing before F9 (echo "You
-  typed:   HELLO", keys "A down: FF" then "A down: 0", fonts "Sum: B4818F4C").
-- Shown to fail: with a copy of the manual without the Caution box's text, "34 of 36 checks passed,
-  2 failed".
-- Open for a person: parts A and B on a real Mac for the release candidate, including the shortcut
-  table in Safari, Chrome and Edge; B3 (Gatekeeper and first start on Apple Silicon and Intel) once
-  a downloadable build exists; part C on real Windows only with the owner's permission (O-2).
+- `node tests/integration/rc/item-12-manual-coverage.mjs`: **35 of 35**: 6.8 has 16 bullets (the
+  sixteenth, the PDF viewer of the additions, since the integration pass of the additions), each
+  with a row of the table of checks naming checks that exist (the viewer: E1 to E4); the shortcut
+  table has the 15 macOS and 10 Windows chords the page cancels; every check of A1, A3 to A5, B1 to
+  B3 and B7 has a place in the report form; the texts the manual quotes are the application's (the
+  storage notices, the paste message, the Caution box); the first-start text of B3 equals the
+  README's (2,714 characters each).
+- `node tests/integration/rc/item-12-check-part-a.mjs --browser all` (macOS key map, a production
+  build of the tree): "71 of 71 checks passed" in Chromium and WebKit (Help > Examples..., F9,
+  Execute, F9 with the four lines and Halted; the three test programs: echo "You typed:   HELLO",
+  keys "A down: FF" then "A down: 0", fonts "Sum: B4818F4C").
+- The manual was brought to the release in this step: the Mac app is the download of the Releases
+  page (B3 and the checks E4 and E5 no longer wait for a release), and its first lines say that
+  release 1.0.0 was published before anyone worked through it. Both judges were run on the changed
+  manual (above). The judge's last line now says that part B3 uses the app of the Releases page.
+- Open for a person: parts A and B on a real Mac, including the shortcut table in Safari, Chrome and
+  Edge, B3 (Gatekeeper and the first start on Apple Silicon and Intel) with the released app, and
+  E1 to E5 (the PDF viewer); part C on real Windows only with the owner's permission (O-2).
 
-## Before version 1.0.0 may be tagged
+## What a person must still do
 
-In order; each with who must act.
+Nothing here is required before the tag by the owner's decisions of 22 November 2026 (erratum I3
+6); each stays open in `docs/MANUAL-TEST-MAC.md` and is named in the README, the release notes and
+part 5 of `docs/DIFFERENCES.md`. Nobody has done any of it.
 
-1. **Item 2: repair a51 and a52** (the file streams after a read right after a write, or a write
-   right after a read). The repair is merged (commit 49a2e6d, measured in the official program
-   under Wine): `a51`, `a52` and `a53` have left `known-differences.json`, the read after a write
-   has left part 5 of DIFFERENCES.md, and `a53`'s one remaining point is a row of part 4. Still to
-   do: the final comparison on the finished suite. Done means both: the sim project of `npm run
-   test:conformance` passes, and `item-02-sim-evidence.mjs` with that run's report
-   (`--sim-report`, as `npm run check:rc` runs it) exits 0; an exit 0 of the judge alone, without
-   the comparison, is not enough. Result: TO BE FILLED FROM THE FINAL COMPARISON.
-2. **Item 6: commit the repairs in the tree, then one more.** The orchestrator commits the repairs
-   listed under item 6 (print focus for `chords.spec.ts:85`; the guarded ending of every
-   `check-*.mjs` for `check:wave2` on Windows; walk-run and the phase `waitInput`; check 7 on arm64;
-   the oracle workflow, erratum T1 27) once they are reviewed. Still open, for an engineer of FS1: `check:files` in WebKit on
-   `windows-latest`, "a page killed in the middle of a write: did not finish within 360 s" (run
-   45034021673, job 137252708316): find why the new page's read of the files did not finish, and
-   make the pass end within its limit.
-3. **Items 6, 9 and 10: the runs of the commit to be tagged.** The orchestrator, after the push of
-   that commit: read the push run of `ci.yml` (every job green; in particular `e2e (macos-latest,
-   chromium)`, `browser-checks (windows-latest, integration)`, `browser-checks (macos-latest,
-   accessibility)`, `browser-checks (windows-latest, interface)`); start `ci.yml` by hand with
-   `e2e_stability=true` (the six stability shards: `item-10-stability.mjs --current`, and `perf
-   (ubuntu-latest, chromium)`: `item-09-perf-verdict.mjs <log> --require-ubuntu`, "7 of 7"); start
-   `release.yml` by hand without a draft release (`mac-arm64` and `mac-x64` checks 1 to 8,
-   `checksums`); start `oracle.yml` by hand (`wine` green; `propose` green, or a candidate that a
-   person reviews). `node tests/integration/rc/fetch-ci.mjs` with those ids in `lib/runs.mjs` and
-   `npm run check:rc -- --logs <folder>` judge them.
-4. **Items 5, 7, 8 and 12: a person with a Mac.** A published pre-release of the release-candidate
-   commit is needed first (the owner's decision; `release.yml` with a draft release, then published
-   by hand), so that part B3 can start. Then one person works through `docs/MANUAL-TEST-MAC.md`:
-   parts A and B (with B7 for item 8, B2 and B13 for item 7: Safari's offline reload and Add to
-   Dock, and installing from a real Chrome; and the 15 manual entries of the parity matrix for item
-   5),
-   fills in the report form, and signs off the release's copy of the manual list. Nobody has tried
-   the application on a Mac yet.
-5. **Optional, with the owner's permission (O-2):** the Windows session of
+1. **Items 5, 7, 8 and 12: a person with a Mac** works through `docs/MANUAL-TEST-MAC.md` with the
+   web version and the released Mac app: parts A and B (B3 for the first start, B7 for item 8, B2
+   and B13 for item 7: Safari's offline reload and Add to Dock, and installing from a real Chrome;
+   the 15 manual entries of the parity matrix for item 5; E1 to E5 for the PDF viewer of the
+   additions), fills in the report form and posts it as an issue, and signs off the manual list.
+2. **Optional, with the owner's permission (O-2):** the Windows session of
    `docs/porting/windows-confirmation.md` (settles `b19`, the remaining point of `a53` and other
-   items of part 4). Not
-   required by 6.9.
+   items of part 4). Not required by 6.9.
 
-## Repaired in this step
+## Changed in this step
 
-- The judges of `tests/integration/rc`, written on commit 4bd5f68, brought up to the definition of
-  done as it reads today (items 1, 2, 3, 5, 6, 8, 9, 11, 12; see each item), each shown to fail on
-  a broken copy of its input; one entry point `npm run check:rc` (`rc.mjs`), which with `--logs`
-  also judges items 4, 5, 6, 8, 9 and 10 from the CI logs that `fetch-ci.mjs` downloads;
-  `tests/integration/rc/README.md`; `docs/porting/errata/I3.md`.
-- `tests/integration/rc/item-02-checklists.json`: T3's reviewed mapping applied (with the
-  hardware 21 colour check found by its exact title), every proof given its exact title, Q19 by the
-  architect's decision U2 S6.
-- `engine/asm/PATCHES.md` "Macro nesting": the original's outcome is known (a stack overflow under
-  Wine, `macro-13`); it said UNVERIFIED.
-- `docs/porting/errata/T3.md` entry 14 and the note under trap15-b 5.4: `a51` and `a52` count
-  against item 2 (not unconfirmed); `b06` is settled and accepted.
+- `tests/integration/rc/lib/runs.mjs`: the runs and jobs of `9b2f25b`; the cancelled push run is
+  named (`CANCELLED_PUSH`) and the manual run is read in its place (erratum I3 8). `rc.mjs` reads
+  the manual run where it read the push run; its header and its line for item 12 say what is true at
+  the release.
+- `item-01-asm-evidence.mjs`, `item-02-sim-evidence.mjs`, `item-11-unverified.mjs`: read
+  `docs/DIFFERENCES.md` with its line ends normalised (erratum I3 7); each shown to fail on a broken
+  CRLF copy (items 1, 2 and 11 above).
+- `item-12-manual-coverage.mjs`: its closing line (part B3 with the released app). The count of
+  6.8's bullets (16) and of the parity matrix's rows of 1.5 (18, judged with the rest by item 5)
+  were already brought to the merged state by the integration pass of the additions (commit
+  bd3d8a2); this step checked that the judges and this document agree with it.
+- This document, `tests/integration/rc/README.md` and `docs/porting/errata/I3.md` (entries 6 to
+  9).
 
-## Repaired after the two reviews of this check
-
-The two independent reviews (items 1 to 4 and 11; items 5 to 10 and 12) found the verdicts right
-and named minor defects of the judges and of this document; no verdict changed. Each judge changed
-here was shown to fail on a broken copy of its input (see its item):
-
-- `item-02-sim-evidence.mjs` counts the identical programs and logs from the comparison's own
-  result (`--sim-report`, `--sim-vitest`), not from the programs the list leaves out; `check:rc`
-  runs the sim project for it; "Before version 1.0.0 may be tagged" step 1 asks for both, and names
-  `a53`.
-- `item-05-parity.mjs` judges the unit entries, a folder of programs by a test of each program;
-  `check:rc` makes the reports and passes them; item 5 gives the figures of 1.3 apart from 1.5.
-- `item-10-stability.mjs` requires Ubuntu runners; `item-01-asm-evidence.mjs` refuses a stale
-  report; `item-11-unverified.mjs` searches without regard to case and keeps empty cells; the spoil
-  of item 3 reaches the primitive suites.
-- This document: item 1's figures (801 runs, 118 of 121 equal and 3 accepted, the archive of the
-  site that cannot be unpacked), item 2's coverage worded as what the judge shows, item 4's note on
-  the engine's own test, item 6's manual run and the `check:wave2` wording, item 7 in step 4.
+The history of the first check (commit `b247e17`, before the file-stream repair and the additions)
+and its two reviews is in the Git history of this file (commit 9b2f25b and earlier) and in
+`docs/porting/errata/I3.md`; the broken inputs on which each judge was shown to fail are listed in
+`tests/integration/rc/README.md` ("Showing that a judge fails when its item is broken").
 
 ## Q1 - accessibility and keyboard audit
 

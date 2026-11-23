@@ -9,9 +9,10 @@ the CI runs read, are in [`docs/integration/rc.md`](../../../docs/integration/rc
 
 ```
 npm run check:rc
-node tests/integration/rc/fetch-ci.mjs build/rc-logs     # read-only: the CI logs the judges read
-npm run check:rc -- --logs build/rc-logs                 # also judge those logs
+node tests/integration/rc/fetch-ci.mjs build/rc-final    # read-only: the CI logs the judges read
+npm run check:rc -- --logs build/rc-final                # also judge those logs
 npm run check:rc -- --browsers [--dist <app build>]      # also the browser walks of items 7 and 12
+npm run check:rc -- --logs build/rc-final --browsers     # the full form, as docs/integration/rc.md ran it
 ```
 
 `rc.mjs` first runs the comparisons that items 2 and 5 read, with four Vitest workers: the sim
@@ -21,7 +22,8 @@ each with the Vitest configuration of its folder; their JSON reports go to `--ou
 build/>` (default `build/I3/rc`, emptied first). Then it runs every local judge below (about two
 minutes in all; item 3 and the comparisons are most of it) and prints one line per item: **holds**, **does not hold**, **not shown yet**, **shown only in CI** (with the
 run and the command that judges its log) or **open for a person**. It exits 1 while any item does
-not hold, so it is not part of CI: today items 2 and 6 do not hold.
+not hold, so it is not part of CI. On the commit of release 1.0.0 (`9b2f25b`) the verdicts are those
+of `docs/integration/rc.md`.
 
 `--logs <folder>` takes job logs saved as `<job id>.log` and the job lists of the runs saved as
 `run-<run id>.json`; with them it also judges items 4, 5, 6, 8, 9 and 10 from CI.
@@ -35,6 +37,10 @@ gh api "repos/gurmyd/easy68k-cross-platform/actions/runs/<id>/jobs?per_page=100"
 
 The run and job ids are in `lib/runs.mjs` (the runs of the commit the check was made on;
 `docs/integration/rc.md` names them). For a check on a later commit, put that commit's ids there.
+A manual run of `ci.yml` runs every job of a push run as well; when GitHub cancels the push run in
+its favour (the same concurrency group), the manual run stands for both (erratum I3 8).
+The judges of items 1, 2, 11 and 12 read `docs/DIFFERENCES.md` and the manual with their line ends normalised, so a Windows
+checkout with CRLF gives the same verdicts (erratum I3 7).
 
 What it needs: `engine/dist` (items 2, 3 and 5), and the reports of the last `npm run
 test:conformance` in `build/reports` (item 1; a report older than `tests/corpus/manifest.json`,

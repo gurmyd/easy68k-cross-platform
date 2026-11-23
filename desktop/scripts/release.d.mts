@@ -14,3 +14,6 @@ export declare const FIRST_START_BEGIN: string;
 export declare const FIRST_START_END: string;
 export declare function firstStartSection(markdown: string): string;
 export declare function releaseNotes(version: string, firstStart: string, minimumMacOS: string): string;
+export declare const REPOSITORY_URL: string;
+export declare const WEB_VERSION_URL: string;
+export declare function releaseStatus(version: string): string[];

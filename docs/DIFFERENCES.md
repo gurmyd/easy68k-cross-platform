@@ -1972,8 +1972,14 @@ They stay here until they are.
 
 - **Nobody has used the port on a real Mac yet.** Everything is tested automatically on GitHub's
   macOS, Linux and Windows machines, but the checks only a person can make
-  (`docs/MANUAL-TEST-MAC.md`) have not been worked through. There is no Mac app to download until a
-  release exists.
+  (`docs/MANUAL-TEST-MAC.md`) have not been worked through. Version 1.0.0, the first release, was
+  published before anyone had made them, by the decision of the project's owner (22 November 2026).
+  The Mac app is on the Releases page of the repository,
+  `https://github.com/gurmyd/easy68k-cross-platform/releases`, and the web version at
+  `https://gurmyd.github.io/easy68k-cross-platform/`. The Mac app is signed ad hoc and not notarised
+  by Apple, so macOS blocks it the first time: the notes of the release on that page, and the front
+  page of the repository (`https://github.com/gurmyd/easy68k-cross-platform`, section "Opening the
+  Mac app for the first time"), say how to open it.
 - **Firefox is not tested.** The automatic tests run in the engines of Chrome (Chromium) and Safari
   (WebKit) only, as Playwright ships them, not in Safari itself. Firefox may work; nothing proves
   it. ChromeOS and phones are not tested either.
@@ -2002,23 +2008,27 @@ They stay here until they are.
 - **Moving panels has not been tried with a screen reader.** The announcements of a move and the
   order of the panels for the Tab key are checked automatically; VoiceOver over a move is checks V10
   and V11 of `docs/MANUAL-TEST-MAC.md`.
-- **Speed at `Maximum`, and frames while a program draws, are not proven yet.** The design asks
-  that at the `Maximum` setting a program executes at least 100 million instructions in 10 seconds,
-  and at least 85 % of what the simulator's engine alone executes in 5 seconds on the same machine
-  in the same test run; and that, while a program draws without pause, the 95th percentile of the
-  frame intervals is under 20 ms at 60 Hz and under 12 ms at 120 Hz; all in Chrome's engine on
-  GitHub's Linux machine (`docs/ARCHITECTURE.md` 6.9 item 9; the `Maximum` rule was corrected on
-  22 November 2026 from 200 million in 10 seconds, erratum P1 13). Only the performance job of a
-  manual test run there decides it, and the release-candidate check reads that job; no such run has
-  been made since the correction. The last one (run 44988194975, 22 November 2026, under the old
-  rule) measured the engine alone at 32.05 million instructions per second, `Maximum` at
-  150.4 million (60 Hz) and 158.9 million (120 Hz) in 10 seconds, and frame intervals of 17.4 ms
-  (60 Hz) and 8.8 ms (120 Hz). By those figures the corrected rule holds there (150.4 million is
-  94 % of the engine's 160.3 million in 5 seconds), but only a run of the corrected check on the
-  final commit shows it. On a Windows PC the same day, with the corrected check (not judged
-  there), `Maximum` reached 144.9 to 224.6 million, 84.4 to 92.2 % of the engine alone; the run at
-  84.4 % would miss the 85 % (`docs/porting/speed.md` 4.2, 4.6). The program's own results and
-  timing are not affected either way.
+- **Speed at `Maximum` is about half of what the engine could do, and depends on the machine.**
+  The design asks that at the `Maximum` setting a program executes at least 100 million
+  instructions in 10 seconds, and at least 85 % of what the simulator's engine alone executes in 5
+  seconds on the same machine in the same test run; and that, while a program draws without pause,
+  the 95th percentile of the frame intervals is under 20 ms at 60 Hz and under 12 ms at 120 Hz; all
+  in Chrome's engine on GitHub's Linux machine (`docs/ARCHITECTURE.md` 6.9 item 9; the `Maximum`
+  rule was corrected on 22 November 2026 from 200 million in 10 seconds, erratum P1 13). The
+  performance job of the manual test run of the release commit (run 45111581771, job `perf
+  (ubuntu-latest, chromium)`, 23 November 2026) measured: the engine alone 25.19 million
+  instructions per second, so 125.9 million in 5 seconds, of which 85 % is 107.0 million;
+  `Maximum` 113.5 million in 10 seconds with the 60 Hz frame source (it holds) and 119.8 million with
+  the 120 Hz one; frame intervals of 17.4 ms at 60 Hz and 9.0 ms at 120 Hz; the busy loop at the
+  default speed used 2.41 s of processor time in 30 seconds (the limit is 4.5 s); assembling the
+  largest test file took 285 ms (`GFX.X68`) and 311 ms (`MAIN.X68` with its includes). All seven
+  verdicts hold. What remains: by design the simulator gives the engine only half of each frame
+  (the other half keeps the window responsive), and the figures depend on the machine. The same
+  runner measured 150.4 million at `Maximum` in an earlier run (run 44988194975) and 113.5 million
+  in this one; on a Windows PC, with the corrected check (not judged there), `Maximum` reached 144.9
+  to 224.6 million, 84.4 to 92.2 % of the engine alone, and the run at 84.4 % would miss the 85 %
+  (`docs/porting/speed.md` 4.2, 4.6). Nobody has measured it on a Mac. The program's own results
+  and timing are not affected either way.
 - **Screen readers have not been tried.** The accessibility checks look at the page's structure;
   nobody has used the port with VoiceOver or NVDA yet. The automatic audit has no open finding
   today: `docs/integration/rc.md` records the six it found and how each was repaired.

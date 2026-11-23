@@ -5,9 +5,11 @@ to use it on a Mac, on Linux, on a Chromebook, or in a browser on Windows. It ex
 differs in use from the Windows program you may know from class. How to write 68000 programs is
 not explained here: the original help pages do that, and they are included (Help menu, or F1).
 
-The port is a **preview**. It is tested automatically, but nobody has used it for a course yet. Keep
-a copy of your work (see "Where your files are kept"), and if something does not work, the original
-EASy68K on a Windows PC is the reference.
+This guide describes version 1.0.0, the first release. The port is tested automatically on
+GitHub's Windows, macOS and Linux machines, but no person has worked through the checks that only a
+person can make (`docs/MANUAL-TEST-MAC.md`), nobody has tried it on a real Mac or in Safari itself,
+and nobody has used it for a course yet. Keep a copy of your work (see "Where your files are kept"),
+and if something does not work, the original EASy68K on a Windows PC is the reference.
 
 ## Which version to use
 
@@ -19,9 +21,11 @@ EASy68K on a Windows PC is the reference.
 - **The Mac app**: the same program as a Mac application, which reads and writes your files directly
   on the disk; it also offers the serial port and network tasks (TRAP #15 tasks 40-43 and 100-107),
   which a browser cannot. Options > Serial Ports... says which device of the Mac each port name of
-  a program (`COM1` ...) opens. It has not been released yet. When it
-  is, the first start needs a few extra steps, because the app is not notarised by Apple; the
-  README's section "Opening the Mac app for the first time" explains them.
+  a program (`COM1` ...) opens. Download it from the Releases page of the repository,
+  <https://github.com/gurmyd/easy68k-cross-platform/releases> (the `.dmg` ending in `arm64` for an
+  Apple silicon Mac, `x64` for an Intel Mac; macOS 13 or later). The first start needs a few extra
+  steps, because the app is signed ad hoc and not notarised by Apple; the README's section "Opening
+  the Mac app for the first time" explains them.
 
 **On a Mac managed by your school** you may not be allowed to do those steps. Use the web version:
 it does the same, and in Safari you can add it to the Dock (below) so that it opens like an app.
