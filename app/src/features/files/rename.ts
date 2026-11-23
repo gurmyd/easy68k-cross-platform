@@ -21,7 +21,7 @@ import type { Vfs, VPath } from '../../contracts';
 import { basename, childPath, dirname, foldCase, splitVPath } from '../../core/paths/winpath';
 import { removeEmptyFolders } from './bulk';
 import { findGitHolder, innerName } from './git-guard';
-import { takeBackCopyOfGone, unchangedSince, writtenAs, type SourceSeen } from './move';
+import { removeSource, takeBackCopyOfGone, unchangedSince, writtenAs, type SourceSeen } from './move';
 import { listTree, makeFolder, renameEntry } from './store';
 import { alreadyExists, changedWhileRenaming, gitNameRefused, gitRefusal, noLongerExists } from './texts';
 
@@ -209,8 +209,10 @@ export async function renameChecked(
   const kept: VPath[] = [];
   const gone: VPath[] = [];
   for (const file of copied) {
-    if (await unchangedSince(vfs, file.source, file.seen)) {
-      await vfs.remove(file.source);
+    // A source that goes in the moment between the check and its removal (the remove finds nothing)
+    // is a source that is gone, as one found gone by the check: its copy is taken back and the
+    // rename goes on with the other files (errata N5 entry 18).
+    if ((await unchangedSince(vfs, file.source, file.seen)) && (await removeSource(vfs, file.source)) === 'removed') {
       continue;
     }
     const outcome = await takeBackCopyOfGone(vfs, file.source, file.dest, file.written);

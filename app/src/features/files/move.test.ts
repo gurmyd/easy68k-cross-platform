@@ -3,7 +3,7 @@
 // the real store (createMemoryHistoryService) for what goes to the Trash.
 
 import { describe, expect, it } from 'vitest';
-import type { HistoryService, Vfs } from '../../contracts';
+import type { HistoryService, Vfs, VPath } from '../../contracts';
 import { cannotKeepQuestion } from '../../core/history/texts';
 import { createMemoryHistoryService } from '../../fs/history-memory';
 import { moveTargets, refusedTarget, transferItems, transferModeOf } from './move';
@@ -207,6 +207,39 @@ describe('Move with Replace (P3.2.4, P3.3.4)', { timeout: 60_000 }, () => {
     await transferItems(deps, ['/browser/prog.X68'], '/browser/demo');
     expect(deps.dialogs.texts()).toEqual([replaceOneQuestion('prog.X68', 'My Programs/demo', false)]);
     expect(text(await vfs.readFile('/browser/demo/prog.X68'))).toBe('new');
+  });
+
+  it('decision D-g: outside "ready" No has the focus (Yes destroys for good); in "ready" the default stays', async () => {
+    for (const [state, many] of [
+      ['off', false],
+      ['off', true],
+      ['ready', false],
+      ['ready', true],
+    ] as const) {
+      const { vfs } = memoryStores();
+      await seed(vfs, {
+        '/browser/prog.X68': 'new',
+        '/browser/two.X68': 'new',
+        '/browser/demo/prog.X68': 'old',
+        '/browser/demo/two.X68': 'old',
+      });
+      const history = state === 'ready' ? scriptedHistory(vfs) : scriptedHistory(vfs, { state });
+      for (const mode of ['move', 'copy'] as const) {
+        const deps = filesTestDeps({ vfs, history, dialogs: scriptedDialogs(['Cancel']) });
+        const items: VPath[] = many ? ['/browser/prog.X68', '/browser/two.X68'] : ['/browser/prog.X68'];
+        await transferItems(deps, items, '/browser/demo', mode);
+        const ready = state === 'ready';
+        expect(deps.dialogs.shown[0]).toEqual({
+          title: mode === 'copy' ? 'Copy' : 'Move',
+          text: many
+            ? replaceManyQuestion(2, 'My Programs/demo', ready)
+            : replaceOneQuestion('prog.X68', 'My Programs/demo', ready),
+          icon: 'confirmation',
+          buttons: ['Yes', 'No', 'Cancel'],
+          ...(ready ? {} : { defaultButton: 'No' }),
+        });
+      }
+    }
   });
 
   it('over an open document: skipped when modified (no guard), reloaded when not, closed when the own document follows', async () => {

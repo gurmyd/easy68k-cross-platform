@@ -5,6 +5,8 @@
 import { Actions, type Action } from 'flexlayout-react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Settings } from '../../contracts';
+import { createDocumentService } from '../../features/documents';
+import { MemoryBackend } from '../../fs/memory-backend';
 import { dockOf } from '../../state/dock';
 import { SPLITS, splitFraction, withPanelVisible, withSplit } from '../../state/layout';
 import { hidePanel, showPanel } from '../../state/panels';
@@ -337,6 +339,91 @@ describe('transient tabs (P4.4)', () => {
     expect(dock.selectTransient('viewer:1')).toBe(true);
     expect(tabNodeOf(engine.model, 'editor', 'viewer:1')!.isSelected()).toBe(true);
     expect(dock.selectTransient('viewer:9')).toBe(false);
+  });
+
+  // O-1 of the gate's fourth round (errata N1 28): a document opened or chosen while a viewer's tab
+  // is in front of the Editor's was made active but stayed hidden.
+  it("documentShown brings the Editor's tab in front of a viewer's in its group, and changes nothing else", () => {
+    const { app, engine } = setup('editor');
+    const dock = dockOf(app.ctx);
+    const selected = (id: string) => tabNodeOf(engine.model, 'editor', id)!.isSelected();
+    dock.openTransient(spec(1));
+    dock.openTransient(spec(2));
+    expect(selected('viewer:2')).toBe(true);
+    expect(selected('editor')).toBe(false);
+    const actions = dock.stats().actions.editor;
+    dock.documentShown();
+    expect(selected('editor')).toBe(true);
+    expect(engine.has('viewer:1') && engine.has('viewer:2')).toBe(true);
+    expect(dock.stats().actions.editor).toBe(actions + 1);
+    // The Editor in front already: no action at all.
+    dock.documentShown();
+    expect(dock.stats().actions.editor).toBe(actions + 1);
+    // A viewer moved to a group of its own stays in front there; the Editor is in front in its own.
+    dock.selectTransient('viewer:1');
+    dock.move('viewer:1', { kind: 'edge', side: 'right' });
+    expect(groupOf(engine.model, 'editor', 'viewer:1')).not.toBe(groupOf(engine.model, 'editor', 'editor'));
+    dock.selectTransient('viewer:2');
+    dock.documentShown();
+    expect(selected('editor')).toBe(true);
+    expect(selected('viewer:1')).toBe(true);
+    expect(selected('viewer:2')).toBe(false);
+  });
+
+  it('documentShown leaves a tool panel a person put in front of the Editor, and the Simulator dock, alone', () => {
+    const { app, engine } = setup('editor');
+    const dock = dockOf(app.ctx);
+    dock.move('files', { kind: 'tab', near: 'editor' });
+    expect(tabNodeOf(engine.model, 'editor', 'files')!.isSelected()).toBe(true);
+    const actions = dock.stats().actions.editor;
+    dock.documentShown();
+    expect(tabNodeOf(engine.model, 'editor', 'files')!.isSelected()).toBe(true);
+    expect(dock.stats().actions.editor).toBe(actions);
+    const sim = setup('simulator');
+    const simActions = dockOf(sim.app.ctx).stats().actions.simulator;
+    sim.engine.documentShown();
+    expect(dockOf(sim.app.ctx).stats().actions.simulator).toBe(simActions);
+  });
+
+  it("in Simulator mode the hidden Editor dock still brings the Editor's tab forward; the mode stays", () => {
+    const { app, engine } = setup('editor');
+    const dock = dockOf(app.ctx);
+    void app.ctx.commands.run('app.mode.set', 'simulator');
+    // A viewer opened while the Simulator is in front (a file handed over by the system).
+    dock.openTransient(spec(1));
+    expect(tabNodeOf(engine.model, 'editor', 'viewer:1')!.isSelected()).toBe(true);
+    dock.documentShown();
+    expect(tabNodeOf(engine.model, 'editor', 'editor')!.isSelected()).toBe(true);
+    expect(app.ctx.store.getState().mode).toBe('simulator');
+  });
+});
+
+describe('documentShown with the real document service (O-1, errata N1 28 and N6 15)', () => {
+  it('New, Open, the Window menu choice of the active document and Reload each bring the Editor in front of a viewer', async () => {
+    const backend = new MemoryBackend({ mount: 'browser', kind: 'memory', label: 'My Programs' });
+    const app = createTestApplication({ services: { createDocumentService }, backends: [backend] });
+    const engine = new DockEngine(app.ctx, app.panels, app.shell, 'editor');
+    engine.start();
+    engine.setSize(1400, 813);
+    const dock = dockOf(app.ctx);
+    const editorInFront = () => tabNodeOf(engine.model, 'editor', 'editor')!.isSelected();
+    let n = 0;
+    const viewerInFront = () => {
+      dock.openTransient({ id: `viewer:${++n}`, title: `f${n}.pdf`, tooltip: '', render: () => null, onClose() {} });
+      expect(editorInFront()).toBe(false);
+    };
+    await app.ctx.vfs.writeFile('/browser/p.X68', Uint8Array.from([0x41, 0x0d, 0x0a]));
+    const steps: [string, () => unknown][] = [
+      ['New', () => app.ctx.documents.newSource()],
+      ['Open', () => app.ctx.documents.open('/browser/p.X68')],
+      ['the active document chosen again', () => app.ctx.documents.activate(app.ctx.documents.active()!.id)],
+      ['Reload of the active document', () => app.ctx.documents.reload(app.ctx.documents.active()!.id)],
+    ];
+    for (const [label, step] of steps) {
+      viewerInFront();
+      await step();
+      expect([label, editorInFront()]).toEqual([label, true]);
+    }
   });
 });
 

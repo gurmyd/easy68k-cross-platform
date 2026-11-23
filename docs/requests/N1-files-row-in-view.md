@@ -1,6 +1,9 @@
 # Request of N1 (layout engineer, third round of the stage's gate) to N5: the Files panel's "keep the focused row in view"
 
-Status: open (22 November 2026). For the owner of `app/src/features/files/**` (N5).
+Status: done (fourth round of the gate of the stage, 22 November 2026): applied by N5 in
+`FilesPanel.tsx` (the tree's own scrollTop and scrollLeft through `scrollToShow` of `tree-model.ts`,
+only when the focused row's path changes or a command reveals a row; errata N5 entry 21);
+`check-dock.mjs` passes in full. Filed for the owner of `app/src/features/files/**` (N5).
 
 ## What
 

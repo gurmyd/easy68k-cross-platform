@@ -484,6 +484,24 @@ function notChanged(error: unknown): Error {
   return new Error(historyNotChanged(errorText(error)));
 }
 
+/**
+ * The open did not succeed within OPEN_TIMEOUT (P3.3.5): the history is unavailable in this window
+ * until the browser answers. The request is not abandoned: `later` settles when it does (errata
+ * N3, "A slow open").
+ */
+class SlowOpen extends Error {
+  constructor(readonly later: Promise<IDBDatabase>) {
+    super(`the browser did not open it within ${OPEN_TIMEOUT / 1000} s`);
+  }
+}
+
+/** A connection that opened late was closed for another window's versionchange before it was used. */
+class ClosedWhileOpening extends Error {
+  constructor() {
+    super('the database was closed while it was opening');
+  }
+}
+
 /** A record() call waiting in the queue (P3.3.5). */
 interface Queued {
   path: VPath;
@@ -521,6 +539,8 @@ class Store implements HistoryStore {
   readonly windowId: string;
   private readonly newId: () => string;
   private failure: string | null = null;
+  /** The failure is a slow open (SlowOpen): it ends when the browser answers (errata N3). */
+  private slowOpen = false;
   private dbPromise: Promise<IDBDatabase> | null = null;
   private openDb: IDBDatabase | null = null;
   private closed = false;
@@ -610,9 +630,10 @@ class Store implements HistoryStore {
     }
   }
 
-  private fail(detail: string): void {
+  private fail(detail: string, slow = false): void {
     if (this.failure !== null) return;
     this.failure = detail;
+    this.slowOpen = slow;
     this.stateMayHaveChanged();
   }
 
@@ -663,24 +684,16 @@ class Store implements HistoryStore {
     if (this.failure !== null) return Promise.reject(new Error(this.failure));
     if (this.closed) return Promise.reject(new Error('the history was closed'));
     if (!this.dbPromise) {
-      const promise = this.open().then(
-        (db) => {
-          this.openDb = db;
-          db.onversionchange = () => {
-            // deleteAll in another window, or a later format: let it have the database (P3.3.5).
-            db.close();
-            if (this.dbPromise === promise) this.dbPromise = null;
-            this.openDb = null;
-          };
-          db.onclose = () => {
-            if (this.dbPromise === promise) this.dbPromise = null;
-            this.openDb = null;
-          };
-          return db;
-        },
+      const promise: Promise<IDBDatabase> = this.open().then(
+        (db) => this.adopt(db, promise),
         (error: unknown) => {
           if (this.dbPromise === promise) this.dbPromise = null;
-          if (error instanceof MetaDamaged) this.fail(error.message);
+          if (error instanceof SlowOpen) {
+            this.fail(error.message, true);
+            this.awaitLateOpen(error.later);
+          } else if (error instanceof ClosedWhileOpening) {
+            // Another window's deleteAll: the next call opens again (as after onversionchange).
+          } else if (error instanceof MetaDamaged) this.fail(error.message);
           else this.fail(errorText(error));
           throw error;
         },
@@ -690,48 +703,123 @@ class Store implements HistoryStore {
     return this.dbPromise;
   }
 
+  /** Makes `db` this window's connection, the value of `promise` (this.dbPromise). */
+  private adopt(db: IDBDatabase, promise: Promise<IDBDatabase>): IDBDatabase {
+    this.openDb = db;
+    db.onversionchange = () => {
+      // deleteAll in another window, or a later format: let it have the database (P3.3.5).
+      db.close();
+      if (this.dbPromise === promise) this.dbPromise = null;
+      this.openDb = null;
+    };
+    db.onclose = () => {
+      if (this.dbPromise === promise) this.dbPromise = null;
+      this.openDb = null;
+    };
+    return db;
+  }
+
+  /**
+   * After a slow open (SlowOpen) the store goes on waiting for the browser's answer: when the
+   * database opens at last and its `meta` parses, the history is ready again in this window and the
+   * listeners hear of it (the dialogs leave the text of P3.3.7). A late error makes the failure
+   * that error; a connection that another window's versionchange closed before it was used is
+   * opened again. Nothing that happened meanwhile is replayed (errata N3, "A slow open").
+   */
+  private awaitLateOpen(later: Promise<IDBDatabase>): void {
+    const stillSlow = () => !this.closed && this.failure !== null && this.slowOpen;
+    later.then(
+      (db) => {
+        if (!stillSlow()) {
+          db.close();
+          return;
+        }
+        const promise = Promise.resolve(db);
+        this.dbPromise = promise;
+        this.adopt(db, promise);
+        this.failure = null;
+        this.slowOpen = false;
+        this.stateMayHaveChanged();
+      },
+      (error: unknown) => {
+        if (!stillSlow()) return;
+        if (error instanceof SlowOpen) {
+          this.awaitLateOpen(error.later);
+        } else if (error instanceof ClosedWhileOpening) {
+          this.awaitLateOpen(this.open());
+        } else {
+          this.failure = error instanceof MetaDamaged ? error.message : errorText(error);
+          this.slowOpen = false;
+          this.emit(); // the state stays unavailable; the dialogs show the new detail
+        }
+      },
+    );
+  }
+
+  /**
+   * Opens the database and checks its `meta`. When that takes longer than OPEN_TIMEOUT, rejects
+   * with a SlowOpen whose `later` settles with the outcome of the same request (P3.3.5).
+   */
   private open(): Promise<IDBDatabase> {
     const factory = this.deps.indexedDB as IDBFactory;
     return new Promise<IDBDatabase>((resolve, reject) => {
       let settled = false;
+      let late: { resolve: (db: IDBDatabase) => void; reject: (error: unknown) => void } | null = null;
       const timed = this.options.openTimeout !== false;
       const cancel = !timed
         ? () => {}
         : this.deps.scheduler.setTimer(OPEN_TIMEOUT, () => {
             if (settled) return;
             settled = true;
-            reject(new Error(`the browser did not open it within ${OPEN_TIMEOUT / 1000} s`));
+            const later = new Promise<IDBDatabase>((res, rej) => {
+              late = { resolve: res, reject: rej };
+            });
+            later.catch(() => {}); // awaitLateOpen handles it; this only keeps it from being unhandled
+            reject(new SlowOpen(later));
           });
-      const finish = (fn: () => void) => {
-        if (settled) return;
-        settled = true;
-        cancel();
-        fn();
+      const answer = (outcome: { db: IDBDatabase } | { error: unknown }) => {
+        if (!settled) {
+          settled = true;
+          cancel();
+          if ('db' in outcome) resolve(outcome.db);
+          else reject(outcome.error);
+        } else if (late) {
+          if ('db' in outcome) late.resolve(outcome.db);
+          else late.reject(outcome.error);
+        } else if ('db' in outcome) {
+          outcome.db.close();
+        }
       };
       let request: IDBOpenDBRequest;
       try {
         request = factory.open(HISTORY_DB_NAME, HISTORY_DB_VERSION);
       } catch (error) {
-        finish(() => reject(error));
+        answer({ error });
         return;
       }
       request.onupgradeneeded = () => upgrade(request.result);
       request.onsuccess = () => {
         const db = request.result;
-        if (settled) {
+        // Until the connection is this window's (adopt), it lets another window's deleteAll or a
+        // later format have the database at once (P3.3.5), and is opened again.
+        let lost = false;
+        db.onversionchange = () => {
+          lost = true;
           db.close();
-          return;
-        }
+        };
         // P3.3.7: a `meta` record that does not parse makes the history unavailable.
         this.transact(db, 'readonly', (tx) => planCheckMeta(tx)).then(
-          () => finish(() => resolve(db)),
+          () => {
+            if (lost) answer({ error: new ClosedWhileOpening() });
+            else answer({ db });
+          },
           (error: unknown) => {
             db.close();
-            finish(() => reject(error));
+            answer({ error: lost ? new ClosedWhileOpening() : error });
           },
         );
       };
-      request.onerror = () => finish(() => reject(request.error ?? new Error('the database could not be opened')));
+      request.onerror = () => answer({ error: request.error ?? new Error('the database could not be opened') });
       request.onblocked = () => {
         // An older connection elsewhere: the open goes on once it lets go (or the timer ends it).
       };
@@ -1675,7 +1763,10 @@ class Store implements HistoryStore {
       };
     });
     // P3.3.7: deleting the database is how an unavailable history recovers.
-    if (this.deps.subtle && typeof this.deps.subtle.digest === 'function') this.failure = null;
+    if (this.deps.subtle && typeof this.deps.subtle.digest === 'function') {
+      this.failure = null;
+      this.slowOpen = false;
+    }
     this.quotaTight = false;
     this.skippedKeys.clear();
     this.stateMayHaveChanged();

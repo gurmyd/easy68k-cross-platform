@@ -14,6 +14,8 @@
 // A start-up file that the viewer takes (ARCHITECTURE-PLUS P3.4.2: a PDF, a picture) makes open()
 // return null; the viewer's tab is queued by the dock controller and shown once the Editor dock
 // attaches, and the Editor then holds the template document, as for any file that does not open.
+// That template document stays behind the viewer; every other document opened or chosen comes in
+// front of a viewer (the service's `shown`, the dock's documentShown; errata N6 15).
 //
 // Unload guard (1.3.3): while any document is modified the browser's "leave site?" prompt is on;
 // the feature asks for it as the party 'documents' (Platform.confirmBeforeUnload(needed, who)).
@@ -24,10 +26,18 @@ import type { AppContext, DocumentService, FeatureModule, VPath } from '../../co
 import { upperExt } from '../../core/documents/format';
 import { DocumentManager } from '../../core/documents/service';
 import { isVPath } from '../../core/paths/winpath';
+import { dockOf } from '../../state/dock';
 import type { LockManagerLike } from '../../state/window-lock';
 import { documentCommands } from './commands';
 import { DraftsDialog } from './DraftsDialog';
 import { createIndexedDbDraftStore, DRAFTS_DIALOG_ID, startDraftKeeper, type DraftStore } from './drafts';
+
+/**
+ * Windows whose start-up is making the template document beside a start-up file that did not open
+ * as a document (the viewer took it, or it could not be read): that template does not cover the
+ * viewer (P5 N6: the start-up PDF is shown and the Editor holds the template document).
+ */
+const quietStart = new WeakSet<AppContext>();
 
 /**
  * The document service of the application (3.9). Called once by the bootstrap, after `dialogs`,
@@ -44,6 +54,11 @@ export function createDocumentService(ctx: AppContext): DocumentService {
     // without one (tests) every file opens as text.
     ...(ctx.viewer ? { viewer: ctx.viewer } : {}),
     clock: ctx.clock,
+    // ARCHITECTURE-PLUS P1.2 (errata N6 15): a document opened or chosen is shown, as today, also
+    // while a viewer's tab is in front of the Editor's (the dock brings the Editor's tab forward).
+    shown: () => {
+      if (!quietStart.has(ctx)) dockOf(ctx).documentShown();
+    },
   });
 }
 
@@ -93,7 +108,12 @@ async function startupDocument(ctx: AppContext): Promise<void> {
     const stat = await ctx.vfs.stat(file).catch(() => null);
     if (stat?.kind === 'file' && (await ctx.documents.open(file))) return;
   }
-  ctx.documents.newSource();
+  quietStart.add(ctx);
+  try {
+    ctx.documents.newSource();
+  } finally {
+    quietStart.delete(ctx);
+  }
 }
 
 export function createDocumentsFeature(options: DocumentsFeatureOptions = {}): FeatureModule {

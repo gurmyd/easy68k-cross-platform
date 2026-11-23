@@ -177,3 +177,104 @@ describe('a move never removes a source that changed after it was copied', { tim
     expect(deps.dialogs.shown).toEqual([]);
   });
 });
+
+/** Before the first removal of `when`, `then` runs once: the moment after the last check. */
+function beforeRemoveOf(vfs: Vfs, when: VPath, then: () => Promise<void>): void {
+  const remove = vfs.remove.bind(vfs);
+  let done = false;
+  vfs.remove = async (path) => {
+    if (!done && path === when) {
+      done = true;
+      await then();
+    }
+    return remove(path);
+  };
+}
+
+/** Every file below `root` with its bytes. */
+async function filesOf(vfs: Vfs, root: VPath): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  const walk = async (dir: VPath) => {
+    for (const entry of await vfs.list(dir)) {
+      const path = `${dir}/${entry.name}` as VPath;
+      if (entry.kind === 'dir') await walk(path);
+      else out[path] = text(await vfs.readFile(path));
+    }
+  };
+  await walk(root);
+  return out;
+}
+
+describe(
+  'a source that goes between the last check and its removal is a source that is gone (errata N5 entry 18)',
+  { timeout: 60_000 },
+  () => {
+    for (const how of ['moved out', 'deleted'] as const) {
+      const away = (vfs: Vfs, path: VPath) =>
+        how === 'deleted'
+          ? vfs.remove(path)
+          : (async () => {
+              await vfs.writeFile('/browser/B/p.X68', await vfs.readFile(path));
+              await vfs.remove(path);
+            })();
+
+      it(`a folder rename, p ${how} just before its removal: its copy goes, the rename goes on with q`, async () => {
+        const { vfs } = memoryStores();
+        await vfs.writeFile('/browser/A/p.X68', ascii('P'));
+        await vfs.writeFile('/browser/A/q.X68', ascii('Q'));
+        await vfs.mkdirp('/browser/B');
+        const gone: VPath[] = [];
+        beforeRemoveOf(vfs, '/browser/A/p.X68', () => away(vfs, '/browser/A/p.X68'));
+        const renamed = await renameChecked(vfs, '/browser/A', 'A2', { gone: (files) => void gone.push(...files) });
+        expect(renamed).toBe('/browser/A2');
+        expect(gone).toEqual(['/browser/A/p.X68']);
+        expect(await filesOf(vfs, '/browser')).toEqual({
+          ...(how === 'moved out' ? { '/browser/B/p.X68': 'P' } : {}),
+          '/browser/A2/q.X68': 'Q',
+        });
+        expect(await vfs.stat('/browser/A')).toBeNull();
+      });
+
+      it(`a file rename, the file ${how} just before its removal: nothing is renamed, nothing is left`, async () => {
+        const { vfs } = memoryStores();
+        await vfs.writeFile('/browser/A/p.X68', ascii('P'));
+        await vfs.mkdirp('/browser/B');
+        beforeRemoveOf(vfs, '/browser/A/p.X68', () => away(vfs, '/browser/A/p.X68'));
+        await expect(renameChecked(vfs, '/browser/A/p.X68', 'r.X68')).rejects.toThrow(/./);
+        expect(await filesOf(vfs, '/browser')).toEqual(how === 'moved out' ? { '/browser/B/p.X68': 'P' } : {});
+      });
+
+      it(`a move, p ${how} just before its removal: its copy goes, q is moved, the student is told`, async () => {
+        const { vfs } = memoryStores();
+        await vfs.writeFile('/browser/A/p.X68', ascii('P'));
+        await vfs.writeFile('/browser/A/q.X68', ascii('Q'));
+        await vfs.mkdirp('/browser/B');
+        await vfs.mkdirp('/browser/C');
+        const deps = filesTestDeps({ vfs, history: scriptedHistory(vfs) });
+        beforeRemoveOf(vfs, '/browser/A/p.X68', () => away(vfs, '/browser/A/p.X68'));
+        const outcome = await transferItems(deps, ['/browser/A/p.X68', '/browser/A/q.X68'], '/browser/C');
+        expect(await filesOf(vfs, '/browser')).toEqual({
+          ...(how === 'moved out' ? { '/browser/B/p.X68': 'P' } : {}),
+          '/browser/C/q.X68': 'Q',
+        });
+        expect(deps.dialogs.shown.map((r) => [r.title, r.icon, r.text])).toEqual([
+          ['Move', 'information', goneWhileMoving('p.X68', 'My Programs/C', false)],
+        ]);
+        expect(outcome.written).toEqual([['/browser/A/q.X68', '/browser/C/q.X68']]);
+      });
+
+      it(`Undo of a move, the file ${how} at its new place just before its removal: not brought back`, async () => {
+        const { vfs } = memoryStores();
+        await vfs.writeFile('/browser/a/p.X68', ascii('P'));
+        await vfs.mkdirp('/browser/b');
+        await vfs.mkdirp('/browser/B');
+        const deps = filesTestDeps({ vfs, history: scriptedHistory(vfs) });
+        await transferItems(deps, ['/browser/a/p.X68'], '/browser/b');
+        beforeRemoveOf(vfs, '/browser/b/p.X68', () => away(vfs, '/browser/b/p.X68'));
+        expect(await deps.undo.run(deps.stack.peek() as UndoEntry, false)).toEqual([]);
+        expect(await filesOf(vfs, '/browser')).toEqual(how === 'moved out' ? { '/browser/B/p.X68': 'P' } : {});
+        expect(deps.dialogs.texts()).toEqual([goneWhileMoving('p.X68', 'My Programs/a', true)]);
+      });
+    }
+  },
+);

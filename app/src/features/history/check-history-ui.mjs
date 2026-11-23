@@ -21,6 +21,9 @@
 //   - the questions that cannot be undone (Delete for Good, Empty Trash, and Delete History and
 //     Trash with a damaged database) open with the focus on `No`, and Enter leaves every Trash item,
 //     earlier version and record in place (decided by the architect, errata N4);
+//   - a slow open (errata N3): while a first window keeps the history database busy, a second
+//     window's Trash dialog shows the text of P3.3.7, and lists the Trash by itself once the first
+//     window lets go;
 //   - an axe scan (WCAG 2.0/2.1 A and AA) of both dialogs in both themes; no console or page error.
 //
 // Part 2 makes a production build of app/ (vite build into the output folder; the service worker is
@@ -795,6 +798,114 @@ async function defaultNoPass(browser, name, baseUrl) {
   }
 }
 
+/**
+ * In the page: keeps a read-write transaction over the whole history database alive until
+ * window.__holding is set false, so that another window cannot open the history meanwhile
+ * (a slow open, P3.3.5). window.__txDone resolves when the transaction has ended.
+ */
+function holdHistory() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('easy68k-history');
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      const names = [...db.objectStoreNames];
+      const tx = db.transaction(names, 'readwrite');
+      const store = tx.objectStore(names[0]);
+      window.__holding = true;
+      const spin = () => {
+        if (window.__holding) store.get('easy68k-check-nothing').onsuccess = spin;
+      };
+      spin();
+      window.__txDone = new Promise((done) => {
+        tx.oncomplete = () => {
+          db.close();
+          done('complete');
+        };
+        tx.onabort = () => done(`aborted: ${tx.error?.name}`);
+      });
+      resolve();
+    };
+  });
+}
+
+/**
+ * A slow open (P3.3.5, errata N3 "A slow open"), as a student sees it: while the first window keeps
+ * the history database busy, a second window's history does not open within 5 s, and its Trash
+ * dialog shows the text of P3.3.7; when the first window lets go, the same dialog, still open,
+ * shows the Trash's item without being opened again.
+ */
+async function slowOpenPass(browser, name, baseUrl) {
+  const p = `${name} slow open:`;
+  const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, reducedMotion: 'reduce' });
+  const errors = [];
+  try {
+    const first = await openApp(context, baseUrl, errors);
+    const count = await makeTrash(first, ['slow.X68']);
+    check(`${p} the first window has one item in the Trash`, count === 1, String(count));
+    await first.evaluate(holdHistory);
+    const second = await openApp(context, baseUrl, errors);
+    const unavailable = await second
+      .waitForFunction(() => window.__easy68k.ctx.history.state() === 'unavailable', null, { timeout: STEP_TIMEOUT })
+      .then(
+        () => true,
+        () => false,
+      );
+    check(`${p} the second window's history is unavailable while the first holds the database`, unavailable);
+    await second.evaluate(() => void window.__easy68k.ctx.commands.run('app.files.trash'));
+    await dialogOpen(second, 'trash').waitFor({ timeout: STEP_TIMEOUT });
+    const message = 'The history cannot be read (the browser did not open it within 5 s). Your files are not affected.';
+    const before = (await second.locator('[data-e68-history=trash]').innerText()).replace(/\s+/g, ' ');
+    check(`${p} the Trash dialog shows the text of P3.3.7`, before.includes(message), before);
+    await second.screenshot({ path: join(outDir, `${name}-slow-open-unavailable.png`) });
+    const released = await first.evaluate(async () => {
+      window.__holding = false;
+      return window.__txDone;
+    });
+    const row = second.locator('[data-e68-history=trash] [role=grid] [role=row][data-row]').first();
+    const listed = await row.waitFor({ timeout: STEP_TIMEOUT }).then(
+      () => true,
+      () => false,
+    );
+    const after = (await second.locator('[data-e68-history=trash]').innerText()).replace(/\s+/g, ' ');
+    check(
+      `${p} when the first window lets go, the open dialog lists the item, without the text of P3.3.7`,
+      listed && after.includes('slow.X68') && !after.includes(message),
+      `transaction ${released}; ${after.slice(0, 300)}`,
+    );
+    const state = await second.evaluate(() => window.__easy68k.ctx.history.state());
+    check(`${p} the second window's history is ready again`, state === 'ready', state);
+    // The Files panel's line (P3.2.6, refreshed at most once per second) counts the Trash again.
+    const line = await second
+      .waitForFunction(
+        () => {
+          const text = document.querySelector('[data-e68-storage-line]')?.textContent ?? '';
+          return /Earlier versions and Trash: [1-9]/.test(text) ? text : false;
+        },
+        null,
+        { timeout: STEP_TIMEOUT },
+      )
+      .then(
+        (handle) => handle.jsonValue(),
+        async () => second.evaluate(() => document.querySelector('[data-e68-storage-line]')?.textContent ?? null),
+      );
+    check(
+      `${p} the Files panel's line counts the Trash again`,
+      /Earlier versions and Trash: [1-9]/.test(line ?? ''),
+      String(line),
+    );
+    await second.screenshot({ path: join(outDir, `${name}-slow-open-ready.png`) });
+    await second.keyboard.press('Escape');
+    await dialogGone(second).then(
+      () => check(`${p} Esc closes the Trash`, true),
+      () => check(`${p} Esc closes the Trash`, false),
+    );
+    check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  } finally {
+    await context.close();
+  }
+}
+
 /** Below 700 px of dialog width: the unified view, with the same marks. */
 async function unifiedPass(browser, name, baseUrl) {
   const p = `${name} narrow:`;
@@ -1017,6 +1128,7 @@ async function main() {
           ['dark', () => dialogsPass(browser, name, 'dark', baseUrl)],
           ['narrow', () => unifiedPass(browser, name, baseUrl)],
           ['default No', () => defaultNoPass(browser, name, baseUrl)],
+          ['slow open', () => slowOpenPass(browser, name, baseUrl)],
         ]) {
           try {
             await run[1]();

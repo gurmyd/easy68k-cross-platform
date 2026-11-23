@@ -2870,23 +2870,12 @@ function asOnMain(key, label, observed) {
   }
   const main = startsOfMain()[key];
   const got = JSON.stringify(observed);
-  const ok = main !== undefined && (JSON.stringify(main) === got || filesCountLineStep(key, main, observed));
+  // No allowance: the one WebKit step that errata N1 26 allowed (Shift+Tab stopping at
+  // `New Folder...` after the focused element went away, because of the selection count line of
+  // P3.2.1) is gone since the strip and that line sit in one element before the tree (decision D-i,
+  // errata N5 23); the integration pass removed the allowance.
+  const ok = main !== undefined && JSON.stringify(main) === got;
   check(label, ok, `main ${JSON.stringify(main)}, here ${got}`);
-}
-
-/**
- * The one step that is the Files panel's and not the dock's (errata N1 26): WebKit goes on from the
- * node before an element that went away. Before the tree, that is main's Files strip, so main's
- * Shift+Tab skips `New Folder...` (Chromium does not, and WebKit does not with a node between);
- * here the selection count line of P3.2.1 (N5) is between them, so WebKit stops at `New Folder...`
- * as Chromium does. Only that walk, only that one stop more.
- */
-function filesCountLineStep(key, main, observed) {
-  if (!/^webkit\|editor.*\|gone beside each stop, Shift\+Tab$/.test(key) || !Array.isArray(main)) return false;
-  const at = main.indexOf('tree|Files|files');
-  if (at < 0 || main[at + 1] === 'button|New Folder...|files') return false;
-  const expected = [...main.slice(0, at + 1), 'button|New Folder...|files', ...main.slice(at + 1)];
-  return JSON.stringify(expected) === JSON.stringify(observed);
 }
 
 let mainStarts = null;

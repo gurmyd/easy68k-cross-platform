@@ -79,9 +79,11 @@ a file the application writes, or an item, command or key of the original's menu
   copied or renamed there.
 - Earlier versions of the files you save, and a Trash for the files you delete or replace (30 days),
   kept in the browser and never written into a folder of your computer: File > Earlier Versions... and
-  File > Trash..., with a comparison and Restore. A message offers a reload when a file you have open is
+  File > Trash..., with a comparison and Restore. Every question the additions ask whose Yes deletes or
+  overwrites something for good has No as its default. A message offers a reload when a file you have open is
   changed outside the window. Files below a `.git` folder are loaded last for a program's folder.
-- A viewer for PDF files and pictures, shown in a tab beside the Editor instead of as nonsense text.
+- A viewer for PDF files and pictures, shown in a tab beside the Editor instead of as nonsense text;
+  a document opened or chosen comes in front of it.
 - Options > Port Additions... switches the viewer and the earlier versions off, and shows what is stored.
 
 ### The macOS app

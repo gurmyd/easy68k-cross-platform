@@ -25,7 +25,7 @@ import {
   type UndoEntry,
 } from './bulk';
 import { gitRefusalFor } from './git-guard';
-import { takeBackCopyOfGone, unchangedSince, writtenAs } from './move';
+import { removeSource, takeBackCopyOfGone, unchangedSince, writtenAs } from './move';
 import { renameChecked } from './rename';
 import { displayPath } from './store';
 import {
@@ -218,7 +218,8 @@ async function undoMove(deps: FilesDeps, entry: Extract<UndoEntry, { kind: 'move
       // The file changed after its bytes were taken: it stays, with the change (entry 16). One that
       // is gone was moved or deleted by someone else: its copy goes again (entry 18).
       const seen = before ? { mtime: before.mtime, size: before.size, data } : undefined;
-      if (!(await unchangedSince(vfs, to, seen))) {
+      // A removal that finds nothing: the file went in the moment since the check, the same case.
+      if (!(await unchangedSince(vfs, to, seen)) || (await removeSource(vfs, to)) === 'gone') {
         const gone = await takeBackCopyOfGone(vfs, to, from, copy);
         if (gone === 'taken-back') {
           await inform(deps, UNDO_TITLE, goneWhileMoving(basename(to), displayPath(vfs, dirname(from)), true));
@@ -227,7 +228,6 @@ async function undoMove(deps: FilesDeps, entry: Extract<UndoEntry, { kind: 'move
         }
         continue;
       }
-      await vfs.remove(to);
     } catch (error) {
       await showError(deps, UNDO_TITLE, error);
       continue;

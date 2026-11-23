@@ -1057,6 +1057,68 @@ export class DockEngine implements DockLive {
     return this.transients.has(id) && this.select(id);
   }
 
+  /**
+   * A document was made the one a person works on (opened, new, chosen, reloaded: the document
+   * service's `shown`, features/documents). Today the editor always shows it (P1.2); here a viewer's
+   * tab may be in front of the Editor's in its group, so the Editor's tab comes forward. Nothing
+   * else changes: a tool panel a person put in front of the Editor stays (their own arrangement),
+   * and the keyboard focus stays where it is, unless it was inside the viewer that is now hidden:
+   * then it goes to the editor, as for a panel that goes away (P3.1.8). Errata N1 28.
+   */
+  documentShown(): void {
+    if (this.mode !== 'editor') return;
+    const group = groupOf(this.model, this.mode, 'editor');
+    const front = panelOfTab(group?.getSelectedNode()?.getId() ?? '');
+    if (front === null || !isViewerId(front)) return;
+    const focusInViewer = this.focusInContentOf(front);
+    this.select('editor');
+    if (focusInViewer && this.ctx.store.getState().mode === 'editor') this.focusEditorOnceShown(front);
+  }
+
+  /**
+   * Puts the focus into the active document's text once the editor shows it. The editor takes a
+   * new active document into its pane a render later (EditorArea's syncPanes), and a focus request
+   * made at once would land on the text of the document it showed before, which then goes away
+   * (seen in Chromium: the focus ended on the page's body). Gives up after about a second, and when
+   * the focus has gone somewhere a person can see meanwhile.
+   */
+  private focusEditorOnceShown(viewer: string, tries = 60): void {
+    const element = this.element;
+    if (!element || typeof window === 'undefined') {
+      focusPanel(this.ctx, 'editor');
+      return;
+    }
+    const later = () => {
+      if (tries > 0) window.setTimeout(() => this.focusEditorOnceShown(viewer, tries - 1), 16);
+    };
+    const document = element.ownerDocument;
+    const active = document.activeElement as HTMLElement | null;
+    const lost =
+      !active ||
+      active === document.body ||
+      this.focusInContentOf(viewer) ||
+      !active.checkVisibility({ visibilityProperty: true });
+    if (!lost) return;
+    const id = this.ctx.store.getState().documents.activeId;
+    const region = element.querySelector<HTMLElement>('[data-e68-panel="editor"]');
+    const text =
+      id === null
+        ? null
+        : region?.querySelector<HTMLElement>(`[data-e68-document="${CSS.escape(id)}"] [data-e68-panel-focus]`);
+    if (id === null || (text && text.checkVisibility({ visibilityProperty: true }))) {
+      focusPanel(this.ctx, 'editor');
+      return;
+    }
+    later();
+  }
+
+  /** The keyboard focus is inside the content of `panel` (not on its tab button). */
+  private focusInContentOf(panel: string): boolean {
+    const active = this.element?.ownerDocument.activeElement;
+    if (!active || !this.element?.contains(active)) return false;
+    return active.closest('[data-e68-panel]')?.getAttribute('data-e68-panel') === panel;
+  }
+
   closeTransient(id: string): void {
     if (!this.transients.has(id)) return;
     const focus = this.focusedPanel();

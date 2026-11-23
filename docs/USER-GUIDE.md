@@ -147,8 +147,8 @@ In Safari (and in any browser on an iPhone or iPad) the Files panel says this it
 start a short notice above My Programs reads: `This browser may delete the programs kept here after
 seven days without a visit to this page. An app made with "Add to Dock" or "Add to Home Screen"
 starts with its own, empty My Programs. Use Export... in the Files panel to save them all as a .zip,
-and Import... in the app to bring them over.` Its **Export...** button saves the whole of My
-Programs as `My Programs.zip`; **Got it** hides the notice in this browser for good. If the Files
+and Import... in the app to bring them over.` The notice's own **Export...** button, which that text
+names, saves the whole of My Programs as `My Programs.zip`; **Got it** hides the notice in this browser for good. If the Files
 panel is hidden, or you start in Simulator mode, the same text appears as a note in the corner when
 the first file is saved into My Programs, with **Got it**. In the app made with "Add to Dock" (on an
 iPhone or iPad, "Add to Home Screen"), while its My Programs is still empty, the notice reads `This
@@ -197,11 +197,14 @@ fails when a text is not the one the code has):
   `one backtick`  a text the application shows (a question, a message, a status line). A text that
                   has a name in it is quoted with one of the example names below.
   ``two``         anything else in code type: file names, folder names, chords. Not checked.
-Keep to this in this section, and only in this section. A name in a text of the code may stand only
-for a number, another text of the code, or these names (joined by "/" for a path):
+Keep to this in this section, and only in this section. A part of a text that the code fills in
+may stand only for what the code puts there (a number, or a text the code itself gives in that
+place); a part that it takes from outside (a file's name, a panel's title, a detail of an error)
+must be one of these names or values (names joined by "/" for a path):
 
 Example names: prog.X68, a.X68, b.X68, lab1.X68, demo, Lab, Courses, lab3, My Programs,
-  prog (restored).X68, report.pdf, data.bin, Editor
+  prog (restored).X68, report.pdf, data.bin, Editor, Files, EASy68K export.zip, no detail is known,
+  .git
 -->
 
 The original EASy68K has panels that stay where they are, a Files panel that did not exist, and no
@@ -265,8 +268,11 @@ Points and Log) can be moved, and every move can be made without a mouse.
   copied or renamed here, and no name can become ``.git``. The message says `The folder "Courses" holds a
   Git repository ("Courses/lab3"). Nothing was deleted. Delete it with your own tools if you are
   sure.` The Files panel does not list a ``.git`` folder; the tool tip of its folder says `Git
-  repository (its .git folder is not shown)`, and an export leaves it out. The same panel never
-  writes below one.
+  repository (its .git folder is not shown)`, and an export leaves it out. The panel's Delete,
+  Rename, New Folder, Move, Copy and Undo never write below one. Import, Save and your programs
+  write there as in the original. If you open a ``.git`` folder itself as a folder of your computer,
+  those commands of the panel say `The folder ".git" is the .git folder of a Git repository. Nothing
+  was changed in it.`
 - The Export button says what it will export: **Export all of My Programs as My Programs.zip** when
   nothing is selected, **Export "prog.X68"**, **Export the folder "demo" as demo.zip**, or **Export 5
   items as EASy68K export.zip**. Several items become one ``.zip`` with each item at the top, and
@@ -276,8 +282,9 @@ Points and Log) can be moved, and every move can be made without a mouse.
   menu, which opens a dialog **Move To** with a list of folders and the buttons **Move** (or **Copy**)
   and **Cancel**. Rename... is in the same menu. `Moved 3 items to demo.` appears with **Undo**. If a
   file of that name is at the target: `"prog.X68" already exists in My Programs/demo. Replace it? The
-  file there now goes to the Trash. Choose No to skip this item.` A file that is open in the editor
-  follows its move or rename.
+  file there now goes to the Trash. Choose No to skip this item.` When no copy can be kept, the
+  question says `This cannot be undone.` instead of the sentence about the Trash, and No is already
+  chosen. A file that is open in the editor follows its move or rename.
 - **Undo** (Ctrl+Z, Cmd+Z, the toast, or **Undo Delete**, **Undo Move**, **Undo Rename**, **Undo Copy**
   in the context menu) takes back the last of up to twenty things done in the Files panel of this
   window; they are forgotten when the page is reloaded, and an import cannot be undone.
@@ -321,8 +328,10 @@ does.
   (restored).X68".` A file with unsaved changes in the editor is skipped: `"prog.X68" has changes
   that are not saved. Save it or close it first, then restore.` **Delete for Good** asks `Delete the 2
   selected items for good?`, and **Empty Trash** asks `Delete everything in the Trash for good? (12
-  items, 1.4 MB)`. An empty Trash says `The Trash is empty. Files you delete in the Files panel stay
-  here for up to 30 days; when the Trash is full, the oldest go first.`
+  items, 1.4 MB)`. These questions, and every other question of the additions whose Yes deletes or
+  overwrites something for good, have No already chosen, so Enter changes nothing. An empty Trash says `The
+  Trash is empty. Files you delete in the Files panel stay here for up to 30 days; when the Trash is
+  full, the oldest go first.`
 - *When no copy can be kept.* With the switch below off, the questions of Delete and Replace already
   end with `This cannot be undone.`, and nothing more is asked. When a question promised a copy but
   none can be kept after all (the storage is nearly full, or the file is too large), the application
@@ -347,12 +356,16 @@ does.
 Opening a ``.pdf`` or a picture (``.png``, ``.jpg``, ``.jpeg``, ``.gif``, ``.bmp``, ``.webp``, ``.svg``, ``.ico``) from the Files panel,
 File > Open File... or a drop shows it in a viewer: a tab beside the Editor, named after the file. Files
 of the original (``.X68``, ``.L68``, ``.S68``) always open as text. A viewer is not a document: Save and
-Assemble do not act on it, the Window menu does not list it, and it is closed after a reload.
+Assemble do not act on it, the Window menu does not list it, and it is closed after a reload. A
+document you open, create or choose in the Window menu comes in front of the viewer; the viewer's
+tab stays beside the Editor's.
 
 - The strip has the name and the size, **Open as Text** (opens the file as a document, as the
   original would), **Export** (in the browser: downloads the file) and, for a picture, **Actual Size**,
   which switches between one pixel to one pixel and scaled to fit.
-- A PDF is drawn by the browser's own PDF viewer. Under the strip: `If the PDF does not appear, use
+- A PDF is drawn by the browser's own PDF viewer. A link inside the PDF does not take the viewer
+  elsewhere: it shows its PDF again. (In Safari a link to another site can leave the box empty;
+  close the viewer's tab and open the file again.) Under the strip: `If the PDF does not appear, use
   Export and open it with another program.` In the Mac app: `If the PDF does not appear, open it from
   its folder with another program.` If your browser shows no PDF at all, the viewer says `"report.pdf"
   cannot be shown here because this browser does not show PDF files.` No person has tried the PDF

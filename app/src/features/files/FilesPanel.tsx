@@ -67,7 +67,7 @@ import {
   selectedCount,
   undoCaption,
 } from './texts';
-import { FilesTreeModel, type TreeRow } from './tree-model';
+import { FilesTreeModel, scrollToShow, type TreeRow } from './tree-model';
 import { filesDeps, onUndoneFromToast, undoLast, undoStackOf } from './undo';
 import './files.css';
 
@@ -455,11 +455,22 @@ export function FilesPanel() {
     }
   };
 
-  // Keep the focused row in view.
+  // Keep the focused row in view when it changes (a key, a click, a reveal). Not at every render and
+  // not with Element.scrollIntoView: in Chromium that moves the sequential focus navigation starting
+  // point to the row, so the next Tab or Shift+Tab goes on from the tree while nothing is focused,
+  // and the panel renders when the window gets the focus back (errata N1 26, N5 21). Setting the
+  // tree's own scroll position moves no starting point.
+  const focusedPath = focused?.path ?? null;
+  const reveals = model?.reveals ?? 0;
   useEffect(() => {
-    if (!focused) return;
-    document.getElementById(rowId(idBase, focused.path))?.scrollIntoView({ block: 'nearest' });
-  }, [focused, idBase]);
+    if (focusedPath === null) return;
+    const tree = treeRef.current;
+    const row = document.getElementById(rowId(idBase, focusedPath));
+    if (!tree || !row) return;
+    const scroll = scrollToShow(tree.getBoundingClientRect(), tree, row.getBoundingClientRect());
+    if (scroll.top !== 0) tree.scrollTop += scroll.top;
+    if (scroll.left !== 0) tree.scrollLeft += scroll.left;
+  }, [focusedPath, reveals, idBase]);
 
   // ---- drag and drop (P3.2.4) ----
   const stopExpandTimer = () => {
@@ -527,27 +538,34 @@ export function FilesPanel() {
 
   return (
     <div className="e68-files">
-      <Toolbar label="Files" className="e68-files__strip">
-        <IconButton icon="plus" size="small" label="New Folder..." onClick={doNewFolder} />
-        <IconButton
-          ref={importButton}
-          icon="arrow-down"
-          size="small"
-          label="Import..."
-          aria-haspopup="menu"
-          aria-expanded={importAt !== null}
-          onClick={() => {
-            const box = importButton.current?.getBoundingClientRect();
-            if (box) setImportAt({ x: box.left, y: box.top, width: box.width, height: box.height });
-          }}
-        />
-        <IconButton icon="external" size="small" label={exportLabel} onClick={doExport} />
-        <IconButton icon="close" size="small" label="Delete" disabled={deletable.length === 0} onClick={doDelete} />
-        <IconButton icon="trash" size="small" label={TRASH_BUTTON} disabled={!historyCommandOn} onClick={doTrash} />
-      </Toolbar>
-      <p role="status" className="e68-files__count">
-        {countText}
-      </p>
+      {/* The strip and the selection count line in one element, so that the node before the tree is
+          one element as on main, whose strip stands there: WebKit's Shift+Tab after the focused
+          element before the tree went away goes on from that node and skips its contents, so it
+          skips New Folder... as main's does (decision D-i; errata N5 23, N1 26). Nothing of the
+          layout, of the roles or of what is read changes. */}
+      <div className="e68-files__head">
+        <Toolbar label="Files" className="e68-files__strip">
+          <IconButton icon="plus" size="small" label="New Folder..." onClick={doNewFolder} />
+          <IconButton
+            ref={importButton}
+            icon="arrow-down"
+            size="small"
+            label="Import..."
+            aria-haspopup="menu"
+            aria-expanded={importAt !== null}
+            onClick={() => {
+              const box = importButton.current?.getBoundingClientRect();
+              if (box) setImportAt({ x: box.left, y: box.top, width: box.width, height: box.height });
+            }}
+          />
+          <IconButton icon="external" size="small" label={exportLabel} onClick={doExport} />
+          <IconButton icon="close" size="small" label="Delete" disabled={deletable.length === 0} onClick={doDelete} />
+          <IconButton icon="trash" size="small" label={TRASH_BUTTON} disabled={!historyCommandOn} onClick={doTrash} />
+        </Toolbar>
+        <p role="status" className="e68-files__count">
+          {countText}
+        </p>
+      </div>
       {importAt && (
         <Menu
           items={importItems}

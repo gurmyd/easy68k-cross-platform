@@ -5,7 +5,7 @@
 //                                                [--dist <built app>] [--skip-build]
 //
 // Starts the Vite development server of app/ on a free port and drives the real application in
-// headless Chromium and WebKit (Playwright), with the Windows key map on every machine. Four passes
+// headless Chromium and WebKit (Playwright), with the Windows key map on every machine. Five passes
 // per browser:
 //
 //   viewer      the real viewer model and panel, shown in a stand-in for the dock's tab
@@ -27,14 +27,18 @@
 //               selects the same tab; the tab's title; closing revokes the URL; Open as Text from
 //               the tab; the `viewer` switch off opens as text; Simulator Open... of an .S68 and
 //               EASyBIN's Open Binary are unchanged with the viewer on; an axe scan;
+//   front       a document opened or chosen while a viewer's tab is in front of the Editor's is
+//               shown, by each way a person makes a document the one they work on, and the focus
+//               stays where main leaves it (errata N1 28, N6 15); the reverse still shows a viewer;
 //   production  the production build (vite build with EASY68K_BASE=/easy68k-cross-platform/,
 //               served under that sub-path): a PDF, a PNG, a JPEG and an SVG dropped on the window
 //               open in the viewer with no Content Security Policy violation and no console error,
 //               and the HTML-with-a-script files run nothing and open no window there either;
 //               then without a service worker (a first visit, the desktop app): the PDF frame sent
-//               to the application's own page and its ?open= address shows its document again
-//               within 2 s, with no copy of the application left in it (decision D-c), and a
-//               picture's viewer has no frame at all.
+//               to the application's own page, its ?open= address and (where the page reads the
+//               frame's own address: Chromium) about:blank shows its document again within 2 s,
+//               with no copy of the application left in it (decisions D-c, D-j), and a picture's
+//               viewer has no frame at all.
 //
 // Headless browsers do not run a PDF viewer (P3.4.2): the check asserts the frame and its blob,
 // never that a PDF is drawn. Screenshots go to build/viewer-check (git-ignored). The page object
@@ -687,6 +691,11 @@ async function dockPass(browser, name) {
     same(startDocs.docs, [['untitled1.x68', false, null]]) && startDocs.template,
     JSON.stringify(startDocs),
   );
+  // The template made beside it does not cover it (errata N6 15).
+  check(
+    `${p} at start-up the PDF's viewer is in front, not the template document`,
+    shown && (await viewer.first().isVisible()),
+  );
   if (shown) {
     const src = await viewer.first().locator('iframe').getAttribute('src');
     const blob = await readBlob(page, src);
@@ -848,6 +857,268 @@ async function dockPass(browser, name) {
   await context.close();
 }
 
+/**
+ * O-1 of the gate's fourth round (errata N1 28, N6 15): a document opened or chosen while a viewer's
+ * tab is in front of the Editor's is shown, as today (P1.2), by each way a person makes a document
+ * the one they work on; the keyboard focus stays where it was, unless it was in the viewer, which
+ * is now hidden (then it goes to the editor). The reverse keeps working: a PDF or a picture opened
+ * while the Editor is in front shows the viewer. In Simulator mode nothing visible changes.
+ */
+async function frontPass(browser, name) {
+  const p = `${name} front:`;
+  const { context } = await newContext(browser);
+  const { page, errors } = await openApp(context, baseUrl);
+  const ctxEval = (fn, arg) => page.evaluate(fn, arg);
+  await writeFile(page, '/browser/front/report.pdf', pdfBytes('front'));
+  const pictures = await makePictures(page, 320, 200);
+  await writeFile(page, '/browser/front/pic.png', pictures.png);
+  for (const n of ['prog', 'other', 'third', 'fourth']) {
+    await writeFile(page, `/browser/front/${n}.X68`, asBytes(`* ${n}\r\n    END    $1000\r\n`));
+  }
+  const files = page.locator('[data-e68-panel="files"]');
+  const row = (file) => files.getByRole('treeitem', { name: file, exact: true });
+  await files.getByRole('treeitem', { name: 'front', exact: true }).dblclick();
+  await row('prog.X68').waitFor({ timeout: 15_000 });
+
+  /** What the student sees: the Editor's dock tab in front, the active document's text visible. */
+  const facts = () =>
+    ctxEval(() => {
+      const { ctx } = window.__easy68k;
+      const state = ctx.store.getState();
+      const active = state.documents.items.find((doc) => doc.id === state.documents.activeId);
+      const content = document.querySelector('[data-e68-panel="editor"] .e68-editor__pane[data-active] .cm-content');
+      const viewers = [...document.querySelectorAll('[data-e68-panel^="viewer:"]')];
+      const focus = document.activeElement;
+      return {
+        active: active?.name ?? null,
+        mode: state.mode,
+        shown: content ? content.checkVisibility({ visibilityProperty: true }) : false,
+        text: content?.textContent?.slice(0, 12) ?? '',
+        viewerShown: viewers.some((v) => v.checkVisibility({ visibilityProperty: true })),
+        focus:
+          focus === document.body || focus === null
+            ? 'body'
+            : (focus.closest('[data-e68-panel]')?.getAttribute('data-e68-panel') ?? focus.tagName),
+      };
+    });
+  const until = async (test) => {
+    let last = null;
+    for (let i = 0; i < 100; i++) {
+      last = await facts();
+      if (test(last)) return last;
+      await page.waitForTimeout(50);
+    }
+    return last;
+  };
+  /** A viewer in front of the Editor, as a person gets it: the PDF opened from the Files panel. */
+  const viewerInFront = async (file = 'report.pdf') => {
+    await row(file).dblclick();
+    const state = await until((f) => f.viewerShown && !f.shown);
+    if (!(state.viewerShown && !state.shown))
+      throw new Error(`the viewer did not come in front: ${JSON.stringify(state)}`);
+  };
+  const focusViewer = () => page.locator(`${DOCK_VIEWER} .e68-viewer__body`).first().focus();
+  const focusTree = () => files.locator('[role=tree]').focus();
+  const shownCheck = async (label, expected, focus) => {
+    const state = await until((f) => f.active === expected && f.shown && !f.viewerShown && f.focus === focus);
+    check(
+      `${p} ${label}: "${expected}" is shown in front of the viewer; the focus is ${focus === 'editor' ? 'in the editor' : 'still in the Files panel'}`,
+      state.active === expected && state.shown && !state.viewerShown && state.focus === focus,
+      JSON.stringify(state),
+    );
+  };
+
+  // The reverse, kept: a PDF and a picture opened while the Editor is in front show the viewer.
+  await row('prog.X68').dblclick();
+  await until((f) => f.active === 'prog.X68' && f.shown);
+  await row('report.pdf').dblclick();
+  const pdfFront = await until((f) => f.viewerShown && !f.shown);
+  check(
+    `${p} a PDF opened while the Editor is in front shows the viewer`,
+    pdfFront.viewerShown && !pdfFront.shown,
+    JSON.stringify(pdfFront),
+  );
+
+  // 1. A double-click in the Files panel (the focus stays in the tree, as in main).
+  await row('other.X68').dblclick();
+  await shownCheck('a double-click in the Files panel', 'other.X68', 'files');
+  // ... also on the document that is active already.
+  await viewerInFront();
+  await row('other.X68').dblclick();
+  await shownCheck('a double-click in the Files panel on the active document', 'other.X68', 'files');
+  // 2. Enter in the Files panel.
+  await viewerInFront('pic.png');
+  await row('third.X68').click();
+  await page.keyboard.press('Enter');
+  await shownCheck('Enter in the Files panel (a picture in front)', 'third.X68', 'files');
+  // 3. File > Open File... (the dialog answers prog.X68), with the focus in the viewer.
+  await viewerInFront();
+  await focusViewer();
+  const inViewer = await facts();
+  if (!/^viewer:/.test(inViewer.focus))
+    throw new Error(`the viewer did not take the focus: ${JSON.stringify(inViewer)}`);
+  const menu = (caption) =>
+    page.locator('[role=menu] [role=menuitem], [role=menu] [role=menuitemradio]', { hasText: caption }).first();
+  const menuBar = (title) => page.locator('[role=menubar] > [role=menuitem]', { hasText: title }).first();
+  await ctxEval(() => {
+    const dialogs = window.__easy68k.ctx.fileDialogs;
+    window.__frontOpen = dialogs.open;
+    dialogs.open = async () => ['/browser/front/prog.X68'];
+  });
+  await menuBar('File').click();
+  await menu('Open File...').click();
+  await shownCheck('File > Open File... with the focus in the viewer', 'prog.X68', 'editor');
+  await ctxEval(() => {
+    window.__easy68k.ctx.fileDialogs.open = window.__frontOpen;
+  });
+  // 4. File > New X68 Source File, with the focus in the Files panel.
+  await viewerInFront();
+  await focusTree();
+  await menuBar('File').click();
+  await menu('New X68 Source File').click();
+  const untitled = await until((f) => /^untitled\d+\.x68$/.test(f.active ?? '') && f.shown);
+  check(
+    `${p} File > New X68 Source File: the new document is shown in front of the viewer; the focus is still in the Files panel`,
+    /^untitled\d+\.x68$/.test(untitled.active ?? '') && untitled.shown && untitled.focus === 'files',
+    JSON.stringify(untitled),
+  );
+  // 5. The Window menu's document list, also for the document that is active already.
+  await row('fourth.X68').dblclick();
+  await until((f) => f.active === 'fourth.X68');
+  for (const target of ['prog.X68', 'fourth.X68']) {
+    await viewerInFront();
+    await focusTree();
+    await menuBar('Window').click();
+    await page.locator('[role=menu] [role=menuitemradio]', { hasText: target }).first().click();
+    await shownCheck(`the Window menu's document list (${target})`, target, 'files');
+  }
+  // 6. Reload File (the command of the editor's context menu, which the viewer covers; a person
+  //    reaches it once the editor is in front, so the command is run directly).
+  await viewerInFront();
+  await focusTree();
+  await ctxEval(() => window.__easy68k.ctx.commands.run('ed.edit.reload'));
+  await shownCheck('the command Reload File', 'fourth.X68', 'files');
+  // 7. What Open as New Document and Restore of the history dialogs and the assembler's include
+  //    files ask of the document service (their dialogs have checks of their own).
+  for (const [label, call, expected] of [
+    ['Open as New Document', () => window.__easy68k.ctx.documents.newSourceWithText('* kept\n'), /^untitled\d+\.x68$/],
+    [
+      "an open as text (the assembler's include file, Open the containing folder...)",
+      () => window.__easy68k.ctx.documents.open('/browser/front/third.X68', { asText: true }),
+      /^third\.X68$/,
+    ],
+    [
+      'a reload of the active document (Restore of Earlier Versions or of the Trash)',
+      () => {
+        const { documents } = window.__easy68k.ctx;
+        return documents.reload(documents.active().id);
+      },
+      /^third\.X68$/,
+    ],
+  ]) {
+    await viewerInFront();
+    await focusTree();
+    await page.evaluate(call);
+    const state = await until((f) => expected.test(f.active ?? '') && f.shown);
+    check(
+      `${p} ${label}: the document is shown in front of the viewer; the focus is still in the Files panel`,
+      expected.test(state.active ?? '') && state.shown && state.focus === 'files',
+      JSON.stringify(state),
+    );
+  }
+  // 8. A file dropped on the window.
+  await viewerInFront();
+  await focusTree();
+  await dropFiles(page, [{ name: 'dropped.X68', bytes: asBytes('* dropped\r\n'), type: '' }]);
+  await shownCheck('a file dropped on the window', 'dropped.X68', 'files');
+  // 9. A second window changes the active document's file; this one offers Reload, which is chosen.
+  await viewerInFront();
+  await focusTree();
+  const droppedPath = await ctxEval(() => window.__easy68k.ctx.documents.active()?.path ?? null);
+  const second = await openApp(context, baseUrl);
+  await second.page.evaluate(
+    (path) => window.__easy68k.ctx.vfs.writeFile(path, Uint8Array.from([0x2a, 0x20, 0x32, 0x0d, 0x0a])),
+    droppedPath,
+  );
+  const reload = page
+    .locator('.e68-toast', { hasText: 'was changed outside this window.' })
+    .getByRole('button', { name: 'Reload', exact: true });
+  const offered = await reload
+    .first()
+    .waitFor({ timeout: 20_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (offered) {
+    await reload.first().click();
+    const state = await until((f) => f.active === 'dropped.X68' && f.shown && f.text.startsWith('* 2'));
+    check(
+      `${p} a second window changed the file and Reload was chosen: the document is shown in front of the viewer`,
+      state.active === 'dropped.X68' && state.shown && state.text.startsWith('* 2'),
+      JSON.stringify(state),
+    );
+  } else {
+    check(
+      `${p} a second window's change of the active document's file offers Reload in this one`,
+      false,
+      'no toast within 20 s',
+    );
+  }
+  await second.page.close();
+  // 10. A tab: a viewer in a group of its own stays in front there, and the Editor shows the document.
+  await viewerInFront();
+  const moved = await ctxEval(async () => {
+    const { dockOf } = await import('/src/state/dock.ts');
+    const dock = dockOf(window.__easy68k.ctx);
+    const viewer = dock.describe().find((entry) => entry.title === 'report.pdf');
+    dock.move(viewer.panel, { kind: 'edge', side: 'right' });
+    return viewer.panel;
+  });
+  await row('prog.X68').dblclick();
+  const beside = await until((f) => f.active === 'prog.X68' && f.shown);
+  check(
+    `${p} a viewer moved beside the Editor stays shown when a document is opened`,
+    beside.shown && beside.viewerShown,
+    JSON.stringify(beside),
+  );
+  await ctxEval(async (id) => {
+    const { dockOf } = await import('/src/state/dock.ts');
+    dockOf(window.__easy68k.ctx).closeTransient(id);
+  }, moved);
+  // 11. Simulator mode: nothing visible changes and the mode stays; back in Editor mode the
+  //     document is in front, as main shows it.
+  const sim = await ctxEval(async () => {
+    const { ctx } = window.__easy68k;
+    await ctx.commands.run('app.mode.set', 'simulator');
+    await ctx.documents.open('/browser/front/report.pdf');
+    await new Promise((r) => setTimeout(r, 300));
+    const editorDock = document.querySelector('[data-e68-workspace="editor"]');
+    const before = editorDock?.checkVisibility({ visibilityProperty: true }) ?? null;
+    const focus = document.activeElement;
+    await ctx.documents.open('/browser/front/other.X68');
+    await new Promise((r) => setTimeout(r, 300));
+    return {
+      mode: ctx.store.getState().mode,
+      editorDockShown: [before, editorDock?.checkVisibility({ visibilityProperty: true }) ?? null],
+      focusKept: document.activeElement === focus,
+    };
+  });
+  check(
+    `${p} Simulator mode: a document opened there changes nothing visible, the mode and the focus stay`,
+    sim.mode === 'simulator' && sim.editorDockShown[0] === false && sim.editorDockShown[1] === false && sim.focusKept,
+    JSON.stringify(sim),
+  );
+  await ctxEval(() => window.__easy68k.ctx.commands.run('app.mode.set', 'editor'));
+  const back = await until((f) => f.active === 'other.X68' && f.shown && !f.viewerShown);
+  check(
+    `${p} back in Editor mode after an open in Simulator mode, the document opened there is in front of the viewer`,
+    back.active === 'other.X68' && back.shown && !back.viewerShown,
+    JSON.stringify(back),
+  );
+  await page.screenshot({ path: join(outDir, `${name}-front.png`) });
+  check(`${p} no console errors`, errors.length === 0, errors.join(' | '));
+  await context.close();
+}
+
 // ---- the production build ---------------------------------------------------------------------
 
 function productionBuild(target) {
@@ -990,10 +1261,21 @@ async function escapeChecks(page, p, origin, stamp) {
   const selector = `[data-e68-panel="${id}"]`;
   const before = await viewerFrameState(page, selector);
   const texts = await page.locator(selector).innerText();
-  for (const [label, address] of [
+  // Decision D-j: where the page reads the frame's own blob: address (Chromium), an empty document
+  // sent there counts as not ours too. WebKit never shows the page that address (it reads
+  // about:blank for its own PDF), so there an empty frame cannot be told from the document: the gap
+  // of errata N6 14, checked below only for staying calm.
+  const seesOwn = typeof before.href === 'string' && before.href.split('#')[0] === before.src;
+  const sent = [
     ["the application's page", `${origin}${BASE}index.html`],
     ["the application's ?open= address", `${origin}${BASE}?open=/browser/demo.X68`],
-  ]) {
+  ];
+  if (seesOwn) sent.push(['an empty document (about:blank)', 'about:blank']);
+  else
+    note(
+      `${p} the page reads ${JSON.stringify(before.href)} for its own PDF: a frame sent to about:blank cannot be told from it (errata N6 14)`,
+    );
+  for (const [label, address] of sent) {
     await page.evaluate(
       (css) => document.querySelector(`${css} iframe`)?.setAttribute('data-e68-check-old', ''),
       selector,
@@ -1034,6 +1316,20 @@ async function escapeChecks(page, p, origin, stamp) {
         shells === 1 &&
         (await page.locator(selector).innerText()) === texts,
       `${JSON.stringify(later)} shells=${shells}`,
+    );
+  }
+  if (!seesOwn) {
+    const start = await viewerFrameState(page, selector);
+    await page.evaluate(
+      (css) => document.querySelector(`${css} iframe`).contentWindow.location.replace('about:blank'),
+      selector,
+    );
+    await page.waitForTimeout(3000);
+    const calm = await viewerFrameState(page, selector);
+    check(
+      `${p} escape: a frame sent to about:blank where the page never sees its own address: the tab stays, one frame, no copy of the application, no loop`,
+      calm.panel && calm.frames === 1 && !calm.app && calm.src === before.src && calm.generation === start.generation,
+      JSON.stringify(calm),
     );
   }
   const picture = page.locator('[data-e68-panel^="viewer:"]', { has: page.locator('img') }).filter({
@@ -1171,6 +1467,7 @@ async function main() {
           ['viewer', viewerPass],
           ['pdf-off', pdfOffPass],
           ['dock', dockPass],
+          ['front', frontPass],
         ]) {
           console.log(`\n[${name}, ${label}]`);
           try {

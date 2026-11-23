@@ -68,6 +68,7 @@ function fakeLive(moves: unknown[]): DockLive {
     openTransient: () => {},
     selectTransient: () => true,
     closeTransient: () => {},
+    documentShown: () => {},
     closeAllTransients: () => {},
     move: (panel, target) => void moves.push({ panel, target }),
     reset: () => void moves.push('reset'),

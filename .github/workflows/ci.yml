@@ -54,6 +54,7 @@
 #       frame_policy  tools/check-frame-policy.mjs                       N0
 #   check: packaging unit tests  tests/desktop/packaged/playwright.config.ts (project unit, DV3)
 #   check: documents           tools/check-docs.test.mjs            (npm run check:docs, DOC1)
+#   check: guide texts         tools/check-guide-strings.mjs        (npm run check:guide, N10)
 #   check: check scripts' ending tests/browser-checks/ending.test.mjs (npm run test:check-ending, W0)
 #   e2e-stability              as e2e, on a manual run (input e2e_stability) or a push of a v* tag (6.9 item 10, X1);
 #                              --repeat-each=20 split by --shard: Chromium in 2 jobs, WebKit in 4;
@@ -398,6 +399,12 @@ jobs:
       - name: Documents (DOC1)
         if: ${{ !cancelled() && hashFiles('tools/check-docs.test.mjs') != '' }}
         run: npm run check:docs
+      # docs/requests/N10-check-guide.md: every caption and text that docs/USER-GUIDE.md quotes in
+      # "Beyond the original" is a text of the stage's texts.ts files or of commands/specs.ts.
+      # Node only, no browser, ~10 s.
+      - name: Guide texts (N10)
+        if: ${{ !cancelled() && hashFiles('tools/check-guide-strings.mjs') != '' }}
+        run: npm run check:guide
       # docs/requests/W0-check-ending-test.md: the guarded ending every browser check script imports
       # (tests/browser-checks/ending.mjs, errata W0 entry 12). Node's test runner, no browser, ~1.5 s.
       # The file is named: on Windows Node 24's `node --test <folder>` does not find it.
@@ -639,6 +646,11 @@ jobs:
   # stalling it until the job's limit of 180, which would upload nothing. 120 min is about 2.6 times
   # the longest expected shard (WebKit, 184 / 4 = 46 min) and 3 times Chromium's (76 / 2 = 38 min),
   # and leaves the job about 60 min for the install, the build and the upload (errata W0.md entry 11).
+  # The stage of additions (tests/e2e/plus, 17 tests per browser) was weighed at its integration pass
+  # (docs/integration/plus.md): on the development PC it adds 11.8 % to WebKit's test time and 10.2 %
+  # to Chromium's. The longest shards of main's run 45034021673 took 50.6 min (WebKit) and 60.5 min
+  # (Chromium), so about 57 and 67 min are expected with the stage: under 60 % of the 120 min, so the
+  # shards stay as they are; a fifth WebKit shard is for when one comes near 80 min.
   e2e-stability:
     name: e2e stability (ubuntu-latest, ${{ matrix.browser }}, 20 repetitions, shard ${{ matrix.shard }} of ${{ matrix.shards }})
     needs: [plan, engines]

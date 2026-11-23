@@ -12,6 +12,8 @@
 //   dockOf(ctx).openTransient({...})    a viewer tab in the group of the Editor panel; called
 //                                       before the Editor dock has attached, it is queued and
 //                                       applied when the dock attaches (P4.4)
+//   dockOf(ctx).documentShown()         a document was opened or chosen: a viewer's tab in front
+//                                       of the Editor's gives way to it (errata N1 28)
 //   dockOf(ctx).move('files', { kind: 'edge', side: 'right' })     Move Panel To...
 //   dockOf(ctx).setLocked(false), .locked(), .reset(), .describe(), .subscribe(listener)
 //
@@ -38,6 +40,12 @@ export interface DockController {
   }): boolean; // false: acceptsTransient() is false
   selectTransient(id: string): boolean;
   closeTransient(id: string): void;
+  /**
+   * N1's addition (errata N1 28): a document was made the one a person works on (the document
+   * service's `shown`). When a viewer's tab is in front of the Editor's in its group, the Editor's
+   * tab comes forward; otherwise nothing happens. Without the Editor dock it does nothing.
+   */
+  documentShown(): void;
   /** The moves of P3.1.4; `near` is a panel id, `side` a side of P3.1.4's dialog. */
   move(panel: string, target: { kind: 'tab' | 'beside' | 'edge'; near?: string; side?: string }): void;
   setLocked(on: boolean): void;
@@ -81,6 +89,8 @@ export interface DockLive {
   openTransient(spec: TransientSpec): void;
   selectTransient(id: string): boolean;
   closeTransient(id: string): void;
+  /** DockController.documentShown, for the Editor dock (the Simulator's does nothing). */
+  documentShown(): void;
   /** Closes every transient tab (a mode change, P4.4). */
   closeAllTransients(): void;
   move(panel: string, target: DockMoveTarget): void;
@@ -196,6 +206,9 @@ function createDockController(ctx: AppContext, state: ControllerState): DockCont
       } catch (error) {
         console.error(error);
       }
+    },
+    documentShown() {
+      state.lives.get('editor')?.documentShown();
     },
     move(panel, target) {
       liveFor(panel)?.move(panel, target);

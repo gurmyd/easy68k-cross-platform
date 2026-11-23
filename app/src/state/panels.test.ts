@@ -298,6 +298,7 @@ describe('the dock controller (ARCHITECTURE-PLUS P3.1.5)', () => {
       openTransient: () => {},
       selectTransient: () => false,
       closeTransient: () => {},
+      documentShown: () => {},
       closeAllTransients: () => {},
       move: () => {},
       reset: () => {},

@@ -37,7 +37,9 @@
 //     names; never in Chromium, never under automation without the parameter, and the panel's
 //     layout without it is the one it always had;
 //   - ARCHITECTURE-PLUS P3.2 (N5): the multiple selection and the keys of P1.3 on both key maps, also
-//     with the storage notice shown (WebKit); drag, the storage line and the large-import question;
+//     with the storage notice shown (WebKit); the focused row brought into view without
+//     Element.scrollIntoView (errata N5 21) and the element before the tree (N5 23); drag, the
+//     storage line and the large-import question;
 //     in Chromium an opened folder on a real directory handle with a log of every write, and an
 //     opened folder that is itself a .git folder;
 //   - no console errors.
@@ -45,7 +47,7 @@
 // Screenshots go to build/FS1/files-check (git-ignored). Exit code 0 = everything passed.
 // The page object `window.__easy68k` exists in development builds only (main.tsx).
 
-/* global console, process, window, document, indexedDB, IDBFactory, IDBObjectStore, setTimeout, DataTransfer, DragEvent, File, performance, Navigator, DOMException, URL, TextEncoder, TextDecoder, Buffer, MutationObserver, clearTimeout, navigator, requestAnimationFrame, FileSystemDirectoryHandle, FileSystemFileHandle, IDBDatabase */
+/* global console, process, window, document, Element, Event, indexedDB, IDBFactory, IDBObjectStore, setTimeout, DataTransfer, DragEvent, File, performance, Navigator, DOMException, URL, TextEncoder, TextDecoder, Buffer, MutationObserver, clearTimeout, navigator, requestAnimationFrame, FileSystemDirectoryHandle, FileSystemFileHandle, IDBDatabase */
 
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -832,10 +834,10 @@ const notAnsweringText = (detail) =>
   "Files are NOT being saved right now: the browser's storage did not answer " +
   `(${detail}; another tab of this site, or a page that was closed during a save, may still be holding it). ` +
   'The programs you saved before are still in the browser: reload the page in a minute to see them. ' +
-  'What you save until then is lost when this tab closes. Use Export... in the Files panel to keep it.';
+  'What you save until then is lost when this tab closes. Use the Export button of the Files panel to keep it.';
 const REFUSED_TEXT_END =
   '; for example in a private window, or when storage is blocked for this site). ' +
-  'Everything you save is lost when this tab closes. Use Export... in the Files panel to keep your work.';
+  'Everything you save is lost when this tab closes. Use the Export button of the Files panel to keep your work.';
 
 /** IndexedDB refuses to open (a private window): the page works and says nothing is kept. */
 async function blockedPass(browser, name) {
@@ -3424,6 +3426,210 @@ function archiveToolCheck(zipPath) {
 
 // ---- run ------------------------------------------------------------------------------------------
 
+/** Where the row of `path` is in the tree's view (the inner area, without the scroll bars). */
+function rowPlace(page, path) {
+  return page.evaluate(
+    ({ tree, p }) => {
+      const element = document.querySelector(tree);
+      const target = element.querySelector(`[role=treeitem][data-e68-path="${p}"]`);
+      if (!target) return null;
+      const view = element.getBoundingClientRect();
+      const box = target.getBoundingClientRect();
+      const top = view.top + element.clientTop;
+      const left = view.left + element.clientLeft;
+      return {
+        inView:
+          box.top >= top - 0.5 &&
+          box.bottom <= top + element.clientHeight + 0.5 &&
+          box.left >= left - 0.5 &&
+          box.right <= left + element.clientWidth + 0.5,
+        scrollTop: Math.round(element.scrollTop),
+        scrollLeft: Math.round(element.scrollLeft),
+        scrolls: element.scrollHeight > element.clientHeight,
+        rowTop: Math.round(box.top - top),
+        rowHeight: Math.round(box.height),
+        viewHeight: element.clientHeight,
+      };
+    },
+    { tree: TREE, p: path },
+  );
+}
+
+/**
+ * The focused row comes into view as before the repair of errata N5 21 (N1 26): Up, Down, Home, End,
+ * Shift+ and Ctrl+ moves, a folder opened, a reveal by a command (also of the row that has the focus
+ * already), in a tree much longer than its view, also scrolled sideways; and the panel no longer
+ * calls Element.scrollIntoView, nor scrolls at a render that does not move the focused row (the
+ * window getting the focus back), which in Chromium moved the Tab key's starting point into the tree.
+ */
+async function rowInViewPass(browser, name) {
+  const p = `${name}, the focused row in view:`;
+  const context = await keyMapContext(browser, 'windows');
+  await context.addInitScript(withoutFileSystemAccess);
+  // Count the panel's own calls of scrollIntoView (Playwright's actions scroll through its own
+  // protocol, not through the page's prototype).
+  await context.addInitScript(() => {
+    const original = Element.prototype.scrollIntoView;
+    window.__e68ScrollIntoView = 0;
+    Element.prototype.scrollIntoView = function (...rest) {
+      if (this.closest?.('[data-e68-panel="files"]')) window.__e68ScrollIntoView++;
+      return original.apply(this, rest);
+    };
+  });
+  const { page, errors } = await openApp(context);
+  const names = Array.from({ length: 60 }, (_, i) => `/browser/long/f${String(i).padStart(2, '0')}.X68`);
+  const inner = '/browser/long/zsub/inner.X68';
+  await seedFiles(page, [...names, inner]);
+  await revealRow(page, names[0]);
+  await page.locator(TREE).focus();
+  const first = await rowPlace(page, names[0]);
+  check(`${p} the tree is longer than its view`, first?.scrolls === true, JSON.stringify(first));
+
+  const focusedPath = () =>
+    page.evaluate((tree) => {
+      const id = document.querySelector(tree).getAttribute('aria-activedescendant');
+      return id ? document.getElementById(id)?.getAttribute('data-e68-path') : null;
+    }, TREE);
+  const expectInView = async (label, key, path = null) => {
+    if (key) await page.keyboard.press(key);
+    const at = path ?? (await focusedPath());
+    let place;
+    const deadline = Date.now() + 5_000;
+    for (;;) {
+      place = await rowPlace(page, at);
+      if (place?.inView || Date.now() > deadline) break;
+      await page.waitForTimeout(50);
+    }
+    check(`${p} ${label}: the focused row is in view`, place?.inView === true, `${at} ${JSON.stringify(place)}`);
+    return place;
+  };
+
+  // Folders come first (sortEntries): the last row is the last file.
+  let place = await expectInView('End', 'End', names[59]);
+  check(`${p} End scrolled the tree down`, place.scrollTop > 0, JSON.stringify(place));
+  check(
+    `${p} End: the row is at the bottom of the view, where scrollIntoView nearest put it`,
+    Math.abs(place.rowTop + place.rowHeight - place.viewHeight) <= 1,
+    JSON.stringify(place),
+  );
+  place = await expectInView('Home', 'Home', '/browser');
+  // The row's top meets the view's top; the tree's padding above the first row stays scrolled away.
+  check(
+    `${p} Home scrolled the tree back to the top`,
+    place.rowTop === 0 && place.scrollTop <= 8,
+    JSON.stringify(place),
+  );
+  await page.keyboard.press('ArrowDown'); // long
+  await page.keyboard.press('ArrowDown'); // f00
+  let missed = null;
+  for (let i = 0; i < 40; i++) {
+    await page.keyboard.press('ArrowDown');
+    const at = await rowPlace(page, await focusedPath());
+    if (!at?.inView && !missed) missed = { step: i, at };
+  }
+  check(`${p} Down, 40 times: the focused row is in view after every key`, missed === null, JSON.stringify(missed));
+  await expectInView('Shift+End', 'Shift+End');
+  await expectInView('Shift+Home', 'Shift+Home');
+  await page.keyboard.press('End');
+  for (let i = 0; i < 30; i++) await page.keyboard.press('ArrowUp');
+  await expectInView('Up, 30 times from the end', null);
+  for (let i = 0; i < 25; i++) await page.keyboard.press('Control+ArrowDown');
+  await expectInView('Ctrl+Down, 25 times (the focus without the selection)', null);
+
+  // From the end of the tree, a reveal by a command of a file in a closed folder near its top.
+  await page.keyboard.press('End');
+  await revealRow(page, inner);
+  await expectInView('a reveal by a command of a file in a closed folder', null, inner);
+  // The tree scrolled away by hand (the wheel): a reveal of the row that has the focus already
+  // brings it back.
+  const toEnd = (tree) => {
+    const element = document.querySelector(tree);
+    element.scrollTop = element.scrollHeight;
+  };
+  await page.evaluate(toEnd, TREE);
+  place = await rowPlace(page, inner);
+  check(`${p} scrolled by hand, the focused row is out of view`, place?.inView === false, JSON.stringify(place));
+  await page.evaluate(async (path) => {
+    const { revealInFilesPanel } = await import('/src/features/files/FilesPanel.tsx');
+    revealInFilesPanel(window.__easy68k.ctx, path);
+  }, inner);
+  await expectInView('a reveal of the row that has the focus already', null, inner);
+
+  // A render that does not move the focused row leaves the scroll position alone: the window gets
+  // the focus back (P3.3.10, the render that moved Chromium's starting point), a file is added.
+  await page.evaluate(toEnd, TREE);
+  const scrolledTo = (await rowPlace(page, inner))?.scrollTop;
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await seedFiles(page, ['/browser/long/added.X68']);
+  await row(page, '/browser/long/added.X68').waitFor();
+  await page.waitForTimeout(300);
+  place = await rowPlace(page, inner);
+  check(
+    `${p} a render that does not move the focused row (the window back, a file added) does not scroll`,
+    scrolledTo > 0 && place?.scrollTop >= scrolledTo && place.inView === false,
+    `${scrolledTo} -> ${JSON.stringify(place)}`,
+  );
+  await page.locator(TREE).focus();
+  await expectInView('Down after the tree was scrolled away by hand', 'ArrowDown');
+
+  // A long name ends in an ellipsis: the tree never scrolls sideways, so only the vertical
+  // position matters (scrollToShow keeps the horizontal rule of nearest all the same).
+  const longName = `/browser/long/${'n'.repeat(120)}.X68`;
+  await seedFiles(page, [longName]);
+  await row(page, longName).waitFor();
+  const wide = await page.evaluate((tree) => {
+    const element = document.querySelector(tree);
+    return { scrollWidth: element.scrollWidth, clientWidth: element.clientWidth };
+  }, TREE);
+  check(
+    `${p} a row with a long name does not make the tree scroll sideways`,
+    wide.scrollWidth <= wide.clientWidth,
+    JSON.stringify(wide),
+  );
+  await revealRow(page, longName);
+  await expectInView('a reveal of the row with the long name', null, longName);
+
+  // Decision D-i: the node before the tree is one element that holds the strip and the count line,
+  // as main's strip is; after an element just before the tree went away, Shift+Tab goes as on main
+  // (WebKit goes on from that node and skips the strip; Chromium stops at New Folder..., as main).
+  const head = await page.evaluate((tree) => {
+    const before = document.querySelector(tree).previousElementSibling;
+    return {
+      holdsStrip: before?.querySelector(':scope > .e68-files__strip') !== null,
+      holdsCount: before?.querySelector(':scope > .e68-files__count[role=status]') !== null,
+    };
+  }, TREE);
+  check(
+    `${p} the element before the tree holds the strip and the count line`,
+    head.holdsStrip && head.holdsCount,
+    JSON.stringify(head),
+  );
+  await page.locator(TREE).focus();
+  await page.evaluate((tree) => {
+    const mark = document.createElement('span');
+    mark.tabIndex = -1;
+    document.querySelector(tree).before(mark);
+    mark.focus();
+    mark.remove();
+  }, TREE);
+  await page.keyboard.press('Shift+Tab');
+  const reached = await page.evaluate(() => ({
+    name: document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.textContent ?? '',
+    inStrip: document.activeElement?.closest('.e68-files__strip') !== null,
+  }));
+  check(
+    `${p} Shift+Tab after an element before the tree went away goes as on main (${name === 'webkit' ? 'past the strip' : 'to New Folder...'})`,
+    name === 'webkit' ? !reached.inStrip : reached.inStrip && reached.name === 'New Folder...',
+    JSON.stringify(reached),
+  );
+
+  const calls = await page.evaluate(() => window.__e68ScrollIntoView);
+  check(`${p} the panel never called Element.scrollIntoView`, calls === 0, String(calls));
+  await page.screenshot({ path: join(outDir, `${name}-row-in-view.png`) });
+  check(`${p} no console errors`, errors.length === 0, errors.join(' | '));
+  await context.close();
+}
+
 async function main() {
   const port = await freePort();
   const server = await createServer({
@@ -3455,6 +3661,7 @@ async function main() {
           // ARCHITECTURE-PLUS P3.2 (N5): both key maps on every system.
           ['selection and keys, Windows key map', (b, n) => selectionPass(b, n, 'windows')],
           ['selection and keys, macOS key map', (b, n) => selectionPass(b, n, 'mac')],
+          ['the focused row in view', rowInViewPass],
           // main's storage notice with the stage's panel: shown in Safari's engine only.
           ...(name === 'webkit'
             ? [

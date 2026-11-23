@@ -1,7 +1,10 @@
 # N10: run the guide's text check in CI, and tell the lint test it is not a browser check
 
-Status: open. Filed by N10 for the gate's configuration engineer (ci.yml and tests/lint are not
-N10's).
+Status: done (NI, integration pass, fourth round of the gate of the stage, 22 November 2026): item 1
+as asked (the step `Guide texts (N10)` after `Documents (DOC1)` in the job `check`, and the row in
+the head comment); item 2 as asked (`NOT_BROWSER_CHECKS` in `tests/lint/ci-workflow.test.ts`, and a
+test that the root script runs the file and a step has `run: npm run check:guide`). Filed by N10
+for the gate's configuration engineer (ci.yml and tests/lint are not N10's).
 
 ## What is wrong
 

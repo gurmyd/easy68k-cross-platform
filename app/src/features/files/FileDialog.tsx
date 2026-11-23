@@ -336,7 +336,7 @@ export function FileDialog({ props, close }: DialogProps<FileDialogProps, Result
             ? `From this computer... copies files from this computer into ${storeLabel}/Imported. `
             : ''}
           {hasFolderProvider ? 'Open folder... works on a folder of this computer directly. ' : ''}
-          {'To take files out of the browser, use Export... in the Files panel.'}
+          {'To take files out of the browser, use the Export button of the Files panel.'}
         </p>
       )}
     </Dialog>

@@ -25,6 +25,7 @@ import {
 import { findGitHolder, gitRefusalFor, gitStoreName, innerName, touchesGit } from './git-guard';
 import { displayPath, locations, sortEntries, storedSpelling } from './store';
 import { changedWhileReplacing } from '../../core/history/texts';
+import { isFsError } from '../../fs/vfs';
 import {
   COPY_TITLE,
   MOVE_TITLE,
@@ -176,6 +177,22 @@ export async function takeBackCopyOfGone(
   }
 }
 
+/**
+ * Removes a source whose copy is written and which was unchanged at the last check. 'gone': the
+ * removal found nothing, so the file was moved or deleted by someone else in the moment since that
+ * check; the caller treats it as a source found gone (takeBackCopyOfGone; errata N5 entry 18).
+ * Any other failure is thrown.
+ */
+export async function removeSource(vfs: Pick<FilesDeps['vfs'], 'remove'>, source: VPath): Promise<'removed' | 'gone'> {
+  try {
+    await vfs.remove(source);
+    return 'removed';
+  } catch (error) {
+    if (isFsError(error, 'not-found')) return 'gone';
+    throw error;
+  }
+}
+
 interface PlannedFile {
   from: VPath;
   to: VPath;
@@ -311,6 +328,9 @@ export async function transferItems(
           : replaceManyQuestion(asked.length, place, ready),
       icon: 'confirmation',
       buttons: ['Yes', 'No', 'Cancel'],
+      // Outside "ready" the question says "This cannot be undone.": No has the focus (decision D-g of
+      // the fourth round, as for every question of the stage whose Yes destroys for good; errata N5 22).
+      ...(ready ? {} : { defaultButton: 'No' as const }),
     });
     if (answer === 'Cancel') return outcome;
     if (answer !== 'Yes') for (const file of asked) file.skip = true;
@@ -419,7 +439,19 @@ export async function transferItems(
       // was moved or deleted by someone else: its copy goes again, unless it replaced a file (that
       // file is in the Trash, and the target keeps the copy) or was written to since (errata N5
       // entry 18).
-      if (!(await unchangedSince(vfs, from, taken.get(from)))) {
+      // The removal finding nothing is the same: the source went in the moment since the check.
+      let removed: 'removed' | 'gone' | 'changed' = 'changed';
+      if (await unchangedSince(vfs, from, taken.get(from))) {
+        try {
+          removed = await removeSource(vfs, from);
+        } catch (error) {
+          await showError(deps, title, error);
+          continue;
+        }
+      }
+      if (removed === 'removed') {
+        moved.push([from, to]);
+      } else {
         const gone = copies.has(to)
           ? await takeBackCopyOfGone(vfs, from, to, copies.get(to))
           : (await vfs.stat(from).catch(() => null)) === null
@@ -431,13 +463,6 @@ export async function transferItems(
         } else if (gone === 'there') {
           await inform(deps, title, changedWhileMoving(basename(from), displayPath(vfs, dirname(to)), false));
         }
-        continue;
-      }
-      try {
-        await vfs.remove(from);
-        moved.push([from, to]);
-      } catch (error) {
-        await showError(deps, title, error);
       }
     }
     const carriedFolders: [VPath, VPath][] = [];

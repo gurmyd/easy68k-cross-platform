@@ -20,6 +20,47 @@ import { FilesSelection, type SelectableRow } from './selection';
 import { locations, sortEntries } from './store';
 import { FOLDER_SECONDARY, GIT_TOOLTIP_LINE, LINKED_SECONDARY, folderTooltip, linkedTooltip } from './texts';
 
+/** A box on the screen, as getBoundingClientRect gives it. */
+export interface ScreenBox {
+  top: number;
+  left: number;
+  bottom: number;
+  right: number;
+}
+/** The inner area of a scrolling element (without its borders and scroll bars). */
+export interface ScrollerClient {
+  clientTop: number;
+  clientLeft: number;
+  clientWidth: number;
+  clientHeight: number;
+}
+
+/** One axis of the "nearest" rule of Element.scrollIntoView (CSSOM View): 0 if the box is wholly
+ *  inside the view or covers it, else the distance that aligns its nearer edge. */
+function nearestDelta(viewStart: number, viewEnd: number, start: number, end: number): number {
+  const startOut = start < viewStart;
+  const endOut = end > viewEnd;
+  if ((startOut && endOut) || (!startOut && !endOut)) return 0;
+  const larger = end - start > viewEnd - viewStart;
+  if ((startOut && !larger) || (endOut && larger)) return start - viewStart;
+  return end - viewEnd;
+}
+
+/**
+ * How far the tree must scroll (down and right positive) to show the focused row as
+ * `row.scrollIntoView({ block: 'nearest', inline: 'nearest' })` would within the tree, which is the
+ * element that scrolls. The panel sets scrollTop and scrollLeft with it instead of calling
+ * scrollIntoView, which in Chromium moves the Tab key's starting point (errata N1 26, N5 21).
+ */
+export function scrollToShow(tree: ScreenBox, client: ScrollerClient, row: ScreenBox): { top: number; left: number } {
+  const viewTop = tree.top + client.clientTop;
+  const viewLeft = tree.left + client.clientLeft;
+  return {
+    top: nearestDelta(viewTop, viewTop + client.clientHeight, row.top, row.bottom),
+    left: nearestDelta(viewLeft, viewLeft + client.clientWidth, row.left, row.right),
+  };
+}
+
 export interface TreeRow {
   path: VPath;
   /** The entry's name; for a store root its label ("My Programs"). */
@@ -62,6 +103,7 @@ export class FilesTreeModel {
   private linkedFiles: LinkedFile[] = [];
   private linkedLoading: Promise<void> | null = null;
   private readonly linkedChecked = new Set<VPath>();
+  private revealCount = 0;
   readonly selection = new FilesSelection((path) => splitVPath(path).rel === '');
 
   constructor(private readonly vfs: Vfs) {
@@ -264,7 +306,14 @@ export class FilesTreeModel {
       await this.loadLinked();
     }
     this.selection.click(path);
+    this.revealCount++;
     this.notify();
+  }
+
+  /** How many reveals have selected a row: the panel brings the focused row into view after each,
+   *  also when the row revealed was focused already (FilesPanel's "keep the focused row in view"). */
+  get reveals(): number {
+    return this.revealCount;
   }
 
   /** Re-reads every expanded folder (and notices stores mounted or unmounted since). */

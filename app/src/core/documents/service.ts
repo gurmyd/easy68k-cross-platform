@@ -34,6 +34,10 @@
 //     'saved') and each open of a file as a document (the bytes read, 'opened'); not for Reload.
 //     Listeners run after the operation's promise has resolved, each in its own try/catch.
 //   - fileTime(id): as it was (DocumentManager.fileTime), now part of the contract.
+//   - deps.shown(id): told whenever a document is made the one a person works on (every
+//     activate(), also of the active document, and a reload of the active document), so that the
+//     dock brings the editor in front of a viewer (P1.2: today the opened document is shown;
+//     errata N6 15). Without the dep nothing is told and nothing else changes.
 //
 // Owner: E1 (the hooks: N6 in the stage of additions). Runs under Node and in browsers (core/
 // rules, 3.1).
@@ -85,6 +89,14 @@ export interface DocumentServiceDeps {
   viewer?: Pick<ViewerService, 'wants' | 'show'>;
   /** The time of onWritten's events (ARCHITECTURE-PLUS P4.4): its wall time; absent = time 0. */
   clock?: Pick<Clock, 'wallTime'>;
+  /**
+   * ARCHITECTURE-PLUS P1.2 (errata N6 15): told that the document `id` was made the one a person
+   * works on, so that a viewer in front of the editor gives way to it. Called by every activate()
+   * (also of the active document: a Window menu choice of it, an "already open" No), and so by New,
+   * Open, Open as New Document and a draft brought back, and after a reload of the active document.
+   * Not called when a close makes another document active. A listener that throws changes nothing.
+   */
+  shown?: (id: string) => void;
 }
 
 /** An event of DocumentService.onWritten (ARCHITECTURE-PLUS P4.4). */
@@ -450,6 +462,7 @@ export class DocumentManager implements DocumentService {
       revision: after.state.revision + 1,
     };
     this.publish();
+    if (this.activeId === id) this.tellShown(id);
     if (looksLikeUtf8(bytes)) dialogs.toast(UTF8_BANNER);
     if (loaded.loadError) await dialogs.messageBox(loadFileError());
   }
@@ -492,9 +505,21 @@ export class DocumentManager implements DocumentService {
   }
 
   activate(id: string): void {
-    if (!this.entries.has(id) || this.activeId === id) return;
-    this.activeId = id;
-    this.publish();
+    if (!this.entries.has(id)) return;
+    if (this.activeId !== id) {
+      this.activeId = id;
+      this.publish();
+    }
+    this.tellShown(id);
+  }
+
+  /** deps.shown (ARCHITECTURE-PLUS P1.2), in its own try/catch. */
+  private tellShown(id: string): void {
+    try {
+      this.deps.shown?.(id);
+    } catch {
+      // The dock's reaction never makes an open, a choice or a reload fail.
+    }
   }
 
   /* ---------------------------------------------------------------- for other packages */

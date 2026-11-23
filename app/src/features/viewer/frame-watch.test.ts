@@ -31,11 +31,32 @@ describe("which addresses of the PDF frame count as not the viewer's own documen
     }
   });
 
-  it('about:blank and a frame without a window decide nothing (WebKit shows its own PDF so)', () => {
+  it('before its own document was seen, about:blank and a frame without a window decide nothing (WebKit shows its own PDF so)', () => {
     const watch = createFrameWatch(OWN);
     expect(watch.observe('about:blank')).toBe('undecided');
     expect(watch.observe('')).toBe('undecided');
+    expect(watch.observe('about:blank', true)).toBe('undecided');
+    expect(watch.observe('about:blank')).toBe('undecided');
     expect(watch.observe(null)).toBe('undecided');
+  });
+
+  it('decision D-j: after its own document was seen (Chromium), an about:blank it loaded, or read twice in a row, is not ours', () => {
+    const loaded = createFrameWatch(OWN);
+    expect(loaded.observe(OWN)).toBe('ours');
+    expect(loaded.observe('about:blank', true)).toBe('foreign');
+    const polled = createFrameWatch(OWN);
+    expect(polled.observe(OWN, true)).toBe('ours');
+    // One reading of an empty frame is a frame loading its document again (the dock moved it).
+    expect(polled.observe('about:blank')).toBe('undecided');
+    expect(polled.observe(OWN)).toBe('ours');
+    expect(polled.observe('')).toBe('undecided');
+    expect(polled.observe('about:blank')).toBe('foreign');
+    // A frame without a window between two empty readings does not join them.
+    const gap = createFrameWatch(OWN);
+    expect(gap.observe(OWN)).toBe('ours');
+    expect(gap.observe('about:blank')).toBe('undecided');
+    expect(gap.observe(null)).toBe('undecided');
+    expect(gap.observe('about:blank')).toBe('undecided');
   });
 
   it('an address the page cannot read is foreign only after its own document was seen there', () => {

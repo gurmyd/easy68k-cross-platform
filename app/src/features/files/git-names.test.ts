@@ -91,7 +91,7 @@ describe('the texts (errata N5 entry 15)', () => {
       '".git" belongs to a Git repository: the Files panel does not write, move, copy or delete anything named .git or inside a folder named .git. Use your own tools.',
     );
     expect(gitStoreRefused('.git')).toBe(
-      'The folder ".git" is the .git folder of a Git repository. The Files panel changes nothing in it.',
+      'The folder ".git" is the .git folder of a Git repository. Nothing was changed in it.',
     );
   });
 

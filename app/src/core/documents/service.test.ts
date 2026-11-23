@@ -937,3 +937,89 @@ describe('fileTime (ARCHITECTURE-PLUS P4.4: part of the contract)', () => {
     expect(service.fileTime?.('doc-unknown')).toBeNull();
   });
 });
+
+describe('shown (ARCHITECTURE-PLUS P1.2; errata N6 15): every way a document becomes the one in front', () => {
+  function watched() {
+    const told: string[] = [];
+    const t = setup({ shown: (id) => void told.push(id) });
+    return { ...t, told };
+  }
+
+  it('New, Open as New Document, Open and a draft brought back tell the new document', async () => {
+    const t = watched();
+    const fresh = t.manager.newSource();
+    const withText = t.manager.newSourceWithText('A\n');
+    await t.vfs.writeFile('/browser/p.X68', bytes('A\r\n'));
+    const opened = (await t.manager.open('/browser/p.X68'))!;
+    const restored = t.manager.restore({ state: { ...fresh, name: 'untitled9.x68' }, text: 'B', mtime: null });
+    expect(t.told).toEqual([fresh.id, withText.id, opened.id, restored.id]);
+  });
+
+  it('activate tells the document also when it is the active one already (the Window menu, a tab, an error row)', () => {
+    const t = watched();
+    const a = t.manager.newSource();
+    const b = t.manager.newSource();
+    t.told.length = 0;
+    let published = 0;
+    const stop = t.store.subscribe(() => void published++);
+    t.manager.activate(b.id);
+    expect(published).toBe(0); // nothing else changes: the store is not published again
+    t.manager.activate(a.id);
+    t.manager.activate('doc-unknown');
+    stop();
+    expect(t.told).toEqual([b.id, a.id]);
+    expect(published).toBe(1);
+  });
+
+  it('an open of a modified, already open file answered No tells the document that stays', async () => {
+    const t = watched();
+    await t.vfs.writeFile('/browser/p.X68', bytes('A\r\n'));
+    const doc = (await t.manager.open('/browser/p.X68'))!;
+    t.type(doc.id, 'X');
+    t.told.length = 0;
+    t.answers.push('No');
+    expect(await t.manager.open('/browser/p.X68')).toBeNull();
+    expect(t.told).toEqual([doc.id]);
+  });
+
+  it('a reload tells the document when it is the active one, not when it is another', async () => {
+    const t = watched();
+    await t.vfs.writeFile('/browser/p.X68', bytes('A\r\n'));
+    await t.vfs.writeFile('/browser/q.X68', bytes('B\r\n'));
+    const p = (await t.manager.open('/browser/p.X68'))!;
+    const q = (await t.manager.open('/browser/q.X68'))!;
+    t.told.length = 0;
+    await t.manager.reload(p.id);
+    expect(t.told).toEqual([]);
+    await t.manager.reload(q.id);
+    expect(t.told).toEqual([q.id]);
+  });
+
+  it('a close that makes the neighbour active, a file the viewer takes and a missing file tell nothing', async () => {
+    const f = fakeViewer('.pdf');
+    const told: string[] = [];
+    const t = setup({ viewer: f.viewer, shown: (id) => void told.push(id) });
+    const a = t.manager.newSource();
+    const b = t.manager.newSource();
+    told.length = 0;
+    expect(await t.manager.close(b.id)).toBe(true);
+    expect(t.manager.active()?.id).toBe(a.id);
+    await t.vfs.writeFile('/browser/report.pdf', bytes('%PDF-1.4\r\n'));
+    expect(await t.manager.open('/browser/report.pdf')).toBeNull();
+    t.answers.push('OK');
+    expect(await t.manager.open('/browser/missing.X68')).toBeNull();
+    expect(told).toEqual([]);
+  });
+
+  it('a listener that throws changes nothing: the document still opens and is active', async () => {
+    const t = setup({
+      shown: () => {
+        throw new Error('dock');
+      },
+    });
+    await t.vfs.writeFile('/browser/p.X68', bytes('A\r\n'));
+    const doc = await t.manager.open('/browser/p.X68');
+    expect(doc).not.toBeNull();
+    expect(t.manager.active()?.id).toBe(doc!.id);
+  });
+});

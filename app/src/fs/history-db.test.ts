@@ -11,7 +11,7 @@ import {
 } from 'fake-indexeddb';
 import { describe, expect, it, vi } from 'vitest';
 import type { Bytes, HistoryState, SeenFile, Settings, SettingsService, VPath } from '../contracts';
-import { DAY, MB, MINUTE } from '../core/history/limits';
+import { DAY, MB, MINUTE, OPEN_TIMEOUT } from '../core/history/limits';
 import type { PlanEvent } from '../core/history/plans';
 import {
   CANNOT_BE_UNDONE,
@@ -135,6 +135,63 @@ function setup(): Env {
         { schedulePass: false, log: (e) => events.push(e) },
       ),
   };
+}
+
+/**
+ * An IDBFactory whose open() reaches `real` only after release(): a browser that answers an open
+ * late (a loaded machine, another window's long transaction; P3.3.5). Requests made after the
+ * release go through at once.
+ */
+function gatedFactory(real: IDBFactory): { factory: IDBFactory; release(): void } {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  type Handler = ((event: Event) => void) | null;
+  const factory = {
+    open(name: string, version?: number): IDBOpenDBRequest {
+      let inner: IDBOpenDBRequest | null = null;
+      const request = {
+        onsuccess: null as Handler,
+        onerror: null as Handler,
+        onupgradeneeded: null as Handler,
+        onblocked: null as Handler,
+        get result() {
+          return (inner as IDBOpenDBRequest).result;
+        },
+        get error() {
+          return inner ? inner.error : null;
+        },
+      };
+      void gate.then(() => {
+        inner = real.open(name, version);
+        inner.onupgradeneeded = (event) => request.onupgradeneeded?.(event);
+        inner.onsuccess = (event) => request.onsuccess?.(event);
+        inner.onerror = (event) => request.onerror?.(event);
+        inner.onblocked = (event) => request.onblocked?.(event);
+      });
+      return request as unknown as IDBOpenDBRequest;
+    },
+    deleteDatabase: (name: string) => real.deleteDatabase(name),
+    cmp: (a: unknown, b: unknown) => real.cmp(a, b),
+    databases: () => real.databases(),
+  };
+  return { factory: factory as unknown as IDBFactory, release: () => release() };
+}
+
+/** Waits (real time, at most `ms`) until `condition()` holds. */
+async function until(condition: () => boolean, ms = 10_000): Promise<void> {
+  const end = Date.now() + ms;
+  while (!condition()) {
+    if (Date.now() > end) throw new Error(`the condition did not hold within ${ms} ms`);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
+/** `promise`, or a rejection naming `what` after `ms` (real time). */
+function withLimit<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${what} did not end within ${ms} ms`)), ms)),
+  ]);
 }
 
 /** Saves a file as the editor would: the write, then the version (P3.3.3). */
@@ -1241,6 +1298,108 @@ describe('states and the database (P3.3.5, P3.3.7, P4.4)', () => {
     expect(h.state()).toBe('unavailable');
     expect(h.unavailableDetail()).toMatch(/5 s/);
   });
+
+  it('a slow open: unavailable after 5 s, ready again when the browser answers; saves meanwhile keep nothing, none twice', async () => {
+    const env = setup();
+    const gated = gatedFactory(env.factory);
+    const h = createMemoryHistoryStore(
+      { vfs: env.vfs, clock: env.clock, scheduler: env.scheduler, settings: env.settings, factory: gated.factory },
+      { schedulePass: false },
+    );
+    const heard: HistoryState[] = [];
+    h.subscribe(() => heard.push(h.state()));
+    // A save within the 5 s waits in the queue; one after them is not queued at all (P4.4).
+    await env.vfs.writeFile('/browser/a.X68', text('early'));
+    const early = h.record('/browser/a.X68', text('early'), 'saved', env.clock.t);
+    env.scheduler.advance(OPEN_TIMEOUT);
+    await early;
+    expect(h.state()).toBe('unavailable');
+    expect(h.unavailableDetail()).toBe('the browser did not open it within 5 s');
+    await save(env, h, '/browser/a.X68', text('meanwhile'));
+    expect(await h.versions('/browser/a.X68')).toEqual([]);
+    // Delete while unavailable: asks, then acts (P4.4), and changes no record.
+    await save(env, h, '/browser/b.X68', text('b'));
+    const confirm = vi.fn(async () => true);
+    expect((await h.guard('/browser/b.X68', 'delete', remover(env, '/browser/b.X68'), confirm)).outcome).toBe(
+      'not-kept',
+    );
+    expect(confirm).toHaveBeenCalledTimes(1);
+    // The browser answers at last: the history is ready in this window, and its listeners hear it.
+    gated.release();
+    await until(() => h.state() === 'ready');
+    expect(h.unavailableDetail()).toBeNull();
+    expect(heard.filter((s, i) => s !== heard[i - 1])).toEqual(['unavailable', 'ready']);
+    // Nothing of the time it was unavailable is recorded, late or twice; a save now keeps a version.
+    expect(await h.versions('/browser/a.X68')).toEqual([]);
+    expect(await h.trashItems()).toEqual([]);
+    await save(env, h, '/browser/a.X68', text('after'));
+    const versions = await h.versions('/browser/a.X68');
+    expect(versions.map((v) => v.reason)).toEqual(['saved']);
+    expect(decode(await h.read('/browser/a.X68', versions[0]!.seq))).toBe('after');
+    const db = await dump(env.factory);
+    expect([db.files.length, db.versions.length, db.contents.length]).toEqual([1, 1, 1]);
+    // Another window on the same database sees the same history.
+    const other = env.make();
+    expect((await other.versions('/browser/a.X68')).length).toBe(1);
+    // Delete keeps a copy again.
+    const kept = await h.guard('/browser/a.X68', 'delete', remover(env, '/browser/a.X68'), async () => false);
+    expect(kept.outcome).toBe('kept');
+  }, 30_000);
+
+  it('a slow open that then fails keeps the history unavailable with the reason the browser gives', async () => {
+    const env = setup();
+    const hooks: { fail?: () => void } = {};
+    const failing = {
+      open: () => {
+        const request = { error: null as DOMException | null } as unknown as IDBOpenDBRequest & {
+          onerror: (() => void) | null;
+        };
+        hooks.fail = () => {
+          (request as unknown as { error: DOMException }).error = new DOMException('the disk is gone', 'UnknownError');
+          request.onerror?.();
+        };
+        return request;
+      },
+      deleteDatabase: () => ({}) as IDBOpenDBRequest,
+      cmp: () => 0,
+    } as unknown as IDBFactory;
+    const h = createMemoryHistoryStore(
+      { vfs: env.vfs, clock: env.clock, scheduler: env.scheduler, settings: env.settings, factory: failing as never },
+      { schedulePass: false },
+    );
+    let heard = 0;
+    h.subscribe(() => heard++);
+    env.scheduler.advance(OPEN_TIMEOUT);
+    await until(() => h.state() === 'unavailable');
+    expect(h.unavailableDetail()).toMatch(/5 s/);
+    expect(hooks.fail).toBeDefined();
+    hooks.fail!();
+    await until(() => h.unavailableDetail() !== 'the browser did not open it within 5 s');
+    expect(h.state()).toBe('unavailable');
+    expect(h.unavailableDetail()).toMatch(/the disk is gone/);
+    expect(heard).toBe(2);
+  }, 30_000);
+
+  it('a slow open while another window deletes the database: the delete is not blocked, and the history becomes ready', async () => {
+    const env = setup();
+    const first = env.make();
+    await save(env, first, '/browser/a.X68', text('a'));
+    const gated = gatedFactory(env.factory);
+    const h = createMemoryHistoryStore(
+      { vfs: env.vfs, clock: env.clock, scheduler: env.scheduler, settings: env.settings, factory: gated.factory },
+      { schedulePass: false },
+    );
+    env.scheduler.advance(OPEN_TIMEOUT);
+    await until(() => h.state() === 'unavailable');
+    gated.release();
+    // The late connection gives way to the delete (versionchange), whichever comes first.
+    await withLimit(first.deleteAll(), 5_000, 'deleteAll in the other window');
+    await until(() => h.state() === 'ready');
+    expect(await h.versions('/browser/a.X68')).toEqual([]);
+    await save(env, h, '/browser/a.X68', text('again'));
+    expect((await h.versions('/browser/a.X68')).length).toBe(1);
+    expect((await first.versions('/browser/a.X68')).length).toBe(1);
+  }, 30_000);
 
   it('a record that does not parse is skipped and counted; a meta that does not parse gives unavailable, and deleteAll recovers', async () => {
     const env = setup();

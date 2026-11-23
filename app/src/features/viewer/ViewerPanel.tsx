@@ -75,17 +75,18 @@ function PdfFrame({ url, title }: { url: string; title: string }) {
     if (!element) return;
     const watch = createFrameWatch(url);
     let done = false;
-    const look = () => {
-      if (done || watch.observe(readFrameAddress(element)) !== 'foreign') return;
+    const look = (loaded: boolean) => {
+      if (done || watch.observe(readFrameAddress(element), loaded) !== 'foreign') return;
       if (!guard.allow(Date.now())) return;
       done = true;
       setGeneration((n) => n + 1);
     };
-    element.addEventListener('load', look);
-    const timer = window.setInterval(look, FRAME_WATCH_MS);
+    const onLoad = () => look(true);
+    element.addEventListener('load', onLoad);
+    const timer = window.setInterval(() => look(false), FRAME_WATCH_MS);
     return () => {
       done = true;
-      element.removeEventListener('load', look);
+      element.removeEventListener('load', onLoad);
       window.clearInterval(timer);
     };
   }, [url, generation, guard]);

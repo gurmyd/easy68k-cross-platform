@@ -20,6 +20,9 @@
 //   - an opened folder with a real directory handle (the origin private file system's): its root is
 //     stored with the handle and found again with isSameEntry from another handle object, by a new
 //     store; another folder is not taken for it; a Trash item of it names the folder (folderName);
+//   - a slow open: while another page keeps a transaction over the database alive, a new page's
+//     history is unavailable after 5 s and keeps nothing; when the other page lets go it becomes
+//     ready by itself, keeps versions again and records nothing of the time it was unavailable;
 //   - Chromium only: after a run like stress run (c) (1 MB files that do not compress; --full for
 //     the whole run of 1,000 saves, else 150), the ratio of the growth of estimate().usage to the
 //     counted bytes (P3.3.4, "Worst case": if it is above 2, B is divided by it); storage full, with
@@ -504,6 +507,107 @@ async function windows(context, name) {
   await b.page.close();
 }
 
+/**
+ * A slow open (P3.3.5, errata N3 "A slow open"): page a keeps a read-write transaction over the
+ * whole history database alive, so that page b's store cannot check its `meta` within the 5 s.
+ * Page b's history is then unavailable and a save there keeps nothing; once page a lets go, page b's
+ * history becomes ready by itself (its listeners hear it), a save keeps a version, nothing of the
+ * time it was unavailable appears, and the database is consistent.
+ */
+async function slowOpen(context, name) {
+  const p = `${name}: slow open:`;
+  const a = await openPage(context);
+  const b = await openPage(context);
+  await a.page.evaluate(async () => {
+    await window.__n3.setup({ files: 'memory' });
+    await window.__n3.store.usage(); // the database exists, with its stores
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('easy68k-history');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const names = [...db.objectStoreNames];
+    const tx = db.transaction(names, 'readwrite');
+    const store = tx.objectStore(names[0]);
+    window.__holding = true;
+    window.__held = 0;
+    const spin = () => {
+      if (!window.__holding) return;
+      window.__held++;
+      store.get('easy68k-check-nothing').onsuccess = spin;
+    };
+    spin();
+    window.__txDone = new Promise((resolve) => {
+      tx.oncomplete = () => {
+        db.close();
+        resolve('complete');
+      };
+      tx.onabort = () => resolve(`aborted: ${tx.error?.name}`);
+    });
+  });
+  const during = await b.page.evaluate(async () => {
+    const started = performance.now();
+    await window.__n3.setup({ files: 'memory' });
+    const { store, save, text } = window.__n3;
+    window.__states = [];
+    store.subscribe(() => window.__states.push(store.state()));
+    while (store.state() === 'ready' && performance.now() - started < 15000)
+      await new Promise((r) => setTimeout(r, 50));
+    const out = {
+      state: store.state(),
+      detail: store.unavailableDetail(),
+      ms: Math.round(performance.now() - started),
+    };
+    await save('/browser/slow.X68', text('saved while unavailable'));
+    out.versionsMeanwhile = (await store.versions('/browser/slow.X68')).length;
+    return out;
+  });
+  check(
+    `${p} the history is unavailable after 5 s while another page holds the database`,
+    during.state === 'unavailable' && /within 5 s/.test(during.detail ?? '') && during.ms >= 4900,
+    JSON.stringify(during),
+  );
+  check(`${p} a save meanwhile keeps nothing`, during.versionsMeanwhile === 0, String(during.versionsMeanwhile));
+  const released = await a.page.evaluate(async () => {
+    window.__holding = false;
+    return { requests: window.__held, tx: await window.__txDone };
+  });
+  const after = await b.page.evaluate(async () => {
+    const started = performance.now();
+    const { store, save, text } = window.__n3;
+    while (store.state() !== 'ready' && performance.now() - started < 20000)
+      await new Promise((r) => setTimeout(r, 50));
+    const out = { state: store.state(), ms: Math.round(performance.now() - started), states: [...window.__states] };
+    out.versionsBefore = (await store.versions('/browser/slow.X68')).length;
+    await save('/browser/slow.X68', text('saved when ready'));
+    const versions = await store.versions('/browser/slow.X68');
+    out.versions = versions.map((v) => v.reason);
+    out.back = versions.length
+      ? new TextDecoder().decode(await store.read('/browser/slow.X68', versions[0].seq))
+      : null;
+    out.consistent = (await window.__n3.consistent()).problems;
+    return out;
+  });
+  check(
+    `${p} when the other page lets go, the history becomes ready by itself and its listeners hear it`,
+    after.state === 'ready' &&
+      after.states.includes('unavailable') &&
+      after.states[after.states.length - 1] === 'ready',
+    `${JSON.stringify(after)}; page a: ${JSON.stringify(released)}`,
+  );
+  check(
+    `${p} then a save keeps a version, and nothing of the time it was unavailable is recorded`,
+    after.versionsBefore === 0 && after.versions.join(',') === 'saved' && after.back === 'saved when ready',
+    JSON.stringify(after),
+  );
+  check(`${p} the database is consistent`, after.consistent.length === 0, after.consistent.join('; '));
+  await b.page.evaluate(() => window.__n3.store.deleteAll());
+  const errors = [...a.errors, ...b.errors];
+  check(`${p} no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await a.page.close();
+  await b.page.close();
+}
+
 async function ratio(context) {
   const { page, errors } = await openPage(context);
   await page.evaluate(() => window.__n3.setup({ files: 'memory' }));
@@ -776,6 +880,7 @@ async function main() {
         await pass('the scenario', (context) => scenario(context, name));
         await pass('several windows', (context) => windows(context, name));
         await pass('opened folder', (context) => openedFolder(context, name));
+        await pass('slow open', (context) => slowOpen(context, name));
         if (name === 'chromium') {
           await pass('run (c)', (context) => ratio(context));
           await pass('storage full', (context) => storageFull(context));

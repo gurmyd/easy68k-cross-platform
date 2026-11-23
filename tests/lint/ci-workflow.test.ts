@@ -168,9 +168,24 @@ describe('ci.yml and package.json: every browser check runs in CI', () => {
   // Checks with a job of their own instead of a step of browser-checks: file -> root script.
   const OWN_JOBS: Record<string, string> = { 'tests/perf/check-perf.mjs': 'check:perf' };
 
-  it.each(checkScripts().filter((file) => !(file in OWN_JOBS)))("%s is in the plan step's table", (file) => {
-    expect([...files]).toContain(RUNNER_OF[file] ?? file);
-  });
+  /** tools/check-*.mjs that start no browser: a step of the job `check` runs them (docs/requests/N10-check-guide.md). */
+  const NOT_BROWSER_CHECKS: Record<string, string> = { 'tools/check-guide-strings.mjs': 'check:guide' };
+
+  it.each(checkScripts().filter((file) => !(file in OWN_JOBS) && !(file in NOT_BROWSER_CHECKS)))(
+    "%s is in the plan step's table",
+    (file) => {
+      expect([...files]).toContain(RUNNER_OF[file] ?? file);
+    },
+  );
+
+  it.each(Object.entries(NOT_BROWSER_CHECKS).map(([file, script]) => ({ file, script })))(
+    '$file: the root script $script runs it and the job check of ci.yml runs that script',
+    ({ file, script }) => {
+      expect(scripts[script]).toMatch(new RegExp(`^node ${file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( |$)`));
+      const step = steps().find((candidate) => candidate.text.some((line) => line.trim() === `run: npm run ${script}`));
+      expect(step, `no step runs "npm run ${script}"`).toBeDefined();
+    },
+  );
 
   it.each(Object.entries(OWN_JOBS).map(([file, script]) => ({ file, script })))(
     '$file: the root script $script runs it and a job of ci.yml runs that script',

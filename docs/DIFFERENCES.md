@@ -322,8 +322,8 @@ None of these changes what a student's program can observe.
 
 - **Dropped files are copied before they are opened (browser).** The original opens a dropped file
   where it lies. A browser gives the page the file's bytes but no path it can keep, so the port
-  copies it into `My Programs/Imported/` and opens the copy; saving writes the copy. Use Export...
-  to take it out again. The desktop app opens a dropped file where it lies, as the original does,
+  copies it into `My Programs/Imported/` and opens the copy; saving writes the copy. Use the Export
+  button of the Files panel to take it out again. The desktop app opens a dropped file where it lies, as the original does,
   and shows the Open dialog in a dropped folder.
 - **Names that differ only in letter case are one name in every store.** As on Windows, Rename...
   refuses a name that exists in another spelling, and Import... and dropped files replace (after the
@@ -347,7 +347,7 @@ None of these changes what a student's program can observe.
   that exported files work on Windows. Only one file can be chosen from the list; several files can
   be brought in at once with `From this computer...` where the opener asks for several.
 - **The Files panel** (an addition, 1.5): the browser store as a tree with New Folder...,
-  Import..., Export..., Rename... and Delete. Delete and Import ask before removing or replacing
+  Import..., an Export button, Rename... and Delete. Delete and Import ask before removing or replacing
   anything.
 - **A browser storage that is slow to answer does not hold up the start.** After three seconds the
   application is shown and the Files panel says that My Programs is still opening; what is opened
@@ -1619,16 +1619,15 @@ LED is as light as the grey.
 (`docs/differences/N0.md`)
 
 Deliberate differences between the application with the additions of `docs/ARCHITECTURE-PLUS.md`
-and the faithful port or the original, that this package introduces. The rule of that stage (P1.1)
-is that nothing a 68000 program can observe changes; a row marked **program** is the one place
-where the design allows an exception. N10 merges this file into `docs/DIFFERENCES.md`.
+and the faithful port or the original, that this package introduces. None changes what a 68000
+program can observe. N10 merges this file into `docs/DIFFERENCES.md`.
 
 | Where | Faithful port | With the additions | Why |
 |---|---|---|---|
 | The page's content security policy (web, and the desktop app's header) | `frame-src 'self'` | `frame-src 'self' blob:`. Nothing else of the policy changes | The viewer shows a PDF in a frame whose address is a `blob:` made by the page itself, from bytes it read, with the type `application/pdf` (P3.4.2). `tools/check-frame-policy.mjs` checks the policy, and that the frames refuse every other address |
-| The PDF frame before the service worker controls the page (a first visit; the desktop app has no worker) | Not present | The frame has no `sandbox` (a sandboxed frame blocks the browser's PDF viewer), and nothing answers a navigation of the frame but the server. If the page's own code, or a link that a person follows inside a PDF, sends the frame to the application's address, it shows a second copy of the application inside the frame, with the same storage as a second tab. Once the worker controls the page, the frame can be sent only to a page of the help | A `blob:` PDF cannot be framed under a sandbox. Measured in Chromium and WebKit; accepted (`docs/porting/errata/N0.md`, entry 11) |
+| The PDF frame before the service worker controls the page (a first visit; the desktop app has no worker) | Not present | The frame has no `sandbox` (a sandboxed frame blocks the browser's PDF viewer), and nothing answers a navigation of the frame but the server. If the page's own code, or a link that a person follows inside a PDF, sends the frame to another address (the application's own page, a page of the help, another site), the viewer finds it within about a fifth of a second and replaces the frame with a fresh one that shows its PDF again; the tab stays, and no second copy of the application remains in it. In WebKit a frame sent to an empty page (`about:blank`) stays empty: WebKit gives the page that same address for the viewer's own PDF, so the two cannot be told apart. Chromium shows the PDF again in that case too | A `blob:` PDF cannot be framed under a sandbox. Measured in Chromium and WebKit; the frame never shows anything but its document (decisions D-c and D-j; `docs/porting/errata/N0.md` entry 11, `docs/porting/errata/N6.md` entry 14) |
 | The desktop app's window preferences | `plugins` not set | `plugins: true` for the application window, `false` for content windows | Electron's PDF viewer. In Electron 45 the viewer draws in a window with `plugins: false` as well, so the setting does not keep it out of content windows (erratum N0, entry 5) |
-| The browsers' own PDF viewers | Not present | No person has tried the PDF viewer yet, in any browser or in the desktop app. On Windows a test machine saw Chromium, Chrome, Edge and Electron draw a PDF in a `blob:` frame under the production policy; Safari has not been tried at all. Playwright's WebKit on Windows says it has a PDF viewer and draws an empty frame | If a browser draws nothing, the line under the strip says to use Export (risk R4; `docs/MANUAL-TEST-MAC.md`, checks E1 to E4) |
+| The browsers' own PDF viewers | Not present | No person has tried the PDF viewer yet, in any browser or in the desktop app. On Windows a test machine saw Chromium, Chrome, Edge and Electron draw a PDF in a `blob:` frame under the production policy; Safari has not been tried at all. Playwright's WebKit on Windows says it has a PDF viewer and draws an empty frame | If a browser draws nothing, the line under the strip says to use Export (risk R4; `docs/MANUAL-TEST-MAC.md`, checks E1 to E5) |
 
 ### Differences introduced by N1 (movable panels, the dock)
 
@@ -1660,7 +1659,7 @@ program can observe. N10 merges this file into `docs/DIFFERENCES.md`.
 
 | Where | Faithful port | With the additions | Why |
 |---|---|---|---|
-| Window menu (Editor) | Arrange, Cascade, Tile Horizontally, Tile Vertically, Minimize All, the document list | The same items first; then, below a separator, Move Panel To..., Split Editor Right, Split Editor Down and Close Split | The three split commands are Tile Vertically, Tile Horizontally and Cascade under names that a student of another editor looks for (P3.1.4) |
+| Window menu (Editor) | Arrange, Cascade, Tile Horizontally, Tile Vertically, Minimize All, the document list | The same items first; then, below a separator, Move Panel To..., Split Editor Right, Split Editor Down and Close Split | Names that a student of another editor looks for. With one pane, Split Editor Right and Split Editor Down do what Tile Vertically and Tile Horizontally do; with two panes, they move the active document to the other pane. Close Split does what Cascade does (P3.1.4) |
 | A document's tab | Can be sent to the other pane from the editor's menu | Can also be dragged onto the other pane. The drag carries the document's number and a token of this window, so a tab dragged from another window moves nothing | P5 N2 |
 | Two panes after a Split Editor Down that follows a Split Editor Right | Not present | One pane may be left empty; it says `No document in this pane. New and Open put a document here after a click into it.` Close Split gathers the documents again | The rule of P3.1.4 moves the active document to the other pane |
 | The editor's context menu | Ends with Reload File (and Move to the Other Pane when two panes are shown) | Earlier Versions... is added below a separator after Reload File | P3.3.3 |
@@ -1696,8 +1695,8 @@ program can observe. N10 merges this file into `docs/DIFFERENCES.md`.
 | Where | Faithful port | With the additions | Why |
 |---|---|---|---|
 | File menu (Editor) | Ends with Exit | Ends with Exit, then, below a separator, Earlier Versions... and Trash... | P3.6 |
-| Earlier Versions | Not present | A list of the kept versions of a file (Kept, Size, Kind), the selected one beside the file as it is now, Restore and Open as New Document. A restore keeps the file as it was, as `Before restore`; it is refused while the file is open with unsaved changes | P3.3.8 |
-| Trash | Not present | A list of deleted and replaced items with Restore, Delete for Good and Empty Trash; several rows can be selected. A restore into a place that is taken asks first, and the file that is there goes to the Trash. An item from an opened folder that is not open now, or from a place of the desktop app's disk that it cannot reach now, can go to My Programs/Restored | P3.3.8 |
+| Earlier Versions | Not present | A list of the kept versions of a file (Kept, Size, Kind), the selected one beside the file as it is now, Restore and Open as New Document. After a restore the file as it was stays in the list: usually it is the newest `Saved` version already, and when it is not, it is kept as `Before restore`. A restore is refused while the file is open with unsaved changes | P3.3.8 |
+| Trash | Not present | A list of deleted and replaced items with Restore, Delete for Good and Empty Trash; several rows can be selected. A restore into a place that is taken asks first, and the file that is there goes to the Trash; when no copy can be kept, the question says `This cannot be undone.` and No has the focus. Delete for Good, Empty Trash and Delete History and Trash ask first, with No as the default, so Enter deletes nothing. An item from an opened folder that is not open now, or from a place of the desktop app's disk that it cannot reach now, can go to My Programs/Restored | P3.3.8 |
 | A copy that cannot be kept | Not present | The dialogs and the Files panel ask once (`EASy68K cannot keep a copy of ... anyway? This cannot be undone.`); No leaves everything as it was | P3.3.4 |
 | The comparison | Not present | Each inserted line is marked + and each deleted line -, so that colour is not the only sign | Accessibility (P3.3.8) |
 
@@ -1716,10 +1715,10 @@ program can observe. N10 merges this file into `docs/DIFFERENCES.md`.
 | Delete of a linked file | Removed the entry | The command is Remove from List; the file on the computer is not changed | P3.2.2 |
 | The Delete button's icon | The trash can | A cross; the trash can is the new Trash... button. The names are unchanged | One icon, one meaning (erratum N5 entry 9) |
 | Export | The caption is Export... | The button, its tool tip and the menu item say what will be exported (one file, one folder, several items, a whole store). Several items become one `EASy68K export.zip`; folders named `.git` are left out of every export | P3.2.3 |
-| Moving files | Rename only | Drag the selection onto a folder, or use Move To... in the context menu. Between My Programs and an opened folder the items are copied. An open file follows its move or rename. Replacing a file that is at the target asks first and puts the old one in the Trash | P3.2.4 |
+| Moving files | Rename only | Drag the selection onto a folder, or use Move To... in the context menu. Between My Programs and an opened folder the items are copied. An open file follows its move or rename. Replacing a file that is at the target asks first and puts the old one in the Trash; when no copy can be kept, the question says `This cannot be undone.` and No is its default. A file that another window or a program changes, moves or deletes while it is being moved or its folder renamed is not brought back or doubled, and a message says what happened to it | P3.2.4; decision D-g; erratum N5 entry 18 |
 | Undo | Not present | Ctrl+Z (Cmd+Z), the toast and the context menu undo the last of 20 operations of this window (delete, move, rename, copy); they are forgotten at a reload | P3.2.7 |
-| Folders that hold a Git repository | Treated as any folder | Not deleted, moved, copied or renamed in the Files panel (the message says to use one's own tools); no name can become `.git`, and nothing is written below a `.git` folder by a command of the panel. The panel does not list `.git`; the tool tip of the folder that holds one says so. An import leaves out a folder named `.git` at its top; a repository inside an imported folder is imported as before. Save, Save As and a program's own file operations are unchanged | P1.1 rule 2, P3.2.2, P3.2.4; erratum N5 entry 15 |
-| An opened folder that is itself a `.git` folder | Could be changed like any folder | Delete, Rename, New Folder, Import, Move and Copy into or out of it, and Undo there, are refused with `The folder ".git" is the .git folder of a Git repository. The Files panel changes nothing in it.` Save and a program's writes there are unchanged | Erratum N5 entries 15 and 19. Import is refused there although P1.1 rule 2 leaves Import unchanged below `.git`: the integration pass may decide otherwise |
+| Folders that hold a Git repository | Treated as any folder | Not deleted, moved, copied or renamed in the Files panel (the message says to use one's own tools); no name can become `.git`, and the panel's Delete, Rename, New Folder, Move, Copy and Undo write nothing below a `.git` folder. The panel does not list `.git`; the tool tip of the folder that holds one says so. Import is unchanged: it imports a folder named `.git` as before. Save, Save As and a program's own file operations are unchanged | P1.1 rule 2, P3.2.2, P3.2.4; erratum N5 entry 15 |
+| An opened folder that is itself a `.git` folder | Could be changed like any folder | Delete, Rename, New Folder, Move and Copy into or out of it, and Undo there, are refused with `The folder ".git" is the .git folder of a Git repository. Nothing was changed in it.` Import, Save and a program's writes there are unchanged | Erratum N5 entries 15 and 19 (P1.1 rule 2) |
 | Opened from this computer | Not present as a root | A third root lists every linked file under its own name, with the note `edited in place` | P3.2.5 |
 | A large import | No question | More than 100 files or 10 MB into the browser's storage asks first; an import that cannot fit is refused with a message and imports nothing | P3.2.6 |
 | The line at the bottom of the panel | Not present | `This site uses ... in this browser - Earlier versions and Trash: ... - About ... free`; a button that opens the Storage part of Port Additions | P3.2.6 |
@@ -1754,7 +1753,7 @@ program can observe. N10 merges this file into `docs/DIFFERENCES.md`.
 |---|---|---|---|
 | Options menu (Editor and Simulator) | Ends with Import/Export Settings... (Editor) and Serial Ports... (Simulator) | Port Additions... is added below a separator at the end | P3.5 |
 | The two switches | Not present | Show PDF files and pictures in a viewer instead of as text, and Keep earlier versions of saved files and a Trash for deleted files. Both are on at first. Off, the application behaves as the faithful port: every file opens as text, and Delete, Replace and Restore say `This cannot be undone.` What was kept stays until the student deletes it. The settings are the port's own and are not in `settings.dat`, `sim68K.dat` or `template.NEW` | P1.2, decision D10 |
-| Storage | Not present | The numbers of files, versions and Trash items and what the site uses, with Empty Trash and Delete Earlier Versions, which act at once after a question. In the desktop app the last two lines say that the versions and the Trash are kept in the app's own storage | P3.5 |
+| Storage | Not present | The numbers of files, versions and Trash items and what the site uses, with Empty Trash and Delete Earlier Versions, which act at once after a question whose default is No. In the desktop app the last two lines say that the versions and the Trash are kept in the app's own storage | P3.5 |
 | Sizes in this dialog | Not present | Written with the units of the Files panel (1 kB is 1024 bytes), so the example figures of the design read `921.6 kB` and `307.2 kB` | Erratum N7 entry 2 |
 
 ### Differences introduced by N8 (status bar, reload offer, Git folders)
@@ -1992,12 +1991,10 @@ They stay here until they are.
 - **No person has tried the PDF viewer yet**, in any browser or in the desktop app. On Windows a
   test machine saw Chromium, Chrome, Edge and Electron draw a PDF under the production policy;
   Safari has not been tried at all, and Playwright's WebKit draws an empty frame. If a browser draws nothing, the line under
-  the viewer's strip says to use Export. The checks for a person are E1 to E4 in
-  `docs/MANUAL-TEST-MAC.md`. Before a service worker controls the page (a first visit, and in the
-  desktop app) the PDF frame can be sent to the application's own page by the page's code or by a link
-  inside the PDF; it then shows a second copy of the application (part N0).
-- **An opened folder that is itself a `.git` folder refuses Import**, although the design leaves Import
-  unchanged below `.git` (part N5). The project's owner has not decided whether that stays.
+  the viewer's strip says to use Export. The checks for a person are E1 to E5 in
+  `docs/MANUAL-TEST-MAC.md`. When a link inside the PDF, or the page's code, sends the viewer's frame
+  elsewhere, the viewer shows its PDF again in a fresh frame (part N0); in WebKit a frame sent to an
+  empty page stays empty, and in the desktop app this was not tried (check E5).
 - **Moving panels has not been tried with a screen reader.** The announcements of a move and the
   order of the panels for the Tab key are checked automatically; VoiceOver over a move is checks V10
   and V11 of `docs/MANUAL-TEST-MAC.md`.

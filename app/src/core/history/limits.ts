@@ -45,7 +45,8 @@ export const PASS_INTERVAL = 10 * MINUTE;
 
 /** `record()` calls wait in a queue of at most 16 MB (P3.3.5). */
 export const RECORD_QUEUE_BYTES = 16 * MB;
-/** An open that does not succeed within 5 s makes the history unavailable (P3.3.5). */
+/** An open that does not succeed within 5 s makes the history unavailable (P3.3.5), until the
+ *  browser answers that open (errata N3, "A slow open"). */
 export const OPEN_TIMEOUT = 5_000;
 
 /**

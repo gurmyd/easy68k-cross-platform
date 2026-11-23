@@ -136,7 +136,7 @@ export const gitPathRefused = (name: string): string =>
  * (P1.1 rule 2, entry 19).
  */
 export const gitStoreRefused = (name: string): string =>
-  `The folder ${quoted(name)} is the .git folder of a Git repository. The Files panel changes nothing in it.`;
+  `The folder ${quoted(name)} is the .git folder of a Git repository. Nothing was changed in it.`;
 
 /** The toast after a delete (P3.2.2). `only` names the one item deleted. */
 export function deletedToast(count: number, only: string | null, forGood: number, changedKept: number): string {

@@ -29,6 +29,7 @@ function fakeLive(mode: 'editor' | 'simulator'): DockLive & { calls: string[] } 
     openTransient: record('openTransient'),
     selectTransient: () => true,
     closeTransient: record('closeTransient'),
+    documentShown: record('documentShown'),
     closeAllTransients: record('closeAllTransients'),
     move: record('move'),
     reset: record('reset'),
@@ -115,6 +116,20 @@ describe('dockOf', () => {
     expect(dockModeOf('messages', 'easybin')).toBeNull();
     // The Help drawer, EASyBIN and the status bars are not dock panels.
     for (const id of ['help', 'easybin', 'status', 'nothing']) expect(dockModeOf(id, 'editor'), id).toBeNull();
+  });
+
+  it('documentShown goes to the Editor dock in every mode; without one it does nothing (errata N1 28)', async () => {
+    const app = createTestApplication();
+    dockOf(app.ctx).documentShown();
+    const editor = fakeLive('editor');
+    const simulator = fakeLive('simulator');
+    attachDock(app.ctx, editor);
+    attachDock(app.ctx, simulator);
+    dockOf(app.ctx).documentShown();
+    await app.ctx.commands.run('app.mode.set', 'simulator');
+    dockOf(app.ctx).documentShown();
+    expect(editor.calls).toEqual(['documentShown()', 'documentShown()']);
+    expect(simulator.calls).toEqual([]);
   });
 
   it('a detached dock is no longer used', () => {

@@ -111,6 +111,15 @@
 
 /* ---- the stage of additions (ARCHITECTURE-PLUS P3.2, N5) ---- */
 
+/* The strip and the count line below it, one element before the tree (FilesPanel.tsx, decision D-i):
+   laid out as when both were children of the panel. */
+.e68-files__head {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 /* `5 items selected` below the strip; empty (and out of the layout) with one row or none. */
 .e68-files__count {
   flex: none;
