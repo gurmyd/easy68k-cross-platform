@@ -457,6 +457,56 @@ fill. Entries under "Contract" ask W1 for a change of `app/src/contracts/`.
       this entry for a time limit; `docs/USER-GUIDE.md` (Troubleshooting) has a line for the new
       text.
 
+31. **The kill pass proves the promise of that text (push run 45086295162 of 2638c67).**
+    - *What the run showed.* Job "browser-checks (windows-latest, interface)", job id 137405625576,
+      `check-files.mjs` in WebKit: 208 of 210. Delay 0 ms passed (`f0.bin` as it was, its log not
+      written). At the delays 2, 10, 30 and 80 ms the new page's first transaction, the read-only
+      one that loads the index, was made 1150 to 1212 ms after the page started and had no answer
+      after 20008 to 20010 ms; no Web Lock was waited for (only the page's own window lock held).
+      The store did what entry 29 and entry 30 designed: the stand-in, with the text of a store that
+      did not answer. The pass took 157.1 s, against 12 to 29 s in the Windows runs that passed. That
+      fits one hold, from the kill at 2 ms to the end of the pass (about 2.5 minutes), rather than
+      four: before entry 31 the pass opened each page to kill without waiting for its store, so a
+      held store made each victim wait its own 20 s too (about 40 s per delay). The hold was gone
+      once the pass had closed its browser context: the next pass ("a store held by a transaction
+      that never ends", a new context in the same browser) ended with a reload that had the real
+      store. The pass "a store held for ever" passed in the same run, and macOS and Ubuntu passed.
+      Whether the hold ends with time or only with the context (in Safari: the tab's web process)
+      is not shown by this run.
+    - *What the pass proves now.* The text tells the person "reload the page in a minute". When a
+      new page gets the stand-in, the pass asserts the stand-in and the exact text
+      (`notAnswering` with either step), then does what the text says: it reloads that page every
+      5 s (a new document each time) for at most 3 minutes, tracing as before. When the store
+      answers it reads the files there, on the real store, with the torn-write rule of before
+      (every file as it was or as written, the index agreeing), and prints how long after the kill
+      the store answered and after how many reloads. A store that does not answer within the 3
+      minutes fails the pass with the trace and stops its remaining delays: then the promise is
+      false in that browser. When the store answers at once (this PC, macOS, Linux) the pass is as
+      strict as before: the real store mounted itself and no request left unanswered. The page to
+      kill must now have the real store before it writes, or the pass fails (it would prove
+      nothing). The pass has its own time limit (see *Time* below); the other passes keep 6 minutes.
+    - *The proof of the pass itself.* The hold does not happen on this PC, so
+      `EASY68K_FILES_KILL_HOLD_MS=<ms>` makes another page hold a read-write transaction on the
+      store for that long after each kill. With 45000 in both browsers: every new page had the
+      stand-in with the exact text, the real store after 1 reload, 45.5 to 48.2 s after the kill,
+      every file as it was or as written: 6 of 6. With 240000 in WebKit the pass failed after the
+      3 minutes with the trace, as it must: "the store did not answer within 3 minutes of
+      reloading (8 reloads, 224.4 s after the kill)", the remaining delays not run, 1 of 3. Without
+      the variable: 212 of 212 in both browsers, every new page with the real store at once.
+    - *Not reproduced here.* The pass ran 50 times in WebKit (250 kills) with the check limited to
+      two CPU cores and sixteen threads loading every core: no store was held, no check failed
+      (each pass 17 to 30 s). What ends the hold on the runner (time, the closing of the context,
+      the web process) could therefore not be found out here; the next CI run of the pass will
+      print how long the store was held, or fail with the trace after 3 minutes.
+    - *Time.* The pass's limit is 22 minutes. In CI the step `check:files` has 15 minutes (it took
+      6 minutes in this run, 2.3 of them the stall); a store held close to 3 minutes at every delay
+      would need about 18 minutes for the WebKit kill pass alone, so the step needs about 40 minutes
+      and the job `browser-checks` of the group interface about 60 (asked of the configuration
+      engineer).
+    - *The manual row.* W8 of `docs/MANUAL-TEST-MAC.md` now asks the person, if a reload after a
+      minute does not show the files, to reload once a minute for up to five minutes and note when
+      they came back, and otherwise whether quitting Safari brought them back.
+
 ## Contract
 
 Status at gate I1: C1 and C2 are in the contract (`Vfs.mkdirp`, `SaveRequest.overwritePrompt`), and

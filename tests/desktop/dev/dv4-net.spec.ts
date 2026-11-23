@@ -143,11 +143,18 @@ test('TCP: a program connects to an echo server, exchanges data, and sees the pe
 test('tasks 106 and 107: the byte-swapped port, both ways, and the two cancel out', async () => {
   test.setTimeout(180_000);
   const P = await programs();
-  const peer = await startUdpListener();
+  const swap16 = (value: number) => ((value & 0xff) << 8) | ((value >>> 8) & 0xff);
+  // A port whose two bytes are equal is its own swap (one port in 256): the second send would then
+  // reach the listener itself, and the test could not tell the swapped port from the plain one. It
+  // failed that way once on GitHub's macOS runner (the listener got "ABC" and "SWAP").
+  let peer = await startUdpListener();
+  while (swap16(peer.port) === peer.port) {
+    await peer.close();
+    peer = await startUdpListener();
+  }
   const got: { text: string; port: number }[] = [];
   peer.socket.on('message', (message, info) => got.push({ text: message.toString('latin1'), port: info.port }));
   const serverPort = await freePort('udp');
-  const swap16 = (value: number) => ((value & 0xff) << 8) | ((value >>> 8) & 0xff);
   try {
     const program = P.buildProgram({
       strings: { TO: '127.0.0.1', DATA: 'SWAP' },
