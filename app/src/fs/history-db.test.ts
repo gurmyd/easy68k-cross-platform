@@ -810,6 +810,62 @@ describe('guard (P3.3.4)', () => {
     expect((await h.usage()).versionBytes).toBe(versionsBefore);
     expect(await h.versions('/browser/big.X68')).toEqual([]);
   }, 120_000);
+
+  it('a folder delete whose act fails gives its copies back to the versions half: room is made oldest first, also from a copy given back in the same step (seed 1165)', async () => {
+    // The files of /browser/b had no versions: guard keeps a Trash copy of each, act fails, and
+    // each copy moves back to the versions half with its record (D-e). The copies together do not
+    // fit beside what the half held, so the oldest versions go: p.X68's (a file outside the
+    // folder) and o.X68's, then, at the same time, the copy whose record comes first (errata N3,
+    // "seed 1165"). Every file is still there; nothing current was destroyed.
+    const env = setup();
+    let ids = 0;
+    const h = createMemoryHistoryStore(
+      {
+        vfs: env.vfs,
+        clock: env.clock,
+        scheduler: env.scheduler,
+        settings: env.settings,
+        factory: env.factory,
+        quota: 40 * MB,
+      },
+      { schedulePass: false, newId: () => `id${String(++ids).padStart(6, '0')}`, log: (e) => env.events.push(e) },
+    ); // B = 4 MB, B / 2 = 2 MB; admission prunes down to 0.9 x B / 2
+    await save(env, h, '/browser/a/p.X68', noise(8_000, 1));
+    await save(env, h, '/browser/a/o.X68', noise(600_000, 2));
+    // Bytes that do not compress at all (noise() keeps a bit fixed): stored as large as they are.
+    const random = (n: number, seed: number) => {
+      const out = new Uint8Array(n);
+      let x = seed;
+      for (let i = 0; i < n; i++) {
+        x = (Math.imul(x, 1103515245) + 12345) >>> 0;
+        out[i] = x >>> 24;
+      }
+      return out;
+    };
+    for (const [i, name] of ['x.pdf', 'y.X68'].entries())
+      await env.vfs.writeFile(`/browser/b/${name}` as VPath, random(980_000, 3 + i));
+    expect((await h.usage()).versionBytes).toBeGreaterThan(500_000);
+    await expect(
+      h.guard(
+        '/browser/b',
+        'delete',
+        async () => {
+          throw new Error('The disk refused to remove "/browser/b/x.pdf".');
+        },
+        yes,
+      ),
+    ).rejects.toThrow('The disk refused');
+    expect(await h.trashItems()).toEqual([]);
+    const paths: VPath[] = ['/browser/a/p.X68', '/browser/a/o.X68', '/browser/b/x.pdf', '/browser/b/y.X68'];
+    for (const path of paths) expect(await env.vfs.stat(path), path).not.toBeNull();
+    // What the half holds at the end is y's copy alone: before it plus the copies that stayed would
+    // be below B / 2, but the room was needed for both copies when they moved back.
+    expect(await Promise.all(paths.map(async (path) => (await h.versions(path)).length))).toEqual([0, 0, 0, 1]);
+    expect(env.events.filter((e) => e.kind === 'prune')).toEqual([
+      { kind: 'prune', half: 'versions', by: 'admission', items: [], livingVersions: 3, trashVersions: 0 },
+    ]);
+    expect((await h.usage()).versionBytes).toBeLessThanOrEqual(0.9 * 2 * MB);
+  }, 120_000);
 });
 
 /**

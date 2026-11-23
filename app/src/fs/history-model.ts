@@ -409,6 +409,9 @@ export interface ModelState {
   dropped: Set<string>;
   /** At most what guard copies that went back to living after act counted in the Trash (bytes). */
   transient: number;
+  /** The files whose guard copies went back to living after act in this step (a failed act, a
+   *  file act left): their places and sizes, for the versions half's admission (seed 1165). */
+  returned: { place: string; size: number }[];
   /** The Trash copies promised in this step (several deletes in one step, an Undo of a Copy). */
   stepPromises: Promised[];
   /** Items a restore took files from in this step (pruning leaves them alone, P3.3.4). */
@@ -474,6 +477,7 @@ export function createHistoryModel(
     history: [],
     dropped: new Set(),
     transient: 0,
+    returned: [],
     stepPromises: [],
     stepRestoring: new Set(),
     stageCommand: 0,
@@ -559,6 +563,7 @@ export function createHistoryModel(
     note(step) {
       state.dropped.clear();
       state.transient = 0;
+      state.returned = [];
       state.stepPromises = [];
       state.stepRestoring = new Set();
       state.step = { ...state.step, pass: false, ...step };
@@ -755,7 +760,12 @@ function watchHistory(model: HistoryModel, history: HistoryService): HistoryServ
       if (outcome === 'not-kept' && how !== 'restore') await releaseVersionsAt(touched.map(([file]) => file));
       if (how !== 'restore') {
         for (const [file, bytes] of atAct) {
-          if (!touched.some(([t]) => t === file)) state.transient += bytes.length + 2 * RECORD_BYTES;
+          if (touched.some(([t]) => t === file)) continue;
+          state.transient += bytes.length + 2 * RECORD_BYTES;
+          // Its copy was kept (as for property 2 above) and moved back with its record (D-e).
+          const place = model.place(file);
+          if ((outcome === 'kept' || outcome === null) && answered === null && place !== null)
+            state.returned.push({ place, size: bytes.length });
         }
       }
       if ('failed' in result) throw result.failed;
@@ -1246,6 +1256,17 @@ function explainLoss(
   // Copies guard kept in this step whose records went back to living after act (files act left,
   // a failed act) passed Trash admission on their way: they count as what the step added there.
   added.trash += state.transient;
+  // Such a copy of a file that had no record was then admitted to the versions half (D-e) when it
+  // can be kept at all; when its record is gone again by the end of the step, room was made for it
+  // and it was pruned in turn, oldest first, within the same step (seed 1165: a folder delete whose
+  // act failed; the copies of its files that stayed fitted beside the half, the copies given back
+  // did not). Its stored size is at most its bytes.
+  const livingBefore = new Set([...before.files.values()].flatMap((r) => (r.live === undefined ? [] : [r.live])));
+  const livingAfter = new Set([...after.files.values()].flatMap((r) => (r.live === undefined ? [] : [r.live])));
+  for (const { place: at, size } of state.returned) {
+    if (livingBefore.has(at) || livingAfter.has(at)) continue;
+    if (size <= LARGEST_VERSION && size + 2 * RECORD_BYTES <= limit) added.versions += size + 2 * RECORD_BYTES;
+  }
   // Items kept in this step and pruned again within it (by a later change of the same step) were
   // in the Trash half when that change was admitted (their stored size is at most their bytes).
   for (const q of state.stepPromises) {

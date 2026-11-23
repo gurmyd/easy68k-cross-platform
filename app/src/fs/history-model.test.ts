@@ -278,6 +278,12 @@ const MEMORY_REGRESSION_SEEDS: readonly [number, string][] = [
     22043,
     "guard's settle wrote records of the item as first read, after a copy's admission had pruned their older versions (the store)",
   ],
+  // Inside the CI range, named because its outcome depends on the memory mode's random record ids
+  // (failed in CI at c3d1074, passed at 2c3cde8; errata N3, "Seed 1165 in the memory mode").
+  [
+    1165,
+    "a failed delete's copies given back to the versions half pruned it, and one of them went again within the step (the model)",
+  ],
 ];
 
 // They failed against createHistoryService (two windows, faults), and run there; the three the review
