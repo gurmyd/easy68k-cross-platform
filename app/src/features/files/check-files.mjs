@@ -16,7 +16,10 @@
 //     file intact;
 //   - a page killed in the middle of a write (Chromium: renderer crash; WebKit: page closed at
 //     once) leaves every file as it was or as written, never half written, and the next page has
-//     the real store with every request answered (or the line says what it waited for);
+//     the real store with every request answered (or the line says what it waited for); where the
+//     browser holds the dead page's transaction, the next page has the stand-in with the text of a
+//     store that did not answer, and reloading as that text asks gives the real store within
+//     3 minutes (the time is printed; FS1 errata entry 31);
 //   - a store held by a read-write transaction that never ends (what a dead page can leave): the
 //     next page answers within the 20 s limit with the memory stand-in and says why, and once the
 //     transaction has ended a reload has the real store, the whole file and no torn write;
@@ -83,18 +86,24 @@ const results = [];
  * it reached (`progress`), and the browser's remaining passes are skipped.
  */
 const PASS_LIMIT_MS = 6 * 60_000;
+/**
+ * The kill pass may wait, at each of its five delays, up to HELD_WAIT_MS (3 min) for a store that a
+ * killed page's transaction holds, reloading as the message asks (FS1 errata entry 31): five times
+ * (3 min + the 20 s of the stand-in + the pages) at most.
+ */
+const KILL_PASS_LIMIT_MS = 22 * 60_000;
 let lastStep = '';
 const progress = (step) => {
   lastStep = step;
 };
-async function timedPass(label, run) {
+async function timedPass(label, run, limitMs = PASS_LIMIT_MS) {
   lastStep = 'start';
   const began = Date.now();
   let timer;
   const limit = new Promise((_, reject) => {
     timer = setTimeout(
-      () => reject(new Error(`${label}: did not finish within ${PASS_LIMIT_MS / 1000} s; last step: ${lastStep}`)),
-      PASS_LIMIT_MS,
+      () => reject(new Error(`${label}: did not finish within ${limitMs / 1000} s; last step: ${lastStep}`)),
+      limitMs,
     );
   });
   const pass = run();
@@ -587,7 +596,9 @@ async function waitingFor(page) {
       // A request made a moment ago (a merge after the reading) is not a wait; one older than 1 s is.
       const unanswered = (window.__idbTrace ?? []).some((e) => e.ended === null && now - e.made > 1000);
       const text = `store ${kind}${banner ? ` ("${banner.slice(0, 120)}")` : ''}; IndexedDB: ${slow.join('; ') || 'every request answered within 1 s'}; ${locks}`;
-      return { kind, unanswered, slow: slow.length > 0, text };
+      // What a pending store finally gave (it stays mounted at /browser for good).
+      const current = store?.current?.constructor?.name ?? null;
+      return { kind, current, unanswered, slow: slow.length > 0, text };
     })
     .catch((error) => ({
       kind: 'unknown',
@@ -602,13 +613,117 @@ async function waitingFor(page) {
  * began to open, so a page that still waits after this long waits for something else.
  */
 const SURVIVOR_LIMIT_MS = 60_000;
+/** How long a page may take to settle its store: the store gives up after 20 s (OPEN_TIMEOUT_MS). */
+const SETTLE_LIMIT_MS = 40_000;
+/**
+ * How long the kill pass reloads a page whose store did not answer, as the message tells the person
+ * to ("reload the page in a minute"), before it decides that the promise does not hold (FS1 errata
+ * entry 31), and the pause between two reloads.
+ */
+const HELD_WAIT_MS = 3 * 60_000;
+const RELOAD_PAUSE_MS = 5_000;
+/**
+ * For the proof of the kill pass itself only (it cannot be made on a PC where the browser ends a
+ * dead page's transaction at once): EASY68K_FILES_KILL_HOLD_MS=<ms> makes another page hold a
+ * read-write transaction on the store for that long after each kill, as WebKit on GitHub's Windows
+ * runner does, so that the stand-in, the reloads and (with more than HELD_WAIT_MS) the failure run.
+ */
+const HOLD_AFTER_KILL_MS = Number(process.env.EASY68K_FILES_KILL_HOLD_MS ?? 0);
+
+/** Opens a page that holds a read-write transaction on the store for `ms`, then aborts it. */
+async function holdStore(context, ms) {
+  const page = await context.newPage();
+  // A document of the same origin that is not the application (whose own store would wait too).
+  await page.goto(`${baseUrl}@vite/client`, { waitUntil: 'load' });
+  await page.evaluate(
+    (holdMs) =>
+      new Promise((resolve, reject) => {
+        const request = indexedDB.open('easy68k-files', 1);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const tx = request.result.transaction('files', 'readwrite');
+          const store = tx.objectStore('files');
+          let alive = true;
+          const spin = () => {
+            store.get('held').onsuccess = () => {
+              if (alive) spin();
+            };
+          };
+          spin();
+          setTimeout(() => {
+            alive = false;
+            tx.abort();
+          }, holdMs);
+          resolve();
+        };
+      }),
+    ms,
+  );
+  return page;
+}
+
+/**
+ * The store a page has mounted at /browser once it has settled: a pending store is awaited (it gives
+ * up after OPEN_TIMEOUT_MS). { kind, problem, cause }, or null when it did not settle within `limit`.
+ */
+async function settledStore(page, limit = SETTLE_LIMIT_MS) {
+  return page
+    .evaluate(async (ms) => {
+      const store = window.__easy68k?.ctx?.vfs?.backends().find((b) => b.mount === 'browser');
+      let final = store ?? null;
+      if (store && typeof store.whenReady === 'function') {
+        final = await Promise.race([store.whenReady(), new Promise((resolve) => setTimeout(() => resolve(null), ms))]);
+      }
+      if (!final) return null;
+      return { kind: final.constructor?.name ?? 'unknown', problem: final.problem ?? null, cause: final.cause ?? null };
+    }, limit)
+    .catch((error) => ({ kind: 'error', problem: String(error).slice(0, 160), cause: null }));
+}
+
+/** Reloads a page as a person does and waits for the application and its Files panel. */
+async function reloadApp(page) {
+  await page.reload({ waitUntil: 'load', timeout: 180_000 });
+  await page.waitForSelector('.e68-shell');
+  await page.waitForFunction(() => window.__easy68k !== undefined);
+  await page.waitForSelector('[data-e68-panel="files"] [role=tree]');
+}
+
+/** Reads the two files of one delay in a page: as it was, as written, or missing (in the page). */
+function readKilledFiles(page, path) {
+  return page.evaluate(async (target) => {
+    const { vfs } = window.__easy68k.ctx;
+    const out = {};
+    for (const file of [target, `${target}.log`]) {
+      const stat = await vfs.stat(file);
+      if (!stat) {
+        out[file] = 'missing';
+        continue;
+      }
+      const bytes = await vfs.readFile(file);
+      const text = bytes.length <= 3 ? new TextDecoder().decode(bytes) : null;
+      const whole = file.endsWith('.log')
+        ? bytes.length === 4096 && bytes.every((b) => b === 65)
+        : text === 'old' || (bytes.length === 8 << 20 && bytes.every((b) => b === 78));
+      out[file] = `${whole ? 'whole' : 'HALF'} ${bytes.length} bytes, index ${stat.size}`;
+      if (stat.size !== bytes.length) out[file] += ' MISMATCH';
+    }
+    return out;
+  }, path);
+}
 
 /**
  * A page that dies in the middle of a write (Chromium: the renderer crashed through the DevTools
  * protocol; WebKit: the page closed at once). Afterwards a new page of the same store finds every
  * file either as it was or as written, never half written, and the index agrees with the bytes.
- * Each delay's new page must come up and answer within SURVIVOR_LIMIT_MS; a page that does not is
- * reported with what it waits for (waitingFor), and so is a page whose store did not open in time.
+ *
+ * The new page gets the real store at once, or - where the browser goes on holding the dead page's
+ * transaction (WebKit on GitHub's Windows runner, run 45086295162; FS1 errata entries 29 and 31) -
+ * the memory stand-in after OPEN_TIMEOUT_MS with the text of a store that did not answer, which
+ * tells the person to reload in a minute. Then the pass does that: it reloads the page every few
+ * seconds (each reload a new document, as a person's) for at most HELD_WAIT_MS, and once the store
+ * answers it reads the files there, on the real store, and prints how long the store was held. A
+ * store that does not answer within that time fails the pass with the trace: the promise would be
+ * false in that browser. A page that does not settle at all is reported with what it waits for.
  */
 async function killPass(browser, name) {
   const p = `${name}:`;
@@ -616,10 +731,21 @@ async function killPass(browser, name) {
   await context.addInitScript(traceIndexedDB);
   const results = [];
   const waits = [];
+  const helds = []; // one line per delay whose new page had to wait
+  const standInTexts = []; // { delay, ok, text } for every stand-in page met
+  let stopped = '';
   for (const delay of [0, 2, 10, 30, 80]) {
     progress(`delay ${delay} ms: opening the page to kill`);
     const victim = await openApp(context);
     const path = `/browser/kill/f${delay}.bin`;
+    // The page to kill must write into the real store, or the pass proves nothing.
+    const victimStore = await settledStore(victim.page);
+    if (victimStore?.kind !== 'BrowserBackend') {
+      waits.push(`delay ${delay} ms: the page to kill had no real store: ${(await waitingFor(victim.page)).text}`);
+      stopped = `delay ${delay} ms`;
+      await victim.page.close().catch(() => {});
+      break;
+    }
     progress(`delay ${delay} ms: writing "old"`);
     await victim.page.evaluate(
       async (target) => window.__easy68k.ctx.vfs.writeFile(target, new TextEncoder().encode('old')),
@@ -634,6 +760,7 @@ async function killPass(browser, name) {
       { target: path, ms: delay },
     );
     progress(`delay ${delay} ms: killing the page in the middle of an 8 MB write`);
+    const killedAt = Date.now();
     if (name === 'chromium') {
       // Page.crash never answers (the target dies), so it is not awaited: the page's 'crash' event is.
       const crashed = victim.page.waitForEvent('crash', { timeout: 15_000 }).catch(() => null);
@@ -644,29 +771,57 @@ async function killPass(browser, name) {
     } else {
       await victim.page.close({ runBeforeUnload: false });
     }
+    const holder = HOLD_AFTER_KILL_MS > 0 ? await holdStore(context, HOLD_AFTER_KILL_MS) : null;
     progress(`delay ${delay} ms: opening a new page of the same store`);
     const survivor = await openApp(context);
+    let store = await settledStore(survivor.page);
+    const waitedForStore = store?.kind === 'UnsavedBrowserStore';
+    if (waitedForStore) {
+      // The designed behaviour of a store that did not answer: the stand-in, with exactly its text.
+      const trace = (await waitingFor(survivor.page)).text;
+      const expected = [
+        notAnsweringText('reading the list of files took longer than 20 s'),
+        notAnsweringText('opening the database took longer than 20 s'),
+      ];
+      const ok = store.cause === 'timeout' && expected.includes(store.problem);
+      standInTexts.push({ delay, ok, text: `${store.cause}: ${String(store.problem).slice(0, 160)}` });
+      const heldAt = Date.now();
+      console.log(`       delay ${delay} ms: the store did not answer, the page has the stand-in: ${trace}`);
+      // What the message tells the person to do: reload, until the store answers (at most HELD_WAIT_MS).
+      let reloads = 0;
+      while (store?.kind !== 'BrowserBackend' && Date.now() - heldAt < HELD_WAIT_MS) {
+        progress(`delay ${delay} ms: the store is held; reload ${reloads + 1}`);
+        await new Promise((resolve) => setTimeout(resolve, RELOAD_PAUSE_MS));
+        await reloadApp(survivor.page);
+        reloads++;
+        store = await settledStore(survivor.page);
+      }
+      const heldFor = ((Date.now() - killedAt) / 1000).toFixed(1);
+      if (store?.kind === 'BrowserBackend') {
+        helds.push(
+          `delay ${delay} ms: store held ${heldFor} s after the kill; the real store after ${reloads} reloads`,
+        );
+      } else {
+        const last = (await waitingFor(survivor.page)).text;
+        waits.push(
+          `delay ${delay} ms: the store did not answer within ${HELD_WAIT_MS / 60_000} minutes of reloading (${reloads} reloads, ${heldFor} s after the kill): ${last}`,
+        );
+        results.push({ [path]: 'NO ANSWER' });
+        stopped = `delay ${delay} ms`;
+        await closeWithin(survivor.page);
+        break;
+      }
+    } else if (store?.kind !== 'BrowserBackend') {
+      const waited = await waitingFor(survivor.page);
+      waits.push(`delay ${delay} ms: the new page's store did not settle (${JSON.stringify(store)}): ${waited.text}`);
+      results.push({ [path]: 'NO ANSWER' });
+      stopped = `delay ${delay} ms`;
+      await closeWithin(survivor.page);
+      break;
+    }
     progress(`delay ${delay} ms: reading the files in the new page`);
     let timer;
-    const reading = survivor.page.evaluate(async (target) => {
-      const { vfs } = window.__easy68k.ctx;
-      const out = {};
-      for (const file of [target, `${target}.log`]) {
-        const stat = await vfs.stat(file);
-        if (!stat) {
-          out[file] = 'missing';
-          continue;
-        }
-        const bytes = await vfs.readFile(file);
-        const text = bytes.length <= 3 ? new TextDecoder().decode(bytes) : null;
-        const whole = file.endsWith('.log')
-          ? bytes.length === 4096 && bytes.every((b) => b === 65)
-          : text === 'old' || (bytes.length === 8 << 20 && bytes.every((b) => b === 78));
-        out[file] = `${whole ? 'whole' : 'HALF'} ${bytes.length} bytes, index ${stat.size}`;
-        if (stat.size !== bytes.length) out[file] += ' MISMATCH';
-      }
-      return out;
-    }, path);
+    const reading = readKilledFiles(survivor.page, path);
     reading.catch(() => {}); // a reading that ran out of time is abandoned with its page
     const found = await Promise.race([
       reading,
@@ -681,27 +836,44 @@ async function killPass(browser, name) {
       results.push({ [path]: 'NO ANSWER' });
     } else {
       // Waiting that ended (a slow disk) is printed; a store that gave up or a request still unanswered fails.
-      if (waited.kind !== 'BrowserBackend' || waited.unanswered) waits.push(`delay ${delay} ms: ${waited.text}`);
+      // At once the real store must be mounted itself, as before. After the reloads the store may
+      // answer only just within its 20 s (the hold ended meanwhile): then the pending store that the
+      // page was shown with must have given the real one.
+      const real = waited.kind === 'BrowserBackend' || (waitedForStore && waited.current === 'BrowserBackend');
+      if (!real || waited.unanswered) waits.push(`delay ${delay} ms: ${waited.text}`);
       else if (waited.slow) console.log(`       delay ${delay} ms, slow but answered: ${waited.text}`);
       results.push(found);
     }
     await closeWithin(survivor.page);
+    if (holder) await closeWithin(holder);
     if (!victim.page.isClosed()) await victim.page.close().catch(() => {});
   }
+  if (stopped) waits.push(`the delays after ${stopped} were not run`);
   const flat = results.flatMap((r) => Object.values(r));
   check(
     `${p} a page killed in the middle of a write: every file is as it was or as written, and the index agrees`,
-    flat.every((v) => v === 'missing' || (v.startsWith('whole') && !v.includes('MISMATCH'))) &&
+    results.length === 5 &&
+      flat.every((v) => v === 'missing' || (v.startsWith('whole') && !v.includes('MISMATCH'))) &&
       results.every((r) => !Object.entries(r).some(([k, v]) => !k.endsWith('.log') && v === 'missing')),
-    flat.join('; '),
+    `${flat.join('; ')}${results.length === 5 ? '' : ` (${results.length} of 5 delays read)`}`,
   );
-  // The new page came up with the real store each time and no request of it was left unanswered:
-  // when one was, the line says what it waited for (the store, the IndexedDB requests, the locks).
+  // A store that did not answer shows the stand-in with the text of that case (STORE_MESSAGES.notAnswering).
   check(
-    `${p} a page killed in the middle of a write: the new page has the real store each time, with every request answered`,
-    waits.length === 0,
-    waits.join(' | ').slice(0, 300) || `store BrowserBackend, ${results.length} of ${results.length}`,
+    `${p} a page killed in the middle of a write: a new page whose store did not answer has the stand-in with the exact text`,
+    standInTexts.every((s) => s.ok),
+    standInTexts.length === 0
+      ? 'no new page had to wait'
+      : standInTexts.map((s) => `delay ${s.delay} ms: ${s.ok ? 'ok' : 'WRONG'} ${s.text}`).join(' | '),
   );
+  // The new page came up with the real store - at once, or after the reloads its message asks for -
+  // and no request of it was left unanswered: when one was, the line says what it waited for.
+  check(
+    `${p} a page killed in the middle of a write: the new page has the real store, at once or after the reload its message asks for, with every request answered`,
+    waits.length === 0,
+    waits.join(' | ').slice(0, 300) ||
+      `store BrowserBackend, ${results.length} of ${results.length}; at once ${results.length - helds.length}${helds.length ? `; ${helds.join('; ')}` : ''}`,
+  );
+  for (const held of helds) console.log(`       ${held}`);
   for (const wait of waits) console.log(`       ${wait}`);
   await closeWithin(context);
 }
@@ -2118,7 +2290,8 @@ async function main() {
         for (const [label, pass] of passes) {
           if (onlyPass && !label.includes(onlyPass)) continue;
           console.log(`\n[${name}, ${label}]`);
-          await timedPass(`${name}, ${label}`, () => pass(browser, name));
+          const limit = pass === killPass ? KILL_PASS_LIMIT_MS : PASS_LIMIT_MS;
+          await timedPass(`${name}, ${label}`, () => pass(browser, name), limit);
         }
       } catch (error) {
         check(`${name}: the pass ran to the end`, false, String(error?.stack ?? error).slice(0, 400));

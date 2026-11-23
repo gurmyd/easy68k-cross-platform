@@ -831,8 +831,10 @@ jobs:
         group: [interface, simulator, integration, accessibility]
     runs-on: ${{ matrix.os }}
     # The accessibility audit is one check of about half an hour on the development PC: two steps
-    # of up to 30 minutes, so its group has a longer limit than the others.
-    timeout-minutes: ${{ matrix.group == 'accessibility' && 75 || 45 }}
+    # of up to 30 minutes, so its group has a longer limit than the others. The interface group has
+    # 60 minutes since check:files may wait for a browser store that a killed page still holds (see
+    # its step below).
+    timeout-minutes: ${{ matrix.group == 'accessibility' && 75 || matrix.group == 'interface' && 60 || 45 }}
     env:
       EASY68K_REQUIRE_ENGINES: ${{ needs.engines.outputs.available == 'asm sim' && '1' || '' }}
       EASY68K_REQUIRE_BROWSERS: '1'
@@ -906,9 +908,14 @@ jobs:
         run: npm run check:highlight
       # check:files proves an exported archive with the system's own tool: Python's zipfile,
       # unzip or bsdtar, whichever the runner has (all three runners have Python).
+      # 40 minutes, not 15: in WebKit on the Windows runner the store of a page that was killed in
+      # the middle of a write did not answer the next page for more than 20 s (run 45086295162).
+      # The pass then reloads for up to three minutes per delay, as the application's message
+      # tells a person to, and checks the files when the store answers: at worst about 19 minutes
+      # for that pass alone (erratum FS1 31). A run that passes at once takes about six.
       - name: Files check (FS1)
         if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.files == 'true' }}
-        timeout-minutes: 15
+        timeout-minutes: 40
         run: npm run check:files
       - name: Documents check (E1)
         if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.documents == 'true' }}
