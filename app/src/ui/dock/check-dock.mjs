@@ -48,7 +48,8 @@
 //              gone, then the window away and back; the focused element gone beside each stop; a
 //              click on the status bar or beside the menus; a menu or a dialog closed; a mode
 //              switch), Tab and Shift+Tab go as on main (check-dock.main.json, recorded from main's
-//              build with --serve <dist> --record <file>)
+//              build with --serve <dist> --record <file> where Tab stops at every button; where it
+//              does not, WebKit on macOS, main's figures are derived from it by starts-rule.mjs)
 //   scan       axe (WCAG 2.0/2.1 A and AA) of each mode in both themes, locked and unlocked: no
 //              serious or critical finding; screenshots of both themes
 //
@@ -65,6 +66,7 @@ import { URL, fileURLToPath } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
+import { isPlainControl, mainHere, skippedStops } from './starts-rule.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -2381,22 +2383,44 @@ const MAIN_READING_ORDER = {
   easybin: ['region|EASyBIN', 'region|Notifications'],
 };
 
-/** The focused element as `role|name|panel` (the entries of MAIN_TAB_ORDER). */
-function focusEntry() {
+/**
+ * The focused element as `role|name|panel` (the entries of MAIN_TAB_ORDER). Given a list of
+ * entries instead, the elements of the page that have each (tag, type, own tabindex attribute):
+ * what starts-rule.mjs's isPlainControl judges.
+ */
+function focusEntry(entries) {
+  const entryOf = (e) => {
+    const role = e.getAttribute('role') ?? e.tagName.toLowerCase();
+    let name = e.getAttribute('aria-label');
+    if (!name && e.getAttribute('aria-labelledby')) {
+      name = e
+        .getAttribute('aria-labelledby')
+        .split(/\s+/)
+        .map((id) => document.getElementById(id)?.textContent ?? '')
+        .join(' ');
+    }
+    if (!name) name = e.getAttribute('title') ?? (e.textContent ?? '').trim().slice(0, 24);
+    const panel = e.closest('[data-e68-panel]')?.getAttribute('data-e68-panel') ?? '-';
+    return `${role}|${name}|${panel}`;
+  };
+  if (Array.isArray(entries)) {
+    const candidates = [
+      ...document.querySelectorAll('button, input, select, textarea, a[href], [tabindex], [contenteditable]'),
+    ];
+    return entries.map((entry) => ({
+      entry,
+      elements: candidates
+        .filter((e) => entryOf(e) === entry)
+        .map((e) => ({
+          tag: e.tagName.toLowerCase(),
+          type: e.getAttribute('type') ?? '',
+          tabindex: e.hasAttribute('tabindex'),
+        })),
+    }));
+  }
   const e = document.activeElement;
   if (!e || e === document.body) return { entry: 'body', editor: false };
-  const role = e.getAttribute('role') ?? e.tagName.toLowerCase();
-  let name = e.getAttribute('aria-label');
-  if (!name && e.getAttribute('aria-labelledby')) {
-    name = e
-      .getAttribute('aria-labelledby')
-      .split(/\s+/)
-      .map((id) => document.getElementById(id)?.textContent ?? '')
-      .join(' ');
-  }
-  if (!name) name = e.getAttribute('title') ?? (e.textContent ?? '').trim().slice(0, 24);
-  const panel = e.closest('[data-e68-panel]')?.getAttribute('data-e68-panel') ?? '-';
-  return { entry: `${role}|${name}|${panel}`, editor: e.isContentEditable === true };
+  return { entry: entryOf(e), editor: e.isContentEditable === true };
 }
 
 const entryMatches = (expected, actual) => {
@@ -2861,21 +2885,34 @@ const recorded = {};
 /** P3.2.6's storage line is the one stop of the stage's own in these walks (N5): set aside. */
 const withoutStorageLine = (entries) => entries.filter((entry) => !entry.includes('|This site uses'));
 
-/** Records (with --record) or compares with main's record. */
-function asOnMain(key, label, observed) {
+/**
+ * Records (with --record) or compares with main's record. On a system where Tab passes over plain
+ * controls (`rule.skipped` not empty: WebKit on macOS) main's figure is derived from the record by
+ * the rule of starts-rule.mjs (errata N1 29); everywhere else it is the record itself. `rule.plain`
+ * adds a verdict of the caller (the skipped stops are plain controls in the page).
+ */
+function asOnMain(key, label, observed, rule) {
   if (recordFile) {
-    recorded[key] = observed;
-    check(`${label} (recorded)`, true);
+    // A record is main's figures where Tab stops at every button; one made elsewhere would hold
+    // fewer stops and could not be derived from.
+    const ok = rule.buttonsStop;
+    if (ok) recorded[key] = observed;
+    check(`${label} (recorded)`, ok, ok ? '' : 'not recorded: Tab does not stop at plain buttons in this browser');
     return;
   }
-  const main = startsOfMain()[key];
+  const record = startsOfMain()[key];
+  const main = mainHere(rule.kind, record, rule.skipped, rule.recordedPlain, rule.backward);
   const got = JSON.stringify(observed);
   // No allowance: the one WebKit step that errata N1 26 allowed (Shift+Tab stopping at
   // `New Folder...` after the focused element went away, because of the selection count line of
   // P3.2.1) is gone since the strip and that line sit in one element before the tree (decision D-i,
   // errata N5 23); the integration pass removed the allowance.
-  const ok = main !== undefined && JSON.stringify(main) === got;
-  check(label, ok, `main ${JSON.stringify(main)}, here ${got}`);
+  const ok = main !== undefined && main !== null && JSON.stringify(main) === got && (rule.plain?.ok ?? true);
+  const derived =
+    rule.skipped.length === 0
+      ? ''
+      : ` (main's record ${JSON.stringify(record)}; this browser passes over the plain controls ${JSON.stringify(rule.skipped)}${rule.plain ? `: ${rule.plain.detail}` : ''})`;
+  check(label, ok, `main ${JSON.stringify(main)}, here ${got}${derived}`);
 }
 
 let mainStarts = null;
@@ -2895,6 +2932,9 @@ function startsOfMain() {
  */
 async function startsPass(browser, name) {
   const p = `${name}/starts:`;
+  // check-dock.main.json holds main's figures where Tab stops at every button; where it does not
+  // (WebKit on macOS) they are derived from it (starts-rule.mjs, errata N1 29).
+  const buttonsStop = await buttonsAreTabStops(browser);
   const cases = [
     { label: 'editor', mode: 'editor', viewport: VIEWPORT },
     { label: 'editor', mode: 'editor', viewport: { width: 1000, height: 800 }, narrow: true },
@@ -2918,18 +2958,49 @@ async function startsPass(browser, name) {
       const backWalks = [];
       for (let i = 0; i < BACK_WALKS; i++)
         backWalks.push(withoutStorageLine(await walkTabs(page, true, null, false, true)));
-      const backs = [...new Set(backWalks.map((walk) => JSON.stringify(walk)))].map((walk) => JSON.parse(walk));
+      const distinct = (walks) =>
+        [...new Set(walks.map((walk) => JSON.stringify(walk)))].map((walk) => JSON.parse(walk));
+      const backs = distinct(backWalks);
+      const forth = [];
+      for (let i = 0; i < 2; i++) forth.push(withoutStorageLine(await walkTabs(page, false, null, false, true)));
+      const forths = distinct(forth);
+      // The stops of main's plain walks that this browser never reaches (none where Tab stops at
+      // buttons), and whether each is a plain control in the page (starts-rule.mjs, rule 1).
+      const mainBack = startsOfMain()[key('gone at the end, window back, Shift+Tab')] ?? [];
+      const mainForth = startsOfMain()[key('gone at the start, window back, Tab')] ?? [];
+      const recordedPlain = { forward: mainForth[0] ?? [], backward: mainBack[0] ?? [] };
+      const skipped = buttonsStop || recordFile ? [] : skippedStops([...mainBack, ...mainForth], [...backs, ...forths]);
+      let plain;
+      if (skipped.length > 0) {
+        const found = await page.evaluate(focusEntry, skipped);
+        const notPlain = found.filter(({ elements }) => elements.length === 0 || !elements.every(isPlainControl));
+        plain = {
+          ok: notPlain.length === 0,
+          detail:
+            notPlain.length === 0
+              ? 'each a plain control in the page'
+              : `NOT plain controls in the page: ${JSON.stringify(notPlain)}`,
+        };
+      }
+      const rule = (kind, backward, withPlain = false) => ({
+        kind,
+        backward,
+        buttonsStop,
+        skipped,
+        recordedPlain,
+        plain: withPlain ? plain : undefined,
+      });
       asOnMain(
         key('gone at the end, window back, Shift+Tab'),
         `${tag}: the focused element gone and the window back, ${BACK_WALKS} Shift+Tab walks from the end go as on main`,
         backs,
+        rule('walks', true, true),
       );
-      const forth = [];
-      for (let i = 0; i < 2; i++) forth.push(withoutStorageLine(await walkTabs(page, false, null, false, true)));
       asOnMain(
         key('gone at the start, window back, Tab'),
         `${tag}: the focused element gone and the window back, Tab walks from the start go as on main`,
-        [...new Set(forth.map((walk) => JSON.stringify(walk)))].map((walk) => JSON.parse(walk)),
+        forths,
+        rule('walks', false, true),
       );
       // The focused element gone beside each stop inside a panel. (A Shift+Tab walk of a page
       // with the Output panel's key field starts just before it: the field keeps Tab.)
@@ -2941,6 +3012,7 @@ async function startsPass(browser, name) {
           key(`gone beside each stop, ${backward ? 'Shift+Tab' : 'Tab'}`),
           `${tag}: ${backward ? 'Shift+Tab' : 'Tab'} with the focused element gone beside each stop goes as on main`,
           withoutStorageLine(steps),
+          rule('walk', backward),
         );
       }
       // Single steps from the other starting points (each from the state the one before left).
@@ -2970,6 +3042,7 @@ async function startsPass(browser, name) {
             key(`${label}, ${backward ? 'Shift+Tab' : 'Tab'}`),
             `${tag}: after ${label}, ${backward ? 'Shift+Tab' : 'Tab'} goes as on main`,
             { from, to: got },
+            rule('step', backward),
           );
         }
       }
