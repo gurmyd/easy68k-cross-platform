@@ -2579,3 +2579,168 @@ neither helps nor hinders it much: the parts that would carry over are below the
 engines and their binding (`app/src/engine`), `core/` (which runs without a DOM by main §0 rule 5),
 and the file layer - and this stage leaves them untouched. The dock, the Files panel and the history
 are interface of this application and would be replaced by Visual Studio Code's own.
+
+---
+
+## P9. Arranging panels freely (version 1.1)
+
+Written by the architect on 25 November 2026, two days after the release of 1.0.0, from the owner's
+first use of the released web version. This section is an addendum: P1 to P8 hold unchanged except
+where a line below says otherwise. Where this section and an earlier one differ about what it
+describes, this section is right.
+
+### P9.1 Why
+
+The owner, using the Simulator in a browser, wrote that it is hard to arrange things so that
+everything can be seen, that the original has windows that can simply be rearranged, and that they
+could not drag anything. Two causes, both decisions of this design:
+
+1. `Lock Layout` is on by default (D2), and nothing on the screen says that it exists. A person who
+   wants to move a panel tries to drag it, nothing happens, and they conclude that it cannot be done.
+2. Floating panels were left out (P3.1.7). Docking answers "put this panel beside that one"; it does
+   not answer "let me put the Hardware window where I want it, at the size I want", which is what
+   the original's separate windows give and what the Simulator's many small panels need.
+
+What this section adds: floating panels (P9.2), a visible way to find the arranging (P9.3) and
+ready-made arrangements for the Simulator (P9.4). What it does not change: D2 (the first start looks
+as it does today), every rule of P1.1, the original's menus, captions, access keys and chords, and
+anything a 68000 program can observe.
+
+### P9.2 Floating panels
+
+**What a person sees.** Any panel of the dock, in each of the three modes, can leave the docked
+arrangement and become a floating window inside the application window: a title bar with the
+panel's name, the panel below it, a border. It is moved by dragging its title bar, resized at its
+edges and corners, comes to the front when it is clicked or gets the keyboard, and lies above the
+docked panels. Its title bar has a button `Dock` (the panel goes back to the place it was docked at
+last; if that group is gone, to its place in the default arrangement of P3.1.3) and, for the panels
+that have one today, the panel's own `x` (which closes the panel exactly as its `x` does today).
+Several panels can float at once; a floating window holds one panel.
+
+**Ways to make a panel float**, each also possible from the keyboard:
+
+- the tab menu of P3.1.4 gains `Float` (and `Dock` on a floating window's title bar menu);
+- `Move Panel To...` gains the place **As a floating window**;
+- with the layout unlocked, dragging a tab and dropping it where there is no docking target;
+- an arrangement of P9.4 that floats panels.
+
+**The lock.** `Lock Layout` goes on meaning what it means: the docked arrangement cannot be changed
+by dragging tabs. A floating window is a window: it can be moved, resized, docked and closed whether
+the layout is locked or not, and `Float` and `Move Panel To...` work while locked, as
+`Move Panel To...` does today.
+
+**Keyboard.** The title bar is a Tab stop. Shift+F10 or the context-menu key on it (and a right
+click) open its menu: `Move`, `Size`, `Dock`, and `Close` where the panel has an `x`. `Move` and
+`Size` work as in a desktop window's system menu: the arrow keys move or size by 16 pixels, with
+Shift by 1, Enter ends, Esc restores the place and size it had. In the Tab order and the reading
+order, floating windows come after everything docked, in the order in which they were made to
+float (not the order they are stacked in), each as: title bar, then the panel. A floating window is
+not a dialog: it is a region named `<panel name>, floating`, and the rest of the application stays
+usable.
+
+**Bounds.** A floating window keeps at least 48 pixels of its title bar inside the application
+window, in every direction, so that it can always be reached; when the application window gets
+smaller, floating windows are moved back by that rule, never resized by it. The smallest size is
+the panel's own minimum, and not less than 160 by 96 pixels. A panel made to float for the first
+time gets the size it had while docked (not more than three quarters of the application window in
+either direction) and a place cascaded from the last floating window; after that it remembers its
+own.
+
+**What may never change (P1.1) holds for a floating panel as for a docked one.** Showing or hiding a
+panel is program state: floating, docking, moving and sizing never change
+`layout.panels[id].visible`; a panel that is hidden while it floats is hidden, and floats again
+where it was when it is shown. The Output panel may float: its keyboard rules (the chords a running
+program receives, Ctrl+Alt+O to leave it, Alt+Enter for full screen) hold unchanged, and full screen
+shows the panel as it does today. With no floating window, which is the state of the default
+arrangement, the page is exactly what 1.0.0 draws: the same elements in the same order, the same
+Tab order, the same reading order, within one pixel.
+
+**How it is built.** flexlayout-react 0.11.1 has floating panels of its own (the options P2.2
+switched off: `tabEnableFloat` and what belongs to it; popout into another browser window stays
+off). The engineer establishes first whether the library's floating windows can meet every rule
+above: keyboard move and size, the bounds, the reading order, the lock, a style without a `<style>`
+element or anything the Content Security Policy refuses, state in the stored layout. If they can,
+they are used. If they cannot, the floating windows are ours, drawn by `ui/dock` above the layout,
+with the library holding only the docked panels; the erratum says which rule decided. Either way the
+panel's content is the same component in the same React tree position as far as its state is
+concerned: a panel that floats keeps what it shows (the Memory panel's address, the Hardware
+panel's fields, the Output canvas) and is not created anew.
+
+**Persistence.** The floating windows of a mode, with place, size and order, are part of the stored
+arrangement of P3.1.6, per window, with the same rules for a stored layout that cannot be read.
+`Reset Layout` docks every panel. A stored layout of 1.0.0 is read as it is (nothing floats).
+
+**Not done.** A panel in a separate browser window or on a second screen (P3.1.7 stays for that
+half); more than one panel in a floating window; minimising a floating window.
+
+### P9.3 Finding it
+
+- **A button `Arrange Panels` at the end of the toolbar** of each mode, after a separator, behind
+  everything the toolbar has today (the original's buttons keep their order and places, P1.1). It
+  is a toggle with the state of `Lock Layout` inverted: pressed means the tabs can be dragged. Its
+  tool tip: `Arrange Panels: drag a panel by its tab, or right-click a tab for more (View > Lock
+  Layout)`, with `Window > Lock Layout` in the Editor. It runs the command `app.layout.lock`; no new
+  command.
+- **A tip, once.** The first time a window shows the Simulator after this version is installed, a
+  notice appears above the status bar (the kit's notice, as the storage notice of the Files panel:
+  it takes no keyboard focus and is announced politely): `You can rearrange this window: make a
+  panel float, dock it elsewhere or pick a ready-made layout in the View menu.` with the buttons
+  `Arrange Panels` (unlocks the layout and closes the notice) and `Got it`. After either button it
+  never comes again (a setting of its own, per browser profile); it does not appear while a program
+  is running or waiting for input, and it comes at the next moment the Simulator is shown with no
+  program running.
+- The tab menu and `Move Panel To...` are where they were.
+
+### P9.4 Ready-made arrangements for the Simulator
+
+`View > Layouts` (a submenu after the stage's other items of the Simulator's View menu; the Editor
+and EASyBIN have none) with four entries. Each sets the place of every panel of the Simulator,
+shown or hidden; none shows or hides a panel (P1.1 rule 4); each keeps the lock as it is.
+
+| Entry | Arrangement |
+|---|---|
+| `Classic` | the default arrangement of P3.1.3 (what `Reset Layout` gives) |
+| `Wide Output` | registers and listing in the left column as today; the Output panel takes the whole height of the right column; the tool panels (Memory, Stack, Hardware, Break Points, Log) are tabs of one group below the listing; the message area stays under the left column |
+| `Output and Hardware Side by Side` | as Classic, with the Hardware panel in a column of its own at the right of the Output panel, both at full height; the other tool panels as tabs below the listing |
+| `Floating Tools` | as Classic for registers, listing, messages and Output; every tool panel floats, cascaded from the top right, at its default size: the arrangement nearest to the original's separate windows |
+
+The exact proportions are the engineer's, chosen so that at 1366 by 768 and at 1920 by 1080 every
+panel of an arrangement that is shown is usable without scrolling the page; they are recorded in
+the erratum with a screenshot of each arrangement at both sizes in both themes.
+
+### P9.5 Commands, texts and menus
+
+- New commands, all additions (they join the list of P3.6 and section 1.5 of the main document):
+  `app.layout.float` (`&Float`, the tab menu; with `{ panel }`), `app.layout.dock` (`&Dock`, the
+  title bar and its menu), and `sim.view.layout.classic`, `.wideOutput`, `.sideBySide`,
+  `.floatingTools` (the four entries of P9.4, captions as in the table, access keys chosen so that
+  none collides inside the submenu). No chord is given to any of them.
+- Every text a person reads is a constant in the `texts.ts` of the package that shows it, as P5
+  says, and exactly the text of this section.
+- The menus of the original keep their items, order, captions, access keys and chords:
+  `tools/diff-menus.mjs` against the tag `v1.0.0` allows only additions after the items of the stage.
+
+### P9.6 Packages
+
+| Package | Owns | Depends on |
+|---|---|---|
+| **M1 Floating panels** | `app/src/ui/dock/**`, `app/src/state/dock.ts` (the controller gains `float(panel, rect?)`, `dock(panel)`, `floating()` and `arrange(arrangement)`, all optional members where a contract is touched), the tab menu's two items, `check-dock.mjs` (a pass `floating`, and every existing pass unchanged: 642 of 642 with nothing floating), erratum `M1.md` | - |
+| **M2 Finding it and the ready-made arrangements** | `app/src/features/layout/**` (the dialog's new place, the notice, the arrangements as data, the four commands), the toolbar's button (`commands/tables/toolbars.ts`, `specs.ts`, the Simulator's View menu table: additions only), their checks, erratum `M2.md` | M1 |
+| **M3 Tests and documents** | `tests/e2e/plus/arrange.spec.ts` and additions to `tests/e2e/fixtures/plus.ts`; the rows of the parity matrix for the new commands; the guide's section "Beyond the original" (a part "Arranging panels"), section 1.5 of the main document (rows for the new commands), fragments `docs/differences/M1.md` and `M2.md`, the manual list (a row: dragging and sizing a floating window with a trackpad and with VoiceOver), the change log's entry 1.1.0, one line of the README | M1, M2 |
+
+Acceptance, beyond each package's own tests: with nothing floating and the tip dismissed, every
+check and every end-to-end test of 1.0.0 passes unchanged (no existing test is changed except to
+dismiss the tip where it would cover something, and the list of such changes is given); the
+fidelity suites are untouched; `check-dock.mjs` passes in Chromium and WebKit with its new pass; the
+end-to-end test floats the Hardware panel, moves and sizes it with the mouse and with the keyboard,
+reloads and finds it where it was, docks it, picks each arrangement, and does all of it once with
+`Lock Layout` on; the accessibility audit passes with a floating window open in both themes.
+
+### P9.7 Decisions
+
+| # | Decision | Taken |
+|---|---|---|
+| D7 | The default of `Lock Layout` after the owner's remark | stays on (D2): the first start looks as it does in 1.0.0 and as the tests pin it; the button and the tip of P9.3 are what makes the arranging findable |
+| D8 | Floating windows and the lock | a floating window can always be moved and sized; the lock is about the docked arrangement |
+| D9 | A panel in a separate browser window | not in 1.1 |
+| D10 | The version | 1.1.0, released from `main` when this section's acceptance holds, by the route of 1.0.0 |
