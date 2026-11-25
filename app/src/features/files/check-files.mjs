@@ -1727,6 +1727,58 @@ async function uiPass(browser, name) {
   }
   check(`${p} Import > Files... keeps a file that arrives seconds after the chooser closed`, lateImported);
 
+  // The Import menu goes away when the person presses anywhere else, presses its button again or
+  // presses Escape, as every other menu does. It stayed open at a press elsewhere (found by the
+  // project's owner in the released version 1.0.0; the bare Menu of the kit has no such rule of its own).
+  const importButtonOf = second.page.locator('[data-e68-panel="files"] button[aria-label="Import..."]');
+  const importMenuOf = second.page.locator('[data-e68-menu]');
+  const menuGone = () =>
+    importMenuOf
+      .first()
+      .waitFor({ state: 'detached', timeout: 5000 })
+      .then(
+        () => true,
+        () => false,
+      );
+  const menuThere = () =>
+    importMenuOf
+      .first()
+      .waitFor({ state: 'visible', timeout: 5000 })
+      .then(
+        () => true,
+        () => false,
+      );
+  await importButtonOf.click();
+  const menuOpened = await menuThere();
+  const viewport = second.page.viewportSize() ?? { width: 1280, height: 720 };
+  // A press on the status bar, at the bottom right: nothing there acts on a click.
+  await second.page.mouse.click(viewport.width - 8, viewport.height - 6);
+  const goneAtPressElsewhere = await menuGone();
+  check(
+    `${p} the Import menu closes at a press anywhere else`,
+    menuOpened && goneAtPressElsewhere && (await importButtonOf.getAttribute('aria-expanded')) === 'false',
+    `opened ${menuOpened}, gone ${goneAtPressElsewhere}`,
+  );
+  await importButtonOf.click();
+  const menuOpenedAgain = await menuThere();
+  await importButtonOf.click();
+  const goneAtSecondPress = await menuGone();
+  check(
+    `${p} the Import menu closes at a second press of its button`,
+    menuOpenedAgain && goneAtSecondPress,
+    `opened ${menuOpenedAgain}, gone ${goneAtSecondPress}`,
+  );
+  await importButtonOf.click();
+  const menuOpenedThird = await menuThere();
+  await second.page.keyboard.press('Escape');
+  const goneAtEscape = await menuGone();
+  const focusBack = await importButtonOf.evaluate((button) => document.activeElement === button);
+  check(
+    `${p} the Import menu closes at Escape and the keyboard is back on its button`,
+    menuOpenedThird && goneAtEscape && focusBack,
+    `opened ${menuOpenedThird}, gone ${goneAtEscape}, focus on the button ${focusBack}`,
+  );
+
   // A chooser the person cancels ends the choice ('cancel'): a headless browser cancels a chooser that
   // nothing intercepts. The hidden input goes, and the next Import works.
   await second.page.locator('[data-e68-panel="files"] button[aria-label="Import..."]').click();
