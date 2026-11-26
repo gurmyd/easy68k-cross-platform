@@ -2828,3 +2828,29 @@ architect's decisions follow. Where a rule below differs from P9.8, this section
 6. Edits outside the paths of P9.6 that the second review listed (the shell's focus request for
    the title bar, the tiling rule in `app/src/state`, the new icon of the kit) are accepted: they
    are what points 1 to 6 of P9.8 needed.
+
+### P9.10 What gives way on a small screen (26 November 2026, after the third review)
+
+The third reviewer found P9.9 point 1 closed and the rest built as written, and showed that two of
+the written rules ask for more than a window of 1366 by 768 has: the registers (477 pixels), 400
+pixels of the Output picture and the Hardware window's own width (523) are 1,401 pixels wide
+together with their border. The architect's decisions; where a rule below differs from P9.9, this
+section is right.
+
+1. **P9.9 point 5 holds from a dock of 1,403 pixels on.** In a narrower dock the Hardware window
+   of `Floating Tools` takes the width that is left beside the registers and the left 400 pixels of
+   the Output picture, and scrolls inside itself (as every panel that is too small does since this
+   version). The guide says in one sentence that on a small screen `Output and Hardware Side by
+   Side` is the layout that shows registers, listing, output and hardware at once.
+2. **Further columns of `Floating Tools` never lie over the left column.** A further column
+   (P9.9 point 2) is opened only at the right of the docked left column (registers, listing,
+   message area); when no such column fits, the remaining windows are cascaded inside the room at
+   the right, below the Hardware window's displays and switches, as P9.8 had it. At 1920 by 1080
+   nothing changes (the five windows are placed without overlap, right of the left column); at
+   1366 by 768 the registers, the listing and the message area stay uncovered.
+3. **The room is kept only while windows fill at least half of its height.** When the floating
+   windows that still lie in the room at the right cover less than half of the room's height, the
+   room is given back and those windows float over the docked panels. An empty block beside the
+   Output panel is not left.
+4. The guide names the key that goes from one floating window to the next; the manual list's row
+   about the first click after a drag in Safari also names a text selection dragged past the edge.
