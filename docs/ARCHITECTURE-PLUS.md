@@ -2744,3 +2744,55 @@ reloads and finds it where it was, docks it, picks each arrangement, and does al
 | D8 | Floating windows and the lock | a floating window can always be moved and sized; the lock is about the docked arrangement |
 | D9 | A panel in a separate browser window | not in 1.1 |
 | D10 | The version | 1.1.0, released from `main` when this section's acceptance holds, by the route of 1.0.0 |
+
+### P9.8 Corrections after the independent review (26 November 2026)
+
+An independent reviewer used the built version as a student would, at 1366 by 768 and at 1920 by
+1080, in both browsers and both themes, and wrote down every point at which they hesitated or
+could not do what they wanted (`docs/integration/plus.md`, section 7). The architect's decisions
+about what they found; where a rule below differs from P9.2 to P9.4, this section is right.
+
+1. **`Floating Tools` is tiled, not cascaded.** The cascade of P9.4 put each tool window 24 pixels
+   from the last, so the Memory window covered the Hardware panel's displays and switches and both
+   covered the Output picture: the arrangement "nearest to the original" showed neither the
+   program's output nor the hardware under test. The rule now: the tool panels that are shown are
+   placed, in the order Hardware, Memory, Stack, Break Points, Log, at places where **no floating
+   window covers another**, each at its default size, filling the right part of the dock from the
+   top down and, when a column is full, a further column to the left; the Output panel keeps the
+   left part of what was its column, so that at 1920 by 1080 with Hardware and Memory shown the
+   whole Output picture at 100 % (640 by 480) is uncovered, and at 1366 by 768 the Hardware
+   panel's displays, lamps and switches and at least the left 400 pixels of the Output picture are
+   uncovered. Only when the shown tool panels cannot be placed without overlap in the dock (many
+   panels, a small window) do the later ones overlap, cascaded by 24 pixels over the last column,
+   and never over the Hardware window's displays and switches. A tool panel that is hidden has its
+   place reserved by the same rule and takes it when it is shown.
+2. **Where a window appears at its first Float.** Not 24 pixels from its docked place, where it
+   covered the very neighbours a person wanted to see beside it: at the first free place of the
+   rule of point 1 (the right part of the dock, top down, not over another floating window), and
+   never over the tab strip of the group it came from.
+3. **Making a panel float is something a person can find.** (a) A double click on a panel's tab
+   makes it float; a double click on a floating window's title bar docks it. Both work with the
+   layout locked, as `Float` and `Dock` do. (b) Every tab strip that is shown has, at its right
+   end, a button `Float` (the picture of a window lifted from its place; tool tip `Float: make
+   this panel a window of its own`), which floats the strip's selected panel; it is a Tab stop
+   after the strip's tabs. (c) The tip of P9.3 reads: `You can rearrange this window: double-click
+   a panel's tab to make it float, drag tabs to dock them elsewhere, or pick a ready-made layout
+   in the View menu.` (d) Dropping a dragged tab on a group goes on docking it there (the library's
+   rule, and what a person who knows such layouts expects); dropping it outside every group makes
+   it float, as before.
+4. **The bounds count the title, not the buttons.** At least 48 pixels of a floating window's
+   title area (the part of the title bar that is neither `Dock` nor `x`) stay inside the
+   application window in every direction.
+5. **`Output and Hardware Side by Side` gives the Output panel the room its picture needs.** Where
+   the two cannot both be shown whole, the Output column gets at least 648 pixels (the picture at
+   100 % and its frame) before the Hardware column gets more than its own minimum; the Hardware
+   panel scrolls inside itself (it does since this version).
+6. **Ctrl+Alt+O and floating windows.** Leaving the Output panel with Ctrl+Alt+O goes to the next
+   panel as before; when that panel floats, the keyboard lands on the floating window's title bar
+   (from where Tab goes into the panel and the menu key opens Move, Size, Dock), not inside it.
+7. **After a tab was dropped, the next click acts.** In WebKit the first click on the menu bar
+   after a tab was dropped did not open the menu. If the released version behaves the same it is
+   recorded; if it came with this version it is repaired.
+8. Left as designed, and recorded as what a first-time user notices: the tip lies above the
+   status bar over the lowest rows of the message area until it is answered; unlocking gives
+   every group its tab strip, which moves the panels down by the height of a strip.
