@@ -10,7 +10,7 @@ the steps for opening the Mac app the first time, which are kept in `docs/differ
 repeated in the README. Changes made after the newest release are collected under a heading "Not
 released yet" at the top; when a version is released, that heading becomes its number and date.
 
-## 1.1.0 (not released yet)
+## 1.1.0 (2026-11-26)
 
 Arranging panels freely (`docs/ARCHITECTURE-PLUS.md` section P9), after the project's owner had used
 the released web version: in the Simulator it was hard to arrange the panels so that everything can
@@ -51,7 +51,9 @@ explains it all; the differences are in parts M1 and M2 of `docs/DIFFERENCES.md`
   take the whole window again when none is left there or when those left cover less than half of
   its height. The Hardware window is as wide as its content from a window 1,403 pixels wide on; on a
   smaller screen `Output and Hardware Side by Side` shows registers, listing, output and hardware at
-  once. F2 goes from one floating window to the next.
+  once. F2 goes from one floating window to the next. A window that a layout has just placed
+  shows its content from its left edge, whatever the panel had been scrolled to where it was
+  docked.
 - **Panels in a small place.** The Hardware panel, the registers and the Memory panel scroll inside
   themselves when they get less room than they need (a low or narrow region, a small floating
   window), so that every control can be reached with the mouse, the wheel and the keyboard; a

@@ -2,7 +2,7 @@
 
 An unofficial port of [EASy68K](http://www.easy68k.com/), the Motorola 68000 editor, assembler and simulator, so that it runs outside Windows: in a web browser on any operating system, and as a macOS app. The original runs only on Windows.
 
-> **Version 1.0.0, the first release (23 November 2026).**
+> **Version 1.1.0 (26 November 2026).** New since 1.0.0: the panels of the Simulator can be arranged freely. Press `Arrange Panels` in the toolbar, then double-click a panel's tab to make it float as a window of its own, or drag it to another place; `View > Layouts` has four ready-made layouts. The [change log](CHANGELOG.md) has the details.
 >
 > - **In a browser** (a Windows PC, a Chromebook, Linux or a Mac): open <https://gurmyd.github.io/easy68k-cross-platform/>. Nothing to download or install.
 > - **The Mac app**: download it from the [Releases page](https://github.com/gurmyd/easy68k-cross-platform/releases). macOS blocks it the first time; [the steps below](#opening-the-mac-app-for-the-first-time) get you past that.

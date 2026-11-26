@@ -1,6 +1,6 @@
 {
   "name": "easy68k-mac",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "EASy68K - unofficial web and macOS port of the EASy68K v5.16.1 68000 editor/assembler and simulator",
   "license": "GPL-2.0-or-later",

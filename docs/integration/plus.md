@@ -502,8 +502,8 @@ GPL-incompatible, and neither has an install script (P2.4, P6.4). Pinned version
 Section P9 of `docs/ARCHITECTURE-PLUS.md`, written after the owner had used the released 1.0.0, on
 the branch `arrange` (from `60d77d2`, with `main` merged up to `6e4f24a`, the Import menu repair).
 Unlike the stage of 1.0.0 it is released as 1.1.0 from `main` once this acceptance holds (P9.7 D10);
-until then the change log's heading is "1.1.0 (not released yet)". `git diff 60d77d2` is the whole
-of version 1.1.
+section 7.6 records what came after this pass and the release. `git diff 60d77d2` is the whole of
+version 1.1.
 
 ### 7.1 What was built, and its verifications
 
@@ -607,6 +607,7 @@ No dependency was added (the lockfile is 1.0.0's).
 - On GitHub, after the push of `arrange`: every check and suite on Ubuntu and macOS (and Windows),
   the new step times against their limits, the desktop tests (`npm run desktop:test`; Electron was
   not started here), and the manual run with `e2e_stability` (twenty repetitions): the orchestrator.
+  Done: section 7.6.
 - For a person: the manual rows F5 (a floating window with a trackpad) and V12 (VoiceOver) on a
   real Mac; nobody has worked through the manual list yet.
 - `docs/requests/M1-dock-floating.md` (the stored floating windows in the contracts): the contracts
@@ -614,3 +615,31 @@ No dependency was added (the lockfile is 1.0.0's).
 - A PDF in a viewer shows its first page again after Float (erratum M1 entry 9): known, recorded.
 - In the Editor at 500 px the theme button, already outside the window in 1.0.0, is 41 px further
   out (erratum NI entry 3).
+
+### 7.6 After the closing pass: three reviews as a student, four runs on GitHub, the release
+
+**Three independent reviews** used the built version as a student would, each by an agent that had
+built none of it; none passed at first, and each led to a section of `docs/ARCHITECTURE-PLUS.md`
+that was then built: P9.8 (Floating Tools laid side by side, making a panel float easy to find),
+P9.9 (the dock never scrolls as a whole, further columns before windows overlap, the tip's text, the
+room given back) and P9.10 (what gives way on a screen of 1366 by 768). After P9.10 the branch was
+at `71fbff2`: `npm test` 5,274 passed, check-dock 976 of 976, check-arrange 530 of 530,
+`tests/e2e/plus` 400 of 400 at five repetitions, `diff-menus` 330 of 330.
+
+**Four manual runs of `ci.yml` on the branch** (every job, with the shards that repeat each
+end-to-end test twenty times; 46 jobs run, the `readme` job is skipped in each):
+
+| Run | Commit | Result | What it found |
+|---|---|---|---|
+| 45809923850 | `71fbff2` | 35 passed, 11 failed | Ubuntu: the Hardware window of Floating Tools scrolled sideways (a defect, errata M1 entry 19; it failed the plain runs and the six repetition shards); two checks that held a number true on Windows only (errata SH7 entry 11, M2 entry 10). macOS, WebKit: the Tab walks of three checks counted stops by a Windows number (errata SH7 entry 12). Windows, WebKit: one test of 1.0.0 timed out while the runner's page did not paint for 45 s; nothing of 1.1 was on the screen |
+| 45825817588 | `dff5479` | 42 passed, 4 failed | All of macOS and Windows passed. Ubuntu, WebKit only: the same window read 30 px to the side now and then (the plain run and three of the four repetition shards): the first repair acted at a fixed time (errata M1 entry 19, "Why a rule and not a time") |
+| 45836792509 | `0f3e9eb` | 41 passed, 5 failed | The same test, WebKit on Ubuntu only (the plain run and the four repetition shards). The trace of a failed test: the runner's browser did not update the screen for about 0.85 s after the layout was applied, and the second repair acted from the scroll event, which comes with a screen update |
+| 45853087060 | `c82f461` | 46 passed | Every job, the repetition shards among them |
+
+On the macOS runner of the last run the step `Dock layout check (N1)` took 19 min 20 s of its 30
+minutes and `Arrange check (M2)` 7 min 56 s.
+
+**The release.** `arrange` was merged into `main` and released as 1.1.0 (the version in the three
+`package.json` files and the lockfile, the change log's heading, the README's box). As with 1.0.0,
+no person has worked through `docs/MANUAL-TEST-MAC.md`: the rows F5, F7 and V12 of version 1.1 are
+open with the rest.
