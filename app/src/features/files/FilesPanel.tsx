@@ -154,6 +154,25 @@ export function FilesPanel() {
   const browser = ctx.vfs.backends().find((backend) => backend.mount === 'browser');
   // A store still opening at start says so until it has opened or given up.
   useEffect(() => onStorageStateChange(browser, () => setVersion((v) => v + 1)), [browser]);
+
+  // The Import menu closes at a press anywhere outside it, as every other menu of the application
+  // does (the focus goes where the press puts it), and when the window loses the focus. The button's
+  // own press is left to its onClick, which closes an open menu.
+  useEffect(() => {
+    if (!importAt) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (target?.closest('[data-e68-menu]') || importButton.current?.contains(target)) return;
+      setImportAt(null);
+    };
+    const onBlur = () => setImportAt(null);
+    document.addEventListener('pointerdown', onPointerDown, true);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, [importAt]);
   const problem = storageProblem(browser);
   const rows = model?.rows() ?? [];
   const focused = model?.selectedRow() ?? null;
@@ -554,6 +573,8 @@ export function FilesPanel() {
             aria-haspopup="menu"
             aria-expanded={importAt !== null}
             onClick={() => {
+              // A second press of the button closes its menu again.
+              if (importAt) return setImportAt(null);
               const box = importButton.current?.getBoundingClientRect();
               if (box) setImportAt({ x: box.left, y: box.top, width: box.width, height: box.height });
             }}
