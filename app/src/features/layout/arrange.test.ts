@@ -131,7 +131,7 @@ describe('the four arrangements of P9.4, as data', () => {
     expect(left + output).toBe(hardware.x);
   });
 
-  it('Floating Tools with all five tools shown (P9.9 point 2): further columns at the left before any overlap; at 1920 by 1080 none overlaps', () => {
+  it('Floating Tools with all five tools shown (P9.9 point 2, P9.10 point 2): further columns at the left before any overlap, never over the left column; at 1920 by 1080 none overlaps', () => {
     for (const area of [
       { width: 1366, height: 681 },
       { width: 1920, height: 993 },
@@ -151,6 +151,8 @@ describe('the four arrangements of P9.4, as data', () => {
         if (panel === 'hardware' || panel === 'memory') {
           expect(rect.x, panel).toBeGreaterThanOrEqual(area.width - layout.reserve);
         }
+        // No window over the docked left column: registers, listing, message area (P9.10 point 2).
+        expect(rect.x, panel).toBeGreaterThanOrEqual(layout.columns[0]);
       }
     }
     const places = (area: { width: number; height: number }) =>
@@ -172,14 +174,17 @@ describe('the four arrangements of P9.4, as data', () => {
       ['log', 840, 660, 440, 300, false],
     ]);
     // 1366 by 768: the room holds Hardware only; Memory stays in it, cascaded below the Hardware
-    // displays (the promise for the Output picture); the other three in further columns.
+    // displays (the promise for the Output picture); Stack in a further column between the left
+    // column (478 px) and the room; Break Points and Log find no further column right of the left
+    // column and are cascaded in the room, below the Hardware displays (P9.10 point 2).
     expect(places({ width: 1366, height: 681 })).toEqual([
       ['hardware', 880, 0, 486, 632, false],
       ['memory', 904, 272, 462, 356, true],
       ['stack', 580, 0, 300, 360, false],
-      ['breakpoints', 320, 360, 560, 300, false],
-      ['log', 140, 0, 440, 300, false],
+      ['breakpoints', 928, 296, 438, 300, true],
+      ['log', 952, 320, 414, 300, true],
     ]);
+    expect(floatingToolsLayout({ width: 1366, height: 681 }).columns[0]).toBe(FLOATING_ROOM.left);
     // The Hardware panel needs 522 by 627 (its window, title bar included): whole at 1920 by 1080.
     expect(TOOL_WINDOW_SIZES.hardware.width).toBeGreaterThanOrEqual(522);
     expect(TOOL_WINDOW_SIZES.hardware.height).toBeGreaterThanOrEqual(627);
@@ -194,7 +199,7 @@ describe('the four arrangements of P9.4, as data', () => {
     expect(rectsOverlap(hardware.rect, onlyMemory.windows.find((entry) => entry.panel === 'memory')!.rect)).toBe(false);
   });
 
-  it('Floating Tools (P9.9 point 5): the room takes the Hardware content width from the Output share, as far as the left 400 px of the picture stay', () => {
+  it('Floating Tools (P9.9 point 5, P9.10 point 1): from a dock of 1,403 px on, the room takes the Hardware content width from the Output share; narrower, what is left beside the registers and the left 400 px of the picture', () => {
     // Wide: the whole picture and the whole Hardware window.
     expect(floatingRoomWidth(1920)).toBe(1920 - FLOATING_ROOM.left - FLOATING_ROOM.outputWhole);
     // Between: the Output panel gives up to the Hardware content's width, keeping at least 402 px.
@@ -202,9 +207,14 @@ describe('the four arrangements of P9.4, as data', () => {
     expect(1600 - FLOATING_ROOM.left - floatingRoomWidth(1600)).toBeGreaterThanOrEqual(FLOATING_ROOM.outputPart);
     const layout = floatingToolsLayout({ width: 1600, height: 800 }, (panel) => panel === 'hardware');
     expect(layout.windows[0]!.rect.width).toBe(FLOATING_ROOM.hardwareWhole);
-    // 1366: the Output panel has no px beyond the 402 to give (477 + 1 + 402 + 486 = 1366): the room
-    // stays 486 px (erratum M2 entry 9).
+    // From a dock of 1,403 px on (478 + 402 + 523) the window has its content's width (P9.10 point 1).
+    expect(FLOATING_ROOM.left + FLOATING_ROOM.outputPart + FLOATING_ROOM.hardwareWhole).toBe(1403);
+    expect(floatingRoomWidth(1403)).toBe(FLOATING_ROOM.hardwareWhole);
+    // Narrower: the width left beside the registers and the left 400 px of the picture; the Hardware
+    // panel scrolls inside itself. At 1366: 477 + 1 + 402 + 486 = 1366 (erratum M2 entry 9).
+    expect(floatingRoomWidth(1402)).toBe(FLOATING_ROOM.hardwareWhole - 1);
     expect(floatingRoomWidth(1366)).toBe(1366 - FLOATING_ROOM.left - FLOATING_ROOM.outputPart);
+    expect(floatingRoomWidth(1366)).toBe(486);
     // Small: never less than the Hardware displays and switches need.
     expect(floatingRoomWidth(1000)).toBe(FLOATING_ROOM.toolsLeast);
   });

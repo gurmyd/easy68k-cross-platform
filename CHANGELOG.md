@@ -44,10 +44,14 @@ explains it all; the differences are in parts M1 and M2 of `docs/DIFFERENCES.md`
   `Floating Tools` (every tool panel in a window of its own, as in the original, side by side from
   the top right so that the windows do not cover one another while there is room, never over the
   Hardware panel's displays and switches, and with the Output picture in view while Hardware and
-  Memory are shown; Stack, Break Points and Log go to further columns at the left before any window
-  covers another, so that in a window of 1920 by 1080 all five lie side by side). The room kept for
-  the windows at the right shrinks to the columns that still hold a window when one is moved, sized,
-  docked or closed, and the docked panels take the whole window again when none is left there.
+  Memory are shown; Stack, Break Points and Log go to further columns at the left, never over the
+  Registers, the Listing or the messages, before any window covers another, so that in a window of
+  1920 by 1080 all five lie side by side). The room kept for the windows at the right shrinks to the
+  columns that still hold a window when one is moved, sized, docked or closed, and the docked panels
+  take the whole window again when none is left there or when those left cover less than half of
+  its height. The Hardware window is as wide as its content from a window 1,403 pixels wide on; on a
+  smaller screen `Output and Hardware Side by Side` shows registers, listing, output and hardware at
+  once. F2 goes from one floating window to the next.
 - **Panels in a small place.** The Hardware panel, the registers and the Memory panel scroll inside
   themselves when they get less room than they need (a low or narrow region, a small floating
   window), so that every control can be reached with the mouse, the wheel and the keyboard; a

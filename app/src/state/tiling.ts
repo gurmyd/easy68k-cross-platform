@@ -1,9 +1,9 @@
 ﻿// Where floating windows are placed without covering one another (ARCHITECTURE-PLUS P9.8 points 1
-// and 2, P9.9 point 2). A pure rule: no DOM, no settings. Used by the ready-made arrangement
+// and 2, P9.9 point 2, P9.10 point 2). A pure rule: no DOM, no settings. Used by the ready-made arrangement
 // `Floating Tools` (features/layout/arrangements.ts) and by the first Float of a panel
 // (ui/dock/engine.ts).
 //
-//   tileWindows(items, { area, minX, further, obstacles })
+//   tileWindows(items, { area, minX, further, furtherFromX, obstacles })
 //
 // The windows are placed one after the other, in the order given, each at its own size, at the
 // first free place of the right part of the dock (the room right of `minX`): the rightmost place
@@ -14,9 +14,11 @@
 //
 // With `further` (P9.9 point 2), a window that finds no free place in the room goes on to the left
 // of it: to the top of a further column at the left, over the docked panels if need be, at the
-// rightmost free place left of the room, and so on while a window fits in the dock without covering
-// another window. A window marked `inRoom` never leaves the room (the promise of P9.8 for the
-// Hardware and the Memory window: the Output picture left of the room stays uncovered).
+// rightmost free place left of the room, and so on while a window fits without covering another
+// window. A further column is opened only right of `furtherFromX` (P9.10 point 2: the right edge of
+// the docked left column, so that the registers, the listing and the message area stay uncovered).
+// A window marked `inRoom` never leaves the room (the promise of P9.8 for the Hardware and the
+// Memory window: the Output picture left of the room stays uncovered).
 //
 // Only when a window finds no free place at all (many windows, a small dock) does it overlap: it is
 // then cascaded by 24 px over the last column of the room (the leftmost column placed right of
@@ -54,6 +56,11 @@ export interface TileOptions {
    * docked panels, before it is cascaded (P9.9 point 2). Default false.
    */
   further?: boolean;
+  /**
+   * Further columns lie right of this x, never left of it (P9.10 point 2: the docked left column
+   * stays uncovered). Default 0.
+   */
+  furtherFromX?: number;
   /** Places that are taken already (other floating windows, a tab strip that must stay seen). */
   obstacles?: readonly DockRect[];
 }
@@ -104,6 +111,7 @@ export function tileWindows(items: readonly TileItem[], options: TileOptions): T
     height: Math.max(0, Math.floor(options.area.height)),
   };
   const minX = Math.max(0, Math.min(Math.round(options.minX ?? 0), area.width - MIN_FLOAT_SIZE.width));
+  const furtherFromX = Math.max(0, Math.round(options.furtherFromX ?? 0));
   const obstacles = (options.obstacles ?? []).map((rect) => ({ ...rect }));
   const placed: (TilePlace & { keep: number })[] = [];
   let overflow = 0;
@@ -114,9 +122,9 @@ export function tileWindows(items: readonly TileItem[], options: TileOptions): T
     const taken = [...obstacles, ...placed.map((place) => place.rect)];
     // In the room first (from the top right); then, where allowed, a further column at its left.
     let rect = freePlace(inRoomWidth, height, minX, area, taken);
-    if (!rect && options.further && !item.inRoom && minX > 0) {
-      const width = Math.max(MIN_FLOAT_SIZE.width, Math.min(Math.round(item.width), area.width));
-      rect = freePlace(width, height, 0, area, taken);
+    if (!rect && options.further && !item.inRoom && minX > furtherFromX) {
+      const width = Math.max(MIN_FLOAT_SIZE.width, Math.min(Math.round(item.width), area.width - furtherFromX));
+      rect = freePlace(width, height, furtherFromX, area, taken);
     }
     if (rect) {
       placed.push({ panel: item.panel, rect, overlaps: false, keep });
@@ -178,16 +186,43 @@ export function rectsOverlap(a: DockRect, b: DockRect): boolean {
 
 /**
  * The room kept for the floating windows of an arrangement, given back as far as no window lies in
- * it any more (P9.9 point 4). The room is the strip of `reserve` px at the right of a dock `width`
- * px wide; a shown window lies in it when its left edge is in it. The result is the width from the
- * leftmost such window's left edge to the dock's right edge: the room shrinks to the columns that
- * still hold a window, never grows, and is 0 when none does (an empty strip is never left).
+ * it any more (P9.9 point 4) and as a whole when its windows fill less than half of its height
+ * (P9.10 point 3). The room is the strip of `reserve` px at the right of a dock of `area`; a shown
+ * window lies in it when its left edge is in it. The result is the width from the leftmost such
+ * window's left edge to the dock's right edge: the room shrinks to the columns that still hold a
+ * window and never grows. It is 0 (the docked panels take the whole dock, the windows float over
+ * them) when no window lies in it, or when the windows that do cover less than half of the dock's
+ * height (the union of their rows inside the dock): an empty block beside the docked panels is never
+ * left.
  */
-export function keptRoom(reserve: number, width: number, shown: readonly DockRect[]): number {
+export function keptRoom(reserve: number, area: TileArea, shown: readonly DockRect[]): number {
   const room = Math.max(0, Math.round(reserve));
-  if (room === 0 || !(width > 0)) return 0;
-  const start = Math.floor(width) - room;
-  const inside = shown.filter((rect) => rect.x >= start).map((rect) => rect.x);
+  const width = Math.floor(area.width);
+  const height = Math.floor(area.height);
+  if (room === 0 || !(width > 0) || !(height > 0)) return 0;
+  const start = width - room;
+  const inside = shown.filter((rect) => rect.x >= start);
   if (inside.length === 0) return 0;
-  return Math.max(0, Math.min(room, Math.floor(width) - Math.min(...inside)));
+  if (2 * coveredHeight(inside, height) < height) return 0;
+  return Math.max(0, Math.min(room, width - Math.min(...inside.map((rect) => rect.x))));
+}
+
+/** The height of the union of the rows that `rects` cover inside a dock `height` px high. */
+export function coveredHeight(rects: readonly DockRect[], height: number): number {
+  const spans = rects
+    .map((rect) => [Math.max(0, rect.y), Math.min(height, rect.y + rect.height)] as const)
+    .filter(([top, bottom]) => bottom > top)
+    .sort((a, b) => a[0] - b[0]);
+  let covered = 0;
+  let end = -Infinity;
+  for (const [top, bottom] of spans) {
+    if (top >= end) {
+      covered += bottom - top;
+      end = bottom;
+    } else if (bottom > end) {
+      covered += bottom - end;
+      end = bottom;
+    }
+  }
+  return covered;
 }

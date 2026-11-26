@@ -1845,9 +1845,10 @@ export class DockEngine implements DockLive {
   }
 
   /**
-   * The room kept at the right of the dock for the floating windows (P9.8 point 1, P9.9 point 4):
-   * the docked panels are laid out left of it (dock.css `[data-e68-reserve]`) as far as shown
-   * floating windows lie in it (state/tiling.ts `keptRoom`): by the places the windows are stored
+   * The room kept at the right of the dock for the floating windows (P9.8 point 1, P9.9 point 4,
+   * P9.10 point 3): the docked panels are laid out left of it (dock.css `[data-e68-reserve]`) as far
+   * as shown floating windows lie in it, and only while they fill at least half of its height
+   * (state/tiling.ts `keptRoom`): by the places the windows are stored
    * at, not the place a window is being dragged or sized to, so nothing moves under a drag and the
    * room changes when it ends. With no window in it, or nothing floating, the docked panels take the
    * whole dock, so that with nothing floating the page is 1.0.0's. They keep at least 320 px.
@@ -1869,8 +1870,9 @@ export class DockEngine implements DockLive {
   }
 
   /**
-   * The room kept for the windows now (P9.9 point 4), CSS px, before the 320 px the docked panels
-   * keep: the arrangement's room as far as shown windows lie in it at their stored places.
+   * The room kept for the windows now (P9.9 point 4, P9.10 point 3), CSS px, before the 320 px the
+   * docked panels keep: the arrangement's room as far as shown windows lie in it at their stored
+   * places, and 0 while those fill less than half of the dock's height.
    */
   keptRoomNow(shown: readonly string[] = this.shownFloats()): number {
     const area = this.area();
@@ -1879,7 +1881,7 @@ export class DockEngine implements DockLive {
       .map((panel) => this.floatEntry(panel))
       .filter((entry): entry is StoredWindow => entry !== undefined)
       .map((entry) => boundedRect(entry.rect, area, this.buttonsOf(entry.panel)));
-    return keptRoom(this.reserve, this.size.width, rects);
+    return keptRoom(this.reserve, this.size, rects);
   }
 
   /** The room the docked panels are laid out in now, CSS px (the dock less the reserve). */

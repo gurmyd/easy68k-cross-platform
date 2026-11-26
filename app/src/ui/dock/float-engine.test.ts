@@ -149,6 +149,53 @@ describe('P9.8: the first place of a window and the room kept for the windows', 
     expect(engine.keptRoomNow()).toBe(0);
   });
 
+  it('P9.10 point 3: the room is given back while its windows fill less than half of its height, and comes back by the same rule', () => {
+    const { app, engine } = setup();
+    showPanel(app.ctx, 'hardware');
+    showPanel(app.ctx, 'memory');
+    const hardware = { x: 860, y: 0, width: 540, height: 632 };
+    const memory = { x: 760, y: 632, width: 640, height: 181 };
+    const docked: DockNode = {
+      type: 'row',
+      weight: 100,
+      children: [
+        {
+          type: 'column',
+          weight: 50,
+          children: [
+            { type: 'tabs', weight: 20, panels: ['registers'], selected: 'registers' },
+            { type: 'tabs', weight: 60, panels: ['listing'], selected: 'listing' },
+            { type: 'tabs', weight: 20, panels: ['messages'], selected: 'messages' },
+          ],
+        },
+        { type: 'tabs', weight: 50, panels: ['output'], selected: 'output' },
+      ],
+    };
+    const floating = [
+      { panel: 'hardware', rect: hardware },
+      { panel: 'memory', rect: memory },
+      { panel: 'stack' },
+      { panel: 'breakpoints' },
+      { panel: 'log' },
+    ];
+    expect(dockOf(app.ctx).arrange({ mode: 'simulator', docked, floating, reserve: 640 })).toBe(true);
+    expect(engine.keptRoomNow()).toBe(640);
+    // Hardware dragged left by 400 px: Memory alone holds 181 of the dock's 813 px. While the button
+    // is held nothing changes; when the drag ends the docked panels take the whole dock.
+    engine.previewRect('hardware', { ...hardware, x: 460, y: 80 });
+    expect(engine.keptRoomNow()).toBe(640);
+    engine.commitRect('hardware', { ...hardware, x: 460, y: 80 });
+    expect(engine.keptRoomNow()).toBe(0);
+    expect(engine.dockedWidth()).toBe(1400);
+    // A reload computes the same.
+    const second = new DockEngine(app.ctx, app.panels, app.shell, 'simulator');
+    second.setSize(1400, 813);
+    expect(second.keptRoomNow()).toBe(0);
+    // Dragged back into the room: the windows in it fill more than half of its height again.
+    engine.commitRect('hardware', hardware);
+    expect(engine.keptRoomNow()).toBe(640);
+  });
+
   it('the last window docked: the room is given back', () => {
     const { app } = setup();
     showPanel(app.ctx, 'hardware');

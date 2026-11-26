@@ -24,9 +24,11 @@
 //                                      the order Hardware, Memory, Stack, Break Points, Log: from
 //                                      the top right down in the room kept for them (Hardware and
 //                                      Memory stay there), then Stack, Break Points and Log in
-//                                      further columns to the left over the docked panels (P9.9
-//                                      point 2), over no other window while there is room, never
-//                                      over the Hardware window's displays and switches; the docked
+//                                      further columns to the left over the Output panel (P9.9
+//                                      point 2), never over the left column (P9.10 point 2), over
+//                                      no other window while there is room, then cascaded in the
+//                                      room, never over the Hardware window's displays and
+//                                      switches; the docked
 //                                      panels keep the part of the dock left of the room (`reserve`),
 //                                      the Output panel the room for its picture (FLOATING_ROOM)
 //
@@ -153,9 +155,12 @@ export const FLOATING_ROOM = {
 
 /**
  * The width of the room kept for the windows of Floating Tools in a dock `width` px wide (P9.8
- * point 1, P9.9 point 5): the dock less the left column and the whole picture; where that is
- * narrower than the Hardware window's content, up to that content's width, taken from the Output
- * panel as far as its left 400 px stay; never less than the Hardware displays and switches need.
+ * point 1, P9.9 point 5, P9.10 point 1): the dock less the left column and the whole picture; where
+ * that is narrower than the Hardware window's content, up to that content's width, taken from the
+ * Output panel as far as its left 400 px stay: so the window is whole from a dock of 1,403 px on
+ * (478 + 402 + 523), and in a narrower dock it gets what is left beside the registers and the left
+ * 400 px of the picture and scrolls inside itself; never less than the Hardware displays and
+ * switches need.
  */
 export function floatingRoomWidth(width: number): number {
   const room = FLOATING_ROOM;
@@ -188,10 +193,11 @@ export interface FloatingToolsLayout {
  * first, in the order Hardware, Memory, Stack, Break Points, Log, by the rule of state/tiling.ts
  * (each at its default size, no window over another, the room at the right of the dock from the top
  * down; when it is full, Stack, Break Points and Log go to further columns at its left over the
- * docked panels, P9.9 point 2, while Hardware and Memory stay in the room; the cascade over the
- * room's last column only when there is no free place, never over the Hardware window's displays
- * and switches); the hidden ones then get their places by the same rule, which they take when they
- * are shown. The docked panels keep the part of the dock left of the room.
+ * Output panel, P9.9 point 2, but never over the docked left column, P9.10 point 2, while Hardware
+ * and Memory stay in the room; the cascade over the room's last column only when there is no free
+ * place, never over the Hardware window's displays and switches); the hidden ones then get their
+ * places by the same rule, which they take when they are shown. The docked panels keep the part of
+ * the dock left of the room.
  */
 export function floatingToolsLayout(
   area: DockArea,
@@ -204,23 +210,41 @@ export function floatingToolsLayout(
     ...FLOATING_TOOLS_ORDER.filter((panel) => shown(panel)),
     ...FLOATING_TOOLS_ORDER.filter((panel) => !shown(panel)),
   ];
-  const places = tileWindows(
+  // The docked left column's width for the docked panels' share `docked`: the Registers panel whole
+  // and the whole picture where the dock has room for both, else the Registers panel whole.
+  const leftOf = (docked: number) =>
+    docked - room.left >= room.outputWhole ? docked - room.outputWhole : Math.min(room.left, docked);
+  // Further columns lie right of the docked left column (P9.10 point 2). That column's width
+  // depends on the room the windows keep, which depends on where they are placed: start from the
+  // narrowest it can be (the whole room kept) and widen until the two agree.
+  let furtherFromX = leftOf(minX);
+  let places = tileWindows(
     order.map((panel) => ({ panel, ...TOOL_WINDOW_SIZES[panel] })),
-    { area: { width, height: Math.floor(area.height) }, minX, further: true },
+    { area: { width, height: Math.floor(area.height) }, minX, further: true, furtherFromX },
   );
+  let reserve: number;
+  let leftColumn: number;
+  for (let round = 0; ; round++) {
+    // The room kept is that of the windows placed in it (those of further columns lie over docked panels).
+    const left = Math.min(
+      width,
+      ...places.filter((place) => !place.overlaps && place.rect.x >= minX).map((place) => place.rect.x),
+    );
+    // The docked panels keep at least the Registers column and a narrow Output panel.
+    reserve = Math.max(0, Math.min(width - left, width - room.left - MIN_FLOAT_SIZE.width));
+    leftColumn = leftOf(width - reserve);
+    if (leftColumn <= furtherFromX || round === 4) break;
+    furtherFromX = leftColumn;
+    places = tileWindows(
+      order.map((panel) => ({ panel, ...TOOL_WINDOW_SIZES[panel] })),
+      { area: { width, height: Math.floor(area.height) }, minX, further: true, furtherFromX },
+    );
+  }
   const windows = FLOATING_TOOLS_ORDER.map((panel) => {
     const place = places.find((entry) => entry.panel === panel)!;
     return { panel, rect: place.rect, overlaps: place.overlaps };
   });
-  // The room kept is that of the windows placed in it (those of further columns lie over docked panels).
-  const left = Math.min(
-    width,
-    ...places.filter((place) => !place.overlaps && place.rect.x >= minX).map((place) => place.rect.x),
-  );
-  // The docked panels keep at least the Registers column and a narrow Output panel.
-  const reserve = Math.max(0, Math.min(width - left, width - room.left - MIN_FLOAT_SIZE.width));
   const docked = width - reserve;
-  const leftColumn = docked - room.left >= room.outputWhole ? docked - room.outputWhole : Math.min(room.left, docked);
   return { windows, reserve, columns: [leftColumn, Math.max(1, docked - leftColumn)] };
 }
 

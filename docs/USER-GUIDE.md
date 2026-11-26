@@ -289,7 +289,9 @@ Simulator (EASyBIN has only one panel).
   example ``Hardware, floating``. It is not a dialog: everything else stays usable. Leaving the Output
   panel with Ctrl+Alt+O (Ctrl+Option+O on a Mac), or F2 and Ctrl+Tab, goes to the next panel as
   before; when that panel floats, the keyboard lands on its title bar, from where Tab goes into the
-  panel.
+  panel. To go from one floating window to the next, press F2 (**Next Panel**; in the desktop app
+  Ctrl+Tab as well): it goes through the shown panels in the order Listing, Output, Memory, Stack,
+  Hardware, Break Points, Log and lands on the title bar of each one that floats.
 - *Dock it again.* Double-click the title bar, or use **Dock** (the button or the menu item): the
   panel goes back where it was docked
   last; if that place is gone, it goes where the original has it. The panel's ``x`` (or **Close**)
@@ -317,19 +319,26 @@ Simulator (EASyBIN has only one panel).
   there is room; the Registers, the Listing, the messages and the Output panel keep the part of the
   window left of them. In a window of 1920 by 1080 pixels with Hardware and Memory shown, the whole
   Output picture stays in view; at 1366 by 768 its left 400 pixels and the Hardware panel's displays,
-  lamps and switches do, and the Memory window lies over the lower part of the Hardware window
-  (there the Hardware window is narrower than its content: its address fields are cut and it
-  scrolls sideways). Stack, Break Points and Log, when they are shown, go to further columns at the
-  left, over the docked panels, before any window covers another: in a window of 1920 by 1080 the
-  five tool windows lie side by side without overlapping, over most of the Output picture. Only when
-  even that leaves no room do the later ones overlap, a little further in each, but never over the
-  Hardware panel's displays and switches. A layout shows and hides no panel: a hidden panel takes its
-  place when you show it.
+  lamps and switches do, and the Memory window lies over the lower part of the Hardware window. The
+  Hardware window is as wide as its content where the window leaves room for it (from 1,403 pixels
+  on); in a narrower window, such as 1366 by 768, it gets what is left beside the Registers and the
+  left 400 pixels of the picture: its address fields are cut and it scrolls sideways. Stack, Break
+  Points and Log, when they are shown, go to further columns at the left, over the Output panel but
+  never over the Registers, the Listing or the messages, before any window covers another: in a
+  window of 1920 by 1080 the five tool windows lie side by side without overlapping, over most of
+  the Output picture. Only when even that leaves no room do the later ones overlap, a little further
+  in each, over the Hardware window's lower part but never over its displays and switches. On a
+  small screen, **Output and Hardware Side by Side** is the layout that shows the Registers, the
+  Listing, the Output picture and the Hardware panel at once. A layout shows and hides no panel: a
+  hidden panel takes its place when you show it.
 - *The room kept for Floating Tools.* The docked panels end where the windows of **Floating Tools**
   begin, so that nothing is covered at the start. When you move, size, dock or close those windows,
   the room shrinks, at the end of the drag, to the columns that still hold a window; when none does,
-  the docked panels take the whole window again. While you drag, nothing else moves. The room is
-  kept by a reload; **Reset Layout** and every other layout clear it.
+  or when the windows still there cover less than half of its height, the docked panels take the
+  whole window again and those windows float over them, so that no empty block is left beside the
+  Output panel. Moved back so that they fill half of its height again, the room comes back. While
+  you drag, nothing else moves. The room is kept by a reload; **Reset Layout** and every other
+  layout clear it.
 - *A window partly outside is cut at the edge.* The docked panels never scroll as a whole: clicking
   a window that lies partly outside the application's window, or pressing Tab into it, leaves the
   Registers and the Listing where they are.

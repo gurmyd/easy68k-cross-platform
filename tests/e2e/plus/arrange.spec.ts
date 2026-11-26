@@ -751,6 +751,87 @@ test('P9.9 point 4: the room kept for the windows shrinks to the columns that st
   await expect.poll(outputRight).toBe(right);
 });
 
+// ---- what gives way on a small screen (P9.10) -------------------------------------------------------
+
+/** Whether a floating window lies over a docked panel's box. */
+const over = (window: ScreenBox, box: Box) =>
+  window.x < box.right - 0.5 &&
+  box.left < window.x + window.width - 0.5 &&
+  window.y < box.bottom - 0.5 &&
+  box.top < window.y + window.height - 0.5;
+
+for (const size of [
+  { width: 1920, height: 1080 },
+  { width: 1366, height: 768 },
+]) {
+  test(`P9.10 point 2: Floating Tools at ${size.width} by ${size.height} with all five tool panels shown: no window lies over the registers, the listing or the message area`, async ({
+    app,
+  }) => {
+    test.setTimeout(180_000);
+    await app.page.setViewportSize(size);
+    await simulatorWithTools(app, true);
+    await view(app, 'Stack', 'stack');
+    await view(app, 'Break Points', 'breakpoints');
+    await view(app, 'Log', 'log');
+    await chooseLayout(app, 'Floating Tools');
+    const titles = ['Hardware', 'Memory', 'Stack', 'Break Points', 'Log'];
+    await expect.poll(() => floatingWindows(app)).toEqual(titles);
+    const windows = await Promise.all(titles.map((title) => windowBox(app, title)));
+    const left = await boxes(app, ['registers', 'listing', 'messages']);
+    const covering: string[] = [];
+    for (const [i, window] of windows.entries()) {
+      for (const [id, box] of Object.entries(left)) if (over(window, box)) covering.push(`${titles[i]} over ${id}`);
+    }
+    expect(covering, JSON.stringify({ windows, left })).toEqual([]);
+    // The Hardware window's displays, lamps and switches stay uncovered.
+    await app.page.evaluate(() => {
+      const scroller = document.querySelector<HTMLElement>(
+        '[data-e68-workspace]:not([hidden]) [data-e68-panel="hardware"] [data-hw-scroll]',
+      );
+      if (scroller) scroller.scrollLeft = 0;
+    });
+    expect((await whatIsSeen(app)).devices).toBe(100);
+  });
+}
+
+test('P9.10 point 3: the room is given back when the windows left in it fill less than half of its height, and comes back by the same rule', async ({
+  app,
+}) => {
+  test.setTimeout(240_000);
+  await app.page.setViewportSize({ width: 1920, height: 1080 });
+  await simulatorWithTools(app, true);
+  await chooseLayout(app, 'Floating Tools');
+  await expect.poll(() => floatingWindows(app)).toEqual(['Hardware', 'Memory']);
+  const dock = await dockBox(app);
+  const right = dock.x + dock.width;
+  const memory = await windowBox(app, 'Memory');
+  const outputRight = async () => (await regionBox(app, 'output'))!.right;
+  expect(near(await outputRight(), memory.x, 2), 'the docked panels end where the windows begin').toBe(true);
+  // The review's case: the Hardware window dragged left by 400 px (and down by 80). Memory alone is
+  // left in the room: 356 of the dock's 993 px. While the button is down nothing docked moves.
+  const from = await titlePoint(app, 'Hardware');
+  const mouse = app.page.mouse;
+  await mouse.move(from.x, from.y);
+  await mouse.down();
+  await mouse.move(from.x - 200, from.y + 40, { steps: 4 });
+  await mouse.move(from.x - 400, from.y + 80, { steps: 4 });
+  expect(near(await outputRight(), memory.x, 2), 'nothing moves while the button is held').toBe(true);
+  await mouse.up();
+  await expect
+    .poll(outputRight, { message: 'the docked panels take the whole dock: no empty block beside the Output panel' })
+    .toBe(right);
+  // A reload keeps it.
+  await reopen(app);
+  await switchMode(app, 'Simulator');
+  await expect(floatingTitle(app, 'Hardware'), 'the Hardware window is drawn after the reload').toBeVisible();
+  await expect.poll(() => screenBox(floatingTitle(app, 'Hardware'))).not.toBeNull();
+  await expect.poll(outputRight).toBe(right);
+  // Dragged back: Hardware and Memory lie in the room and fill more than half of its height again.
+  await dragBy(app, await titlePoint(app, 'Hardware'), 400, -80);
+  await expect.poll(outputRight, { message: 'the room comes back' }).toBeLessThan(right - 100);
+  expect(near(await outputRight(), memory.x, 2), 'as it was').toBe(true);
+});
+
 test('P9.8 point 3: a double click on a tab floats its panel, on a title bar docks it, and the Float button of a strip floats its selected panel, all locked', async ({
   app,
 }) => {

@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { FLOAT_CASCADE_STEP, MIN_FLOAT_SIZE } from './dock';
-import { keptRoom, rectsOverlap, tileWindows, type TileItem } from './tiling';
+import { coveredHeight, keptRoom, rectsOverlap, tileWindows, type TileItem } from './tiling';
 
 const AREA = { width: 1920, height: 993 };
 const item = (panel: string, width: number, height: number, keep?: number): TileItem => ({
@@ -137,41 +137,121 @@ describe('tileWindows (P9.8 point 1)', () => {
     expect(places[2]!.rect.x).toBeGreaterThanOrEqual(700);
   });
 
+  it('with `furtherFromX` (P9.10 point 2): no further column left of it; what finds none is cascaded in the room', () => {
+    const area = { width: 1366, height: 681 };
+    const items = [
+      item('hardware', 540, 632, 272),
+      { ...item('memory', 640, 356), inRoom: true },
+      item('stack', 300, 360),
+      item('breakpoints', 560, 300),
+      item('log', 440, 300),
+    ];
+    const places = tileWindows(items, { area, minX: 880, further: true, furtherFromX: 478 });
+    expect(places.every((place) => place.rect.x >= 478)).toBe(true);
+    const [hardware, memory, stack, breakpoints, log] = places;
+    expect(stack!.rect).toEqual({ x: 580, y: 0, width: 300, height: 360 });
+    expect(stack!.overlaps).toBe(false);
+    // Break Points and Log fit no further column between 478 and 880: cascaded in the room, below
+    // the Hardware window's kept part.
+    const kept = { ...hardware!.rect, height: 272 };
+    for (const place of [memory!, breakpoints!, log!]) {
+      expect(place.overlaps).toBe(true);
+      expect(place.rect.x).toBeGreaterThanOrEqual(880);
+      expect(rectsOverlap(place.rect, kept)).toBe(false);
+    }
+    // Without it, as P9.9 had it: further columns reach the dock's left edge.
+    const before = tileWindows(items, { area, minX: 880, further: true });
+    expect(Math.min(...before.map((place) => place.rect.x))).toBeLessThan(478);
+  });
+
+  it('`furtherFromX` at or right of the room opens no further column at all', () => {
+    const area = { width: 1000, height: 400 };
+    const places = tileWindows([item('a', 300, 400), item('b', 300, 400)], {
+      area,
+      minX: 700,
+      further: true,
+      furtherFromX: 700,
+    });
+    expect(places[1]!.overlaps).toBe(true);
+    expect(places[1]!.rect.x).toBeGreaterThanOrEqual(700);
+  });
+
   it('is pure and the same for the same input', () => {
     const items = [item('hardware', 540, 632, 272), item('memory', 640, 356), item('log', 440, 300)];
     expect(tileWindows(items, { area: AREA, minX: 1118 })).toEqual(tileWindows(items, { area: AREA, minX: 1118 }));
   });
 });
 
-describe('keptRoom (P9.9 point 4)', () => {
+describe('coveredHeight', () => {
+  it('is the height of the union of the rows inside the dock', () => {
+    expect(coveredHeight([], 100)).toBe(0);
+    expect(
+      coveredHeight(
+        [
+          { x: 0, y: 10, width: 5, height: 20 },
+          { x: 0, y: 20, width: 5, height: 20 },
+          { x: 0, y: 60, width: 5, height: 100 },
+        ],
+        100,
+      ),
+    ).toBe(30 + 40);
+    expect(coveredHeight([{ x: 0, y: -50, width: 5, height: 80 }], 100)).toBe(30);
+  });
+});
+
+describe('keptRoom (P9.9 point 4, P9.10 point 3)', () => {
+  const DOCK = { width: 1920, height: 993 };
   const hardware = { x: 1380, y: 0, width: 540, height: 632 };
   const memory = { x: 1280, y: 632, width: 640, height: 356 };
 
   it('is the room while its windows lie in it', () => {
-    expect(keptRoom(640, 1920, [hardware, memory])).toBe(640);
+    expect(keptRoom(640, DOCK, [hardware, memory])).toBe(640);
   });
 
   it('shrinks to the columns that still hold a window', () => {
     // Memory moved out to the left: the Hardware column is kept.
-    expect(keptRoom(640, 1920, [hardware, { ...memory, x: 300 }])).toBe(540);
-    // Hardware moved out: Memory's column (the wider one) is kept.
-    expect(keptRoom(640, 1920, [{ ...hardware, x: 200, y: 300 }, memory])).toBe(640);
-    // Memory moved further right inside the room: the room follows it.
-    expect(keptRoom(640, 1920, [{ ...memory, x: 1500 }])).toBe(420);
+    expect(keptRoom(640, DOCK, [hardware, { ...memory, x: 300 }])).toBe(540);
+    // Memory moved further right inside the room, Hardware still in it: the room follows Memory.
+    expect(keptRoom(640, DOCK, [hardware, { ...memory, x: 1500 }])).toBe(540);
+    expect(
+      keptRoom(640, DOCK, [
+        { ...hardware, x: 1500 },
+        { ...memory, x: 1600 },
+      ]),
+    ).toBe(420);
   });
 
   it('is given back whole when no shown window lies in it: no empty strip', () => {
-    expect(keptRoom(640, 1920, [])).toBe(0);
-    expect(keptRoom(640, 1920, [{ ...hardware, x: 100 }])).toBe(0);
+    expect(keptRoom(640, DOCK, [])).toBe(0);
+    expect(keptRoom(640, DOCK, [{ ...hardware, x: 100 }])).toBe(0);
     // A window whose left edge is left of the room does not hold it, even if it reaches into it.
-    expect(keptRoom(640, 1920, [{ ...hardware, x: 1200 }])).toBe(0);
+    expect(keptRoom(640, DOCK, [{ ...hardware, x: 1200 }])).toBe(0);
+  });
+
+  it('is given back when the windows in it cover less than half of its height (P9.10 point 3)', () => {
+    // The reviewer's case: Hardware dragged left by 400 px; Memory alone holds 356 of 993 px.
+    expect(keptRoom(640, DOCK, [{ ...hardware, x: 980, y: 80 }, memory])).toBe(0);
+    // Dragged back into the room: Hardware and Memory fill it again (988 of 993 px).
+    expect(keptRoom(640, DOCK, [{ ...hardware, x: 1380, y: 0 }, memory])).toBe(640);
+    // Exactly half keeps it; less gives it back.
+    const tall = { x: 1400, y: 0, width: 520, height: 497 };
+    expect(keptRoom(640, { width: 1920, height: 994 }, [tall])).toBe(520);
+    expect(keptRoom(640, { width: 1920, height: 995 }, [tall])).toBe(0);
+    // Rows covered twice count once; rows outside the dock do not count.
+    expect(keptRoom(640, DOCK, [memory, { ...memory, y: 700 }])).toBe(0);
+    expect(keptRoom(640, DOCK, [{ ...hardware, y: 700 }])).toBe(0);
+    // At 1366 by 768 (dock 681 px high): Hardware alone fills 632 px; Memory alone 356 px.
+    const small = { width: 1366, height: 681 };
+    expect(keptRoom(486, small, [{ x: 880, y: 0, width: 486, height: 632 }])).toBe(486);
+    expect(keptRoom(486, small, [{ x: 904, y: 272, width: 462, height: 356 }])).toBe(462);
+    expect(keptRoom(486, small, [{ x: 904, y: 272, width: 462, height: 300 }])).toBe(0);
   });
 
   it('never grows beyond the room the arrangement kept, and is 0 without one', () => {
-    expect(keptRoom(640, 1920, [{ ...hardware, x: 1000 }, hardware])).toBe(540);
-    expect(keptRoom(0, 1920, [hardware])).toBe(0);
-    expect(keptRoom(640, 0, [hardware])).toBe(0);
+    expect(keptRoom(640, DOCK, [{ ...hardware, x: 1000 }, hardware])).toBe(540);
+    expect(keptRoom(0, DOCK, [hardware])).toBe(0);
+    expect(keptRoom(640, { width: 0, height: 993 }, [hardware])).toBe(0);
     // A window pushed past the right edge still lies in the room.
-    expect(keptRoom(640, 1920, [{ ...hardware, x: 1872 }])).toBe(48);
+    expect(keptRoom(640, DOCK, [{ ...hardware, x: 1872 }])).toBe(48);
   });
 });
