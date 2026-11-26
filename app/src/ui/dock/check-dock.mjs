@@ -74,6 +74,12 @@
 //              window; a double click on a title bar docks; Ctrl+Alt+O lands on a floating title
 //              bar and Tab goes on into the panel; the bounds by the title area (with and without
 //              x); a double click on an Editor document's tab floats nothing
+//   edges      version 1.1 after the second review (P9.9 point 1), at 1366 x 768 and 1920 x 1080: a
+//              window pushed past each of the four edges, then a click on its title, Tab into its
+//              panel, a character typed in its rightmost field, Float and Dock of another panel,
+//              scrollIntoView and a script that scrolls the dock: every docked panel's box stays
+//              where it was, nothing from the window up to the page has a scroll offset, and the
+//              window's title bar stays at its top
 //
 // The Tab walks of taborder and starts compare with 1.0.0's recorded orders, which have no Float
 // button: they learn that one stop (learnFloatButtons: each must follow its strip's tabs) and
@@ -3453,6 +3459,184 @@ async function reviewPass(browser, name) {
   await context.close();
 }
 
+/**
+ * What a person sees of the docked arrangement while windows float (P9.9 point 1): the box of every
+ * docked panel's region, and every element from the first floating window up to the page (and the
+ * page itself) that has a scroll offset. Each floating window's title bar is at the window's top.
+ */
+const dockedState = (page) =>
+  page.evaluate(() => {
+    const dock = document.querySelector('[data-e68-dock="simulator"]');
+    const boxes = {};
+    for (const region of Array.from(dock.querySelectorAll('[data-e68-panel]'))) {
+      if (region.closest('.flexlayout__tab[data-e68-float]') || !region.checkVisibility()) continue;
+      const b = region.getBoundingClientRect();
+      boxes[region.getAttribute('data-e68-panel')] = [b.x, b.y, b.width, b.height].map(Math.round);
+    }
+    const scrolled = [];
+    const scrollingElement = document.scrollingElement;
+    if (scrollingElement && (scrollingElement.scrollLeft !== 0 || scrollingElement.scrollTop !== 0)) {
+      scrolled.push(`document ${scrollingElement.scrollLeft},${scrollingElement.scrollTop}`);
+    }
+    const titles = [];
+    for (const window of Array.from(dock.querySelectorAll('.flexlayout__tab[data-e68-float]'))) {
+      for (let element = window; element; element = element.parentElement) {
+        if (element.scrollLeft !== 0 || element.scrollTop !== 0) {
+          scrolled.push(
+            `${element.tagName}.${String(element.className).slice(0, 40)} ${element.scrollLeft},${element.scrollTop}`,
+          );
+        }
+      }
+      const bar = window.querySelector('[data-e68-float-bar]')?.getBoundingClientRect();
+      const box = window.getBoundingClientRect();
+      if (!bar || Math.abs(bar.top - box.top - 1) > 1) titles.push(window.getAttribute('data-e68-float'));
+    }
+    return { boxes, scrolled: [...new Set(scrolled)], titlesMoved: titles };
+  });
+
+/**
+ * Version 1.1 after the second review (ARCHITECTURE-PLUS P9.9 point 1): the docked arrangement never
+ * scrolls as a whole. A window is pushed past each of the four edges of the dock; then a click on its
+ * title, Tab into its panel, a typed character in one of its fields, Float and Dock of another panel:
+ * after each, every docked panel's box is where it was, no element above the floating window (nor
+ * the page) has a scroll offset, and the window's title bar is at its top. Both sizes the review used.
+ */
+async function edgesPass(browser, name) {
+  for (const size of [
+    { width: 1366, height: 768 },
+    { width: 1920, height: 1080 },
+  ]) {
+    const p = `${name}/edges ${size.width}x${size.height}:`;
+    const context = await newContext(browser, 'windows', size);
+    const { page, errors } = await openApp(context);
+    await setMode(page, 'simulator');
+    await settle(page);
+    await showPanels(page, ['memory', 'hardware', 'log']);
+    // Hardware floats (its address fields lie at its right: the focus would scroll to them).
+    await page.evaluate(() => window.__dock.controller().float('hardware'));
+    await settle(page);
+    const before = await dockedState(page);
+    const dockBox = await page.evaluate(() => {
+      const b = document.querySelector('[data-e68-dock="simulator"]').getBoundingClientRect();
+      return { x: b.x, y: b.y, width: b.width, height: b.height };
+    });
+    /** Drags the window's title by (dx, dy) from a point of it that is inside the dock. */
+    const push = async (dx, dy) => {
+      const t = await titleOf(page, 'hardware').boundingBox();
+      const left = Math.max(t.x, dockBox.x + 2);
+      const right = Math.min(t.x + t.width, dockBox.x + dockBox.width - 2);
+      const from = { x: left + Math.min(20, (right - left) / 2), y: Math.max(t.y, dockBox.y) + t.height / 2 };
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      await page.mouse.move(from.x + dx / 2, from.y + dy / 2, { steps: 4 });
+      await page.mouse.move(from.x + dx, from.y + dy, { steps: 4 });
+      await page.mouse.up();
+      await settle(page);
+    };
+    /** Clicks the part of the title area that is inside the dock. */
+    const clickTitle = async () => {
+      const t = await titleOf(page, 'hardware').boundingBox();
+      const left = Math.max(t.x, dockBox.x + 2);
+      const right = Math.min(t.x + t.width, dockBox.x + dockBox.width - 2);
+      const top = Math.max(t.y, dockBox.y + 1);
+      const bottom = Math.min(t.y + t.height, dockBox.y + dockBox.height - 1);
+      await page.mouse.click((left + right) / 2, (top + bottom) / 2);
+      await settle(page);
+    };
+    const same1 = (a, b) =>
+      Object.keys(a).length === Object.keys(b).length &&
+      Object.entries(a).every(([id, box]) => b[id] && box.every((value, i) => Math.abs(value - b[id][i]) <= 1));
+    const expectSteady = async (label) => {
+      const now = await dockedState(page);
+      const moved = Object.keys(before.boxes).filter(
+        (id) => !same1({ [id]: before.boxes[id] }, { [id]: now.boxes[id] }),
+      );
+      check(
+        `${p} ${label}: every docked panel's box is where it was, nothing above a floating window scrolled, its title bar at its top`,
+        same1(before.boxes, now.boxes) && now.scrolled.length === 0 && now.titlesMoved.length === 0,
+        JSON.stringify({
+          moved: moved.map((id) => [id, before.boxes[id], now.boxes[id]]),
+          scrolled: now.scrolled,
+          titles: now.titlesMoved,
+        }),
+      );
+    };
+    check(`${p} at the start nothing has a scroll offset`, before.scrolled.length === 0, before.scrolled.join('; '));
+    for (const [edge, dx, dy] of [
+      ['right', 6000, 0],
+      ['left', -6000, 0],
+      ['bottom', 0, 6000],
+      ['top', 0, -6000],
+    ]) {
+      // From the middle of the dock each time, so that each push starts from the same place.
+      await page.evaluate(
+        ([w, h]) =>
+          window.__dock
+            .controller()
+            .float('hardware', { x: Math.round(w / 3), y: Math.round(h / 4), width: 540, height: 420 }),
+        [dockBox.width, dockBox.height],
+      );
+      await settle(page);
+      await push(dx, dy);
+      await expectSteady(`pushed past the ${edge} edge`);
+      await clickTitle();
+      await expectSteady(`past the ${edge} edge, a click on its title`);
+      // Tab into the panel: the focus goes to its first field.
+      await page.keyboard.press('Tab');
+      await settle(page);
+      const into = await page.evaluate(
+        () => document.activeElement?.closest('[data-e68-panel]')?.getAttribute('data-e68-panel') ?? null,
+      );
+      check(`${p} past the ${edge} edge, Tab goes from the title into the panel`, into === 'hardware', String(into));
+      await expectSteady(`past the ${edge} edge, Tab into the panel`);
+      // A field at the panel's right (an address field), focused and typed into.
+      await page.evaluate(() => {
+        const fields = Array.from(
+          document.querySelectorAll('.flexlayout__tab[data-e68-float="hardware"] input:not([disabled])'),
+        );
+        const rightmost = fields.sort((a, b) => b.getBoundingClientRect().right - a.getBoundingClientRect().right)[0];
+        rightmost?.focus();
+      });
+      await page.keyboard.press('End');
+      await page.keyboard.type('0');
+      await settle(page);
+      await expectSteady(`past the ${edge} edge, a character typed in its rightmost field`);
+      // Float and Dock of another panel (Log, from its tab's Float button and the window's Dock).
+      await page.evaluate(() => window.__dock.controller().float('log'));
+      await settle(page);
+      const logFloats = await floatBox(page, 'log');
+      await page
+        .locator('.flexlayout__tab[data-e68-float="log"]')
+        .getByRole('button', { name: 'Dock', exact: true })
+        .click();
+      await settle(page);
+      check(
+        `${p} past the ${edge} edge, Log floated and docked again`,
+        logFloats !== null && (await floatBox(page, 'log')) === null,
+        JSON.stringify(logFloats),
+      );
+      await expectSteady(`past the ${edge} edge, Float and Dock of another panel`);
+      // scrollIntoView of the window's far corner and a script that scrolls the dock: nothing moves.
+      await page.evaluate(() => {
+        const window = document.querySelector('.flexlayout__tab[data-e68-float="hardware"]');
+        window?.lastElementChild?.scrollIntoView();
+        const dock = document.querySelector('[data-e68-dock="simulator"]');
+        dock.scrollLeft = 300;
+        dock.scrollTop = 300;
+        dock.querySelector('.flexlayout__layout').scrollLeft = 300;
+        if (window) window.scrollTop = 50;
+      });
+      await settle(page);
+      await expectSteady(`past the ${edge} edge, scrollIntoView and a script that scrolls the dock`);
+    }
+    await page.screenshot({ path: join(outDir, `${name}-edges-${size.width}x${size.height}.png`) });
+    await page.evaluate(() => window.__dock.controller().reset());
+    await settle(page);
+    check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+    await context.close();
+  }
+}
+
 async function floatingPass(browser, name) {
   const p = `${name}/floating:`;
   const context = await newContext(browser);
@@ -4450,6 +4634,7 @@ const PASSES = {
   scan: (browser, name) => scanPass(browser, name),
   floating: (browser, name) => floatingPass(browser, name),
   review: (browser, name) => reviewPass(browser, name),
+  edges: (browser, name) => edgesPass(browser, name),
 };
 
 const MIME = {

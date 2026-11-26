@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { FLOAT_CASCADE_STEP, MIN_FLOAT_SIZE } from './dock';
-import { rectsOverlap, tileWindows, type TileItem } from './tiling';
+import { keptRoom, rectsOverlap, tileWindows, type TileItem } from './tiling';
 
 const AREA = { width: 1920, height: 993 };
 const item = (panel: string, width: number, height: number, keep?: number): TileItem => ({
@@ -83,8 +83,95 @@ describe('tileWindows (P9.8 point 1)', () => {
     expect([tiny!.rect.width, tiny!.rect.height]).toEqual([MIN_FLOAT_SIZE.width, MIN_FLOAT_SIZE.height]);
   });
 
+  it('without `further`, nothing is placed left of minX (P9.8)', () => {
+    const area = { width: 1920, height: 993 };
+    const places = tileWindows([item('a', 540, 632), item('b', 640, 356), item('c', 300, 360)], { area, minX: 1126 });
+    expect(places[2]!.overlaps).toBe(true);
+    expect(places.every((place) => place.rect.x >= 1126)).toBe(true);
+  });
+
+  it('with `further` (P9.9 point 2): a full room opens further columns at its left, over the docked panels, before any overlap', () => {
+    const area = { width: 1920, height: 993 };
+    const items = [
+      item('hardware', 540, 632, 272),
+      item('memory', 640, 356),
+      item('stack', 300, 360),
+      item('breakpoints', 560, 300),
+      item('log', 440, 300),
+    ];
+    const places = tileWindows(items, { area, minX: 1126, further: true });
+    expect(places.every((place) => !place.overlaps)).toBe(true);
+    expect(noTwoOverlap(places.map((place) => place.rect))).toBe(true);
+    // The first two fill the room; Stack goes to the top of the next column at its left.
+    expect(places.slice(0, 2).every((place) => place.rect.x >= 1126)).toBe(true);
+    expect(places[2]!.rect).toEqual({ x: 1080, y: 0, width: 300, height: 360 });
+    expect(places.slice(2).every((place) => place.rect.x < 1126)).toBe(true);
+  });
+
+  it('a window marked inRoom never leaves the room: it is cascaded in it instead', () => {
+    const area = { width: 1366, height: 681 };
+    const [hardware, memory, stack] = tileWindows(
+      [item('hardware', 540, 632, 272), { ...item('memory', 640, 356), inRoom: true }, item('stack', 300, 360)],
+      { area, minX: 880, further: true },
+    );
+    expect(hardware!.rect).toEqual({ x: 880, y: 0, width: 486, height: 632 });
+    expect(memory!.overlaps).toBe(true);
+    expect(memory!.rect.x).toBeGreaterThanOrEqual(880);
+    expect(memory!.rect.y).toBe(272);
+    // Stack is not marked: it goes to a further column, over no window.
+    expect(stack!.overlaps).toBe(false);
+    expect(stack!.rect.x + stack!.rect.width).toBeLessThanOrEqual(880);
+    expect(rectsOverlap(stack!.rect, memory!.rect)).toBe(false);
+  });
+
+  it('the cascade, when a further column has no room either, stays over the room, not over the docked panels', () => {
+    const area = { width: 1000, height: 400 };
+    const places = tileWindows([item('a', 300, 400), item('b', 700, 400), item('c', 300, 300)], {
+      area,
+      minX: 700,
+      further: true,
+    });
+    expect(places[1]!.overlaps).toBe(false);
+    expect(places[1]!.rect.x).toBe(0);
+    expect(places[2]!.overlaps).toBe(true);
+    expect(places[2]!.rect.x).toBeGreaterThanOrEqual(700);
+  });
+
   it('is pure and the same for the same input', () => {
     const items = [item('hardware', 540, 632, 272), item('memory', 640, 356), item('log', 440, 300)];
     expect(tileWindows(items, { area: AREA, minX: 1118 })).toEqual(tileWindows(items, { area: AREA, minX: 1118 }));
+  });
+});
+
+describe('keptRoom (P9.9 point 4)', () => {
+  const hardware = { x: 1380, y: 0, width: 540, height: 632 };
+  const memory = { x: 1280, y: 632, width: 640, height: 356 };
+
+  it('is the room while its windows lie in it', () => {
+    expect(keptRoom(640, 1920, [hardware, memory])).toBe(640);
+  });
+
+  it('shrinks to the columns that still hold a window', () => {
+    // Memory moved out to the left: the Hardware column is kept.
+    expect(keptRoom(640, 1920, [hardware, { ...memory, x: 300 }])).toBe(540);
+    // Hardware moved out: Memory's column (the wider one) is kept.
+    expect(keptRoom(640, 1920, [{ ...hardware, x: 200, y: 300 }, memory])).toBe(640);
+    // Memory moved further right inside the room: the room follows it.
+    expect(keptRoom(640, 1920, [{ ...memory, x: 1500 }])).toBe(420);
+  });
+
+  it('is given back whole when no shown window lies in it: no empty strip', () => {
+    expect(keptRoom(640, 1920, [])).toBe(0);
+    expect(keptRoom(640, 1920, [{ ...hardware, x: 100 }])).toBe(0);
+    // A window whose left edge is left of the room does not hold it, even if it reaches into it.
+    expect(keptRoom(640, 1920, [{ ...hardware, x: 1200 }])).toBe(0);
+  });
+
+  it('never grows beyond the room the arrangement kept, and is 0 without one', () => {
+    expect(keptRoom(640, 1920, [{ ...hardware, x: 1000 }, hardware])).toBe(540);
+    expect(keptRoom(0, 1920, [hardware])).toBe(0);
+    expect(keptRoom(640, 0, [hardware])).toBe(0);
+    // A window pushed past the right edge still lies in the room.
+    expect(keptRoom(640, 1920, [{ ...hardware, x: 1872 }])).toBe(48);
   });
 });

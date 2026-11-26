@@ -1,9 +1,9 @@
 // The tip about arranging the panels (ARCHITECTURE-PLUS P9.3, version 1.1), drawn. Owner: M2.
 //
 //   +-----------------------------------------------------------------------------------+
-//   | You can rearrange this window: double-click a panel's tab to make it float, drag   |
-//   | tabs to dock them elsewhere, or pick a ready-made layout in the View menu.         |
-//   |                                                    [ Arrange Panels ] [ Got it ]   |
+//   | You can rearrange this window. Press Arrange Panels to show each panel's tab; then |
+//   | double-click a tab to make the panel float, or drag it to dock it elsewhere.       |
+//   | Ready-made layouts are in the View menu.           [ Arrange Panels ] [ Got it ]   |
 //   +-----------------------------------------------------------------------------------+
 //   status bar
 //

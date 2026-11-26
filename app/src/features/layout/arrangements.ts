@@ -22,11 +22,13 @@
 //                                      the five tool panels float, each at its own default size
 //                                      (TOOL_WINDOW_SIZES), placed by the rule of state/tiling.ts in
 //                                      the order Hardware, Memory, Stack, Break Points, Log: from
-//                                      the top right down, then further columns to the left, over no
-//                                      other window while there is room, never over the Hardware
-//                                      window's displays and switches; the docked panels keep the
-//                                      part of the dock left of the windows (`reserve`), the Output
-//                                      panel the room for its picture (FLOATING_ROOM)
+//                                      the top right down in the room kept for them (Hardware and
+//                                      Memory stay there), then Stack, Break Points and Log in
+//                                      further columns to the left over the docked panels (P9.9
+//                                      point 2), over no other window while there is room, never
+//                                      over the Hardware window's displays and switches; the docked
+//                                      panels keep the part of the dock left of the room (`reserve`),
+//                                      the Output panel the room for its picture (FLOATING_ROOM)
 //
 // [tools] is one group with the tool panels as tabs (Memory, Stack, Hardware, Break Points, Log in
 // this order; Hardware only in Wide Output). Each arrangement names every panel of the Simulator,
@@ -116,11 +118,16 @@ function leftColumn(tools: readonly string[], selected: string, weight: number):
  * buttons: no window is ever placed over it (P9.8 point 1). Erratum M2.
  */
 export const FLOATING_TOOLS_ORDER = ['hardware', 'memory', 'stack', 'breakpoints', 'log'] as const;
+/**
+ * `inRoom`: the Hardware and the Memory window stay in the room kept for the windows, right of the
+ * Output panel (the promise of P9.8 point 1 for them); the other three go on to further columns at
+ * the left, over the docked panels, before any window overlaps another (P9.9 point 2).
+ */
 export const TOOL_WINDOW_SIZES: Readonly<
-  Record<(typeof FLOATING_TOOLS_ORDER)[number], { width: number; height: number; keep?: number }>
+  Record<(typeof FLOATING_TOOLS_ORDER)[number], { width: number; height: number; keep?: number; inRoom?: boolean }>
 > = {
-  hardware: { width: 540, height: 632, keep: 272 },
-  memory: { width: 640, height: 356 },
+  hardware: { width: 540, height: 632, keep: 272, inRoom: true },
+  memory: { width: 640, height: 356, inRoom: true },
   stack: { width: 300, height: 360 },
   breakpoints: { width: 560, height: 300 },
   log: { width: 440, height: 300 },
@@ -131,9 +138,34 @@ export const TOOL_WINDOW_SIZES: Readonly<
  * the Registers panel needs to be shown whole (`left`); the Output panel keeps the left part of what
  * was its column: its whole picture at 100 % with its frame (`outputWhole`) where the tool windows
  * then still get at least `toolsLeast` (the Hardware panel's displays, lamps and switches), else the
- * left 400 px of the picture (`outputPart`). The tool windows are placed right of that.
+ * left 400 px of the picture (`outputPart`). Where the whole picture leaves the room narrower than
+ * the Hardware window's content (`hardwareWhole`: 521 px and the window's border, measured in
+ * Chromium and WebKit), the room takes from the Output panel's share up to that width, as far as the
+ * left 400 px of the picture stay uncovered (P9.9 point 5). The tool windows are placed right of that.
  */
-export const FLOATING_ROOM = { left: 478, outputWhole: 648, outputPart: 402, toolsLeast: 360 } as const;
+export const FLOATING_ROOM = {
+  left: 478,
+  outputWhole: 648,
+  outputPart: 402,
+  toolsLeast: 360,
+  hardwareWhole: 523,
+} as const;
+
+/**
+ * The width of the room kept for the windows of Floating Tools in a dock `width` px wide (P9.8
+ * point 1, P9.9 point 5): the dock less the left column and the whole picture; where that is
+ * narrower than the Hardware window's content, up to that content's width, taken from the Output
+ * panel as far as its left 400 px stay; never less than the Hardware displays and switches need.
+ */
+export function floatingRoomWidth(width: number): number {
+  const room = FLOATING_ROOM;
+  const whole = width - room.left - room.outputWhole;
+  const part = width - room.left - room.outputPart;
+  let region = whole;
+  if (region < room.hardwareWhole) region = Math.max(region, Math.min(room.hardwareWhole, part));
+  if (region < room.toolsLeast) region = Math.max(room.toolsLeast, part);
+  return region;
+}
 
 /** The size of a Simulator dock, CSS pixels. */
 export interface DockArea {
@@ -154,11 +186,12 @@ export interface FloatingToolsLayout {
 /**
  * Floating Tools in a dock of `area` (P9.8 point 1): the tool panels that are shown are placed
  * first, in the order Hardware, Memory, Stack, Break Points, Log, by the rule of state/tiling.ts
- * (each at its default size, no window over another, the right part of the dock from the top down,
- * a further column to the left when one is full, the cascade over the last column only when there
- * is no free place, never over the Hardware window's displays and switches); the hidden ones then
- * get their places by the same rule, which they take when they are shown. The docked panels keep the
- * part of the dock left of the windows.
+ * (each at its default size, no window over another, the room at the right of the dock from the top
+ * down; when it is full, Stack, Break Points and Log go to further columns at its left over the
+ * docked panels, P9.9 point 2, while Hardware and Memory stay in the room; the cascade over the
+ * room's last column only when there is no free place, never over the Hardware window's displays
+ * and switches); the hidden ones then get their places by the same rule, which they take when they
+ * are shown. The docked panels keep the part of the dock left of the room.
  */
 export function floatingToolsLayout(
   area: DockArea,
@@ -166,22 +199,24 @@ export function floatingToolsLayout(
 ): FloatingToolsLayout {
   const width = Math.floor(area.width);
   const room = FLOATING_ROOM;
-  let region = width - room.left - room.outputWhole;
-  if (region < room.toolsLeast) region = Math.max(room.toolsLeast, width - room.left - room.outputPart);
-  const minX = Math.max(0, width - region);
+  const minX = Math.max(0, width - floatingRoomWidth(width));
   const order = [
     ...FLOATING_TOOLS_ORDER.filter((panel) => shown(panel)),
     ...FLOATING_TOOLS_ORDER.filter((panel) => !shown(panel)),
   ];
   const places = tileWindows(
     order.map((panel) => ({ panel, ...TOOL_WINDOW_SIZES[panel] })),
-    { area: { width, height: Math.floor(area.height) }, minX },
+    { area: { width, height: Math.floor(area.height) }, minX, further: true },
   );
   const windows = FLOATING_TOOLS_ORDER.map((panel) => {
     const place = places.find((entry) => entry.panel === panel)!;
     return { panel, rect: place.rect, overlaps: place.overlaps };
   });
-  const left = Math.min(width, ...places.filter((place) => !place.overlaps).map((place) => place.rect.x));
+  // The room kept is that of the windows placed in it (those of further columns lie over docked panels).
+  const left = Math.min(
+    width,
+    ...places.filter((place) => !place.overlaps && place.rect.x >= minX).map((place) => place.rect.x),
+  );
   // The docked panels keep at least the Registers column and a narrow Output panel.
   const reserve = Math.max(0, Math.min(width - left, width - room.left - MIN_FLOAT_SIZE.width));
   const docked = width - reserve;

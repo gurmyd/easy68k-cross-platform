@@ -317,18 +317,31 @@ Simulator (EASyBIN has only one panel).
   there is room; the Registers, the Listing, the messages and the Output panel keep the part of the
   window left of them. In a window of 1920 by 1080 pixels with Hardware and Memory shown, the whole
   Output picture stays in view; at 1366 by 768 its left 400 pixels and the Hardware panel's displays,
-  lamps and switches do, and the Memory window lies over the lower part of the Hardware window.
-  When more tool panels are shown than there is room for, the later ones overlap, a little further
-  in each, but never over the Hardware panel's displays and switches. A layout shows and hides no
-  panel: a hidden panel takes its place when you show it.
+  lamps and switches do, and the Memory window lies over the lower part of the Hardware window
+  (there the Hardware window is narrower than its content: its address fields are cut and it
+  scrolls sideways). Stack, Break Points and Log, when they are shown, go to further columns at the
+  left, over the docked panels, before any window covers another: in a window of 1920 by 1080 the
+  five tool windows lie side by side without overlapping, over most of the Output picture. Only when
+  even that leaves no room do the later ones overlap, a little further in each, but never over the
+  Hardware panel's displays and switches. A layout shows and hides no panel: a hidden panel takes its
+  place when you show it.
+- *The room kept for Floating Tools.* The docked panels end where the windows of **Floating Tools**
+  begin, so that nothing is covered at the start. When you move, size, dock or close those windows,
+  the room shrinks, at the end of the drag, to the columns that still hold a window; when none does,
+  the docked panels take the whole window again. While you drag, nothing else moves. The room is
+  kept by a reload; **Reset Layout** and every other layout clear it.
+- *A window partly outside is cut at the edge.* The docked panels never scroll as a whole: clicking
+  a window that lies partly outside the application's window, or pressing Tab into it, leaves the
+  Registers and the Listing where they are.
 - *What Lock Layout means now.* It keeps the docked panels where they are: while it is checked, tabs
   cannot be dragged, and only the tool panels show a tab. Floating windows are not locked: they can
   always be moved, sized, docked and closed, and **Float**, **Move Panel To...** and **View > Layouts**
   work whether the layout is locked or not. Lock Layout is checked at first, as before.
 - *A tip, once.* The first time the Simulator is shown (not while a program runs or waits for
-  input), a line above the status bar says `You can rearrange this window: double-click a panel's tab
-  to make it float, drag tabs to dock them elsewhere, or pick a ready-made layout in the View menu.`
-  It lies over the lowest rows of the messages until you answer it. **Arrange Panels** unlocks the
+  input), a line above the status bar says `You can rearrange this window. Press Arrange Panels to
+  show each panel's tab; then double-click a tab to make the panel float, or drag it to dock it
+  elsewhere. Ready-made layouts are in the View menu.` It lies over the lowest rows of the messages
+  until you answer it. **Arrange Panels** unlocks the
   layout (every group then shows its tabs, which moves the panels down by the height of a strip),
   **Got it** only closes the line; after either it never comes again in this browser. If a program
   starts while it is shown, it goes away and comes back when the program has stopped.

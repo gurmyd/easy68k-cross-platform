@@ -38,8 +38,16 @@
 //             picture and the Hardware displays, lamps, switches and push buttons seen) and at
 //             1366 x 768 (those devices and the left 400 px of the picture seen; what overlaps is
 //             noted); with all five tool panels shown (the windows placed without overlap do not
-//             overlap, the devices seen; every overlap noted); Side by Side (the Output column at
-//             least 648 px, its whole picture seen); screenshots of each case in <out>/shots
+//             overlap, the devices seen; at 1920 x 1080 no window covers another, P9.9 point 2;
+//             every overlap and what each docked panel keeps seen noted); the Hardware window's
+//             content width (P9.9 point 5: whole at 1920, noted at 1366); Side by Side (the Output
+//             column at least 648 px, its whole picture seen); screenshots of each case in <out>/shots
+//   room      P9.9 point 4, at both sizes: Floating Tools keeps the room of its windows; a window
+//             dragged out (nothing docked moves while the button is down) shrinks it to the columns
+//             that still hold one, when the drag ends; a reload keeps it; with no window in it the
+//             docked panels take the whole dock; moved back, the room comes back for its column;
+//             Close gives it back; every other layout and Reset Layout clear it, stored and shown;
+//             screenshots before and after in <out>/shots
 //   program   while a program runs (it drew a picture and reads keys; the Memory panel at an address
 //             of the check's choosing): each arrangement keeps the phase, the Output picture, the
 //             Memory panel's address and every panel's content instance; with a panel hidden, an
@@ -74,7 +82,7 @@ if (args.includes('--help') || args.includes('-h')) {
       '  --browser  the browsers to drive (default: all)',
       '  --out      where screenshots, proportions.json and the Vite cache go',
       '             (default: build/arrange-check of the repository, git-ignored)',
-      '  --only     run only these passes: button, narrow, tip, layouts, uncovered, program, menus, dialog',
+      '  --only     run only these passes: button, narrow, tip, layouts, uncovered, room, program, menus, dialog',
     ].join('\n'),
   );
   process.exit(0);
@@ -109,17 +117,17 @@ const SIM_PANELS = ['registers', 'listing', 'messages', 'output', ...TOOLS];
 /** Floating Tools: the order the tool panels float in and each window's default size (arrangements.ts). */
 const FLOATING_ORDER = ['hardware', 'memory', 'stack', 'breakpoints', 'log'];
 const WINDOW_SIZES = {
-  hardware: { width: 540, height: 632, keep: 272 },
-  memory: { width: 640, height: 356 },
+  hardware: { width: 540, height: 632, keep: 272, inRoom: true },
+  memory: { width: 640, height: 356, inRoom: true },
   stack: { width: 300, height: 360 },
   breakpoints: { width: 560, height: 300 },
   log: { width: 440, height: 300 },
 };
 
-// The texts, as P9.3 and P9.4 give them (the application's constants are in texts.ts and
-// commands/tables/toolbars.ts; they are compared with these in the page).
+// The texts, as P9.3, P9.4 and P9.9 point 3 give them (the application's constants are in texts.ts
+// and commands/tables/toolbars.ts; they are compared with these in the page).
 const TIP_TEXT =
-  "You can rearrange this window: double-click a panel's tab to make it float, drag tabs to dock them elsewhere, or pick a ready-made layout in the View menu.";
+  "You can rearrange this window. Press Arrange Panels to show each panel's tab; then double-click a tab to make the panel float, or drag it to dock it elsewhere. Ready-made layouts are in the View menu.";
 const SIM_TOOLTIP = 'Arrange Panels: drag a panel by its tab, or right-click a tab for more (View > Lock Layout)';
 const EDITOR_TOOLTIP = 'Arrange Panels: drag a panel by its tab, or right-click a tab for more (Window > Lock Layout)';
 const ARRANGEMENTS = [
@@ -183,6 +191,12 @@ async function openApp(context, query = '') {
   });
   await page.goto(`${baseUrl}${query}`, { timeout: LOAD_TIMEOUT });
   await page.waitForSelector('.e68-shell', { timeout: LOAD_TIMEOUT });
+  await installHooks(page);
+  return { page, errors };
+}
+
+/** Waits for the application and gives the check its hooks (window.__arrange); again after a reload. */
+async function installHooks(page) {
   await page.waitForFunction(() => window.__easy68k !== undefined, null, { timeout: LOAD_TIMEOUT });
   await page
     .waitForFunction(() => window.__easy68k.ctx.store.getState().sim.phase !== 'loading', null, { timeout: 60_000 })
@@ -210,7 +224,6 @@ async function openApp(context, query = '') {
       },
     };
   });
-  return { page, errors };
 }
 
 async function until(page, fn, arg, timeout = 10_000) {
@@ -1032,7 +1045,20 @@ function uncovered(page) {
       }
     }
     const canvasBox = canvas?.getBoundingClientRect();
+    // What each docked panel keeps visible (the share of its region's points that hit itself).
+    const docked = {};
+    for (const region of Array.from(dock.querySelectorAll('[data-e68-panel]'))) {
+      if (region.closest('.flexlayout__tab[data-e68-float]') || !region.checkVisibility()) continue;
+      docked[region.getAttribute('data-e68-panel')] = grid(
+        region.getBoundingClientRect(),
+        (hit) => hit !== null && region.contains(hit),
+      ).share;
+    }
+    // The Hardware window's content: its width and the width it needs (P9.9 point 5).
+    const hwScroll = dock.querySelector('.flexlayout__tab[data-e68-float="hardware"] .e68-hw-scroll');
     return {
+      docked,
+      hardwareContent: hwScroll ? [hwScroll.clientWidth, hwScroll.scrollWidth] : null,
       canvas: canvas ? grid(canvasBox, (hit) => hit === canvas) : null,
       canvasSize: canvasBox ? [Math.round(canvasBox.width), Math.round(canvasBox.height)] : null,
       devices: devicesTotal ? Math.round((1000 * devicesSeen) / devicesTotal) / 10 : null,
@@ -1099,6 +1125,17 @@ async function uncoveredPass(browser, name) {
         check(`${label}: both windows float`, two.windows.length === 2, JSON.stringify(two.windows));
         note(`${label}: windows ${two.windows.join('; ')}; overlaps ${two.overlaps.join('; ') || 'none'}`);
       }
+      // P9.9 point 5: the Hardware window's content, its width against the width it needs.
+      note(
+        `${label}: the Hardware window's content ${two.hardwareContent?.[0]} px wide, it needs ${two.hardwareContent?.[1]} px; docked panels seen ${JSON.stringify(two.docked)}`,
+      );
+      if (size.width >= 1920) {
+        check(
+          `${label}: the Hardware window holds its whole content (P9.9 point 5)`,
+          two.hardwareContent !== null && two.hardwareContent[1] <= two.hardwareContent[0],
+          JSON.stringify(two.hardwareContent),
+        );
+      }
       check(
         `${label}: the Hardware panel's displays, lamps, switches and push buttons are uncovered`,
         two.deviceBlocks === 4 && two.devices === 100,
@@ -1144,8 +1181,16 @@ async function uncoveredPass(browser, name) {
         five.windows.length === 5 && freeOverlaps.length === 0 && five.devices === 100,
         JSON.stringify({ free: freeOnes, overlaps: five.overlaps, devices: five.devices }),
       );
+      if (size.width >= 1920) {
+        // P9.9 point 2: further columns at the left before any overlap; at 1920 by 1080 none.
+        check(
+          `${p} ${at} ${theme} Floating Tools, all five shown: no floating window covers another (P9.9 point 2)`,
+          five.windows.length === 5 && five.overlaps.length === 0 && freeOnes.length === 5,
+          JSON.stringify({ windows: five.windows, overlaps: five.overlaps }),
+        );
+      }
       note(
-        `${p} ${at} ${theme} Floating Tools, all five shown: placed without overlap ${freeOnes.join(', ')}; overlaps ${five.overlaps.join('; ') || 'none'}; Output picture ${five.canvas?.share}% uncovered, left ${five.canvas?.left} px`,
+        `${p} ${at} ${theme} Floating Tools, all five shown: windows ${five.windows.join('; ')}; placed without overlap ${freeOnes.join(', ')}; overlaps ${five.overlaps.join('; ') || 'none'}; Output picture ${five.canvas?.share}% uncovered, left ${five.canvas?.left} px; docked panels seen ${JSON.stringify(five.docked)}`,
       );
       // Output and Hardware Side by Side (P9.8 point 5): the Output column shows the whole picture.
       await setShown(page, ['hardware', 'memory']);
@@ -1173,6 +1218,168 @@ async function uncoveredPass(browser, name) {
     await run(page, 'app.theme.set', 'light');
     if (enginesPresent) await page.evaluate(() => window.__easy68k.ctx.sim.controller.pause());
     finish(`${p} uncovered ${at}`, errors);
+    await closeWithin(context);
+  }
+}
+
+// --- pass: room (P9.9 point 4) ------------------------------------------------------------------
+
+/** The docked panels' boxes, the room the dock keeps now and the floating windows. */
+const roomState = (page) =>
+  page.evaluate(() => {
+    const dock = document.querySelector('[data-e68-dock="simulator"]');
+    const d = dock.getBoundingClientRect();
+    const boxes = {};
+    for (const region of Array.from(dock.querySelectorAll('[data-e68-panel]'))) {
+      if (region.closest('.flexlayout__tab[data-e68-float]') || !region.checkVisibility()) continue;
+      const b = region.getBoundingClientRect();
+      boxes[region.getAttribute('data-e68-panel')] = [b.x - d.x, b.y - d.y, b.width, b.height].map(Math.round);
+    }
+    const windows = {};
+    for (const window of Array.from(dock.querySelectorAll('.flexlayout__tab[data-e68-float]'))) {
+      const b = window.getBoundingClientRect();
+      windows[window.getAttribute('data-e68-float')] = [b.x - d.x, b.y - d.y, b.width, b.height].map(Math.round);
+    }
+    // The docked panels' right edge: where the room begins (the dock's width with no room).
+    const right = Math.max(...Object.values(boxes).map(([x, , w]) => x + w));
+    return {
+      room: Number(dock.getAttribute('data-e68-reserve') ?? 0),
+      dockWidth: Math.round(d.width),
+      right,
+      boxes,
+      windows,
+    };
+  });
+
+/** Drags a floating window by its title by (dx, dy); `during` runs before the button is let go. */
+async function dragTitle(page, panel, dx, dy, during) {
+  const t = await page.locator(`[data-e68-float-title="${panel}"]`).boundingBox();
+  const from = { x: t.x + Math.min(40, t.width / 2), y: t.y + t.height / 2 };
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + dx / 2, from.y + dy / 2, { steps: 5 });
+  await page.mouse.move(from.x + dx, from.y + dy, { steps: 5 });
+  await settle(page);
+  const result = during ? await during() : null;
+  await page.mouse.up();
+  await settle(page);
+  return result;
+}
+
+/**
+ * P9.9 point 4: the room kept for the windows of Floating Tools shrinks to the columns that still
+ * hold a shown window when a move, a size, Dock or Close ends; nothing moves while a window is being
+ * dragged; a reload keeps it; Reset Layout and every other layout clear it. Screenshots before and
+ * after in <out>/shots.
+ */
+async function roomPass(browser, name) {
+  for (const size of SIZES) {
+    const at = `${size.width}x${size.height}`;
+    const p = `${name}: room ${at}`;
+    const context = await newContext(browser, size);
+    const { page, errors } = await openApp(context);
+    await setMode(page, 'simulator');
+    await settle(page);
+    await setShown(page, ['hardware', 'memory']);
+    await run(page, 'sim.view.layout.floatingTools');
+    await settle(page);
+    await settle(page);
+    const start = await roomState(page);
+    await page.screenshot({ path: join(outDir, 'shots', `${name}-${at}-room-0-floating-tools.png`) });
+    check(
+      `${p}: Floating Tools keeps the room of its windows: the docked panels end where the windows begin`,
+      start.room > 0 && Math.abs(start.right - (start.dockWidth - start.room)) <= 1,
+      JSON.stringify(start),
+    );
+    // Memory dragged out of the room to the left (down-left over the docked panels): while the
+    // pointer is down nothing of the docked panels moves; when it is let go the room shrinks to the
+    // Hardware window's column (at 1366 the Hardware window is the room: it stays).
+    const memory = start.windows.memory;
+    const during = await dragTitle(page, 'memory', -(memory[0] - 40), 0, () => roomState(page));
+    check(
+      `${p}: while the Memory window is being dragged, the docked panels do not move`,
+      JSON.stringify(during.boxes) === JSON.stringify(start.boxes) && during.room === start.room,
+      JSON.stringify({ during: during.boxes, start: start.boxes, room: [during.room, start.room] }),
+    );
+    const afterMemory = await roomState(page);
+    const hardware = afterMemory.windows.hardware;
+    await page.screenshot({ path: join(outDir, 'shots', `${name}-${at}-room-1-memory-moved.png`) });
+    check(
+      `${p}: Memory moved out, the room shrinks to the column that still holds a window (Hardware's)`,
+      afterMemory.room === start.dockWidth - hardware[0] && Math.abs(afterMemory.right - hardware[0]) <= 1,
+      JSON.stringify({ room: afterMemory.room, right: afterMemory.right, hardware }),
+    );
+    // A reload keeps what was there.
+    await page.reload({ timeout: LOAD_TIMEOUT });
+    await installHooks(page);
+    await setMode(page, 'simulator');
+    await settle(page);
+    await settle(page);
+    const reloaded = await roomState(page);
+    check(
+      `${p}: a reload keeps the room, the windows and the docked panels`,
+      reloaded.room === afterMemory.room &&
+        JSON.stringify(reloaded.windows) === JSON.stringify(afterMemory.windows) &&
+        JSON.stringify(reloaded.boxes) === JSON.stringify(afterMemory.boxes),
+      JSON.stringify({ reloaded, afterMemory }),
+    );
+    // The Hardware window dragged down and to the left (the review's case): no window lies in the
+    // room any more, and no empty strip is left: the docked panels take the whole dock.
+    await dragTitle(page, 'hardware', -(hardware[0] - 300), 40);
+    const afterHardware = await roomState(page);
+    await page.screenshot({ path: join(outDir, 'shots', `${name}-${at}-room-2-hardware-moved.png`) });
+    check(
+      `${p}: Hardware moved out as well, the room is given back: the docked panels take the whole dock`,
+      afterHardware.room === 0 && Math.abs(afterHardware.right - afterHardware.dockWidth) <= 1,
+      JSON.stringify({ room: afterHardware.room, right: afterHardware.right, windows: afterHardware.windows }),
+    );
+    // Moved back to the right edge, it lies in the room again (the room never grows past the
+    // arrangement's), and its x hides it: the room goes with it.
+    const moved = afterHardware.windows.hardware;
+    await dragTitle(page, 'hardware', afterHardware.dockWidth - (moved[0] + moved[2]), -40);
+    const back = await roomState(page);
+    check(
+      `${p}: moved back to the right edge, the room comes back for its column, never wider than the arrangement's`,
+      back.room > 0 && back.room <= start.room && Math.abs(back.right - (back.dockWidth - back.room)) <= 1,
+      JSON.stringify({ room: back.room, right: back.right, windows: back.windows }),
+    );
+    await page
+      .locator('.flexlayout__tab[data-e68-float="hardware"]')
+      .getByRole('button', { name: 'Close', exact: true })
+      .click();
+    await settle(page);
+    const closed = await roomState(page);
+    check(
+      `${p}: its x (Close) hides it, and the room is given back`,
+      closed.room === 0 && Math.abs(closed.right - closed.dockWidth) <= 1,
+      JSON.stringify({ room: closed.room, right: closed.right }),
+    );
+    // Every other layout and Reset Layout clear it; Floating Tools again keeps it.
+    await setShown(page, ['hardware', 'memory']);
+    for (const [command, kept] of [
+      ['sim.view.layout.floatingTools', true],
+      ['sim.view.layout.wideOutput', false],
+      ['sim.view.layout.floatingTools', true],
+      ['sim.view.layout.sideBySide', false],
+      ['sim.view.layout.floatingTools', true],
+      ['sim.view.layout.classic', false],
+      ['sim.view.layout.floatingTools', true],
+      ['app.layout.reset', false],
+    ]) {
+      await run(page, command);
+      await settle(page);
+      await settle(page);
+      const now = await roomState(page);
+      const stored = await page.evaluate(
+        () => window.__easy68k.ctx.settings.get().app.layout.dock?.floating?.simulator?.reserve ?? 0,
+      );
+      check(
+        `${p}: ${command} ${kept ? 'keeps a room for its windows' : 'clears the room'}`,
+        kept ? now.room > 0 && stored > 0 : now.room === 0 && stored === 0 && Math.abs(now.right - now.dockWidth) <= 1,
+        JSON.stringify({ room: now.room, stored, right: now.right }),
+      );
+    }
+    finish(`${p}`, errors);
     await closeWithin(context);
   }
 }
@@ -1380,6 +1587,7 @@ const PASSES = {
   tip: tipPass,
   layouts: layoutsPass,
   uncovered: uncoveredPass,
+  room: roomPass,
   program: programPass,
   menus: menusPass,
   dialog: dialogPass,

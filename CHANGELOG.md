@@ -32,14 +32,22 @@ explains it all; the differences are in parts M1 and M2 of `docs/DIFFERENCES.md`
   appears at a free place at the right of the window, over no other floating window and not over
   the tab strip it came from. A window pushed to an edge keeps 48 pixels of its title (not of its
   buttons) in view. Leaving the Output panel with Ctrl+Alt+O lands on a floating window's title bar.
+- **Floating windows after a second review.** A window pushed partly outside the application window
+  is cut at its edge: clicking it or pressing Tab into it no longer scrolls the docked panels
+  sideways off the screen.
 - **Finding it.** A button `Arrange Panels` at the end of the toolbar is pressed while the layout is
   unlocked. The first time the Simulator is shown, a tip says once that the window can be rearranged
-  and how: a double click on a panel's tab, dragging tabs, or a ready-made layout.
+  and how, starting from what that page shows: press `Arrange Panels` to show each panel's tab, then
+  double-click a tab or drag it; ready-made layouts are in the View menu.
 - **Ready-made layouts** for the Simulator, in `View > Layouts`: `Classic`, `Wide Output`, `Output
   and Hardware Side by Side` (the Output panel gets the room its whole picture needs first) and
   `Floating Tools` (every tool panel in a window of its own, as in the original, side by side from
   the top right so that the windows do not cover one another while there is room, never over the
-  Hardware panel's displays and switches, and with the Output picture in view).
+  Hardware panel's displays and switches, and with the Output picture in view while Hardware and
+  Memory are shown; Stack, Break Points and Log go to further columns at the left before any window
+  covers another, so that in a window of 1920 by 1080 all five lie side by side). The room kept for
+  the windows at the right shrinks to the columns that still hold a window when one is moved, sized,
+  docked or closed, and the docked panels take the whole window again when none is left there.
 - **Panels in a small place.** The Hardware panel, the registers and the Memory panel scroll inside
   themselves when they get less room than they need (a low or narrow region, a small floating
   window), so that every control can be reached with the mouse, the wheel and the keyboard; a

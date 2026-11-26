@@ -21,6 +21,17 @@
   background: var(--c-bg);
 }
 
+/* Version 1.1 (P9.9 point 1): the dock never scrolls as a whole. A floating window that lies partly
+   outside is cut at the dock's edge; with `overflow: clip` (Chromium, Safari 16 and later) the dock
+   is no scroll container, so neither the focus, nor scrollIntoView, nor a script can scroll it, and
+   nothing of it reaches the page's own scrolling. Where `clip` is missing, the dock puts the offsets
+   back at once (pin.ts). With nothing floating, nothing lies outside: the page is 1.0.0's. */
+@supports (overflow: clip) {
+  .e68-dock {
+    overflow: clip;
+  }
+}
+
 .e68-dock .flexlayout__layout {
   --flexlayout-color-text: var(--c-text);
   --flexlayout-color-background: var(--c-surface);
@@ -349,11 +360,19 @@
   width: var(--e68-float-width) !important;
   height: var(--e68-float-height) !important;
   z-index: var(--e68-float-z, 11);
+  /* The window itself never scrolls either (P9.9 point 1): its title bar stays at its top; what is
+     larger than the window scrolls inside the panel (.flexlayout__tab_moveable, the panel's own). */
   overflow: hidden;
   border: 1px solid var(--c-border-strong);
   border-radius: var(--r-md);
   background: var(--c-surface);
   box-shadow: var(--shadow-popup);
+}
+
+@supports (overflow: clip) {
+  .e68-dock .flexlayout__tab[data-e68-float] {
+    overflow: clip;
+  }
 }
 
 .e68-dock .flexlayout__tab[data-e68-float]:has(.e68-output[data-fullscreen='true']) {

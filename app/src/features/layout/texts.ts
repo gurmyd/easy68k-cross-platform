@@ -31,9 +31,12 @@ export const MOVE_TEXTS = {
 export const BESIDE_SIDE_LABELS = { left: 'Left', right: 'Right', above: 'Above', below: 'Below' } as const;
 export const EDGE_SIDE_LABELS = { left: 'Left', right: 'Right', top: 'Top', bottom: 'Bottom' } as const;
 
-/** The tip of P9.3 (its text as P9.8 point 3 (c) gives it), shown once per browser profile above the Simulator's status bar. */
+/**
+ * The tip of P9.3 (its text as P9.9 point 3 gives it: what can be done on the page it appears on),
+ * shown once per browser profile above the Simulator's status bar.
+ */
 export const ARRANGE_TIP_TEXTS = {
-  text: "You can rearrange this window: double-click a panel's tab to make it float, drag tabs to dock them elsewhere, or pick a ready-made layout in the View menu.",
+  text: "You can rearrange this window. Press Arrange Panels to show each panel's tab; then double-click a tab to make the panel float, or drag it to dock it elsewhere. Ready-made layouts are in the View menu.",
   /** Unlocks the layout and closes the tip. */
   arrange: ARRANGE_BUTTON_TEXTS.caption,
   /** Closes the tip. */

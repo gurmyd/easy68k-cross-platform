@@ -71,7 +71,8 @@ import {
   type PlannedMove,
 } from './actions';
 import { Announcer } from './announce';
-import { tileWindows } from '../../state/tiling';
+import { keptRoom, tileWindows } from '../../state/tiling';
+import { pinScroll } from './pin';
 import {
   boundedRect,
   firstFloatRect,
@@ -212,6 +213,8 @@ export class DockEngine implements DockLive {
   private reserve = 0;
   /** The room applied to the page now (applyReserve). */
   private reserveShown = 0;
+  /** Stops pinScroll on the dock's element (P9.9 point 1). */
+  private unpin: (() => void) | null = null;
   private readonly changeListener = {
     onBeforeAction: (action: Action) => this.onBeforeAction(action),
     onAfterAction: (action: Action) => this.onAfterAction(action),
@@ -299,7 +302,12 @@ export class DockEngine implements DockLive {
 
   /** The dock's element (null on unmount). */
   setElement(element: HTMLElement | null): void {
+    if (element === this.element) return;
+    this.unpin?.();
+    this.unpin = null;
     this.element = element;
+    // P9.9 point 1: the dock never scrolls as a whole (dock.css `overflow: clip`; pin.ts elsewhere).
+    if (element) this.unpin = pinScroll(element);
   }
 
   setSize(width: number, height: number): void {
@@ -1837,14 +1845,16 @@ export class DockEngine implements DockLive {
   }
 
   /**
-   * The room kept at the right of the dock for the floating windows (P9.8 point 1): while a panel of
-   * the mode floats and is shown, the docked panels are laid out left of it (dock.css
-   * `[data-e68-reserve]`); with none shown, or nothing floating, they take the whole dock, so that
-   * with nothing floating the page is 1.0.0's. The docked panels keep at least 320 px.
+   * The room kept at the right of the dock for the floating windows (P9.8 point 1, P9.9 point 4):
+   * the docked panels are laid out left of it (dock.css `[data-e68-reserve]`) as far as shown
+   * floating windows lie in it (state/tiling.ts `keptRoom`): by the places the windows are stored
+   * at, not the place a window is being dragged or sized to, so nothing moves under a drag and the
+   * room changes when it ends. With no window in it, or nothing floating, the docked panels take the
+   * whole dock, so that with nothing floating the page is 1.0.0's. They keep at least 320 px.
    */
   private applyReserve(root: HTMLElement, shown: readonly string[]): void {
     const width = this.size.width;
-    const wanted = shown.some((panel) => !isViewerId(panel)) ? this.reserve : 0;
+    const wanted = this.keptRoomNow(shown);
     const reserve = width > 0 ? Math.max(0, Math.min(Math.round(wanted), Math.floor(width) - RESERVE_LEAVES)) : 0;
     if (reserve === this.reserveShown) return;
     this.reserveShown = reserve;
@@ -1856,6 +1866,20 @@ export class DockEngine implements DockLive {
       root.removeAttribute('data-e68-reserve');
     }
     this.controller()?.redrawLayout?.();
+  }
+
+  /**
+   * The room kept for the windows now (P9.9 point 4), CSS px, before the 320 px the docked panels
+   * keep: the arrangement's room as far as shown windows lie in it at their stored places.
+   */
+  keptRoomNow(shown: readonly string[] = this.shownFloats()): number {
+    const area = this.area();
+    const rects = shown
+      .filter((panel) => !isViewerId(panel))
+      .map((panel) => this.floatEntry(panel))
+      .filter((entry): entry is StoredWindow => entry !== undefined)
+      .map((entry) => boundedRect(entry.rect, area, this.buttonsOf(entry.panel)));
+    return keptRoom(this.reserve, this.size.width, rects);
   }
 
   /** The room the docked panels are laid out in now, CSS px (the dock less the reserve). */

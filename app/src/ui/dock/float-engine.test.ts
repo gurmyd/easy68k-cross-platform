@@ -89,6 +89,66 @@ describe('P9.8: the first place of a window and the room kept for the windows', 
     expect(engine.dockedWidth()).toBe(1400);
   });
 
+  it('P9.9 point 4: the room shrinks to the columns that still hold a shown window, when a move, size, Dock or Close ends; kept by a reload; Reset Layout clears it', () => {
+    const { app, engine } = setup();
+    showPanel(app.ctx, 'hardware');
+    showPanel(app.ctx, 'memory');
+    const hardware = { x: 860, y: 0, width: 540, height: 632 };
+    const memory = { x: 760, y: 632, width: 640, height: 181 };
+    const arrangement: DockArrangement = {
+      mode: 'simulator',
+      docked: {
+        type: 'row',
+        weight: 100,
+        children: [
+          {
+            type: 'column',
+            weight: 50,
+            children: [
+              { type: 'tabs', weight: 20, panels: ['registers'], selected: 'registers' },
+              { type: 'tabs', weight: 60, panels: ['listing'], selected: 'listing' },
+              { type: 'tabs', weight: 20, panels: ['messages'], selected: 'messages' },
+            ],
+          },
+          { type: 'tabs', weight: 50, panels: ['output'], selected: 'output' },
+        ],
+      },
+      floating: [
+        { panel: 'hardware', rect: hardware },
+        { panel: 'memory', rect: memory },
+        { panel: 'stack' },
+        { panel: 'breakpoints' },
+        { panel: 'log' },
+      ],
+      reserve: 640,
+    };
+    expect(dockOf(app.ctx).arrange(arrangement)).toBe(true);
+    expect(engine.keptRoomNow()).toBe(640);
+    // While a window is being dragged out (a preview), nothing changes; when the drag ends, it does.
+    engine.previewRect('memory', { ...memory, x: 100 });
+    expect(engine.keptRoomNow()).toBe(640);
+    engine.commitRect('memory', { ...memory, x: 100 });
+    expect(engine.keptRoomNow(), "Hardware's column is still held").toBe(540);
+    // Kept by a reload: another engine of the same profile reads the same room.
+    const second = new DockEngine(app.ctx, app.panels, app.shell, 'simulator');
+    second.setSize(1400, 813);
+    expect(second.keptRoomNow()).toBe(540);
+    // Hardware closed (its x hides it): no shown window lies in the room; it is given back whole.
+    hidePanel(app.ctx, 'hardware');
+    expect(engine.keptRoomNow()).toBe(0);
+    // Shown again where it floated, it lies in its column again.
+    showPanel(app.ctx, 'hardware');
+    expect(engine.keptRoomNow()).toBe(540);
+    // Hardware docked: none in the room.
+    dockOf(app.ctx).dock('hardware');
+    expect(engine.keptRoomNow()).toBe(0);
+    expect(readDock(app.ctx.settings.get()).floating?.simulator?.reserve, 'stored while windows float').toBe(640);
+    // Reset Layout clears it.
+    dockOf(app.ctx).reset();
+    expect(readDock(app.ctx.settings.get()).floating?.simulator?.reserve).toBeUndefined();
+    expect(engine.keptRoomNow()).toBe(0);
+  });
+
   it('the last window docked: the room is given back', () => {
     const { app } = setup();
     showPanel(app.ctx, 'hardware');

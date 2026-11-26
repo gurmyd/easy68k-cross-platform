@@ -2,8 +2,9 @@
 //
 // The first time a window shows the Simulator, a notice appears above the status bar:
 //
-//   You can rearrange this window: double-click a panel's tab to make it float, drag tabs to dock
-//   them elsewhere, or pick a ready-made layout in the View menu.  [ Arrange Panels ] [ Got it ]
+//   You can rearrange this window. Press Arrange Panels to show each panel's tab; then double-click
+//   a tab to make the panel float, or drag it to dock it elsewhere. Ready-made layouts are in the
+//   View menu.  [ Arrange Panels ] [ Got it ]                                    (P9.9 point 3)
 //
 // `Arrange Panels` unlocks the layout and closes it, `Got it` closes it; after either it never comes
 // again in this browser profile (AppSettings.plus.arrangeTipAnswered, core/plus/settings.ts), in no

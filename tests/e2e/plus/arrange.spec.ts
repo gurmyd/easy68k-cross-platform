@@ -65,9 +65,9 @@ const ARRANGE_TIP_SIMULATOR =
   'Arrange Panels: drag a panel by its tab, or right-click a tab for more (View > Lock Layout)';
 const ARRANGE_TIP_EDITOR =
   'Arrange Panels: drag a panel by its tab, or right-click a tab for more (Window > Lock Layout)';
-/** P9.3: the tip and its two buttons. */
+/** P9.3: the tip (its text as P9.9 point 3 gives it) and its two buttons. */
 const TIP =
-  "You can rearrange this window: double-click a panel's tab to make it float, drag tabs to dock them elsewhere, or pick a ready-made layout in the View menu.";
+  "You can rearrange this window. Press Arrange Panels to show each panel's tab; then double-click a tab to make the panel float, or drag it to dock it elsewhere. Ready-made layouts are in the View menu.";
 /** P9.8 point 3 (b): the button at the right end of every tab strip that is shown (its tool tip). */
 const FLOAT_BUTTON = 'Float: make this panel a window of its own';
 const TIP_ARRANGE = 'Arrange Panels';
@@ -623,6 +623,133 @@ for (const size of [
     }
   });
 }
+
+// ---- the second review's corrections (P9.9) ---------------------------------------------------------
+
+/** The left edge of the shown dock's Registers panel and every scroll offset above the floating windows. */
+async function dockSteady(app: App): Promise<{ registersLeft: number; scrolled: string[] }> {
+  return app.page.evaluate(() => {
+    const dock = document.querySelector('[data-e68-workspace]:not([hidden]) [data-e68-dock]')!;
+    const registers = dock.querySelector('[data-e68-panel="registers"]')!.getBoundingClientRect();
+    const scrolled: string[] = [];
+    for (const window of Array.from(dock.querySelectorAll('.flexlayout__tab[data-e68-float]'))) {
+      for (let element: Element | null = window; element; element = element.parentElement) {
+        if (element.scrollLeft !== 0 || element.scrollTop !== 0) {
+          scrolled.push(`${element.className} ${element.scrollLeft},${element.scrollTop}`);
+        }
+      }
+    }
+    const page = document.scrollingElement!;
+    if (page.scrollLeft !== 0 || page.scrollTop !== 0) scrolled.push(`document ${page.scrollLeft},${page.scrollTop}`);
+    return { registersLeft: Math.round(registers.left), scrolled: [...new Set(scrolled)] };
+  });
+}
+
+test('P9.9 point 1: a window pushed past the right edge, clicked and tabbed into, never scrolls the docked panels', async ({
+  app,
+}) => {
+  test.setTimeout(180_000);
+  await app.page.setViewportSize({ width: 1366, height: 768 });
+  await simulatorWithTools(app, true);
+  await chooseLayout(app, 'Floating Tools');
+  await expect.poll(() => floatingWindows(app)).toEqual(['Hardware', 'Memory']);
+  // The reviewer's steps: the Hardware title dragged far to the right, a click on it, Tab into the panel.
+  await dragBy(app, await titlePoint(app, 'Hardware'), 3000, 0);
+  const pushed = await windowBox(app, 'Hardware');
+  expect(pushed.x, 'the window lies partly outside, cut at the edge').toBeGreaterThan(1366 - pushed.width);
+  // (The room kept for the windows follows the window to the edge, P9.9 point 4: measured from here.)
+  const before = await boxes(app, ['registers', 'listing', 'messages', 'output']);
+  await floatingTitle(app, 'Hardware').click({ position: { x: 24, y: 15 } });
+  await expect(floatingTitle(app, 'Hardware')).toBeFocused();
+  expect(await dockSteady(app)).toEqual({ registersLeft: 0, scrolled: [] });
+  await app.page.keyboard.press('Tab');
+  await expect
+    .poll(() =>
+      app.page.evaluate(() => document.activeElement?.closest('[data-e68-panel]')?.getAttribute('data-e68-panel')),
+    )
+    .toBe('hardware');
+  expect(await dockSteady(app)).toEqual({ registersLeft: 0, scrolled: [] });
+  expect(await boxes(app, ['registers', 'listing', 'messages', 'output']), 'nothing docked moved').toEqual(before);
+  // Memory docked from its title bar: the docked arrangement changes (Memory joins it), never scrolls.
+  await floatingWindow(app, 'Memory').getByRole('button', { name: DOCK, exact: true }).click();
+  await expect.poll(() => floatingWindows(app)).toEqual(['Hardware']);
+  expect(await dockSteady(app)).toEqual({ registersLeft: 0, scrolled: [] });
+  expect((await boxes(app, ['registers'])).registers!.left).toBe(before.registers!.left);
+});
+
+test('P9.9 point 2: Floating Tools at 1920 by 1080 with all five tool panels shown: no window covers another', async ({
+  app,
+}) => {
+  test.setTimeout(180_000);
+  await app.page.setViewportSize({ width: 1920, height: 1080 });
+  await simulatorWithTools(app, true);
+  await view(app, 'Stack', 'stack');
+  await view(app, 'Break Points', 'breakpoints');
+  await view(app, 'Log', 'log');
+  await chooseLayout(app, 'Floating Tools');
+  await expect.poll(() => floatingWindows(app)).toEqual(['Hardware', 'Memory', 'Stack', 'Break Points', 'Log']);
+  const titles = ['Hardware', 'Memory', 'Stack', 'Break Points', 'Log'];
+  const windows = await Promise.all(titles.map((title) => windowBox(app, title)));
+  const dock = await dockBox(app);
+  const pairs: string[] = [];
+  for (let i = 0; i < windows.length; i++) {
+    const a = windows[i]!;
+    expect(
+      a.x >= dock.x - 1 && a.y >= dock.y - 1 && a.x + a.width <= dock.x + dock.width + 1,
+      `${titles[i]} inside the dock`,
+    ).toBe(true);
+    expect(a.y + a.height, `${titles[i]} inside the dock`).toBeLessThanOrEqual(dock.y + dock.height + 1);
+    for (let j = i + 1; j < windows.length; j++) if (overlap(a, windows[j]!)) pairs.push(`${titles[i]}/${titles[j]}`);
+  }
+  expect(pairs, JSON.stringify(windows)).toEqual([]);
+  // Hardware and Memory in the room at the right; the Hardware displays, lamps and switches seen.
+  expect((await whatIsSeen(app)).devices).toBe(100);
+});
+
+test('P9.9 point 4: the room kept for the windows shrinks to the columns that still hold one, when a drag ends; a reload keeps it; Reset Layout clears it', async ({
+  app,
+}) => {
+  test.setTimeout(240_000);
+  await app.page.setViewportSize({ width: 1920, height: 1080 });
+  await simulatorWithTools(app, true);
+  await chooseLayout(app, 'Floating Tools');
+  await expect.poll(() => floatingWindows(app)).toEqual(['Hardware', 'Memory']);
+  const dock = await dockBox(app);
+  const right = dock.x + dock.width;
+  const hardware = await windowBox(app, 'Hardware');
+  const memory = await windowBox(app, 'Memory');
+  const outputRight = async () => (await regionBox(app, 'output'))!.right;
+  expect(near(await outputRight(), memory.x, 2), 'the docked panels end where the windows begin').toBe(true);
+  // Memory dragged out to the left: while the button is down nothing docked moves.
+  const from = await titlePoint(app, 'Memory');
+  const mouse = app.page.mouse;
+  await mouse.move(from.x, from.y);
+  await mouse.down();
+  await mouse.move(from.x - 600, from.y - 100, { steps: 6 });
+  await mouse.move(from.x - (memory.x - dock.x) + 20, from.y - 100, { steps: 6 });
+  expect(near(await outputRight(), memory.x, 2), 'nothing jumps while a window is dragged').toBe(true);
+  await mouse.up();
+  await expect
+    .poll(outputRight, { message: 'the room shrinks to the Hardware column when the drag ends' })
+    .toBeGreaterThanOrEqual(hardware.x - 2);
+  expect(near(await outputRight(), hardware.x, 2)).toBe(true);
+  // A reload keeps what was there.
+  const kept = await outputRight();
+  await reopen(app);
+  await switchMode(app, 'Simulator');
+  await expect.poll(outputRight).toBe(kept);
+  await expect(floatingTitle(app, 'Hardware'), 'the Hardware window is drawn after the reload').toBeVisible();
+  await expect.poll(() => screenBox(floatingTitle(app, 'Hardware'))).not.toBeNull();
+  // Hardware dragged down and to the left as well: no window in the room; no empty strip is left.
+  await dragBy(app, await titlePoint(app, 'Hardware'), -(hardware.x - dock.x) + 300, 40);
+  await expect.poll(outputRight, { message: 'the docked panels take the whole dock' }).toBe(right);
+  // Floating Tools again keeps a room; Reset Layout clears it and docks every window.
+  await chooseLayout(app, 'Floating Tools');
+  await expect.poll(outputRight).toBeLessThan(right - 100);
+  await app.chooseMenu('View', 'Reset Layout');
+  await expect.poll(() => floatingWindows(app)).toEqual([]);
+  await expect.poll(outputRight).toBe(right);
+});
 
 test('P9.8 point 3: a double click on a tab floats its panel, on a title bar docks it, and the Float button of a strip floats its selected panel, all locked', async ({
   app,
