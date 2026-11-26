@@ -3406,6 +3406,32 @@ async function floatingPass(browser, name) {
   await page.keyboard.press('Escape');
   await settle(page);
   check(`${p} Size: Esc restores the size`, same(await floatBox(page, 'hardware'), box));
+  // The same menu opened with a right click and Move chosen with the mouse (closing pass of 1.1: the
+  // press on the menu item used to reach the title bar through React's portal and Move never began).
+  await page.locator('[data-e68-float-title="hardware"]').click({ button: 'right' });
+  await page.locator('[role=menu] [role^=menuitem]', { hasText: 'Move' }).first().click();
+  await settle(page);
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await settle(page);
+  after = await floatBox(page, 'hardware');
+  check(
+    `${p} Move chosen with the mouse from the right-click menu: the arrows move it`,
+    after.x === box.x + 16 && after.y === box.y,
+    JSON.stringify({ box, after }),
+  );
+  await page.locator('[data-e68-float-title="hardware"]').click({ button: 'right' });
+  await page.locator('[role=menu] [role^=menuitem]', { hasText: 'Size' }).first().click();
+  await settle(page);
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await settle(page);
+  const sizedByMouse = await floatBox(page, 'hardware');
+  check(
+    `${p} Size chosen with the mouse: the arrows size it`,
+    sizedByMouse.height === after.height + 16 && sizedByMouse.x === after.x,
+    JSON.stringify({ after, sizedByMouse }),
+  );
 
   // A second window: cascaded from the first; the order of Tab and reading is the float order.
   await tabMenu(page, 'simulator', 'memory', 'Float');

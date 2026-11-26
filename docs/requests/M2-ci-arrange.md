@@ -1,6 +1,8 @@
 # Request of M2 (version 1.1): run check-arrange in CI
 
-Status: open (for the gate's configuration engineer; M2 does not edit `.github/workflows/ci.yml`).
+Status: done in the closing pass of version 1.1 (NI, 26 November 2026): items 1 to 5 are in
+`.github/workflows/ci.yml` as written here (step limit 20 minutes); `tests/lint/ci-workflow.test.ts`
+passes and actionlint 1.7.12 reports nothing (erratum NI entry 2).
 
 `app/src/features/layout/check-arrange.mjs` (root script `check:arrange`, already in the root
 `package.json`) is the browser check of ARCHITECTURE-PLUS P9.3 and P9.4. Until `ci.yml` names it,

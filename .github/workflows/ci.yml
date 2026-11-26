@@ -52,6 +52,8 @@
 #       status        app/src/ui/editor/check-status.mjs                 N8
 #       additions     app/src/features/additions/check-additions.mjs     N7
 #       frame_policy  tools/check-frame-policy.mjs                       N0
+#     version 1.1, arranging panels freely (ARCHITECTURE-PLUS P9; branch arrange):
+#       arrange       app/src/features/layout/check-arrange.mjs          M2
 #   check: packaging unit tests  tests/desktop/packaged/playwright.config.ts (project unit, DV3)
 #   check: documents           tools/check-docs.test.mjs            (npm run check:docs, DOC1)
 #   check: guide texts         tools/check-guide-strings.mjs        (npm run check:guide, N10)
@@ -179,6 +181,7 @@ jobs:
       status: ${{ steps.guards.outputs.status }}
       additions: ${{ steps.guards.outputs.additions }}
       frame_policy: ${{ steps.guards.outputs.frame_policy }}
+      arrange: ${{ steps.guards.outputs.arrange }}
       e2e_stability: ${{ steps.guards.outputs.e2e_stability }}
       perf: ${{ steps.guards.outputs.perf }}
       perf_full: ${{ steps.guards.outputs.perf_full }}
@@ -256,6 +259,7 @@ jobs:
             status          app/src/ui/editor/check-status.mjs
             additions       app/src/features/additions/check-additions.mjs
             frame_policy    tools/check-frame-policy.mjs
+            arrange         app/src/features/layout/check-arrange.mjs
           '
           check_names=""
           browser_checks=false
@@ -1037,9 +1041,13 @@ jobs:
         timeout-minutes: 15
         run: npm run check:assemble
       # The stage of additions (ARCHITECTURE-PLUS P5), group `interface`: none needs engine/dist.
+      # check:dock grew with version 1.1's pass `floating` (642 checks in 1.0.0, 808 now): 407 s
+      # became 688 s on the development PC (both browsers, one at a time). On GitHub 1.0.0's step
+      # took 8.5 min on macOS (run 45718196506), so about 14.5 min are expected there: the step gets
+      # 30 minutes (the interface job, 28 min on macOS in that run, stays inside its 60).
       - name: Dock layout check (N1)
         if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.dock == 'true' }}
-        timeout-minutes: 15
+        timeout-minutes: 30
         run: npm run check:dock
       - name: Viewer check (N6)
         if: ${{ !cancelled() && matrix.group == 'interface' && needs.plan.outputs.viewer == 'true' }}
@@ -1129,6 +1137,14 @@ jobs:
         if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.desktop_devices == 'true' && needs.engines.outputs.available == 'asm sim' }}
         timeout-minutes: 15
         run: npm run check:desktop-devices
+      # Version 1.1 (ARCHITECTURE-PLUS P9.3, P9.4; docs/requests/M2-ci-arrange.md), group `simulator`:
+      # the button Arrange Panels, the tip and the four arrangements of View > Layouts. Its pass
+      # `program` runs a 68000 program, so it needs both engines. About 2 minutes for both browsers
+      # on the development PC.
+      - name: Arrange check (M2)
+        if: ${{ !cancelled() && matrix.group == 'simulator' && needs.plan.outputs.arrange == 'true' && needs.engines.outputs.available == 'asm sim' }}
+        timeout-minutes: 20
+        run: npm run check:arrange
       # Group `accessibility`: the audit of Q1 (2.9-2.11, 6.9 item 8; docs/requests/Q1-a11y-ci.md), one
       # browser per step. Known application defects are entered in docs/integration/rc.md and
       # tests/a11y/lib/findings.mjs and print "known" without failing; I3 gates on that list, not on
@@ -1217,6 +1233,8 @@ jobs:
             build/DV4/desktop-devices-check/
             build/Q1/a11y-check/
             build/dock-check/
+            build/arrange-check/
+            !build/arrange-check/vite-cache/
             build/history-check/
             build/history-ui-check/
             build/viewer-check/

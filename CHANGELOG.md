@@ -31,6 +31,12 @@ explains it all; the differences are in parts M1 and M2 of `docs/DIFFERENCES.md`
 - **Ready-made layouts** for the Simulator, in `View > Layouts`: `Classic`, `Wide Output`, `Output
   and Hardware Side by Side` and `Floating Tools` (every tool panel in a window of its own, as in the
   original).
+- **Panels in a small place.** The Hardware panel, the registers and the Memory panel scroll inside
+  themselves when they get less room than they need (a low or narrow region, a small floating
+  window), so that every control can be reached with the mouse, the wheel and the keyboard; a
+  Memory row keeps its sixteen bytes and scrolls sideways. Where they fit, they look as in 1.0.0.
+- In a narrow window the caption of `Arrange Panels` is shortened inside its frame; the original's
+  toolbar buttons keep their places.
 - The `Import...` menu of the Files panel closes when you click anywhere else (found by the owner in
   1.0.0).
 

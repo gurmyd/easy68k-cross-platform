@@ -15,10 +15,9 @@ import { useId, type CSSProperties } from 'react';
 import { Box } from '../../contracts';
 import { useAppContext, useAppState } from '../../state/context';
 import { useStoreValue } from '../../state/store';
-import { Button, MaskedField, REGISTER_FIELD, SR_FIELD } from '../../ui/components';
+import { Button, MaskedField, REGISTER_FIELD, SR_FIELD, revealInArea } from '../../ui/components';
 import { beep } from './beep';
 import { ADDRESS_BOXES, simMainOf } from './model';
-import { revealInArea } from './reveal';
 
 /** Caption of the label above the SR field; its 16 characters line up with the 16 bits (sim-ui §4.1). */
 export const SR_FLAGS_CAPTION = 'T S  INT   XNZVC';
@@ -130,7 +129,7 @@ export function RegistersPanel() {
     />
   );
   // The panel's own scroll area (version 1.1): a region narrower or shorter than the fields scrolls,
-  // and a field that gets the focus is brought into view by the area's own offsets (reveal.ts).
+  // and a field that gets the focus is brought into view by the area's own offsets (revealInArea of the component kit).
   return (
     <div
       className="e68-regs-scroll"

@@ -1,4 +1,5 @@
-// revealScroll: a focused control is brought into view by the panel's own scroll area (version 1.1).
+// revealScroll: a focused control is brought into view by a panel's own scroll area (version 1.1;
+// used by the Hardware panel, the registers and the Memory panel). Owner: W2.
 
 import { describe, expect, it } from 'vitest';
 import { revealScroll } from './reveal';

@@ -83,6 +83,12 @@ export interface DockLayouts {
 export interface PlusSettings {
   viewer: boolean; // default true (P3.4)
   history: boolean; // default true (P3.3)
+  /**
+   * Version 1.1 (ARCHITECTURE-PLUS P9.3): true once `Arrange Panels` or `Got it` of the tip about
+   * arranging the panels was pressed in this browser profile; absent (or anything but true): not
+   * answered. Validated where it is read (core/plus/settings.ts arrangeTipAnswered).
+   */
+  arrangeTipAnswered?: boolean;
 }
 
 export interface AppSettings {

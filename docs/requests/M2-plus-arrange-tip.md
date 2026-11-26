@@ -1,6 +1,8 @@
 # M2: an optional member of `PlusSettings` for the tip of P9.3
 
-Status: open (filed by M2, version 1.1, 25 November 2026).
+Status: done in the closing pass of version 1.1 (NI, 26 November 2026): the member is in
+`PlusSettings`, `contracts.test.ts` lists it, and `StoredPlus` in `core/plus/settings.ts` is now
+`PlusSettings` (erratum NI entry 2). Filed by M2, version 1.1, 25 November 2026.
 
 To: the gate's contracts engineer (`app/src/contracts`).
 

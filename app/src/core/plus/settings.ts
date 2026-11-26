@@ -14,10 +14,10 @@ export const PLUS_DEFAULTS: Readonly<PlusSettings> = Object.freeze({ viewer: tru
  * AppSettings.plus as it may be stored since version 1.1: the two switches and the optional member
  * `arrangeTipAnswered` (true once `Arrange Panels` or `Got it` of the tip of P9.3 was pressed in
  * this browser profile; absent or anything but true: not answered). Like every setting but the
- * layout it is shared by every window of the profile at once (errata W3 16). The member is not in
- * the contracts' PlusSettings yet (docs/requests/M2-plus-arrange-tip.md).
+ * layout it is shared by every window of the profile at once (errata W3 16). The member is in the
+ * contracts' PlusSettings since version 1.1 (docs/requests/M2-plus-arrange-tip.md, applied).
  */
-export type StoredPlus = PlusSettings & { arrangeTipAnswered?: boolean };
+export type StoredPlus = PlusSettings;
 
 /** What is stored as app.plus when it is an object, else null. */
 function storedPlus(settings: Pick<Settings, 'app'>): Record<string, unknown> | null {
@@ -31,7 +31,7 @@ function storedPlus(settings: Pick<Settings, 'app'>): Record<string, unknown> | 
 /** The two switches as stored, each one the default unless it is a boolean. */
 export function readPlus(settings: Pick<Settings, 'app'>): PlusSettings {
   const stored = storedPlus(settings);
-  const value = (key: keyof PlusSettings): boolean => {
+  const value = (key: 'viewer' | 'history'): boolean => {
     const field = stored?.[key];
     return typeof field === 'boolean' ? field : PLUS_DEFAULTS[key];
   };

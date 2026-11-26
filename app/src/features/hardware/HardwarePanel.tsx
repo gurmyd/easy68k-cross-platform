@@ -26,6 +26,7 @@ import {
   MaskedField,
   Select,
   parseMaskedText,
+  revealInArea,
   type MaskedConfig,
 } from '../../ui/components';
 import { useAppContext } from '../../state/context';
@@ -47,7 +48,6 @@ import {
   ledLeft,
   lit,
   pressesButton,
-  revealScroll,
   syncFieldText,
   viewSignature,
   type DeviceRow,
@@ -192,27 +192,11 @@ export function HardwarePanel() {
 
 /**
  * A control that gets the focus is scrolled into view inside the panel's own scroll area (the
- * panel's region is smaller than what it holds: docked low or floating small). The area itself is
- * scrolled, never `scrollIntoView`, which would also move the page's starting point for the Tab key
- * in Chromium (errata N1 26) and could scroll the dock's own boxes.
+ * panel's region is smaller than what it holds: docked low or floating small), by the kit's
+ * revealInArea: the area itself is scrolled, never `scrollIntoView` (errata N1 26).
  */
 function revealFocused(event: FocusEvent<HTMLDivElement>): void {
-  const area = event.currentTarget;
-  const target = event.target;
-  if (target === area || !(target instanceof Element)) return;
-  const box = area.getBoundingClientRect();
-  const next = revealScroll(
-    {
-      top: box.top + area.clientTop,
-      left: box.left + area.clientLeft,
-      width: area.clientWidth,
-      height: area.clientHeight,
-    },
-    { top: area.scrollTop, left: area.scrollLeft },
-    target.getBoundingClientRect(),
-  );
-  if (next.top !== area.scrollTop) area.scrollTop = next.top;
-  if (next.left !== area.scrollLeft) area.scrollLeft = next.left;
+  revealInArea(event.currentTarget, event.target);
 }
 
 /* ------------------------------------------------------------------ row 1: 7-segment display */

@@ -1,6 +1,10 @@
 # M1 asks the contracts engineer: the stored floating windows in `DockLayouts`
 
-Status: open (version 1.1, ARCHITECTURE-PLUS P9.2 Persistence).
+Status: open, not applied in version 1.1 (decided in the closing pass, erratum NI entry 2). The
+shape below is out of date: since M1's repair after its second verification a stored window also
+has `place` and a mode has `origin` (`ui/dock/floating.ts`). Nothing depends on the contract having
+it: `ui/dock/stored.ts` validates everything it reads. Whoever applies it copies the types from
+`ui/dock/floating.ts` as they are then. (Version 1.1, ARCHITECTURE-PLUS P9.2 Persistence.)
 
 P9.2: "The floating windows of a mode, with place, size and order, are part of the stored
 arrangement of P3.1.6". The stored arrangement is `AppSettings.app.layout.dock: DockLayouts`

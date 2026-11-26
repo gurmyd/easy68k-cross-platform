@@ -288,7 +288,12 @@ Simulator (EASyBIN has only one panel).
   Panels** is pressed while the layout is unlocked (**View > Lock Layout** unchecked, in the Editor
   **Window > Lock Layout**): then every group of panels shows its tabs, and a tab can be dragged.
   Press it again to lock the layout. With the layout unlocked, a tab dropped outside the panels (on
-  the menus, the toolbar or the status bar) makes its panel float there.
+  the menus, the toolbar or the status bar) makes its panel float there. In a narrow window its
+  caption is cut short with an ellipsis; its tool tip still gives it whole.
+- *A panel in a small place.* The Hardware panel, the registers and the Memory panel scroll inside
+  themselves when they get less room than they need: docked low, in a narrow column or in a small
+  floating window. The wheel and the scroll bars reach every control, and a control that gets the
+  keyboard is scrolled into view. A Memory row keeps its sixteen bytes and scrolls sideways.
 - *Ready-made layouts* (Simulator only): **View > Layouts** has four entries. **Classic** is the
   original's arrangement (what Reset Layout gives). **Wide Output** gives the Output panel the whole
   height of the right column and puts the tool panels (Memory, Stack, Hardware, Break Points, Log) as

@@ -12,6 +12,11 @@
 //             and keyboard), Lock Layout in the menu, a reload and a second window opened later all
 //             agree; its pressed state is in the accessibility tree; its tool-tip names the mode's
 //             menu (View, Window); the toolbar stays one Tab stop
+//   narrow    at 1366, 1024, 800, 600 and 500 px, in the Editor and the Simulator: every button of
+//             1.0.0's row (the toolbar without the added separator and button) has the box it has
+//             without them, Arrange Panels covers no other control and its caption stays inside its
+//             frame (cut with an ellipsis where the row is too narrow), and where 1.0.0's row left
+//             room the row does not overflow; a screenshot of each toolbar
 //   tip       a driven browser sees no tip unless the address carries arrange-tip=1; with it: the tip
 //             comes when the Simulator is shown, not in the Editor, not while a program runs (it
 //             comes back when the program stops), takes no focus, is a polite live region, covers
@@ -60,7 +65,7 @@ if (args.includes('--help') || args.includes('-h')) {
       '  --browser  the browsers to drive (default: all)',
       '  --out      where screenshots, proportions.json and the Vite cache go',
       '             (default: build/arrange-check of the repository, git-ignored)',
-      '  --only     run only these passes: button, tip, layouts, program, menus, dialog',
+      '  --only     run only these passes: button, narrow, tip, layouts, program, menus, dialog',
     ].join('\n'),
   );
   process.exit(0);
@@ -438,6 +443,120 @@ async function buttonPass(browser, name) {
   finish(`${p} second window`, second.errors);
   finish(`${p} button`, errors);
   await closeWithin(context);
+}
+
+// --- pass: narrow -----------------------------------------------------------------------------
+
+/** The window widths at which the toolbar is checked (the closing pass of version 1.1). */
+const NARROW_WIDTHS = [1366, 1024, 800, 600, 500];
+
+/**
+ * The toolbar's items in the page: every button, separator and the LOGGING label, with its box
+ * (CSS px, two decimals), and the Arrange Panels button's caption box. With `without` the button
+ * and the separator before it are taken out of the row (display: none on the toolbar's children
+ * that hold them) before measuring, which is the row 1.0.0 draws: version 1.1 adds exactly those
+ * two items to it (toolbars.ts), so the original's buttons must have the same boxes either way.
+ */
+function measureToolbar(page, without) {
+  return page.evaluate(async (hide) => {
+    const root = document.querySelector('.e68-shell__toolbar');
+    const button = root.querySelector('button[data-command="app.layout.lock"]');
+    let holder = button;
+    while (holder.parentElement !== root) holder = holder.parentElement;
+    const separator = holder.previousElementSibling;
+    for (const element of [holder, separator]) element.style.display = hide ? 'none' : '';
+    await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+    const box = (element) => {
+      const r = element.getBoundingClientRect();
+      const round = (v) => Math.round(v * 100) / 100;
+      return { left: round(r.left), top: round(r.top), right: round(r.right), bottom: round(r.bottom) };
+    };
+    const items = Array.from(root.querySelectorAll('button, [role=separator], .e68-shell__logging'))
+      .filter((element) => element.getClientRects().length > 0)
+      .map((element) => ({
+        id: element.matches('[role=separator]')
+          ? '|'
+          : element.matches('.e68-shell__logging')
+            ? 'logging'
+            : (element.getAttribute('data-command') ?? element.getAttribute('aria-label') ?? '?'),
+        box: box(element),
+      }));
+    const caption = button.querySelector('.e68-button__caption');
+    const result = {
+      items,
+      arrange: hide ? null : box(button),
+      caption: hide || !caption ? null : box(caption),
+      captionCut: hide || !caption ? false : caption.scrollWidth > caption.clientWidth + 0.5,
+      toolbar: { client: root.clientWidth, scroll: root.scrollWidth },
+      // The free room of the row: what its spacer takes (zero where the row is full).
+      room: Math.round(root.querySelector('.e68-toolbar__spacer')?.getBoundingClientRect().width ?? 0),
+      page: { client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth },
+    };
+    for (const element of [holder, separator]) element.style.display = '';
+    return result;
+  }, without);
+}
+
+const overlaps = (a, b) =>
+  a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+const inside = (a, b) =>
+  a.left >= b.left - 0.5 && a.right <= b.right + 0.5 && a.top >= b.top - 0.5 && a.bottom <= b.bottom + 0.5;
+
+async function narrowPass(browser, name) {
+  const p = `${name}:`;
+  for (const width of NARROW_WIDTHS) {
+    const context = await newContext(browser, { width, height: 700 });
+    const { page, errors } = await openApp(context);
+    for (const mode of ['editor', 'simulator']) {
+      await setMode(page, mode);
+      await settle(page);
+      const before = await measureToolbar(page, true);
+      const now = await measureToolbar(page, false);
+      const at = `${p} ${width} px, ${mode}:`;
+      // The original's buttons (everything before the added separator) keep their boxes (P1.1).
+      const added = now.items.findIndex((item) => item.id === 'app.layout.lock');
+      const was = before.items.slice(0, added - 1);
+      const is = now.items.slice(0, added - 1);
+      check(
+        `${at} every button of 1.0.0's row is where 1.0.0 draws it`,
+        same(was, is),
+        same(was, is) ? `${was.length} items` : JSON.stringify({ was, is }).slice(0, 600),
+      );
+      // The caption is drawn inside the button's frame, and the frame over no other control.
+      const others = now.items.filter((item) => item.id !== 'app.layout.lock');
+      const hit = others.filter((item) => overlaps(item.box, now.arrange)).map((item) => item.id);
+      check(
+        `${at} Arrange Panels covers no other control and its caption stays inside its frame`,
+        hit.length === 0 && now.caption !== null && inside(now.caption, now.arrange),
+        JSON.stringify({ hit, arrange: now.arrange, caption: now.caption }),
+      );
+      check(
+        `${at} the button is at least as wide as an icon button`,
+        now.arrange.right - now.arrange.left >= 27.5,
+        JSON.stringify(now.arrange),
+      );
+      // Where 1.0.0's row fitted with room for the addition at its smallest, nothing overflows.
+      const room = before.room - Math.max(0, before.toolbar.scroll - before.toolbar.client);
+      if (room >= 40) {
+        check(
+          `${at} the row fits (1.0.0 left ${room} px)`,
+          now.toolbar.scroll <= now.toolbar.client && now.page.scroll <= now.page.client,
+          JSON.stringify({ toolbar: now.toolbar, page: now.page }),
+        );
+      } else {
+        note(
+          `${at} 1.0.0's row already fills the toolbar (room ${room} px); toolbar ${JSON.stringify(now.toolbar)}, caption cut ${now.captionCut}`,
+        );
+      }
+      if (now.captionCut)
+        note(`${at} the caption is cut with an ellipsis (${Math.round(now.arrange.right - now.arrange.left)} px)`);
+      await page
+        .locator('.e68-shell__toolbar')
+        .screenshot({ path: join(outDir, 'shots', `${name}-toolbar-${mode}-${width}.png`) });
+    }
+    finish(`${p} ${width} px narrow`, errors);
+    await closeWithin(context);
+  }
 }
 
 // --- pass: tip --------------------------------------------------------------------------------
@@ -1026,6 +1145,7 @@ async function dialogPass(browser, name) {
 
 const PASSES = {
   button: buttonPass,
+  narrow: narrowPass,
   tip: tipPass,
   layouts: layoutsPass,
   program: programPass,

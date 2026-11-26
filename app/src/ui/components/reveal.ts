@@ -1,16 +1,18 @@
-// Bringing a focused field into view inside the Registers panel's own scroll area (version 1.1,
-// erratum U1 12). Owner: U1.
+// Bringing a focused control into view inside a panel's own scroll area. Owner: W2 (the kit).
+// Version 1.1: the Hardware panel (SH7), the registers (U1) and the Memory panel (U2) scroll inside
+// their own areas when their region is smaller than what they hold (a short or narrow region, a
+// small floating window; errata SH7 10, U1 12, U2 S7). Each had the same copy of this helper, since
+// one feature does not import another; the closing pass of version 1.1 moved it here (erratum NI entry 4).
 //
-// When the panel's region is smaller than the register grid (a narrow left column, a small
-// floating window), the area scrolls; a field that gets the focus is shown by setting the area's
-// own scroll offsets. Never `scrollIntoView`: in Chromium it moves the page's starting point for
-// the Tab key (errata N1 26), and it could scroll the dock's own boxes.
+// A control that gets the focus is shown by setting the area's own scroll offsets. Never
+// `scrollIntoView`: in Chromium it moves the page's starting point for the Tab key (errata N1 26),
+// and it could scroll the dock's own boxes.
 //
 //   revealScroll(view, scroll, target, margin?)   the offsets that show `target` (pure)
 //   revealInArea(area, target)                    applies them to `area`
 
 /** A box in the page's coordinates (getBoundingClientRect). */
-export interface Box {
+export interface RevealBox {
   top: number;
   left: number;
   width: number;
@@ -23,9 +25,9 @@ export interface Box {
  * larger than the view shows its top and left edge.
  */
 export function revealScroll(
-  view: Box,
+  view: RevealBox,
   scroll: { top: number; left: number },
-  target: Box,
+  target: RevealBox,
   margin = 4,
 ): { top: number; left: number } {
   const axis = (start: number, size: number, viewStart: number, viewSize: number, current: number): number => {
@@ -45,8 +47,8 @@ export function revealScroll(
 }
 
 /** Scrolls `area` (and nothing else) so that `target`, an element inside it, is in view. */
-export function revealInArea(area: HTMLElement, target: Element): void {
-  if (target === area || !area.contains(target)) return;
+export function revealInArea(area: HTMLElement, target: EventTarget | null): void {
+  if (target === area || !(target instanceof Element) || !area.contains(target)) return;
   const box = area.getBoundingClientRect();
   const next = revealScroll(
     {

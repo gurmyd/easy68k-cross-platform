@@ -168,8 +168,16 @@ export function FloatTitleBar({ ctx, engine, view }: { ctx: AppContext; engine: 
     }
   };
 
+  /**
+   * React passes the events of the title bar's menu (a portal) up to the bar as well; they are the
+   * menu's, not a press on the bar. Before the closing pass of version 1.1 a press on the menu's
+   * Move or Size captured the pointer for the bar, and the item's click never started Move or Size.
+   */
+  const fromBar = (event: { currentTarget: Element; target: EventTarget }) =>
+    event.target instanceof Node && event.currentTarget.contains(event.target);
+
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || !fromBar(event)) return;
     const rect = engine.shownRect(view.panel);
     if (!rect) return;
     const button = (event.target as Element).closest('button');
@@ -244,6 +252,7 @@ export function FloatTitleBar({ ctx, engine, view }: { ctx: AppContext; engine: 
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
       onContextMenu={(event) => {
+        if (!fromBar(event)) return;
         event.preventDefault();
         openMenu(event.clientX, event.clientY);
       }}

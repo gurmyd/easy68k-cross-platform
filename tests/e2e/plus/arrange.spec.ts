@@ -88,6 +88,28 @@ async function windowBox(app: App, title: string): Promise<ScreenBox> {
   return box!;
 }
 
+/**
+ * P9.4 Floating Tools, as built (erratum M2 entry 4): each tool panel's window at its own default
+ * size, title bar included (Hardware 540 by 640, Memory 640 by 360, Stack 300 by 360), the n-th of
+ * the cascade n steps of 24 pixels in from the dock's top right corner. A window is made smaller
+ * only where the dock is too small for it, never below 160 by 96. Within one pixel, because the dock
+ * may lie at a fraction of a pixel.
+ */
+const TOOL_WINDOW = {
+  Hardware: { width: 540, height: 640 },
+  Memory: { width: 640, height: 360 },
+  Stack: { width: 300, height: 360 },
+} as const;
+const CASCADE_STEP = 24;
+function expectInCascade(seen: ScreenBox, dock: ScreenBox, name: keyof typeof TOOL_WINDOW, place: number): void {
+  const step = CASCADE_STEP * place;
+  const width = Math.max(MIN.width, Math.min(TOOL_WINDOW[name].width, dock.width - 2 * step));
+  const height = Math.max(MIN.height, Math.min(TOOL_WINDOW[name].height, dock.height - step));
+  const want = { x: dock.x + dock.width - step - width, y: dock.y + step, width, height };
+  const off = (Object.keys(want) as (keyof ScreenBox)[]).filter((key) => !near(seen[key], want[key]));
+  expect(off, `${name}'s window, place ${place} of the cascade: ${JSON.stringify({ seen, want, dock })}`).toEqual([]);
+}
+
 /** Polls a floating window's box until it equals `want`. */
 async function expectWindowAt(app: App, title: string, want: ScreenBox, message: string): Promise<void> {
   await expect.poll(() => screenBox(floatingWindow(app, title)), { message }).toEqual(want);
@@ -454,7 +476,9 @@ for (const locked of [true, false]) {
 
     await test.step('Floating Tools: registers, listing, messages and Output as Classic; every tool panel shown floats, cascaded from the top right', async () => {
       await after('Floating Tools');
-      await expect.poll(() => floatingWindows(app)).toEqual(['Memory', 'Hardware']);
+      // In the order of the cascade (erratum M2 entry 4): Hardware first, then Memory; Stack, Break
+      // Points and Log keep their places in it while hidden.
+      await expect.poll(() => floatingWindows(app)).toEqual(['Hardware', 'Memory']);
       const b = await boxes(app, ['registers', 'listing', 'messages', 'output']);
       const same = (x: Box, y: Box) =>
         near(x.left, y.left) && near(x.right, y.right) && near(x.top, y.top) && near(x.bottom, y.bottom);
@@ -473,30 +497,21 @@ for (const locked of [true, false]) {
         ],
         JSON.stringify({ now: b, classic }),
       ).toEqual([]);
-      const memory = await windowBox(app, 'Memory');
-      const hardware = await windowBox(app, 'Hardware');
-      for (const [name, w] of [
-        ['Memory', memory],
-        ['Hardware', hardware],
+      // The cascade (P9.4 "cascaded from the top right, at its default size"; erratum M2 entry 4): the
+      // n-th tool panel of the cascade (Hardware 1, Memory 2, Stack 3) lies n steps of 24 pixels in
+      // from the dock's top right corner, at its own default size, made smaller only where the dock
+      // is too small for it. So every window is inside the dock and every title bar can be reached.
+      for (const [name, place] of [
+        ['Hardware', 1],
+        ['Memory', 2],
       ] as const) {
-        expect(w.x + w.width, `${name}'s window inside the right edge`).toBeLessThanOrEqual(right);
-        expect(right - (w.x + w.width), `${name}'s window cascaded from the right edge`).toBeLessThanOrEqual(5 * 24);
-        expect(w.y - dock.y, `${name}'s window cascaded from the top`).toBeLessThanOrEqual(5 * 24);
-        expect(w.y).toBeGreaterThanOrEqual(dock.y);
+        expectInCascade(await windowBox(app, name), dock, name, place);
       }
-      // The cascade: each next window further in, from the top right, at the same default size.
-      expect(
-        hardware.y,
-        `Hardware comes after Memory in the cascade (${JSON.stringify({ memory, hardware })})`,
-      ).toBeGreaterThan(memory.y);
-      expect(hardware.x + hardware.width).toBeLessThan(memory.x + memory.width);
-      expect((hardware.y - memory.y) % 24, 'steps of 24 pixels').toBe(0);
-      expect(hardware.width, 'the default size').toBe(memory.width);
-      expect(hardware.height, 'the default size').toBe(memory.height);
-      // A hidden panel shown later floats too (it was given its place, hidden).
+      // A hidden panel shown later floats too, in the place it was given while hidden.
       await view(app, 'Stack', 'stack');
       await expect(floatingWindow(app, 'Stack')).toBeVisible();
-      await expect.poll(() => floatingWindows(app)).toEqual(['Memory', 'Stack', 'Hardware']);
+      await expect.poll(() => floatingWindows(app)).toEqual(['Hardware', 'Memory', 'Stack']);
+      expectInCascade(await windowBox(app, 'Stack'), dock, 'Stack', 3);
       await floatingWindow(app, 'Stack').getByRole('button', { name: 'Close', exact: true }).click();
       await expect(floatingWindow(app, 'Stack')).toHaveCount(0);
       expect(await regionBox(app, 'stack')).toBeNull();
@@ -532,7 +547,7 @@ test('View > Layouts is in the Simulator only; Reset Layout docks every floating
   expect(editorWindow.map((entry) => entry.caption)).not.toContain('Layouts');
   await simulatorWithTools(app, true);
   await chooseLayout(app, 'Floating Tools');
-  await expect.poll(() => floatingWindows(app)).toEqual(['Memory', 'Hardware']);
+  await expect.poll(() => floatingWindows(app)).toEqual(['Hardware', 'Memory']);
   await app.chooseMenu('View', 'Reset Layout');
   await expect.poll(() => dockAnnouncement(app, 'simulator')).toBe(ANNOUNCE.reset);
   await expect.poll(() => floatingWindows(app)).toEqual([]);

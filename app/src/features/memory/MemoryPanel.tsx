@@ -18,10 +18,17 @@ import {
   type FocusEvent,
   type KeyboardEvent,
 } from 'react';
-import { ADDRESS_FIELD, Button, Checkbox, IconButton, MaskedField, type MaskedConfig } from '../../ui/components';
+import {
+  ADDRESS_FIELD,
+  Button,
+  Checkbox,
+  IconButton,
+  MaskedField,
+  revealInArea,
+  type MaskedConfig,
+} from '../../ui/components';
 import { useAppContext } from '../../state/context';
 import { memoryModelOf } from './model';
-import { revealInArea } from './reveal';
 import { COLUMN_HEADER, cellAddress, type MemoryRow } from './rules';
 import './memory.css';
 

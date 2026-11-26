@@ -153,7 +153,7 @@ needed.
   area's top left, which is where they started in the region (the area has no border or padding),
   and no scroll bar appears.
 - A control that gets the focus is scrolled into view by the area itself (`revealFocused`, the pure
-  rule `panel-logic.ts revealScroll`: the smallest scroll that shows it with 4 px around it; a
+  rule `revealScroll` (in `panel-logic.ts` until the closing pass of 1.1 moved it to `ui/components/reveal.ts`): the smallest scroll that shows it with 4 px around it; a
   control larger than the area shows its top left). Never `scrollIntoView`: in Chromium it moves the
   page's starting point for the Tab key (errata N1 26) and it could scroll the dock's own boxes.
   So the first address field, which gets the focus when the panel is shown or floats, is in view,
