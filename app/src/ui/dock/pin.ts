@@ -52,3 +52,37 @@ export function pinScroll(root: EventTarget & Scrollable): () => void {
   unscroll(root);
   return () => root.removeEventListener('scroll', onScroll, { capture: true });
 }
+
+/** What a person does that ends holdLeftEdge: a press, a key, the wheel, a touch. */
+export const PERSON_ACTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
+
+/**
+ * P9.8 point 1 (errata M1 entry 19): a window that an arrangement has just placed shows its content
+ * from its left edge until a person acts. While nobody has pressed, typed or turned the wheel, a
+ * sideways scroll inside such a window can only come from the page itself (the focus being put back
+ * on a field at the right of a window narrower than its content, which the panel then reveals; the
+ * browser's own reveal of that field's caret): it is put back from the scroll event, before the
+ * next frame is drawn. How long that takes on a machine does not matter, which a number of frames
+ * to wait would make it do. The first action of a person, anywhere in `root`, ends it: from then on
+ * the panel scrolls as every panel does, the reveal of a field reached with Tab included.
+ *
+ * `held` says whether an element lies in such a window; `onEnd` is called once when the hold ends.
+ * Returns the function that ends it (an action of a person calls the same).
+ */
+export function holdLeftEdge(root: EventTarget, held: (element: Scrollable) => boolean, onEnd: () => void): () => void {
+  let over = false;
+  const onScroll = (event: Event) => {
+    const target = event.target;
+    if (isScrollable(target) && target.scrollLeft !== 0 && held(target)) target.scrollLeft = 0;
+  };
+  const end = () => {
+    if (over) return;
+    over = true;
+    root.removeEventListener('scroll', onScroll, { capture: true });
+    for (const type of PERSON_ACTS) root.removeEventListener(type, end, { capture: true });
+    onEnd();
+  };
+  root.addEventListener('scroll', onScroll, { capture: true });
+  for (const type of PERSON_ACTS) root.addEventListener(type, end, { capture: true });
+  return end;
+}

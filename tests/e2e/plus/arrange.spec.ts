@@ -641,6 +641,30 @@ for (const size of [
       expect(seen.picture.left, 'at least the left 400 px of the Output picture are uncovered').toBeGreaterThanOrEqual(
         400,
       );
+      // The left edge is held by rule, not for a time (errata M1 entry 19; GitHub's Ubuntu runner
+      // put the focus back later than this PC does, run 45825817588): the page gives the focus to a
+      // field that the window cuts at its right, as the dock does after a move. The panel reveals
+      // the field at once; with no action of a person the window is back at its left edge.
+      const cut = await app.page.evaluate(() => {
+        const area = document.querySelector<HTMLElement>(
+          '[data-e68-workspace]:not([hidden]) [data-e68-panel="hardware"] [data-hw-scroll]',
+        )!;
+        const edge = area.getBoundingClientRect().left + area.clientLeft + area.clientWidth;
+        const field = Array.from(area.querySelectorAll<HTMLInputElement>('input')).find(
+          (input) => !input.disabled && input.tabIndex >= 0 && input.getBoundingClientRect().right > edge,
+        );
+        if (!field) return null;
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+        field.focus();
+        return { revealedBy: area.scrollLeft };
+      });
+      expect(cut, 'a field of the Hardware window is cut at its right edge').not.toBeNull();
+      expect(cut!.revealedBy, 'the panel reveals a field that gets the focus').toBeGreaterThan(0);
+      expect(await hardwareSideways(app), 'the focus put back by the page leaves the left edge shown').toBe(0);
+      // A person's key ends the hold: a field reached with Tab is revealed and stays revealed.
+      await app.page.keyboard.press('Shift+Tab');
+      await app.page.keyboard.press('Tab');
+      expect(await hardwareSideways(app), 'a field reached with Tab is revealed').toBeGreaterThan(0);
     }
   });
 }

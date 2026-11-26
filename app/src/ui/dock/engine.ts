@@ -72,7 +72,7 @@ import {
 } from './actions';
 import { Announcer } from './announce';
 import { keptRoom, tileWindows } from '../../state/tiling';
-import { pinScroll } from './pin';
+import { holdLeftEdge, pinScroll } from './pin';
 import {
   boundedRect,
   firstFloatRect,
@@ -217,11 +217,12 @@ export class DockEngine implements DockLive {
   /** Stops pinScroll on the dock's element (P9.9 point 1). */
   private unpin: (() => void) | null = null;
   /**
-   * The panels an arrangement has just made float (P9.4, P9.8 point 1): until their windows are
-   * laid out, the sideways scroll offsets they had where they were docked are not carried into the
-   * window (errata M1 entry 19).
+   * The panels an arrangement has just made float (P9.4, P9.8 point 1): until a person acts, their
+   * windows show their content from the left edge (errata M1 entry 19).
    */
   private placedAfresh = new Set<string>();
+  /** Ends the hold of those windows' left edges (pin.ts holdLeftEdge); null when none is held. */
+  private releasePlaced: (() => void) | null = null;
   private readonly changeListener = {
     onBeforeAction: (action: Action) => this.onBeforeAction(action),
     onAfterAction: (action: Action) => this.onAfterAction(action),
@@ -312,6 +313,7 @@ export class DockEngine implements DockLive {
     if (element === this.element) return;
     this.unpin?.();
     this.unpin = null;
+    this.releasePlaced?.();
     this.element = element;
     // P9.9 point 1: the dock never scrolls as a whole (dock.css `overflow: clip`; pin.ts elsewhere).
     if (element) this.unpin = pinScroll(element);
@@ -1104,27 +1106,42 @@ export class DockEngine implements DockLive {
    * person's action on it, shows its content from its left edge. The panel may have been scrolled
    * sideways where it was docked (a narrow column, where the focus revealed a field at its right);
    * that offset is not carried into the window (scrollPositions leaves it out while the panel is in
-   * `placedAfresh`), and once the window is laid out (two frames: the move's own layout, and the
-   * browser's reveal of a focused field's caret after it) every sideways offset inside it is put
-   * back to 0. Vertical offsets are the panel's own (the Log follows its end) and are kept.
+   * `placedAfresh`). The focus may be in a field at the right of a window that is narrower than its
+   * content (the Hardware window at 1366 by 768): when the focus is put back there after the move,
+   * the panel reveals the field, and WebKit reveals its caret. Both come some frames later, how
+   * many depends on the machine; so the left edge is held by rule and not for a time: until a person
+   * presses, types or turns the wheel, a sideways scroll inside these windows is put back from its
+   * scroll event (pin.ts holdLeftEdge). Vertical offsets are the panel's own (the Log follows its
+   * end) and are kept. The next arrangement and the dock's unmounting end the hold too.
    */
   private showFromLeft(panels: readonly string[]): void {
-    const view = this.element?.ownerDocument.defaultView;
-    if (panels.length === 0 || !view) return;
+    this.releasePlaced?.();
+    const owner = this.element?.ownerDocument;
+    const view = owner?.defaultView;
+    if (panels.length === 0 || !owner || !view) return;
     for (const panel of panels) this.placedAfresh.add(panel);
-    const unscrollSideways = () => {
-      for (const panel of panels) {
-        const window = this.element?.querySelector(`[id="flexlayout-tab-${tabIdOf(this.mode, panel)}"]`);
-        if (!window) continue;
-        for (const element of [window, ...Array.from(window.querySelectorAll('*'))]) {
-          if (element.scrollLeft !== 0) element.scrollLeft = 0;
-        }
-      }
-    };
+    const ids = new Set(panels.map((panel) => `flexlayout-tab-${tabIdOf(this.mode, panel)}`));
+    const release = holdLeftEdge(
+      owner,
+      (element) => element instanceof view.Element && ids.has(element.closest('.flexlayout__tab')?.id ?? ''),
+      () => {
+        for (const panel of panels) this.placedAfresh.delete(panel);
+        if (this.releasePlaced === release) this.releasePlaced = null;
+      },
+    );
+    this.releasePlaced = release;
+    // An offset that stays as it was through the move raises no scroll event: once the windows are
+    // laid out, what is still scrolled sideways inside them is put back directly.
     view.requestAnimationFrame(() =>
       view.requestAnimationFrame(() => {
-        unscrollSideways();
-        for (const panel of panels) this.placedAfresh.delete(panel);
+        if (this.releasePlaced !== release) return;
+        for (const id of ids) {
+          const window = this.element?.querySelector(`[id="${id}"]`);
+          if (!window) continue;
+          for (const element of [window, ...Array.from(window.querySelectorAll('*'))]) {
+            if (element.scrollLeft !== 0) element.scrollLeft = 0;
+          }
+        }
       }),
     );
   }

@@ -3,7 +3,7 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { PINNED_SELECTOR, pinScroll, unscroll, type Scrollable } from './pin';
+import { PERSON_ACTS, PINNED_SELECTOR, holdLeftEdge, pinScroll, unscroll, type Scrollable } from './pin';
 
 /** An element as pinScroll sees it: its offsets and the selectors it matches. */
 function element(matches: string[], left = 0, top = 0): Scrollable & EventTarget {
@@ -60,5 +60,82 @@ describe('pin.ts', () => {
       [...block.matchAll(/([^{}]+)\{\s*overflow: clip;\s*\}/g)].map((rule) => rule[1]!.trim()),
     );
     expect(clipped).toEqual(['.e68-dock', '.e68-dock .flexlayout__tab[data-e68-float]']);
+  });
+});
+
+describe('holdLeftEdge (errata M1 entry 19): a placed window shows its left edge until a person acts', () => {
+  /** A scroll event of `target` as `root` sees it on the way down. */
+  const scrollOf = (root: EventTarget, target: Scrollable) => {
+    const event = new Event('scroll');
+    Object.defineProperty(event, 'target', { value: target });
+    root.dispatchEvent(event);
+  };
+
+  it('puts a sideways scroll inside a held window back, whenever it comes, and leaves the rest', () => {
+    const page = new EventTarget();
+    const area = element(['.e68-hw-scroll'], 0, 0);
+    const other = element(['.e68-memory__rows'], 0, 0);
+    let ended = 0;
+    holdLeftEdge(
+      page,
+      (target) => target === area,
+      () => ended++,
+    );
+    // The focus is put back on a field at the right, some frames later: the panel reveals it.
+    area.scrollLeft = 30;
+    scrollOf(page, area);
+    expect(area.scrollLeft).toBe(0);
+    // Later still (a slow machine), and again: the same.
+    area.scrollLeft = 34;
+    scrollOf(page, area);
+    expect(area.scrollLeft).toBe(0);
+    // Up and down is the panel's own (the Log follows its end): kept.
+    area.scrollTop = 120;
+    scrollOf(page, area);
+    expect([area.scrollLeft, area.scrollTop]).toEqual([0, 120]);
+    // A window that floated already, or a docked panel: not held.
+    other.scrollLeft = 80;
+    scrollOf(page, other);
+    expect(other.scrollLeft).toBe(80);
+    expect(ended).toBe(0);
+  });
+
+  it('ends with the first action of a person, once; the panel then scrolls as every panel does', () => {
+    expect([...PERSON_ACTS]).toEqual(['pointerdown', 'keydown', 'wheel', 'touchstart']);
+    for (const act of PERSON_ACTS) {
+      const page = new EventTarget();
+      const area = element(['.e68-hw-scroll'], 0, 0);
+      let ended = 0;
+      holdLeftEdge(
+        page,
+        () => true,
+        () => ended++,
+      );
+      page.dispatchEvent(new Event(act));
+      page.dispatchEvent(new Event(act));
+      expect(ended, act).toBe(1);
+      // Tab went to the field at the right and the panel revealed it: it stays revealed.
+      area.scrollLeft = 30;
+      scrollOf(page, area);
+      expect(area.scrollLeft, act).toBe(30);
+    }
+  });
+
+  it('is ended by its own function too (the next arrangement, the dock going away), once', () => {
+    const page = new EventTarget();
+    const area = element(['.e68-hw-scroll'], 0, 0);
+    let ended = 0;
+    const end = holdLeftEdge(
+      page,
+      () => true,
+      () => ended++,
+    );
+    end();
+    end();
+    page.dispatchEvent(new Event('keydown'));
+    expect(ended).toBe(1);
+    area.scrollLeft = 12;
+    scrollOf(page, area);
+    expect(area.scrollLeft).toBe(12);
   });
 });
