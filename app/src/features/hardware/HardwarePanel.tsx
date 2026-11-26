@@ -47,6 +47,7 @@ import {
   ledLeft,
   lit,
   pressesButton,
+  revealScroll,
   syncFieldText,
   viewSignature,
   type DeviceRow,
@@ -148,41 +149,70 @@ export function HardwarePanel() {
 
   if (!view) {
     return (
-      <div className="e68-hw e68-hw--empty" data-e68-panel-focus tabIndex={-1}>
-        The simulator is starting.
+      <div className="e68-hw-scroll" data-hw-scroll>
+        <div className="e68-hw e68-hw--empty" data-e68-panel-focus tabIndex={-1}>
+          The simulator is starting.
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="e68-hw" ref={root} data-hw-root>
-      <div className="e68-hw__devices">
-        <DisplayRow view={view} />
-        <AddressCell row={DEVICE_ROWS[0] as DeviceRow} view={view} actions={actions} ctx={ctx} root={root} focus />
-        <LedRow view={view} />
-        <AddressCell row={DEVICE_ROWS[1] as DeviceRow} view={view} actions={actions} ctx={ctx} root={root} />
-        <SwitchRow view={view} actions={actions} />
-        <AddressCell row={DEVICE_ROWS[2] as DeviceRow} view={view} actions={actions} ctx={ctx} root={root} />
-        <ButtonRow actions={actions} />
-        <AddressCell row={DEVICE_ROWS[3] as DeviceRow} view={view} actions={actions} ctx={ctx} root={root} />
+    <div className="e68-hw-scroll" data-hw-scroll onFocus={revealFocused}>
+      <div className="e68-hw" ref={root} data-hw-root>
+        <div className="e68-hw__devices">
+          <DisplayRow view={view} />
+          <AddressCell row={DEVICE_ROWS[0] as DeviceRow} view={view} actions={actions} ctx={ctx} root={root} focus />
+          <LedRow view={view} />
+          <AddressCell row={DEVICE_ROWS[1] as DeviceRow} view={view} actions={actions} ctx={ctx} root={root} />
+          <SwitchRow view={view} actions={actions} />
+          <AddressCell row={DEVICE_ROWS[2] as DeviceRow} view={view} actions={actions} ctx={ctx} root={root} />
+          <ButtonRow actions={actions} />
+          <AddressCell row={DEVICE_ROWS[3] as DeviceRow} view={view} actions={actions} ctx={ctx} root={root} />
+        </div>
+        <div className="e68-hw__groups">
+          <InterruptGroup view={view} actions={actions} />
+          <IntervalGroup view={view} actions={actions} />
+          <Group caption="Reset" className="e68-hw__group--reset">
+            <button
+              type="button"
+              className="e68-hw__irq"
+              aria-label="Reset"
+              disabled={!view.buttonsEnabled}
+              data-hw-nofocus
+              onClick={() => actions.reset()}
+            />
+          </Group>
+        </div>
+        <MemoryMapGroup view={view} actions={actions} />
       </div>
-      <div className="e68-hw__groups">
-        <InterruptGroup view={view} actions={actions} />
-        <IntervalGroup view={view} actions={actions} />
-        <Group caption="Reset" className="e68-hw__group--reset">
-          <button
-            type="button"
-            className="e68-hw__irq"
-            aria-label="Reset"
-            disabled={!view.buttonsEnabled}
-            data-hw-nofocus
-            onClick={() => actions.reset()}
-          />
-        </Group>
-      </div>
-      <MemoryMapGroup view={view} actions={actions} />
     </div>
   );
+}
+
+/**
+ * A control that gets the focus is scrolled into view inside the panel's own scroll area (the
+ * panel's region is smaller than what it holds: docked low or floating small). The area itself is
+ * scrolled, never `scrollIntoView`, which would also move the page's starting point for the Tab key
+ * in Chromium (errata N1 26) and could scroll the dock's own boxes.
+ */
+function revealFocused(event: FocusEvent<HTMLDivElement>): void {
+  const area = event.currentTarget;
+  const target = event.target;
+  if (target === area || !(target instanceof Element)) return;
+  const box = area.getBoundingClientRect();
+  const next = revealScroll(
+    {
+      top: box.top + area.clientTop,
+      left: box.left + area.clientLeft,
+      width: area.clientWidth,
+      height: area.clientHeight,
+    },
+    { top: area.scrollTop, left: area.scrollLeft },
+    target.getBoundingClientRect(),
+  );
+  if (next.top !== area.scrollTop) area.scrollTop = next.top;
+  if (next.left !== area.scrollLeft) area.scrollLeft = next.left;
 }
 
 /* ------------------------------------------------------------------ row 1: 7-segment display */

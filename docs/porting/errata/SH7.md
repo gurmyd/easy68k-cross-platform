@@ -135,3 +135,35 @@ needed.
   after a re-bundle with a fresh cache), not only after a 504, and a screenshot that times out is
   tried once more and then printed, not counted (it is a record for a person; the panel's contents
   are checked from the DOM).
+
+## 10. The panel scrolls inside a region smaller than what it holds (version 1.1, M1b)
+
+- Says: ARCHITECTURE.md 2.6 places the Hardware window's six rows in a tool panel; nothing says
+  what happens when the panel's region is smaller than they are. In 1.0.0 the panel's root
+  (`.e68-hw`, `min-width: max-content`) simply overflowed the region, which clips (`.e68-region`,
+  `overflow: hidden`): docked below the Output panel at 1366 x 768 the region is 682 x 241 px and
+  the rows are 595 px high, so the groups Interrupt, Auto Interval and Reset and the Memory Map were
+  cut off and out of reach, and nothing scrolled. The owner of the project met it in the released
+  version; ARCHITECTURE-PLUS P9 (floating windows, as small as 160 x 96) makes it more likely.
+- Code: `HardwarePanel.tsx` wraps the rows in a scroll area of the panel's own
+  (`.e68-hw-scroll`, `data-hw-scroll`: `flex: 1 1 0; min-width: 0; min-height: 0; overflow: auto`).
+  It takes the region's size; the rows inside it keep their size (`min-width: max-content` as
+  before), so a smaller region scrolls vertically and horizontally, by the wheel, the scroll bars
+  and the keyboard. Where the rows fit, nothing scrolls and nothing moves: the rows start at the
+  area's top left, which is where they started in the region (the area has no border or padding),
+  and no scroll bar appears.
+- A control that gets the focus is scrolled into view by the area itself (`revealFocused`, the pure
+  rule `panel-logic.ts revealScroll`: the smallest scroll that shows it with 4 px around it; a
+  control larger than the area shows its top left). Never `scrollIntoView`: in Chromium it moves the
+  page's starting point for the Tab key (errata N1 26) and it could scroll the dock's own boxes.
+  So the first address field, which gets the focus when the panel is shown or floats, is in view,
+  also in a narrow floating window, which therefore opens scrolled to the right column.
+- Checked: `check-hardware.mjs` part 3 (`short region`), Chromium and WebKit: docked below the
+  Output panel at 1366 x 768 and floating at 360 x 280 the area scrolls (595 px of rows in 241 and
+  248 px; 521 px wide in 358 px floating); the wheel reaches the Memory Map, down and across; a
+  real click reaches its last check box; Tab and Shift+Tab through all 49 controls find each one
+  inside the area's visible box, and no other box of the page scrolled (every ancestor's scroll
+  offsets 0); floating at 900 x 640 nothing scrolls and the rows start at the area's top left. The
+  checks of parts 1 and 2 and `check-dock.mjs` are unchanged and pass. Screenshots:
+  `<out>/<browser>-docked-under-output-1366x768-{light,dark}.png`,
+  `<out>/<browser>-floating-360x280-{light,dark}.png`.

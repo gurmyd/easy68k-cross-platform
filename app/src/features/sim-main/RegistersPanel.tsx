@@ -18,6 +18,7 @@ import { useStoreValue } from '../../state/store';
 import { Button, MaskedField, REGISTER_FIELD, SR_FIELD } from '../../ui/components';
 import { beep } from './beep';
 import { ADDRESS_BOXES, simMainOf } from './model';
+import { revealInArea } from './reveal';
 
 /** Caption of the label above the SR field; its 16 characters line up with the 16 bits (sim-ui §4.1). */
 export const SR_FLAGS_CAPTION = 'T S  INT   XNZVC';
@@ -128,27 +129,35 @@ export function RegistersPanel() {
       {...(style ? { style } : {})}
     />
   );
+  // The panel's own scroll area (version 1.1): a region narrower or shorter than the fields scrolls,
+  // and a field that gets the focus is brought into view by the area's own offsets (reveal.ts).
   return (
-    <div className="e68-regs">
-      <div className="e68-regs__grid">{GRID_BOXES.map((box) => field(box))}</div>
-      <div className="e68-regs__side">
-        <span className="e68-regs__flags" aria-hidden="true" style={{ gridArea: 'flags' }}>
-          <span className="e68-regs__label e68-regs__spacer">{'SR='}</span>
-          <span className="e68-regs__flagtext">{SR_FLAGS_CAPTION}</span>
-        </span>
-        {field(Box.SR, { gridArea: 'sr' })}
-        {field(Box.PC, { gridArea: 'pc' })}
-        {field(Box.SS, { gridArea: 'ss' })}
-        <span className="e68-regs__cycles-label" style={{ gridArea: 'cyclabel' }}>
-          {'Cycles'}
-        </span>
-        <span className="e68-regs__cycles" style={{ gridArea: 'cycles' }} data-cycles="">
-          {view.cycles}
-        </span>
-        <span className="e68-regs__clear" style={{ gridArea: 'clear' }}>
-          <Button caption="Clear Cycles" size="small" onClick={() => void ctx.commands.run('sim.cycles.clear')} />
-        </span>
-        {field(Box.US, { gridArea: 'us' })}
+    <div
+      className="e68-regs-scroll"
+      data-regs-scroll=""
+      onFocus={(event) => revealInArea(event.currentTarget, event.target)}
+    >
+      <div className="e68-regs">
+        <div className="e68-regs__grid">{GRID_BOXES.map((box) => field(box))}</div>
+        <div className="e68-regs__side">
+          <span className="e68-regs__flags" aria-hidden="true" style={{ gridArea: 'flags' }}>
+            <span className="e68-regs__label e68-regs__spacer">{'SR='}</span>
+            <span className="e68-regs__flagtext">{SR_FLAGS_CAPTION}</span>
+          </span>
+          {field(Box.SR, { gridArea: 'sr' })}
+          {field(Box.PC, { gridArea: 'pc' })}
+          {field(Box.SS, { gridArea: 'ss' })}
+          <span className="e68-regs__cycles-label" style={{ gridArea: 'cyclabel' }}>
+            {'Cycles'}
+          </span>
+          <span className="e68-regs__cycles" style={{ gridArea: 'cycles' }} data-cycles="">
+            {view.cycles}
+          </span>
+          <span className="e68-regs__clear" style={{ gridArea: 'clear' }}>
+            <Button caption="Clear Cycles" size="small" onClick={() => void ctx.commands.run('sim.cycles.clear')} />
+          </span>
+          {field(Box.US, { gridArea: 'us' })}
+        </div>
       </div>
     </div>
   );

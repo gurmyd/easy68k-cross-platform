@@ -125,6 +125,14 @@ export const COMMAND_IDS = [
   'app.layout.reset',
   'app.files.trash',
   'app.additions.options',
+  // Every mode - version 1.1, arranging panels freely (ARCHITECTURE-PLUS P9.5; M1)
+  'app.layout.float',
+  'app.layout.dock',
+  // Simulator - version 1.1: View > Layouts, the ready-made arrangements (ARCHITECTURE-PLUS P9.4, P9.5; M2)
+  'sim.view.layout.classic',
+  'sim.view.layout.wideOutput',
+  'sim.view.layout.sideBySide',
+  'sim.view.layout.floatingTools',
 ] as const;
 
 /** The union of the ids above. `CommandId` of the contracts is `string`; use this where a typo should not compile. */

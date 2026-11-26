@@ -225,3 +225,41 @@ export function viewSignature(view: HardwareView): string {
     view.addressConflict,
   ]);
 }
+
+/* ------------------------------------------------------------------ scrolling */
+
+/** A box in the page's coordinates (getBoundingClientRect). */
+export interface Box {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Where the panel's scroll area must scroll so that `target` (a control that got the focus) is in
+ * view inside `view` (the area's visible box), with `margin` px around it where there is room; the
+ * scroll position unchanged when it is in view already. A target larger than the view shows its top
+ * and left edge.
+ */
+export function revealScroll(
+  view: Box,
+  scroll: { top: number; left: number },
+  target: Box,
+  margin = 4,
+): { top: number; left: number } {
+  const axis = (start: number, size: number, viewStart: number, viewSize: number, current: number): number => {
+    const before = start - viewStart;
+    const after = start + size - (viewStart + viewSize);
+    if (before < 0) return Math.max(0, current + before - margin);
+    if (after > 0) {
+      const by = size + 2 * margin > viewSize ? before - margin : after + margin;
+      return Math.max(0, current + Math.max(0, by));
+    }
+    return current;
+  };
+  return {
+    top: Math.round(axis(target.top, target.height, view.top, view.height, scroll.top)),
+    left: Math.round(axis(target.left, target.width, view.left, view.width, scroll.left)),
+  };
+}

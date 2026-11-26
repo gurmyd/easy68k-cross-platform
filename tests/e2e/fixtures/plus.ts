@@ -319,6 +319,236 @@ export async function switchMode(app: App, mode: 'Editor' | 'Simulator'): Promis
   await expect.poll(() => app.mode()).toBe(mode.toLowerCase());
 }
 
+// ---- floating panels and arrangements (version 1.1, ARCHITECTURE-PLUS P9; M3) ----------------------
+//
+// What a student sees of a floating window (P9.2): a region named `<panel name>, floating` with a
+// title bar (a button named by the panel's title, which opens the window's menu), the buttons `Dock`
+// and `x`, the panel below it, and its edges and corners to size it with the pointer. Boxes are read
+// from the screen (getBoundingClientRect, rounded to whole pixels).
+
+/** A box on the screen, in whole CSS pixels of the page. */
+export interface ScreenBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** The floating window of the panel titled `title` (P9.2: the region `<panel name>, floating`). */
+export function floatingWindow(app: App, title: string): Locator {
+  return app.page
+    .locator('[data-e68-workspace]:not([hidden])')
+    .getByRole('region', { name: `${title}, floating`, exact: true });
+}
+
+/** The title bar of a floating window: one Tab stop, a button named by the panel's title. */
+export function floatingTitle(app: App, title: string): Locator {
+  return floatingWindow(app, title).getByRole('button', { name: title, exact: true });
+}
+
+/** The names of the floating windows of the shown mode, in the reading order of the page. */
+export function floatingWindows(app: App): Promise<string[]> {
+  return app.page
+    .locator('[data-e68-workspace]:not([hidden]) [role=region][aria-label$=", floating"]')
+    .evaluateAll((regions) =>
+      regions
+        .filter((region) => (region as HTMLElement).checkVisibility())
+        .map((region) => (region.getAttribute('aria-label') ?? '').replace(/, floating$/, '')),
+    );
+}
+
+/** The box of an element as drawn, or null when it is not drawn. */
+export async function screenBox(locator: Locator): Promise<ScreenBox | null> {
+  if ((await locator.count()) === 0) return null;
+  const box = await locator.first().evaluate((element) => {
+    if (!(element as HTMLElement).checkVisibility()) return null;
+    const rect = element.getBoundingClientRect();
+    return rect.width === 0 || rect.height === 0
+      ? null
+      : { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+  });
+  return (
+    box && { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) }
+  );
+}
+
+/** The box of the shown mode's dock: the workspace between the toolbar and the status bar. */
+export async function dockBox(app: App): Promise<ScreenBox> {
+  const box = await screenBox(app.page.locator('[data-e68-workspace]:not([hidden]) [data-e68-dock]'));
+  expect(box, 'the dock of the shown mode is drawn').not.toBeNull();
+  return box!;
+}
+
+/**
+ * Drags with the primary button from `from` by `dx`, `dy`, as a hand on a mouse or a trackpad does:
+ * pressed, moved in steps, released.
+ */
+export async function dragBy(app: App, from: { x: number; y: number }, dx: number, dy: number): Promise<void> {
+  const mouse = app.page.mouse;
+  await mouse.move(from.x, from.y);
+  await mouse.down();
+  await mouse.move(from.x + dx / 2, from.y + dy / 2, { steps: 4 });
+  await mouse.move(from.x + dx, from.y + dy, { steps: 4 });
+  await mouse.up();
+}
+
+/** A point of a floating window's title bar, on its name (not on Dock or x). */
+export async function titlePoint(app: App, title: string): Promise<{ x: number; y: number }> {
+  const box = await screenBox(floatingTitle(app, title));
+  expect(box, `the title bar of ${title} is drawn`).not.toBeNull();
+  return { x: box!.x + Math.min(20, box!.width / 2), y: box!.y + box!.height / 2 };
+}
+
+/** The tab of a panel in the dock of the shown mode (a group that shows its strip). */
+export function panelTab(app: App, title: string): Locator {
+  return app.page.locator('[data-e68-workspace]:not([hidden])').getByRole('tab', { name: title, exact: true });
+}
+
+/**
+ * Chooses `caption` in the open menu with the keyboard (Down until it has the focus, then Enter), as
+ * a student without a mouse does. Returns the captions of the menu's items, in order.
+ */
+async function chooseInOpenMenu(app: App, caption: string): Promise<string[]> {
+  const menu = app.openMenuList;
+  await menu.waitFor();
+  const items = await menu
+    .locator('[role^=menuitem]')
+    .evaluateAll((elements) => elements.map((element) => (element.textContent ?? '').trim()));
+  expect(items, `the menu has ${caption}`).toContain(caption);
+  for (let i = 0; i < items.length; i++) {
+    const focused = await app.page.evaluate(() => (document.activeElement?.textContent ?? '').trim());
+    if (focused === caption) break;
+    await app.page.keyboard.press('ArrowDown');
+  }
+  await expect.poll(() => app.page.evaluate(() => (document.activeElement?.textContent ?? '').trim())).toBe(caption);
+  await app.page.keyboard.press('Enter');
+  await expect(menu).toBeHidden();
+  return items;
+}
+
+/**
+ * The tab menu of a panel (P3.1.4, P9.2): opened with a right click on its tab (`mouse`) or with
+ * Shift+F10 on the focused tab (`keyboard`); `caption` is chosen with the keyboard. Returns the
+ * menu's captions.
+ */
+export async function tabMenu(
+  app: App,
+  title: string,
+  caption: string,
+  how: 'mouse' | 'keyboard' = 'mouse',
+): Promise<string[]> {
+  const tab = panelTab(app, title);
+  await expect(tab, `the tab of ${title} is shown`).toBeVisible();
+  if (how === 'mouse') await tab.click({ button: 'right' });
+  else {
+    await tab.focus();
+    await app.page.keyboard.press('Shift+F10');
+  }
+  return chooseInOpenMenu(app, caption);
+}
+
+/**
+ * The menu of a floating window's title bar (P9.2): the title bar focused (a Tab stop), Shift+F10,
+ * then `caption` chosen with the keyboard. Returns the menu's captions.
+ */
+export async function windowMenu(app: App, title: string, caption: string): Promise<string[]> {
+  await floatingTitle(app, title).focus();
+  await expect(floatingTitle(app, title)).toBeFocused();
+  await app.page.keyboard.press('Shift+F10');
+  return chooseInOpenMenu(app, caption);
+}
+
+/** Chooses an entry of the Simulator's `View > Layouts` (P9.4) with the mouse. */
+export async function chooseLayout(app: App, caption: string): Promise<void> {
+  const menu = await app.openMenu('View');
+  await app.menuItem(menu, 'Layouts').click();
+  const submenu = app.openMenuList;
+  await expect(app.menuItem(submenu, caption)).toBeVisible();
+  await app.menuItem(submenu, caption).click();
+  await expect(app.page.locator('[role=menu][data-e68-menu]')).toHaveCount(0);
+}
+
+/** The captions of the entries of `View > Layouts`, as drawn (the menus are closed again). */
+export async function layoutEntries(app: App): Promise<string[]> {
+  const menu = await app.openMenu('View');
+  await app.menuItem(menu, 'Layouts').click();
+  const submenu = app.openMenuList;
+  await expect(submenu).not.toHaveAttribute('aria-label', 'View');
+  const entries = (await app.entriesOf(submenu)).map((entry) => entry.caption);
+  await app.page.keyboard.press('Escape');
+  await app.page.keyboard.press('Escape');
+  await expect(app.page.locator('[role=menu][data-e68-menu]')).toHaveCount(0);
+  return entries;
+}
+
+/**
+ * The address's query that lets a browser driven by a test see the tip of P9.3 as a person sees it
+ * (`?arrange-tip=1`, ARRANGE_TIP_PARAM of features/layout/texts.ts). Without it a driven browser
+ * never shows the tip (errata M2), so that the suites of 1.0.0 see the window they always saw.
+ */
+export const ARRANGE_TIP_QUERY = '?arrange-tip=1';
+
+/**
+ * Opens the application (again) as a person's browser that may show the tip of P9.3. The profile is
+ * the test's fresh one, which has not answered the tip. Every later reload of a tip test must use
+ * this too, or the tip would be absent for the driven browser alone and prove nothing.
+ */
+export async function openWithTip(app: App, query = ''): Promise<void> {
+  await reopen(app, query ? `${ARRANGE_TIP_QUERY}&${query.replace(/^\?/, '')}` : ARRANGE_TIP_QUERY);
+}
+
+/**
+ * The three files the simulator engine is made of (app/src/engine/loader.ts): its interface module,
+ * its Emscripten loader and its WebAssembly, by the names of a production build
+ * (`assets/sim68k-<hash>.mjs`, `assets/sim68k-loader-<hash>.mjs`, `assets/sim68k-<hash>.wasm`) or
+ * of the development server (`engine/sim/sim68k.mjs`, `engine/dist/sim68k-loader.mjs`, ...).
+ */
+const SIM_ENGINE_FILES = [/\/sim68k(?!-loader)[^/]*\.mjs$/, /\/sim68k-loader[^/]*\.mjs$/, /\/sim68k[^/]*\.wasm$/];
+
+/**
+ * Waits until the page holds the simulator engine's files: the browser's own record of what the
+ * page fetched (Resource Timing) names each of SIM_ENGINE_FILES with its response complete. In
+ * Simulator mode it also waits for the application's own signal that the engine was created: the
+ * status bar's run state is no longer `Loading` (the phase of the start, controller.ts `start`).
+ * Editor mode draws no such state (the status bar of the run feature is the Simulator's), hence the
+ * files.
+ */
+export async function simEngineLoaded(app: App): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        app.page.evaluate(
+          (sources) => {
+            const done = performance
+              .getEntriesByType('resource')
+              .filter((entry) => (entry as PerformanceResourceTiming).responseEnd > 0)
+              .map((entry) => entry.name.split(/[?#]/)[0] ?? '');
+            return sources.filter((source) => !done.some((name) => new RegExp(source).test(name)));
+          },
+          SIM_ENGINE_FILES.map((pattern) => pattern.source),
+        ),
+      { timeout: 60_000, message: "the simulator engine's files are fetched (none is missing)" },
+    )
+    .toEqual([]);
+  if ((await app.mode()) === 'simulator') {
+    await expect(app.page.locator('[data-e68-status="run"]'), 'the simulator has started').not.toHaveText('Loading', {
+      timeout: 60_000,
+    });
+  }
+}
+
+/**
+ * Reloads the application (with `query`) once the simulator engine of the page is loaded. A reload
+ * made right after the start interrupts the simulator engine's module while it is still being
+ * fetched, and WebKit logs that as the page's console error ("The simulator engine could not be
+ * created: ... Importing a module script failed", seen once in 65 runs). A person does not reload
+ * within that moment; the test waits for that state (simEngineLoaded), not for a time.
+ */
+export async function reopen(app: App, query = ''): Promise<void> {
+  await simEngineLoaded(app);
+  await app.open(query);
+}
+
 // ---- offline (main 6.6, P5 N9 "offline after the first load") -------------------------------------
 
 /**

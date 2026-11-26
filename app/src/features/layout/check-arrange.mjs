@@ -1,0 +1,1088 @@
+// Browser check of version 1.1's finding and ready-made arrangements (ARCHITECTURE-PLUS P9.3, P9.4;
+// package M2). Owner: M2.
+//
+//   node app/src/features/layout/check-arrange.mjs [--browser chromium|webkit|all] [--out <dir>]
+//                                                  [--only <pass,...>]
+//
+// Starts the Vite dev server of app/ on a free port and drives the real application in headless
+// Chromium and WebKit (Playwright). Passes:
+//
+//   button    `Arrange Panels` ends the Editor's and the Simulator's toolbar after a separator, the
+//             original buttons before it unchanged; it is Lock Layout inverted: pressing it (mouse
+//             and keyboard), Lock Layout in the menu, a reload and a second window opened later all
+//             agree; its pressed state is in the accessibility tree; its tool-tip names the mode's
+//             menu (View, Window); the toolbar stays one Tab stop
+//   tip       a driven browser sees no tip unless the address carries arrange-tip=1; with it: the tip
+//             comes when the Simulator is shown, not in the Editor, not while a program runs (it
+//             comes back when the program stops), takes no focus, is a polite live region, covers
+//             neither the toolbar nor the status bar; Got it and Arrange Panels (which unlocks)
+//             close it for good, also in a second window open at the same time and in one opened
+//             later and after a reload; a button of it that had the focus gives the focus back;
+//             screenshots in both themes
+//   layouts   View > Layouts at 1366 x 768 and 1920 x 1080 in both themes, every tool panel shown:
+//             the arrangement of each entry (its tree and floating windows), no page scroll, every
+//             shown panel inside the window and at least 160 x 96 px, the floating windows of
+//             Floating Tools cascaded from the top right at their own default sizes, below the
+//             toolbar and inside the dock, the Hardware panel whole in its window; Floating Tools
+//             chosen in the moment of the switch to the Simulator cascades from that dock's corner;
+//             visibility and the lock unchanged; screenshots (sixteen per browser, in <out>/shots)
+//   program   while a program runs (it drew a picture and reads keys; the Memory panel at an address
+//             of the check's choosing): each arrangement keeps the phase, the Output picture, the
+//             Memory panel's address and every panel's content instance; with a panel hidden, an
+//             arrangement leaves it hidden and showing it puts it at its place of the arrangement;
+//             the lock is kept, locked and unlocked
+//   menus     the View menu's submenu Layouts by mouse and by its access keys (T, then W)
+//   dialog    Move Panel To... As a floating window makes the panel float and focuses it
+//
+// Prints "N of M checks passed" and exits non-zero on any failure or console error. Screenshots go
+// to build/arrange-check (git-ignored) or --out.
+
+/* global console, process, document, window, Navigator, requestAnimationFrame, setTimeout, getComputedStyle */
+
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { chromium, webkit } from '@playwright/test';
+import { createServer } from 'vite';
+import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../tests/browser-checks/ending.mjs';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const appRoot = resolve(here, '../../..');
+const repoRoot = resolve(appRoot, '..');
+
+const args = process.argv.slice(2);
+if (args.includes('--help') || args.includes('-h')) {
+  console.log(
+    [
+      'Usage: node app/src/features/layout/check-arrange.mjs [--browser chromium|webkit|all] [--out <dir>]',
+      '                                                      [--only <pass,...>]',
+      '',
+      '  --browser  the browsers to drive (default: all)',
+      '  --out      where screenshots, proportions.json and the Vite cache go',
+      '             (default: build/arrange-check of the repository, git-ignored)',
+      '  --only     run only these passes: button, tip, layouts, program, menus, dialog',
+    ].join('\n'),
+  );
+  process.exit(0);
+}
+const option = (name, fallback) => {
+  const index = args.indexOf(name);
+  return index >= 0 && args[index + 1] ? args[index + 1] : fallback;
+};
+const browserChoice = option('--browser', 'all');
+const outDir = resolve(option('--out', join(repoRoot, 'build', 'arrange-check')));
+const only = option('--only', '')
+  .split(',')
+  .map((name) => name.trim())
+  .filter(Boolean);
+mkdirSync(join(outDir, 'shots'), { recursive: true });
+
+const BROWSERS = { chromium, webkit };
+const browsers = browserChoice === 'all' ? ['chromium', 'webkit'] : [browserChoice];
+
+const engineDist = join(repoRoot, 'engine', 'dist');
+const enginesPresent = existsSync(join(engineDist, 'asm68k.wasm')) && existsSync(join(engineDist, 'sim68k.wasm'));
+const enginesRequired = process.env.EASY68K_REQUIRE_ENGINES === '1';
+
+const LOAD_TIMEOUT = 240_000;
+const VIEWPORT = { width: 1400, height: 900 };
+const SIZES = [
+  { width: 1366, height: 768 },
+  { width: 1920, height: 1080 },
+];
+const TOOLS = ['memory', 'stack', 'hardware', 'breakpoints', 'log'];
+const SIM_PANELS = ['registers', 'listing', 'messages', 'output', ...TOOLS];
+/** Floating Tools: the order the tool panels float in and each window's default size (arrangements.ts). */
+const FLOATING_ORDER = ['hardware', 'memory', 'stack', 'breakpoints', 'log'];
+const WINDOW_SIZES = {
+  hardware: { width: 540, height: 640 },
+  memory: { width: 640, height: 360 },
+  stack: { width: 300, height: 360 },
+  breakpoints: { width: 560, height: 300 },
+  log: { width: 440, height: 300 },
+};
+
+// The texts, as P9.3 and P9.4 give them (the application's constants are in texts.ts and
+// commands/tables/toolbars.ts; they are compared with these in the page).
+const TIP_TEXT =
+  'You can rearrange this window: make a panel float, dock it elsewhere or pick a ready-made layout in the View menu.';
+const SIM_TOOLTIP = 'Arrange Panels: drag a panel by its tab, or right-click a tab for more (View > Lock Layout)';
+const EDITOR_TOOLTIP = 'Arrange Panels: drag a panel by its tab, or right-click a tab for more (Window > Lock Layout)';
+const ARRANGEMENTS = [
+  { id: 'classic', command: 'sim.view.layout.classic', caption: 'Classic' },
+  { id: 'wideOutput', command: 'sim.view.layout.wideOutput', caption: 'Wide Output' },
+  { id: 'sideBySide', command: 'sim.view.layout.sideBySide', caption: 'Output and Hardware Side by Side' },
+  { id: 'floatingTools', command: 'sim.view.layout.floatingTools', caption: 'Floating Tools' },
+];
+/** The docked tree of each arrangement with every panel shown (wide window). */
+const SHAPES = {
+  classic: 'row(column(registers, listing, messages), column(output, memory+stack+hardware+breakpoints+log))',
+  wideOutput: 'row(column(registers, listing, memory+stack+hardware+breakpoints+log, messages), output)',
+  sideBySide: 'row(column(registers, listing, memory+stack+breakpoints+log, messages), output, hardware)',
+  floatingTools: 'row(column(registers, listing, messages), output)',
+};
+
+let baseUrl = '';
+let failures = 0;
+const results = [];
+function check(name, ok, detail = '') {
+  results.push({ name, ok, detail });
+  if (!ok) failures++;
+  console.log(`${ok ? '  ok  ' : '  FAIL'} ${name}${detail ? ` - ${detail}` : ''}`);
+}
+const notes = [];
+function note(text) {
+  notes.push(text);
+  console.log(`  note ${text}`);
+}
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+/** The proportions measured at each size, for erratum M2 (written to <out>/proportions.json). */
+const measured = [];
+
+// --- pages ------------------------------------------------------------------------------------
+
+function pretendWindows() {
+  Object.defineProperty(Navigator.prototype, 'platform', { get: () => 'Win32' });
+  Object.defineProperty(Navigator.prototype, 'userAgentData', { get: () => undefined });
+}
+
+async function newContext(browser, viewport = VIEWPORT) {
+  const context = await browser.newContext({ viewport, reducedMotion: 'reduce' });
+  await context.addInitScript(pretendWindows);
+  return context;
+}
+
+const isMissingEngineError = (text) =>
+  !enginesPresent &&
+  !enginesRequired &&
+  /Simulator:|sim68k|asm68k|engine\/dist|Failed to fetch dynamically/i.test(text);
+
+async function openApp(context, query = '') {
+  const page = await context.newPage();
+  const errors = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error' && !isMissingEngineError(message.text())) errors.push(message.text());
+  });
+  page.on('pageerror', (error) => {
+    if (!isMissingEngineError(String(error))) errors.push(String(error));
+  });
+  await page.goto(`${baseUrl}${query}`, { timeout: LOAD_TIMEOUT });
+  await page.waitForSelector('.e68-shell', { timeout: LOAD_TIMEOUT });
+  await page.waitForFunction(() => window.__easy68k !== undefined, null, { timeout: LOAD_TIMEOUT });
+  await page
+    .waitForFunction(() => window.__easy68k.ctx.store.getState().sim.phase !== 'loading', null, { timeout: 60_000 })
+    .catch(() => {});
+  await page.evaluate(async () => {
+    const [panels, dock, plus] = await Promise.all([
+      import('/src/state/panels.ts'),
+      import('/src/state/dock.ts'),
+      import('/src/core/plus/settings.ts'),
+    ]);
+    const { ctx } = window.__easy68k;
+    window.__arrange = {
+      ctx,
+      panels,
+      dock: () => dock.dockOf(ctx),
+      answered: () => plus.arrangeTipAnswered(ctx.settings.get()),
+      shape() {
+        const visit = (node) =>
+          node === null
+            ? 'empty'
+            : node.type === 'tabs'
+              ? node.panels.join('+')
+              : `${node.type}(${node.children.map(visit).join(', ')})`;
+        return visit(window.__easy68kDock?.simulator?.tree() ?? null);
+      },
+    };
+  });
+  return { page, errors };
+}
+
+async function until(page, fn, arg, timeout = 10_000) {
+  return page
+    .waitForFunction(fn, arg, { timeout, polling: 50 })
+    .then(() => true)
+    .catch(() => false);
+}
+
+const frames = (page, count = 3) =>
+  page.evaluate(
+    (n) =>
+      new Promise((done) => {
+        let left = n;
+        const step = () => (--left <= 0 ? done() : requestAnimationFrame(step));
+        requestAnimationFrame(step);
+      }),
+    count,
+  );
+const settle = async (page) => {
+  await frames(page, 4);
+  await sleep(120);
+  await frames(page, 2);
+};
+
+const setMode = (page, mode) => page.locator(`.e68-modeswitch [data-mode="${mode}"]`).click();
+const run = (page, id, arg) =>
+  page.evaluate(([command, value]) => window.__easy68k.ctx.commands.run(command, value), [id, arg]);
+const arrangeButton = (page) => page.locator('.e68-shell__toolbar button[data-command="app.layout.lock"]');
+const tip = (page) => page.locator('[data-e68-arrange-tip]');
+const locked = (page) => page.evaluate(() => window.__arrange.dock().locked());
+const panelsSetting = (page) =>
+  page.evaluate(() => JSON.stringify(window.__easy68k.ctx.settings.get().app.layout.panels));
+
+function finish(name, errors) {
+  check(`${name}: no console error`, errors.length === 0, errors.slice(0, 3).join(' | '));
+}
+
+// --- programs ---------------------------------------------------------------------------------
+
+/** Draws a filled rectangle (TRAP #15 tasks 81 and 87), then reads keys for ever. */
+const DRAW_THEN_KEYS = [
+  '        ORG     $1000',
+  'START:  MOVE.L  #$0000FF00,D1',
+  '        MOVEQ   #81,D0',
+  '        TRAP    #15',
+  '        MOVE.W  #20,D1',
+  '        MOVE.W  #20,D2',
+  '        MOVE.W  #200,D3',
+  '        MOVE.W  #120,D4',
+  '        MOVEQ   #87,D0',
+  '        TRAP    #15',
+  'LOOP:   MOVEQ   #0,D1',
+  '        MOVEQ   #19,D0',
+  '        TRAP    #15',
+  '        BRA     LOOP',
+  '        END     START',
+];
+
+async function loadProgram(page, name, lines) {
+  const path = await page.evaluate(
+    async ([n, l]) => {
+      const engine = await import('/src/engine/testing.ts');
+      const { ctx } = window.__easy68k;
+      const { s68, l68 } = await engine.assembleProgram(l);
+      const file = `/browser/arrange-check/${n}.S68`;
+      await ctx.vfs.writeFile(file, s68);
+      await ctx.vfs.writeFile(file.replace(/S68$/, 'L68'), l68);
+      if (ctx.sim.controller.phase !== 'idle') ctx.sim.controller.pause();
+      ctx.sim.controller.open(file, 'open').catch((error) => console.error('arrange-check: the load failed', error));
+      return file;
+    },
+    [name, lines],
+  );
+  const end = Date.now() + 90_000;
+  for (;;) {
+    const loaded = await page.evaluate((file) => {
+      const state = window.__easy68k.ctx.store.getState().sim;
+      return state.phase === 'idle' && state.program?.path === file;
+    }, path);
+    if (loaded) return;
+    const ok = page.locator('[role=alertdialog] .e68-dialog__footer button', { hasText: 'OK' });
+    if ((await ok.count()) > 0) await ok.first().click();
+    if (Date.now() > end) throw new Error(`The program ${name} was not loaded within 90 s`);
+    await sleep(100);
+  }
+}
+
+const phase = (page) => page.evaluate(() => window.__easy68k.ctx.store.getState().sim.phase);
+const runningNow = (page) =>
+  until(
+    page,
+    () => ['running', 'waitInput', 'waitDelay'].includes(window.__easy68k.ctx.store.getState().sim.phase),
+    null,
+    30_000,
+  );
+
+// --- pass: button -----------------------------------------------------------------------------
+
+async function buttonPass(browser, name) {
+  const p = `${name}:`;
+  const context = await newContext(browser);
+  const { page, errors } = await openApp(context);
+  for (const mode of ['editor', 'simulator']) {
+    await setMode(page, mode);
+    await settle(page);
+    const toolbar = await page.evaluate(() => {
+      const root = document.querySelector('.e68-shell__toolbar');
+      const items = Array.from(root.querySelectorAll('button, [role=separator], .e68-toolbar__spacer'));
+      return items.map((element) =>
+        element.matches('[role=separator]')
+          ? '|'
+          : element.matches('.e68-toolbar__spacer')
+            ? '<spacer>'
+            : (element.getAttribute('data-command') ?? '?'),
+      );
+    });
+    const at = toolbar.indexOf('app.layout.lock');
+    check(
+      `${p} ${mode}: Arrange Panels is the toolbar's last button before the spacer, after a separator`,
+      at > 0 &&
+        toolbar[at - 1] === '|' &&
+        toolbar[at + 1] === '<spacer>' &&
+        toolbar.filter((id) => id === 'app.layout.lock').length === 1,
+      JSON.stringify(toolbar),
+    );
+    const original = await page.evaluate(async (m) => {
+      const { TOOLBARS } = await import('/src/commands/tables/toolbars.ts');
+      return TOOLBARS[m]
+        .slice(0, -2)
+        .map((node) => (node.type === 'command' ? node.id : node.type === 'separator' ? '|' : node.type));
+    }, mode);
+    const onScreen = toolbar.slice(0, at - 1).filter((id) => id !== '?');
+    check(
+      `${p} ${mode}: the original buttons keep their order before it`,
+      same(
+        onScreen,
+        original.filter((id) => id !== 'logging'),
+      ),
+      `${JSON.stringify(onScreen)} vs ${JSON.stringify(original)}`,
+    );
+    const button = arrangeButton(page);
+    const described = await button.evaluate((element) => ({
+      name: element.getAttribute('aria-label'),
+      text: element.textContent,
+      pressed: element.getAttribute('aria-pressed'),
+      tabIndex: element.tabIndex,
+    }));
+    check(
+      `${p} ${mode}: it reads "Arrange Panels", not pressed while locked (D2)`,
+      described.name === 'Arrange Panels' && described.text === 'Arrange Panels' && described.pressed === 'false',
+      JSON.stringify(described),
+    );
+    // Its tool-tip on hover, the mode's menu named.
+    await button.hover();
+    const tooltip = await until(
+      page,
+      (text) => Array.from(document.querySelectorAll('[role=tooltip]')).some((element) => element.textContent === text),
+      mode === 'editor' ? EDITOR_TOOLTIP : SIM_TOOLTIP,
+      5_000,
+    );
+    const describedBy = await button.evaluate(
+      (element) => document.getElementById(element.getAttribute('aria-describedby') ?? '')?.textContent ?? null,
+    );
+    check(
+      `${p} ${mode}: its tool-tip is the text of P9.3 and describes it`,
+      tooltip && describedBy === (mode === 'editor' ? EDITOR_TOOLTIP : SIM_TOOLTIP),
+      String(describedBy),
+    );
+    await page.mouse.move(5, VIEWPORT.height - 5);
+  }
+  // Mouse: press it, the layout is unlocked, the menu's check follows.
+  await arrangeButton(page).click();
+  await settle(page);
+  const afterClick = await page.evaluate(() => ({
+    locked: window.__arrange.dock().locked(),
+    checked: window.__easy68k.ctx.commands.isChecked('app.layout.lock'),
+  }));
+  check(
+    `${p} pressing it unlocks the layout and Lock Layout is unchecked`,
+    !afterClick.locked && !afterClick.checked && (await arrangeButton(page).getAttribute('aria-pressed')) === 'true',
+    JSON.stringify(afterClick),
+  );
+  const strips = await page.evaluate(
+    () => document.querySelectorAll('[data-e68-workspace="simulator"] .flexlayout__tabset_tabbar_outer').length,
+  );
+  check(`${p} unlocked, every group of the Simulator shows its tab strip`, strips >= 4, String(strips));
+  // The accessibility tree names it pressed.
+  const pressedRole = await page.getByRole('button', { name: 'Arrange Panels', pressed: true }).count();
+  check(`${p} the accessibility tree has the button "Arrange Panels", pressed`, pressedRole === 1, String(pressedRole));
+  // The menu: Lock Layout locks again, the button follows.
+  await page.locator('.e68-menubar [role=menuitem]', { hasText: 'View' }).click();
+  await page.locator('[role=menu] [role=menuitemcheckbox]', { hasText: 'Lock Layout' }).click();
+  await settle(page);
+  check(
+    `${p} View > Lock Layout locks it again; the button is not pressed`,
+    (await locked(page)) && (await arrangeButton(page).getAttribute('aria-pressed')) === 'false',
+  );
+  // Keyboard: the toolbar is one Tab stop; the arrows reach the button, Space presses it.
+  const stops = await page.evaluate(() => document.querySelectorAll('.e68-shell__toolbar [tabindex="0"]').length);
+  check(`${p} the toolbar is still one Tab stop`, stops === 1, String(stops));
+  await page.locator('.e68-shell__toolbar button[data-command="sim.file.open"]').focus();
+  let reached = false;
+  for (let i = 0; i < 20 && !reached; i++) {
+    await page.keyboard.press('ArrowRight');
+    reached = await page.evaluate(() => document.activeElement?.getAttribute('data-command') === 'app.layout.lock');
+  }
+  await page.keyboard.press('Space');
+  await settle(page);
+  check(
+    `${p} the Right arrow reaches it and Space presses it`,
+    reached && !(await locked(page)) && (await arrangeButton(page).getAttribute('aria-pressed')) === 'true',
+    `reached ${reached}`,
+  );
+  // A reload and a second window opened later agree (the lock is stored with the layout).
+  await page.reload({ timeout: LOAD_TIMEOUT });
+  await page.waitForSelector('.e68-shell', { timeout: LOAD_TIMEOUT });
+  await page.waitForFunction(() => window.__easy68k !== undefined, null, { timeout: LOAD_TIMEOUT });
+  await setMode(page, 'simulator');
+  await settle(page);
+  check(
+    `${p} after a reload it is still pressed (unlocked)`,
+    (await arrangeButton(page).getAttribute('aria-pressed')) === 'true',
+  );
+  const second = await openApp(context);
+  await setMode(second.page, 'simulator');
+  await settle(second.page);
+  check(
+    `${p} a second window opened later shows it pressed too, and is unlocked`,
+    (await arrangeButton(second.page).getAttribute('aria-pressed')) === 'true' &&
+      !(await second.page.evaluate(() => window.__arrange.dock().locked())),
+  );
+  await arrangeButton(second.page).click();
+  await settle(second.page);
+  check(
+    `${p} pressing it in the second window locks that window`,
+    (await arrangeButton(second.page).getAttribute('aria-pressed')) === 'false',
+  );
+  finish(`${p} second window`, second.errors);
+  finish(`${p} button`, errors);
+  await closeWithin(context);
+}
+
+// --- pass: tip --------------------------------------------------------------------------------
+
+async function tipBox(page) {
+  return page.evaluate(() => {
+    const host = document.querySelector('[data-e68-arrange-tip]');
+    const box = (element) => {
+      const r = element?.getBoundingClientRect();
+      return r ? { top: r.top, bottom: r.bottom, left: r.left, right: r.right } : null;
+    };
+    return {
+      tip: box(host?.firstElementChild),
+      toolbar: box(document.querySelector('.e68-shell__toolbar')),
+      status: box(document.querySelector('.e68-statusbar')),
+      role: host?.getAttribute('role'),
+      live: host?.getAttribute('aria-live'),
+      text: host?.querySelector('p')?.textContent ?? null,
+      buttons: Array.from(host?.querySelectorAll('button') ?? []).map((button) => button.textContent),
+      overflow:
+        document.documentElement.scrollWidth > window.innerWidth ||
+        document.documentElement.scrollHeight > window.innerHeight,
+    };
+  });
+}
+
+async function tipPass(browser, name) {
+  const p = `${name}:`;
+  // A driven browser without the parameter: never.
+  {
+    const context = await newContext(browser);
+    const { page, errors } = await openApp(context);
+    await setMode(page, 'simulator');
+    await settle(page);
+    await sleep(300);
+    check(`${p} without arrange-tip=1 a driven browser sees no tip`, (await tip(page).count()) === 0);
+    finish(`${p} tip (automated)`, errors);
+    await closeWithin(context);
+  }
+  const context = await newContext(browser);
+  const { page, errors } = await openApp(context, '?arrange-tip=1');
+  await settle(page);
+  await sleep(300);
+  check(`${p} the tip is not shown in the Editor`, (await tip(page).count()) === 0);
+  // The focus stays where it was when the tip comes.
+  await setMode(page, 'simulator');
+  await page.locator('.e68-shell__toolbar button[data-command="sim.file.open"]').focus();
+  const before = await page.evaluate(() => document.activeElement?.getAttribute('data-command'));
+  const came = await until(page, () => document.querySelector('[data-e68-arrange-tip] p') !== null, null, 10_000);
+  const box = await tipBox(page);
+  check(`${p} the tip comes when the Simulator is shown`, came, JSON.stringify(box));
+  check(
+    `${p} its text and buttons are P9.3's`,
+    box.text === TIP_TEXT && same(box.buttons, ['Arrange Panels', 'Got it']),
+    JSON.stringify(box),
+  );
+  check(`${p} it is a polite live region (role status)`, box.role === 'status' && box.live === 'polite');
+  const after = await page.evaluate(() => document.activeElement?.getAttribute('data-command'));
+  check(`${p} it took no focus`, before === 'sim.file.open' && after === before, `${before} -> ${after}`);
+  check(
+    `${p} it covers neither the toolbar nor the status bar, and the page does not scroll`,
+    box.tip !== null &&
+      box.tip.top >= box.toolbar.bottom &&
+      box.tip.bottom <= box.status.top &&
+      box.tip.left >= 0 &&
+      box.tip.right <= VIEWPORT.width &&
+      !box.overflow,
+    JSON.stringify(box),
+  );
+  for (const theme of ['light', 'dark']) {
+    await run(page, 'app.theme.set', theme);
+    await page.waitForFunction((value) => document.documentElement.getAttribute('data-theme') === value, theme);
+    await settle(page);
+    await page.screenshot({ path: join(outDir, `${name}-tip-${theme}.png`) });
+  }
+  await run(page, 'app.theme.set', 'light');
+  // A second window open at the same time shows it too.
+  const second = await openApp(context, '?arrange-tip=1');
+  await setMode(second.page, 'simulator');
+  check(
+    `${p} a second window open at the same time shows it too`,
+    await until(second.page, () => document.querySelector('[data-e68-arrange-tip] p') !== null, null, 10_000),
+  );
+  // Not while a program runs; back when it stops.
+  if (enginesPresent) {
+    await loadProgram(page, 'tip-keys', DRAW_THEN_KEYS);
+    await settle(page);
+    const shownIdle = (await tip(page).count()) === 1;
+    await run(page, 'sim.run.run');
+    await runningNow(page);
+    const gone = await until(page, () => document.querySelector('[data-e68-arrange-tip]') === null, null, 5_000);
+    await sleep(500);
+    const stillGone = (await tip(page).count()) === 0;
+    check(
+      `${p} not while a program runs or waits for input`,
+      shownIdle && gone && stillGone,
+      JSON.stringify({ shownIdle, gone, stillGone, phase: await phase(page) }),
+    );
+    await page.evaluate(() => window.__easy68k.ctx.sim.controller.pause());
+    check(
+      `${p} it comes back when the program stops`,
+      await until(page, () => document.querySelector('[data-e68-arrange-tip] p') !== null, null, 10_000),
+      String(await phase(page)),
+    );
+  } else {
+    note('engine/dist is missing: the tip was not checked while a program runs');
+  }
+  // A button of it that had the focus gives the focus back; Got it keeps the lock.
+  await page.locator('.e68-shell__toolbar button[data-command="sim.file.open"]').focus();
+  await tip(page).getByRole('button', { name: 'Got it' }).focus();
+  await page.keyboard.press('Enter');
+  await settle(page);
+  const focusBack = await page.evaluate(() => document.activeElement?.getAttribute('data-command'));
+  check(`${p} Got it closes it`, (await tip(page).count()) === 0);
+  check(`${p} the focus went back to where it was`, focusBack === 'sim.file.open', String(focusBack));
+  check(
+    `${p} Got it is remembered for the profile and keeps the lock`,
+    (await page.evaluate(() => window.__arrange.answered())) && (await locked(page)),
+  );
+  check(
+    `${p} the second window's tip went away with it`,
+    await until(second.page, () => document.querySelector('[data-e68-arrange-tip]') === null, null, 10_000),
+  );
+  finish(`${p} tip, second window`, second.errors);
+  await page.reload({ timeout: LOAD_TIMEOUT });
+  await page.waitForSelector('.e68-shell', { timeout: LOAD_TIMEOUT });
+  await setMode(page, 'simulator');
+  await settle(page);
+  await sleep(400);
+  const third = await openApp(context, '?arrange-tip=1');
+  await setMode(third.page, 'simulator');
+  await settle(third.page);
+  await sleep(400);
+  check(
+    `${p} it never comes again: not after a reload, not in a window opened later`,
+    (await tip(page).count()) === 0 && (await tip(third.page).count()) === 0,
+  );
+  finish(`${p} tip, third window`, third.errors);
+  finish(`${p} tip`, errors);
+  await closeWithin(context);
+
+  // Arrange Panels unlocks the layout and closes it for good.
+  const other = await newContext(browser);
+  const fresh = await openApp(other, '?arrange-tip=1');
+  await setMode(fresh.page, 'simulator');
+  await until(fresh.page, () => document.querySelector('[data-e68-arrange-tip] p') !== null, null, 10_000);
+  await tip(fresh.page).getByRole('button', { name: 'Arrange Panels' }).click();
+  await settle(fresh.page);
+  check(
+    `${p} Arrange Panels unlocks the layout, closes the tip and is remembered`,
+    !(await locked(fresh.page)) &&
+      (await tip(fresh.page).count()) === 0 &&
+      (await fresh.page.evaluate(() => window.__arrange.answered())) &&
+      (await arrangeButton(fresh.page).getAttribute('aria-pressed')) === 'true',
+  );
+  finish(`${p} tip (Arrange Panels)`, fresh.errors);
+  await closeWithin(other);
+}
+
+// --- pass: layouts ----------------------------------------------------------------------------
+
+async function showAllTools(page) {
+  await page.evaluate((tools) => {
+    for (const id of tools) window.__arrange.panels.showPanel(window.__arrange.ctx, id, { focus: false });
+  }, TOOLS);
+  await settle(page);
+}
+
+/** Every shown panel of the Simulator: its box, whether it floats; the dock's and the bars' boxes. */
+function measure(page) {
+  return page.evaluate((panels) => {
+    const box = (element) => {
+      const r = element?.getBoundingClientRect();
+      return r
+        ? { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) }
+        : null;
+    };
+    const dock = document.querySelector('[data-e68-dock="simulator"]');
+    const out = {};
+    const tabs = {};
+    for (const id of panels) {
+      const element = dock?.querySelector(`[data-e68-panel="${id}"]`);
+      if (!element || element.getClientRects().length === 0) {
+        // A panel behind another tab of its group is reached by its tab.
+        const tab = document.getElementById(`flexlayout-tabbutton-simulator:${id}`);
+        if (tab && tab.getClientRects().length > 0) tabs[id] = box(tab);
+        continue;
+      }
+      const floatWindow = element.closest('[data-e68-float]');
+      let widest = 0;
+      for (const child of element.querySelectorAll('*')) widest = Math.max(widest, child.scrollWidth);
+      out[id] = {
+        box: box(element),
+        floating: floatWindow !== null,
+        window: floatWindow ? box(floatWindow) : null,
+        widest,
+      };
+    }
+    return {
+      panels: out,
+      tabs,
+      dock: box(dock),
+      toolbar: box(document.querySelector('.e68-shell__toolbar')),
+      status: box(document.querySelector('.e68-statusbar')),
+      scroll: {
+        width: document.documentElement.scrollWidth,
+        height: document.documentElement.scrollHeight,
+        innerWidth: window.innerWidth,
+        innerHeight: window.innerHeight,
+      },
+    };
+  }, SIM_PANELS);
+}
+
+/**
+ * Floating Tools chosen in the same moment as the switch from the Editor to the Simulator (the
+ * Simulator's dock not laid out yet): the windows cascade from the Simulator dock's top right, not
+ * from a size of before (verify round 1: x 816 instead of 982 at 1366 px, a fallback size).
+ */
+async function sameMomentCheck(browser, name) {
+  const context = await newContext(browser, SIZES[0]);
+  const { page, errors } = await openApp(context);
+  const constants = await page.evaluate(async () => {
+    const { FLOATING_TOOLS_ORDER, TOOL_WINDOW_SIZES } = await import('/src/features/layout/arrangements.ts');
+    return { order: FLOATING_TOOLS_ORDER, sizes: TOOL_WINDOW_SIZES };
+  });
+  check(
+    `${name}: the check's Floating Tools order and sizes are the application's`,
+    same(constants.order, FLOATING_ORDER) && FLOATING_ORDER.every((id) => same(constants.sizes[id], WINDOW_SIZES[id])),
+    JSON.stringify(constants),
+  );
+  const result = await page.evaluate(async () => {
+    const { ctx } = window.__easy68k;
+    const switched = ctx.commands.run('app.mode.set', 'simulator');
+    const arranged = ctx.commands.run('sim.view.layout.floatingTools');
+    await switched;
+    await arranged;
+    const box = document.querySelector('[data-e68-dock="simulator"]').getBoundingClientRect();
+    return { dock: Math.round(box.width), windows: window.__arrange.dock().floating() };
+  });
+  const first = result.windows[0];
+  check(
+    `${name}: Floating Tools chosen as the window switches to the Simulator cascades from the Simulator dock's top right`,
+    first !== undefined &&
+      first.panel === FLOATING_ORDER[0] &&
+      Math.abs(first.rect.x + first.rect.width - (result.dock - 24)) <= 1 &&
+      first.rect.y === 24,
+    JSON.stringify({ dock: result.dock, first }),
+  );
+  await run(page, 'sim.view.layout.classic');
+  finish(`${name}: layouts at the switch`, errors);
+  await closeWithin(context);
+}
+
+async function layoutsPass(browser, name) {
+  const p = `${name}:`;
+  await sameMomentCheck(browser, name);
+  for (const size of SIZES) {
+    const context = await newContext(browser, size);
+    const { page, errors } = await openApp(context);
+    await setMode(page, 'simulator');
+    await settle(page);
+    await showAllTools(page);
+    for (const theme of ['light', 'dark']) {
+      await run(page, 'app.theme.set', theme);
+      await page.waitForFunction((value) => document.documentElement.getAttribute('data-theme') === value, theme);
+      for (const lockedState of theme === 'light' ? [true, false] : [true]) {
+        await page.evaluate((on) => window.__arrange.dock().setLocked(on), lockedState);
+        await settle(page);
+        for (const arrangement of ARRANGEMENTS) {
+          const label = `${p} ${size.width}x${size.height} ${theme}${lockedState ? '' : ' unlocked'} ${arrangement.caption}`;
+          const panelsBefore = await panelsSetting(page);
+          await run(page, arrangement.command);
+          await settle(page);
+          await settle(page);
+          const shape = await page.evaluate(() => window.__arrange.shape());
+          const floating = await page.evaluate(() =>
+            window.__arrange
+              .dock()
+              .floating()
+              .map((window) => window.panel),
+          );
+          const expectedFloating = arrangement.id === 'floatingTools' ? FLOATING_ORDER : [];
+          check(
+            `${label}: the arrangement of P9.4`,
+            shape === SHAPES[arrangement.id] && same(floating, expectedFloating),
+            `${shape} floating ${JSON.stringify(floating)}`,
+          );
+          check(
+            `${label}: no panel shown or hidden, the lock kept`,
+            (await panelsSetting(page)) === panelsBefore && (await locked(page)) === lockedState,
+          );
+          const m = await measure(page);
+          const shown = Object.keys(m.panels);
+          const problems = [];
+          if (m.scroll.width > m.scroll.innerWidth || m.scroll.height > m.scroll.innerHeight) {
+            problems.push(`page scrolls ${JSON.stringify(m.scroll)}`);
+          }
+          const inside = (b) =>
+            b.x >= m.dock.x - 1 &&
+            b.y >= m.dock.y - 1 &&
+            b.x + b.w <= m.dock.x + m.dock.w + 1 &&
+            b.y + b.h <= m.dock.y + m.dock.h + 1;
+          for (const id of SIM_PANELS) {
+            if (shown.includes(id)) continue;
+            if (!m.tabs[id]) problems.push(`${id} is neither on the screen nor reachable by its tab`);
+            else if (!inside(m.tabs[id])) problems.push(`the tab of ${id} leaves the dock`);
+          }
+          for (const [id, entry] of Object.entries(m.panels)) {
+            const b = entry.window ?? entry.box;
+            if (!inside(b)) problems.push(`${id} leaves the dock ${JSON.stringify(b)} dock ${JSON.stringify(m.dock)}`);
+            if (b.y < m.toolbar.y + m.toolbar.h) problems.push(`${id} covers the toolbar`);
+            // The Messages panel's least height is its splitter's (SPLITS 'sim.messages': 40 px).
+            const least = id === 'messages' ? { w: 160, h: 40 } : { w: 160, h: 96 };
+            if (entry.box.w < least.w || entry.box.h < least.h)
+              problems.push(`${id} is ${entry.box.w} x ${entry.box.h}`);
+          }
+          // The Registers panel is shown whole wherever it is docked (the original's main window).
+          const registers = m.panels.registers;
+          if (registers && registers.widest > registers.box.w + 1) {
+            problems.push(`the Registers panel is cut: ${registers.widest} > ${registers.box.w}`);
+          }
+          const hardware = m.panels.hardware;
+          if (hardware && !hardware.floating && hardware.widest > hardware.box.w + 1 && size.width >= 1366) {
+            note(`${label}: the Hardware panel scrolls inside itself (${hardware.widest} px in ${hardware.box.w} px)`);
+          }
+          if (arrangement.id === 'floatingTools') {
+            // Each window at its own default size (TOOL_WINDOW_SIZES), the first 24 px in from the
+            // dock's top right corner, each next one 24 px further left and down.
+            const right = m.dock.x + m.dock.w;
+            FLOATING_ORDER.forEach((id, i) => {
+              const w = m.panels[id]?.window;
+              const step = 24 * (i + 1);
+              const size = WINDOW_SIZES[id];
+              if (!w) problems.push(`${id} does not float`);
+              else if (
+                Math.abs(w.x + w.w - (right - step)) > 1 ||
+                Math.abs(w.y - (m.dock.y + step)) > 1 ||
+                Math.abs(w.w - size.width) > 1 ||
+                Math.abs(w.h - size.height) > 1
+              ) {
+                problems.push(
+                  `the window of ${id} is not at its place of the cascade at ${size.width} x ${size.height}: ${JSON.stringify(w)} dock ${JSON.stringify(m.dock)}`,
+                );
+              }
+            });
+            // The Hardware panel is shown whole in its window: nothing of it scrolls.
+            const scrolls = await page.evaluate(() => {
+              const panel = document.querySelector('[data-e68-dock="simulator"] [data-e68-panel="hardware"]');
+              return Array.from([panel, ...panel.querySelectorAll('*')])
+                .filter((e) => e.scrollHeight > e.clientHeight + 1 || e.scrollWidth > e.clientWidth + 1)
+                .filter(
+                  (e) => getComputedStyle(e).overflowY !== 'visible' || getComputedStyle(e).overflowX !== 'visible',
+                )
+                .map(
+                  (e) =>
+                    `${e.className || e.tagName} ${e.scrollWidth}x${e.scrollHeight} in ${e.clientWidth}x${e.clientHeight}`,
+                );
+            });
+            if (scrolls.length > 0) problems.push(`the floating Hardware panel scrolls: ${scrolls.join(', ')}`);
+          }
+          check(
+            `${label}: every shown panel usable, inside the window, no page scroll`,
+            problems.length === 0,
+            problems.join('; '),
+          );
+          if (lockedState) {
+            const file = `${name}-${size.width}x${size.height}-${theme}-${arrangement.id}.png`;
+            await page.screenshot({ path: join(outDir, 'shots', file) });
+            measured.push({
+              browser: name,
+              size: `${size.width}x${size.height}`,
+              theme,
+              arrangement: arrangement.id,
+              panels: m.panels,
+              dock: m.dock,
+            });
+          }
+        }
+      }
+    }
+    await run(page, 'app.theme.set', 'light');
+    await run(page, 'sim.view.layout.classic');
+    await settle(page);
+    finish(`${p} layouts ${size.width}x${size.height}`, errors);
+    await closeWithin(context);
+  }
+}
+
+// --- pass: program ----------------------------------------------------------------------------
+
+async function programPass(browser, name) {
+  const p = `${name}:`;
+  if (!enginesPresent) {
+    note('engine/dist is missing: the program pass was skipped');
+    return;
+  }
+  const context = await newContext(browser);
+  const { page, errors } = await openApp(context);
+  await setMode(page, 'simulator');
+  await settle(page);
+  await showAllTools(page);
+  await loadProgram(page, 'arrange-keys', DRAW_THEN_KEYS);
+  await run(page, 'sim.run.run');
+  await runningNow(page);
+  const address = page.locator('[data-e68-dock="simulator"] [data-e68-panel="memory"] input[aria-label="Address"]');
+  await run(page, 'sim.view.memory');
+  await settle(page);
+  await address.selectText();
+  await page.keyboard.type('002000', { delay: 60 });
+  await page.keyboard.press('Enter');
+  await settle(page);
+  await sleep(400);
+  const snapshot = () =>
+    page.evaluate(() => {
+      const memory = document.querySelector('[data-e68-dock="simulator"] [data-e68-panel="memory"]');
+      const canvas = document.querySelector('[data-e68-dock="simulator"] [data-e68-panel="output"] canvas');
+      let picture;
+      try {
+        const url = canvas?.toDataURL() ?? 'none';
+        let hash = 0;
+        for (let i = 0; i < url.length; i++) hash = (hash * 31 + url.charCodeAt(i)) | 0;
+        picture = `${canvas?.width}x${canvas?.height}:${url.length}:${hash}`;
+      } catch (error) {
+        picture = String(error);
+      }
+      return {
+        address: memory?.querySelector('input[aria-label="Address"]')?.value ?? null,
+        picture,
+        mounts: window.__arrange.dock().stats().mounts,
+      };
+    });
+  const before = await snapshot();
+  for (const arrangement of [...ARRANGEMENTS.slice(1), ARRANGEMENTS[0]]) {
+    await run(page, arrangement.command);
+    await settle(page);
+    const now = await snapshot();
+    const ph = await phase(page);
+    check(
+      `${p} while a program runs, ${arrangement.caption} keeps the program's state (phase, Output picture, Memory address, every panel's content)`,
+      ['running', 'waitInput', 'waitDelay'].includes(ph) && same(now, before),
+      JSON.stringify({ ph, before, now }),
+    );
+  }
+  await page.evaluate(() => window.__easy68k.ctx.sim.controller.pause());
+  // A hidden panel takes its place of the arrangement when it is shown.
+  await page.evaluate(() => window.__arrange.panels.hidePanel(window.__arrange.ctx, 'hardware'));
+  await settle(page);
+  const panelsBefore = await panelsSetting(page);
+  await run(page, 'sim.view.layout.sideBySide');
+  await settle(page);
+  const hiddenShape = await page.evaluate(() => window.__arrange.shape());
+  check(
+    `${p} Side by Side with Hardware hidden leaves it hidden`,
+    (await panelsSetting(page)) === panelsBefore &&
+      hiddenShape === 'row(column(registers, listing, memory+stack+breakpoints+log, messages), output)',
+    hiddenShape,
+  );
+  await run(page, 'sim.view.hardware');
+  await settle(page);
+  const shownShape = await page.evaluate(() => window.__arrange.shape());
+  check(`${p} shown again, Hardware is in its column right of Output`, shownShape === SHAPES.sideBySide, shownShape);
+  await page.evaluate(() => window.__arrange.panels.hidePanel(window.__arrange.ctx, 'stack'));
+  await run(page, 'sim.view.layout.floatingTools');
+  await settle(page);
+  const floatsHidden = await page.evaluate(() => window.__arrange.dock().floating());
+  const stackEntry = floatsHidden.find((window) => window.panel === 'stack');
+  check(
+    `${p} Floating Tools with Stack hidden: Stack is a hidden floating window`,
+    stackEntry !== undefined &&
+      stackEntry.visible === false &&
+      (await page.locator('[data-e68-dock="simulator"] [data-e68-panel="stack"]').isVisible()) === false,
+    JSON.stringify(floatsHidden.map((window) => [window.panel, window.visible])),
+  );
+  await run(page, 'sim.view.stack');
+  await settle(page);
+  const stackFloating = await page.evaluate(() => {
+    const element = document.querySelector('[data-e68-dock="simulator"] [data-e68-panel="stack"]');
+    return element?.closest('[data-e68-float]') !== null && element.getClientRects().length > 0;
+  });
+  check(`${p} shown again, Stack floats where the arrangement put it`, stackFloating);
+  await run(page, 'sim.view.layout.classic');
+  await settle(page);
+  check(
+    `${p} Classic docks every panel again (Reset Layout)`,
+    (await page.evaluate(() => window.__arrange.dock().floating().length)) === 0 &&
+      (await page.evaluate(() => window.__arrange.shape())) === SHAPES.classic,
+    await page.evaluate(() => window.__arrange.shape()),
+  );
+  finish(`${p} program`, errors);
+  await closeWithin(context);
+}
+
+// --- pass: menus ------------------------------------------------------------------------------
+
+async function menusPass(browser, name) {
+  const p = `${name}:`;
+  const context = await newContext(browser);
+  const { page, errors } = await openApp(context);
+  await setMode(page, 'simulator');
+  await settle(page);
+  await showAllTools(page);
+  await page.locator('.e68-menubar [role=menuitem]', { hasText: 'View' }).click();
+  const layouts = page.locator('[role=menu] [role=menuitem]', { hasText: 'Layouts' });
+  await layouts.hover();
+  await layouts.click().catch(() => {});
+  const entries = page
+    .locator('[role=menu] [role=menuitem]')
+    .filter({ hasText: /^(Classic|Wide Output|Output and Hardware Side by Side|Floating Tools)/ });
+  await until(page, () => document.querySelectorAll('[role=menu]').length >= 2, null, 5_000);
+  const captions = await entries.allTextContents();
+  check(
+    `${p} View > Layouts lists the four entries in order`,
+    same(
+      captions.map((text) => text.trim()),
+      ARRANGEMENTS.map((entry) => entry.caption),
+    ),
+    JSON.stringify(captions),
+  );
+  await page.locator('[role=menu] [role=menuitem]', { hasText: 'Wide Output' }).click();
+  await settle(page);
+  check(
+    `${p} choosing Wide Output with the mouse arranges it`,
+    (await page.evaluate(() => window.__arrange.shape())) === SHAPES.wideOutput,
+  );
+  // The access keys: Alt+V opens View, T the submenu, F Floating Tools.
+  await page.locator('[data-e68-dock="simulator"] [data-e68-panel="registers"]').click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press('Alt+v');
+  await until(page, () => document.querySelector('[role=menu]') !== null, null, 5_000);
+  await page.keyboard.press('t');
+  await until(page, () => document.querySelectorAll('[role=menu]').length >= 2, null, 5_000);
+  await page.keyboard.press('f');
+  await settle(page);
+  const viaKeys = await page.evaluate(() => window.__arrange.dock().floating().length);
+  check(`${p} Alt+V, T, F (the access keys) applies Floating Tools`, viaKeys === TOOLS.length, String(viaKeys));
+  await run(page, 'sim.view.layout.classic');
+  finish(`${p} menus`, errors);
+  await closeWithin(context);
+}
+
+// --- pass: dialog -----------------------------------------------------------------------------
+
+async function dialogPass(browser, name) {
+  const p = `${name}:`;
+  const context = await newContext(browser);
+  const { page, errors } = await openApp(context);
+  await setMode(page, 'simulator');
+  await settle(page);
+  await showAllTools(page);
+  void run(page, 'app.layout.move', { panel: 'memory' });
+  const dialog = page.getByRole('dialog', { name: 'Move Panel' });
+  await dialog.waitFor({ timeout: 10_000 });
+  const radio = dialog.getByRole('radio', { name: 'As a floating window' });
+  check(`${p} Move Panel To... has the place "As a floating window"`, (await radio.count()) === 1);
+  await radio.check();
+  await dialog.getByRole('button', { name: 'OK' }).click();
+  await settle(page);
+  const result = await page.evaluate(() => ({
+    floating: window.__arrange
+      .dock()
+      .floating()
+      .map((window) => window.panel),
+    focused: document.activeElement?.closest('[data-e68-panel]')?.getAttribute('data-e68-panel') ?? null,
+  }));
+  check(
+    `${p} OK makes the Memory panel float and puts the focus into it`,
+    same(result.floating, ['memory']) && result.focused === 'memory',
+    JSON.stringify(result),
+  );
+  // The panel that floats is listed; the docked lists do not offer it.
+  void run(page, 'app.layout.move', { panel: 'stack' });
+  await dialog.waitFor({ timeout: 10_000 });
+  const besideOptions = await dialog
+    .getByRole('combobox', { name: 'Beside panel' })
+    .evaluate((select) => Array.from(select.options).map((option) => option.value));
+  check(
+    `${p} a floating panel is no target of a move`,
+    !besideOptions.includes('memory'),
+    JSON.stringify(besideOptions),
+  );
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await run(page, 'app.layout.reset');
+  finish(`${p} dialog`, errors);
+  await closeWithin(context);
+}
+
+const PASSES = {
+  button: buttonPass,
+  tip: tipPass,
+  layouts: layoutsPass,
+  program: programPass,
+  menus: menusPass,
+  dialog: dialogPass,
+};
+
+async function main() {
+  if (!enginesPresent && enginesRequired) {
+    console.error('engine/dist is missing and EASY68K_REQUIRE_ENGINES=1: the simulator session cannot start.');
+    process.exit(1);
+  }
+  const server = await createServer({
+    configFile: join(appRoot, 'vite.config.ts'),
+    root: appRoot,
+    logLevel: 'warn',
+    cacheDir: join(outDir, 'vite-cache'),
+    server: { port: 0, strictPort: false, host: '127.0.0.1', hmr: false, watch: null },
+  });
+  await server.listen();
+  const address = server.httpServer?.address();
+  if (typeof address !== 'object' || !address) throw new Error('The dev server has no address');
+  baseUrl = `http://127.0.0.1:${address.port}/`;
+  console.log(`Application: ${baseUrl}\nScreenshots: ${outDir}`);
+  if (!enginesPresent) console.log('engine/dist is missing: the simulator session will not start (ignored).');
+  try {
+    for (const name of browsers) {
+      const browser = await BROWSERS[name].launch();
+      try {
+        for (const [label, pass] of Object.entries(PASSES)) {
+          if (only.length > 0 && !only.includes(label)) continue;
+          console.log(`\n[${name}, ${label}]`);
+          try {
+            await pass(browser, name);
+          } catch (error) {
+            check(
+              `${name}: ${label} ran to the end`,
+              false,
+              String(error?.stack ?? error)
+                .split('\n')
+                .slice(0, 4)
+                .join(' | '),
+            );
+          }
+        }
+      } finally {
+        await doneWith(browser, { last: name === browsers.at(-1) });
+      }
+    }
+  } finally {
+    closeAtEnd(server);
+  }
+  if (measured.length > 0) writeFileSync(join(outDir, 'proportions.json'), JSON.stringify(measured, null, 1));
+  if (notes.length > 0) console.log(`\nNotes (not failures):\n${notes.map((text) => `  - ${text}`).join('\n')}`);
+  const passed = results.filter((r) => r.ok).length;
+  console.log(`\n${passed} of ${results.length} checks passed${failures ? `, ${failures} failed` : ''}.`);
+  await endChecks(failures ? 1 : 0);
+}
+
+await main();

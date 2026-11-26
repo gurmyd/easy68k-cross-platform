@@ -10,6 +10,30 @@ the steps for opening the Mac app the first time, which are kept in `docs/differ
 repeated in the README. Changes made after the newest release are collected under a heading "Not
 released yet" at the top; when a version is released, that heading becomes its number and date.
 
+## 1.1.0 (not released yet)
+
+Arranging panels freely (`docs/ARCHITECTURE-PLUS.md` section P9), after the project's owner had used
+the released web version: in the Simulator it was hard to arrange the panels so that everything can
+be seen, and dragging was not found because the layout is locked at first. Nothing a 68000 program
+can observe changes, no file the application writes, and none of the original's menus, commands or
+keys. With nothing floating the window looks as in 1.0.0. The user guide's part "Arranging panels"
+explains it all; the differences are in parts M1 and M2 of `docs/DIFFERENCES.md`.
+
+- **Floating panels.** Any panel of the Editor and the Simulator can float: a window inside the
+  application window, moved by its title bar, sized at its edges and corners, and docked back with
+  its `Dock` button. `Float` is in the menu of a panel's tab and, as the place `As a floating
+  window`, in `Move Panel To...`. Everything can be done from the keyboard: the title bar is a stop
+  of Tab, and its menu has `Move`, `Size`, `Dock` and `Close`. Floating windows are kept with the
+  arrangement and are where they were after a reload. `Lock Layout` now locks only the docked
+  panels; floating windows can always be moved and sized.
+- **Finding it.** A button `Arrange Panels` at the end of the toolbar is pressed while the layout is
+  unlocked. The first time the Simulator is shown, a tip says once that the window can be rearranged.
+- **Ready-made layouts** for the Simulator, in `View > Layouts`: `Classic`, `Wide Output`, `Output
+  and Hardware Side by Side` and `Floating Tools` (every tool panel in a window of its own, as in the
+  original).
+- The `Import...` menu of the Files panel closes when you click anywhere else (found by the owner in
+  1.0.0).
+
 ## 1.0.0 (2026-11-23)
 
 The first release: the web version at <https://gurmyd.github.io/easy68k-cross-platform/>, and the Mac

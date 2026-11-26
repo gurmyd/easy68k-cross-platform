@@ -69,6 +69,8 @@ function renderToolbar(mode: Mode): string {
     .map((node) => {
       if (node.type === 'separator') return '|';
       if (node.type === 'logging') return 'LOGGING';
+      // version 1.1 (ARCHITECTURE-PLUS P9.3): a text toggle
+      if (node.type === 'toggle') return `[${node.caption}] ${node.id}${node.inverted ? ' inverted' : ''}`;
       const spec = COMMAND_SPECS[node.id];
       return `${spec.hint ?? '?'} <${spec.icon ?? '?'}>`;
     })
@@ -184,6 +186,12 @@ const SIM_MENUS = trim(`
   Mo&ve Panel To...
   Loc&k Layout [check]
   Reset La&yout
+  ---
+  Layou&ts >
+    &Classic
+    &Wide Output
+    &Output and Hardware Side by Side
+    &Floating Tools
 &Options
   Source Window Font...
   Output Window Font...
@@ -267,6 +275,8 @@ Comment Selection <comment>
 Uncomment Selection <uncomment>
 |
 Assemble Source <assemble>
+|
+[Arrange Panels] app.layout.lock inverted
 `);
 
 // sim-ui §3.2.
@@ -288,6 +298,8 @@ Reload Program <reload>
 Log Start <log-start>
 Log Stop <log-stop>
 LOGGING
+|
+[Arrange Panels] app.layout.lock inverted
 `);
 
 describe('menus equal section 1.3', () => {
@@ -328,6 +340,14 @@ const PLUS_COMMANDS: ReadonlySet<string> = new Set([
   'app.additions.options',
 ]);
 
+/** Version 1.1 (ARCHITECTURE-PLUS P9.4, P9.5): the entries of the Simulator's View > Layouts. */
+const LAYOUT_COMMANDS: readonly string[] = [
+  'sim.view.layout.classic',
+  'sim.view.layout.wideOutput',
+  'sim.view.layout.sideBySide',
+  'sim.view.layout.floatingTools',
+];
+
 /** The number of nodes of each menu before the stage of additions (the tables of 1.0). */
 const ORIGINAL_NODES: Record<string, number> = {
   'editor.file': 12,
@@ -363,9 +383,14 @@ describe('the stage of additions keeps the original menus (ARCHITECTURE-PLUS P1.
         // After them: a separator, then only additions and separators.
         expect(added[0], menu.id).toEqual({ type: 'separator' });
         for (const node of added) {
-          expect(node.type === 'separator' || (node.type === 'command' && PLUS_COMMANDS.has(node.id)), menu.id).toBe(
-            true,
-          );
+          // Version 1.1 (ARCHITECTURE-PLUS P9.4): the submenu Layouts of the Simulator's View menu.
+          const layouts =
+            node.type === 'submenu' &&
+            node.items.every((item) => item.type === 'command' && LAYOUT_COMMANDS.includes(item.id));
+          expect(
+            node.type === 'separator' || layouts || (node.type === 'command' && PLUS_COMMANDS.has(node.id)),
+            menu.id,
+          ).toBe(true);
         }
       }
     }
@@ -401,7 +426,8 @@ describe('the stage of additions keeps the original menus (ARCHITECTURE-PLUS P1.
 describe('toolbars equal sections 1.3.2 and 1.3.5', () => {
   it('Editor: the 13 original buttons with 6 separators, after the Files button', () => {
     expect(renderToolbar('editor')).toBe(EDITOR_TOOLBAR);
-    const original = TOOLBARS.editor.slice(2);
+    // Between the Files button and version 1.1's addition (its separator and Arrange Panels).
+    const original = TOOLBARS.editor.slice(2, -2);
     expect(original.filter((node) => node.type === 'command')).toHaveLength(13);
     expect(original.filter((node) => node.type === 'separator')).toHaveLength(6);
   });
@@ -411,6 +437,25 @@ describe('toolbars equal sections 1.3.2 and 1.3.5', () => {
   });
   it('EASyBIN has no toolbar', () => {
     expect(TOOLBARS.easybin).toEqual([]);
+  });
+  it('version 1.1: Arrange Panels ends the Editor and Simulator toolbars, after a separator (ARCHITECTURE-PLUS P9.3)', () => {
+    for (const mode of ['editor', 'simulator'] as const) {
+      const nodes = TOOLBARS[mode];
+      expect(nodes.at(-2), mode).toEqual({ type: 'separator' });
+      expect(nodes.at(-1), mode).toMatchObject({ type: 'toggle', id: 'app.layout.lock', inverted: true });
+      expect(
+        nodes.filter((node) => node.type === 'toggle'),
+        mode,
+      ).toHaveLength(1);
+    }
+    expect(TOOLBARS.simulator.at(-1)).toMatchObject({
+      caption: 'Arrange Panels',
+      tooltip: 'Arrange Panels: drag a panel by its tab, or right-click a tab for more (View > Lock Layout)',
+    });
+    expect(TOOLBARS.editor.at(-1)).toMatchObject({
+      caption: 'Arrange Panels',
+      tooltip: 'Arrange Panels: drag a panel by its tab, or right-click a tab for more (Window > Lock Layout)',
+    });
   });
 });
 

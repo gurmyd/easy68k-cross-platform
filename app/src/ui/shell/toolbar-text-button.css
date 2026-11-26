@@ -1,0 +1,25 @@
+/*
+ * A toolbar toggle drawn with its caption as text (ARCHITECTURE-PLUS P9.3, version 1.1): the
+ * button `Arrange Panels` at the end of the toolbar. Owner: M2. The kit's framed button, as high
+ * as the icon buttons beside it, so that it is seen as a button; pressed (the layout unlocked) it
+ * is drawn as a pressed icon button is (IconButton.css).
+ */
+
+.e68-shell__textbutton {
+  min-width: 0;
+  height: var(--h-control);
+  padding: 0 var(--sp-2);
+}
+
+.e68-shell__textbutton[aria-pressed='true'],
+.e68-shell__textbutton[aria-pressed='true']:hover:not(:disabled) {
+  background: var(--c-accent-soft);
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+}
+
+@media (forced-colors: active) {
+  .e68-shell__textbutton[aria-pressed='true'] {
+    border-color: Highlight;
+  }
+}

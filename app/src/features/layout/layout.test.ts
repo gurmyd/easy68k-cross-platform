@@ -78,11 +78,17 @@ function fakeLive(moves: unknown[]): DockLive {
 }
 
 describe('the commands', () => {
-  it('registers the three handlers and the dialog', () => {
+  it('registers the three handlers, version 1.1 the six of P9.5, and the dialog', () => {
     expect(Object.keys(feature.commands ?? {}).sort()).toEqual([
+      'app.layout.dock',
+      'app.layout.float',
       'app.layout.lock',
       'app.layout.move',
       'app.layout.reset',
+      'sim.view.layout.classic',
+      'sim.view.layout.floatingTools',
+      'sim.view.layout.sideBySide',
+      'sim.view.layout.wideOutput',
     ]);
     expect(Object.keys(feature.dialogs ?? {})).toEqual([MOVE_DIALOG_ID]);
   });

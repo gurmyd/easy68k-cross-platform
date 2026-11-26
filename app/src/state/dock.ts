@@ -24,7 +24,7 @@
 // locked() and setLocked() work without a dock too.
 
 import type { ReactNode } from 'react';
-import type { AppContext, DockLayouts, Mode, Settings } from '../contracts';
+import type { AppContext, CommandHandler, DockLayouts, DockNode, Mode, Settings } from '../contracts';
 
 export interface DockController {
   reveal(id: string, options?: { select?: boolean }): void; // showPanel
@@ -57,11 +57,93 @@ export interface DockController {
   subscribe(listener: () => void): () => void;
   reset(): void;
   /** The visible panels, open viewers included, with their titles and the group each is in, for
-   *  the dialog `layout.move` and the tab menu. */
-  describe(): { panel: string; title: string; group: number }[];
+   *  the dialog `layout.move` and the tab menu. A floating panel (version 1.1) is listed after the
+   *  docked ones with `group: 0` and `floating: true`; it is no target of a move. */
+  describe(): DockDescription[];
   /** N1's addition: counters of development builds and tests (actions the docks dispatched, how
    *  often each panel's content was mounted). Read by the browser check. */
   stats(): DockStats;
+
+  // --- version 1.1: floating panels (ARCHITECTURE-PLUS P9.2, P9.4; M1) ---------------------------
+
+  /**
+   * Makes `panel` (a panel of the mode in front, or of its own mode) a floating window. `rect`
+   * absent: the place and size it had when it floated last, else its docked size (at most three
+   * quarters of the dock in either direction) cascaded from the last floating window. A panel that
+   * floats already is moved to `rect` (when given) and brought to the front. A hidden panel is
+   * recorded as floating and floats when it is shown (P1.1 rule 4: visibility is never changed).
+   * Does nothing when the panel cannot float (canFloat). Works locked or not (D8).
+   */
+  float(panel: string, rect?: DockRect): void;
+  /** Docks a floating panel at the place it was docked at last (that group gone: its default place). */
+  dock(panel: string): void;
+  /** The floating windows of `mode` (default: the mode in front), in the order they were made to float. */
+  floating(mode?: DockMode): DockFloating[];
+  /** Whether `panel` can float now: a docked panel of a dock mode that is not the last docked one. */
+  canFloat(panel: string): boolean;
+  /**
+   * Puts every panel of `arrangement.mode` where the arrangement says (P9.4); shows and hides no
+   * panel, keeps the lock. An arrangement that does not name every panel of the mode exactly once
+   * (or lacks a panel that cannot be closed) is refused: nothing changes and false is returned.
+   */
+  arrange(arrangement: DockArrangement): boolean;
+}
+
+/**
+ * A floating window's place and size in CSS pixels, relative to the top left corner of its mode's
+ * dock (the workspace between the toolbar and the status bar), P9.2.
+ */
+export interface DockRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** A floating window (P9.2). `visible` is the panel's visibility (layout.panels), never changed here. */
+export interface DockFloating {
+  panel: string;
+  rect: DockRect;
+  visible: boolean;
+}
+
+/**
+ * A ready-made arrangement of a mode (P9.4): every panel of the mode, shown or hidden, with its
+ * place. A panel is either in `docked` (a stored tree, P4.2; weights are proportions, as stored)
+ * or in `floating`. A hidden panel in `docked` takes its place when it is shown (its place is
+ * parked from the tree, as for Reset Layout). `docked` must hold every panel that cannot be closed
+ * that does not float (FIXED_PANELS of ui/dock/model.ts: Editor `editor`, `messages`; Simulator
+ * `registers`, `listing`, `messages`, `output`).
+ */
+export interface DockArrangement {
+  mode: DockMode;
+  docked: DockNode;
+  /**
+   * The floating panels, in the order they are made to float. An entry without `rect` gets the
+   * dock's default floating size (DEFAULT_FLOAT_SIZE, at most three quarters of the dock), cascaded
+   * from `cascade` (default 'top-left'): the first at that corner of the dock, each next one
+   * 24 px further in.
+   */
+  floating: { panel: string; rect?: DockRect }[];
+  cascade?: 'top-left' | 'top-right';
+}
+
+/** The default size of a floating window that is given no size (P9.4 `Floating Tools`). */
+export const DEFAULT_FLOAT_SIZE = { width: 360, height: 280 } as const;
+
+/** The smallest floating window (P9.2): not less than 160 by 96 pixels. */
+export const MIN_FLOAT_SIZE = { width: 160, height: 96 } as const;
+
+/** The step of a cascade (P9.2, P9.4). */
+export const FLOAT_CASCADE_STEP = 24;
+
+/** A panel of DockController.describe(). */
+export interface DockDescription {
+  panel: string;
+  title: string;
+  /** The group's number in reading order, from 1; 0 for a floating panel. */
+  group: number;
+  floating?: true;
 }
 
 /** The spec of a transient tab (a viewer, P3.1.2). */
@@ -99,7 +181,13 @@ export interface DockLive {
   reset(): void;
   /** The lock setting changed; `announce` is true for the dock of the mode in front. */
   lockChanged(on: boolean, announce: boolean): void;
-  describe(): { panel: string; title: string; group: number }[];
+  describe(): DockDescription[];
+  /** Version 1.1 (M1): optional, so that a dock without floating windows still attaches. */
+  float?(panel: string, rect?: DockRect): void;
+  dock?(panel: string): void;
+  floating?(): DockFloating[];
+  canFloat?(panel: string): boolean;
+  arrange?(arrangement: DockArrangement): boolean;
 }
 
 /** What attachDock() returns to the dock. */
@@ -233,6 +321,25 @@ function createDockController(ctx: AppContext, state: ControllerState): DockCont
       notify();
     },
     describe: () => front()?.describe() ?? [],
+    float(panel, rect) {
+      liveFor(panel)?.float?.(panel, rect);
+    },
+    dock(panel) {
+      liveFor(panel)?.dock?.(panel);
+    },
+    floating(mode) {
+      const live = mode === undefined ? front() : state.lives.get(mode);
+      return live?.floating?.() ?? [];
+    },
+    canFloat(panel) {
+      return liveFor(panel)?.canFloat?.(panel) ?? false;
+    },
+    arrange(arrangement) {
+      const live = state.lives.get(arrangement.mode);
+      const done = live?.arrange?.(arrangement) ?? false;
+      if (done) notify();
+      return done;
+    },
     stats: () => ({
       actions: { ...state.stats.actions },
       mounts: { ...state.stats.mounts },
@@ -262,6 +369,52 @@ function entryOf(ctx: AppContext): Entry {
   }
   return entry;
 }
+
+/** The panel named by a command's argument `{ panel }`, else the one that holds the focus. */
+function panelArg(arg: unknown): string | null {
+  const asked = typeof arg === 'object' && arg !== null ? (arg as { panel?: unknown }).panel : undefined;
+  if (typeof asked === 'string') return asked;
+  const active = globalThis.document?.activeElement as { closest?(selector: string): Element | null } | null;
+  const region = typeof active?.closest === 'function' ? active.closest('[data-e68-panel]') : null;
+  return region?.getAttribute('data-e68-panel') ?? null;
+}
+
+const inDockMode = (state: { mode: string }) => state.mode === 'editor' || state.mode === 'simulator';
+
+function canFloatArg(ctx: AppContext, arg: unknown): boolean {
+  const panel = panelArg(arg);
+  return panel !== null && dockOf(ctx).canFloat(panel);
+}
+
+/**
+ * The handlers of the two commands of P9.5 that M1 owns (no chord, P1.3): `app.layout.float`
+ * (`&Float`, the tab menu, with `{ panel }`) and `app.layout.dock` (`&Dock`, a floating window's
+ * title bar and its menu, with `{ panel }`). Without `panel`, the panel that holds the focus.
+ * They are registered by the feature of the layout commands (features/layout/index.ts spreads
+ * this object into its commands), because a command's handler comes from a feature (3.12.3).
+ */
+export const DOCK_COMMANDS: Record<'app.layout.float' | 'app.layout.dock', CommandHandler> = {
+  'app.layout.float': {
+    run: (ctx, arg) => {
+      const panel = panelArg(arg);
+      if (panel !== null) dockOf(ctx).float(panel);
+    },
+    // Asked with an argument (the tab menu): whether that panel can float now.
+    enabled: (state, ctx, arg) => inDockMode(state) && (arg === undefined || canFloatArg(ctx, arg)),
+  },
+  'app.layout.dock': {
+    run: (ctx, arg) => {
+      const panel = panelArg(arg);
+      if (panel !== null) dockOf(ctx).dock(panel);
+    },
+    enabled: (state, ctx, arg) =>
+      inDockMode(state) &&
+      (arg === undefined ||
+        dockOf(ctx)
+          .floating()
+          .some((window) => window.panel === panelArg(arg))),
+  },
+};
 
 /** The dock controller of the window of `ctx` (one per context). */
 export function dockOf(ctx: AppContext): DockController {

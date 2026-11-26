@@ -6,6 +6,16 @@
    No design token exists for these, so they are the four custom properties below. The rest of the
    panel uses the tokens of app/src/styles. */
 
+/* The panel's own scroll area (version 1.1, erratum SH7 10): it takes the region's size, and
+   when the region is smaller than the panel's six rows (docked low, or floating small) they scroll
+   inside it, vertically and horizontally. Where they fit, nothing scrolls and nothing moves. */
+.e68-hw-scroll {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
 .e68-hw {
   --hw-on: #ff0000;
   --hw-off: #400000;

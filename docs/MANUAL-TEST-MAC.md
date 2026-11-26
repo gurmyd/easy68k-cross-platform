@@ -593,6 +593,7 @@ type `xattr -dr com.apple.quarantine ` and then drag the app onto the Terminal w
 | F2 | In full screen, press Esc in Chrome, in Safari and in the Mac app | Chrome and the app: the program shows code `1B` and full screen stays. Safari: full screen ends and the program gets no key (a known difference, note 36 of `docs/DIFFERENCES.md`) |
 | F3 | On a Retina display: Output panel zoom `200%`, run `graphicSound.X68` | Sharp square pixels, no blur |
 | F4 | Run `mouseWindowSize.X68` (it shows the mouse position and buttons and draws a green crosshair): tap the trackpad, click with two fingers (right-click), drag | The program shows the left button for a tap, the right button for a two-finger click, and the position follows while dragging |
+| F5 | A floating window with the trackpad, in Safari and in Chrome. Simulator mode: View > Hardware, then click the Hardware tab with two fingers and choose Float. Drag the window's title bar to another place; drag its bottom right corner to make it larger, then its left edge; then drag the corner far up and to the left to make it as small as it goes; then drag the title bar far to the right, off the window. Reload the page, switch to Simulator mode, and click Dock on the window's title bar | The window follows your finger without jumps; the corner and the edge size it; it stops getting smaller at 160 by 96 pixels; dragged off, a part of its title bar stays inside and can be dragged back. After the reload it is where you left it, at the same size. Dock puts the Hardware panel back among the tabs below the Output panel. Write down anything that is hard to grab (the edges are 5 pixels wide, the corners 12) |
 
 ### B5. Printing (needs a printer)
 
@@ -612,7 +613,7 @@ type `xattr -dr com.apple.quarantine ` and then drag the app onto the Terminal w
 
 ### B7. VoiceOver and the keyboard alone
 
-For V1 to V7, V10 and V11, switch VoiceOver on with Cmd+F5 (Fn+Cmd+F5). Write down what it says, and anything you
+For V1 to V7 and V10 to V12, switch VoiceOver on with Cmd+F5 (Fn+Cmd+F5). Write down what it says, and anything you
 cannot reach. V8 and V9 are done without VoiceOver.
 
 | # | Do | Expected |
@@ -628,6 +629,7 @@ cannot reach. V8 and V9 are done without VoiceOver.
 | V9 | In the light and in the dark theme (the button at the top right): Tab into the Output panel | The frame that shows the panel has the keyboard is clearly visible against the black panel and the window around it |
 | V10 | VoiceOver on, Editor mode. Window > Move Panel To... Choose the panel Files, the choice `Into the group of`, the panel Editor, and press OK | The dialog's controls are read with their names. After OK VoiceOver says `Files moved into the group of Editor.` without you moving to it, and the keyboard is inside the moved panel |
 | V11 | VoiceOver on, in Simulator mode, with the Memory panel shown (View menu), at any window size. View > Lock Layout (so that it is unchecked). In a wide window the Memory panel has a group of its own; put it into the group of the Output panel first: View > Move Panel To..., the panel Memory, the choice `Into the group of`, the panel Output, OK (in a window narrower than about 1100 pixels the two already share a group: skip this). Then move to the tab of the Memory panel, open its menu (Shift+F10, or VoiceOver's own context menu command) and choose Move Tab Earlier; then open the menu of the Registers tab and choose Move Right | The menu is read (`Panel tab`) with its items; each choice is announced, in one of the forms `<panel> moved into the group of <panel>.`, `<panel> moved to position <n> of its group.`, `<panel> moved beside <panel>, right.` or `<panel> moved to the right edge of the window.`; the panels are read in the order they are on the screen, from left to right and top to bottom |
+| V12 | VoiceOver on, Simulator mode, with the Hardware panel shown (View > Hardware). Move to the Hardware tab, open its menu (Shift+F10, or VoiceOver's own context menu command) and choose Float. Then press Tab until the floating window's title bar is reached; open its menu with Shift+F10, choose Move, press the Left arrow twice and Return; open the menu again, choose Size, press the Right arrow and then Esc; open it once more and choose Dock | The window is read as `Hardware, floating` and its title bar as a button `Hardware` that opens a menu; the menu items `Move`, `Size`, `Dock` and `Close` are read. Tab reaches the title bar after all docked panels, then the Hardware panel's controls. Each arrow press moves the window by 16 pixels; Esc puts the size back. After Dock the Hardware panel is among the tabs below the Output panel again, the keyboard is in it, and nothing of the application became unreachable while the window floated |
 
 ### B8. A long session in Safari (30 minutes)
 
@@ -768,6 +770,7 @@ And what the parts of the port left for a person:
 | `docs/requests/N0.md` section 5.2 and 5.4 (the PDF in a real Safari, Chrome and Edge, not tried by a person), `docs/ARCHITECTURE-PLUS.md` P3.4.2 | E1-E4 |
 | `docs/porting/errata/N6.md` entry 14 (the viewer's frame sent to another address in the desktop app, which has no service worker) | E5 |
 | `docs/ARCHITECTURE-PLUS.md` P3.1.8 (a screen reader over a move of a panel and over the order of the panels) | V10, V11 |
+| `docs/ARCHITECTURE-PLUS.md` P9.2 and `docs/porting/errata/M1.md` entry 10 (a floating window dragged and sized with a real trackpad, and moved, sized and docked with VoiceOver, version 1.1) | F5, V12 |
 | `docs/integration/rc.md`, the accessibility audit (the walk-throughs on a real Mac with Safari's Tab setting, a halt and `Current Log Stopped.` announced, the focus frame of the Output panel, real screen readers) | V6-V9, X4 |
 | `docs/porting/errata/X3.md` entry 6 (a real Safari's canvas keeps colours exact; whole-program pictures against the original) | W5, W6, C6 |
 | `docs/porting/errata/DOC1.md` (the README's build steps followed literally on a Mac) | B12 |
@@ -814,7 +817,8 @@ A6 key recording: attached yes/no
 B1 layouts (which layout): L1:   L2:   L3:   L4:
 B2 Safari: W0:   W1:   W2:   W3:   W4:   W5 (both sums):   W6 (sum):   W7 (device, version):   W8 (what you saw, seconds for each try, minutes until a reload showed the files or whether quitting Safari was needed, macOS and Safari versions):
 B3 Mac app (exact first-start message, which way worked): D1:   D2:   D3:   D4:   D5:   D6:   D7:   D8:   D9:   D10:
-B7 VoiceOver and keyboard only: V1:   V2:   V3:   V4:   V5:   V6:   V7:   V8:   V9:   V10:   V11:
+B4 floating window with the trackpad (Safari, Chrome): F5:
+B7 VoiceOver and keyboard only: V1:   V2:   V3:   V4:   V5:   V6:   V7:   V8:   V9:   V10:   V11:   V12:
 B13 Chrome install (its exact words): I1:
 B14 sound program (browser): S7 (step 7: looping or once?):   S8:
 B15 PDF viewer (browser and version for each): E1:   E2:   E3:   E4:   E5:

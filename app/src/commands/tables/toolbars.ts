@@ -11,6 +11,26 @@ import type { ToolbarNode } from './types';
 const button = (id: Extract<ToolbarNode, { type: 'command' }>['id']): ToolbarNode => ({ type: 'command', id });
 const separator: ToolbarNode = { type: 'separator' };
 
+/**
+ * Version 1.1 (ARCHITECTURE-PLUS P9.3; M2): the button `Arrange Panels` at the end of the toolbar
+ * of Editor and Simulator mode, after a separator, behind everything the toolbar had. It is the
+ * check command `app.layout.lock` inverted: pressed means the layout is unlocked and the tabs can
+ * be dragged. The tool-tip names the menu item of the mode (Simulator: View, Editor: Window).
+ */
+export const ARRANGE_BUTTON_TEXTS = {
+  caption: 'Arrange Panels',
+  simulatorTooltip: 'Arrange Panels: drag a panel by its tab, or right-click a tab for more (View > Lock Layout)',
+  editorTooltip: 'Arrange Panels: drag a panel by its tab, or right-click a tab for more (Window > Lock Layout)',
+} as const;
+
+const arrange = (tooltip: string): ToolbarNode => ({
+  type: 'toggle',
+  id: 'app.layout.lock',
+  caption: ARRANGE_BUTTON_TEXTS.caption,
+  tooltip,
+  inverted: true,
+});
+
 export const EDITOR_TOOLBAR: ToolbarNode[] = [
   // added (1.5)
   button('app.files.toggle'),
@@ -35,6 +55,9 @@ export const EDITOR_TOOLBAR: ToolbarNode[] = [
   button('ed.edit.uncomment'),
   separator,
   button('ed.project.assemble'),
+  // added in version 1.1 (ARCHITECTURE-PLUS P9.3)
+  separator,
+  arrange(ARRANGE_BUTTON_TEXTS.editorTooltip),
 ];
 
 export const SIM_TOOLBAR: ToolbarNode[] = [
@@ -55,6 +78,9 @@ export const SIM_TOOLBAR: ToolbarNode[] = [
   button('sim.run.logStart'),
   button('sim.run.logStop'),
   { type: 'logging' },
+  // added in version 1.1 (ARCHITECTURE-PLUS P9.3)
+  separator,
+  arrange(ARRANGE_BUTTON_TEXTS.simulatorTooltip),
 ];
 
 export const EASYBIN_TOOLBAR: ToolbarNode[] = [];

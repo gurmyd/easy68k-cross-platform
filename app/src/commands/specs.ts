@@ -147,6 +147,15 @@ const ROWS: Record<KnownCommandId, Row> = {
   'app.layout.reset': { caption: 'R&eset Layout' },
   'app.files.trash': { caption: 'Tras&h...' },
   'app.additions.options': { caption: 'Port Ad&ditions...' },
+  // ---- Every mode: version 1.1, arranging panels freely (ARCHITECTURE-PLUS P9.5; no keys, P1.3)
+  'app.layout.float': { caption: '&Float' },
+  'app.layout.dock': { caption: '&Dock' },
+  // ---- Simulator: View > Layouts, version 1.1 (ARCHITECTURE-PLUS P9.4, P9.5; M2). No keys (P1.3);
+  // the access keys C, W, O, F differ inside the submenu.
+  'sim.view.layout.classic': { caption: '&Classic' },
+  'sim.view.layout.wideOutput': { caption: '&Wide Output' },
+  'sim.view.layout.sideBySide': { caption: '&Output and Hardware Side by Side' },
+  'sim.view.layout.floatingTools': { caption: '&Floating Tools' },
 };
 
 function modeOf(id: KnownCommandId): Mode | 'app' {

@@ -239,6 +239,8 @@ items keep their positions:
 | `Earlier Versions...` (P3.3.3) | `ed.file.history` (arg: `{ path? }`) | end of the Editor's File menu, below a separator; end of the editor's context menu; the Files panel's context menu | - | - |
 | `Trash...` (P3.3.3) | `app.files.trash` | end of the Editor's File menu, after `Earlier Versions...`; the Files panel's strip | - | - |
 | `Port Additions...` (P3.5) | `app.additions.options` (arg: `{ group?: 'storage' }`) | end of the Options menu in Editor and Simulator mode, below a separator | - | - |
+| `Float`, `Dock` (version 1.1, `ARCHITECTURE-PLUS.md` P9.2, P9.5) | `app.layout.float` (arg: `{ panel }`), `app.layout.dock` (arg: `{ panel }`) | `Float`: the tab menu of a panel, after `Move Tab Later`, below a separator; `Dock`: a floating window's title bar (a button) and its menu | - | - |
+| `Layouts` > `Classic`, `Wide Output`, `Output and Hardware Side by Side`, `Floating Tools` (version 1.1, P9.4, P9.5) | `sim.view.layout.classic`, `sim.view.layout.wideOutput`, `sim.view.layout.sideBySide`, `sim.view.layout.floatingTools` | Simulator: a submenu `Layouts` at the end of the View menu, after `Reset Layout` | - | - |
 
 ## 2. Differences recorded by each part of the port
 
@@ -1780,6 +1782,50 @@ file into `docs/DIFFERENCES.md`.
 | The editor's status bar and the tool tip of a document's tab | The internal path of the store (`/browser/demo/prog.X68`, `/linked/...`) | `My Programs/demo/prog.X68`; for a linked file `lab1.X68 - on this computer, edited in place`; in an opened folder `Lab/prog.X68 - in the folder "Lab" on this computer`; in the desktop app the real path. A message names a linked file `lab1.X68 (on this computer)` | P3.2.5, P4.5 |
 | A file changed outside the window | Found when the file is saved (the question of main 3.8.6) | An open, unmodified document whose file was changed by another window, or by another program in an opened folder or on the disk, shows `"prog.X68" was changed outside this window.` with Reload when the window regains the focus. A modified document is left alone; Save asks as before | P3.3.10. In every store, with no switch |
 | The message area when a program's folder is beyond the limits | Every file that is left out is named: `Not available to the program: <path> (<reason>)` | A file below a folder named `.git` that is left out is not named; the others still are | P3.3.10 |
+
+### Differences introduced by M1 (floating panels, version 1.1)
+
+(`docs/differences/M1.md`)
+
+Deliberate differences between version 1.1 and version 1.0.0 (and the original), that this package
+introduces (`docs/ARCHITECTURE-PLUS.md` P9.2, `docs/porting/errata/M1.md`). None changes what a 68000
+program can observe, a file the application writes, which panels are shown, or the original's menus,
+commands and keys. With nothing floating the page is the one 1.0.0 draws. M3 wrote this file from the
+code of M1; `tools/make-differences.mjs` merges it into `docs/DIFFERENCES.md`.
+
+| Where | Original and 1.0.0 | Version 1.1 | Why |
+|---|---|---|---|
+| Panels in a window of their own | The original's Simulator has separate windows that can be put anywhere on the desktop; 1.0.0 has only docked panels | Any panel of the Editor and the Simulator can float: a window inside the application window with a title bar (the panel's name, `Dock`, and the panel's `x` where it has one), moved by its title bar, sized at its edges and corners (not below 160 by 96 pixels), above the docked panels, the one clicked in front. Several can float at once; each holds one panel. The last docked panel of a mode cannot float. A floating window is never outside the browser window or on a second screen | The owner could not arrange the Simulator so that everything can be seen (P9.1) |
+| The tab menu | `Move To...` to `Move Tab Later`, and `Close` | `Float` before `Close`, below a separator | P9.2 |
+| A floating window's title bar | Not present | One stop of Tab; Shift+F10, the context-menu key, Enter, Space or a right click open its menu `Move`, `Size`, `Dock`, `Close` (`Close` where the panel has an `x`). After `Move` or `Size` the arrow keys move the window, or its right and bottom edges, by 16 pixels (with Shift by 1); Enter keeps, Esc restores | P9.2: everything can be done without a mouse |
+| `Dock` | Not present | The panel goes back where it was docked last, beside the panel it was next to; when that panel is not docked now, to its place in the default arrangement. `Reset Layout` docks every floating panel | P9.2 |
+| `Lock Layout` | Locks every move by dragging | Locks the docked arrangement only. A floating window can be moved, sized, docked and closed while the layout is locked, and `Float` works then too | Decision D8 |
+| Dragging a tab (layout unlocked) | A tab dropped outside the dock's panels does nothing | A tab dropped on the menus, the toolbar or the status bar makes its panel float there | P9.2 |
+| Tab order and reading order | The docked panels in their order | The docked panels first, then each floating window (its title bar, then its panel) in the order in which they were made to float, not in the order they are stacked | P9.2 |
+| Screen readers | Panels are regions named after the panel | A floating window is a region named `<panel name>, floating` (for example `Hardware, floating`); it is not a dialog, and the rest of the application stays usable | P9.2 |
+| A smaller browser window | Not applicable | Floating windows are moved back so that the title bar stays reachable (at least 48 pixels of it inside the workspace), never resized; their stored place is kept, so they come back when the window grows. An arrangement with a floating window is a changed arrangement: the Simulator's narrow arrangement under 1100 pixels is not used for it | P9.2, erratum M1 3 and 5 |
+| Stored arrangement | The docked tree of each mode | Also each mode's floating windows with their place, size and order, per window; a stored layout of 1.0.0 is read as it is (nothing floats). A viewer's floating window is not stored, as a viewer's tab is not | P9.2, P4.2 |
+| The Output panel in a floating window | Not applicable | Its keys (the chords a running program receives, Ctrl+Alt+O to leave it, Alt+Enter for full screen) are unchanged; full screen shows the panel as before | P1.1 |
+| A PDF in a viewer that is made to float | Not applicable | The browser loads the PDF again: it shows its first page from the top. A picture keeps its place | A known limitation of the browsers (erratum M1 9) |
+| EASyBIN | One panel | Nothing floats there; `Float` and `Dock` are disabled in that mode | It has nothing to arrange |
+
+### Differences introduced by M2 (finding the arranging, ready-made layouts, version 1.1)
+
+(`docs/differences/M2.md`)
+
+Deliberate differences between version 1.1 and version 1.0.0 (and the original), that this package
+introduces (`docs/ARCHITECTURE-PLUS.md` P9.3, P9.4; `docs/porting/errata/M2.md`). None changes what a
+68000 program can observe, a file the application writes, which panels are shown, or the original's
+menus, commands and keys: the toolbar's new button comes after all of the original's buttons, and the
+new menu entries after the original's items and the stage's. M3 wrote this file from P9 and the code
+of M2; `tools/make-differences.mjs` merges it into `docs/DIFFERENCES.md`.
+
+| Where | Original and 1.0.0 | Version 1.1 | Why |
+|---|---|---|---|
+| The toolbar of each mode | The original's buttons | The same buttons in the same places, then, after a separator, `Arrange Panels`: a toggle that is pressed while `Lock Layout` is unchecked (the tabs can be dragged). Its tool tip: `Arrange Panels: drag a panel by its tab, or right-click a tab for more (View > Lock Layout)` (`Window > Lock Layout` in the Editor). It runs `Lock Layout`; it is no new command | In 1.0.0 nothing on the screen said that the panels can be arranged (P9.1) |
+| A tip, once | Not present | The first time the Simulator is shown, with no program running or waiting for input, a line above the status bar: `You can rearrange this window: make a panel float, dock it elsewhere or pick a ready-made layout in the View menu.` with `Arrange Panels` (unlocks the layout) and `Got it`. It takes no keyboard focus and is announced politely. When a program starts it goes away unanswered and comes back when the program stops. After either button it never comes again in that browser profile, in any window | P9.3 |
+| The Simulator's View menu | 1.0.0: `Move Panel To...`, `Lock Layout`, `Reset Layout` after the original's items | Also a submenu `Layouts` with `Classic` (the default arrangement, as `Reset Layout` gives it: floating panels dock), `Wide Output` (the Output panel the whole height of the right column, the tool panels a group below the Listing), `Output and Hardware Side by Side` (the Hardware panel in a column of its own beside the Output panel) and `Floating Tools` (every tool panel floats, cascaded from the top right, at a default size). None shows or hides a panel; each keeps the lock. The Editor and EASyBIN have none | P9.4 |
+| `Move Panel To...` | Three places: into a group, beside a panel, at an edge | A fourth place, `As a floating window` | P9.2 |
 
 ## 3. Shortcuts a browser does not give up
 

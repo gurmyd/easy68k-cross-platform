@@ -58,6 +58,11 @@ export type ResolvedToolbarItem =
       enabled: boolean;
       /** For toggles (kind 'check'): the pressed state. */
       pressed: boolean | null;
+      /**
+       * Version 1.1 (ARCHITECTURE-PLUS P9.3): a button drawn with this text instead of its icon
+       * (`label` is then the same text) and with `tooltip` as its tool-tip and description.
+       */
+      text?: { caption: string; tooltip: string };
     }
   | { type: 'separator' }
   | { type: 'logging'; visible: boolean };
@@ -166,6 +171,19 @@ export function resolveToolbar(mode: Mode, env: ResolveEnv): ResolvedToolbarItem
   return TOOLBARS[mode].map((node): ResolvedToolbarItem => {
     if (node.type === 'separator') return { type: 'separator' };
     if (node.type === 'logging') return { type: 'logging', visible: env.state.sim.logging };
+    if (node.type === 'toggle') {
+      const checked = env.commands.isChecked(node.id);
+      return {
+        type: 'button',
+        id: node.id,
+        icon: 'dot',
+        label: node.caption,
+        disabledReason: null,
+        enabled: env.commands.isEnabled(node.id),
+        pressed: node.inverted ? !checked : checked,
+        text: { caption: node.caption, tooltip: node.tooltip },
+      };
+    }
     const spec = COMMAND_SPECS[node.id];
     const shortcut = shortcutText(node.id, env);
     const hint = spec.hint ?? spec.caption;

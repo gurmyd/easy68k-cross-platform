@@ -3,7 +3,20 @@
 
 /* ---- Registers ------------------------------------------------------------------------------ */
 
+/* The panel's own scroll area (version 1.1, erratum U1 12): it fills the
+   region where the region has a size of its own (a fill region: scrolled vertically when shorter),
+   and takes the fields' height where the dock sizes the region by its content. Narrower than the
+   register grid, it scrolls horizontally (the grid never wraps; the SR, PC, SS, US and Cycles part
+   wraps below it, as before). Where everything fits, nothing scrolls and nothing moves. */
+.e68-regs-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
 .e68-regs {
+  min-width: min-content;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;

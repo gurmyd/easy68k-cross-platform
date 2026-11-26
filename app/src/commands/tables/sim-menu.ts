@@ -76,6 +76,18 @@ export const SIM_MENUS: MenuTable[] = [
       command('app.layout.move'),
       command('app.layout.lock'),
       command('app.layout.reset', undefined, 'Reset La&yout'),
+      // added in version 1.1 (ARCHITECTURE-PLUS P9.4): the ready-made arrangements of the Simulator
+      separator,
+      {
+        type: 'submenu',
+        caption: 'Layou&ts',
+        items: [
+          command('sim.view.layout.classic'),
+          command('sim.view.layout.wideOutput'),
+          command('sim.view.layout.sideBySide'),
+          command('sim.view.layout.floatingTools'),
+        ],
+      },
     ],
   },
   {

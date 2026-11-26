@@ -236,7 +236,8 @@ Points and Log) can be moved, and every move can be made without a mouse.
   with the layout locked too.
 - A right click on a tab (or Shift+F10, or the context-menu key, on a tab that has the keyboard) opens a
   menu with **Move To...**, **Move Left**, **Move Right**, **Move Up**, **Move Down**, **Move Tab
-  Earlier**, **Move Tab Later** and **Close**. **Close** is there for the panels that have an ``x``.
+  Earlier**, **Move Tab Later**, **Float** and **Close**. **Close** is there for the panels that have an
+  ``x``; **Float** is explained in "Arranging panels" below.
 - **Window > Reset Layout** (in the Simulator: **View > Reset Layout**) puts the panels of the current
   mode back where the original has them. It does not show or hide any panel and does not change Lock
   Layout.
@@ -253,6 +254,61 @@ Points and Log) can be moved, and every move can be made without a mouse.
   what the original's Tile Vertically and Tile Horizontally do; with two panes, they move the active
   document to the other pane. Close Split does what Cascade does. Dragging a document's tab onto the
   other pane moves the document there.
+
+### Arranging panels
+
+The original's Simulator has separate windows that you can put anywhere on the screen. Here a panel
+can do the same inside the application's window: it can *float*. This works in the Editor and in the
+Simulator (EASyBIN has only one panel).
+
+- *Make a panel float.* Right-click the panel's tab and choose **Float**, or choose **View > Move
+  Panel To...** (in the Editor **Window > Move Panel To...**), pick the panel and the place **As a
+  floating window**, and press OK. The panel becomes a window of its own above the other panels: a
+  title bar with the panel's name, a **Dock** button and, for the panels that have one, an ``x``. It
+  keeps what it shows: the Memory panel's address, the Hardware panel's switches, the Output
+  panel's picture and a program that waits for a key. Several panels can float at once; each window
+  holds one panel. The last panel that is still docked cannot float.
+- *Move and size it with the mouse or a trackpad.* Drag the title bar to move the window. Drag an edge
+  or a corner to make it larger or smaller; it never gets smaller than 160 by 96 pixels. A window
+  that is clicked comes to the front. A window always keeps a part of its title bar inside the
+  application's window, so that you can reach it; when the application's window gets smaller, the
+  floating windows are moved back inside it, never made smaller.
+- *Move and size it with the keyboard.* The title bar is a stop of Tab: the floating windows come
+  after all docked panels, in the order in which you made them float. On the title bar, Shift+F10
+  (or the context-menu key, Enter, Space, or a right click) opens its menu: **Move**, **Size**,
+  **Dock** and, where the panel has an ``x``, **Close**. After **Move** or **Size** the arrow keys move
+  the window, or its right and bottom edges, by 16 pixels, with Shift by 1 pixel; Enter keeps the
+  new place, Esc puts it back where it was. A screen reader names the window after its panel, for
+  example ``Hardware, floating``. It is not a dialog: everything else stays usable.
+- *Dock it again.* **Dock** (the button or the menu item) puts the panel back where it was docked
+  last; if that place is gone, it goes where the original has it. The panel's ``x`` (or **Close**)
+  hides it as before; shown again from the View menu, it floats where it was. **View > Reset Layout**
+  (in the Editor **Window > Reset Layout**) docks every floating panel.
+- *The Arrange Panels button.* At the end of the toolbar, behind the original's buttons, **Arrange
+  Panels** is pressed while the layout is unlocked (**View > Lock Layout** unchecked, in the Editor
+  **Window > Lock Layout**): then every group of panels shows its tabs, and a tab can be dragged.
+  Press it again to lock the layout. With the layout unlocked, a tab dropped outside the panels (on
+  the menus, the toolbar or the status bar) makes its panel float there.
+- *Ready-made layouts* (Simulator only): **View > Layouts** has four entries. **Classic** is the
+  original's arrangement (what Reset Layout gives). **Wide Output** gives the Output panel the whole
+  height of the right column and puts the tool panels (Memory, Stack, Hardware, Break Points, Log) as
+  tabs below the Listing. **Output and Hardware Side by Side** puts the Hardware panel in a column of
+  its own at the right of the Output panel. **Floating Tools** makes every tool panel float, from the
+  top right, as the original's separate windows. A layout shows and hides no panel: a hidden panel
+  takes its place when you show it.
+- *What Lock Layout means now.* It keeps the docked panels where they are: while it is checked, tabs
+  cannot be dragged, and only the tool panels show a tab. Floating windows are not locked: they can
+  always be moved, sized, docked and closed, and **Float**, **Move Panel To...** and **View > Layouts**
+  work whether the layout is locked or not. Lock Layout is checked at first, as before.
+- *A tip, once.* The first time the Simulator is shown (not while a program runs or waits for
+  input), a line above the status bar says `You can rearrange this window: make a panel float, dock
+  it elsewhere or pick a ready-made layout in the View menu.` **Arrange Panels** unlocks the layout,
+  **Got it** only closes the line; after either it never comes again in this browser. If a program
+  starts while it is shown, it goes away and comes back when the program has stopped.
+- Floating windows are kept with the rest of the arrangement, for each window and each mode, and are
+  where you left them after a reload (a viewer's window is not: viewers are closed by a reload). The
+  Output panel's keys are the same when it floats (Ctrl+Alt+O, Ctrl+Option+O on a Mac, leaves it;
+  Alt+Enter, Option+Return on a Mac, shows it full screen). A PDF in a viewer starts again at its first page when its viewer is made to float.
 
 ### The Files panel: several files at once
 

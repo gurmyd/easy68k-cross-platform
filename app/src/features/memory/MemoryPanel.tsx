@@ -8,10 +8,20 @@
 //
 // All behaviour is in model.ts and rules.ts; this component measures, renders and forwards events.
 
-import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type FocusEvent,
+  type KeyboardEvent,
+} from 'react';
 import { ADDRESS_FIELD, Button, Checkbox, IconButton, MaskedField, type MaskedConfig } from '../../ui/components';
 import { useAppContext } from '../../state/context';
 import { memoryModelOf } from './model';
+import { revealInArea } from './reveal';
 import { COLUMN_HEADER, cellAddress, type MemoryRow } from './rules';
 import './memory.css';
 
@@ -40,6 +50,10 @@ export function MemoryPanel() {
   const state = useSyncExternalStore(model.subscribe, model.getState);
   const rowsRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLDivElement>(null);
+  const cursorRef = useRef<HTMLDivElement>(null);
+  const [rowsFocused, setRowsFocused] = useState(false);
+  const reveal = (event: FocusEvent<HTMLDivElement>) => revealInArea(event.currentTarget, event.target);
   const [cell, setCell] = useState({ width: 8, height: 16 });
   const statusId = useId();
   const fieldIds = { address: useId(), from: useId(), to: useId(), bytes: useId() };
@@ -112,6 +126,17 @@ export function MemoryPanel() {
 
   const cursor =
     state.cursor && state.rows > 0 ? { ...state.cursor, row: Math.min(state.cursor.row, state.rows - 1) } : null;
+
+  // The cursor's cell stays in view while the rows have the focus and the table is scrolled
+  // sideways (a panel narrower than a row): the table's own offsets, never scrollIntoView.
+  const cursorCol = cursor?.col ?? null;
+  const cursorRowIndex = cursor?.row ?? null;
+  useLayoutEffect(() => {
+    const table = tableRef.current;
+    const frame = cursorRef.current;
+    if (!table || !frame || cursorCol === null || document.activeElement !== rowsRef.current) return;
+    revealInArea(table, frame);
+  }, [cursorCol, cursorRowIndex, cell, rowsFocused]);
   const cursorAddress = cursor ? cellAddress(state.address, cursor) : null;
   const cursorRow = cursor ? state.view[cursor.row] : undefined;
   const cursorText =
@@ -121,7 +146,7 @@ export function MemoryPanel() {
 
   return (
     <div className="e68-memory">
-      <div className="e68-memory__main">
+      <div className="e68-memory__main" onFocus={reveal}>
         <div className="e68-memory__strip">
           <MaskedField
             id={fieldIds.address}
@@ -164,57 +189,66 @@ export function MemoryPanel() {
           <Button caption="Fill" size="small" onClick={() => void model.fill()} />
           <IconButton icon="file-save" label="Save" size="small" onClick={() => void model.save()} />
         </div>
-        <div className="e68-memory__header" aria-hidden="true">
-          {`${' '.repeat(10)}${COLUMN_HEADER}`}
-        </div>
-        <div
-          ref={rowsRef}
-          className="e68-memory__rows"
-          role="group"
-          aria-label="Memory contents"
-          aria-roledescription="memory editor"
-          aria-describedby={statusId}
-          tabIndex={0}
-          onFocus={() => model.ensureCursor()}
-          onKeyDown={onRowsKeyDown}
-          onWheel={(event) => model.wheel(event.deltaY, event.deltaMode)}
-          onPointerDown={(event) => {
-            if (event.button !== 0) return;
-            const rows = rowsRef.current;
-            if (!rows) return;
-            const box = rows.getBoundingClientRect();
-            const padding = parseFloat(getComputedStyle(rows).paddingLeft) || 0;
-            const x = event.clientX - box.left - padding + rows.scrollLeft;
-            const y = event.clientY - box.top;
-            event.preventDefault();
-            rows.focus({ preventScroll: true });
-            model.place({ row: Math.floor(y / cell.height), col: Math.floor(x / cell.width) });
-          }}
-        >
-          <div ref={measureRef} className="e68-memory__row e68-memory__measure" aria-hidden="true">
-            WWWWWWWWWW
+        {/* The header and the rows scroll sideways together when the panel is narrower than a
+            row (version 1.1): a row always holds 16 bytes, as in the original (sim-ui 10.1). */}
+        <div className="e68-memory__table" ref={tableRef} data-memory-table="">
+          <div className="e68-memory__header" aria-hidden="true">
+            {`${' '.repeat(10)}${COLUMN_HEADER}`}
           </div>
-          {state.view.map((row) => (
-            <Row key={row.address} row={row} />
-          ))}
-          {cursor && (
-            <div
-              className="e68-memory__cursor"
-              aria-hidden="true"
-              style={{
-                left: `calc(var(--sp-1) + ${cursor.col * cell.width}px)`,
-                top: cursor.row * cell.height,
-                width: cell.width,
-                height: cell.height,
-              }}
-            />
-          )}
-          <span id={statusId} className="e68-sr" aria-live="polite">
-            {cursorText}
-          </span>
+          <div
+            ref={rowsRef}
+            className="e68-memory__rows"
+            role="group"
+            aria-label="Memory contents"
+            aria-roledescription="memory editor"
+            aria-describedby={statusId}
+            tabIndex={0}
+            onFocus={() => {
+              model.ensureCursor();
+              setRowsFocused(true);
+            }}
+            onBlur={() => setRowsFocused(false)}
+            onKeyDown={onRowsKeyDown}
+            onWheel={(event) => model.wheel(event.deltaY, event.deltaMode)}
+            onPointerDown={(event) => {
+              if (event.button !== 0) return;
+              const rows = rowsRef.current;
+              if (!rows) return;
+              const box = rows.getBoundingClientRect();
+              const padding = parseFloat(getComputedStyle(rows).paddingLeft) || 0;
+              const x = event.clientX - box.left - padding + rows.scrollLeft;
+              const y = event.clientY - box.top;
+              event.preventDefault();
+              rows.focus({ preventScroll: true });
+              model.place({ row: Math.floor(y / cell.height), col: Math.floor(x / cell.width) });
+            }}
+          >
+            <div ref={measureRef} className="e68-memory__row e68-memory__measure" aria-hidden="true">
+              WWWWWWWWWW
+            </div>
+            {state.view.map((row) => (
+              <Row key={row.address} row={row} />
+            ))}
+            {cursor && (
+              <div
+                ref={cursorRef}
+                className="e68-memory__cursor"
+                aria-hidden="true"
+                style={{
+                  left: `calc(var(--sp-1) + ${cursor.col * cell.width}px)`,
+                  top: cursor.row * cell.height,
+                  width: cell.width,
+                  height: cell.height,
+                }}
+              />
+            )}
+            <span id={statusId} className="e68-sr" aria-live="polite">
+              {cursorText}
+            </span>
+          </div>
         </div>
       </div>
-      <div className="e68-memory__side">
+      <div className="e68-memory__side" onFocus={reveal}>
         <span className="e68-memory__sidelabel">Row</span>
         <IconButton icon="chevron-up" label="Row up" size="small" onClick={() => model.rowUp()} />
         <IconButton icon="chevron-down" label="Row down" size="small" onClick={() => model.rowDown()} />

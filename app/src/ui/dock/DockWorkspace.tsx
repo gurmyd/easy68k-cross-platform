@@ -34,6 +34,7 @@ import './dock.css';
 import { DockEngine } from './engine';
 import { DOCK_KEY_MAP, isViewerId, panelOfTab, tabIdOf, type DockMode } from './model';
 import { blockOf, stopsOf } from './order';
+import { FloatEdges, FloatTitleBar } from './FloatChrome';
 import { innerPanelId, type SplitRole } from './splitters';
 import { TabMenu, type TabMenuState } from './TabMenu';
 import { CLOSE_TAB, SPLITTER_LABEL } from './texts';
@@ -129,15 +130,16 @@ function OutputContent({ engine }: { engine: DockEngine }) {
   );
 }
 
-/** A viewer (a transient panel): its element is the tab panel (P3.1.2). */
-function TransientContent({ engine, panel }: { engine: DockEngine; panel: string }) {
+/** A viewer (a transient panel): its element is the tab panel (P3.1.2); floating, it has no tab. */
+function TransientContent({ engine, panel, floating }: { engine: DockEngine; panel: string; floating: boolean }) {
   const spec = engine.transients.get(panel);
   return (
     <section
       id={innerPanelId(tabIdOf(engine.mode, panel))}
       data-e68-panel={panel}
-      role="tabpanel"
-      aria-labelledby={`flexlayout-tabbutton-${tabIdOf(engine.mode, panel)}`}
+      role={floating ? 'region' : 'tabpanel'}
+      aria-label={floating ? (spec?.title ?? panel) : undefined}
+      aria-labelledby={floating ? undefined : `flexlayout-tabbutton-${tabIdOf(engine.mode, panel)}`}
       tabIndex={-1}
       className="e68-region e68-region--fill e68-dock__viewer"
     >
@@ -189,22 +191,22 @@ function DockSlot({ engine, panel, side }: { engine: DockEngine; panel: string; 
   );
 }
 
-/** A panel's content between the slots of the blocks that come before and after it. */
-function Slotted({ engine, panel, children }: { engine: DockEngine; panel: string; children: ReactNode }) {
-  return (
-    <>
-      <DockSlot engine={engine} panel={panel} side="before" />
-      {children}
-      <DockSlot engine={engine} panel={panel} side="after" />
-    </>
-  );
-}
-
-/** The content of a panel's tab (exported for the shell's tests under Node). */
+/**
+ * The content of a panel's tab (exported for the shell's tests under Node), between the slots of
+ * the blocks that come before and after it (Lock Layout on, order.ts). Floating (version 1.1), the
+ * window's title bar comes before the content and its edges after it; the content keeps its place
+ * among its siblings either way, so floating and docking never create it anew (P9.2).
+ */
 export function DockContent({ engine, panel }: { engine: DockEngine; panel: string }) {
   useMountCount(engine, panel);
+  const app = useApplication();
+  const view = useSyncExternalStore(
+    engine.subscribeFloats,
+    () => engine.floatViewOf(panel),
+    () => engine.floatViewOf(panel),
+  );
   let content: ReactNode;
-  if (isViewerId(panel)) content = <TransientContent engine={engine} panel={panel} />;
+  if (isViewerId(panel)) content = <TransientContent engine={engine} panel={panel} floating={view !== null} />;
   else if (engine.mode === 'simulator' && panel === 'output') content = <OutputContent engine={engine} />;
   else if (engine.mode === 'simulator' && panel === 'registers') content = <RegistersContent engine={engine} />;
   else
@@ -214,9 +216,13 @@ export function DockContent({ engine, panel }: { engine: DockEngine; panel: stri
       </div>
     );
   return (
-    <Slotted engine={engine} panel={panel}>
+    <>
+      <DockSlot engine={engine} panel={panel} side="before" />
+      {view ? <FloatTitleBar ctx={app.ctx} engine={engine} view={view} /> : null}
       {content}
-    </Slotted>
+      {view ? <FloatEdges engine={engine} panel={panel} /> : null}
+      <DockSlot engine={engine} panel={panel} side="after" />
+    </>
   );
 }
 
@@ -400,6 +406,46 @@ export function DockWorkspace({ mode }: { mode: DockMode }) {
     // drop, P2.2 setOnAllowDrop): the browser then drops nothing, so the preview is hidden too
     // (errata N1). Runs after FlexLayout's own handler, which cancels the event when it has a place.
     const document = element.ownerDocument;
+    // Version 1.1 (P9.2): a tab dragged (layout unlocked) and dropped where there is no docking
+    // target, outside the dock's layout (on the toolbar, the menus, the status bar), floats there.
+    // Inside the layout FlexLayout decides as in 1.0.0 (a refused place drops nothing, errata N1 22).
+    let dragged: string | null = null;
+    const layoutOf = () => element.querySelector('.flexlayout__layout');
+    const onDragStart = (event: DragEvent) => {
+      const tab = tabButtonPanel(event.target as Element | null);
+      dragged = tab && element.contains(tab.button) ? tab.panel : null;
+    };
+    const onDragEnd = () => {
+      dragged = null;
+    };
+    const outsideLayout = (event: DragEvent) => {
+      const layout = layoutOf();
+      return layout !== null && !layout.contains(event.target as globalThis.Node | null);
+    };
+    const onDragOverFloat = (event: DragEvent) => {
+      if (dragged === null || event.defaultPrevented || !outsideLayout(event) || !engine.canFloat(dragged)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    };
+    const onDropFloat = (event: DragEvent) => {
+      const panel = dragged;
+      if (panel === null || event.defaultPrevented || !outsideLayout(event) || !engine.canFloat(panel)) return;
+      event.preventDefault();
+      dragged = null;
+      const box = element.getBoundingClientRect();
+      const size = engine.firstFloatSize(panel);
+      engine.float(panel, {
+        x: event.clientX - box.left - 24,
+        y: event.clientY - box.top - 12,
+        width: size.width,
+        height: size.height,
+      });
+    };
+    const onRaise = (event: Event) => {
+      const window = (event.target as Element | null)?.closest?.('.flexlayout__tab[data-e68-float]');
+      const panel = window?.getAttribute('data-e68-float');
+      if (panel && element.contains(window!)) engine.raise(panel);
+    };
     const onDragOver = (event: DragEvent) => {
       if (event.defaultPrevented || !element.contains(event.target as globalThis.Node | null)) return;
       for (const outline of Array.from(
@@ -417,9 +463,21 @@ export function DockWorkspace({ mode }: { mode: DockMode }) {
     };
     element.addEventListener('keydown', onKeyDown, true);
     element.addEventListener('dblclick', onDoubleClick);
+    element.addEventListener('dragstart', onDragStart, true);
+    element.addEventListener('pointerdown', onRaise, true);
+    element.addEventListener('focusin', onRaise);
+    document.addEventListener('dragend', onDragEnd);
     document.addEventListener('dragover', onDragOver);
+    document.addEventListener('dragover', onDragOverFloat);
+    document.addEventListener('drop', onDropFloat);
     document.addEventListener('keydown', onTabKey, true);
     return () => {
+      element.removeEventListener('dragstart', onDragStart, true);
+      element.removeEventListener('pointerdown', onRaise, true);
+      element.removeEventListener('focusin', onRaise);
+      document.removeEventListener('dragend', onDragEnd);
+      document.removeEventListener('dragover', onDragOverFloat);
+      document.removeEventListener('drop', onDropFloat);
       document.removeEventListener('keydown', onTabKey, true);
       element.removeEventListener('keydown', onKeyDown, true);
       element.removeEventListener('dblclick', onDoubleClick);

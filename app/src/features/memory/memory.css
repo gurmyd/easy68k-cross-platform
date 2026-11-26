@@ -29,6 +29,27 @@
   background: var(--c-panel);
 }
 
+/* The header and the rows (version 1.1, erratum U2 S7): a row always holds
+   16 bytes and their text (sim-ui 10.1: the original's window has a fixed width, its rows never
+   wrap or shorten). In a panel narrower than a row, header and rows scroll sideways together here;
+   the rows still page vertically (their number follows their height), they never scroll so. The
+   address fields above and the Row, Page and Live strip stay where they are. Where a row fits,
+   nothing scrolls and nothing moves. */
+.e68-memory__table {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.e68-memory__table > .e68-memory__header,
+.e68-memory__table > .e68-memory__rows {
+  min-width: max-content;
+}
+
 .e68-memory__header {
   flex: none;
   padding: var(--sp-1) var(--sp-1) 0;
@@ -107,6 +128,9 @@
   flex-direction: column;
   align-items: center;
   gap: var(--sp-1);
+  min-height: 0;
+  /* A panel shorter than the strip: it scrolls (version 1.1). */
+  overflow-y: auto;
   padding: var(--sp-2) var(--sp-1);
   border-left: 1px solid var(--c-border);
   background: var(--c-panel);
