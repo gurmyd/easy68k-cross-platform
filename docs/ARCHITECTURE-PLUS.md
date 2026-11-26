@@ -2796,3 +2796,35 @@ about what they found; where a rule below differs from P9.2 to P9.4, this sectio
 8. Left as designed, and recorded as what a first-time user notices: the tip lies above the
    status bar over the lowest rows of the message area until it is answered; unlocking gives
    every group its tab strip, which moves the panels down by the height of a strip.
+
+### P9.9 Corrections after the second independent review (26 November 2026)
+
+A second reviewer used the version with P9.8 built. Two findings were major and three minor; the
+architect's decisions follow. Where a rule below differs from P9.8, this section is right.
+
+1. **The docked arrangement never scrolls as a whole.** A click on a floating window that had been
+   pushed past the right edge scrolled the dock itself sideways, and the registers and the listing
+   left the screen. The dock's root and the layer of the floating windows cannot be scrolled by
+   anything: not by the focus, not by a script, not by a drag; a floating window that is partly
+   outside is simply cut at the edge.
+2. **`Floating Tools` opens further columns before it overlaps** (P9.8 point 1 as written, which
+   was not built): when the column at the right is full, the next tool window goes to the top of a
+   further column at its left, over docked panels if need be, and so on while a window fits in the
+   dock without covering another floating window; only then the cascade. At 1920 by 1080 the five
+   tool panels are placed without any overlap. The promise of P9.8 for Hardware and Memory (the
+   Output picture uncovered) stays.
+3. **The tip says what can be done on the page it appears on.** Its text: `You can rearrange this
+   window. Press Arrange Panels to show each panel's tab; then double-click a tab to make the panel
+   float, or drag it to dock it elsewhere. Ready-made layouts are in the View menu.` The buttons
+   stay `Arrange Panels` and `Got it`.
+4. **The room kept for the windows of `Floating Tools` is given back.** The arrangement lets the
+   docked panels end where its windows begin (so that nothing is covered at the start). That room
+   is kept only as far as shown floating windows still lie in it: when a window is moved, sized,
+   docked or closed, the room shrinks to the columns that still hold a window, and when none does,
+   the docked panels take the whole dock again. An empty strip is never left.
+5. **At 1366 by 768 the Hardware window of `Floating Tools` has the width of what it holds**
+   (its content's width, about 521 pixels), taken from the Output panel's share as far as the left
+   400 pixels of the picture stay uncovered; its address fields are not cut.
+6. Edits outside the paths of P9.6 that the second review listed (the shell's focus request for
+   the title bar, the tiling rule in `app/src/state`, the new icon of the kit) are accepted: they
+   are what points 1 to 6 of P9.8 needed.
