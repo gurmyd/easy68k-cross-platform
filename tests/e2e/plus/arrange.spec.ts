@@ -136,27 +136,32 @@ async function whatIsSeen(app: App): Promise<{ picture: { share: number; left: n
 }
 
 /**
- * How far the Hardware panel's own scroll area is scrolled sideways (errata M1 entry 19: a window
- * an arrangement has just placed shows its content from its left edge, whatever the panel showed
- * where it was docked and wherever the keyboard focus is).
+ * How far the Hardware panel's own scroll area is scrolled sideways once the page has come to rest:
+ * the offset that has been the same through ten screen updates in a row (errata M1 entry 19: a
+ * window an arrangement has just placed shows its content from its left edge, whatever the panel
+ * showed where it was docked and wherever the keyboard focus is). It is what stays on the screen.
+ * One screen update may show another offset in WebKit: when the menu has given the focus back to a
+ * field that the window cuts, WebKit brings the field's caret into view at the end of the update,
+ * after every hook a page has, and the dock puts the window back in the next one. Read after a fixed
+ * number of updates, that one was sometimes caught on GitHub's Ubuntu runner (runs 45825817588 and
+ * 45836792509).
  */
 async function hardwareSideways(app: App): Promise<number> {
   return app.page.evaluate(async () => {
-    // Read after the frames in which a placed window is laid out (a frame, or 100 ms without one).
-    for (let i = 0; i < 3; i++) {
-      await new Promise<void>((done) => {
-        const timer = setTimeout(done, 100);
-        requestAnimationFrame(() => {
-          clearTimeout(timer);
-          done();
-        });
-      });
-    }
-    return (
+    const read = () =>
       document.querySelector<HTMLElement>(
         '[data-e68-workspace]:not([hidden]) [data-e68-panel="hardware"] [data-hw-scroll]',
-      )?.scrollLeft ?? -1
-    );
+      )?.scrollLeft ?? -1;
+    const update = () => new Promise<void>((done) => requestAnimationFrame(() => done()));
+    const until = performance.now() + 5000;
+    let last = read();
+    for (let same = 0; same < 10 && performance.now() < until;) {
+      await update();
+      const now = read();
+      same = now === last ? same + 1 : 0;
+      last = now;
+    }
+    return last;
   });
 }
 
@@ -641,10 +646,11 @@ for (const size of [
       expect(seen.picture.left, 'at least the left 400 px of the Output picture are uncovered').toBeGreaterThanOrEqual(
         400,
       );
-      // The left edge is held by rule, not for a time (errata M1 entry 19; GitHub's Ubuntu runner
-      // put the focus back later than this PC does, run 45825817588): the page gives the focus to a
-      // field that the window cuts at its right, as the dock does after a move. The panel reveals
-      // the field at once; with no action of a person the window is back at its left edge.
+      // The left edge is held by rule, not for a time (errata M1 entry 19): the page gives the focus
+      // to a field that the window cuts at its right, with no action of a person, as the dock and
+      // the menus do at times of their own. The panel reveals the field at once (and WebKit brings
+      // its caret into view once more at the end of the screen update); the window is back at its
+      // left edge whenever that happens, and stays there.
       const cut = await app.page.evaluate(() => {
         const area = document.querySelector<HTMLElement>(
           '[data-e68-workspace]:not([hidden]) [data-e68-panel="hardware"] [data-hw-scroll]',

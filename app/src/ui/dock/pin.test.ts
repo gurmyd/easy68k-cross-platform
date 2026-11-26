@@ -70,6 +70,8 @@ describe('holdLeftEdge (errata M1 entry 19): a placed window shows its left edge
     Object.defineProperty(event, 'target', { value: target });
     root.dispatchEvent(event);
   };
+  /** The script that moved the focus has returned: what was queued behind it has run. */
+  const scriptReturned = () => Promise.resolve();
 
   it('puts a sideways scroll inside a held window back, whenever it comes, and leaves the rest', () => {
     const page = new EventTarget();
@@ -79,9 +81,9 @@ describe('holdLeftEdge (errata M1 entry 19): a placed window shows its left edge
     holdLeftEdge(
       page,
       (target) => target === area,
+      () => {},
       () => ended++,
     );
-    // The focus is put back on a field at the right, some frames later: the panel reveals it.
     area.scrollLeft = 30;
     scrollOf(page, area);
     expect(area.scrollLeft).toBe(0);
@@ -100,34 +102,82 @@ describe('holdLeftEdge (errata M1 entry 19): a placed window shows its left edge
     expect(ended).toBe(0);
   });
 
-  it('ends with the first action of a person, once; the panel then scrolls as every panel does', () => {
+  it('puts the offsets back as soon as the script that moved the focus has returned, not a frame later', async () => {
+    const page = new EventTarget();
+    const area = element(['.e68-hw-scroll'], 0, 0);
+    let resets = 0;
+    holdLeftEdge(
+      page,
+      () => true,
+      () => {
+        resets++;
+        area.scrollLeft = 0;
+      },
+      () => {},
+    );
+    // The menu closes and gives the focus back to the field at the right; the browser scrolls it
+    // into view after the focus events (WebKit: 15 px on Windows, 30 px on Ubuntu).
+    page.dispatchEvent(new Event('focusin'));
+    area.scrollLeft = 30;
+    expect(resets, 'not during the focus events: the browser scrolls after them').toBe(0);
+    await scriptReturned();
+    expect([resets, area.scrollLeft]).toEqual([1, 0]);
+    // And every time the focus is moved by the page while nobody has acted.
+    page.dispatchEvent(new Event('focusin'));
+    area.scrollLeft = 28;
+    await scriptReturned();
+    expect([resets, area.scrollLeft]).toEqual([2, 0]);
+  });
+
+  it('ends with the first action of a person, once; the panel then scrolls as every panel does', async () => {
     expect([...PERSON_ACTS]).toEqual(['pointerdown', 'keydown', 'wheel', 'touchstart']);
     for (const act of PERSON_ACTS) {
       const page = new EventTarget();
       const area = element(['.e68-hw-scroll'], 0, 0);
       let ended = 0;
+      let resets = 0;
       holdLeftEdge(
         page,
         () => true,
+        () => resets++,
         () => ended++,
       );
       page.dispatchEvent(new Event(act));
       page.dispatchEvent(new Event(act));
       expect(ended, act).toBe(1);
       // Tab went to the field at the right and the panel revealed it: it stays revealed.
+      page.dispatchEvent(new Event('focusin'));
       area.scrollLeft = 30;
       scrollOf(page, area);
-      expect(area.scrollLeft, act).toBe(30);
+      await scriptReturned();
+      expect([area.scrollLeft, resets], act).toEqual([30, 0]);
     }
   });
 
-  it('is ended by its own function too (the next arrangement, the dock going away), once', () => {
+  it('a focus that arrived just before a person acted puts nothing back afterwards', async () => {
+    const page = new EventTarget();
+    let resets = 0;
+    holdLeftEdge(
+      page,
+      () => true,
+      () => resets++,
+      () => {},
+    );
+    page.dispatchEvent(new Event('focusin'));
+    page.dispatchEvent(new Event('keydown'));
+    await scriptReturned();
+    expect(resets).toBe(0);
+  });
+
+  it('is ended by its own function too (the next arrangement, the dock going away), once', async () => {
     const page = new EventTarget();
     const area = element(['.e68-hw-scroll'], 0, 0);
     let ended = 0;
+    let resets = 0;
     const end = holdLeftEdge(
       page,
       () => true,
+      () => resets++,
       () => ended++,
     );
     end();
@@ -136,6 +186,8 @@ describe('holdLeftEdge (errata M1 entry 19): a placed window shows its left edge
     expect(ended).toBe(1);
     area.scrollLeft = 12;
     scrollOf(page, area);
-    expect(area.scrollLeft).toBe(12);
+    page.dispatchEvent(new Event('focusin'));
+    await scriptReturned();
+    expect([area.scrollLeft, resets]).toEqual([12, 0]);
   });
 });
