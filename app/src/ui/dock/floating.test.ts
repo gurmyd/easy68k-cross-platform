@@ -7,8 +7,9 @@ import {
   KEEP_INSIDE,
   TITLE_BAR_HEIGHT,
   boundedRect,
-  cascadeRects,
   firstFloatRect,
+  titleButtonsWidth,
+  WINDOW_BORDER,
   keyStep,
   minimumSize,
   raised,
@@ -72,33 +73,63 @@ describe('sizes (P9.2)', () => {
     expect(nw).toEqual(rect(190, 180, 310, 220));
   });
 
-  it('the first float: the docked size, at most three quarters of the dock, cascaded 24 px', () => {
-    const docked = rect(700, 500, 700, 300);
-    const first = firstFloatRect(docked, AREA, null);
+  it('the first float: the docked size, at most three quarters of the dock', () => {
+    const first = firstFloatRect(rect(700, 500, 700, 300), AREA, []);
     expect([first.width, first.height]).toEqual([700, 300]);
-    const huge = firstFloatRect(rect(0, 0, 1400, 800), AREA, null);
+    const huge = firstFloatRect(rect(0, 0, 1400, 800), AREA, []);
     expect([huge.width, huge.height]).toEqual([1050, 600]);
-    const next = firstFloatRect(rect(0, 0, 200, 150), AREA, rect(100, 100));
-    expect([next.x, next.y]).toEqual([100 + FLOAT_CASCADE_STEP, 100 + FLOAT_CASCADE_STEP]);
-    // Lifted off its docked place also at the bottom right corner of the dock.
-    const corner = firstFloatRect(rect(700, 500, 700, 300), AREA, null);
-    expect([corner.x, corner.y]).toEqual([676, 476]);
     // At least the minimum, also for a panel docked small.
-    const tiny = firstFloatRect(rect(0, 0, 50, 30), AREA, null);
+    const tiny = firstFloatRect(rect(0, 0, 50, 30), AREA, []);
     expect([tiny.width, tiny.height]).toEqual([160, 96]);
   });
 
-  it('a cascade from the top right (P9.4 Floating Tools)', () => {
-    const rects = cascadeRects(3, AREA, 'top-right', { width: 360, height: 280 });
-    expect(rects.map((r) => [r.x, r.y])).toEqual([
-      [AREA.width - 360 - 24, 24],
-      [AREA.width - 360 - 48, 48],
-      [AREA.width - 360 - 72, 72],
-    ]);
-    expect(cascadeRects(2, AREA, 'top-left', { width: 360, height: 280 }).map((r) => [r.x, r.y])).toEqual([
-      [24, 24],
-      [48, 48],
-    ]);
+  it('P9.8 point 2: the first free place of the rule of point 1, not 24 px off its docked place', () => {
+    // Nothing floats: the top right corner of the dock, wherever the panel was docked.
+    expect(firstFloatRect(rect(700, 500, 700, 300), AREA, [])).toEqual(rect(700, 0, 700, 300));
+    expect(firstFloatRect(rect(0, 0, 300, 200), AREA, [])).toEqual(rect(1100, 0, 300, 200));
+    // Another window at the top right: below it in the same column.
+    const below = firstFloatRect(rect(0, 0, 300, 200), AREA, [rect(1100, 0, 300, 400)]);
+    expect(below).toEqual(rect(1100, 400, 300, 200));
+    // The column full: a further column to the left, over no other window.
+    const left = firstFloatRect(rect(0, 0, 300, 200), AREA, [rect(1100, 0, 300, 700)]);
+    expect(left).toEqual(rect(800, 0, 300, 200));
+  });
+
+  it('P9.8 point 2: never over the tab strip of the group it came from', () => {
+    const strip = rect(700, 0, 700, 29);
+    const placed = firstFloatRect(rect(700, 29, 700, 300), AREA, [], minimumSize(), strip);
+    expect(placed.y).toBeGreaterThanOrEqual(29);
+    expect(placed).toEqual(rect(700, 29, 700, 300));
+  });
+
+  it('no free place: cascaded 24 px from the last window, still not over the strip', () => {
+    const others = [rect(0, 0, 1400, 800)];
+    const next = firstFloatRect(rect(0, 0, 200, 150), AREA, others);
+    expect([next.x, next.y]).toEqual([FLOAT_CASCADE_STEP, FLOAT_CASCADE_STEP]);
+    const strip = rect(0, 0, 1400, 40);
+    const moved = firstFloatRect(rect(0, 0, 200, 150), AREA, others, minimumSize(), strip);
+    expect(moved.y).toBe(40);
+  });
+});
+
+describe('bounds (P9.8 point 4): the title area, not the buttons', () => {
+  it('a window pushed left keeps 48 px of its title area inside, besides its buttons', () => {
+    const buttons = titleButtonsWidth(true);
+    const shown = boundedRect(rect(-3000, 100, 662, 300), AREA, buttons);
+    // The title area ends at x + width - buttons.
+    expect(shown.x + shown.width - buttons).toBe(KEEP_INSIDE);
+    const dockOnly = boundedRect(rect(-3000, 100, 662, 300), AREA, titleButtonsWidth(false));
+    expect(dockOnly.x + dockOnly.width - titleButtonsWidth(false)).toBe(KEEP_INSIDE);
+  });
+
+  it('pushed right, the title area starts 48 px from the right edge (it is at the left of the bar, inside the border)', () => {
+    expect(boundedRect(rect(5000, 100, 662, 300), AREA, titleButtonsWidth(true)).x).toBe(
+      AREA.width - KEEP_INSIDE - WINDOW_BORDER,
+    );
+  });
+
+  it('the buttons are wider for a panel with an x', () => {
+    expect(titleButtonsWidth(true)).toBeGreaterThan(titleButtonsWidth(false));
   });
 });
 

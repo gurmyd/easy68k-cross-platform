@@ -67,6 +67,17 @@
 //              every panel of both modes, every pair and triple of Simulator panels docked in every
 //              order, and the stored arrangements of P9.4, each giving back the stored tree and the
 //              boxes within 1 px
+//   review     version 1.1 after the review (P9.8 points 2, 3, 4, 6): the Float button of a strip
+//              (its name, icon and place after the tabs); a single click selects a tab at once, a
+//              slow double click floats it (locked); the first Float at the top right, not over
+//              the strip it came from; the Float button floats the selected panel over no other
+//              window; a double click on a title bar docks; Ctrl+Alt+O lands on a floating title
+//              bar and Tab goes on into the panel; the bounds by the title area (with and without
+//              x); a double click on an Editor document's tab floats nothing
+//
+// The Tab walks of taborder and starts compare with 1.0.0's recorded orders, which have no Float
+// button: they learn that one stop (learnFloatButtons: each must follow its strip's tabs) and
+// compare everything else with 1.0.0 as before.
 //
 // Prints "N of M checks passed" and exits non-zero on any failure or console error. Screenshots go
 // to build/dock-check (git-ignored) or --out.
@@ -2512,7 +2523,38 @@ async function walkTabs(page, backward, until = null, beforeKeys = false, refocu
     if (focus.entry === 'body' || focus.entry.startsWith('textarea|') || focus.entry === until) break;
     if (focus.editor) await page.keyboard.press('Escape');
   }
-  return seen;
+  return learnFloatButtons(seen, backward);
+}
+
+/**
+ * Version 1.1 (P9.8 point 3 (b)): every tab strip that is shown ends with the button `Float`, a
+ * Tab stop after the strip's tabs. 1.0.0's recorded orders (MAIN_TAB_ORDER, check-dock.main.json)
+ * have no such stop; this is the one thing the walks that compare with them learn: each Float stop
+ * must come right after a tab (Tab) or right before one (Shift+Tab), which is counted in
+ * FLOAT_STOPS, and is then left out, so that everything else is still compared with 1.0.0.
+ */
+const FLOAT_STOP = 'button|Float: make this panel a window of its own|-';
+const FLOAT_STOPS = { seen: 0, misplaced: [] };
+function learnFloatButtons(walk, backward) {
+  walk.forEach((entry, i) => {
+    if (entry !== FLOAT_STOP) return;
+    FLOAT_STOPS.seen++;
+    // Forward the stop before it is the strip's tab; backward the stop after it.
+    const neighbour = backward ? walk[i + 1] : walk[i - 1];
+    if (!neighbour?.startsWith('tab|')) FLOAT_STOPS.misplaced.push(`${backward ? 'Shift+Tab' : 'Tab'} ${neighbour}`);
+  });
+  return walk.filter((entry) => entry !== FLOAT_STOP);
+}
+
+/** The check of the Float stops the walks of a pass met (learnFloatButtons), and a fresh count. */
+function checkFloatStops(label, expectSome) {
+  check(
+    `${label}: each Float button of a strip is the Tab stop after its tabs (P9.8 point 3 (b))`,
+    FLOAT_STOPS.misplaced.length === 0 && (!expectSome || FLOAT_STOPS.seen > 0),
+    `${FLOAT_STOPS.seen} Float stops met${FLOAT_STOPS.misplaced.length ? `, misplaced after ${FLOAT_STOPS.misplaced.slice(0, 3).join('; ')}` : ''}`,
+  );
+  FLOAT_STOPS.seen = 0;
+  FLOAT_STOPS.misplaced = [];
 }
 
 /** The walk a list predicts: up to the body or the Output panel's key field. */
@@ -2834,6 +2876,7 @@ async function tabOrderPass(browser, name) {
       await context.close();
     }
   }
+  checkFloatStops(`${p} the walks of this pass`, true);
 }
 
 // --- starting points (errata N1 26) ---------------------------------------------------------------
@@ -2871,7 +2914,7 @@ async function walkFromRemoved(page, backward) {
     if (focus.entry === 'body' || focus.entry.startsWith('textarea|')) break;
     if (focus.editor) await page.keyboard.press('Escape');
   }
-  return seen;
+  return learnFloatButtons(seen, backward);
 }
 
 /** The element a click at the middle of `selector`'s box (or `x` px from its right) reaches. */
@@ -3106,6 +3149,8 @@ async function startsPass(browser, name) {
     const before = existsSync(recordFile) ? JSON.parse(readFileSync(recordFile, 'utf8')) : {};
     writeFileSync(recordFile, `${JSON.stringify({ ...before, ...recorded }, null, 2)}\n`);
   }
+  // A build of 1.0.0 (--serve, recording main's figures) has no Float button to meet.
+  if (!serveDir) checkFloatStops(`${p} the walks of this pass`, true);
 }
 
 // --- run -----------------------------------------------------------------------------------------
@@ -3209,6 +3254,205 @@ async function floatWalk(page, backward, steps = 120) {
 /** The runs of a walk: consecutive equal entries collapsed. */
 const runs = (list) => list.filter((entry, i) => i === 0 || entry !== list[i - 1]);
 
+/**
+ * Version 1.1 after the review (ARCHITECTURE-PLUS P9.8 points 2, 3, 4 and 6): where a window
+ * appears at its first Float; the double click on a tab and on a title bar; the Float button of the
+ * strips; the bounds by the title area; Ctrl+Alt+O onto a floating window's title bar.
+ */
+async function reviewPass(browser, name) {
+  const p = `${name}/review:`;
+  const context = await newContext(browser, 'windows', { width: 1366, height: 768 });
+  const { page, errors } = await openApp(context);
+  await setMode(page, 'simulator');
+  await settle(page);
+  await showPanels(page, ['memory', 'hardware']);
+  const dockBox = await page.evaluate(() => {
+    const b = document.querySelector('[data-e68-dock="simulator"]').getBoundingClientRect();
+    return { x: b.x, y: b.y, width: Math.round(b.width), height: Math.round(b.height) };
+  });
+  const floating = () =>
+    page.evaluate(() =>
+      window.__dock
+        .controller()
+        .floating()
+        .map((window) => window.panel),
+    );
+  const tab = (panel) => page.locator(`[id="flexlayout-tabbutton-simulator:${panel}"]`);
+  const stripBox = (panel) =>
+    page.evaluate((id) => {
+      const strip = document
+        .getElementById(`flexlayout-tabbutton-simulator:${id}`)
+        ?.closest('.flexlayout__tabset_tabbar_outer');
+      const dock = document.querySelector('[data-e68-dock="simulator"]').getBoundingClientRect();
+      const b = strip?.getBoundingClientRect();
+      return b ? { x: b.x - dock.x, y: b.y - dock.y, width: b.width, height: b.height } : null;
+    }, panel);
+  const overlapsBox = (a, b) =>
+    a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+  // The Float button: on the tool group's strip (1.0.0 shows that strip), after its tabs.
+  const buttons = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('[data-e68-dock="simulator"] [data-e68-float-button]')).map((button) => ({
+      panel: button.getAttribute('data-e68-float-button'),
+      name: button.getAttribute('aria-label'),
+      icon: button.querySelector('use')?.getAttribute('href') ?? button.querySelector('svg') !== null,
+      afterTabs:
+        button.closest('.flexlayout__tabset_tabbar_outer') !== null &&
+        Array.from(button.closest('.flexlayout__tabset_tabbar_outer').querySelectorAll('[role=tab]')).every(
+          (t) => t.compareDocumentPosition(button) & 4 /* Node.DOCUMENT_POSITION_FOLLOWING */,
+        ),
+    })),
+  );
+  check(
+    `${p} the tool group's strip has one button "Float: make this panel a window of its own", drawn with the kit's icon, after the strip's tabs`,
+    buttons.length === 1 &&
+      buttons[0].name === 'Float: make this panel a window of its own' &&
+      buttons[0].icon &&
+      buttons[0].afterTabs,
+    JSON.stringify(buttons),
+  );
+  // A single click selects a tab at once; a double click (slow: the second click 350 ms later)
+  // makes it float, the layout locked.
+  await tab('memory').click();
+  const selectedAtOnce = await tab('memory').getAttribute('aria-selected');
+  const strip = await stripBox('hardware');
+  await sleep(350);
+  await tab('memory').click({ clickCount: 2 });
+  await settle(page);
+  check(
+    `${p} a single click selects the tab at once, and nothing floats`,
+    selectedAtOnce === 'true',
+    String(selectedAtOnce),
+  );
+  check(
+    `${p} a double click on a tab makes the panel float, locked (P9.8 point 3 (a))`,
+    same(await floating(), ['memory']) && (await page.evaluate(() => window.__dock.controller().locked())),
+    JSON.stringify(await floating()),
+  );
+  const memoryBox = await floatBox(page, 'memory');
+  check(
+    `${p} the first Float: at the top right of the dock (the rule of point 1), not over the strip it came from (P9.8 point 2)`,
+    memoryBox !== null &&
+      Math.abs(memoryBox.x + memoryBox.width - dockBox.width) <= 1 &&
+      strip !== null &&
+      !overlapsBox(memoryBox, strip),
+    JSON.stringify({ memoryBox, strip, dock: dockBox }),
+  );
+  // The Hardware tab, still in the group: its strip and tab are not covered.
+  const hardwareTabFree = await page.evaluate(() => {
+    const t = document.getElementById('flexlayout-tabbutton-simulator:hardware')?.getBoundingClientRect();
+    if (!t) return false;
+    const hit = document.elementFromPoint(t.x + t.width / 2, t.y + t.height / 2);
+    return hit?.closest('#flexlayout-tabbutton-simulator\\:hardware') !== null;
+  });
+  check(`${p} the group it came from keeps its tab strip seen and clickable`, hardwareTabFree);
+  // The Float button floats the strip's selected panel; the second window over no other window.
+  await page.locator('[data-e68-dock="simulator"] [data-e68-float-button]').first().click();
+  await settle(page);
+  const hardwareBox = await floatBox(page, 'hardware');
+  check(
+    `${p} the Float button floats the strip's selected panel, at a free place: over no other floating window`,
+    same(await floating(), ['memory', 'hardware']) && hardwareBox !== null && !overlapsBox(hardwareBox, memoryBox),
+    JSON.stringify({ hardwareBox, memoryBox }),
+  );
+  // A double click on a floating window's title bar docks it, locked; on its Dock button it does
+  // nothing twice.
+  await page.locator('[data-e68-float-title="hardware"]').dblclick();
+  await settle(page);
+  check(
+    `${p} a double click on a floating window's title bar docks it (P9.8 point 3 (a))`,
+    same(await floating(), ['memory']),
+    JSON.stringify(await floating()),
+  );
+  // Ctrl+Alt+O from the Output panel: the next panel of the cycle floats; the keyboard lands on
+  // its title bar (P9.8 point 6).
+  await page.evaluate(() => window.__dock.controller().float('hardware'));
+  await settle(page);
+  await page.locator('[data-e68-dock="simulator"] [data-e68-panel="output"] textarea').focus();
+  await page.keyboard.press('Control+Alt+o');
+  await settle(page);
+  const landed = await page.evaluate(() => {
+    const active = document.activeElement;
+    return {
+      title: active?.getAttribute('data-e68-float-title') ?? null,
+      panel: active?.closest('[data-e68-panel]')?.getAttribute('data-e68-panel') ?? null,
+    };
+  });
+  check(
+    `${p} Ctrl+Alt+O from the Output panel lands on the next panel's floating title bar`,
+    landed.title !== null && ['memory', 'hardware'].includes(landed.title),
+    JSON.stringify(landed),
+  );
+  await page.keyboard.press('Tab');
+  const intoPanel = await page.evaluate(
+    () => document.activeElement?.closest('[data-e68-panel]')?.getAttribute('data-e68-panel') ?? null,
+  );
+  check(`${p} ...from where Tab goes into the panel`, intoPanel === landed.title, String(intoPanel));
+  // The bounds count the title area (P9.8 point 4): pushed far left and far right.
+  const pushed = async (panel, dx) => {
+    const b = await page.locator(`[data-e68-float-title="${panel}"]`).boundingBox();
+    const from = {
+      x: Math.min(Math.max(b.x + 10, dockBox.x + 5), dockBox.x + dockBox.width - 5),
+      y: b.y + b.height / 2,
+    };
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x + dx / 2, from.y, { steps: 4 });
+    await page.mouse.move(from.x + dx, from.y, { steps: 4 });
+    await page.mouse.up();
+    await settle(page);
+    return page.evaluate(
+      ([id, dock]) => {
+        const t = document.querySelector(`[data-e68-float-title="${id}"]`).getBoundingClientRect();
+        return { left: Math.round(t.left - dock.x), right: Math.round(t.right - dock.x) };
+      },
+      [panel, dockBox],
+    );
+  };
+  const left = await pushed('hardware', -3000);
+  const right = await pushed('hardware', 6000);
+  check(
+    `${p} pushed out at the left, at least 48 px of the title area (not the buttons) stay inside`,
+    left.right >= 48,
+    JSON.stringify(left),
+  );
+  check(
+    `${p} pushed out at the right, the title area's first 48 px stay inside`,
+    dockBox.width - right.left >= 48,
+    JSON.stringify({ right, dock: dockBox.width }),
+  );
+  // A window without x (the Output panel's): the same.
+  await page.evaluate(() => window.__dock.controller().float('output'));
+  await settle(page);
+  const outputLeft = await pushed('output', -3000);
+  check(
+    `${p} ...also for a window with Dock alone (the Output panel)`,
+    outputLeft.right >= 48,
+    JSON.stringify(outputLeft),
+  );
+  await page.evaluate(() => window.__dock.controller().reset());
+  await settle(page);
+  // The Editor's document tabs are not the dock's: a double click on one floats nothing.
+  await setMode(page, 'editor');
+  await settle(page);
+  const documentTab = page.locator('[data-e68-dock="editor"] [data-e68-panel="editor"] [role=tab]').first();
+  if ((await documentTab.count()) > 0) {
+    await documentTab.dblclick();
+    await settle(page);
+    const editorFloats = await page.evaluate(() => window.__dock.controller().floating('editor').length);
+    check(
+      `${p} a double click on a tab of the Editor's documents floats nothing`,
+      editorFloats === 0,
+      String(editorFloats),
+    );
+  } else {
+    check(`${p} the Editor shows its documents' strip`, false, 'no document tab found');
+  }
+  await page.screenshot({ path: join(outDir, `${name}-review-editor.png`) });
+  check(`${p} no console or page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  await context.close();
+}
+
 async function floatingPass(browser, name) {
   const p = `${name}/floating:`;
   const context = await newContext(browser);
@@ -3306,11 +3550,12 @@ async function floatingPass(browser, name) {
     await settle(page);
   };
   box = await floatBox(page, 'hardware');
-  await drag(await titlePoint('hardware'), -200, -100);
+  // (Since P9.8 point 2 the window starts at the top of the dock: it is moved down, not up.)
+  await drag(await titlePoint('hardware'), -200, 100);
   let after = await floatBox(page, 'hardware');
   check(
     `${p} dragging the title bar moves the window`,
-    after && after.x === box.x - 200 && after.y === box.y - 100 && after.width === box.width,
+    after && after.x === box.x - 200 && after.y === box.y + 100 && after.width === box.width,
     JSON.stringify({ box, after }),
   );
   const edge = async (edges) => {
@@ -3347,16 +3592,22 @@ async function floatingPass(browser, name) {
   await drag(await edge('se'), 300, 200);
   await drag(await titlePoint('hardware'), -3000, -3000);
   after = await floatBox(page, 'hardware');
+  // P9.8 point 4: the 48 px are of the title area (the bar less its Dock and x).
+  const titleRight = await page.evaluate(() => {
+    const t = document.querySelector('[data-e68-float-title="hardware"]').getBoundingClientRect();
+    return Math.round(t.right - document.querySelector('[data-e68-dock="simulator"]').getBoundingClientRect().x);
+  });
   check(
-    `${p} dragged out at the top left, 48 px of its title bar stay inside and the title bar is reachable`,
-    after && after.x + after.width === 48 && after.y === 0,
-    JSON.stringify(after),
+    `${p} dragged out at the top left, 48 px of its title area stay inside and the title bar is reachable`,
+    after && titleRight >= 48 && titleRight <= 50 && after.y === 0,
+    JSON.stringify({ after, titleRight }),
   );
   await drag(await titlePoint('hardware'), 4000, 4000);
   after = await floatBox(page, 'hardware');
+  // (The title area begins inside the window's 1 px border: P9.8 point 4.)
   check(
     `${p} dragged out at the bottom right, likewise`,
-    after && after.x === dock.width - 48 && after.y === dock.height - 30,
+    after && after.x === dock.width - 48 - 1 && after.y === dock.height - 30,
     JSON.stringify({ after, dock }),
   );
   await page.evaluate(() => window.__dock.controller().float('hardware', { x: 500, y: 200, width: 460, height: 360 }));
@@ -3433,13 +3684,24 @@ async function floatingPass(browser, name) {
     JSON.stringify({ after, sizedByMouse }),
   );
 
-  // A second window: cascaded from the first; the order of Tab and reading is the float order.
+  // A second window (P9.8 point 2): at the first free place, over no other floating window; where
+  // there is none (here: the first window is large and in the middle), cascaded from the last
+  // floating window. The order of Tab and reading is the float order.
   await tabMenu(page, 'simulator', 'memory', 'Float');
   const memory = await floatBox(page, 'memory');
   const hardware = await floatBox(page, 'hardware');
+  const apart =
+    memory &&
+    hardware &&
+    !(
+      memory.x < hardware.x + hardware.width &&
+      hardware.x < memory.x + memory.width &&
+      memory.y < hardware.y + hardware.height &&
+      hardware.y < memory.y + memory.height
+    );
   check(
-    `${p} a second window is cascaded from the last floating window`,
-    memory && ((memory.x === hardware.x + 24 && memory.y === hardware.y + 24) || (memory.x === 24 && memory.y === 24)),
+    `${p} a second window: at a free place, or cascaded from the last floating window where there is none`,
+    memory && (apart || memory.x === hardware.x + 24 || memory.x === 24),
     JSON.stringify({ memory, hardware }),
   );
   // The front: overlapping windows, the one clicked or focused comes to the front.
@@ -4187,6 +4449,7 @@ const PASSES = {
   starts: (browser, name) => startsPass(browser, name),
   scan: (browser, name) => scanPass(browser, name),
   floating: (browser, name) => floatingPass(browser, name),
+  review: (browser, name) => reviewPass(browser, name),
 };
 
 const MIME = {

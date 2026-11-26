@@ -106,14 +106,16 @@ const nextFrame = () =>
 const LAYOUT_FRAMES = 40;
 
 /**
- * Applies the entry `id`, placing Floating Tools by the Simulator dock's own size: when the entry
+ * Applies the entry `id`, placing Floating Tools and sizing Side by Side's columns by the Simulator
+ * dock's own size (P9.8 points 1 and 5): when the entry
  * is chosen at the moment the window switches to the Simulator (the dock not laid out yet, or
  * still hidden), it waits for the dock's first layout, so that the windows cascade from the
  * Simulator dock's top right and not from a size of before (erratum M2). Without a page it applies
  * at once.
  */
 export async function runArrangement(ctx: AppContext, id: ArrangementId): Promise<boolean> {
-  if (id !== 'floatingTools' || typeof globalThis.document === 'undefined') return applyArrangement(ctx, id);
+  const sized = id === 'floatingTools' || id === 'sideBySide';
+  if (!sized || typeof globalThis.document === 'undefined') return applyArrangement(ctx, id);
   let area = simulatorDockArea();
   for (let frame = 0; area === null && frame < LAYOUT_FRAMES; frame++) {
     await nextFrame();

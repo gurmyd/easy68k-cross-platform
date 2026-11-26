@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DockNode, Settings } from '../../contracts';
 import { dockOf, type DockArrangement } from '../../state/dock';
+import { rectsOverlap } from '../../state/tiling';
 import { withPanelVisible } from '../../state/layout';
 import { hidePanel, showPanel } from '../../state/panels';
 import { createTestApplication, type TestApplication } from '../../state/testing';
@@ -41,6 +42,90 @@ const shape = (engine: DockEngine) => {
 
 const panelsJson = (app: ReturnType<typeof createTestApplication>) =>
   JSON.stringify(app.ctx.settings.get().app.layout.panels);
+
+describe('P9.8: the first place of a window and the room kept for the windows', () => {
+  it('a second window floats at the first free place, over no other floating window', () => {
+    const { app } = setup();
+    for (const id of ['memory', 'hardware', 'log']) showPanel(app.ctx, id);
+    dockOf(app.ctx).float('hardware', { x: 1000, y: 0, width: 400, height: 300 });
+    dockOf(app.ctx).float('log');
+    const [hardware, log] = dockOf(app.ctx).floating();
+    expect(rectsOverlap(hardware!.rect, log!.rect)).toBe(false);
+  });
+
+  it('an arrangement keeps room at the right of the dock while one of its windows is shown; stored, read, reset', () => {
+    const { app, engine } = setup();
+    showPanel(app.ctx, 'hardware');
+    const arrangement: DockArrangement = {
+      mode: 'simulator',
+      docked: {
+        type: 'row',
+        weight: 100,
+        children: [
+          {
+            type: 'column',
+            weight: 50,
+            children: [
+              { type: 'tabs', weight: 20, panels: ['registers'], selected: 'registers' },
+              { type: 'tabs', weight: 60, panels: ['listing'], selected: 'listing' },
+              { type: 'tabs', weight: 20, panels: ['messages'], selected: 'messages' },
+            ],
+          },
+          { type: 'tabs', weight: 50, panels: ['output'], selected: 'output' },
+        ],
+      },
+      floating: ['hardware', 'memory', 'stack', 'breakpoints', 'log'].map((panel) => ({ panel })),
+      reserve: 540,
+    };
+    expect(dockOf(app.ctx).arrange(arrangement)).toBe(true);
+    expect(readDock(app.ctx.settings.get()).floating?.simulator?.reserve).toBe(540);
+    // Another window of the same profile reads it.
+    const second = new DockEngine(app.ctx, app.panels, app.shell, 'simulator');
+    second.setSize(1400, 813);
+    expect(second.isFloating('hardware')).toBe(true);
+    // With nothing floating there is no room kept (the page is 1.0.0's).
+    dockOf(app.ctx).reset();
+    expect(readDock(app.ctx.settings.get()).floating?.simulator?.reserve).toBeUndefined();
+    expect(engine.dockedWidth()).toBe(1400);
+  });
+
+  it('the last window docked: the room is given back', () => {
+    const { app } = setup();
+    showPanel(app.ctx, 'hardware');
+    const plan: DockArrangement = {
+      mode: 'simulator',
+      docked: {
+        type: 'row',
+        weight: 100,
+        children: [
+          {
+            type: 'column',
+            weight: 50,
+            children: [
+              { type: 'tabs', weight: 20, panels: ['registers'], selected: 'registers' },
+              { type: 'tabs', weight: 60, panels: ['listing'], selected: 'listing' },
+              { type: 'tabs', weight: 20, panels: ['messages'], selected: 'messages' },
+            ],
+          },
+          {
+            type: 'column',
+            weight: 50,
+            children: [
+              { type: 'tabs', weight: 50, panels: ['output'], selected: 'output' },
+              { type: 'tabs', weight: 50, panels: ['memory', 'stack', 'breakpoints', 'log'], selected: 'memory' },
+            ],
+          },
+        ],
+      },
+      floating: [{ panel: 'hardware' }],
+      reserve: 300,
+    };
+    expect(dockOf(app.ctx).arrange(plan)).toBe(true);
+    expect(readDock(app.ctx.settings.get()).floating?.simulator?.reserve).toBe(300);
+    dockOf(app.ctx).dock('hardware');
+    expect(readDock(app.ctx.settings.get()).floating?.simulator?.reserve).toBeUndefined();
+  });
+});
 
 describe('Float and Dock (P9.2)', () => {
   it('a panel leaves the docked arrangement; its tab stays in the model; layout.panels unchanged', () => {
@@ -336,7 +421,7 @@ describe('arrange (P9.4): every panel placed, none shown or hidden, the lock kep
     cascade: 'top-right',
   };
 
-  it('Floating Tools: the tools float cascaded from the top right; hidden ones stay hidden', () => {
+  it('Floating Tools: the tools float side by side from the top right (P9.8 point 1); hidden ones stay hidden', () => {
     const { app, engine } = setup();
     showPanel(app.ctx, 'memory');
     showPanel(app.ctx, 'hardware');
@@ -354,7 +439,12 @@ describe('arrange (P9.4): every panel placed, none shown or hidden, the lock kep
       ['breakpoints', false],
       ['log', false],
     ]);
-    expect(windows[0]!.rect.x).toBeGreaterThan(windows[1]!.rect.x);
+    // Entries without a place: the default size, by the rule of state/tiling.ts in a dock that has
+    // of the test's size (1400 wide): the first at the top right corner, the next below it, none
+    // over another.
+    expect(windows[0]!.rect).toEqual({ x: 1040, y: 0, width: 360, height: 280 });
+    expect(windows[1]!.rect).toEqual({ x: 1040, y: 280, width: 360, height: 280 });
+    for (const a of windows) for (const b of windows) if (a !== b) expect(rectsOverlap(a.rect, b.rect)).toBe(false);
     expect(floatingTabIds(engine.model)).toEqual(['simulator:memory', 'simulator:hardware']);
     showPanel(app.ctx, 'log');
     expect(floatingTabIds(engine.model)).toEqual(['simulator:memory', 'simulator:hardware', 'simulator:log']);

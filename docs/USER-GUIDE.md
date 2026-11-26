@@ -261,34 +261,46 @@ The original's Simulator has separate windows that you can put anywhere on the s
 can do the same inside the application's window: it can *float*. This works in the Editor and in the
 Simulator (EASyBIN has only one panel).
 
-- *Make a panel float.* Right-click the panel's tab and choose **Float**, or choose **View > Move
-  Panel To...** (in the Editor **Window > Move Panel To...**), pick the panel and the place **As a
-  floating window**, and press OK. The panel becomes a window of its own above the other panels: a
-  title bar with the panel's name, a **Dock** button and, for the panels that have one, an ``x``. It
-  keeps what it shows: the Memory panel's address, the Hardware panel's switches, the Output
-  panel's picture and a program that waits for a key. Several panels can float at once; each window
-  holds one panel. The last panel that is still docked cannot float.
+- *Make a panel float.* Double-click the panel's tab, or press the button at the right end of its
+  tab strip (its tool tip: `Float: make this panel a window of its own`; it floats the strip's
+  selected panel), or right-click the tab and choose **Float**, or choose **View > Move Panel To...**
+  (in the Editor **Window > Move Panel To...**), pick the panel and the place **As a floating
+  window**, and press OK. All of these work with the layout locked. A single click on a tab still
+  only selects it; the tabs of the Editor's documents are not panel tabs, and a double click there
+  does what it always did. The panel becomes a window of its own above the other panels: a title
+  bar with the panel's name, a **Dock** button and, for the panels that have one, an ``x``. The first
+  time a panel floats, its window appears at the first free place at the right of the window, from
+  the top down, over no other floating window and not over the tab strip it came from; after that
+  it remembers its own place. It keeps what it shows: the Memory panel's address, the Hardware
+  panel's switches, the Output panel's picture and a program that waits for a key. Several panels
+  can float at once; each window holds one panel. The last panel that is still docked cannot float.
 - *Move and size it with the mouse or a trackpad.* Drag the title bar to move the window. Drag an edge
   or a corner to make it larger or smaller; it never gets smaller than 160 by 96 pixels. A window
-  that is clicked comes to the front. A window always keeps a part of its title bar inside the
-  application's window, so that you can reach it; when the application's window gets smaller, the
-  floating windows are moved back inside it, never made smaller.
+  that is clicked comes to the front. A window always keeps at least 48 pixels of its title (not
+  counting **Dock** and ``x``) inside the application's window, so that you can reach it and drag it;
+  when the application's window gets smaller, the floating windows are moved back inside it, never
+  made smaller.
 - *Move and size it with the keyboard.* The title bar is a stop of Tab: the floating windows come
   after all docked panels, in the order in which you made them float. On the title bar, Shift+F10
   (or the context-menu key, Enter, Space, or a right click) opens its menu: **Move**, **Size**,
   **Dock** and, where the panel has an ``x``, **Close**. After **Move** or **Size** the arrow keys move
   the window, or its right and bottom edges, by 16 pixels, with Shift by 1 pixel; Enter keeps the
   new place, Esc puts it back where it was. A screen reader names the window after its panel, for
-  example ``Hardware, floating``. It is not a dialog: everything else stays usable.
-- *Dock it again.* **Dock** (the button or the menu item) puts the panel back where it was docked
+  example ``Hardware, floating``. It is not a dialog: everything else stays usable. Leaving the Output
+  panel with Ctrl+Alt+O (Ctrl+Option+O on a Mac), or F2 and Ctrl+Tab, goes to the next panel as
+  before; when that panel floats, the keyboard lands on its title bar, from where Tab goes into the
+  panel.
+- *Dock it again.* Double-click the title bar, or use **Dock** (the button or the menu item): the
+  panel goes back where it was docked
   last; if that place is gone, it goes where the original has it. The panel's ``x`` (or **Close**)
   hides it as before; shown again from the View menu, it floats where it was. **View > Reset Layout**
   (in the Editor **Window > Reset Layout**) docks every floating panel.
 - *The Arrange Panels button.* At the end of the toolbar, behind the original's buttons, **Arrange
   Panels** is pressed while the layout is unlocked (**View > Lock Layout** unchecked, in the Editor
   **Window > Lock Layout**): then every group of panels shows its tabs, and a tab can be dragged.
-  Press it again to lock the layout. With the layout unlocked, a tab dropped outside the panels (on
-  the menus, the toolbar or the status bar) makes its panel float there. In a narrow window its
+  Press it again to lock the layout. With the layout unlocked, a tab dropped on a group of panels
+  docks there; a tab dropped outside the panels (on the menus, the toolbar or the status bar) makes
+  its panel float there. In a narrow window its
   caption is cut short with an ellipsis; its tool tip still gives it whole.
 - *A panel in a small place.* The Hardware panel, the registers and the Memory panel scroll inside
   themselves when they get less room than they need: docked low, in a narrow column or in a small
@@ -298,16 +310,26 @@ Simulator (EASyBIN has only one panel).
   original's arrangement (what Reset Layout gives). **Wide Output** gives the Output panel the whole
   height of the right column and puts the tool panels (Memory, Stack, Hardware, Break Points, Log) as
   tabs below the Listing. **Output and Hardware Side by Side** puts the Hardware panel in a column of
-  its own at the right of the Output panel. **Floating Tools** makes every tool panel float, from the
-  top right, as the original's separate windows. A layout shows and hides no panel: a hidden panel
-  takes its place when you show it.
+  its own at the right of the Output panel; the Output panel gets the room its picture needs first,
+  and where the window is too narrow for both the Hardware panel scrolls. **Floating Tools** makes
+  every tool panel float, as the original's separate windows: side by side from the top right,
+  Hardware first, then Memory below it, each at its own size, without covering one another while
+  there is room; the Registers, the Listing, the messages and the Output panel keep the part of the
+  window left of them. In a window of 1920 by 1080 pixels with Hardware and Memory shown, the whole
+  Output picture stays in view; at 1366 by 768 its left 400 pixels and the Hardware panel's displays,
+  lamps and switches do, and the Memory window lies over the lower part of the Hardware window.
+  When more tool panels are shown than there is room for, the later ones overlap, a little further
+  in each, but never over the Hardware panel's displays and switches. A layout shows and hides no
+  panel: a hidden panel takes its place when you show it.
 - *What Lock Layout means now.* It keeps the docked panels where they are: while it is checked, tabs
   cannot be dragged, and only the tool panels show a tab. Floating windows are not locked: they can
   always be moved, sized, docked and closed, and **Float**, **Move Panel To...** and **View > Layouts**
   work whether the layout is locked or not. Lock Layout is checked at first, as before.
 - *A tip, once.* The first time the Simulator is shown (not while a program runs or waits for
-  input), a line above the status bar says `You can rearrange this window: make a panel float, dock
-  it elsewhere or pick a ready-made layout in the View menu.` **Arrange Panels** unlocks the layout,
+  input), a line above the status bar says `You can rearrange this window: double-click a panel's tab
+  to make it float, drag tabs to dock them elsewhere, or pick a ready-made layout in the View menu.`
+  It lies over the lowest rows of the messages until you answer it. **Arrange Panels** unlocks the
+  layout (every group then shows its tabs, which moves the panels down by the height of a strip),
   **Got it** only closes the line; after either it never comes again in this browser. If a program
   starts while it is shown, it goes away and comes back when the program has stopped.
 - Floating windows are kept with the rest of the arrangement, for each window and each mode, and are

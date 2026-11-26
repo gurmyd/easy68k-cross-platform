@@ -13,10 +13,15 @@ import {
   ARRANGEMENT_COMMANDS,
   ARRANGEMENT_IDS,
   arrangementPlan,
+  FLOATING_ROOM,
   floatingToolRects,
+  floatingToolsLayout,
+  SIDE_HARDWARE_LEAST,
+  sideBySideColumns,
   TOOL_WINDOW_SIZES,
   type ArrangementId,
 } from './arrangements';
+import { rectsOverlap } from '../../state/tiling';
 import { answerArrangeTip } from './ArrangeTip';
 import { applyArrangement, feature, openMoveDialog, runArrangement } from './index';
 import { canChooseFloat, initialChoice, otherPanels, resultOf, type DescribedPanel } from './model';
@@ -86,26 +91,89 @@ describe('the four arrangements of P9.4, as data', () => {
     );
   });
 
-  it('Floating Tools at 1366 by 768 and 1920 by 1080: each window at its default size, inside the dock, cascaded from the top right', () => {
+  it('Floating Tools at 1920 by 1080, Hardware and Memory shown (P9.8 point 1): tiled down the right edge, the whole Output picture left of them', () => {
+    const area = { width: 1920, height: 993 };
+    const shown = (panel: string) => panel === 'hardware' || panel === 'memory';
+    const layout = floatingToolsLayout(area, shown);
+    const of = (panel: string) => layout.windows.find((entry) => entry.panel === panel)!;
+    // Each at its default size; Hardware in the top right corner, Memory below it; neither covers the other.
+    expect(of('hardware').rect).toEqual({ x: 1380, y: 0, width: 540, height: 632 });
+    expect(of('memory').rect).toEqual({ x: 1280, y: 632, width: 640, height: 356 });
+    expect(rectsOverlap(of('hardware').rect, of('memory').rect)).toBe(false);
+    expect([of('hardware').overlaps, of('memory').overlaps]).toEqual([false, false]);
+    // The docked panels keep the dock left of the windows; the Output panel gets the picture at 100 % and its frame.
+    expect(layout.reserve).toBe(640);
+    const [left, output] = layout.columns;
+    expect(left + output).toBe(area.width - layout.reserve);
+    expect(output).toBeGreaterThanOrEqual(FLOATING_ROOM.outputWhole);
+    expect(left).toBeGreaterThanOrEqual(FLOATING_ROOM.left);
+  });
+
+  it('Floating Tools at 1366 by 768, Hardware and Memory shown: the Hardware displays and the left 400 px of the Output picture uncovered', () => {
+    const area = { width: 1366, height: 681 };
+    const layout = floatingToolsLayout(area, (panel) => panel === 'hardware' || panel === 'memory');
+    const of = (panel: string) => layout.windows.find((entry) => entry.panel === panel)!;
+    const hardware = of('hardware').rect;
+    const memory = of('memory').rect;
+    // Hardware at the top right corner, as wide as the room right of the Output's 400 px allows.
+    expect(hardware).toEqual({ x: 880, y: 0, width: 486, height: 632 });
+    // Memory does not fit beside or below it: it overlaps, cascaded over the column, below the
+    // Hardware window's displays, lamps, switches and push buttons (its kept part).
+    expect(of('memory').overlaps).toBe(true);
+    const keep = TOOL_WINDOW_SIZES.hardware.keep!;
+    expect(rectsOverlap(memory, { x: hardware.x, y: hardware.y, width: hardware.width, height: keep })).toBe(false);
+    expect(memory.x).toBeGreaterThanOrEqual(hardware.x);
+    // The docked panels: the Registers column whole, the Output panel at least 400 px of its picture.
+    const [left, output] = layout.columns;
+    expect(left).toBeGreaterThanOrEqual(FLOATING_ROOM.left);
+    expect(output).toBeGreaterThanOrEqual(400);
+    expect(left + output).toBe(hardware.x);
+  });
+
+  it('Floating Tools with all five tools shown: where they fit nothing overlaps; the rest cascades, never over the displays', () => {
     for (const area of [
       { width: 1366, height: 681 },
       { width: 1920, height: 993 },
     ]) {
-      const windows = floatingToolRects(area);
-      expect(windows.map((entry) => entry.panel)).toEqual(['hardware', 'memory', 'stack', 'breakpoints', 'log']);
-      windows.forEach(({ panel, rect }, index) => {
-        const step = 24 * (index + 1);
-        const size = TOOL_WINDOW_SIZES[panel as keyof typeof TOOL_WINDOW_SIZES];
-        expect({ width: rect.width, height: rect.height }, panel).toEqual(size);
-        expect(rect.x + rect.width, panel).toBe(area.width - step);
-        expect(rect.y, panel).toBe(step);
+      const layout = floatingToolsLayout(area);
+      expect(layout.windows.map((entry) => entry.panel)).toEqual(['hardware', 'memory', 'stack', 'breakpoints', 'log']);
+      const hardware = layout.windows[0]!.rect;
+      const kept = { ...hardware, height: TOOL_WINDOW_SIZES.hardware.keep! };
+      const free = layout.windows.filter((entry) => !entry.overlaps);
+      for (const a of free) for (const b of free) if (a !== b) expect(rectsOverlap(a.rect, b.rect)).toBe(false);
+      for (const { panel, rect } of layout.windows) {
+        if (panel !== 'hardware') expect(rectsOverlap(rect, kept), panel).toBe(false);
+        expect(rect.x, panel).toBeGreaterThanOrEqual(area.width - layout.reserve);
+        expect(rect.x + rect.width, panel).toBeLessThanOrEqual(area.width);
         expect(rect.y + rect.height, panel).toBeLessThanOrEqual(area.height);
-        expect(rect.x, panel).toBeGreaterThanOrEqual(0);
-      });
+      }
     }
-    // The Hardware panel needs 522 by 627 (its window, title bar included): whole at 1366 by 768.
+    // The Hardware panel needs 522 by 627 (its window, title bar included): whole at 1920 by 1080.
     expect(TOOL_WINDOW_SIZES.hardware.width).toBeGreaterThanOrEqual(522);
     expect(TOOL_WINDOW_SIZES.hardware.height).toBeGreaterThanOrEqual(627);
+  });
+
+  it('Floating Tools: a hidden tool panel has its place reserved by the same rule, after the shown ones', () => {
+    const area = { width: 1920, height: 993 };
+    const onlyMemory = floatingToolsLayout(area, (panel) => panel === 'memory');
+    // Memory, the only one shown, takes the top right corner; Hardware's place is after it.
+    expect(onlyMemory.windows.find((entry) => entry.panel === 'memory')!.rect).toMatchObject({ x: 1280, y: 0 });
+    const hardware = onlyMemory.windows.find((entry) => entry.panel === 'hardware')!;
+    expect(rectsOverlap(hardware.rect, onlyMemory.windows.find((entry) => entry.panel === 'memory')!.rect)).toBe(false);
+  });
+
+  it('Side by Side (P9.8 point 5): the Output column gets 648 px before Hardware gets more than its minimum', () => {
+    const [left1366, output1366, hardware1366] = sideBySideColumns(1366);
+    expect(output1366).toBeGreaterThanOrEqual(648);
+    expect(hardware1366).toBeGreaterThanOrEqual(SIDE_HARDWARE_LEAST);
+    // The dock less its two splitters.
+    expect(left1366 + output1366 + hardware1366).toBe(1366 - 2);
+    const [, output1920, hardware1920] = sideBySideColumns(1920);
+    expect(output1920).toBeGreaterThanOrEqual(648);
+    expect(hardware1920).toBeGreaterThanOrEqual(522);
+    // A dock too narrow for both: the Hardware column keeps its minimum.
+    const [, , narrowHardware] = sideBySideColumns(900);
+    expect(narrowHardware).toBeGreaterThanOrEqual(SIDE_HARDWARE_LEAST);
   });
 
   it('Floating Tools in a small dock: the windows get smaller to stay inside it, never below 160 by 96', () => {
@@ -248,8 +316,11 @@ describe('the commands of View > Layouts (P9.4, P9.5)', () => {
       delete g.requestAnimationFrame;
     }
     expect(calls.arranged).toHaveLength(1);
-    expect(calls.arranged[0]!.floating).toEqual(floatingToolRects({ width: 1366, height: 681 }));
-    expect(calls.arranged[0]!.floating[0]!.rect).toEqual({ x: 1366 - 24 - 540, y: 24, width: 540, height: 640 });
+    // Every tool panel is hidden in this application (the defaults): all places by the rule, in order.
+    const expected = floatingToolsLayout({ width: 1366, height: 681 }, () => false);
+    expect(calls.arranged[0]!.floating).toEqual(expected.windows.map(({ panel, rect }) => ({ panel, rect })));
+    expect(calls.arranged[0]!.floating[0]!.rect).toEqual({ x: 880, y: 0, width: 486, height: 632 });
+    expect(calls.arranged[0]!.reserve).toBe(486);
   });
 
   it('without the Simulator dock an arrangement does nothing', () => {
@@ -317,8 +388,9 @@ describe('the tip of P9.3', () => {
   const person = { automated: false, forced: false };
 
   it('its texts', () => {
+    // P9.8 point 3 (c).
     expect(ARRANGE_TIP_TEXTS.text).toBe(
-      'You can rearrange this window: make a panel float, dock it elsewhere or pick a ready-made layout in the View menu.',
+      "You can rearrange this window: double-click a panel's tab to make it float, drag tabs to dock them elsewhere, or pick a ready-made layout in the View menu.",
     );
     expect(ARRANGE_TIP_TEXTS.arrange).toBe('Arrange Panels');
     expect(ARRANGE_TIP_TEXTS.dismiss).toBe('Got it');

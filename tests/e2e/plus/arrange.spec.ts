@@ -67,7 +67,9 @@ const ARRANGE_TIP_EDITOR =
   'Arrange Panels: drag a panel by its tab, or right-click a tab for more (Window > Lock Layout)';
 /** P9.3: the tip and its two buttons. */
 const TIP =
-  'You can rearrange this window: make a panel float, dock it elsewhere or pick a ready-made layout in the View menu.';
+  "You can rearrange this window: double-click a panel's tab to make it float, drag tabs to dock them elsewhere, or pick a ready-made layout in the View menu.";
+/** P9.8 point 3 (b): the button at the right end of every tab strip that is shown (its tool tip). */
+const FLOAT_BUTTON = 'Float: make this panel a window of its own';
 const TIP_ARRANGE = 'Arrange Panels';
 const TIP_GOT_IT = 'Got it';
 /** P9.2: the keyboard steps of Move and Size. */
@@ -89,26 +91,53 @@ async function windowBox(app: App, title: string): Promise<ScreenBox> {
 }
 
 /**
- * P9.4 Floating Tools, as built (erratum M2 entry 4): each tool panel's window at its own default
- * size, title bar included (Hardware 540 by 640, Memory 640 by 360, Stack 300 by 360), the n-th of
- * the cascade n steps of 24 pixels in from the dock's top right corner. A window is made smaller
- * only where the dock is too small for it, never below 160 by 96. Within one pixel, because the dock
- * may lie at a fraction of a pixel.
+ * P9.8 point 1 (Floating Tools, tiled): the Hardware window's default size, title bar included, and
+ * the top part of it that holds its displays, lamps, switches and push buttons (no window is ever
+ * placed over it). Copied from the decision recorded in erratum M2.
  */
-const TOOL_WINDOW = {
-  Hardware: { width: 540, height: 640 },
-  Memory: { width: 640, height: 360 },
-  Stack: { width: 300, height: 360 },
-} as const;
-const CASCADE_STEP = 24;
-function expectInCascade(seen: ScreenBox, dock: ScreenBox, name: keyof typeof TOOL_WINDOW, place: number): void {
-  const step = CASCADE_STEP * place;
-  const width = Math.max(MIN.width, Math.min(TOOL_WINDOW[name].width, dock.width - 2 * step));
-  const height = Math.max(MIN.height, Math.min(TOOL_WINDOW[name].height, dock.height - step));
-  const want = { x: dock.x + dock.width - step - width, y: dock.y + step, width, height };
-  const off = (Object.keys(want) as (keyof ScreenBox)[]).filter((key) => !near(seen[key], want[key]));
-  expect(off, `${name}'s window, place ${place} of the cascade: ${JSON.stringify({ seen, want, dock })}`).toEqual([]);
+const HARDWARE_WINDOW = { width: 540, height: 632 };
+const HARDWARE_KEEP = 272;
+
+/**
+ * What a student sees, measured as the review did (elementFromPoint on a grid every 4 px): of the
+ * Output picture, the share of its points and how many px from its left edge are seen in every row;
+ * of the Hardware panel's four device blocks (display, lamps, switches, push buttons), the share of
+ * their points that hit the Hardware panel.
+ */
+async function whatIsSeen(app: App): Promise<{ picture: { share: number; left: number }; devices: number }> {
+  return app.page.evaluate(() => {
+    const dock = document.querySelector('[data-e68-workspace]:not([hidden]) [data-e68-dock]')!;
+    const grid = (box: DOMRect, hits: (element: Element | null) => boolean) => {
+      let seen = 0;
+      let total = 0;
+      let left = 0;
+      let open = true;
+      for (let x = 2; x < box.width; x += 4) {
+        let column = true;
+        for (let y = 2; y < box.height; y += 4) {
+          total++;
+          if (hits(document.elementFromPoint(box.left + x, box.top + y))) seen++;
+          else column = false;
+        }
+        if (open && column) left += 4;
+        else open = false;
+      }
+      return { share: total ? Math.round((1000 * seen) / total) / 10 : 0, left: Math.min(left, Math.round(box.width)) };
+    };
+    const canvas = dock.querySelector('[data-e68-panel="output"] canvas');
+    const hardware = dock.querySelector('[data-e68-panel="hardware"]');
+    const picture = canvas ? grid(canvas.getBoundingClientRect(), (hit) => hit === canvas) : { share: 0, left: 0 };
+    const blocks = hardware ? Array.from(hardware.querySelectorAll('.e68-hw__devices > .e68-hw__device')) : [];
+    const shares = blocks.map(
+      (block) => grid(block.getBoundingClientRect(), (hit) => !!hit && hardware!.contains(hit)).share,
+    );
+    return { picture, devices: shares.length === 4 ? Math.min(...shares) : 0 };
+  });
 }
+
+/** Whether two boxes overlap (more than touching). */
+const overlap = (a: ScreenBox, b: ScreenBox) =>
+  a.x < b.x + b.width - 0.5 && b.x < a.x + a.width - 0.5 && a.y < b.y + b.height - 0.5 && b.y < a.y + a.height - 0.5;
 
 /** Polls a floating window's box until it equals `want`. */
 async function expectWindowAt(app: App, title: string, want: ScreenBox, message: string): Promise<void> {
@@ -199,8 +228,9 @@ for (const locked of [true, false]) {
     let box: ScreenBox;
     await test.step('the mouse: the title bar moves it, the corners and edges size it, never below 160 by 96', async () => {
       box = await windowBox(app, 'Hardware');
-      await dragBy(app, await titlePoint(app, 'Hardware'), -120, -60);
-      box = { ...box, x: box.x - 120, y: box.y - 60 };
+      // (It floated at the top of the dock, P9.8 point 2: it is moved down and to the left.)
+      await dragBy(app, await titlePoint(app, 'Hardware'), -120, 60);
+      box = { ...box, x: box.x - 120, y: box.y + 60 };
       await expectWindowAt(app, 'Hardware', box, 'dragging the title bar moves the window by as much');
 
       await dragBy(app, { x: box.x + box.width - 4, y: box.y + box.height - 4 }, 40, 30);
@@ -474,44 +504,56 @@ for (const locked of [true, false]) {
       leftColumn(b, dock);
     });
 
-    await test.step('Floating Tools: registers, listing, messages and Output as Classic; every tool panel shown floats, cascaded from the top right', async () => {
+    await test.step('Floating Tools (P9.8 point 1): the tool panels shown float side by side from the top right; the docked panels keep the dock left of them', async () => {
       await after('Floating Tools');
-      // In the order of the cascade (erratum M2 entry 4): Hardware first, then Memory; Stack, Break
-      // Points and Log keep their places in it while hidden.
+      // In the order Hardware, Memory; Stack, Break Points and Log have their places while hidden.
       await expect.poll(() => floatingWindows(app)).toEqual(['Hardware', 'Memory']);
       const b = await boxes(app, ['registers', 'listing', 'messages', 'output']);
-      const same = (x: Box, y: Box) =>
-        near(x.left, y.left) && near(x.right, y.right) && near(x.top, y.top) && near(x.bottom, y.bottom);
+      const hardware = await windowBox(app, 'Hardware');
+      const memory = await windowBox(app, 'Memory');
+      const kept = { ...hardware, height: HARDWARE_KEEP };
       expect(
         [
-          ...rule('Registers as in Classic', same(b.registers!, classic.registers!)),
-          ...rule('Listing as in Classic', same(b.listing!, classic.listing!)),
-          ...rule('Messages as in Classic', same(b.messages!, classic.messages!)),
-          // With no tool panel docked, Output has the right column of Classic to itself.
           ...rule(
-            'Output in the right column',
-            near(b.output!.left, classic.output!.left) && near(b.output!.right, right, 1),
+            'Hardware in the top right corner of the dock',
+            near(hardware.x + hardware.width, right, 1) && near(hardware.y, dock.y, 1),
           ),
-          ...rule('Output from the top', near(b.output!.top, classic.output!.top)),
-          ...rule('Output to the bottom', near(b.output!.bottom, bottom, 1)),
+          ...rule('Hardware at its default height', near(hardware.height, HARDWARE_WINDOW.height, 1)),
+          ...rule('Hardware no wider than its default', hardware.width <= HARDWARE_WINDOW.width + 1),
+          ...rule('Memory not over the Hardware displays and switches', !overlap(memory, kept)),
+          ...rule(
+            'Memory inside the dock',
+            memory.x >= dock.x - 1 && memory.x + memory.width <= right + 1 && memory.y + memory.height <= bottom + 1,
+          ),
+          ...rule('Memory right of the Output panel', memory.x >= b.output!.right - 1),
+          // The docked panels: the left column, then the Output panel up to the windows.
+          ...rule(
+            'Registers, Listing and Messages in the left column',
+            near(b.registers!.left, dock.x, 1) &&
+              near(b.listing!.left, dock.x, 1) &&
+              near(b.messages!.bottom, bottom, 1),
+          ),
+          ...rule(
+            'Output from the top to the bottom',
+            near(b.output!.top, classic.output!.top) && near(b.output!.bottom, bottom, 1),
+          ),
+          ...rule('Output right of the left column', b.output!.left >= b.listing!.right - 1),
+          ...rule('Output ends where the windows begin', near(b.output!.right, hardware.x, 2)),
         ],
-        JSON.stringify({ now: b, classic }),
+        JSON.stringify({ now: b, hardware, memory, dock }),
       ).toEqual([]);
-      // The cascade (P9.4 "cascaded from the top right, at its default size"; erratum M2 entry 4): the
-      // n-th tool panel of the cascade (Hardware 1, Memory 2, Stack 3) lies n steps of 24 pixels in
-      // from the dock's top right corner, at its own default size, made smaller only where the dock
-      // is too small for it. So every window is inside the dock and every title bar can be reached.
-      for (const [name, place] of [
-        ['Hardware', 1],
-        ['Memory', 2],
-      ] as const) {
-        expectInCascade(await windowBox(app, name), dock, name, place);
-      }
-      // A hidden panel shown later floats too, in the place it was given while hidden.
+      const seenNow = await whatIsSeen(app);
+      expect(seenNow.devices, 'the Hardware displays, lamps, switches and push buttons are seen').toBe(100);
+      expect(seenNow.picture.left, 'at least the left 400 px of the Output picture are seen').toBeGreaterThanOrEqual(
+        400,
+      );
+      // A hidden panel shown later floats too, in the place it was given while hidden: inside the
+      // dock, not over the Hardware displays.
       await view(app, 'Stack', 'stack');
       await expect(floatingWindow(app, 'Stack')).toBeVisible();
       await expect.poll(() => floatingWindows(app)).toEqual(['Hardware', 'Memory', 'Stack']);
-      expectInCascade(await windowBox(app, 'Stack'), dock, 'Stack', 3);
+      const stack = await windowBox(app, 'Stack');
+      expect(!overlap(stack, kept) && stack.x + stack.width <= right + 1, JSON.stringify(stack)).toBe(true);
       await floatingWindow(app, 'Stack').getByRole('button', { name: 'Close', exact: true }).click();
       await expect(floatingWindow(app, 'Stack')).toHaveCount(0);
       expect(await regionBox(app, 'stack')).toBeNull();
@@ -539,6 +581,89 @@ for (const locked of [true, false]) {
     });
   });
 }
+
+for (const size of [
+  { width: 1920, height: 1080 },
+  { width: 1366, height: 768 },
+]) {
+  test(`Floating Tools at ${size.width} by ${size.height}, Hardware and Memory shown: what P9.8 point 1 promises is seen`, async ({
+    app,
+  }) => {
+    test.setTimeout(180_000);
+    await app.page.setViewportSize(size);
+    await simulatorWithTools(app, true);
+    await chooseLayout(app, 'Floating Tools');
+    await expect.poll(() => floatingWindows(app)).toEqual(['Hardware', 'Memory']);
+    const hardware = await windowBox(app, 'Hardware');
+    const memory = await windowBox(app, 'Memory');
+    if (size.width < 1920) {
+      // At 1366 by 768 the Hardware window is narrower than its content (erratum M2 entry 8): a
+      // field at its right that has the keyboard (View > Hardware focuses the first one) scrolls the
+      // panel sideways. That is the panel's own scrolling, not a window over it: measured from its
+      // left edge, as a person sees it after a scroll back.
+      await app.page.evaluate(() => {
+        const scroller = document.querySelector<HTMLElement>(
+          '[data-e68-workspace]:not([hidden]) [data-e68-panel="hardware"] [data-hw-scroll]',
+        );
+        if (scroller) scroller.scrollLeft = 0;
+      });
+    }
+    const seen = await whatIsSeen(app);
+    expect(seen.devices, "the Hardware panel's displays, lamps, switches and push buttons are uncovered").toBe(100);
+    if (size.width >= 1920) {
+      expect(
+        overlap(hardware, memory),
+        `neither window covers the other: ${JSON.stringify({ hardware, memory })}`,
+      ).toBe(false);
+      expect(seen.picture, 'the whole Output picture at 100 % is uncovered').toEqual({ share: 100, left: 640 });
+    } else {
+      expect(seen.picture.left, 'at least the left 400 px of the Output picture are uncovered').toBeGreaterThanOrEqual(
+        400,
+      );
+    }
+  });
+}
+
+test('P9.8 point 3: a double click on a tab floats its panel, on a title bar docks it, and the Float button of a strip floats its selected panel, all locked', async ({
+  app,
+}) => {
+  test.setTimeout(180_000);
+  await simulatorWithTools(app, true);
+  // The Float button at the right end of the tool group's strip, after its tabs.
+  const strip = app.page.locator('[data-e68-workspace]:not([hidden]) .flexlayout__tabset_tabbar_outer').filter({
+    has: app.page.getByRole('tab', { name: 'Hardware', exact: true }),
+  });
+  const button = strip.getByRole('button', { name: FLOAT_BUTTON, exact: true });
+  await expect(button).toBeVisible();
+  await expect(button).toHaveAccessibleName(FLOAT_BUTTON);
+  // A single click selects a tab at once and floats nothing.
+  await panelTab(app, 'Memory').click();
+  await expect(panelTab(app, 'Memory')).toHaveAttribute('aria-selected', 'true');
+  expect(await floatingWindows(app)).toEqual([]);
+  // A double click floats it; the layout stays locked.
+  await panelTab(app, 'Memory').dblclick();
+  await expect.poll(() => floatingWindows(app)).toEqual(['Memory']);
+  expect(await lockChecked(app, 'View')).toBe(true);
+  // P9.8 point 2: it appears at the top right of the dock, not over the strip it came from.
+  const dock = await dockBox(app);
+  const memory = await windowBox(app, 'Memory');
+  const stripBox = await screenBox(strip);
+  expect(
+    near(memory.x + memory.width, dock.x + dock.width, 1) && near(memory.y, dock.y, 1),
+    JSON.stringify(memory),
+  ).toBe(true);
+  expect(overlap(memory, stripBox!), 'not over the strip it came from').toBe(false);
+  // The Float button floats the strip's selected panel (now Hardware), over no other window.
+  await button.click();
+  await expect.poll(() => floatingWindows(app)).toEqual(['Memory', 'Hardware']);
+  expect(overlap(await windowBox(app, 'Memory'), await windowBox(app, 'Hardware'))).toBe(false);
+  // A double click on a title bar docks the window.
+  await floatingTitle(app, 'Hardware').dblclick();
+  await expect.poll(() => floatingWindows(app)).toEqual(['Memory']);
+  await floatingTitle(app, 'Memory').dblclick();
+  await expect.poll(() => floatingWindows(app)).toEqual([]);
+  expect(await lockChecked(app, 'View')).toBe(true);
+});
 
 test('View > Layouts is in the Simulator only; Reset Layout docks every floating panel', async ({ app }) => {
   test.setTimeout(180_000);
@@ -723,9 +848,10 @@ test('a program that draws and waits for a key: the picture and the key survive 
   expect(await pixel(app, 99, 120)).toBe('#000000');
 
   // Moved with the mouse while the program waits: nothing of the program changes.
+  // (It floated at the top of the dock, P9.8 point 2: it is moved down and to the left.)
   const box = await windowBox(app, 'Output');
-  await dragBy(app, await titlePoint(app, 'Output'), -60, -40);
-  await expectWindowAt(app, 'Output', { ...box, x: box.x - 60, y: box.y - 40 }, 'the Output window moved');
+  await dragBy(app, await titlePoint(app, 'Output'), -60, 40);
+  await expectWindowAt(app, 'Output', { ...box, x: box.x - 60, y: box.y + 40 }, 'the Output window moved');
   await expectState(app, 'Waiting for input');
   expect(await pixel(app, 150, 120)).toBe('#00ff00');
 

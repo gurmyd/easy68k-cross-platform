@@ -594,6 +594,8 @@ type `xattr -dr com.apple.quarantine ` and then drag the app onto the Terminal w
 | F3 | On a Retina display: Output panel zoom `200%`, run `graphicSound.X68` | Sharp square pixels, no blur |
 | F4 | Run `mouseWindowSize.X68` (it shows the mouse position and buttons and draws a green crosshair): tap the trackpad, click with two fingers (right-click), drag | The program shows the left button for a tap, the right button for a two-finger click, and the position follows while dragging |
 | F5 | A floating window with the trackpad, in Safari and in Chrome. Simulator mode: View > Hardware, then click the Hardware tab with two fingers and choose Float. Drag the window's title bar to another place; drag its bottom right corner to make it larger, then its left edge; then drag the corner far up and to the left to make it as small as it goes; then drag the title bar far to the right, off the window. Reload the page, switch to Simulator mode, and click Dock on the window's title bar | The window follows your finger without jumps; the corner and the edge size it; it stops getting smaller at 160 by 96 pixels; dragged off, a part of its title bar stays inside and can be dragged back. After the reload it is where you left it, at the same size. Dock puts the Hardware panel back among the tabs below the Output panel. Write down anything that is hard to grab (the edges are 5 pixels wide, the corners 12) |
+| F6 | Making a panel float without the menu, with the trackpad, in Safari and in Chrome. Simulator mode: View > Memory and View > Hardware. Tap the Memory tab once; then double-tap it (two taps as you would to open a file, also once slowly). Then press the small button at the right end of the tabs below the Output panel (its tool tip: Float: make this panel a window of its own). Double-tap each window's title bar | One tap only selects the tab. A double tap makes the panel a window at the top right of the window, not over the tabs below the Output panel, also when the two taps are slow (as slow as the Mac's own double-click setting allows). The button floats the selected panel, at a place where it covers no other window. A double tap on a title bar docks the window. Write down any double tap that did nothing or did something else |
+| F7 | Unlocked (press Arrange Panels in the toolbar), drag the Hardware tab onto the middle of the Output panel and let go; then click View in the menu bar once | The View menu opens at the first click. (In Playwright's WebKit the first click after a drop does nothing, in 1.0.0 as in 1.1: erratum M1 entry 16 asks whether a real Safari does the same) |
 
 ### B5. Printing (needs a printer)
 
@@ -770,7 +772,7 @@ And what the parts of the port left for a person:
 | `docs/requests/N0.md` section 5.2 and 5.4 (the PDF in a real Safari, Chrome and Edge, not tried by a person), `docs/ARCHITECTURE-PLUS.md` P3.4.2 | E1-E4 |
 | `docs/porting/errata/N6.md` entry 14 (the viewer's frame sent to another address in the desktop app, which has no service worker) | E5 |
 | `docs/ARCHITECTURE-PLUS.md` P3.1.8 (a screen reader over a move of a panel and over the order of the panels) | V10, V11 |
-| `docs/ARCHITECTURE-PLUS.md` P9.2 and `docs/porting/errata/M1.md` entry 10 (a floating window dragged and sized with a real trackpad, and moved, sized and docked with VoiceOver, version 1.1) | F5, V12 |
+| `docs/ARCHITECTURE-PLUS.md` P9.2 and `docs/porting/errata/M1.md` entry 10 (a floating window dragged and sized with a real trackpad, and moved, sized and docked with VoiceOver, version 1.1), `docs/porting/errata/M1.md` entries 12 to 16 (the double click with a trackpad, the Float button, the first click after a tab was dropped) | F5, F6, F7, V12 |
 | `docs/integration/rc.md`, the accessibility audit (the walk-throughs on a real Mac with Safari's Tab setting, a halt and `Current Log Stopped.` announced, the focus frame of the Output panel, real screen readers) | V6-V9, X4 |
 | `docs/porting/errata/X3.md` entry 6 (a real Safari's canvas keeps colours exact; whole-program pictures against the original) | W5, W6, C6 |
 | `docs/porting/errata/DOC1.md` (the README's build steps followed literally on a Mac) | B12 |
@@ -817,7 +819,7 @@ A6 key recording: attached yes/no
 B1 layouts (which layout): L1:   L2:   L3:   L4:
 B2 Safari: W0:   W1:   W2:   W3:   W4:   W5 (both sums):   W6 (sum):   W7 (device, version):   W8 (what you saw, seconds for each try, minutes until a reload showed the files or whether quitting Safari was needed, macOS and Safari versions):
 B3 Mac app (exact first-start message, which way worked): D1:   D2:   D3:   D4:   D5:   D6:   D7:   D8:   D9:   D10:
-B4 floating window with the trackpad (Safari, Chrome): F5:
+B4 floating window with the trackpad (Safari, Chrome): F5:   F6:   F7:
 B7 VoiceOver and keyboard only: V1:   V2:   V3:   V4:   V5:   V6:   V7:   V8:   V9:   V10:   V11:   V12:
 B13 Chrome install (its exact words): I1:
 B14 sound program (browser): S7 (step 7: looping or once?):   S8:

@@ -5,13 +5,15 @@
 // the toolbar and the status bar; the dock clips what lies outside it, so that is "the application
 // window" of P9.2, errata M1 3).
 //
-//   boundedRect(rect, area)          the place shown: at least 48 px of the title bar inside the dock
-//                                    in every direction; moved back, never resized (P9.2, Bounds)
+//   boundedRect(rect, area, buttons) the place shown: at least 48 px of the title area (the title bar
+//                                    less its buttons, P9.8 point 4) inside the dock in every
+//                                    direction; moved back, never resized (P9.2, Bounds)
 //   sizedRect(rect, edges, dx, dy, min, area)   a resize by the edges and corners (pointer or keyboard)
 //   minimumSize(panelMin?)           the panel's own minimum, not less than 160 x 96
-//   firstFloatRect(docked, area, last)    the first float: its docked size (at most three quarters of
-//                                    the dock), cascaded from the last floating window
-//   cascadeRects(count, area, corner, size)    the cascade of an arrangement (P9.4 Floating Tools)
+//   firstFloatRect(docked, area, others, min, avoid)   the first float: its docked size (at most
+//                                    three quarters of the dock) at the first free place of the rule
+//                                    of P9.8 point 1 (state/tiling.ts), over no other window and not
+//                                    over the strip it came from (P9.8 point 2)
 //   keyStep(key, shift)              the arrow keys of Move and Size: 16 px, with Shift 1 px
 //   readFloating(raw, mode, readTree)    a mode's stored floating windows, validated (stored.ts), with
 //                                    the place each was docked at and the run's origin (errata M1 11)
@@ -20,6 +22,7 @@
 
 import type { DockNode, DockParked } from '../../contracts';
 import { FLOAT_CASCADE_STEP, MIN_FLOAT_SIZE, type DockRect } from '../../state/dock';
+import { rectsOverlap, tileWindows } from '../../state/tiling';
 import { DOCK_PANELS, type DockMode } from './model';
 
 /** The title bar's height (dock.css `.e68-float__bar`). */
@@ -70,14 +73,33 @@ const round = (rect: DockRect): DockRect => ({
 });
 
 /**
- * The place a window is shown at: moved (never resized) so that at least 48 px of its title bar are
- * inside the dock horizontally and the whole title bar vertically (it is shorter than 48 px). When
- * the dock is narrower than 48 px nothing can hold; the window is then put at the left edge.
+ * The width of the buttons at the right end of a title bar (dock.css `.e68-float__button`, measured
+ * in Chromium and WebKit): `Dock`, and `Dock` with the `x` of a panel that has one. The title area is
+ * the rest of the bar (P9.8 point 4).
  */
-export function boundedRect(rect: DockRect, area: Area): DockRect {
-  const keep = Math.min(KEEP_INSIDE, rect.width);
-  const minX = keep - rect.width;
-  const maxX = Math.max(minX, area.width - keep);
+export const TITLE_BUTTONS_WIDTH = { dock: 54, dockAndClose: 80 } as const;
+
+/** A floating window's border (dock.css `[data-e68-float]`), inside which its title bar begins. */
+export const WINDOW_BORDER = 1;
+
+/** The width of a window's title bar buttons: `closable` for a panel that has an `x`. */
+export const titleButtonsWidth = (closable: boolean): number =>
+  closable ? TITLE_BUTTONS_WIDTH.dockAndClose : TITLE_BUTTONS_WIDTH.dock;
+
+/**
+ * The place a window is shown at: moved (never resized) so that at least 48 px of its title area
+ * (the title bar less its buttons at the right end, `buttons` px wide; P9.8 point 4) are inside the
+ * dock horizontally and the whole title bar vertically (it is shorter than 48 px). When the dock is
+ * narrower than 48 px nothing can hold; the window is then put at the left edge.
+ */
+export function boundedRect(rect: DockRect, area: Area, buttons = 0): DockRect {
+  const title = Math.max(0, rect.width - Math.max(0, buttons));
+  const keep = Math.min(KEEP_INSIDE, title > 0 ? title : rect.width);
+  // The title area's right end (x + title) at least `keep` from the dock's left edge; its left end
+  // (x) at most `keep` from the right edge.
+  const minX = keep - (title > 0 ? title : rect.width);
+  // The title area (given by its buttons) begins inside the window's 1 px border.
+  const maxX = Math.max(minX, area.width - keep - (buttons > 0 && title > 0 ? WINDOW_BORDER : 0));
   const maxY = Math.max(0, area.height - TITLE_BAR_HEIGHT);
   return round({
     ...rect,
@@ -122,7 +144,11 @@ export function sizedRect(
 }
 
 /** A size of at most three quarters of the dock in either direction, and at least the minimum. */
-function firstSize(size: { width: number; height: number }, area: Area, min: { width: number; height: number }) {
+export function firstSizeWithin(
+  size: { width: number; height: number },
+  area: Area,
+  min: { width: number; height: number } = minimumSize(),
+) {
   return {
     width: Math.max(min.width, Math.min(size.width, Math.floor(area.width * FIRST_FLOAT_SHARE))),
     height: Math.max(min.height, Math.min(size.height, Math.floor(area.height * FIRST_FLOAT_SHARE))),
@@ -130,55 +156,37 @@ function firstSize(size: { width: number; height: number }, area: Area, min: { w
 }
 
 /**
- * The first float of a panel (P9.2): the size it had while docked (at most three quarters of the
- * dock), at a place cascaded from the last floating window (24 px further right and down); with no
- * floating window, 24 px right and down of where it was docked (left and up where that does not
- * fit). Shown within the bounds.
+ * The first float of a panel (P9.2 as corrected by P9.8 point 2): the size it had while docked (at
+ * most three quarters of the dock), at the first free place of the rule of P9.8 point 1
+ * (state/tiling.ts: the right part of the dock from the top down, then further columns to the left)
+ * where it covers none of `others` (the floating windows shown) and not `avoid` (the tab strip of the
+ * group it came from). Where there is no free place: cascaded 24 px from the last of `others` (from
+ * the top left when that would leave the dock), moved below `avoid` where it would cover it. Shown
+ * within the bounds.
  */
 export function firstFloatRect(
   docked: DockRect | null,
   area: Area,
-  last: DockRect | null,
+  others: readonly DockRect[],
   min: { width: number; height: number } = minimumSize(),
+  avoid: DockRect | null = null,
 ): DockRect {
   const base = docked ?? { x: 0, y: 0, width: area.width / 2, height: area.height / 2 };
-  const size = firstSize(base, area, min);
-  const origin = last ?? base;
-  let x = origin.x + FLOAT_CASCADE_STEP;
-  let y = origin.y + FLOAT_CASCADE_STEP;
+  const size = firstSizeWithin(base, area, min);
+  const obstacles = avoid ? [...others, avoid] : [...others];
+  const [place] = tileWindows([{ panel: '', ...size }], { area, obstacles });
+  if (place && !place.overlaps) return boundedRect(place.rect, area);
+  const last = others.length > 0 ? others[others.length - 1]! : null;
+  let x = (last?.x ?? 0) + FLOAT_CASCADE_STEP;
+  let y = (last?.y ?? 0) + FLOAT_CASCADE_STEP;
   // A cascade that would leave the dock starts again at the top left.
-  if (last && (x + size.width > area.width || y + size.height > area.height)) {
+  if (x + size.width > area.width || y + size.height > area.height) {
     x = FLOAT_CASCADE_STEP;
     y = FLOAT_CASCADE_STEP;
-  } else if (!last) {
-    // Lifted off its docked place: 24 px right and down, or left and up where that does not fit.
-    if (x + size.width > area.width) x = Math.max(0, Math.min(origin.x - FLOAT_CASCADE_STEP, area.width - size.width));
-    if (y + size.height > area.height) {
-      y = Math.max(0, Math.min(origin.y - FLOAT_CASCADE_STEP, area.height - size.height));
-    }
   }
-  return boundedRect({ x, y, ...size }, area);
-}
-
-/**
- * `count` windows of `size` (at most three quarters of the dock), cascaded from a corner of the
- * dock: the first 24 px in from it, each next one 24 px further in (P9.4 Floating Tools).
- */
-export function cascadeRects(
-  count: number,
-  area: Area,
-  corner: 'top-left' | 'top-right',
-  size: { width: number; height: number },
-  min: { width: number; height: number } = minimumSize(),
-): DockRect[] {
-  const fitted = firstSize(size, area, min);
-  const rects: DockRect[] = [];
-  for (let i = 0; i < count; i++) {
-    const step = FLOAT_CASCADE_STEP * (i + 1);
-    const x = corner === 'top-left' ? step : area.width - fitted.width - step;
-    rects.push(boundedRect({ x, y: step, ...fitted }, area));
-  }
-  return rects;
+  const rect = { x, y, ...size };
+  if (avoid && rectsOverlap(rect, avoid)) rect.y = avoid.y + avoid.height;
+  return boundedRect(rect, area);
 }
 
 /** The move or size of one arrow key (P9.2), or null for another key. */
@@ -237,6 +245,11 @@ export interface StoredFloating {
   remembered: Record<string, DockRect>;
   /** The arrangement the windows floated from (absent: none known). */
   origin?: FloatOrigin;
+  /**
+   * The width, CSS px, at the right of the dock that the docked panels leave to the floating windows
+   * (an arrangement's `reserve`, P9.8 point 1; absent: none). It applies while a window is shown.
+   */
+  reserve?: number;
 }
 
 export const EMPTY_FLOATING: StoredFloating = { windows: [], remembered: {} };
@@ -308,6 +321,10 @@ export function readFloating(
     const last = readTree(raw.origin.last);
     if (tree && last) result.origin = { tree, wasDefault: raw.origin.wasDefault === true, last };
   }
+  // So is the room kept for the windows: a whole number of pixels above 0, else none.
+  if (finite(raw.reserve) && raw.reserve > 0 && raw.reserve < 1e5 && windows.length > 0) {
+    result.reserve = Math.round(raw.reserve);
+  }
   return result;
 }
 
@@ -339,6 +356,9 @@ export function storedFloating(floating: StoredFloating): StoredFloating | undef
     remembered: Object.fromEntries(Object.entries(floating.remembered).map(([panel, rect]) => [panel, round(rect)])),
     // An origin belongs to windows that float; with none it has nothing left to do.
     ...(floating.origin && floating.windows.length > 0 ? { origin: floating.origin } : {}),
+    ...(floating.reserve && floating.reserve > 0 && floating.windows.length > 0
+      ? { reserve: Math.round(floating.reserve) }
+      : {}),
   };
 }
 

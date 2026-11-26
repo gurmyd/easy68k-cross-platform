@@ -26,11 +26,20 @@ explains it all; the differences are in parts M1 and M2 of `docs/DIFFERENCES.md`
   of Tab, and its menu has `Move`, `Size`, `Dock` and `Close`. Floating windows are kept with the
   arrangement and are where they were after a reload. `Lock Layout` now locks only the docked
   panels; floating windows can always be moved and sized.
+- **Making a panel float is easy to find** (after an independent review of the built version): a
+  double click on a panel's tab makes it float and a double click on a floating window's title bar
+  docks it; every tab strip ends with a button `Float`. A window that floats for the first time
+  appears at a free place at the right of the window, over no other floating window and not over
+  the tab strip it came from. A window pushed to an edge keeps 48 pixels of its title (not of its
+  buttons) in view. Leaving the Output panel with Ctrl+Alt+O lands on a floating window's title bar.
 - **Finding it.** A button `Arrange Panels` at the end of the toolbar is pressed while the layout is
-  unlocked. The first time the Simulator is shown, a tip says once that the window can be rearranged.
+  unlocked. The first time the Simulator is shown, a tip says once that the window can be rearranged
+  and how: a double click on a panel's tab, dragging tabs, or a ready-made layout.
 - **Ready-made layouts** for the Simulator, in `View > Layouts`: `Classic`, `Wide Output`, `Output
-  and Hardware Side by Side` and `Floating Tools` (every tool panel in a window of its own, as in the
-  original).
+  and Hardware Side by Side` (the Output panel gets the room its whole picture needs first) and
+  `Floating Tools` (every tool panel in a window of its own, as in the original, side by side from
+  the top right so that the windows do not cover one another while there is room, never over the
+  Hardware panel's displays and switches, and with the Output picture in view).
 - **Panels in a small place.** The Hardware panel, the registers and the Memory panel scroll inside
   themselves when they get less room than they need (a low or narrow region, a small floating
   window), so that every control can be reached with the mouse, the wheel and the keyboard; a

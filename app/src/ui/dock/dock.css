@@ -334,6 +334,12 @@
    menus; while the Output panel in it is in full screen, it takes the full screen's own z-order
    (P3.1.5: `calc(var(--z-modeless) - 1)`, features/output/output.css) so that it covers the window. */
 
+/* The room kept at the right of the dock for the floating windows (P9.8 point 1, engine.ts
+   applyReserve): the docked panels are laid out left of it while a window is shown. */
+.e68-dock[data-e68-reserve] .flexlayout__layout_main {
+  margin-right: var(--e68-dock-reserve, 0px);
+}
+
 .e68-dock .flexlayout__tab[data-e68-float] {
   display: flex !important;
   flex-direction: column;

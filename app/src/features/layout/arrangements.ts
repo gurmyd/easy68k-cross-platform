@@ -14,13 +14,19 @@
 //                                      | [tools]   |            |        |
 //                                      | Messages  |            |        |
 //                                      +-----------+------------+--------+
-//   Floating Tools                     Classic for Registers, Listing, Messages and Output; the
-//                                      five tool panels float, cascaded from the top right, each at
-//                                      its own default size (TOOL_WINDOW_SIZES: what the panel needs
-//                                      to show its content; the Hardware panel whole, without
-//                                      scrolling, at 1366 by 768), Hardware first (at the back, the
-//                                      highest place of the cascade, where it fits), then Memory,
-//                                      Stack, Break Points and Log in front
+//   Floating Tools                     +-----------+--------+   +------------+
+//   (P9.8 point 1: tiled)              | Registers |        |   |  Hardware  |
+//                                      | Listing   | Output |   +------------+
+//                                      | Messages  |        |   |   Memory   |
+//                                      +-----------+--------+   +------------+
+//                                      the five tool panels float, each at its own default size
+//                                      (TOOL_WINDOW_SIZES), placed by the rule of state/tiling.ts in
+//                                      the order Hardware, Memory, Stack, Break Points, Log: from
+//                                      the top right down, then further columns to the left, over no
+//                                      other window while there is room, never over the Hardware
+//                                      window's displays and switches; the docked panels keep the
+//                                      part of the dock left of the windows (`reserve`), the Output
+//                                      panel the room for its picture (FLOATING_ROOM)
 //
 // [tools] is one group with the tool panels as tabs (Memory, Stack, Hardware, Break Points, Log in
 // this order; Hardware only in Wide Output). Each arrangement names every panel of the Simulator,
@@ -32,7 +38,8 @@
 
 import type { DockNode } from '../../contracts';
 import { TOOL_PANELS } from '../../state/layout';
-import { FLOAT_CASCADE_STEP, MIN_FLOAT_SIZE, type DockArrangement, type DockRect } from '../../state/dock';
+import { MIN_FLOAT_SIZE, type DockArrangement, type DockRect } from '../../state/dock';
+import { tileWindows } from '../../state/tiling';
 
 export type ArrangementId = 'classic' | 'wideOutput' | 'sideBySide' | 'floatingTools';
 
@@ -98,24 +105,35 @@ function leftColumn(tools: readonly string[], selected: string, weight: number):
 }
 
 /**
- * Floating Tools: the order in which the tool panels float (the first at the back, the last in
- * front; also their reading order) and the default size of each window, title bar included, in CSS
- * pixels. Each size is what the panel needs to show its content (measured in Chromium and WebKit:
- * the Hardware panel needs 522 by 627, the Memory panel's sixteen bytes a row 622 px), with a few
- * pixels to spare for other systems' fonts; the lists (Stack, Break Points, Log) get a size that
- * shows several rows. The Hardware panel comes first so that it has the highest place of the
- * cascade, the only one where it fits whole in the dock at 1366 by 768 (681 px high). Erratum M2.
+ * Floating Tools: the order in which the tool panels float (also their reading order, and the order
+ * in which they are placed, P9.8 point 1) and the default size of each window, title bar and border
+ * included, in CSS pixels. Each size is what the panel needs to show its content (measured in
+ * Chromium and WebKit: the Hardware panel's content is 522 by 595, its window 540 by 627; the
+ * Memory panel's sixteen bytes a row need 622 px and its rows fill the height it is given); the
+ * lists (Stack, Break Points, Log) get a size that shows several rows. The Hardware window and the
+ * Memory window below it fit one column of the dock at 1920 by 1080 (993 px high). `keep` is the
+ * Hardware window's top part, title bar included, that holds its displays, lamps, switches and push
+ * buttons: no window is ever placed over it (P9.8 point 1). Erratum M2.
  */
 export const FLOATING_TOOLS_ORDER = ['hardware', 'memory', 'stack', 'breakpoints', 'log'] as const;
 export const TOOL_WINDOW_SIZES: Readonly<
-  Record<(typeof FLOATING_TOOLS_ORDER)[number], { width: number; height: number }>
+  Record<(typeof FLOATING_TOOLS_ORDER)[number], { width: number; height: number; keep?: number }>
 > = {
-  hardware: { width: 540, height: 640 },
-  memory: { width: 640, height: 360 },
+  hardware: { width: 540, height: 632, keep: 272 },
+  memory: { width: 640, height: 356 },
   stack: { width: 300, height: 360 },
   breakpoints: { width: 560, height: 300 },
   log: { width: 440, height: 300 },
 };
+
+/**
+ * The room of Floating Tools (P9.8 point 1), CSS pixels. The left column keeps at least the width
+ * the Registers panel needs to be shown whole (`left`); the Output panel keeps the left part of what
+ * was its column: its whole picture at 100 % with its frame (`outputWhole`) where the tool windows
+ * then still get at least `toolsLeast` (the Hardware panel's displays, lamps and switches), else the
+ * left 400 px of the picture (`outputPart`). The tool windows are placed right of that.
+ */
+export const FLOATING_ROOM = { left: 478, outputWhole: 648, outputPart: 402, toolsLeast: 360 } as const;
 
 /** The size of a Simulator dock, CSS pixels. */
 export interface DockArea {
@@ -123,22 +141,82 @@ export interface DockArea {
   height: number;
 }
 
-/**
- * The windows of Floating Tools in a dock of `area`: cascaded from the top right, the first
- * FLOAT_CASCADE_STEP px in from the corner, each next one a step further left and down, each at its
- * default size, made smaller only where the dock is too small for it (never below MIN_FLOAT_SIZE),
- * so that every window lies inside the dock.
- */
-export function floatingToolRects(area: DockArea): { panel: string; rect: DockRect }[] {
-  return FLOATING_TOOLS_ORDER.map((panel, index) => {
-    const step = FLOAT_CASCADE_STEP * (index + 1);
-    const size = TOOL_WINDOW_SIZES[panel];
-    const width = Math.max(MIN_FLOAT_SIZE.width, Math.min(size.width, Math.floor(area.width) - 2 * step));
-    const height = Math.max(MIN_FLOAT_SIZE.height, Math.min(size.height, Math.floor(area.height) - step));
-    const x = Math.max(0, Math.floor(area.width) - step - width);
-    return { panel, rect: { x, y: step, width, height } };
-  });
+/** Floating Tools in a dock of a size: the windows, the room kept for them and the docked columns. */
+export interface FloatingToolsLayout {
+  /** Every tool panel, in FLOATING_TOOLS_ORDER, with its window. */
+  windows: { panel: string; rect: DockRect; overlaps: boolean }[];
+  /** The width at the right of the dock that the docked panels leave to the windows (DockArrangement.reserve). */
+  reserve: number;
+  /** The docked row: the left column's width and the Output panel's, in the rest of the dock. */
+  columns: [number, number];
 }
+
+/**
+ * Floating Tools in a dock of `area` (P9.8 point 1): the tool panels that are shown are placed
+ * first, in the order Hardware, Memory, Stack, Break Points, Log, by the rule of state/tiling.ts
+ * (each at its default size, no window over another, the right part of the dock from the top down,
+ * a further column to the left when one is full, the cascade over the last column only when there
+ * is no free place, never over the Hardware window's displays and switches); the hidden ones then
+ * get their places by the same rule, which they take when they are shown. The docked panels keep the
+ * part of the dock left of the windows.
+ */
+export function floatingToolsLayout(
+  area: DockArea,
+  shown: (panel: string) => boolean = () => true,
+): FloatingToolsLayout {
+  const width = Math.floor(area.width);
+  const room = FLOATING_ROOM;
+  let region = width - room.left - room.outputWhole;
+  if (region < room.toolsLeast) region = Math.max(room.toolsLeast, width - room.left - room.outputPart);
+  const minX = Math.max(0, width - region);
+  const order = [
+    ...FLOATING_TOOLS_ORDER.filter((panel) => shown(panel)),
+    ...FLOATING_TOOLS_ORDER.filter((panel) => !shown(panel)),
+  ];
+  const places = tileWindows(
+    order.map((panel) => ({ panel, ...TOOL_WINDOW_SIZES[panel] })),
+    { area: { width, height: Math.floor(area.height) }, minX },
+  );
+  const windows = FLOATING_TOOLS_ORDER.map((panel) => {
+    const place = places.find((entry) => entry.panel === panel)!;
+    return { panel, rect: place.rect, overlaps: place.overlaps };
+  });
+  const left = Math.min(width, ...places.filter((place) => !place.overlaps).map((place) => place.rect.x));
+  // The docked panels keep at least the Registers column and a narrow Output panel.
+  const reserve = Math.max(0, Math.min(width - left, width - room.left - MIN_FLOAT_SIZE.width));
+  const docked = width - reserve;
+  const leftColumn = docked - room.left >= room.outputWhole ? docked - room.outputWhole : Math.min(room.left, docked);
+  return { windows, reserve, columns: [leftColumn, Math.max(1, docked - leftColumn)] };
+}
+
+/** The windows of Floating Tools in a dock of `area`, every tool panel shown (floatingToolsLayout). */
+export function floatingToolRects(area: DockArea): { panel: string; rect: DockRect }[] {
+  return floatingToolsLayout(area).windows.map(({ panel, rect }) => ({ panel, rect }));
+}
+
+/**
+ * Output and Hardware Side by Side in a dock `width` px wide (P9.8 point 5): the left column keeps
+ * its share; the Output column gets at least 648 px (the picture at 100 % and its frame) before the
+ * Hardware column gets more than its own minimum; the Hardware panel scrolls inside itself.
+ */
+export function sideBySideColumns(width: number): [number, number, number] {
+  const [leftShare, outputShare, hardwareShare] = PROPORTIONS.sideColumns;
+  const total = leftShare + outputShare + hardwareShare;
+  // The columns share the dock less its two splitters (1 px each), as the weights do.
+  const room = Math.max(0, width - 2);
+  const left = Math.round((room * leftShare) / total);
+  let output = Math.round((room * outputShare) / total);
+  let hardware = room - left - output;
+  if (output < FLOATING_ROOM.outputWhole) {
+    const give = Math.min(FLOATING_ROOM.outputWhole - output, Math.max(0, hardware - SIDE_HARDWARE_LEAST));
+    output += give;
+    hardware -= give;
+  }
+  return [left, output, hardware];
+}
+
+/** The Hardware column's own minimum in Side by Side: a floating window's least width (P9.2). */
+export const SIDE_HARDWARE_LEAST = MIN_FLOAT_SIZE.width;
 
 export interface ArrangementInput {
   /** The tool panel in front now (ShellState.activeTool), if any. */
@@ -177,7 +255,10 @@ export function arrangementPlan(id: ArrangementId, input: ArrangementInput = {})
     }
     case 'sideBySide': {
       const tools = TOOL_PANELS.filter((panel) => panel !== 'hardware');
-      const [left, output, hardware] = PROPORTIONS.sideColumns;
+      // By the dock's width where it is known (P9.8 point 5), else the proportions.
+      const [left, output, hardware] = input.area
+        ? sideBySideColumns(Math.floor(input.area.width))
+        : PROPORTIONS.sideColumns;
       return {
         kind: 'arrange',
         arrangement: {
@@ -196,7 +277,8 @@ export function arrangementPlan(id: ArrangementId, input: ArrangementInput = {})
       };
     }
     case 'floatingTools': {
-      const [left, right] = PROPORTIONS.floatingColumns;
+      const layout = input.area ? floatingToolsLayout(input.area, shown) : null;
+      const [left, right] = layout ? layout.columns : PROPORTIONS.floatingColumns;
       const [registers, listing, messages] = PROPORTIONS.floatingLeft;
       return {
         kind: 'arrange',
@@ -214,9 +296,13 @@ export function arrangementPlan(id: ArrangementId, input: ArrangementInput = {})
               tabs(['output'], right),
             ],
           },
-          // Each at its default size, cascaded from the top right (P9.4).
-          floating: input.area ? floatingToolRects(input.area) : FLOATING_TOOLS_ORDER.map((panel) => ({ panel })),
+          // Each at its default size, side by side from the top right (P9.8 point 1); without the
+          // dock's size, the dock places them by the same rule.
+          floating: layout
+            ? layout.windows.map(({ panel, rect }) => ({ panel, rect }))
+            : FLOATING_TOOLS_ORDER.map((panel) => ({ panel })),
           cascade: 'top-right',
+          ...(layout ? { reserve: layout.reserve } : {}),
         },
       };
     }

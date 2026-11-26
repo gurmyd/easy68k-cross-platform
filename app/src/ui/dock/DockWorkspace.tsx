@@ -12,7 +12,16 @@
 //
 // No component here handles a key whose target is inside `[data-e68-keys="program"]` (P1.1 rule 5).
 
-import { I18nLabel, Layout, TabNode, type IKeyMap, type Node } from 'flexlayout-react';
+import {
+  I18nLabel,
+  Layout,
+  TabNode,
+  TabSetNode,
+  type BorderNode,
+  type IKeyMap,
+  type ITabSetRenderValues,
+  type Node,
+} from 'flexlayout-react';
 import 'flexlayout-react/style/light.css';
 import {
   useCallback,
@@ -34,7 +43,7 @@ import './dock.css';
 import { DockEngine } from './engine';
 import { DOCK_KEY_MAP, isViewerId, panelOfTab, tabIdOf, type DockMode } from './model';
 import { blockOf, stopsOf } from './order';
-import { FloatEdges, FloatTitleBar } from './FloatChrome';
+import { FloatButton, FloatEdges, FloatTitleBar, floatPanel } from './FloatChrome';
 import { innerPanelId, type SplitRole } from './splitters';
 import { TabMenu, type TabMenuState } from './TabMenu';
 import { CLOSE_TAB, SPLITTER_LABEL } from './texts';
@@ -398,7 +407,17 @@ export function DockWorkspace({ mode }: { mode: DockMode }) {
       }
     };
     const onDoubleClick = (event: MouseEvent) => {
-      const splitter = (event.target as Element | null)?.closest?.('.flexlayout__splitter[data-e68-split]');
+      const target = event.target as Element | null;
+      // Version 1.1 (P9.8 point 3 (a)): a double click on a panel's tab makes it float, locked or
+      // not. The browser's own double click (the system's double-click time); the first click has
+      // selected the tab already. Only the dock's tabs: the Editor's document tabs are not these.
+      const tab = tabButtonPanel(target);
+      if (tab && element.contains(tab.button) && event.button === 0) {
+        event.preventDefault();
+        floatPanel(ctx, engine, tab.panel);
+        return;
+      }
+      const splitter = target?.closest?.('.flexlayout__splitter[data-e68-split]');
       if (!splitter) return;
       engine.restoreSplit(splitter.getAttribute('data-e68-split') as SplitRole);
     };
@@ -483,7 +502,20 @@ export function DockWorkspace({ mode }: { mode: DockMode }) {
       element.removeEventListener('dblclick', onDoubleClick);
       document.removeEventListener('dragover', onDragOver);
     };
-  }, [engine, openMenu]);
+  }, [ctx, engine, openMenu]);
+
+  // Version 1.1 (P9.8 point 3 (b)): the Float button at the right end of every tab strip that is
+  // shown (FlexLayout's buttons follow the strip's tabs, so it is the Tab stop after them).
+  const onRenderTabSet = useCallback(
+    (node: TabSetNode | BorderNode, values: ITabSetRenderValues) => {
+      if (!(node instanceof TabSetNode) || !node.isEnableTabStrip()) return;
+      const selected = node.getSelectedNode();
+      const panel = selected instanceof TabNode ? panelOfTab(selected.getId()) : null;
+      if (panel === null) return;
+      values.buttons.push(<FloatButton key="e68-float" ctx={ctx} engine={engine} panel={panel} />);
+    },
+    [ctx, engine],
+  );
 
   const onContextMenu = useCallback(
     (node: Node, event: ReactMouseEvent<HTMLElement>) => {
@@ -524,6 +556,7 @@ export function DockWorkspace({ mode }: { mode: DockMode }) {
         factory={factory}
         onAction={engine.onAction}
         onContextMenu={onContextMenu}
+        onRenderTabSet={onRenderTabSet}
         // Each key passed explicitly, the unbound ones as undefined (P2.2): FlexLayout merges the
         // map over its defaults, so an absent key would keep Ctrl+Delete, F2 or Escape.
         keyMap={DOCK_KEY_MAP as IKeyMap}

@@ -27,10 +27,19 @@
 //   layouts   View > Layouts at 1366 x 768 and 1920 x 1080 in both themes, every tool panel shown:
 //             the arrangement of each entry (its tree and floating windows), no page scroll, every
 //             shown panel inside the window and at least 160 x 96 px, the floating windows of
-//             Floating Tools cascaded from the top right at their own default sizes, below the
-//             toolbar and inside the dock, the Hardware panel whole in its window; Floating Tools
-//             chosen in the moment of the switch to the Simulator cascades from that dock's corner;
-//             visibility and the lock unchanged; screenshots (sixteen per browser, in <out>/shots)
+//             Floating Tools where the rule of P9.8 point 1 puts them (arrangements.ts
+//             floatingToolsLayout), below the toolbar and inside the dock, the Hardware panel whole
+//             in its window at 1920 x 1080; Floating Tools chosen in the moment of the switch to the
+//             Simulator starts at that dock's top right corner; visibility and the lock unchanged;
+//             screenshots (sixteen per browser, in <out>/shots)
+//   uncovered P9.8 points 1 and 5, measured as the review did (elementFromPoint every 4 px), with
+//             a program that has drawn its picture, in both themes: Floating Tools with Hardware and
+//             Memory shown at 1920 x 1080 (neither window covers the other, the whole 640 x 480
+//             picture and the Hardware displays, lamps, switches and push buttons seen) and at
+//             1366 x 768 (those devices and the left 400 px of the picture seen; what overlaps is
+//             noted); with all five tool panels shown (the windows placed without overlap do not
+//             overlap, the devices seen; every overlap noted); Side by Side (the Output column at
+//             least 648 px, its whole picture seen); screenshots of each case in <out>/shots
 //   program   while a program runs (it drew a picture and reads keys; the Memory panel at an address
 //             of the check's choosing): each arrangement keeps the phase, the Output picture, the
 //             Memory panel's address and every panel's content instance; with a panel hidden, an
@@ -65,7 +74,7 @@ if (args.includes('--help') || args.includes('-h')) {
       '  --browser  the browsers to drive (default: all)',
       '  --out      where screenshots, proportions.json and the Vite cache go',
       '             (default: build/arrange-check of the repository, git-ignored)',
-      '  --only     run only these passes: button, narrow, tip, layouts, program, menus, dialog',
+      '  --only     run only these passes: button, narrow, tip, layouts, uncovered, program, menus, dialog',
     ].join('\n'),
   );
   process.exit(0);
@@ -100,8 +109,8 @@ const SIM_PANELS = ['registers', 'listing', 'messages', 'output', ...TOOLS];
 /** Floating Tools: the order the tool panels float in and each window's default size (arrangements.ts). */
 const FLOATING_ORDER = ['hardware', 'memory', 'stack', 'breakpoints', 'log'];
 const WINDOW_SIZES = {
-  hardware: { width: 540, height: 640 },
-  memory: { width: 640, height: 360 },
+  hardware: { width: 540, height: 632, keep: 272 },
+  memory: { width: 640, height: 356 },
   stack: { width: 300, height: 360 },
   breakpoints: { width: 560, height: 300 },
   log: { width: 440, height: 300 },
@@ -110,7 +119,7 @@ const WINDOW_SIZES = {
 // The texts, as P9.3 and P9.4 give them (the application's constants are in texts.ts and
 // commands/tables/toolbars.ts; they are compared with these in the page).
 const TIP_TEXT =
-  'You can rearrange this window: make a panel float, dock it elsewhere or pick a ready-made layout in the View menu.';
+  "You can rearrange this window: double-click a panel's tab to make it float, drag tabs to dock them elsewhere, or pick a ready-made layout in the View menu.";
 const SIM_TOOLTIP = 'Arrange Panels: drag a panel by its tab, or right-click a tab for more (View > Lock Layout)';
 const EDITOR_TOOLTIP = 'Arrange Panels: drag a panel by its tab, or right-click a tab for more (Window > Lock Layout)';
 const ARRANGEMENTS = [
@@ -799,11 +808,11 @@ async function sameMomentCheck(browser, name) {
   });
   const first = result.windows[0];
   check(
-    `${name}: Floating Tools chosen as the window switches to the Simulator cascades from the Simulator dock's top right`,
+    `${name}: Floating Tools chosen as the window switches to the Simulator places its first window in the Simulator dock's top right corner (P9.8 point 1)`,
     first !== undefined &&
       first.panel === FLOATING_ORDER[0] &&
-      Math.abs(first.rect.x + first.rect.width - (result.dock - 24)) <= 1 &&
-      first.rect.y === 24,
+      Math.abs(first.rect.x + first.rect.width - result.dock) <= 1 &&
+      first.rect.y === 0,
     JSON.stringify({ dock: result.dock, first }),
   );
   await run(page, 'sim.view.layout.classic');
@@ -884,39 +893,47 @@ async function layoutsPass(browser, name) {
             note(`${label}: the Hardware panel scrolls inside itself (${hardware.widest} px in ${hardware.box.w} px)`);
           }
           if (arrangement.id === 'floatingTools') {
-            // Each window at its own default size (TOOL_WINDOW_SIZES), the first 24 px in from the
-            // dock's top right corner, each next one 24 px further left and down.
-            const right = m.dock.x + m.dock.w;
-            FLOATING_ORDER.forEach((id, i) => {
+            // Each window where the rule of P9.8 point 1 puts it (arrangements.ts floatingToolsLayout,
+            // every tool panel shown), at its default size where the room allows.
+            const expected = await page.evaluate(
+              async (area) => {
+                const { floatingToolsLayout } = await import('/src/features/layout/arrangements.ts');
+                return floatingToolsLayout(area);
+              },
+              { width: m.dock.w, height: m.dock.h },
+            );
+            for (const { panel: id, rect } of expected.windows) {
               const w = m.panels[id]?.window;
-              const step = 24 * (i + 1);
-              const size = WINDOW_SIZES[id];
               if (!w) problems.push(`${id} does not float`);
               else if (
-                Math.abs(w.x + w.w - (right - step)) > 1 ||
-                Math.abs(w.y - (m.dock.y + step)) > 1 ||
-                Math.abs(w.w - size.width) > 1 ||
-                Math.abs(w.h - size.height) > 1
+                Math.abs(w.x - (m.dock.x + rect.x)) > 1 ||
+                Math.abs(w.y - (m.dock.y + rect.y)) > 1 ||
+                Math.abs(w.w - rect.width) > 1 ||
+                Math.abs(w.h - rect.height) > 1
               ) {
                 problems.push(
-                  `the window of ${id} is not at its place of the cascade at ${size.width} x ${size.height}: ${JSON.stringify(w)} dock ${JSON.stringify(m.dock)}`,
+                  `the window of ${id} is not at its place: ${JSON.stringify(w)}, rule ${JSON.stringify(rect)}`,
                 );
               }
-            });
-            // The Hardware panel is shown whole in its window: nothing of it scrolls.
-            const scrolls = await page.evaluate(() => {
-              const panel = document.querySelector('[data-e68-dock="simulator"] [data-e68-panel="hardware"]');
-              return Array.from([panel, ...panel.querySelectorAll('*')])
-                .filter((e) => e.scrollHeight > e.clientHeight + 1 || e.scrollWidth > e.clientWidth + 1)
-                .filter(
-                  (e) => getComputedStyle(e).overflowY !== 'visible' || getComputedStyle(e).overflowX !== 'visible',
-                )
-                .map(
-                  (e) =>
-                    `${e.className || e.tagName} ${e.scrollWidth}x${e.scrollHeight} in ${e.clientWidth}x${e.clientHeight}`,
-                );
-            });
-            if (scrolls.length > 0) problems.push(`the floating Hardware panel scrolls: ${scrolls.join(', ')}`);
+            }
+            // Where the dock is tall enough for the Hardware window (1920 by 1080), nothing of the
+            // Hardware panel scrolls; at 1366 by 768 its window is as wide as the room right of the
+            // Output's 400 px, and its displays, lamps and switches are checked in the pass uncovered.
+            if (size.width >= 1920) {
+              const scrolls = await page.evaluate(() => {
+                const panel = document.querySelector('[data-e68-dock="simulator"] [data-e68-panel="hardware"]');
+                return Array.from([panel, ...panel.querySelectorAll('*')])
+                  .filter((e) => e.scrollHeight > e.clientHeight + 1 || e.scrollWidth > e.clientWidth + 1)
+                  .filter(
+                    (e) => getComputedStyle(e).overflowY !== 'visible' || getComputedStyle(e).overflowX !== 'visible',
+                  )
+                  .map(
+                    (e) =>
+                      `${e.className || e.tagName} ${e.scrollWidth}x${e.scrollHeight} in ${e.clientWidth}x${e.clientHeight}`,
+                  );
+              });
+              if (scrolls.length > 0) problems.push(`the floating Hardware panel scrolls: ${scrolls.join(', ')}`);
+            }
           }
           check(
             `${label}: every shown panel usable, inside the window, no page scroll`,
@@ -942,6 +959,220 @@ async function layoutsPass(browser, name) {
     await run(page, 'sim.view.layout.classic');
     await settle(page);
     finish(`${p} layouts ${size.width}x${size.height}`, errors);
+    await closeWithin(context);
+  }
+}
+
+// --- pass: uncovered (P9.8 points 1 and 5) ---------------------------------------------------
+
+/**
+ * What a person sees of the Output picture, the Hardware panel's displays, lamps, switches and push
+ * buttons, and of each floating window, measured as the reviewer did: elementFromPoint on a grid of
+ * points every 4 px over each region. `canvas`: the share of the picture's points that hit the
+ * picture, and how many px of it from its left edge are uncovered in every row; `devices`: the
+ * share of the points of the four device blocks that hit the Hardware panel; `overlaps`: each pair
+ * of shown floating windows whose boxes overlap, with the area.
+ */
+function uncovered(page) {
+  return page.evaluate(() => {
+    const dock = document.querySelector('[data-e68-dock="simulator"]');
+    const grid = (box, hits) => {
+      let seen = 0;
+      let total = 0;
+      const columns = [];
+      for (let x = 2; x < box.width; x += 4) {
+        let column = true;
+        for (let y = 2; y < box.height; y += 4) {
+          total++;
+          const px = box.left + x;
+          const py = box.top + y;
+          const inside = px >= 0 && py >= 0 && px < window.innerWidth && py < window.innerHeight;
+          if (inside && hits(document.elementFromPoint(px, py))) seen++;
+          else column = false;
+        }
+        columns.push(column);
+      }
+      let left = 0;
+      for (const column of columns) {
+        if (!column) break;
+        left += 4;
+      }
+      return { share: total ? Math.round((1000 * seen) / total) / 10 : 0, left: Math.min(left, Math.round(box.width)) };
+    };
+    const canvas = dock.querySelector('[data-e68-panel="output"] canvas');
+    const hardware = dock.querySelector('[data-e68-panel="hardware"]');
+    // The four device blocks: the 7-segment display, the lamps, the switches, the push buttons (each
+    // is followed by its address field, which is not one of them).
+    const deviceBlocks = hardware
+      ? Array.from(hardware.querySelectorAll('.e68-hw__devices > .e68-hw__device')).filter(
+          (element) => element.getClientRects().length > 0,
+        )
+      : [];
+    let devicesSeen = 0;
+    let devicesTotal = 0;
+    for (const block of deviceBlocks) {
+      const r = grid(block.getBoundingClientRect(), (hit) => hit !== null && hardware.contains(hit));
+      const box = block.getBoundingClientRect();
+      const n = Math.ceil((box.width - 2) / 4) * Math.ceil((box.height - 2) / 4);
+      devicesSeen += (r.share / 100) * n;
+      devicesTotal += n;
+    }
+    const windows = Array.from(dock.querySelectorAll('.flexlayout__tab[data-e68-float]')).map((element) => {
+      const r = element.getBoundingClientRect();
+      return { panel: element.getAttribute('data-e68-float'), x: r.left, y: r.top, w: r.width, h: r.height };
+    });
+    const overlaps = [];
+    for (let i = 0; i < windows.length; i++) {
+      for (let j = i + 1; j < windows.length; j++) {
+        const a = windows[i];
+        const b = windows[j];
+        const w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+        const h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+        if (w > 0.5 && h > 0.5) overlaps.push(`${a.panel}/${b.panel} ${Math.round(w)}x${Math.round(h)}`);
+      }
+    }
+    const canvasBox = canvas?.getBoundingClientRect();
+    return {
+      canvas: canvas ? grid(canvasBox, (hit) => hit === canvas) : null,
+      canvasSize: canvasBox ? [Math.round(canvasBox.width), Math.round(canvasBox.height)] : null,
+      devices: devicesTotal ? Math.round((1000 * devicesSeen) / devicesTotal) / 10 : null,
+      deviceBlocks: deviceBlocks.length,
+      windows: windows.map(
+        (w) => `${w.panel} ${Math.round(w.x)},${Math.round(w.y)} ${Math.round(w.w)}x${Math.round(w.h)}`,
+      ),
+      overlaps,
+    };
+  });
+}
+
+/** Shows the tool panels of `shown` and hides the others. */
+async function setShown(page, shown) {
+  await page.evaluate(
+    ([tools, list]) => {
+      for (const id of tools) {
+        if (list.includes(id)) window.__arrange.panels.showPanel(window.__arrange.ctx, id, { focus: false });
+        else window.__arrange.panels.hidePanel(window.__arrange.ctx, id);
+      }
+    },
+    [TOOLS, shown],
+  );
+  await settle(page);
+}
+
+async function uncoveredPass(browser, name) {
+  const p = `${name}:`;
+  for (const size of SIZES) {
+    const context = await newContext(browser, size);
+    const { page, errors } = await openApp(context);
+    await setMode(page, 'simulator');
+    await settle(page);
+    if (enginesPresent) {
+      await loadProgram(page, 'uncovered', DRAW_THEN_KEYS);
+      await run(page, 'sim.run.run');
+      await runningNow(page);
+    } else {
+      note('engine/dist is missing: the Output picture is empty in the screenshots of the pass uncovered');
+    }
+    const at = `${size.width}x${size.height}`;
+    for (const theme of ['light', 'dark']) {
+      await run(page, 'app.theme.set', theme);
+      await page.waitForFunction((value) => document.documentElement.getAttribute('data-theme') === value, theme);
+      // Hardware and Memory shown (the reviewer's case, P9.8 point 1).
+      await setShown(page, ['hardware', 'memory']);
+      await run(page, 'sim.view.layout.floatingTools');
+      await settle(page);
+      await settle(page);
+      const two = await uncovered(page);
+      await page.screenshot({
+        path: join(outDir, 'shots', `${name}-${at}-${theme}-floating-tools-hardware-memory.png`),
+      });
+      const label = `${p} ${at} ${theme} Floating Tools, Hardware and Memory shown`;
+      if (size.width >= 1920) {
+        check(
+          `${label}: neither window covers the other`,
+          two.windows.length === 2 && two.overlaps.length === 0,
+          JSON.stringify({ windows: two.windows, overlaps: two.overlaps }),
+        );
+      } else {
+        // At 1366 by 768 the Memory window has no free place right of the Output's 400 px: it is
+        // cascaded over the Hardware window's column, below its displays (P9.8 point 1).
+        check(`${label}: both windows float`, two.windows.length === 2, JSON.stringify(two.windows));
+        note(`${label}: windows ${two.windows.join('; ')}; overlaps ${two.overlaps.join('; ') || 'none'}`);
+      }
+      check(
+        `${label}: the Hardware panel's displays, lamps, switches and push buttons are uncovered`,
+        two.deviceBlocks === 4 && two.devices === 100,
+        JSON.stringify({ devices: two.devices, blocks: two.deviceBlocks }),
+      );
+      if (size.width >= 1920) {
+        check(
+          `${label}: the whole Output picture at 100 % (640 by 480) is uncovered`,
+          two.canvas?.share === 100 && two.canvasSize?.[0] === 640 && two.canvasSize?.[1] === 480,
+          JSON.stringify({ canvas: two.canvas, size: two.canvasSize }),
+        );
+      } else {
+        check(
+          `${label}: at least the left 400 px of the Output picture are uncovered`,
+          (two.canvas?.left ?? 0) >= 400,
+          JSON.stringify({ canvas: two.canvas, size: two.canvasSize }),
+        );
+      }
+      // All five tool panels shown: say exactly what overlaps what.
+      await setShown(page, TOOLS);
+      await run(page, 'sim.view.layout.floatingTools');
+      await settle(page);
+      await settle(page);
+      const five = await uncovered(page);
+      await page.screenshot({ path: join(outDir, 'shots', `${name}-${at}-${theme}-floating-tools-all-five.png`) });
+      const rule = await page.evaluate(
+        async (area) => {
+          const { floatingToolsLayout } = await import('/src/features/layout/arrangements.ts');
+          return floatingToolsLayout(area).windows.map((w) => [w.panel, w.overlaps]);
+        },
+        await page.evaluate(() => {
+          const r = document.querySelector('[data-e68-dock="simulator"]').getBoundingClientRect();
+          return { width: r.width, height: r.height };
+        }),
+      );
+      const freeOnes = rule.filter(([, overlapping]) => !overlapping).map(([panel]) => panel);
+      const freeOverlaps = five.overlaps.filter((pair) => {
+        const [a, b] = pair.split(' ')[0].split('/');
+        return freeOnes.includes(a) && freeOnes.includes(b);
+      });
+      check(
+        `${p} ${at} ${theme} Floating Tools, all five shown: the windows placed without overlap do not overlap; the Hardware displays uncovered`,
+        five.windows.length === 5 && freeOverlaps.length === 0 && five.devices === 100,
+        JSON.stringify({ free: freeOnes, overlaps: five.overlaps, devices: five.devices }),
+      );
+      note(
+        `${p} ${at} ${theme} Floating Tools, all five shown: placed without overlap ${freeOnes.join(', ')}; overlaps ${five.overlaps.join('; ') || 'none'}; Output picture ${five.canvas?.share}% uncovered, left ${five.canvas?.left} px`,
+      );
+      // Output and Hardware Side by Side (P9.8 point 5): the Output column shows the whole picture.
+      await setShown(page, ['hardware', 'memory']);
+      await run(page, 'sim.view.layout.sideBySide');
+      await settle(page);
+      await settle(page);
+      const side = await uncovered(page);
+      const widths = await page.evaluate(() => {
+        const w = (id) =>
+          Math.round(
+            document.querySelector(`[data-e68-dock="simulator"] [data-e68-panel="${id}"]`)?.getBoundingClientRect()
+              .width ?? 0,
+          );
+        return { output: w('output'), hardware: w('hardware') };
+      });
+      await page.screenshot({ path: join(outDir, 'shots', `${name}-${at}-${theme}-side-by-side.png`) });
+      check(
+        `${p} ${at} ${theme} Side by Side: the Output column is at least 648 px and its whole picture is seen`,
+        widths.output >= 648 && side.canvas?.share === 100,
+        JSON.stringify({ widths, canvas: side.canvas }),
+      );
+      await run(page, 'sim.view.layout.classic');
+      await settle(page);
+    }
+    await run(page, 'app.theme.set', 'light');
+    if (enginesPresent) await page.evaluate(() => window.__easy68k.ctx.sim.controller.pause());
+    finish(`${p} uncovered ${at}`, errors);
     await closeWithin(context);
   }
 }
@@ -1148,6 +1379,7 @@ const PASSES = {
   narrow: narrowPass,
   tip: tipPass,
   layouts: layoutsPass,
+  uncovered: uncoveredPass,
   program: programPass,
   menus: menusPass,
   dialog: dialogPass,

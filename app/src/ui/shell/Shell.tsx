@@ -93,7 +93,7 @@ function usePanelFocus() {
       shell.setState((state) =>
         state.focusRequest?.serial === request.serial ? { ...state, focusRequest: null } : state,
       );
-    if (focusPanelElement(document, request.panel)) return done();
+    if (focusPanelElement(document, request.panel, request.at)) return done();
     let finished = false;
     let frames = 0;
     let frame = 0;
@@ -111,7 +111,7 @@ function usePanelFocus() {
       if (finished) return true;
       const elapsed = performance.now() - started;
       const over = (frames >= FOCUS_FRAMES && elapsed >= FOCUS_WAIT_MS) || elapsed >= 3 * FOCUS_WAIT_MS;
-      if (focusPanelElement(document, request.panel) || over) {
+      if (focusPanelElement(document, request.panel, request.at) || over) {
         stop();
         done();
         return true;

@@ -20,11 +20,11 @@ import { useCallback, useRef, useState, type KeyboardEvent, type PointerEvent, t
 import type { AppContext } from '../../contracts';
 import type { DockRect } from '../../state/dock';
 import { hidePanel } from '../../state/panels';
-import { ContextMenu, Icon, type MenuEntry } from '../components';
+import { ContextMenu, Icon, IconButton, type MenuEntry } from '../components';
 import type { DockEngine, FloatView } from './engine';
 import { EDGES, keyStep, sizedRect, type Edges } from './floating';
 import { isViewerId } from './model';
-import { CLOSE_TAB, FLOAT_WINDOW } from './texts';
+import { CLOSE_TAB, FLOAT_BUTTON, FLOAT_WINDOW } from './texts';
 
 type Mode = 'move' | 'size' | null;
 
@@ -41,6 +41,33 @@ function closePanel(ctx: AppContext, engine: DockEngine, panel: string): void {
 export function dockPanel(ctx: AppContext, engine: DockEngine, panel: string): void {
   if (ctx.commands.isEnabled('app.layout.dock', { panel })) void ctx.commands.run('app.layout.dock', { panel });
   else engine.dock(panel);
+}
+
+/**
+ * Float (P9.5): the command `app.layout.float` with `{ panel }`; while no feature has registered
+ * its handler, the dock itself. Works locked or not (D8).
+ */
+export function floatPanel(ctx: AppContext, engine: DockEngine, panel: string): void {
+  if (ctx.commands.isEnabled('app.layout.float', { panel })) void ctx.commands.run('app.layout.float', { panel });
+  else engine.float(panel);
+}
+
+/**
+ * The button `Float` at the right end of a tab strip (P9.8 point 3 (b)): floats the strip's
+ * selected panel. The kit's IconButton (20 px, the tab strips' size); its tool tip is its name.
+ */
+export function FloatButton({ ctx, engine, panel }: { ctx: AppContext; engine: DockEngine; panel: string }) {
+  return (
+    <IconButton
+      icon="float"
+      size="small"
+      label={FLOAT_BUTTON}
+      className="e68-dock__float-button"
+      data-e68-float-button={panel}
+      disabled={!engine.canFloat(panel)}
+      onClick={() => floatPanel(ctx, engine, panel)}
+    />
+  );
 }
 
 /** The entries of a floating window's menu. */
@@ -100,6 +127,10 @@ export function FloatTitleBar({ ctx, engine, view }: { ctx: AppContext; engine: 
     button: HTMLButtonElement | null;
   } | null>(null);
   const suppressClick = useRef(false);
+  // The last two presses on the bar: whether each was on one of its buttons or moved the window. A
+  // double click (the browser's, by the system's double-click time) docks the window only when both
+  // of its presses were on the title area and moved nothing (P9.8 point 3 (a)).
+  const presses = useRef<{ button: boolean; moved: boolean }[]>([]);
 
   const start = useCallback(
     (next: 'move' | 'size') => {
@@ -213,6 +244,8 @@ export function FloatTitleBar({ ctx, engine, view }: { ctx: AppContext; engine: 
     const drag = dragging.current;
     if (!drag || drag.id !== event.pointerId) return;
     dragging.current = null;
+    const moved = drag.moved && (Math.abs(event.clientX - drag.x) >= 4 || Math.abs(event.clientY - drag.y) >= 4);
+    presses.current = [...presses.current.slice(-1), { button: drag.button !== null, moved }];
     if (!drag.moved) {
       // A press and release on a button: its click (the browser's own click goes to the title bar,
       // the element that captured the pointer, or is ignored once).
@@ -251,6 +284,15 @@ export function FloatTitleBar({ ctx, engine, view }: { ctx: AppContext; engine: 
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
+      onDoubleClick={(event) => {
+        if (!fromBar(event) || event.button !== 0) return;
+        const [first, second] = presses.current;
+        presses.current = [];
+        if (!first || !second || first.button || second.button || first.moved || second.moved) return;
+        event.preventDefault();
+        if (mode !== null) end(false);
+        dockPanel(ctx, engine, view.panel);
+      }}
       onContextMenu={(event) => {
         if (!fromBar(event)) return;
         event.preventDefault();

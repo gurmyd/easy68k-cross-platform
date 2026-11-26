@@ -69,7 +69,9 @@ export interface DockController {
   /**
    * Makes `panel` (a panel of the mode in front, or of its own mode) a floating window. `rect`
    * absent: the place and size it had when it floated last, else its docked size (at most three
-   * quarters of the dock in either direction) cascaded from the last floating window. A panel that
+   * quarters of the dock in either direction) at the first free place of the rule of P9.8 point 1
+   * (state/tiling.ts: the right part of the dock, top down, over no other floating window and not
+   * over the tab strip of the group it came from; P9.8 point 2). A panel that
    * floats already is moved to `rect` (when given) and brought to the front. A hidden panel is
    * recorded as floating and floats when it is shown (P1.1 rule 4: visibility is never changed).
    * Does nothing when the panel cannot float (canFloat). Works locked or not (D8).
@@ -126,6 +128,12 @@ export interface DockArrangement {
    */
   floating: { panel: string; rect?: DockRect }[];
   cascade?: 'top-left' | 'top-right';
+  /**
+   * The width, CSS px, at the right of the dock that the docked panels leave free for the floating
+   * windows while one of them is shown (P9.8 point 1: the Output panel keeps the left part of what
+   * was its column). Absent or 0: the docked panels take the whole dock.
+   */
+  reserve?: number;
 }
 
 /** The default size of a floating window that is given no size (P9.4 `Floating Tools`). */

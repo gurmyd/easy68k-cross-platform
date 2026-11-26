@@ -103,9 +103,12 @@ export function togglePanel(ctx: AppContext, id: string): void {
  * Asks the shell to move the keyboard focus into a panel (it does so once the panel is rendered).
  * The dock selects the panel's tab first.
  */
-export function focusPanel(ctx: AppContext, id: string): void {
+export function focusPanel(ctx: AppContext, id: string, options: { at?: 'title' } = {}): void {
   dockOf(ctx).present(id);
-  shellStateOf(ctx).setState((state) => ({ ...state, focusRequest: { panel: id, serial: serial.next++ } }));
+  shellStateOf(ctx).setState((state) => ({
+    ...state,
+    focusRequest: { panel: id, serial: serial.next++, ...(options.at ? { at: options.at } : {}) },
+  }));
 }
 
 /**
@@ -135,7 +138,10 @@ export function panelOf(element: unknown): string | null {
     closest?: (selector: string) => { getAttribute(name: string): string | null } | null;
   } | null;
   if (!target || typeof target.closest !== 'function') return null;
-  return target.closest('[data-e68-panel]')?.getAttribute('data-e68-panel') ?? null;
+  const panel = target.closest('[data-e68-panel]')?.getAttribute('data-e68-panel');
+  if (panel) return panel;
+  // Version 1.1: a floating window's title bar belongs to its panel (P9.2).
+  return target.closest('[data-e68-float-bar]')?.getAttribute('data-e68-float-bar') ?? null;
 }
 
 /** Moves the focus to the next visible panel of the cycle and returns its id. */
@@ -148,7 +154,12 @@ export function focusNextPanel(ctx: AppContext, activeElement: unknown = globalT
   } else if (next === 'output') {
     shellStateOf(ctx).setState((state) => (state.outputInFront ? state : { ...state, outputInFront: true }));
   }
-  focusPanel(ctx, next);
+  // Version 1.1 (P9.8 point 6): a panel that floats is reached at its window's title bar, from where
+  // Tab goes into the panel and the menu key opens Move, Size and Dock.
+  const floats = dockOf(ctx)
+    .floating()
+    .some((window) => window.panel === next && window.visible);
+  focusPanel(ctx, next, floats ? { at: 'title' } : {});
   return next;
 }
 
@@ -210,7 +221,15 @@ export function isRenderedVisible(element: HTMLElement): boolean {
  * else on the first focusable control, else on the region itself. False when the region is not
  * rendered (yet). The element may take the focus its own way (PANEL_FOCUS_EVENT).
  */
-export function focusPanelElement(root: ParentNode, id: string): boolean {
+export function focusPanelElement(root: ParentNode, id: string, at?: 'title'): boolean {
+  if (at === 'title') {
+    // A floating window's title bar (P9.8 point 6); a panel that is docked again is focused as usual.
+    const title = root.querySelector<HTMLElement>(`[data-e68-float-title="${id}"]`);
+    if (title && isRenderedVisible(title)) {
+      focusTarget(title);
+      return true;
+    }
+  }
   const regions = Array.from(root.querySelectorAll<HTMLElement>(panelSelector(id)));
   // Workspaces of the other modes stay mounted but hidden, and a dock hides the panels behind
   // another tab: take the region that is shown.
