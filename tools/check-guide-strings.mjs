@@ -761,7 +761,9 @@ export function buildMatcher(literals, examples = [], code = null) {
 
 /** The files whose literals the guide's texts are compared with, relative to app/src. */
 export function sourceFiles(repoRoot) {
-  const files = [...STAGE_TEXTS, 'commands/specs.ts'];
+  // The toolbar table holds the caption and tool tips of version 1.1's `Arrange Panels` (P9.3), which
+  // the layer rules keep out of a feature's texts.ts (commands may not import features; errata M3).
+  const files = [...STAGE_TEXTS, 'commands/specs.ts', 'commands/tables/toolbars.ts'];
   for (const name of readdirSync(join(repoRoot, 'app', 'src', 'commands', 'tables')))
     if (/-menu\.ts$/.test(name)) files.push(`commands/tables/${name}`);
   return files.map((p) => join(repoRoot, 'app', 'src', ...p.split('/')));

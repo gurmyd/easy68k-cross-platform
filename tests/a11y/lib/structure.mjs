@@ -745,6 +745,76 @@ async function motionChecks(browser, os, baseUrl, p, report) {
   );
 }
 
+/**
+ * Version 1.1 (ARCHITECTURE-PLUS P9.2; M1): a floating window open. The Hardware panel is made to
+ * float from its tab menu with the keyboard (Shift+F10, Float). The window is a region named
+ * `Hardware, floating`, not a dialog; its title bar is a named Tab stop that opens a menu; its
+ * buttons are named; the panels on screen keep their roles and names; the tool tabs that stay are
+ * a tablist; every tab stop still shows a focus indicator.
+ */
+async function floatingWindowChecks(page, os, p, report) {
+  const tab = page.locator('[id="flexlayout-tabbutton-simulator:hardware"]');
+  await tab.focus();
+  await page.keyboard.press('Shift+F10');
+  const item = page.locator('[role=menu] [role^=menuitem]', { hasText: /^Float$/ });
+  await item.first().waitFor({ timeout: 5000 });
+  // Chosen with the keyboard: the arrows down to Float (the menu focuses its first item), Enter.
+  for (let i = 0; i < 12; i++) {
+    const focused = await page.evaluate(() => document.activeElement?.textContent?.trim() ?? '');
+    if (focused === 'Float') break;
+    await page.keyboard.press('ArrowDown');
+  }
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.flexlayout__tab[data-e68-float="hardware"]', { timeout: 5000 });
+  await page.waitForTimeout(300);
+  const facts = await page.evaluate(() => {
+    const window = document.querySelector('.flexlayout__tab[data-e68-float="hardware"]');
+    const title = window?.querySelector('[data-e68-float-title]');
+    const buttons = [...(window?.querySelectorAll('[data-e68-float-bar] button') ?? [])];
+    return {
+      role: window?.getAttribute('role'),
+      name: window?.getAttribute('aria-label'),
+      dialog:
+        window?.closest('[role=dialog],[role=alertdialog]') !== null || window?.getAttribute('aria-modal') !== null,
+      titleRole: title?.getAttribute('role'),
+      titleName: title?.textContent?.trim(),
+      titleTabStop: title?.tabIndex === 0,
+      titlePopup: title?.getAttribute('aria-haspopup'),
+      buttons: buttons.map((button) => button.getAttribute('aria-label') ?? button.textContent?.trim() ?? ''),
+    };
+  });
+  report.check(
+    `${p} a floating window is a region named "Hardware, floating", not a dialog`,
+    facts.role === 'region' && facts.name === 'Hardware, floating' && !facts.dialog,
+    JSON.stringify(facts),
+  );
+  report.check(
+    `${p} its title bar is a named Tab stop that opens a menu; its buttons are named`,
+    facts.titleRole === 'button' &&
+      facts.titleName === 'Hardware' &&
+      facts.titleTabStop &&
+      facts.titlePopup === 'menu' &&
+      facts.buttons.length === 2 &&
+      facts.buttons.every((text) => text !== ''),
+    JSON.stringify(facts),
+  );
+  await page.locator('[data-e68-float-title="hardware"]').focus();
+  await page.keyboard.press('Shift+F10');
+  const menu = await page
+    .locator('[role=menu] [role^=menuitem]')
+    .evaluateAll((elements) => elements.map((element) => element.textContent.trim()))
+    .catch(() => []);
+  await page.keyboard.press('Escape');
+  report.check(
+    `${p} the title bar's menu by keyboard (Shift+F10): Move, Size, Dock, Close`,
+    JSON.stringify(menu) === JSON.stringify(['Move', 'Size', 'Dock', 'Close']),
+    JSON.stringify(menu),
+  );
+  await panelChecks(page, p, report, 'simulator');
+  await toolTabChecks(page, p, report);
+  await focusVisibleChecks(page, os, p, report, 'simulator with a floating window');
+}
+
 export async function structurePart({ browser, name, os, baseUrl, report, outDir, enginesPresent }) {
   // The Windows key map in the light theme, the macOS key map in the dark one: the focus
   // indicators are judged in both themes.
@@ -778,6 +848,10 @@ export async function structurePart({ browser, name, os, baseUrl, report, outDir
     await toolTabChecks(page, p, report);
     await focusVisibleChecks(page, os, p, report, 'simulator with the tool panels');
     await shoot(page, outDir, `${name}-${os}-structure-simulator`);
+    await floatingWindowChecks(page, os, p, report);
+    await shoot(page, outDir, `${name}-${os}-structure-simulator-floating`);
+    await page.locator('[data-e68-float-dock="hardware"]').click();
+    await page.waitForTimeout(300);
     await semanticsChecks(page, p, report);
     if (enginesPresent) {
       await haltAndBreakpointChecks(page, p, report);

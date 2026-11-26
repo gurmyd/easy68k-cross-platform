@@ -26,6 +26,7 @@ import {
   MaskedField,
   Select,
   parseMaskedText,
+  revealInArea,
   type MaskedConfig,
 } from '../../ui/components';
 import { useAppContext } from '../../state/context';
@@ -148,41 +149,54 @@ export function HardwarePanel() {
 
   if (!view) {
     return (
-      <div className="e68-hw e68-hw--empty" data-e68-panel-focus tabIndex={-1}>
-        The simulator is starting.
+      <div className="e68-hw-scroll" data-hw-scroll>
+        <div className="e68-hw e68-hw--empty" data-e68-panel-focus tabIndex={-1}>
+          The simulator is starting.
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="e68-hw" ref={root} data-hw-root>
-      <div className="e68-hw__devices">
-        <DisplayRow view={view} />
-        <AddressCell row={DEVICE_ROWS[0] as DeviceRow} view={view} actions={actions} ctx={ctx} root={root} focus />
-        <LedRow view={view} />
-        <AddressCell row={DEVICE_ROWS[1] as DeviceRow} view={view} actions={actions} ctx={ctx} root={root} />
-        <SwitchRow view={view} actions={actions} />
-        <AddressCell row={DEVICE_ROWS[2] as DeviceRow} view={view} actions={actions} ctx={ctx} root={root} />
-        <ButtonRow actions={actions} />
-        <AddressCell row={DEVICE_ROWS[3] as DeviceRow} view={view} actions={actions} ctx={ctx} root={root} />
+    <div className="e68-hw-scroll" data-hw-scroll onFocus={revealFocused}>
+      <div className="e68-hw" ref={root} data-hw-root>
+        <div className="e68-hw__devices">
+          <DisplayRow view={view} />
+          <AddressCell row={DEVICE_ROWS[0] as DeviceRow} view={view} actions={actions} ctx={ctx} root={root} focus />
+          <LedRow view={view} />
+          <AddressCell row={DEVICE_ROWS[1] as DeviceRow} view={view} actions={actions} ctx={ctx} root={root} />
+          <SwitchRow view={view} actions={actions} />
+          <AddressCell row={DEVICE_ROWS[2] as DeviceRow} view={view} actions={actions} ctx={ctx} root={root} />
+          <ButtonRow actions={actions} />
+          <AddressCell row={DEVICE_ROWS[3] as DeviceRow} view={view} actions={actions} ctx={ctx} root={root} />
+        </div>
+        <div className="e68-hw__groups">
+          <InterruptGroup view={view} actions={actions} />
+          <IntervalGroup view={view} actions={actions} />
+          <Group caption="Reset" className="e68-hw__group--reset">
+            <button
+              type="button"
+              className="e68-hw__irq"
+              aria-label="Reset"
+              disabled={!view.buttonsEnabled}
+              data-hw-nofocus
+              onClick={() => actions.reset()}
+            />
+          </Group>
+        </div>
+        <MemoryMapGroup view={view} actions={actions} />
       </div>
-      <div className="e68-hw__groups">
-        <InterruptGroup view={view} actions={actions} />
-        <IntervalGroup view={view} actions={actions} />
-        <Group caption="Reset" className="e68-hw__group--reset">
-          <button
-            type="button"
-            className="e68-hw__irq"
-            aria-label="Reset"
-            disabled={!view.buttonsEnabled}
-            data-hw-nofocus
-            onClick={() => actions.reset()}
-          />
-        </Group>
-      </div>
-      <MemoryMapGroup view={view} actions={actions} />
     </div>
   );
+}
+
+/**
+ * A control that gets the focus is scrolled into view inside the panel's own scroll area (the
+ * panel's region is smaller than what it holds: docked low or floating small), by the kit's
+ * revealInArea: the area itself is scrolled, never `scrollIntoView` (errata N1 26).
+ */
+function revealFocused(event: FocusEvent<HTMLDivElement>): void {
+  revealInArea(event.currentTarget, event.target);
 }
 
 /* ------------------------------------------------------------------ row 1: 7-segment display */

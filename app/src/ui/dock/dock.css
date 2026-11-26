@@ -21,6 +21,17 @@
   background: var(--c-bg);
 }
 
+/* Version 1.1 (P9.9 point 1): the dock never scrolls as a whole. A floating window that lies partly
+   outside is cut at the dock's edge; with `overflow: clip` (Chromium, Safari 16 and later) the dock
+   is no scroll container, so neither the focus, nor scrollIntoView, nor a script can scroll it, and
+   nothing of it reaches the page's own scrolling. Where `clip` is missing, the dock puts the offsets
+   back at once (pin.ts). With nothing floating, nothing lies outside: the page is 1.0.0's. */
+@supports (overflow: clip) {
+  .e68-dock {
+    overflow: clip;
+  }
+}
+
 .e68-dock .flexlayout__layout {
   --flexlayout-color-text: var(--c-text);
   --flexlayout-color-background: var(--c-surface);
@@ -322,4 +333,221 @@
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+/* ---- floating windows (version 1.1, ARCHITECTURE-PLUS P9.2; M1) ------------------------------
+   A floating panel's own element (FlexLayout's `.flexlayout__tab`, kept as a tab of a border that
+   is never shown) is drawn at the window's place: FlexLayout writes the place of a hidden tab
+   (display: none, a zero rect) into its inline style, and these rules, marked !important, win
+   over it. The engine sets the custom properties (engine.ts applyFloatStyles). Nothing of this
+   applies while nothing floats, so the docked page is 1.0.0's. A floating window lies above the
+   docked panels and their splitters (FlexLayout's 10) and below the kit's modeless dialogs and
+   menus; while the Output panel in it is in full screen, it takes the full screen's own z-order
+   (P3.1.5: `calc(var(--z-modeless) - 1)`, features/output/output.css) so that it covers the window. */
+
+/* The room kept at the right of the dock for the floating windows (P9.8 point 1, engine.ts
+   applyReserve): the docked panels are laid out left of it while a window is shown. */
+.e68-dock[data-e68-reserve] .flexlayout__layout_main {
+  margin-right: var(--e68-dock-reserve, 0px);
+}
+
+.e68-dock .flexlayout__tab[data-e68-float] {
+  display: flex !important;
+  flex-direction: column;
+  position: absolute !important;
+  left: var(--e68-float-x) !important;
+  top: var(--e68-float-y) !important;
+  width: var(--e68-float-width) !important;
+  height: var(--e68-float-height) !important;
+  z-index: var(--e68-float-z, 11);
+  /* The window itself never scrolls either (P9.9 point 1): its title bar stays at its top; what is
+     larger than the window scrolls inside the panel (.flexlayout__tab_moveable, the panel's own). */
+  overflow: hidden;
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+  box-shadow: var(--shadow-popup);
+}
+
+@supports (overflow: clip) {
+  .e68-dock .flexlayout__tab[data-e68-float] {
+    overflow: clip;
+  }
+}
+
+.e68-dock .flexlayout__tab[data-e68-float]:has(.e68-output[data-fullscreen='true']) {
+  z-index: calc(var(--z-modeless) - 1);
+  overflow: visible;
+}
+
+.e68-dock .flexlayout__tab[data-e68-float] > .flexlayout__tab_moveable {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+  height: auto;
+}
+
+.e68-dock .flexlayout__tab[data-e68-float] .e68-dock__content,
+.e68-dock .flexlayout__tab[data-e68-float] .e68-dock__viewer {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 0;
+}
+
+/* The title bar: the kit's dialog title bar, a little lower (30 px, floating.ts TITLE_BAR_HEIGHT). */
+.e68-float__bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--sp-1);
+  height: 30px;
+  box-sizing: border-box;
+  padding: 0 var(--sp-1) 0 0;
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-panel);
+  color: var(--c-text);
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+
+.e68-float__title {
+  flex: 1 1 auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 var(--sp-3);
+  overflow: hidden;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+
+.e68-float__title:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}
+
+/* Move or Size from the keyboard: the window shows that the arrows move or size it. */
+.e68-float__bar[data-mode] {
+  background: var(--c-accent-soft);
+}
+
+.e68-float__button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  min-width: 22px;
+  padding: 0 var(--sp-2);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--c-text);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: default;
+}
+
+.e68-float__close {
+  padding: 0;
+  color: var(--c-text-muted);
+}
+
+.e68-float__button:hover {
+  background: var(--c-hover);
+  color: var(--c-text);
+}
+
+.e68-float__button:active {
+  background: var(--c-pressed);
+}
+
+/* The edges and corners a pointer sizes the window by: inside the window's border, not seen. */
+.e68-float__edge {
+  position: absolute;
+  z-index: 1;
+  touch-action: none;
+}
+
+.e68-float__edge--n,
+.e68-float__edge--s {
+  right: 12px;
+  left: 12px;
+  height: 5px;
+  cursor: ns-resize;
+}
+
+.e68-float__edge--e,
+.e68-float__edge--w {
+  top: 12px;
+  bottom: 12px;
+  width: 5px;
+  cursor: ew-resize;
+}
+
+.e68-float__edge--n {
+  top: 0;
+}
+
+.e68-float__edge--s {
+  bottom: 0;
+}
+
+.e68-float__edge--e {
+  right: 0;
+}
+
+.e68-float__edge--w {
+  left: 0;
+}
+
+.e68-float__edge--ne,
+.e68-float__edge--nw,
+.e68-float__edge--se,
+.e68-float__edge--sw {
+  width: 12px;
+  height: 12px;
+}
+
+.e68-float__edge--nw {
+  top: 0;
+  left: 0;
+  cursor: nwse-resize;
+}
+
+.e68-float__edge--se {
+  right: 0;
+  bottom: 0;
+  cursor: nwse-resize;
+}
+
+.e68-float__edge--ne {
+  top: 0;
+  right: 0;
+  cursor: nesw-resize;
+}
+
+.e68-float__edge--sw {
+  bottom: 0;
+  left: 0;
+  cursor: nesw-resize;
+}
+
+@media (forced-colors: active) {
+  .e68-dock .flexlayout__tab[data-e68-float] {
+    border-color: CanvasText;
+  }
+
+  .e68-float__bar {
+    border-bottom-color: CanvasText;
+  }
+
+  .e68-float__button {
+    border-color: ButtonText;
+  }
 }

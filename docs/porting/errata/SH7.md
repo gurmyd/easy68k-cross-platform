@@ -135,3 +135,98 @@ needed.
   after a re-bundle with a fresh cache), not only after a 504, and a screenshot that times out is
   tried once more and then printed, not counted (it is a record for a person; the panel's contents
   are checked from the DOM).
+
+## 10. The panel scrolls inside a region smaller than what it holds (version 1.1, M1b)
+
+- Says: ARCHITECTURE.md 2.6 places the Hardware window's six rows in a tool panel; nothing says
+  what happens when the panel's region is smaller than they are. In 1.0.0 the panel's root
+  (`.e68-hw`, `min-width: max-content`) simply overflowed the region, which clips (`.e68-region`,
+  `overflow: hidden`): docked below the Output panel at 1366 x 768 the region is 682 x 241 px and
+  the rows are 595 px high, so the groups Interrupt, Auto Interval and Reset and the Memory Map were
+  cut off and out of reach, and nothing scrolled. The owner of the project met it in the released
+  version; ARCHITECTURE-PLUS P9 (floating windows, as small as 160 x 96) makes it more likely.
+- Code: `HardwarePanel.tsx` wraps the rows in a scroll area of the panel's own
+  (`.e68-hw-scroll`, `data-hw-scroll`: `flex: 1 1 0; min-width: 0; min-height: 0; overflow: auto`).
+  It takes the region's size; the rows inside it keep their size (`min-width: max-content` as
+  before), so a smaller region scrolls vertically and horizontally, by the wheel, the scroll bars
+  and the keyboard. Where the rows fit, nothing scrolls and nothing moves: the rows start at the
+  area's top left, which is where they started in the region (the area has no border or padding),
+  and no scroll bar appears.
+- A control that gets the focus is scrolled into view by the area itself (`revealFocused`, the pure
+  rule `revealScroll` (in `panel-logic.ts` until the closing pass of 1.1 moved it to `ui/components/reveal.ts`): the smallest scroll that shows it with 4 px around it; a
+  control larger than the area shows its top left). Never `scrollIntoView`: in Chromium it moves the
+  page's starting point for the Tab key (errata N1 26) and it could scroll the dock's own boxes.
+  So the first address field, which gets the focus when the panel is shown or floats, is in view,
+  also in a narrow floating window, which therefore opens scrolled to the right column.
+- Checked: `check-hardware.mjs` part 3 (`short region`), Chromium and WebKit: docked below the
+  Output panel at 1366 x 768 and floating at 360 x 280 the area scrolls (595 px of rows in 241 and
+  248 px; 521 px wide in 358 px floating); the wheel reaches the Memory Map, down and across; a
+  real click reaches its last check box; Tab and Shift+Tab through all 49 controls find each one
+  inside the area's visible box, and no other box of the page scrolled (every ancestor's scroll
+  offsets 0); floating at 900 x 640 nothing scrolls and the rows start at the area's top left. The
+  checks of parts 1 and 2 and `check-dock.mjs` are unchanged and pass. Screenshots:
+  `<out>/<browser>-docked-under-output-1366x768-{light,dark}.png`,
+  `<out>/<browser>-floating-360x280-{light,dark}.png`.
+
+## 11. The wheel check of the short region waited for the first scroll, not the last (CI run 45809923850)
+
+**What CI saw.** On Ubuntu, WebKit only, `check-hardware.mjs` part 3: `short region: docked: the
+wheel scrolls the panel to its end; the Memory Map is then in view` failed with `scrollTop` 148 of
+354, and with it `a click reaches the last Memory Map check box`.
+
+**Measured in a Linux container** (Playwright 1.65.1, Ubuntu 24.04), six wheel notches of 400 px over
+the docked panel at 1366 x 768, the offset read after each notch and then every 100 ms: Chromium is
+at 354 (the end) after the first notch, on Windows and Linux, and WebKit on Windows too; WebKit on
+Linux scrolls smoothly: 0, 17, 54, 85, 117, 145 after the notches, then 282 after 100 ms and 354
+(the end) after 200 ms, where it stays. So the panel scrolls to its end with the wheel on Linux as
+everywhere (no defect of the product); the check read the offset as soon as it had left 0, while
+WebKit's smooth scroll was still on its way.
+
+**The check now** waits, after the notches, until the area has come to rest (its offsets unchanged
+for 10 frames in a row, at most 5 s) and then judges where the wheel took it, by the same rules
+as before (the Memory Map inside the visible box, nothing else scrolled, a real click on the last
+check box). Where the browser does not scroll smoothly the offsets are at rest at once, so the check
+is as strict on this PC as before. Checked: the whole check, Chromium and WebKit, on this PC and in
+the Linux container (100 of 100; the docked wheel at `scrollTop` 354 in both browsers).
+
+## 12. The Tab walks counted their stops by a number that is only true where Tab stops at buttons (CI run 45809923850)
+
+**What CI saw.** On GitHub's macOS runner, WebKit only, the Tab walks of the parts added for
+version 1.1 failed by their number of stops and by nothing else (no control out of view, nothing
+outside the panel scrolled): `check-hardware.mjs` part 3 with 14 stops against a floor of 20 (four
+checks), `check-sim-main.mjs` "narrow region (registers)" with 20 against 21 (eight checks) and
+`check-memory-stack.mjs` "narrow region (memory)" with 5 forward and 6 back against 12 (eight
+checks). Chromium on the same runner passed.
+
+**Cause: the checks, not the product.** Safari's engine on a Mac, with the system's default setting
+("Keyboard navigation" off), stops with Tab only at text fields, lists and elements with an explicit
+tabindex; buttons and check boxes are reached with Option+Tab (errata W2 entries 13 and 14; the
+accessibility audit and `check-dock.mjs` have followed that rule since 1.0.0). The three floors were
+counted on Windows, where Playwright's WebKit stops at every control.
+
+**The rule now** (`tests/browser-checks/tab-stops.mjs`, with a unit test of its pure part that
+`npm run test:check-ending` runs): before the first Tab, with the focus where the walk starts, the
+check reads the panel's controls from the page (not disabled, `tabIndex` of 0 or more, visible) and
+counts the walk's stops twice: with every control, and by Safari's rule (`isSafariTabStop` of
+`tests/a11y/lib/keys.mjs`; the control the check itself put the focus on counts whatever it is). A
+probe says which of the two the browser follows (does Tab go from a field to a plain button?). The
+walk must have at least that many stops, and where Tab stops at buttons never fewer than the floor
+the check held before; every stop in view and nothing else scrolled, as before. So the check is
+stricter than it was on Windows and Linux (the page's own count, which is higher than the old
+floors), and on a Mac it asks for what the system's Tab reaches.
+
+**Measured on this PC**, Chromium and WebKit alike, every situation of each part:
+
+| Panel | Stops walked | Counted in the page | By Safari's rule | The macOS runner had |
+| --- | --- | --- | --- | --- |
+| Hardware | 49 | 49 | 14 | 14 |
+| Registers | 21 | 21 | 20 | 20 |
+| Memory, forward | 13 | 13 | 5 | 5 |
+| Memory, back | 13 | 13 | 6 | 6 |
+
+The rule gives exactly the figures the macOS runner produced, so the same walks pass there by the
+rule. All three checks pass on this PC in both browsers (100 of 100, 218 of 218, 220 of 220).
+
+**Not covered.** With Option+Tab Safari goes through the buttons and check boxes too; that walk is
+not made (the buttons are brought into view by the same code as the fields, which the walks on
+Windows and Linux cover in WebKit).

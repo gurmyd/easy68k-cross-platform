@@ -30,7 +30,13 @@ export type ToolbarNode =
   | { type: 'command'; id: KnownCommandId }
   | { type: 'separator' }
   /** The simulator's `LOGGING` label: bold on yellow while a log file is open (sim-ui §3.2). */
-  | { type: 'logging' };
+  | { type: 'logging' }
+  /**
+   * Version 1.1 (ARCHITECTURE-PLUS P9.3; M2): a toggle drawn with its caption as text (not an
+   * icon), with its own tool-tip. Its pressed state is the check state of the check command `id`,
+   * inverted when `inverted` is true (`Arrange Panels` is `Lock Layout` inverted).
+   */
+  | { type: 'toggle'; id: KnownCommandId; caption: string; tooltip: string; inverted: boolean };
 
 /** Shorthand for table rows. */
 export const command = (id: KnownCommandId, arg?: unknown, caption?: string): MenuNode => {

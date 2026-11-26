@@ -10,6 +10,57 @@ the steps for opening the Mac app the first time, which are kept in `docs/differ
 repeated in the README. Changes made after the newest release are collected under a heading "Not
 released yet" at the top; when a version is released, that heading becomes its number and date.
 
+## 1.1.0 (not released yet)
+
+Arranging panels freely (`docs/ARCHITECTURE-PLUS.md` section P9), after the project's owner had used
+the released web version: in the Simulator it was hard to arrange the panels so that everything can
+be seen, and dragging was not found because the layout is locked at first. Nothing a 68000 program
+can observe changes, no file the application writes, and none of the original's menus, commands or
+keys. With nothing floating the window looks as in 1.0.0. The user guide's part "Arranging panels"
+explains it all; the differences are in parts M1 and M2 of `docs/DIFFERENCES.md`.
+
+- **Floating panels.** Any panel of the Editor and the Simulator can float: a window inside the
+  application window, moved by its title bar, sized at its edges and corners, and docked back with
+  its `Dock` button. `Float` is in the menu of a panel's tab and, as the place `As a floating
+  window`, in `Move Panel To...`. Everything can be done from the keyboard: the title bar is a stop
+  of Tab, and its menu has `Move`, `Size`, `Dock` and `Close`. Floating windows are kept with the
+  arrangement and are where they were after a reload. `Lock Layout` now locks only the docked
+  panels; floating windows can always be moved and sized.
+- **Making a panel float is easy to find** (after an independent review of the built version): a
+  double click on a panel's tab makes it float and a double click on a floating window's title bar
+  docks it; every tab strip ends with a button `Float`. A window that floats for the first time
+  appears at a free place at the right of the window, over no other floating window and not over
+  the tab strip it came from. A window pushed to an edge keeps 48 pixels of its title (not of its
+  buttons) in view. Leaving the Output panel with Ctrl+Alt+O lands on a floating window's title bar.
+- **Floating windows after a second review.** A window pushed partly outside the application window
+  is cut at its edge: clicking it or pressing Tab into it no longer scrolls the docked panels
+  sideways off the screen.
+- **Finding it.** A button `Arrange Panels` at the end of the toolbar is pressed while the layout is
+  unlocked. The first time the Simulator is shown, a tip says once that the window can be rearranged
+  and how, starting from what that page shows: press `Arrange Panels` to show each panel's tab, then
+  double-click a tab or drag it; ready-made layouts are in the View menu.
+- **Ready-made layouts** for the Simulator, in `View > Layouts`: `Classic`, `Wide Output`, `Output
+  and Hardware Side by Side` (the Output panel gets the room its whole picture needs first) and
+  `Floating Tools` (every tool panel in a window of its own, as in the original, side by side from
+  the top right so that the windows do not cover one another while there is room, never over the
+  Hardware panel's displays and switches, and with the Output picture in view while Hardware and
+  Memory are shown; Stack, Break Points and Log go to further columns at the left, never over the
+  Registers, the Listing or the messages, before any window covers another, so that in a window of
+  1920 by 1080 all five lie side by side). The room kept for the windows at the right shrinks to the
+  columns that still hold a window when one is moved, sized, docked or closed, and the docked panels
+  take the whole window again when none is left there or when those left cover less than half of
+  its height. The Hardware window is as wide as its content from a window 1,403 pixels wide on; on a
+  smaller screen `Output and Hardware Side by Side` shows registers, listing, output and hardware at
+  once. F2 goes from one floating window to the next.
+- **Panels in a small place.** The Hardware panel, the registers and the Memory panel scroll inside
+  themselves when they get less room than they need (a low or narrow region, a small floating
+  window), so that every control can be reached with the mouse, the wheel and the keyboard; a
+  Memory row keeps its sixteen bytes and scrolls sideways. Where they fit, they look as in 1.0.0.
+- In a narrow window the caption of `Arrange Panels` is shortened inside its frame; the original's
+  toolbar buttons keep their places.
+- The `Import...` menu of the Files panel closes when you click anywhere else (found by the owner in
+  1.0.0).
+
 ## 1.0.0 (2026-11-23)
 
 The first release: the web version at <https://gurmyd.github.io/easy68k-cross-platform/>, and the Mac

@@ -58,6 +58,7 @@ export { findMnemonic, mnemonicKeyOf, parseMnemonic, stripMnemonic } from './mne
 export { isModalOpen } from './focus';
 export { LayerContext, Portal } from './layer';
 export { RadioGroup, type RadioGroupProps, type RadioOption } from './RadioGroup';
+export { revealInArea, revealScroll, type RevealBox } from './reveal';
 export { Select, type SelectOption, type SelectProps } from './Select';
 export { SpinField, type SpinFieldProps } from './SpinField';
 export { Splitter, type SplitterProps } from './Splitter';

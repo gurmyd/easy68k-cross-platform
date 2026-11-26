@@ -34,6 +34,29 @@ export const TAB_MENU = {
   close: 'Close',
 } as const;
 
+/** Version 1.1 (P9.2, P9.5): the tab menu's new item. */
+export const FLOAT_ITEM = 'Float';
+
+/**
+ * Version 1.1 (P9.8 point 3 (b)): the button at the right end of every tab strip that is shown; it
+ * floats the strip's selected panel. Its tool tip, which is also its accessible name (the kit's
+ * IconButton), begins with its name `Float`.
+ */
+export const FLOAT_BUTTON = 'Float: make this panel a window of its own';
+
+/** Version 1.1 (P9.2): a floating window's title bar, its buttons and its menu. */
+export const FLOAT_WINDOW = {
+  /** The title bar's menu (Shift+F10, the context-menu key, a right click). */
+  menuLabel: 'Window',
+  move: 'Move',
+  size: 'Size',
+  dock: 'Dock',
+  close: 'Close',
+} as const;
+
+/** A floating window is a region named `<panel name>, floating` (P9.2). */
+export const FLOATING_REGION = (title: string) => `${title}, floating`;
+
 /** The tooltip of a tab's `x` (FlexLayout's `I18nLabel.Close_Tab`). */
 export const CLOSE_TAB = 'Close';
 

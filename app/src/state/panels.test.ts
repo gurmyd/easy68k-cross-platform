@@ -16,7 +16,25 @@ import {
   showPanel,
   togglePanel,
 } from './panels';
-import { attachDock } from './dock';
+import { attachDock, type DockLive } from './dock';
+
+/** A mounted dock that does nothing (the parts a test does not look at). */
+const inertLive = (mode: 'editor' | 'simulator'): DockLive => ({
+  mode,
+  has: () => true,
+  reveal: () => {},
+  park: () => {},
+  present: () => true,
+  openTransient: () => {},
+  selectTransient: () => false,
+  closeTransient: () => {},
+  documentShown: () => {},
+  closeAllTransients: () => {},
+  move: () => {},
+  reset: () => {},
+  lockChanged: () => {},
+  describe: () => [],
+});
 import { showExitScreen } from './shell';
 import { createFakePlatform, createTestApplication } from './testing';
 
@@ -167,6 +185,25 @@ describe('show, hide, focus', () => {
     // A collapsed Output panel is skipped like a hidden window.
     hidePanel(app.ctx, 'output');
     expect(focusNextPanel(app.ctx, inside('listing'))).toBe('hardware');
+  });
+
+  it('P9.8 point 6: the next panel floats: the focus request asks for its title bar', async () => {
+    const app = createTestApplication();
+    await app.ctx.commands.run('app.mode.set', 'simulator');
+    showPanel(app.ctx, 'hardware', { focus: false });
+    const windows = [{ panel: 'hardware', rect: { x: 0, y: 0, width: 300, height: 200 }, visible: true }];
+    attachDock(app.ctx, { ...inertLive('simulator'), floating: () => windows });
+    const inside = (id: string) => ({ closest: () => ({ getAttribute: () => id }) });
+    expect(focusNextPanel(app.ctx, inside('output'))).toBe('hardware');
+    expect(app.shell.getState().focusRequest).toMatchObject({ panel: 'hardware', at: 'title' });
+    // A docked panel: the panel itself, as before.
+    expect(focusNextPanel(app.ctx, inside('hardware'))).toBe('listing');
+    expect(app.shell.getState().focusRequest?.at).toBeUndefined();
+    // The title bar belongs to its panel for the cycle.
+    const onTitle = {
+      closest: (selector: string) => (selector === '[data-e68-float-bar]' ? { getAttribute: () => 'hardware' } : null),
+    };
+    expect(focusNextPanel(app.ctx, onTitle)).toBe('listing');
   });
 
   it("`sim.panel.next` is the shell's command for it", async () => {

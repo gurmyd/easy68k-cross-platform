@@ -43,7 +43,7 @@
 // cache, as on every CI runner), the page may get a 504 "Outdated Optimize Dep" or two copies of
 // React ("Invalid hook call"); the page is then loaded again, up to three times.
 
-/* global console, process, document, window, getComputedStyle, PointerEvent, setTimeout -- the browser globals are used inside page.evaluate() callbacks */
+/* global console, process, document, window, getComputedStyle, PointerEvent, setTimeout, HTMLElement -- the browser globals are used inside page.evaluate() callbacks */
 
 import { existsSync, mkdirSync } from 'node:fs';
 import { createServer as createNetServer } from 'node:net';
@@ -53,6 +53,7 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
 import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../tests/browser-checks/ending.mjs';
+import { buttonsAreTabStops, stopsRequired, tabStopsFromFocus } from '../../../../tests/browser-checks/tab-stops.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -185,8 +186,8 @@ function pretendWindows() {
   Object.defineProperty(window.Navigator.prototype, 'userAgentData', { get: () => undefined });
 }
 
-async function openApp(browser) {
-  const context = await browser.newContext({ viewport: { width: 1600, height: 1300 }, reducedMotion: 'reduce' });
+async function openApp(browser, viewport = { width: 1600, height: 1300 }) {
+  const context = await browser.newContext({ viewport, reducedMotion: 'reduce' });
   await context.addInitScript(pretendWindows);
   if (withoutEngines) {
     await context.route(
@@ -692,6 +693,342 @@ async function enginePass(browser, name, programs) {
   await closeWithin(context);
 }
 
+/* ------------------------------------------------------------------ part 3: a short region */
+
+const SCROLLER = '[data-e68-panel="hardware"] [data-hw-scroll]';
+
+/** The panel's scroll area: its visible box, what it holds, where it is scrolled; the page's own scrolls. */
+const scrollFacts = (page) =>
+  page.evaluate((selector) => {
+    const area = document.querySelector(selector);
+    if (!area) return null;
+    const box = area.getBoundingClientRect();
+    const content = area.firstElementChild.getBoundingClientRect();
+    const region = area.closest('[data-e68-panel]');
+    // Every box that holds the panel, up to the page: none of them may be scrolled (only the area).
+    let outer = 0;
+    for (let element = area.parentElement; element; element = element.parentElement) {
+      outer += element.scrollTop + element.scrollLeft;
+    }
+    return {
+      view: {
+        top: box.top + area.clientTop,
+        left: box.left + area.clientLeft,
+        width: area.clientWidth,
+        height: area.clientHeight,
+      },
+      scrollWidth: area.scrollWidth,
+      scrollHeight: area.scrollHeight,
+      scrollTop: area.scrollTop,
+      scrollLeft: area.scrollLeft,
+      overflow: getComputedStyle(area).overflow,
+      contentAt: [Math.round(content.left - box.left), Math.round(content.top - box.top)],
+      region: region ? [region.clientWidth, region.clientHeight] : null,
+      outer,
+    };
+  }, SCROLLER);
+
+/** The box of an element of the panel (getBoundingClientRect), or null. */
+const boxOf = (page, selector) =>
+  page.evaluate((s) => {
+    const element = document.querySelector(s);
+    if (!element) return null;
+    const b = element.getBoundingClientRect();
+    return { top: b.top, left: b.left, width: b.width, height: b.height };
+  }, selector);
+
+const inside = (box, view) =>
+  !!box &&
+  box.top >= view.top - 1 &&
+  box.left >= view.left - 1 &&
+  box.top + box.height <= view.top + view.height + 1 &&
+  box.left + box.width <= view.left + view.width + 1;
+
+/**
+ * Tab from the panel's first control to its last (and Shift+Tab back): where each focused control is
+ * against the area's visible box (it must be inside: scrolled into view), and the page's other
+ * scrolls (they must stay 0, errata N1 26). `need` is how many stops the walk has on a system
+ * (tab-stops.mjs): read before the first Tab, with the focus where the walk starts.
+ */
+async function tabWalk(page, backward) {
+  const need = await tabStopsFromFocus(page, SCROLLER, backward);
+  const stops = [];
+  for (let i = 0; i < 80; i++) {
+    const where = await page.evaluate((selector) => {
+      const area = document.querySelector(selector);
+      const active = document.activeElement;
+      if (!area || !active || !area.contains(active)) return null;
+      const b = active.getBoundingClientRect();
+      const box = area.getBoundingClientRect();
+      let outer = 0;
+      for (let element = area.parentElement; element; element = element.parentElement) {
+        outer += element.scrollTop + element.scrollLeft;
+      }
+      return {
+        name: active.getAttribute('aria-label') ?? active.getAttribute('data-hw-address') ?? active.tagName,
+        box: { top: b.top, left: b.left, width: b.width, height: b.height },
+        view: {
+          top: box.top + area.clientTop,
+          left: box.left + area.clientLeft,
+          width: area.clientWidth,
+          height: area.clientHeight,
+        },
+        outer,
+      };
+    }, SCROLLER);
+    if (where === null) break;
+    stops.push(where);
+    await page.keyboard.press(backward ? 'Shift+Tab' : 'Tab');
+  }
+  const hidden = stops.filter((stop) => !inside(stop.box, stop.view));
+  const moved = stops.filter((stop) => stop.outer !== 0);
+  return { count: stops.length, hidden, moved, need };
+}
+
+/**
+ * The walk went through every control Tab stops at on this system (never fewer than the 20 counted
+ * on Windows where Tab stops at buttons; Safari's engine on a Mac stops at the fields only), each
+ * one in view, and nothing but the panel scrolled.
+ */
+const walkedAll = (walk, buttonsStop) =>
+  walk.count >= stopsRequired(walk.need, buttonsStop, 20) && walk.hidden.length === 0 && walk.moved.length === 0;
+const walkFacts = (walk) =>
+  `${walk.count} stops (every control: ${walk.need.everywhere}; by Safari's rule on a Mac: ${walk.need.safari}); ` +
+  `hidden ${JSON.stringify(walk.hidden.slice(0, 2))}; moved ${walk.moved.length}`;
+
+/** Focuses the panel's first control (as focusPanel does) with the area scrolled to its start. */
+async function focusFirst(page, last = false) {
+  await page.evaluate(
+    ([selector, toLast]) => {
+      const area = document.querySelector(selector);
+      area.scrollTop = 0;
+      area.scrollLeft = 0;
+      const controls = Array.from(area.querySelectorAll('input, select, button, [tabindex="0"]')).filter(
+        (element) => !element.disabled && element.tabIndex >= 0,
+      );
+      const target = toLast ? controls[controls.length - 1] : controls[0];
+      if (toLast) {
+        area.scrollTop = area.scrollHeight;
+        area.scrollLeft = area.scrollWidth;
+      }
+      // It gets the focus anew (Float has put the focus on the first field already).
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      target?.focus({ preventScroll: true });
+    },
+    [SCROLLER, last],
+  );
+}
+
+/** The wheel over the area reaches its far end: the Memory Map's last field is then in view. */
+async function wheelTo(page, dx, dy) {
+  const facts = await scrollFacts(page);
+  await page.mouse.move(facts.view.left + facts.view.width / 2, facts.view.top + facts.view.height / 2);
+  for (let i = 0; i < 6; i++) await page.mouse.wheel(dx, dy);
+  await until(
+    page,
+    ([selector, x, y]) => {
+      const area = document.querySelector(selector);
+      const moved = (delta, at) => delta === 0 || (delta > 0 ? at > 0 : at === 0);
+      return moved(x, area.scrollLeft) && moved(y, area.scrollTop);
+    },
+    [SCROLLER, dx, dy],
+    5000,
+  );
+  // A browser that scrolls smoothly (WebKit on Linux: about 200 ms after the last notch) is still
+  // on its way: the facts are read once the area has come to rest (its offsets unchanged for 10
+  // frames in a row), so that what is judged is where the wheel took it, on every system.
+  await until(
+    page,
+    (selector) => {
+      const area = document.querySelector(selector);
+      const at = `${area.scrollLeft},${area.scrollTop}`;
+      const state = (window.__wheelRest ??= { at: '', frames: 0 });
+      state.frames = state.at === at ? state.frames + 1 : 0;
+      state.at = at;
+      return state.frames >= 10;
+    },
+    SCROLLER,
+    5000,
+  );
+  await page.evaluate(() => delete window.__wheelRest);
+  return scrollFacts(page);
+}
+
+/** A real click at the middle of the last Memory Map check box, where it is on screen; whether it toggled. */
+async function clickLastMapCheck(page) {
+  const selector = `${SCROLLER} input[data-map]:last-of-type`;
+  const before = await page.evaluate((s) => {
+    const all = document.querySelectorAll(s.replace(':last-of-type', ''));
+    return all[all.length - 1]?.checked ?? null;
+  }, selector);
+  const box = await page.evaluate((s) => {
+    const all = document.querySelectorAll(s.replace(':last-of-type', ''));
+    const target = all[all.length - 1];
+    const b = (target?.closest('label') ?? target)?.getBoundingClientRect();
+    return b ? { x: b.left + Math.min(8, b.width / 2), y: b.top + b.height / 2 } : null;
+  }, selector);
+  if (!box) return false;
+  const hit = await page.evaluate(
+    ([x, y, s]) => {
+      const all = document.querySelectorAll(s.replace(':last-of-type', ''));
+      const target = all[all.length - 1];
+      const at = document.elementFromPoint(x, y);
+      return !!at && (at === target || at.closest('label')?.contains(target));
+    },
+    [box.x, box.y, selector],
+  );
+  if (!hit) return false;
+  await page.mouse.click(box.x, box.y);
+  const toggled = await until(
+    page,
+    ([s, was]) => {
+      const all = document.querySelectorAll(s.replace(':last-of-type', ''));
+      return all[all.length - 1]?.checked === !was;
+    },
+    [selector, before],
+    5000,
+  );
+  // Back as it was (the map's setting is the simulator's).
+  await page.mouse.click(box.x, box.y);
+  return toggled;
+}
+
+/**
+ * Part 3 (version 1.1, errata SH7): the panel in a region smaller than what it holds, docked below
+ * the Output panel at 1366 x 768 and floating at 360 x 280, scrolls inside its region, vertically
+ * and horizontally; every control is reached by the wheel, the mouse and the keyboard; a focused
+ * control is scrolled into view by the area itself, nothing else scrolls; at a size where it fits,
+ * nothing scrolls and nothing moves.
+ */
+async function shortRegionPass(browser, name) {
+  const p = `${name}/short region:`;
+  const buttonsStop = await buttonsAreTabStops(browser);
+  console.log(`  note ${name}: Tab ${buttonsStop ? 'stops' : 'does not stop'} at plain buttons in this browser`);
+  const { context, page, errors } = await openApp(browser, { width: 1366, height: 768 });
+  await page.locator('.e68-modeswitch [data-mode="simulator"]').click();
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('sim.view.hardware'));
+  await page.waitForSelector(SCROLLER, { timeout: WAIT });
+  await page.evaluate(async () => {
+    const dock = await import('/src/state/dock.ts');
+    window.__hwDock = () => dock.dockOf(window.__easy68k.ctx);
+  });
+  await until(page, (s) => (document.querySelector(s)?.clientHeight ?? 0) > 0, SCROLLER);
+
+  // Docked below the Output panel, as the owner met it in 1.0.0.
+  const docked = await scrollFacts(page);
+  const output = await boxOf(page, '[data-e68-panel="output"]');
+  check(
+    `${p} docked below the Output panel at 1366 x 768, the panel holds more than its region and scrolls inside it`,
+    !!docked &&
+      !!output &&
+      docked.view.top >= output.top + output.height - 1 &&
+      docked.scrollHeight > docked.view.height &&
+      /auto/.test(docked.overflow),
+    JSON.stringify({ docked, output }),
+  );
+  await screenshot(page.locator('[data-e68-dock="simulator"]'), `${name}-docked-under-output-1366x768-light.png`);
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('app.theme.set', 'dark'));
+  await page.waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'dark');
+  await screenshot(page.locator('[data-e68-dock="simulator"]'), `${name}-docked-under-output-1366x768-dark.png`);
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('app.theme.set', 'light'));
+  await page.waitForFunction(() => document.documentElement.getAttribute('data-theme') !== 'dark');
+
+  const wheeled = await wheelTo(page, 0, 400);
+  const lastField = await boxOf(page, `${SCROLLER} .e68-hw__group--map`);
+  check(
+    `${p} docked: the wheel scrolls the panel to its end; the Memory Map is then in view`,
+    wheeled.scrollTop > 0 && wheeled.outer === 0 && inside(lastField, wheeled.view),
+    JSON.stringify({ scrollTop: wheeled.scrollTop, outer: wheeled.outer, lastField, view: wheeled.view }),
+  );
+  check(`${p} docked: a click reaches the last Memory Map check box`, await clickLastMapCheck(page));
+  await focusFirst(page);
+  const forward = await tabWalk(page, false);
+  check(
+    `${p} docked: Tab through every control: each one is scrolled into view by the panel, nothing else scrolls`,
+    walkedAll(forward, buttonsStop),
+    walkFacts(forward),
+  );
+  await focusFirst(page, true);
+  const backward = await tabWalk(page, true);
+  check(`${p} docked: Shift+Tab back through them: likewise`, walkedAll(backward, buttonsStop), walkFacts(backward));
+
+  // Floating at 360 x 280.
+  await page.evaluate(() => {
+    const area = document.querySelector('[data-e68-panel="hardware"] [data-hw-scroll]');
+    area.scrollTop = 0;
+    area.scrollLeft = 0;
+    window.__hwDock().float('hardware', { x: 420, y: 60, width: 360, height: 280 });
+  });
+  await until(page, () => document.querySelector('.flexlayout__tab[data-e68-float="hardware"]') !== null);
+  await until(
+    page,
+    (s) => {
+      const area = document.querySelector(s);
+      return !!area && area.clientWidth > 0 && area.clientWidth < 360;
+    },
+    SCROLLER,
+  );
+  const floating = await scrollFacts(page);
+  check(
+    `${p} floating at 360 x 280: the panel scrolls inside the window, vertically and horizontally`,
+    !!floating && floating.scrollHeight > floating.view.height && floating.scrollWidth > floating.view.width,
+    JSON.stringify(floating),
+  );
+  const windowBox = page.locator('.flexlayout__tab[data-e68-float="hardware"]');
+  await screenshot(windowBox, `${name}-floating-360x280-light.png`);
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('app.theme.set', 'dark'));
+  await page.waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'dark');
+  await screenshot(windowBox, `${name}-floating-360x280-dark.png`);
+  await page.evaluate(() => window.__easy68k.ctx.commands.run('app.theme.set', 'light'));
+  await page.waitForFunction(() => document.documentElement.getAttribute('data-theme') !== 'dark');
+  const down = await wheelTo(page, 0, 400);
+  const across = await wheelTo(page, 400, 0);
+  const map = await boxOf(page, `${SCROLLER} input[data-map-end]:last-of-type`);
+  check(
+    `${p} floating: the wheel scrolls down and across (Shift or a horizontal wheel), nothing else scrolls`,
+    down.scrollTop > 0 && across.scrollLeft > 0 && across.outer === 0,
+    JSON.stringify({ top: down.scrollTop, left: across.scrollLeft, outer: across.outer, map }),
+  );
+  const back = await wheelTo(page, -400, 0);
+  check(
+    `${p} floating: the wheel back to the left edge; a click then reaches the last Memory Map check box`,
+    back.scrollLeft === 0 && (await clickLastMapCheck(page)),
+    JSON.stringify({ left: back.scrollLeft, top: back.scrollTop }),
+  );
+  await focusFirst(page);
+  const floatForward = await tabWalk(page, false);
+  check(
+    `${p} floating: Tab through every control: each one is scrolled into view by the panel, nothing else scrolls`,
+    walkedAll(floatForward, buttonsStop),
+    walkFacts(floatForward),
+  );
+  await focusFirst(page, true);
+  const floatBackward = await tabWalk(page, true);
+  check(
+    `${p} floating: Shift+Tab back through them: likewise`,
+    walkedAll(floatBackward, buttonsStop),
+    walkFacts(floatBackward),
+  );
+
+  // Large enough: nothing scrolls, the panel's rows start where they did.
+  await page.evaluate(() => window.__hwDock().float('hardware', { x: 20, y: 10, width: 900, height: 640 }));
+  await until(page, (s) => (document.querySelector(s)?.clientWidth ?? 0) > 800, SCROLLER);
+  const roomy = await scrollFacts(page);
+  check(
+    `${p} floating at 900 x 640 (it fits): nothing scrolls, the rows start at the area's top left`,
+    !!roomy &&
+      roomy.scrollHeight <= roomy.view.height &&
+      roomy.scrollWidth <= roomy.view.width &&
+      same(roomy.contentAt, [0, 0]),
+    JSON.stringify(roomy),
+  );
+  await page.evaluate(() => window.__hwDock().dock('hardware'));
+  await until(page, () => document.querySelector('.flexlayout__tab[data-e68-float="hardware"]') === null);
+  await scanPanel(page, `${name} light, docked short`);
+  reportErrors(p, errors);
+  await closeWithin(context);
+}
+
 async function main() {
   const port = await freePort();
   const server = await createServer({
@@ -727,6 +1064,8 @@ async function main() {
         console.log(`\n${name} ${browser.version()}`);
         console.log(`\n[${name}, shell]`);
         await shellPass(browser, name);
+        console.log(`\n[${name}, short region]`);
+        await shortRegionPass(browser, name);
         console.log(`\n[${name}, real engine]`);
         if (programs) await enginePass(browser, name, programs);
         else if (process.env.EASY68K_REQUIRE_ENGINES === '1') {

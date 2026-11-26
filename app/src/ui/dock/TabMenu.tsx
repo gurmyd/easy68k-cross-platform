@@ -12,7 +12,7 @@ import { hidePanel } from '../../state/panels';
 import { ContextMenu, type MenuEntry } from '../components';
 import type { DockEngine } from './engine';
 import { isClosablePanel, isViewerId } from './model';
-import { TAB_MENU } from './texts';
+import { FLOAT_ITEM, TAB_MENU } from './texts';
 
 export interface TabMenuState {
   panel: string;
@@ -49,6 +49,20 @@ export function tabMenuEntries(ctx: AppContext, engine: DockEngine, panel: strin
       onSelect: () => engine.tabOrder(panel, 1),
     },
   ];
+  // Version 1.1 (P9.2, P9.5): Float, through the command app.layout.float with { panel }.
+  entries.push(
+    { type: 'separator' },
+    {
+      type: 'item',
+      id: 'dock.float',
+      caption: FLOAT_ITEM,
+      disabled: !engine.canFloat(panel),
+      onSelect: () =>
+        ctx.commands.isEnabled('app.layout.float', { panel })
+          ? void ctx.commands.run('app.layout.float', { panel })
+          : engine.float(panel),
+    },
+  );
   if (isClosablePanel(panel)) {
     entries.push(
       { type: 'separator' },

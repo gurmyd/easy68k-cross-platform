@@ -502,6 +502,8 @@ items keep their positions:
 | `Earlier Versions...` (P3.3.3) | `ed.file.history` (arg: `{ path? }`) | end of the Editor's File menu, below a separator; end of the editor's context menu; the Files panel's context menu | - | - |
 | `Trash...` (P3.3.3) | `app.files.trash` | end of the Editor's File menu, after `Earlier Versions...`; the Files panel's strip | - | - |
 | `Port Additions...` (P3.5) | `app.additions.options` (arg: `{ group?: 'storage' }`) | end of the Options menu in Editor and Simulator mode, below a separator | - | - |
+| `Float`, `Dock` (version 1.1, `ARCHITECTURE-PLUS.md` P9.2, P9.5) | `app.layout.float` (arg: `{ panel }`), `app.layout.dock` (arg: `{ panel }`) | `Float`: the tab menu of a panel, after `Move Tab Later`, below a separator; `Dock`: a floating window's title bar (a button) and its menu | - | - |
+| `Layouts` > `Classic`, `Wide Output`, `Output and Hardware Side by Side`, `Floating Tools` (version 1.1, P9.4, P9.5) | `sim.view.layout.classic`, `sim.view.layout.wideOutput`, `sim.view.layout.sideBySide`, `sim.view.layout.floatingTools` | Simulator: a submenu `Layouts` at the end of the View menu, after `Reset Layout` | - | - |
 
 ---
 

@@ -496,3 +496,121 @@ added    node_modules/flexlayout-react  0.11.1  MIT
 No other entry of `package-lock.json` differs from `main`'s. Neither package is Apache-2.0 or
 GPL-incompatible, and neither has an install script (P2.4, P6.4). Pinned versions and why:
 `docs/requests/N0.md` section 1.
+
+## 7. Version 1.1: arranging panels freely (closing pass, 25 and 26 November 2026)
+
+Section P9 of `docs/ARCHITECTURE-PLUS.md`, written after the owner had used the released 1.0.0, on
+the branch `arrange` (from `60d77d2`, with `main` merged up to `6e4f24a`, the Import menu repair).
+Unlike the stage of 1.0.0 it is released as 1.1.0 from `main` once this acceptance holds (P9.7 D10);
+until then the change log's heading is "1.1.0 (not released yet)". `git diff 60d77d2` is the whole
+of version 1.1.
+
+### 7.1 What was built, and its verifications
+
+| Package | What | Verifications | Last verdict |
+|---|---|---|---|
+| M1 | floating panels (`ui/dock`, `state/dock.ts`), the tab menu's Float, the title bar's menu | 2, a repair after each | not passed: Dock did not go back to the place a panel was docked at (repaired after it, below) |
+| M2 | Arrange Panels, the tip, View > Layouts and its four arrangements (`features/layout`) | 2 | passed; three minor defects: C-1, C-2, C-3 below |
+| M3 | `tests/e2e/plus/arrange.spec.ts`, the guide's "Arranging panels", the parity rows, the manual rows F5 and V12, the change log | 2 | not passed: C-1 below |
+
+After M1's second verification one engineer repaired, unverified, the place a docked panel goes back
+to (`ui/dock/park.ts`, erratum M1 entry 11), and made the Hardware panel, the registers and the
+Memory panel scroll inside a region that is too small for them (errata SH7 10, U1 12, U2 S7). This
+pass verified that work with probes of its own (erratum NI entry 7): Float then Dock gave the
+arrangement back in 48 of 48 round trips per browser (every docked panel of the Simulator from the
+default and from each of the four arrangements, with the default visibility and with every tool
+panel shown, and the Editor's default); the three panels in small regions passed 1,355 of 1,355
+checks per browser (every control reached by Tab, by the wheel and a click, nothing outside the
+panel scrolled); where they fit, their boxes are 1.0.0's to half a pixel. No defect was found in it.
+
+### 7.2 What this pass changed (erratum NI)
+
+- **C-1** `arrange.spec.ts` follows M2's Floating Tools (Hardware first, each window at its own
+  default size, 24 px steps from the top right), with an exact rule per window (entry 1).
+- **C-2** `ci.yml`: check-arrange in group `simulator` (`docs/requests/M2-ci-arrange.md`, done);
+  the dock step's limit 15 to 30 minutes (below). `PlusSettings.arrangeTipAnswered` in the contracts
+  (`M2-plus-arrange-tip.md`, done). `M1-dock-floating.md` stays open: out of date, nothing needs it
+  (entry 2).
+- **C-3** the button Arrange Panels cuts its caption inside its frame in a narrow window; a pass
+  `narrow` of check-arrange (88 checks) and a comparison with 1.0.0 itself at 1366, 1024, 800, 600
+  and 500 px: every original button where 1.0.0 draws it (entry 3).
+- **C-4** stays a known limitation (erratum M1 entry 9; the guide says it).
+- **C-5** the three copies of the reveal helper are one file of the kit, `ui/components/reveal.ts`
+  (entry 4).
+- **Found in this pass** (entry 5): Move and Size chosen with the mouse from a floating window's
+  menu did nothing; repaired in `ui/dock/FloatChrome.tsx`, with two checks in check-dock.
+- **P9.6's audit with a floating window** (entry 6): the axe scans of `tests/a11y/lib/scan.mjs` now
+  also run with the Hardware and Memory panels floating, in both themes.
+- The change log's 1.1.0 and the guide's "Arranging panels" say what the scrolling panels and the
+  narrow toolbar do; the guide was walked through in Chromium by a probe (21 steps).
+
+Tests of 1.0.0 changed by version 1.1, all because P9 changes what they test (the packages' errata
+name each): `app/src/commands/tables/tables.test.ts`, `menus.test.ts`, `ui/shell/shell.test.tsx`,
+`features/layout/layout.test.ts`, `tests/e2e/sim/menus.spec.ts` (View gains Layouts; errata M2 7,
+M3 10), `ui/dock/dock.test.ts` and check-dock's moves pass (the tab menu gains Float; erratum M1 8),
+`tests/a11y/lib/structure.mjs` and `scan.mjs` (a floating window audited). The browser checks of
+the three scrolling panels gained parts; none of their 1.0.0 checks changed.
+`check-dock.main.json` is unchanged.
+
+### 7.3 This pass, on Windows 11 (this machine), against the working copy
+
+| Command | Result |
+|---|---|
+| `npm run typecheck` | app, desktop, tests: ok |
+| `npm run lint` | eslint clean; `tests/lint` 4 files, 213 passed, 1 skipped |
+| `npm run format:check` | every file formatted |
+| `npm run check:docs` / `check:guide` | 17 of 17 / 185 of 185 quoted texts, 10 of 10 tests |
+| `node tools/make-differences.mjs --check` | up to date |
+| `npm test -- --maxWorkers=4` (`EASY68K_REQUIRE_ENGINES=1`) | 259 files passed, 1 skipped; 5,235 passed, 61 skipped |
+| `npm run test:conformance -- --maxWorkers=4` (`EASY68K_REQUIRE_ENGINES=1`) | 41 files passed, 1 skipped; 1,049 passed, 409 skipped (1.0.0's CI on Ubuntu, run 45111581771: 41 and 1; 1,048 and 410; no local corpus in this working copy) |
+| `npm run test:integration` | 2 files; 21 passed, 2 skipped |
+| every `check:*` script but `check:rc`, both browsers (`run-checks.mjs`, not tracked) | 43 of 43 exited 0, every count complete (below) |
+| `tests/e2e`, Chromium and WebKit, 4 workers, production build | 675 passed, 3 skipped (8.9 min) |
+| `tests/e2e/plus --repeat-each=5`, both browsers, production build | 310 of 310 passed (31 tests, 7.9 min) |
+| `node tools/diff-menus.mjs --main v1.0.0` | 330 of 330; added: the Simulator's View > Layou&ts after a separator (menu bar and native menu); `keys.ts`: no entry added |
+| `npm run check:rc` (no GitHub logs) | items 2, 3, 5, 8, 11, 12 hold here (5: 15 of 15 with section 1.5; 12: 35 of 35); item 1 not judged here: the `site` set is not in this working copy (267 runs); 4, 6, 7, 9, 10 shown only on GitHub |
+| actionlint 1.7.12 on `ci.yml` | no finding (ShellCheck off: with it, it does not finish here, for 1.0.0's file as well) |
+
+The check scripts (counts for both browsers): gallery 254, shell 385, engine-browsers 24 tests,
+editor 168, highlight 58, files 445, documents 96, help 164, surface 28, easybin 174, memory-stack
+220, text 78, output 567, hardware 100, stop-buttons 20, run 144, sim-main 218, pwa 114, wave1 268,
+options 122, find 70, print 122, fsaccess 90, assemble 98, audio 47, sim-files 80, breakpoints 74,
+log 144, wave2 185, examples 309, desktop-devices 36, a11y 1,532 (1,520 before the scans with the
+floating windows were added), perf 46, docs, guide, dock 808, history 68, history-ui 254, viewer 279,
+status 32, additions 96, frame-policy 86, arrange 358.
+
+`git diff 60d77d2 --stat` is empty for `engine/`, `tests/conformance`, `tests/oracle`,
+`app/src/engine`, `app/src/core/sim-host`, `app/src/commands/tables/keys.ts`, `package-lock.json`
+and the workspaces' `package.json` files; the root `package.json` adds only `check:arrange`.
+
+**Step times** (this PC, one check at a time, both browsers; 1.0.0 is `60d77d2` exported):
+check:dock 407 to 688 s, check:hardware 15 to 23 s, check:sim-main 107 to 128 s,
+check:memory-stack 32 to 53 s; check:arrange 116 s. The dock step's 15 minutes would not have left
+room on macOS (8.5 min for 1.0.0 there), so it has 30 (erratum NI entry 2).
+
+### 7.4 The size of the production build
+
+1.0.0 built from `60d77d2`'s `app` (exported); the two engine wrappers that export does not carry
+(`asm68k.mjs`, `sim68k.mjs`, 72,820 bytes) are left out of both sides.
+
+| | 1.0.0 | 1.1 | Increase |
+|---|---|---|---|
+| JS and CSS loaded at start, gzip -9 | 507.8 kB | 518.4 kB | 10.6 kB |
+| All JS and CSS, gzip -9 | 544.3 kB | 554.9 kB | 10.6 kB |
+| Precached by the service worker | 18,480,777 bytes | 18,527,992 bytes | 47,215 bytes (0.26 %) |
+| The main script, raw | 1,587,563 bytes | 1,621,073 bytes | 33,510 bytes |
+
+No dependency was added (the lockfile is 1.0.0's).
+
+### 7.5 Open, and whose
+
+- On GitHub, after the push of `arrange`: every check and suite on Ubuntu and macOS (and Windows),
+  the new step times against their limits, the desktop tests (`npm run desktop:test`; Electron was
+  not started here), and the manual run with `e2e_stability` (twenty repetitions): the orchestrator.
+- For a person: the manual rows F5 (a floating window with a trackpad) and V12 (VoiceOver) on a
+  real Mac; nobody has worked through the manual list yet.
+- `docs/requests/M1-dock-floating.md` (the stored floating windows in the contracts): the contracts
+  engineer, when wanted; nothing depends on it.
+- A PDF in a viewer shows its first page again after Float (erratum M1 entry 9): known, recorded.
+- In the Editor at 500 px the theme button, already outside the window in 1.0.0, is 41 px further
+  out (erratum NI entry 3).

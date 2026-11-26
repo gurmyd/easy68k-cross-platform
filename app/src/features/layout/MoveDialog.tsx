@@ -5,16 +5,19 @@
 //   | P&lace:   ( ) Into the group of [ Editor        v ] as a tab |
 //   |           ( ) Beside [ Editor        v ]: [ Left  v ]       |
 //   |           ( ) At the edge of the window: [ Left  v ]         |
+//   |           ( ) As a floating window                          |
 //   |                                          [  OK  ] [ Cancel ] |
 //   +--------------------------------------------------------------+
 //
-// OK returns the move (model.ts resultOf); the command makes it with one FlexLayout action.
+// OK returns the move (model.ts resultOf); the command makes it with one FlexLayout action, or
+// makes the panel float (the fourth place, version 1.1, P9.2; M2).
 
 import { useId, useRef, useState, type ReactNode } from 'react';
 import type { DialogProps } from '../../contracts';
 import { Button, Caption, Dialog, Select } from '../../ui/components';
 import './layout.css';
 import {
+  canChooseFloat,
   initialChoice,
   otherPanels,
   resultOf,
@@ -31,20 +34,23 @@ export interface MoveDialogProps {
   panels: readonly DescribedPanel[];
   /** The panel the dialog starts on (the focused one, or the command's argument). */
   initial?: string | null;
+  /** Version 1.1: the panels that can float now (DockController.canFloat); absent = none. */
+  floatable?: readonly string[];
 }
 
-const PLACES: MoveChoice['place'][] = ['tab', 'beside', 'edge'];
+const PLACES: MoveChoice['place'][] = ['tab', 'beside', 'edge', 'float'];
 
 export function MoveDialog({ props, close }: DialogProps<MoveDialogProps, MoveResult | null>) {
   const id = useId();
   const first = useRef<HTMLSelectElement>(null);
   const [choice, setChoice] = useState(() => initialChoice(props.panels, props.initial));
+  const floatable = props.floatable ?? [];
   const options = props.panels.map((entry) => ({ value: entry.panel, label: entry.title }));
   const others = otherPanels(props.panels, choice.panel).map((entry) => ({ value: entry.panel, label: entry.title }));
-  const result = resultOf(choice);
+  const result = resultOf(choice, props.panels, floatable);
   const set = (patch: Partial<MoveChoice>) => setChoice((current) => ({ ...current, ...patch }));
 
-  const radio = (place: MoveChoice['place'], children: ReactNode) => (
+  const radio = (place: MoveChoice['place'], children: ReactNode, disabled = false) => (
     <div className="e68-movepanel__row" key={place}>
       <label className="e68-checkbox e68-radio" htmlFor={`${id}-${place}`}>
         <input
@@ -53,6 +59,7 @@ export function MoveDialog({ props, close }: DialogProps<MoveDialogProps, MoveRe
           name={`${id}-place`}
           className="e68-checkbox__input"
           checked={choice.place === place}
+          disabled={disabled}
           // The group's access key (P&lace:) goes to the chosen place.
           data-e68-mnemonic={choice.place === place ? 'l' : undefined}
           onChange={() => set({ place })}
@@ -139,6 +146,17 @@ export function MoveDialog({ props, close }: DialogProps<MoveDialogProps, MoveRe
                       onChange={(beside) => set({ beside, place: 'beside' })}
                     />
                   </>,
+                );
+              }
+              if (place === 'float') {
+                // Version 1.1 (P9.2): the panel becomes a floating window.
+                return radio(
+                  place,
+                  <label htmlFor={`${id}-float`} className="e68-movepanel__text">
+                    {MOVE_TEXTS.float}
+                  </label>,
+                  // The last docked panel cannot float (errata M1 6).
+                  !canChooseFloat(props.panels, floatable, choice.panel),
                 );
               }
               return radio(

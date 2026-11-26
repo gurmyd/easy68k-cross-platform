@@ -149,7 +149,17 @@ export interface FlexJsonOptions {
   tooltip?(panel: string): string | undefined;
   /** Whether a group shows its strip; default needsStrip(panels, locked). */
   strip?(panels: readonly string[]): boolean;
+  /**
+   * Version 1.1 (P9.2, M1): the shown floating panels, in the order they were made to float. Their
+   * tabs are kept in the model in a border that is never shown (FLOAT_BORDER), so that FlexLayout
+   * keeps their content mounted where it is; ui/dock draws them as windows. None: no border at all,
+   * the model of 1.0.0.
+   */
+  floating?: readonly string[];
 }
+
+/** Where the tabs of the floating panels are kept: a border FlexLayout never shows (errata M1 1). */
+export const FLOAT_BORDER = 'bottom' as const;
 
 /** A tab of FlexLayout's JSON for a panel. */
 export function tabJson(panel: string, options: FlexJsonOptions): IJsonTabNode {
@@ -201,7 +211,22 @@ export function toFlexJson(tree: DockNode, options: FlexJsonOptions): IJsonModel
     // A column (or a single group) at the root: a root row holding it, so that it lays out vertically.
     layout = { type: 'row', id: `${options.mode}:root`, weight: 100, children: [rowJson(tree, options, 'root.0')] };
   }
-  return { global: globalAttributes(options.locked), borders: [], layout };
+  const floating = options.floating ?? [];
+  const borders =
+    floating.length === 0
+      ? []
+      : [
+          {
+            type: 'border' as const,
+            location: FLOAT_BORDER,
+            show: false,
+            selected: -1,
+            enableDrop: false,
+            enableAutoHide: false,
+            children: floating.map((panel) => tabJson(panel, options)),
+          },
+        ];
+  return { global: globalAttributes(options.locked), borders, layout };
 }
 
 interface JsonNodeLike {

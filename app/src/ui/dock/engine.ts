@@ -21,6 +21,7 @@
 
 import {
   Actions,
+  BorderNode,
   DockLocation,
   Model,
   RowNode,
@@ -30,13 +31,18 @@ import {
   type DropInfo,
   type Node,
 } from 'flexlayout-react';
-import type { AppContext, DockNode, Settings, Store } from '../../contracts';
+import type { AppContext, DockNode, DockParked, Settings, Store } from '../../contracts';
 import {
+  DEFAULT_FLOAT_SIZE,
   attachDock,
   lockedIn,
+  type DockArrangement,
   type DockAttachment,
+  type DockDescription,
+  type DockFloating,
   type DockLive,
   type DockMoveTarget,
+  type DockRect,
   type TransientSpec,
 } from '../../state/dock';
 import {
@@ -65,6 +71,23 @@ import {
   type PlannedMove,
 } from './actions';
 import { Announcer } from './announce';
+import { keptRoom, tileWindows } from '../../state/tiling';
+import { holdLeftEdge, pinScroll } from './pin';
+import {
+  boundedRect,
+  firstFloatRect,
+  firstSizeWithin,
+  minimumSize,
+  newlyFloating,
+  raised,
+  sameRect,
+  titleButtonsWidth,
+  WINDOW_BORDER,
+  zIndexOf,
+  type Area,
+  type FloatOrigin,
+  type StoredWindow,
+} from './floating';
 import { indexModel, tabIdsInReadingOrder, type LiveIndex } from './live';
 import {
   DOCK_PANELS,
@@ -72,19 +95,22 @@ import {
   defaultTree,
   groupLabel,
   groupsOf,
+  isClosablePanel,
   isToolPanel,
   isPanelOf,
   isViewerId,
   needsStrip,
   panelOfTab,
   panelsOf,
+  sameShape,
+  tabIdOf,
   tabJson,
   toFlexJson,
   type DockMode,
   type FlexJsonOptions,
 } from './model';
 import { EMPTY_RELOCATION, decorateStrips, relocationPlan, type Relocation } from './order';
-import { insertPanel, removePanel, withoutViewers } from './park';
+import { dockInto, insertPanel, placeOf, removePanel, selectedLike, withoutViewers } from './park';
 import { allowsDrop, decideAction } from './rules';
 import {
   defaultDrag,
@@ -98,8 +124,8 @@ import {
   type SizeInput,
 } from './sizes';
 import { decorateSplitters, decorateTabPanels, splitterPlans, type SplitRole } from './splitters';
-import { readDock, readTree, withDock } from './stored';
-import { ANNOUNCE } from './texts';
+import { floatingOf, readDock, readTree, withDock } from './stored';
+import { ANNOUNCE, FLOATING_REGION } from './texts';
 import { TransientTabs } from './transient';
 
 /** What a tab's content component reads from the engine (re-rendered when it changes). */
@@ -108,6 +134,14 @@ export interface EngineView {
   registersAuto: boolean;
   /** A collapsed Output panel shows today's expand bar (not in the narrow default, where it is a tab). */
   collapseApplies: boolean;
+}
+
+/** What a floating window's title bar reads from the engine (version 1.1, P9.2). */
+export interface FloatView {
+  panel: string;
+  title: string;
+  /** The panel has an `x` today (files, the tool panels, viewers). */
+  closable: boolean;
 }
 
 /** FlexLayout internals the dock uses (flexlayout-react 0.11.1; docs/porting/errata/N1.md). */
@@ -119,6 +153,10 @@ interface LayoutControllerInternals {
 interface ModelInternals {
   adoptedFromModel?: Model;
   getLayouts?(): Map<string, { getController?(): unknown }>;
+}
+interface TabNodeInternals {
+  isRendered?(): boolean;
+  setRendered?(rendered: boolean): void;
 }
 
 const sameList = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
@@ -155,6 +193,36 @@ export class DockEngine implements DockLive {
   private readonly slotListeners = new Set<() => void>();
   /** True while the focus is put on a slot only to let Tab go on from there (DockWorkspace). */
   passingFocus = false;
+  /**
+   * Version 1.1 (P9.2): the floating windows in the order they were made to float, shown or hidden
+   * (viewers included, never stored); the remembered rect of each panel that floated before; the
+   * stacking order from the back to the front; a rect shown while a pointer or the keys move it.
+   */
+  private floats: StoredWindow[] = [];
+  private remembered: Record<string, DockRect> = {};
+  private stack: string[] = [];
+  private preview = new Map<string, DockRect>();
+  private floatViews = new Map<string, FloatView>();
+  private readonly floatListeners = new Set<() => void>();
+  /**
+   * The docked arrangement the floating panels left (errata M1 11; stored with the windows), and
+   * whether the store being written is a Float's or a Dock's (which moves `origin.last` on).
+   */
+  private origin: FloatOrigin | null = null;
+  private chainWriting = false;
+  /** The room at the right of the dock kept for the floating windows (P9.8 point 1), CSS px. */
+  private reserve = 0;
+  /** The room applied to the page now (applyReserve). */
+  private reserveShown = 0;
+  /** Stops pinScroll on the dock's element (P9.9 point 1). */
+  private unpin: (() => void) | null = null;
+  /**
+   * The panels an arrangement has just made float (P9.4, P9.8 point 1): until a person acts, their
+   * windows show their content from the left edge (errata M1 entry 19).
+   */
+  private placedAfresh = new Set<string>();
+  /** Ends the hold of those windows' left edges (pin.ts holdLeftEdge); null when none is held. */
+  private releasePlaced: (() => void) | null = null;
   private readonly changeListener = {
     onBeforeAction: (action: Action) => this.onBeforeAction(action),
     onAfterAction: (action: Action) => this.onAfterAction(action),
@@ -166,6 +234,7 @@ export class DockEngine implements DockLive {
     this.shell = shell;
     this.mode = mode;
     this.narrow = narrow;
+    this.loadFloats();
     this.model = this.createModel(this.treeFromSettings(), undefined);
     this.recordApplied();
     this.updateView();
@@ -241,13 +310,21 @@ export class DockEngine implements DockLive {
 
   /** The dock's element (null on unmount). */
   setElement(element: HTMLElement | null): void {
+    if (element === this.element) return;
+    this.unpin?.();
+    this.unpin = null;
+    this.releasePlaced?.();
     this.element = element;
+    // P9.9 point 1: the dock never scrolls as a whole (dock.css `overflow: clip`; pin.ts elsewhere).
+    if (element) this.unpin = pinScroll(element);
   }
 
   setSize(width: number, height: number): void {
     if (Math.abs(width - this.size.width) < 0.25 && Math.abs(height - this.size.height) < 0.25) return;
     this.size = { width, height };
     this.syncSizes();
+    this.ensureFloatsRendered();
+    this.applyFloatStyles();
   }
 
   setNarrow(narrow: boolean): void {
@@ -325,6 +402,7 @@ export class DockEngine implements DockLive {
       title: this.title,
       tooltip: (panel) => this.transients.get(panel)?.tooltip,
       strip: (panels) => this.stripFor(panels),
+      floating: this.shownFloats(),
     };
   }
 
@@ -365,16 +443,21 @@ export class DockEngine implements DockLive {
     if (stored) {
       tree = this.reconcileTree(stored, visible, dock.parked).tree;
     } else {
-      const shell = this.shell.getState();
-      tree = defaultTree(this.mode, {
-        visible: (panel) => visible.has(panel),
-        narrow: this.narrow,
-        activeTool: shell.activeTool,
-        outputInFront: shell.outputInFront,
-      });
+      tree = this.defaultArrangement(visible);
     }
-    for (const id of this.transients.ids()) tree = insertPanel(tree, this.mode, id);
+    for (const id of this.transients.ids()) if (!this.isFloating(id)) tree = insertPanel(tree, this.mode, id);
     return tree;
+  }
+
+  /** The mode's default arrangement (P3.1.3) for the visible panels, at the dock's width now. */
+  private defaultArrangement(visible: ReadonlySet<string> = new Set(this.visiblePanels())): DockNode {
+    const shell = this.shell.getState();
+    return defaultTree(this.mode, {
+      visible: (panel) => visible.has(panel),
+      narrow: this.narrow,
+      activeTool: shell.activeTool,
+      outputInFront: shell.outputInFront,
+    });
   }
 
   /** A stored tree with the hidden panels taken out (their places parked) and the shown ones put in. */
@@ -399,7 +482,7 @@ export class DockEngine implements DockLive {
       changed = true;
     }
     for (const panel of DOCK_PANELS[this.mode]) {
-      if (!visible.has(panel) || panelsOf(tree).includes(panel)) continue;
+      if (!visible.has(panel) || panelsOf(tree).includes(panel) || this.isFloating(panel)) continue;
       tree = insertPanel(tree, this.mode, panel, places[panel]);
       changed = true;
     }
@@ -434,10 +517,16 @@ export class DockEngine implements DockLive {
     this.moveFocusAfterClose(focus, before);
   }
 
+  /** The stored tree and floating windows of the mode, as one key (reconcile). */
+  private storedKey(dock = readDock(this.settings())): string {
+    const floating = dock.floating?.[this.mode];
+    return JSON.stringify([dock[this.mode] ?? null, floating?.windows ?? [], floating?.reserve ?? 0]);
+  }
+
   private recordApplied(): void {
     const dock = readDock(this.settings());
     this.applied = {
-      stored: JSON.stringify(dock[this.mode] ?? null),
+      stored: this.storedKey(dock),
       visible: this.visiblePanels().join(','),
       locked: dock.locked,
       narrow: this.narrow,
@@ -448,9 +537,10 @@ export class DockEngine implements DockLive {
   reconcile(): void {
     if (this.writing) return;
     const dock = readDock(this.settings());
-    const stored = JSON.stringify(dock[this.mode] ?? null);
+    const stored = this.storedKey(dock);
     const visible = this.visiblePanels().join(',');
     if (stored !== this.applied.stored) {
+      this.loadFloats();
       this.rebuild(this.treeFromSettings());
       this.storeReconciled();
     } else if (visible !== this.applied.visible) {
@@ -486,12 +576,34 @@ export class DockEngine implements DockLive {
     parked?: Record<string, { near: string; side: 'tab' | 'left' | 'right' | 'above' | 'below' }>,
   ): void {
     const stored = tree === null ? null : withoutViewers(tree);
-    const valid = stored === null ? undefined : readTree(stored, this.mode);
+    const windows = this.floats.filter((window) => !isViewerId(window.panel));
+    const valid =
+      stored === null ? undefined : readTree(stored, this.mode, new Set(windows.map((window) => window.panel)));
     if (!valid) return;
+    // The run of Float and Dock goes on while only they change the shape of the arrangement.
+    if (this.origin) {
+      if (this.chainWriting) this.origin = { ...this.origin, last: valid };
+      else if (!sameShape(valid, this.origin.last)) this.origin = null;
+    }
+    if (windows.length === 0) {
+      this.origin = null;
+      this.reserve = 0;
+    }
+    const floating = {
+      windows: windows.map((window) => ({ ...window })),
+      remembered: { ...this.remembered },
+      ...(this.origin ? { origin: this.origin } : {}),
+      ...(this.reserve > 0 ? { reserve: this.reserve } : {}),
+    };
     this.writing = true;
     try {
       this.ctx.settings.update((settings) =>
-        withDock(settings, (dock) => ({ ...dock, [this.mode]: valid, parked: { ...dock.parked, ...parked } })),
+        withDock(settings, (dock) => ({
+          ...dock,
+          [this.mode]: valid,
+          parked: { ...dock.parked, ...parked },
+          floating: { ...dock.floating, [this.mode]: floating },
+        })),
       );
     } finally {
       this.writing = false;
@@ -637,6 +749,8 @@ export class DockEngine implements DockLive {
       this.syncSizes();
       return;
     }
+    // A splitter the person moved ends a run of Float and Dock (its shares are theirs now).
+    this.origin = null;
     this.store(this.tree());
     this.syncSizes();
   }
@@ -719,6 +833,8 @@ export class DockEngine implements DockLive {
       } else for (const child of node.getChildren()) collect(child);
     };
     collect(dragNode);
+    // The border that keeps the floating panels' tabs is no place to drop (version 1.1).
+    if (dropInfo.node instanceof BorderNode) return false;
     // Into a group (its middle or its strip): the group's size; beside it or at an edge: the
     // place the drop would give (FlexLayout's outline). A drop on a strip outlines a 3 px marker.
     const into = dropInfo.location === DockLocation.CENTER && dropInfo.node instanceof TabSetNode;
@@ -816,6 +932,7 @@ export class DockEngine implements DockLive {
   // --- DOM: names, roles, reading order, focus -------------------------------------------------
 
   private afterRender(): void {
+    this.ensureFloatsRendered();
     this.decorate();
     this.ensureReadingOrder();
   }
@@ -874,7 +991,12 @@ export class DockEngine implements DockLive {
       },
       (tabId) => isViewerId(panelOfTab(tabId) ?? ''),
       locked,
+      (tabId) => {
+        const panel = panelOfTab(tabId);
+        return panel !== null && this.isFloating(panel) ? FLOATING_REGION(this.title(panel)) : null;
+      },
     );
+    this.applyFloatStyles();
     this.setRelocation(relocation);
     // The tab list of the tool panels' group keeps today's name (`Tool panels`).
     const narrowOutput = this.narrowOutputStrip();
@@ -934,6 +1056,10 @@ export class DockEngine implements DockLive {
       if (target && typeof target.focus === 'function') active = target;
     };
     owner?.addEventListener('focusin', follow, true);
+    // React moves the element of a tab whose place in the order changed (a panel that floats goes
+    // after everything docked, version 1.1); the browser then loses the scroll positions inside it.
+    // They are put back once the element is in its new place.
+    const scrolled = this.scrollPositions();
     controller._orderedTabIds = [...want];
     controller.redrawLayout();
     const view = owner?.defaultView;
@@ -943,6 +1069,11 @@ export class DockEngine implements DockLive {
     }
     view.requestAnimationFrame(() => {
       owner?.removeEventListener('focusin', follow, true);
+      for (const [element, { top, left }] of scrolled) {
+        if (!element.isConnected) continue;
+        if (element.scrollTop !== top) element.scrollTop = top;
+        if (element.scrollLeft !== left) element.scrollLeft = left;
+      }
       const document = this.element?.ownerDocument;
       if (
         active &&
@@ -954,6 +1085,70 @@ export class DockEngine implements DockLive {
         active.focus({ preventScroll: true });
       }
     });
+  }
+
+  /** The scroll positions inside the panels' elements that are not at their start. */
+  private scrollPositions(): Map<Element, { top: number; left: number }> {
+    const positions = new Map<Element, { top: number; left: number }>();
+    const root = this.element;
+    if (!root) return positions;
+    const fresh = new Set(Array.from(this.placedAfresh, (panel) => `flexlayout-tab-${tabIdOf(this.mode, panel)}`));
+    for (const element of Array.from(root.querySelectorAll('.flexlayout__tab *'))) {
+      // A window an arrangement has just placed shows its content from its left edge.
+      const left = fresh.size > 0 && fresh.has(element.closest('.flexlayout__tab')?.id ?? '') ? 0 : element.scrollLeft;
+      if (element.scrollTop !== 0 || left !== 0) positions.set(element, { top: element.scrollTop, left });
+    }
+    return positions;
+  }
+
+  /**
+   * P9.8 point 1 (errata M1 entry 19): a window that an arrangement has just placed, without a
+   * person's action on it, shows its content from its left edge. The panel may have been scrolled
+   * sideways where it was docked (a narrow column, where the focus revealed a field at its right);
+   * that offset is not carried into the window (scrollPositions leaves it out while the panel is in
+   * `placedAfresh`). The focus may be in a field at the right of a window that is narrower than its
+   * content (the Hardware window at 1366 by 768): when the menu that closes, or the dock after the
+   * move, puts the focus back there, the browser scrolls the field into view (WebKit) or the panel's
+   * own reveal does. That comes some frames after the arrangement, how many depends on the machine;
+   * so the left edge is held by rule and not for a time (pin.ts holdLeftEdge): until a person
+   * presses, types or turns the wheel, every sideways offset inside these windows is put back as
+   * soon as the script that moved the focus returns, and a sideways scroll that comes another way
+   * from its scroll event. Vertical offsets are the panel's own (the Log follows its end) and are
+   * kept. The next arrangement and the dock's unmounting end the hold too.
+   */
+  private showFromLeft(panels: readonly string[]): void {
+    this.releasePlaced?.();
+    const owner = this.element?.ownerDocument;
+    const view = owner?.defaultView;
+    if (panels.length === 0 || !owner || !view) return;
+    for (const panel of panels) this.placedAfresh.add(panel);
+    const ids = new Set(panels.map((panel) => `flexlayout-tab-${tabIdOf(this.mode, panel)}`));
+    const unscrollSideways = () => {
+      for (const id of ids) {
+        const window = this.element?.querySelector(`[id="${id}"]`);
+        if (!window) continue;
+        for (const element of [window, ...Array.from(window.querySelectorAll('*'))]) {
+          if (element.scrollLeft !== 0) element.scrollLeft = 0;
+        }
+      }
+    };
+    const release = holdLeftEdge(
+      owner,
+      (element) => element instanceof view.Element && ids.has(element.closest('.flexlayout__tab')?.id ?? ''),
+      unscrollSideways,
+      () => {
+        for (const panel of panels) this.placedAfresh.delete(panel);
+        if (this.releasePlaced === release) this.releasePlaced = null;
+      },
+    );
+    this.releasePlaced = release;
+    // An offset that stays as it was through the move raises no event: once the windows are laid
+    // out, what is still scrolled sideways inside them is put back directly.
+    view.requestAnimationFrame(() =>
+      view.requestAnimationFrame(() => {
+        if (this.releasePlaced === release) unscrollSideways();
+      }),
+    );
   }
 
   /** The focus is in `panel`, on its tab, or on another tab of its group. */
@@ -977,6 +1172,10 @@ export class DockEngine implements DockLive {
     if (!active || !this.element?.contains(active)) return null;
     const region = active.closest('[data-e68-panel]')?.getAttribute('data-e68-panel');
     if (region && this.has(region)) return region;
+    // A floating window's title bar (or its buttons) is the panel's, as its tab button is (P9.2:
+    // the window's Close closes the panel exactly as its x does, the focus included).
+    const bar = active.closest('[data-e68-float-bar]')?.getAttribute('data-e68-float-bar');
+    if (bar && this.has(bar)) return bar;
     const button = active.closest('.flexlayout__tab_button');
     const tabId = button?.id.startsWith('flexlayout-tabbutton-')
       ? button.id.slice('flexlayout-tabbutton-'.length)
@@ -1021,12 +1220,24 @@ export class DockEngine implements DockLive {
   private select(id: string): boolean {
     const tab = tabNodeOf(this.model, this.mode, id);
     if (!tab) return false;
+    // A floating window has no tab to select (its tab is in the hidden border, where a selection
+    // would open the border): it comes to the front instead (P9.2).
+    if (this.isFloating(id)) {
+      this.raise(id);
+      return true;
+    }
     if (!tab.isSelected()) this.dispatch(Actions.selectTab(tab.getId()));
     return true;
   }
 
   park(id: string): void {
     if (id === 'output' || !this.has(id)) return;
+    if (this.isFloating(id)) {
+      // Hidden while it floats: its window goes, its entry stays (it floats again when shown).
+      const tree = this.tree();
+      if (tree) this.rebuild(tree);
+      return;
+    }
     const tree = this.tree();
     if (!tree) return;
     const removed = removePanel(tree, id);
@@ -1126,8 +1337,11 @@ export class DockEngine implements DockLive {
     const focus = this.focusedPanel();
     const before = this.tree();
     const tab = tabNodeOf(this.model, this.mode, id);
+    const floated = this.isFloating(id);
+    if (floated) this.dropFloat(id);
     if (tab) this.dispatch(Actions.deleteTab(tab.getId()));
     this.transients.close(id);
+    if (floated && tab) this.rebuild(this.tree() ?? this.treeFromSettings());
     this.moveFocusAfterClose(focus === id ? id : null, before);
   }
 
@@ -1136,6 +1350,8 @@ export class DockEngine implements DockLive {
   }
 
   move(panel: string, target: DockMoveTarget): void {
+    // A floating panel moved by Move Panel To... is docked first, then moved (version 1.1).
+    if (this.isFloating(panel)) this.dock(panel, false);
     const plan = moveAction(this.model, this.mode, panel, target, this.title);
     this.apply(plan, panel);
   }
@@ -1171,10 +1387,19 @@ export class DockEngine implements DockLive {
   reset(): void {
     const splits: SplitId[] = this.mode === 'editor' ? ['editor.files'] : ['sim.columns', 'sim.messages', 'sim.tools'];
     this.drag = null;
+    // Reset Layout docks every panel (P9.2); each remembers the place it floated at.
+    for (const window of this.floats) if (!isViewerId(window.panel)) this.remembered[window.panel] = window.rect;
+    this.floats = [];
+    this.stack = [];
+    this.preview.clear();
+    this.origin = null;
+    this.reserve = 0;
+    const remembered = { ...this.remembered };
     this.ctx.settings.update((settings) => {
       let next = withDock(settings, (dock) => {
         const copy = { ...dock };
         delete copy[this.mode];
+        copy.floating = { ...dock.floating, [this.mode]: { windows: [], remembered } };
         return copy;
       });
       for (const id of splits) next = withSplit(next, id, DEFAULT_SPLIT_FRACTIONS[id]);
@@ -1189,10 +1414,17 @@ export class DockEngine implements DockLive {
     if (announce) this.announcer.announce(on ? ANNOUNCE.locked : ANNOUNCE.unlocked);
   }
 
-  describe(): { panel: string; title: string; group: number }[] {
-    return groupsOf(this.tree()).flatMap((group, index) =>
+  describe(): DockDescription[] {
+    const docked: DockDescription[] = groupsOf(this.tree()).flatMap((group, index) =>
       group.panels.map((panel) => ({ panel, title: this.title(panel), group: index + 1 })),
     );
+    const floating: DockDescription[] = this.shownFloats().map((panel) => ({
+      panel,
+      title: this.title(panel),
+      group: 0,
+      floating: true as const,
+    }));
+    return [...docked, ...floating];
   }
 
   /** A default splitter's double-click or Enter: back to today's default (P3.1.1, the kit's rule). */
@@ -1260,4 +1492,507 @@ export class DockEngine implements DockLive {
         return 0;
     }
   }
+
+  // --- floating windows (version 1.1, ARCHITECTURE-PLUS P9.2; M1) ------------------------------
+  //
+  // A floating panel's tab stays in the model, in a border FlexLayout never shows (model.ts
+  // FLOAT_BORDER), so its content is the same component in the same place of the React tree and
+  // is never created anew. FlexLayout keeps positioning its element (`.flexlayout__tab`) as a
+  // hidden tab; dock.css draws an element marked `data-e68-float` at the window's place instead
+  // (custom properties set here), and DockContent draws the title bar and the edges inside it.
+
+  /** The floating windows as stored for the mode; the viewers' windows (never stored) are kept. */
+  private loadFloats(): void {
+    const stored = floatingOf(readDock(this.settings()), this.mode);
+    const viewers = this.floats.filter((window) => isViewerId(window.panel));
+    this.floats = [...stored.windows.map((window) => ({ ...window })), ...viewers];
+    this.remembered = { ...stored.remembered };
+    this.origin = stored.origin ?? null;
+    this.reserve = stored.reserve ?? 0;
+    const names = this.floats.map((window) => window.panel);
+    this.stack = [
+      ...this.stack.filter((panel) => names.includes(panel)),
+      ...names.filter((panel) => !this.stack.includes(panel)),
+    ];
+    for (const panel of [...this.preview.keys()]) if (!names.includes(panel)) this.preview.delete(panel);
+    this.updateFloatViews();
+  }
+
+  /** The panel floats (shown or hidden). */
+  isFloating(panel: string): boolean {
+    return this.floats.some((window) => window.panel === panel);
+  }
+
+  private floatEntry(panel: string): StoredWindow | undefined {
+    return this.floats.find((window) => window.panel === panel);
+  }
+
+  /** The floating panels that are shown (visible, or an open viewer), in the order they floated. */
+  private shownFloats(): string[] {
+    const visible = new Set(this.visiblePanels());
+    return this.floats
+      .filter((window) => (isViewerId(window.panel) ? this.transients.has(window.panel) : visible.has(window.panel)))
+      .map((window) => window.panel);
+  }
+
+  /** The dock's size; before it is laid out, a size of a small window (the windows are bounded when shown). */
+  private area(): Area {
+    if (this.size.width > 0 && this.size.height > 0) return { ...this.size };
+    return { width: 1200, height: 700 };
+  }
+
+  /** Where a docked panel's content is now, in the dock's coordinates (null before layout). */
+  private dockedRectOf(panel: string): DockRect | null {
+    const tab = tabNodeOf(this.model, this.mode, panel);
+    const rect = tab?.getRect();
+    if (!rect || !(rect.width > 0) || !(rect.height > 0)) return null;
+    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+  }
+
+  /** The tab strip of a docked panel's group as drawn now, in the dock's coordinates (null: none shown). */
+  private stripRectOf(panel: string): DockRect | null {
+    const root = this.element;
+    const button = root?.ownerDocument.getElementById(`flexlayout-tabbutton-${tabIdOf(this.mode, panel)}`);
+    const strip = button?.closest('.flexlayout__tabset_tabbar_outer');
+    if (!root || !strip || strip.getClientRects().length === 0) return null;
+    const box = strip.getBoundingClientRect();
+    const origin = root.getBoundingClientRect();
+    if (!(box.width > 0) || !(box.height > 0)) return null;
+    return { x: box.left - origin.left, y: box.top - origin.top, width: box.width, height: box.height };
+  }
+
+  /**
+   * The width of the buttons at the right end of a panel's title bar, with the window's right border
+   * (P9.8 point 4): measured on the page where the window is drawn (fonts differ between systems),
+   * else the measured figures of floating.ts.
+   */
+  private buttonsOf(panel: string): number {
+    const bar = this.element?.querySelector<HTMLElement>(`[data-e68-float-bar="${CSS.escape(panel)}"]`);
+    const title = bar?.querySelector<HTMLElement>('[data-e68-float-title]');
+    if (bar && title && bar.offsetWidth > 0 && title.offsetWidth > 0) {
+      return bar.offsetWidth - title.offsetWidth + WINDOW_BORDER;
+    }
+    return titleButtonsWidth(isClosablePanel(panel));
+  }
+
+  /** P9.2: a docked panel of this dock that is not the last docked one; a hidden one (it floats when shown). */
+  canFloat(panel: string): boolean {
+    if (!isPanelOf(this.mode, panel) || this.isFloating(panel)) return false;
+    if (!this.has(panel)) return !isViewerId(panel);
+    return panelsOf(this.tree()).length > 1;
+  }
+
+  float(panel: string, rect?: DockRect): void {
+    if (this.isFloating(panel)) {
+      if (rect) this.commitRect(panel, rect);
+      this.raise(panel);
+      return;
+    }
+    if (!this.canFloat(panel)) return;
+    const tree = this.tree();
+    const shown = this.has(panel);
+    const stripBefore = shown && !rect && !this.remembered[panel] ? this.stripRectOf(panel) : null;
+    let next = tree;
+    let home: DockParked | undefined = readDock(this.settings()).parked[panel];
+    let docked: ReturnType<typeof placeOf> = null;
+    const chained = shown && !isViewerId(panel);
+    if (shown && tree) {
+      const removed = removePanel(tree, panel);
+      if (removed.tree === null) return;
+      next = removed.tree;
+      home = removed.parked ?? undefined;
+      docked = placeOf(tree, panel);
+      // The first Float of a run remembers the arrangement it starts from (errata M1 11).
+      if (chained && !this.chainIntact()) this.origin = this.originOf(tree, next);
+    }
+    const area = this.area();
+    const min = minimumSize();
+    // P9.8 point 2: the first free place of the rule of point 1, over no floating window that is
+    // shown and not over the tab strip of the group the panel came from.
+    const others = this.shownFloats()
+      .filter((id) => id !== panel)
+      .map((id) => this.shownRect(id))
+      .filter((other): other is DockRect => other !== null);
+    const place =
+      rect ??
+      this.remembered[panel] ??
+      firstFloatRect(shown ? this.dockedRectOf(panel) : null, area, others, min, stripBefore);
+    this.floats.push({
+      panel,
+      rect: atLeast(place, min),
+      ...(home ? { home } : {}),
+      ...(docked ? { place: docked } : {}),
+    });
+    this.stack = raised(this.stack, panel);
+    this.updateFloatViews();
+    if (next) {
+      if (shown) this.rebuild(next);
+      this.storeChained(next, chained);
+    }
+    this.syncSizes();
+    if (shown) focusPanel(this.ctx, panel);
+  }
+
+  dock(panel: string, focus = true): void {
+    const entry = this.floatEntry(panel);
+    if (!entry) return;
+    this.dropFloat(panel);
+    const shown = isViewerId(panel) ? this.transients.has(panel) : this.visiblePanels().includes(panel);
+    const tree = this.tree();
+    if (!shown) {
+      // A hidden panel docked (Reset Layout, an arrangement): it is shown where it was docked last.
+      if (tree) this.store(tree, entry.home ? { [panel]: entry.home } : {});
+      return;
+    }
+    // P9.2: where it was docked last; when that group is gone, its place in the default arrangement
+    // (park.ts dockInto; errata M1 7 and 11).
+    const origin = isViewerId(panel) ? null : this.originFor(panel);
+    const docked = tree
+      ? dockInto(
+          tree,
+          this.mode,
+          this.defaultArrangement(),
+          panel,
+          { place: entry.place, parked: entry.home },
+          origin?.tree,
+        )
+      : null;
+    const home = docked?.place;
+    const next: DockNode = docked ? docked.tree : { type: 'tabs', weight: 100, panels: [panel], selected: panel };
+    const announcement = this.dockAnnouncement(panel, home, tree);
+    const complete = origin !== null && sameShape(withoutViewers(next), origin.tree);
+    if (complete && origin.wasDefault && !this.floats.some((window) => !isViewerId(window.panel))) {
+      // Every panel of the run is docked again where it was, and it began in the default
+      // arrangement: that is what the mode shows again, sized as it is (nothing stored).
+      this.restoreDefault();
+    } else {
+      this.rebuild(next);
+      this.storeChained(next, origin !== null);
+    }
+    this.syncSizes();
+    if (announcement) this.announcer.announce(announcement);
+    if (focus) focusPanel(this.ctx, panel);
+  }
+
+  /** The run of Float and Dock is unbroken: the stored tree has the shape the last of them stored. */
+  private chainIntact(): boolean {
+    const stored = readDock(this.settings())[this.mode];
+    return this.origin !== null && stored !== undefined && sameShape(stored, this.origin.last);
+  }
+
+  /** The origin a panel docks back into: it floated in this unbroken run and is not docked now. */
+  private originFor(panel: string): FloatOrigin | null {
+    const origin = this.origin;
+    if (!origin || !this.chainIntact()) return null;
+    if (!panelsOf(origin.tree).includes(panel) || panelsOf(origin.last).includes(panel)) return null;
+    return origin;
+  }
+
+  /**
+   * The arrangement a run of Float and Dock starts from: the stored tree (its own shares; the front
+   * tabs as shown), or in the default arrangement the tree as it is laid out now. `next`: the tree
+   * after the first Float (the `last` until the store says otherwise).
+   */
+  private originOf(tree: DockNode, next: DockNode): FloatOrigin | null {
+    const shown = withoutViewers(tree);
+    const after = withoutViewers(next);
+    if (shown === null || after === null) return null;
+    const stored = readDock(this.settings())[this.mode];
+    const wasDefault = stored === undefined;
+    const base = stored && sameShape(stored, shown) ? selectedLike(stored, shown) : shown;
+    return { tree: base, wasDefault, last: after };
+  }
+
+  /** Stores the tree; a Float's or a Dock's store moves the run of Float and Dock on. */
+  private storeChained(tree: DockNode, chained: boolean): void {
+    this.chainWriting = chained;
+    try {
+      this.store(tree);
+    } finally {
+      this.chainWriting = false;
+    }
+  }
+
+  /** Back to the default arrangement of the mode (nothing stored), keeping the remembered rects. */
+  private restoreDefault(): void {
+    this.origin = null;
+    this.reserve = 0;
+    const remembered = { ...this.remembered };
+    this.ctx.settings.update((settings) =>
+      withDock(settings, (dock) => {
+        const copy = { ...dock };
+        delete copy[this.mode];
+        copy.floating = { ...dock.floating, [this.mode]: { windows: [], remembered } };
+        return copy;
+      }),
+    );
+    this.reconcile();
+  }
+
+  /** What the live region says when a panel docks at the place it had (P3.1.8's texts). */
+  private dockAnnouncement(panel: string, home: DockParked | undefined, tree: DockNode | null): string | null {
+    if (!home || !panelsOf(tree).includes(home.near)) return null;
+    if (home.side === 'tab') return ANNOUNCE.intoGroup(this.title(panel), this.title(home.near));
+    return ANNOUNCE.beside(this.title(panel), this.title(home.near), home.side);
+  }
+
+  /** Takes a panel out of the floating windows; it remembers its rect. */
+  private dropFloat(panel: string): void {
+    const entry = this.floatEntry(panel);
+    if (!entry) return;
+    this.floats = this.floats.filter((window) => window.panel !== panel);
+    this.stack = this.stack.filter((id) => id !== panel);
+    this.preview.delete(panel);
+    if (!isViewerId(panel)) this.remembered[panel] = entry.rect;
+    this.updateFloatViews();
+  }
+
+  floating(): DockFloating[] {
+    const shown = new Set(this.shownFloats());
+    return this.floats.map((window) => ({
+      panel: window.panel,
+      rect: { ...window.rect },
+      visible: shown.has(window.panel),
+    }));
+  }
+
+  arrange(arrangement: DockArrangement): boolean {
+    if (arrangement.mode !== this.mode) return false;
+    const names = arrangement.floating.map((entry) => entry.panel);
+    const all = [...panelsOf(arrangement.docked), ...names];
+    const panels = DOCK_PANELS[this.mode];
+    if (all.length !== panels.length || new Set(all).size !== all.length || all.some((id) => !panels.includes(id))) {
+      return false;
+    }
+    const docked = readTree(arrangement.docked, this.mode, new Set(names));
+    if (!docked) return false;
+    const area = this.area();
+    const min = minimumSize();
+    // An entry without a rect: the default size, at the first free place of the rule of P9.8
+    // point 1 (state/tiling.ts), after the entries that have their places.
+    const placed = arrangement.floating.flatMap((entry) => (entry.rect ? [atLeast(entry.rect, min)] : []));
+    const tiles = tileWindows(
+      arrangement.floating
+        .filter((entry) => entry.rect === undefined)
+        .map((entry) => ({ panel: entry.panel, ...firstSizeWithin(DEFAULT_FLOAT_SIZE, area, min) })),
+      { area, obstacles: placed },
+    );
+    const windows: StoredWindow[] = arrangement.floating.map((entry) => ({
+      panel: entry.panel,
+      rect: entry.rect ? atLeast(entry.rect, min) : tiles.find((tile) => tile.panel === entry.panel)!.rect,
+    }));
+    this.reserve = Math.max(0, Math.round(arrangement.reserve ?? 0));
+    for (const window of this.floats) {
+      if (!isViewerId(window.panel) && !names.includes(window.panel)) this.remembered[window.panel] = window.rect;
+    }
+    const viewers = this.floats.filter((window) => isViewerId(window.panel));
+    const afresh = newlyFloating(
+      this.floats.map((window) => window.panel),
+      names,
+    );
+    this.floats = [...windows, ...viewers];
+    this.stack = this.floats.map((window) => window.panel);
+    this.preview.clear();
+    this.origin = null;
+    this.updateFloatViews();
+    const result = this.reconcileTree(docked, new Set(this.visiblePanels()), readDock(this.settings()).parked);
+    let tree = result.tree;
+    for (const id of this.transients.ids()) if (!this.isFloating(id)) tree = insertPanel(tree, this.mode, id);
+    this.showFromLeft(afresh);
+    this.rebuild(tree);
+    this.store(tree, result.parked);
+    this.syncSizes();
+    return true;
+  }
+
+  /** Brings a floating window to the front (a click, the keyboard focus, View > panel). */
+  raise(panel: string): void {
+    if (!this.isFloating(panel) || this.stack[this.stack.length - 1] === panel) return;
+    this.stack = raised(this.stack, panel);
+    this.applyFloatStyles();
+  }
+
+  /** The rect a floating window is shown at now (moved back into the dock, P9.2), or null. */
+  shownRect(panel: string): DockRect | null {
+    const entry = this.floatEntry(panel);
+    if (!entry) return null;
+    return boundedRect(this.preview.get(panel) ?? entry.rect, this.area(), this.buttonsOf(panel));
+  }
+
+  /** A rect shown while the pointer or the keys move or size a window (null: none). Not stored. */
+  previewRect(panel: string, rect: DockRect | null): void {
+    if (!this.isFloating(panel)) return;
+    if (rect === null) this.preview.delete(panel);
+    else this.preview.set(panel, rect);
+    this.applyFloatStyles();
+  }
+
+  /** The window's new place and size (the end of a move or size); stored. */
+  commitRect(panel: string, rect: DockRect): void {
+    const entry = this.floatEntry(panel);
+    this.preview.delete(panel);
+    if (!entry) return;
+    const next = boundedRect(atLeast(rect, minimumSize()), this.area(), this.buttonsOf(panel));
+    if (!sameRect(next, entry.rect)) {
+      entry.rect = next;
+      const tree = this.tree();
+      if (tree) this.store(tree);
+    }
+    this.applyFloatStyles();
+  }
+
+  /** The size a panel gets when it floats now without a rect (remembered, else its docked size). */
+  firstFloatSize(panel: string): { width: number; height: number } {
+    const remembered = this.remembered[panel];
+    if (remembered) return { width: remembered.width, height: remembered.height };
+    const rect = firstFloatRect(this.dockedRectOf(panel), this.area(), [], minimumSize());
+    return { width: rect.width, height: rect.height };
+  }
+
+  /** The minimum size of a panel's window (P9.2). */
+  minimumOf(_panel: string): { width: number; height: number } {
+    return minimumSize();
+  }
+
+  /** The area the windows are bounded by (the dock). */
+  bounds(): Area {
+    return this.area();
+  }
+
+  /** Marks the floating panels' tabs rendered once the dock is laid out (their border has no size). */
+  private ensureFloatsRendered(): void {
+    if (this.size.width <= 0 || this.size.height <= 0) return;
+    let changed = false;
+    for (const panel of this.shownFloats()) {
+      const tab = tabNodeOf(this.model, this.mode, panel) as (TabNode & TabNodeInternals) | undefined;
+      if (tab && typeof tab.isRendered === 'function' && !tab.isRendered()) {
+        tab.setRendered?.(true);
+        changed = true;
+      }
+    }
+    if (changed) this.controller()?.redrawLayout?.();
+  }
+
+  private controller(): LayoutControllerInternals | undefined {
+    const layouts = (this.model as unknown as ModelInternals).getLayouts?.();
+    return layouts?.get(Model.MAIN_LAYOUT_ID)?.getController?.() as LayoutControllerInternals | undefined;
+  }
+
+  /** Puts each shown floating window at its place, size and z-order (dock.css `[data-e68-float]`). */
+  applyFloatStyles(): void {
+    const root = this.element;
+    if (!root) return;
+    const shown = this.shownFloats();
+    this.applyReserve(root, shown);
+    for (const element of Array.from(root.querySelectorAll<HTMLElement>('.flexlayout__tab[data-e68-float]'))) {
+      if (shown.includes(element.getAttribute('data-e68-float') ?? '')) continue;
+      element.removeAttribute('data-e68-float');
+      for (const name of FLOAT_PROPERTIES) element.style.removeProperty(name);
+    }
+    const area = this.area();
+    for (const panel of shown) {
+      const element = root.querySelector<HTMLElement>(`[id="flexlayout-tab-${tabIdOf(this.mode, panel)}"]`);
+      const entry = this.floatEntry(panel);
+      if (!element || !entry) continue;
+      const rect = boundedRect(this.preview.get(panel) ?? entry.rect, area, this.buttonsOf(panel));
+      const values: Record<(typeof FLOAT_PROPERTIES)[number], string> = {
+        '--e68-float-x': `${rect.x}px`,
+        '--e68-float-y': `${rect.y}px`,
+        '--e68-float-width': `${rect.width}px`,
+        '--e68-float-height': `${rect.height}px`,
+        '--e68-float-z': String(zIndexOf(this.stack, panel)),
+      };
+      for (const [name, value] of Object.entries(values)) {
+        if (element.style.getPropertyValue(name) !== value) element.style.setProperty(name, value);
+      }
+      if (element.getAttribute('data-e68-float') !== panel) element.setAttribute('data-e68-float', panel);
+    }
+  }
+
+  /**
+   * The room kept at the right of the dock for the floating windows (P9.8 point 1, P9.9 point 4,
+   * P9.10 point 3): the docked panels are laid out left of it (dock.css `[data-e68-reserve]`) as far
+   * as shown floating windows lie in it, and only while they fill at least half of its height
+   * (state/tiling.ts `keptRoom`): by the places the windows are stored
+   * at, not the place a window is being dragged or sized to, so nothing moves under a drag and the
+   * room changes when it ends. With no window in it, or nothing floating, the docked panels take the
+   * whole dock, so that with nothing floating the page is 1.0.0's. They keep at least 320 px.
+   */
+  private applyReserve(root: HTMLElement, shown: readonly string[]): void {
+    const width = this.size.width;
+    const wanted = this.keptRoomNow(shown);
+    const reserve = width > 0 ? Math.max(0, Math.min(Math.round(wanted), Math.floor(width) - RESERVE_LEAVES)) : 0;
+    if (reserve === this.reserveShown) return;
+    this.reserveShown = reserve;
+    if (reserve > 0) {
+      root.style.setProperty('--e68-dock-reserve', `${reserve}px`);
+      root.setAttribute('data-e68-reserve', String(reserve));
+    } else {
+      root.style.removeProperty('--e68-dock-reserve');
+      root.removeAttribute('data-e68-reserve');
+    }
+    this.controller()?.redrawLayout?.();
+  }
+
+  /**
+   * The room kept for the windows now (P9.9 point 4, P9.10 point 3), CSS px, before the 320 px the
+   * docked panels keep: the arrangement's room as far as shown windows lie in it at their stored
+   * places, and 0 while those fill less than half of the dock's height.
+   */
+  keptRoomNow(shown: readonly string[] = this.shownFloats()): number {
+    const area = this.area();
+    const rects = shown
+      .filter((panel) => !isViewerId(panel))
+      .map((panel) => this.floatEntry(panel))
+      .filter((entry): entry is StoredWindow => entry !== undefined)
+      .map((entry) => boundedRect(entry.rect, area, this.buttonsOf(entry.panel)));
+    return keptRoom(this.reserve, this.size, rects);
+  }
+
+  /** The room the docked panels are laid out in now, CSS px (the dock less the reserve). */
+  dockedWidth(): number {
+    return Math.max(0, this.size.width - this.reserveShown);
+  }
+
+  subscribeFloats = (listener: () => void) => {
+    this.floatListeners.add(listener);
+    return () => this.floatListeners.delete(listener);
+  };
+
+  /** The title bar's facts of a floating panel, or null when it is docked. */
+  floatViewOf = (panel: string): FloatView | null => this.floatViews.get(panel) ?? null;
+
+  private updateFloatViews(): void {
+    const next = new Map<string, FloatView>();
+    for (const window of this.floats) {
+      const old = this.floatViews.get(window.panel);
+      const view: FloatView = {
+        panel: window.panel,
+        title: this.title(window.panel),
+        closable: isClosablePanel(window.panel),
+      };
+      next.set(window.panel, old && old.title === view.title && old.closable === view.closable ? old : view);
+    }
+    const same =
+      next.size === this.floatViews.size && [...next].every(([panel, view]) => this.floatViews.get(panel) === view);
+    this.floatViews = next;
+    if (!same) for (const listener of [...this.floatListeners]) listener();
+  }
+}
+
+/** The width the docked panels keep at least when room is kept for floating windows. */
+const RESERVE_LEAVES = 320;
+
+/** The custom properties a floating window's element gets (dock.css). */
+const FLOAT_PROPERTIES = [
+  '--e68-float-x',
+  '--e68-float-y',
+  '--e68-float-width',
+  '--e68-float-height',
+  '--e68-float-z',
+] as const;
+
+/** A rect of at least the minimum size. */
+function atLeast(rect: DockRect, min: { width: number; height: number }): DockRect {
+  return { ...rect, width: Math.max(min.width, rect.width), height: Math.max(min.height, rect.height) };
 }

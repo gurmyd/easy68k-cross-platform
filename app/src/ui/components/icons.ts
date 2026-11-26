@@ -45,6 +45,8 @@ export const ICON_NAMES = [
   'options',
   'trash',
   'external',
+  // Version 1.1: a window lifted from its place (the Float button of the dock's tab strips, P9.8)
+  'float',
   // Files
   'folder',
   'file',

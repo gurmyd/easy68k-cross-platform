@@ -7,7 +7,8 @@
 
 import type { Mode } from '../../contracts';
 import { MODE_CAPTIONS } from '../../commands/shell-commands';
-import { IconButton, Toolbar, ToolbarSeparator, ToolbarSpacer, Tooltip, type IconName } from '../components';
+import { Button, IconButton, Toolbar, ToolbarSeparator, ToolbarSpacer, Tooltip, type IconName } from '../components';
+import './toolbar-text-button.css';
 import { ThemeButton } from './ThemeButton';
 import { useResolvedToolbar, useRunCommand } from './use-commands';
 
@@ -24,6 +25,23 @@ export function ShellToolbar({ mode }: { mode: Mode }) {
             <span key={index} role="status" className="e68-shell__logging">
               {item.visible && <span className="e68-toolbar__logging">LOGGING</span>}
             </span>
+          );
+        }
+        if (item.text) {
+          // Version 1.1 (ARCHITECTURE-PLUS P9.3): `Arrange Panels`, a toggle with its caption as
+          // text; its tool-tip is its description, its pressed state is announced (aria-pressed).
+          return (
+            <Tooltip key={item.id} text={item.text.tooltip} describes>
+              <Button
+                caption={item.text.caption}
+                aria-label={item.label}
+                aria-pressed={item.pressed ?? undefined}
+                className="e68-shell__textbutton"
+                disabled={!item.enabled}
+                data-command={item.id}
+                onClick={() => run(item.id)}
+              />
+            </Tooltip>
           );
         }
         const button = (

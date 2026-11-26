@@ -29,7 +29,8 @@ export interface ShellState {
   outputInFront: boolean;
   /** The shell moves the focus into this panel once it is rendered, then clears the request.
    *  `serial` makes two requests for the same panel distinct. */
-  focusRequest: { panel: string; serial: number } | null;
+  /** `at: 'title'`: a floating window's title bar (version 1.1, P9.8 point 6). */
+  focusRequest: { panel: string; serial: number; at?: 'title' } | null;
   /** Web only (1.4 note 4): Exit has run; the workspace shows `You can close this tab.` */
   exited: boolean;
   /**

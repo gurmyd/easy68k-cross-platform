@@ -155,9 +155,27 @@ export function decorateTabPanels(
   hasStrip: (tabId: string) => boolean,
   isViewer: (tabId: string) => boolean,
   inner = false,
+  floatingLabel: (tabId: string) => string | null = () => null,
 ): void {
   for (const element of Array.from(root.querySelectorAll('.flexlayout__tab[id^="flexlayout-tab-"]'))) {
     const tabId = element.id.slice('flexlayout-tab-'.length);
+    // Version 1.1 (P9.2): a floating window is a region named `<panel name>, floating`, not a
+    // dialog; its title bar and its panel are inside it.
+    const floating = floatingLabel(tabId);
+    if (floating !== null) {
+      setAttr(element, 'role', 'region');
+      setAttr(element, 'aria-label', floating);
+      setAttr(element, 'aria-labelledby', null);
+      setAttr(element, 'data-e68-dock-tab', tabId);
+      const content = element.querySelector(`[data-e68-dock-content="${tabId}"]`);
+      if (content) {
+        setAttr(content, 'role', null);
+        setAttr(content, 'aria-labelledby', null);
+        setAttr(content, 'id', null);
+      }
+      continue;
+    }
+    setAttr(element, 'aria-label', null);
     const panel = hasStrip(tabId) && !isViewer(tabId);
     // With Lock Layout on, a strip's slot (order.ts) sits in the tab's element just before the
     // panel's content, so the tabpanel role goes on the content's own wrapper: the strip is then

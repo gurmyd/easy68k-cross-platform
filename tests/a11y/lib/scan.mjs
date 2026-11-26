@@ -16,7 +16,7 @@
 // when modal, a title that labels it, the focus inside a modal dialog, Tab and Shift+Tab staying
 // inside, and the focus back where it was after Escape.
 
-/* global document, window, getComputedStyle */
+/* global document, window, getComputedStyle, requestAnimationFrame */
 
 import { closeWithin } from '../../browser-checks/ending.mjs';
 import { AxeBuilder } from '@axe-core/playwright';
@@ -242,6 +242,38 @@ async function plusStates(page, prefix, report, all, outDir) {
     }
   } finally {
     await setDockLocked(page, true);
+  }
+  // Version 1.1 (ARCHITECTURE-PLUS P9.6: "the accessibility audit passes with a floating window open
+  // in both themes"): the Hardware and Memory panels floating over the Simulator, the layout locked.
+  try {
+    await setMode(page, 'simulator');
+    const floated = await page.evaluate(async () => {
+      const [{ dockOf }, { showPanel }] = await Promise.all([
+        import('/src/state/dock.ts'),
+        import('/src/state/panels.ts'),
+      ]);
+      const ctx = window.__easy68k.ctx;
+      for (const id of ['hardware', 'memory']) showPanel(ctx, id, { focus: false });
+      await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+      const dock = dockOf(ctx);
+      dock.float('hardware');
+      dock.float('memory');
+      return dock.floating().map((window) => window.panel);
+    });
+    await page.waitForTimeout(300);
+    report.check(
+      `${prefix}: the Hardware and Memory panels float`,
+      JSON.stringify(floated) === JSON.stringify(['hardware', 'memory']),
+      JSON.stringify(floated),
+    );
+    await axeScan(page, `${prefix} simulator with two floating windows`, report, all);
+    await shoot(page, outDir, `${prefix}-simulator-floating`.replace(/\s+/g, '-'));
+  } finally {
+    await run(page, 'app.layout.reset');
+    await page.evaluate(async () => {
+      const { hidePanel } = await import('/src/state/panels.ts');
+      for (const id of ['hardware', 'memory']) hidePanel(window.__easy68k.ctx, id);
+    });
     await setMode(page, 'editor');
   }
 }

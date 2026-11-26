@@ -75,6 +75,8 @@ const ORDER = [
   'N6',
   'N7',
   'N8',
+  'M1',
+  'M2',
 ];
 
 export function fragmentIds(dir) {

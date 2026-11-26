@@ -35,3 +35,52 @@
   font-size: var(--fs-md);
   white-space: nowrap;
 }
+
+/* Version 1.1 (ARCHITECTURE-PLUS P9.3; M2): the tip about arranging the panels (ArrangeTip.tsx).
+   Above the status bar at the left (the toasts are at the right), never over the toolbar or the
+   status bar; above the floating windows (z-index 11 to 18, errata M1 7) and below the Output
+   panel's full screen (z-modeless - 1), every dialog and every menu. */
+.e68-arrangetip-host {
+  position: fixed;
+  left: var(--sp-4);
+  bottom: calc(var(--h-status) + var(--sp-2));
+  z-index: calc(var(--z-modeless) - 2);
+  max-width: min(560px, calc(100vw - 2 * var(--sp-4)));
+  font-family: var(--font-ui);
+}
+
+.e68-arrangetip-host:empty {
+  display: none;
+}
+
+.e68-arrangetip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--c-border);
+  border-left: 3px solid var(--c-accent);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+  color: var(--c-text);
+  box-shadow: var(--shadow-popup);
+  font-size: var(--fs-md);
+  line-height: var(--lh-body);
+}
+
+.e68-arrangetip__text {
+  margin: 0;
+}
+
+.e68-arrangetip__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+
+@media (forced-colors: active) {
+  .e68-arrangetip {
+    border-color: CanvasText;
+  }
+}

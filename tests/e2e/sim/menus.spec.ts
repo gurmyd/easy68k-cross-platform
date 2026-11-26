@@ -50,7 +50,8 @@ const MENUS: Record<string, Row[]> = {
 /** Items the port added after the original's items of a menu (1.5), in order. */
 const ADDED: Record<string, string[]> = {
   // ARCHITECTURE-PLUS P3.1.4 (N1): the layout commands, below a separator after Log.
-  View: ['Log', 'Move Panel To...', 'Lock Layout', 'Reset Layout'],
+  // ARCHITECTURE-PLUS P9.4 and P9.5 (version 1.1, M2): the submenu Layouts, below a separator, last.
+  View: ['Log', 'Move Panel To...', 'Lock Layout', 'Reset Layout', 'Layouts'],
   // Serial Ports... is the desktop app's (erratum W3 43): shown greyed in a browser.
   // ARCHITECTURE-PLUS P3.5 (N7): Port Additions..., below a separator, last.
   Options: ['Import/Export Settings...', 'Execution Speed...', 'Serial Ports...', 'Port Additions...'],
@@ -65,6 +66,7 @@ const AFTER_SEPARATOR: Record<string, string> = {
   'Serial Ports...': 'Execution Speed...',
   'Move Panel To...': 'Log',
   'Port Additions...': 'Serial Ports...',
+  Layouts: 'Reset Layout',
 };
 
 const SIZES = [

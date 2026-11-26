@@ -21,7 +21,7 @@
 // Screenshots go to build/U2/check (git-ignored). Exit code 0 = every check passed. A pass that
 // throws (for example a page that never opens) counts as one failed check; the others still run.
 
-/* global console, process, document, window, getComputedStyle -- page.evaluate() callbacks run in the page */
+/* global console, process, document, window, getComputedStyle, HTMLElement -- page.evaluate() callbacks run in the page */
 
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -29,6 +29,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
 import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../tests/browser-checks/ending.mjs';
+import { buttonsAreTabStops, stopsRequired, tabStopsFromFocus } from '../../../../tests/browser-checks/tab-stops.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -228,6 +229,309 @@ async function messageBox(page, text, button = 'OK') {
   return shown && content.includes(text) ? content.replace(/\s+/g, ' ').trim() : `missing: ${content}`;
 }
 
+// --- part: a narrow or short region (version 1.1; the arrangement work) -------------------------
+//
+// The panel docked in the Simulator's default arrangement at 1366 x 768 and at 1024 x 700 (and
+// SCENARIOS' own extra), and floating at 360 x 280: where its region is smaller than what it holds,
+// the panel's own areas scroll and nothing else of the page does; the Tab walk through every
+// control lands each one in view (inside the region and inside every scrolling box of the panel
+// around it), with every box outside the panel unscrolled (errata N1 26); screenshots of each
+// situation in both themes.
+
+/** What the page shows of the panel: its region, its scrolling boxes, the scrolls outside it. */
+const nrFacts = (page, panel) =>
+  page.evaluate((id) => {
+    const region = document.querySelector(`[data-e68-panel="${id}"]`);
+    if (!region || !region.checkVisibility()) return null;
+    const r = region.getBoundingClientRect();
+    const areas = [];
+    for (const element of [region, ...region.querySelectorAll('*')]) {
+      const style = getComputedStyle(element);
+      if (!/(auto|scroll)/.test(style.overflowX + style.overflowY)) continue;
+      if (element.scrollWidth <= element.clientWidth && element.scrollHeight <= element.clientHeight) continue;
+      areas.push({
+        name: String(element.className).split(' ')[0],
+        client: [element.clientWidth, element.clientHeight],
+        scroll: [element.scrollWidth, element.scrollHeight],
+      });
+    }
+    let outer = 0;
+    for (let element = region.parentElement; element; element = element.parentElement) {
+      outer += element.scrollTop + element.scrollLeft;
+    }
+    return { region: [Math.round(r.width), Math.round(r.height)], areas, outer };
+  }, panel);
+
+/** Where the focused element is: in view inside the region and every clipping box of the panel? */
+const nrFocused = (page, panel) =>
+  page.evaluate((id) => {
+    const region = document.querySelector(`[data-e68-panel="${id}"]`);
+    let active = document.activeElement;
+    if (!region || !active || !region.contains(active)) return null;
+    const name = active.getAttribute('aria-label') ?? active.id ?? active.tagName;
+    // The memory rows are larger than any view: their cursor cell is what must be seen.
+    if (active.classList.contains('e68-memory__rows')) active = active.querySelector('.e68-memory__cursor') ?? active;
+    const b = active.getBoundingClientRect();
+    let view = region.getBoundingClientRect();
+    view = { left: view.left, top: view.top, right: view.right, bottom: view.bottom };
+    for (
+      let element = active.parentElement;
+      element && element !== region.parentElement;
+      element = element.parentElement
+    ) {
+      const style = getComputedStyle(element);
+      if (!/(auto|scroll|hidden|clip)/.test(style.overflowX + style.overflowY)) continue;
+      const e = element.getBoundingClientRect();
+      const left = e.left + element.clientLeft;
+      const top = e.top + element.clientTop;
+      view = {
+        left: Math.max(view.left, left),
+        top: Math.max(view.top, top),
+        right: Math.min(view.right, left + element.clientWidth),
+        bottom: Math.min(view.bottom, top + element.clientHeight),
+      };
+    }
+    const seen =
+      b.left >= view.left - 1 && b.top >= view.top - 1 && b.right <= view.right + 1 && b.bottom <= view.bottom + 1;
+    let outer = 0;
+    for (let element = region.parentElement; element; element = element.parentElement) {
+      outer += element.scrollTop + element.scrollLeft;
+    }
+    return {
+      name,
+      seen,
+      outer,
+      box: [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)],
+    };
+  }, panel);
+
+/** Tab from the panel's first control until the focus leaves the panel; each stop must be in view. */
+async function nrTabWalk(page, panel, backward = false) {
+  await page.evaluate(
+    ([id, toLast]) => {
+      const region = document.querySelector(`[data-e68-panel="${id}"]`);
+      for (const element of [region, ...region.querySelectorAll('*')]) {
+        element.scrollTop = 0;
+        element.scrollLeft = 0;
+      }
+      const controls = Array.from(region.querySelectorAll('input, select, button, [tabindex="0"]')).filter(
+        (element) => !element.disabled && element.tabIndex >= 0 && element.checkVisibility(),
+      );
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      (toLast ? controls[controls.length - 1] : controls[0])?.focus({ preventScroll: true });
+    },
+    [panel, backward],
+  );
+  // How many stops the walk has on a system (tab-stops.mjs), read with the focus at its start.
+  const need = await tabStopsFromFocus(page, `[data-e68-panel="${panel}"]`, backward);
+  const stops = [];
+  for (let i = 0; i < 60; i++) {
+    const where = await nrFocused(page, panel);
+    if (where === null) break;
+    stops.push(where);
+    await page.keyboard.press(backward ? 'Shift+Tab' : 'Tab');
+  }
+  return {
+    count: stops.length,
+    hidden: stops.filter((stop) => !stop.seen),
+    moved: stops.filter((stop) => stop.outer !== 0),
+    need,
+  };
+}
+
+/**
+ * The walk went through every control Tab stops at on this system (never fewer than `floor`, the
+ * figure counted on Windows, where Tab stops at buttons; Safari's engine on a Mac stops at the
+ * fields only), each one in view, and nothing outside the panel scrolled.
+ */
+const nrWalkedAll = (walk, buttonsStop, floor) =>
+  walk.count >= stopsRequired(walk.need, buttonsStop, floor) && walk.hidden.length === 0 && walk.moved.length === 0;
+const nrWalkFacts = (walk) =>
+  `${walk.count} stops (every control: ${walk.need.everywhere}; by Safari's rule on a Mac: ${walk.need.safari}); ` +
+  `hidden ${JSON.stringify(walk.hidden.slice(0, 2))}; moved ${walk.moved.length}`;
+
+async function nrTheme(page, theme) {
+  await page.evaluate((t) => window.__easy68k.ctx.commands.run('app.theme.set', t), theme);
+  await page.waitForFunction(
+    (t) => (document.documentElement.getAttribute('data-theme') === 'dark') === (t === 'dark'),
+    theme,
+  );
+}
+
+/**
+ * One panel in each situation. `spec`: { panel, extra (situations of its own: [label, width,
+ * height, prepare(page)]), mouse(page, label) (a real wheel and click into the part that was out
+ * of view; returns [ok, detail] or null where nothing overflows), keyboard(page) (optional, the
+ * panel's own keys) }.
+ */
+async function narrowRegionPass(browser, name, spec) {
+  const p = `${name}/narrow region (${spec.panel}):`;
+  const buttonsStop = await buttonsAreTabStops(browser);
+  console.log(`  note ${name}: Tab ${buttonsStop ? 'stops' : 'does not stop'} at plain buttons in this browser`);
+  const situations = [
+    ['docked 1366 x 768', 1366, 768, null],
+    ['docked 1024 x 700', 1024, 700, null],
+    ...spec.extra,
+    [
+      'floating 360 x 280',
+      1366,
+      768,
+      (page, panel) =>
+        page.evaluate((id) => window.__nrDock().float(id, { x: 420, y: 60, width: 360, height: 280 }), panel),
+    ],
+  ];
+  for (const [label, width, height, prepare] of situations) {
+    const context = await browser.newContext({ viewport: { width, height }, reducedMotion: 'reduce' });
+    const page = await context.newPage();
+    const errors = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text());
+    });
+    page.on('pageerror', (error) => errors.push(String(error)));
+    await page.goto(baseUrl, { timeout: 180_000 });
+    await page.waitForFunction(() => window.__easy68k !== undefined, null, { timeout: 180_000 });
+    await page.locator('.e68-modeswitch [data-mode="simulator"]').click();
+    await page.evaluate(async (id) => {
+      const [panels, dock, layout] = await Promise.all([
+        import('/src/state/panels.ts'),
+        import('/src/state/dock.ts'),
+        import('/src/state/layout.ts'),
+      ]);
+      const { ctx } = window.__easy68k;
+      window.__nrDock = () => dock.dockOf(ctx);
+      window.__nrLayout = layout;
+      panels.showPanel(ctx, id, { focus: true });
+    }, spec.panel);
+    await page.waitForFunction(
+      (id) => document.querySelector(`[data-e68-panel="${id}"]`)?.checkVisibility(),
+      spec.panel,
+      {
+        timeout: 30_000,
+      },
+    );
+    if (prepare) await prepare(page, spec.panel);
+    await page.waitForTimeout(600);
+    const facts = await nrFacts(page, spec.panel);
+    check(
+      `${p} ${label}: the panel is shown; only its own boxes may scroll, nothing outside it is scrolled`,
+      facts !== null && facts.outer === 0,
+      JSON.stringify(facts),
+    );
+    const slug = label.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    const shot = label.startsWith('floating')
+      ? page.locator(`.flexlayout__tab[data-e68-float="${spec.panel}"]`)
+      : page.locator('[data-e68-dock="simulator"]');
+    for (const theme of ['light', 'dark']) {
+      await nrTheme(page, theme);
+      await shot.screenshot({ path: join(outDir, `${name}-${spec.panel}-${slug}-${theme}.png`) }).catch((error) => {
+        console.log(`        screenshot not taken: ${String(error).split('\n')[0]}`);
+      });
+    }
+    await nrTheme(page, 'light');
+    const mouse = await spec.mouse(page, label, facts);
+    if (mouse !== null) check(`${p} ${label}: the wheel and a click reach what was out of view`, mouse[0], mouse[1]);
+    const forward = await nrTabWalk(page, spec.panel);
+    check(
+      `${p} ${label}: Tab through every control lands each one in view, nothing outside the panel scrolls`,
+      nrWalkedAll(forward, buttonsStop, spec.minStops),
+      nrWalkFacts(forward),
+    );
+    const backward = await nrTabWalk(page, spec.panel, true);
+    check(
+      `${p} ${label}: Shift+Tab back through them, likewise`,
+      nrWalkedAll(backward, buttonsStop, spec.minStops),
+      nrWalkFacts(backward),
+    );
+    if (spec.keyboard) {
+      const keys = await spec.keyboard(page, label);
+      if (keys !== null) check(`${p} ${label}: ${keys[2]}`, keys[0], keys[1]);
+    }
+    const real = errors.filter((text) => !/Failed to load resource.*Timeout was reached/i.test(text));
+    check(`${p} ${label}: no console or page errors`, real.length === 0, real.slice(0, 3).join(' | '));
+    await closeWithin(context);
+  }
+}
+
+/** The Memory panel's spec for the narrow-region part. */
+const MEMORY_NARROW = {
+  panel: 'memory',
+  minStops: 12,
+  extra: [['docked 1150 x 768 (the tool group narrower than a row)', 1150, 768, null]],
+  async mouse(page) {
+    const table = await page.evaluate(() => {
+      const element = document.querySelector('[data-e68-panel="memory"] [data-memory-table]');
+      const b = element.getBoundingClientRect();
+      const header = element.firstElementChild.getBoundingClientRect();
+      return {
+        over: element.scrollWidth > element.clientWidth,
+        view: { left: b.left, top: b.top, width: element.clientWidth, height: element.clientHeight },
+        at: [Math.round(header.left - b.left), Math.round(header.top - b.top)],
+      };
+    });
+    if (!table.over)
+      return [table.at[0] === 0 && table.at[1] === 0, `a row fits: nothing scrolls, the header starts at ${table.at}`];
+    await page.mouse.move(table.view.left + table.view.width / 2, table.view.top + table.view.height / 2);
+    for (let i = 0; i < 4; i++) await page.mouse.wheel(300, 0);
+    await page.waitForTimeout(300);
+    // A real click on the high digit of byte $0F of the first row (character column 55).
+    const cell = await page.evaluate(() => {
+      const element = document.querySelector('[data-e68-panel="memory"] [data-memory-table]');
+      const b = element.getBoundingClientRect();
+      const measure = element.querySelector('.e68-memory__measure').getBoundingClientRect();
+      const width = measure.width / 10;
+      const first = element.querySelector('.e68-memory__row:not(.e68-memory__measure)').getBoundingClientRect();
+      const x = first.left + 55 * width + width / 2;
+      return {
+        scrollLeft: element.scrollLeft,
+        x,
+        y: first.top + first.height / 2,
+        inside: x >= b.left && x <= b.left + element.clientWidth,
+      };
+    });
+    if (!cell.inside) return [false, JSON.stringify(cell)];
+    await page.mouse.click(cell.x, cell.y);
+    const status = await page.evaluate(() => {
+      const rows = document.querySelector('[data-e68-panel="memory"] .e68-memory__rows');
+      return document.getElementById(rows.getAttribute('aria-describedby'))?.textContent ?? '';
+    });
+    return [
+      cell.scrollLeft > 0 && /^Address 0000000F, value/.test(status),
+      `wheel to scrollLeft ${cell.scrollLeft}; the click put the cursor on: ${status}`,
+    ];
+  },
+  async keyboard(page) {
+    // The cursor walks with the arrow keys from byte $00 out to the text column: the table follows
+    // it sideways; then the Address field's Page Down pages as before.
+    const start = await page.evaluate(() => {
+      const element = document.querySelector('[data-e68-panel="memory"] [data-memory-table]');
+      element.scrollLeft = 0;
+      const measure = element.querySelector('.e68-memory__measure').getBoundingClientRect();
+      const first = element.querySelector('.e68-memory__row:not(.e68-memory__measure)').getBoundingClientRect();
+      return {
+        x: first.left + 10.5 * (measure.width / 10),
+        y: first.top + first.height / 2,
+        over: element.scrollWidth > element.clientWidth,
+      };
+    });
+    await page.mouse.click(start.x, start.y);
+    for (let i = 0; i < 60; i++) await page.keyboard.press('ArrowRight');
+    const seen = await nrFocused(page, 'memory');
+    const scrolled = await page.evaluate(
+      () => document.querySelector('[data-e68-panel="memory"] [data-memory-table]').scrollLeft,
+    );
+    const address = page.locator('[data-e68-panel="memory"] input[aria-label="Address"]');
+    await address.focus();
+    const before = await address.inputValue();
+    await page.keyboard.press('PageDown');
+    await page.waitForTimeout(200);
+    const after = await address.inputValue();
+    return [
+      !!seen && seen.seen && seen.outer === 0 && (!start.over || scrolled > 0) && before !== after,
+      JSON.stringify({ seen, scrolled, before, after }),
+      'the arrow keys take the cursor to the text column, in view; the Address field pages with Page Down',
+    ];
+  },
+};
 // --- passes -----------------------------------------------------------------------------------
 
 async function memoryPass(browser, programs, name, theme) {
@@ -628,6 +932,8 @@ async function main() {
           console.log(`\n[${name}, ${theme}: Stack panel]`);
           await pass(`${name}/${theme} Stack`, () => stackPass(browser, programs, name, theme));
         }
+        console.log(`\n[${name}, narrow region]`);
+        await pass(`${name} narrow region`, () => narrowRegionPass(browser, name, MEMORY_NARROW));
         console.log(`\n[${name}, motion]`);
         await pass(`${name} motion`, () => motionPass(browser, programs, name));
       } finally {

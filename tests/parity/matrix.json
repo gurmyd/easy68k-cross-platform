@@ -3447,6 +3447,67 @@
         }
       ],
       "note": "The test chooses Options > Port Additions... in Editor mode and switches the viewer off."
+    },
+    {
+      "section": "1.5",
+      "original": "`Float`, `Dock` (version 1.1, `ARCHITECTURE-PLUS.md` P9.2, P9.5)",
+      "id": "`app.layout.float` (arg: `{ panel }`), `app.layout.dock` (arg: `{ panel }`)",
+      "status": "+",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/plus/arrange.spec.ts",
+          "test": "the Hardware panel floats from its tab menu, moves and sizes with the mouse and the keyboard, is where it was after a reload and docks again (Lock Layout ${locked ? 'on' : 'off'})"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/plus/arrange.spec.ts",
+          "test": "the Dock item of the title bar's menu docks the window from the keyboard; Close in it hides the panel as its x does"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/plus/arrange.spec.ts",
+          "test": "Dock puts the Output panel back where it was docked: the whole right column"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/plus/arrange.spec.ts",
+          "test": "Move Panel To... has the place \"As a floating window\", locked or not"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/plus/arrange.spec.ts",
+          "test": "a program that draws and waits for a key: the picture and the key survive its Output panel floating and docking"
+        },
+        {
+          "kind": "unit",
+          "file": "app/src/ui/dock/float-engine.test.ts"
+        },
+        {
+          "kind": "browser-check",
+          "file": "app/src/ui/dock/check-dock.mjs"
+        }
+      ],
+      "note": "The first test runs twice, with Lock Layout on and off: Float from the tab menu (a right click, and Shift+F10 on the tab), the window moved and sized with the mouse and with the title bar's menu (Move, Size: arrows by 16 px, Shift by 1 px, Enter, Esc), a reload, then the title bar's Dock. Every box is read from the screen. The check-dock pass `floating` checks the Tab and reading order, the bounds and the stacking."
+    },
+    {
+      "section": "1.5",
+      "original": "`Layouts` > `Classic`, `Wide Output`, `Output and Hardware Side by Side`, `Floating Tools` (version 1.1, P9.4, P9.5)",
+      "id": "`sim.view.layout.classic`, `sim.view.layout.wideOutput`, `sim.view.layout.sideBySide`, `sim.view.layout.floatingTools`",
+      "status": "+",
+      "verifiedBy": [
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/plus/arrange.spec.ts",
+          "test": "View > Layouts: each of the four arrangements puts the panels where P9.4 says, keeps a hidden panel hidden and the lock (Lock Layout ${locked ? 'on' : 'off'})"
+        },
+        {
+          "kind": "web-e2e",
+          "file": "tests/e2e/plus/arrange.spec.ts",
+          "test": "View > Layouts is in the Simulator only; Reset Layout docks every floating panel"
+        }
+      ],
+      "note": "The test chooses each entry of View > Layouts with Memory and Hardware shown and Stack hidden, with Lock Layout on and off, and compares the panels' boxes with P9.4: which panel is beside or below which, what floats; the lock and the hidden panel stay as they were, and an arrangement survives a reload."
     }
   ]
 }

@@ -9,7 +9,7 @@
 // FlexLayout's root row lays out horizontally; a root row with a single child holds our root
 // (a column or a single group), as model.ts toFlexJson builds it.
 
-import { RowNode, TabNode, TabSetNode, type Model, type Node } from 'flexlayout-react';
+import { BorderNode, RowNode, TabNode, TabSetNode, type Model, type Node } from 'flexlayout-react';
 import type { DockNode } from '../../contracts';
 import { panelOfTab } from './model';
 
@@ -98,5 +98,16 @@ export function tabIdsInReadingOrder(model: Model): string[] {
   };
   const root = model.getRootRow();
   if (root) visit(root);
+  // Version 1.1 (P9.2): the floating panels after everything docked, in the order they were made
+  // to float (the order of the hidden border's tabs, model.ts FLOAT_BORDER), not their stacking.
+  return [...ids, ...floatingTabIds(model)];
+}
+
+/** The tab ids of the floating panels of a model, in the order they were made to float. */
+export function floatingTabIds(model: Model): string[] {
+  const ids: string[] = [];
+  model.visitNodes((node) => {
+    if (node instanceof TabNode && node.getParent() instanceof BorderNode) ids.push(node.getId());
+  });
   return ids;
 }

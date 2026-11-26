@@ -822,6 +822,8 @@ const ADDED_DECLARATIONS: Record<string, string[]> = {
     'plus?: PlusSettings;',
     'locked?: boolean;',
     'parked?: Record<string, DockParked>;',
+    // version 1.1 (ARCHITECTURE-PLUS P9.3; docs/requests/M2-plus-arrange-tip.md)
+    'arrangeTipAnswered?: boolean;',
   ],
   'commands.ts': [
     'run(id: CommandId, arg?: unknown, options?: CommandRunOptions): Promise<void>;',

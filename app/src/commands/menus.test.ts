@@ -234,6 +234,25 @@ const PLUS_PLACES: Record<string, string[]> = {
 const PLUS_IDS = new Set(Object.values(PLUS_PLACES).flat());
 
 /**
+ * Version 1.1 (ARCHITECTURE-PLUS P9.4, P9.5): the Simulator's View menu ends with a separator and
+ * the submenu `Layouts`, after the stage's items. These tests of the stage pass over it; its own
+ * tests are below.
+ */
+const LAYOUTS_CAPTION = 'Layou&ts';
+const LAYOUT_IDS = [
+  'sim.view.layout.classic',
+  'sim.view.layout.wideOutput',
+  'sim.view.layout.sideBySide',
+  'sim.view.layout.floatingTools',
+];
+const isLayoutsSubmenu = (node: ResolvedNode) => node.type === 'submenu' && node.caption === LAYOUTS_CAPTION;
+/** The menu's items without the addition of version 1.1 (and the separator before it). */
+const withoutLayouts = (nodes: ResolvedNode[]): ResolvedNode[] => {
+  const at = nodes.findIndex(isLayoutsSubmenu);
+  return at < 0 ? nodes : nodes.slice(0, at > 0 && nodes[at - 1]?.type === 'separator' ? at - 1 : at);
+};
+
+/**
  * The original captions of every menu, with `&` before the access key and `---` for a separator, as
  * on main before the stage (Windows key map, no document open). The Window menu's document list
  * is checked separately.
@@ -283,7 +302,7 @@ describe('the stage of additions in the menus (ARCHITECTURE-PLUS P1.1 rule 3, P3
       const state = documents ? withDocuments() : initialAppState(defaultSettings());
       for (const mode of ['editor', 'simulator', 'easybin'] as const) {
         for (const menu of resolveMenus(mode, env({ os, desktop, state }))) {
-          const original = menu.items.filter(
+          const original = withoutLayouts(menu.items).filter(
             (node) =>
               !(node.type === 'item' && PLUS_IDS.has(node.id)) &&
               !(node.type === 'item' && node.id === 'ed.window.select'),
@@ -307,7 +326,7 @@ describe('the stage of additions in the menus (ARCHITECTURE-PLUS P1.1 rule 3, P3
       const state = documents ? withDocuments() : initialAppState(defaultSettings());
       for (const mode of ['editor', 'simulator'] as const) {
         for (const menu of resolveMenus(mode, env({ os, desktop, state }))) {
-          const ids = menu.items.map((node) => (node.type === 'item' ? node.id : node.type));
+          const ids = withoutLayouts(menu.items).map((node) => (node.type === 'item' ? node.id : node.type));
           const plus = ids.filter((id) => PLUS_IDS.has(id));
           expect(plus, menu.id).toEqual(PLUS_PLACES[menu.id] ?? []);
           if (plus.length === 0) continue;
@@ -331,9 +350,9 @@ describe('the stage of additions in the menus (ARCHITECTURE-PLUS P1.1 rule 3, P3
         }
       }
       expect(
-        resolveMenus('simulator', env({ os, desktop, state }))
-          .find((m) => m.id === 'simulator.view')
-          ?.items.at(-1),
+        withoutLayouts(
+          resolveMenus('simulator', env({ os, desktop, state })).find((m) => m.id === 'simulator.view')!.items,
+        ).at(-1),
       ).toMatchObject({
         id: 'app.layout.reset',
         caption: 'Reset La&yout',
@@ -394,13 +413,55 @@ describe('the stage of additions in the menus (ARCHITECTURE-PLUS P1.1 rule 3, P3
     const view = buildNativeMenu('simulator', { ...env({ os: 'mac', desktop: true }), modalOpen: false }).find(
       (menu) => menu.label === 'View',
     );
-    expect(view?.items?.map((item) => item.label ?? item.type).slice(-5)).toEqual([
+    expect(view?.items?.map((item) => item.label ?? item.type).slice(-7)).toEqual([
       'Log',
       'separator',
       'Move Panel To...',
       'Lock Layout',
       'Reset Layout',
+      // version 1.1 (ARCHITECTURE-PLUS P9.4)
+      'separator',
+      'Layouts',
     ]);
+  });
+
+  it("version 1.1: View > Layouts ends the Simulator's View menu, after a separator (P9.4, P9.5)", () => {
+    for (const os of ['windows', 'linux', 'mac'] as const) {
+      for (const desktop of [false, true]) {
+        const view = resolveMenus('simulator', env({ os, desktop })).find((menu) => menu.id === 'simulator.view')!;
+        const last = view.items.at(-1);
+        expect(view.items.at(-2)).toEqual({ type: 'separator' });
+        expect(last?.type === 'submenu' && last.caption).toBe(LAYOUTS_CAPTION);
+        const entries = last?.type === 'submenu' ? (last.items as ResolvedItem[]) : [];
+        expect(entries.map((item) => [item.id, item.caption, item.shortcut, item.kind])).toEqual([
+          ['sim.view.layout.classic', '&Classic', null, 'action'],
+          ['sim.view.layout.wideOutput', '&Wide Output', null, 'action'],
+          ['sim.view.layout.sideBySide', '&Output and Hardware Side by Side', null, 'action'],
+          ['sim.view.layout.floatingTools', '&Floating Tools', null, 'action'],
+        ]);
+        // No access key collides inside the submenu, nor the submenu's with the View menu's items.
+        const keys = entries.map((item) => accessKeyOf(item.caption));
+        expect(new Set(keys).size).toBe(4);
+        const viewKeys = view.items.flatMap((node) =>
+          node.type === 'item'
+            ? [accessKeyOf(node.caption)]
+            : node.type === 'submenu'
+              ? [accessKeyOf(node.caption)]
+              : [],
+        );
+        expect(viewKeys.filter((key) => key === accessKeyOf(LAYOUTS_CAPTION))).toHaveLength(1);
+      }
+    }
+    // The Editor and EASyBIN have no Layouts.
+    for (const mode of ['editor', 'easybin'] as const) {
+      const all = resolveMenus(mode, env()).flatMap((menu) => items(menu.items));
+      expect(all.filter((item) => LAYOUT_IDS.includes(item.id))).toEqual([]);
+    }
+    // The native menu of the desktop app: the same submenu, no accelerator.
+    const native = buildNativeMenu('simulator', { ...env({ os: 'mac', desktop: true }), modalOpen: false });
+    const layouts = native.find((menu) => menu.label === 'View')?.items?.at(-1);
+    expect(layouts?.label).toBe('Layouts');
+    expect(layouts?.items?.map((item) => [item.id, item.accelerator])).toEqual(LAYOUT_IDS.map((id) => [id, undefined]));
   });
 
   it('every command of the stage is disabled while it has no handler', () => {
@@ -431,6 +492,8 @@ describe('resolveToolbar', () => {
       'Comment Selection (Ctrl+Alt+C)',
       'Uncomment Selection (Ctrl+Alt+U)',
       'Assemble Source (F9)',
+      // version 1.1 (ARCHITECTURE-PLUS P9.3): the addition at the end, after a separator
+      'Arrange Panels',
     ]);
     expect(labels('mac')).toEqual([
       'Files',
@@ -447,6 +510,7 @@ describe('resolveToolbar', () => {
       'Comment Selection (Cmd+/)',
       'Uncomment Selection (Shift+Cmd+/)',
       'Assemble Source (F9)',
+      'Arrange Panels',
     ]);
   });
 
@@ -465,12 +529,15 @@ describe('resolveToolbar', () => {
       'Reload Program (Ctrl+F3)',
       'Log Start (Shift+F4)',
       'Log Stop (Ctrl+F5)',
+      // version 1.1 (ARCHITECTURE-PLUS P9.3)
+      'Arrange Panels',
     ]);
     expect(labels('mac').slice(7)).toEqual([
       'Rewind Program (Shift+F2)',
       'Reload Program (Shift+F3)',
       'Log Start (Shift+F4)',
       'Log Stop (Shift+F5)',
+      'Arrange Panels',
     ]);
   });
 

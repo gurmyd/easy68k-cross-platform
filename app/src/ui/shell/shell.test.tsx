@@ -11,7 +11,9 @@ import type { AppState, DialogProps, FeatureModule } from '../../contracts';
 import type { ResolvedMenu } from '../../commands/menus';
 import { defaultSettings } from '../../core/settings/defaults';
 import { ApplicationProvider, useAppContext, useAppState } from '../../state/context';
+import { withLocked } from '../../state/dock';
 import { showPanel } from '../../state/panels';
+import { feature as layoutFeature } from '../../features/layout';
 import { initialAppState } from '../../state/store';
 import { createTestApplication, type TestApplication } from '../../state/testing';
 import { groupOf } from '../dock/actions';
@@ -274,7 +276,23 @@ describe('dialogs and toasts', () => {
     expect(html).toContain('>Caution</h2>');
     // Double spaces are kept (section 0, rule 7).
     expect(html).toContain('A program is loaded.  Close it?');
-    expect(html.match(/e68-button__caption/g)).toHaveLength(2);
+    // The message box's two buttons; version 1.1's toolbar button `Arrange Panels` (ARCHITECTURE-PLUS
+    // P9.3) is the one other captioned button of the page.
+    expect(html.match(/e68-button__caption/g)).toHaveLength(3);
+    expect(html.slice(html.indexOf('role="alertdialog"')).match(/e68-button__caption/g)).toHaveLength(2);
+  });
+
+  it('version 1.1: the toolbar ends with Arrange Panels, the lock inverted, its pressed state announced (P9.3)', () => {
+    const app = createTestApplication({ features: [layoutFeature] });
+    const button = () => /<button[^>]*data-command="app.layout.lock"[^>]*>/.exec(render(app))?.[0] ?? '';
+    // Locked by default (D2): not pressed.
+    expect(button()).toContain('aria-label="Arrange Panels"');
+    expect(button()).toContain('aria-pressed="false"');
+    expect(render(app)).toMatch(
+      /role="separator"[^>]*><\/div>(<span[^>]*>)?<button[^>]*data-command="app.layout.lock"/,
+    );
+    app.ctx.settings.update((settings) => withLocked(settings, false));
+    expect(button()).toContain('aria-pressed="true"');
   });
 
   // docs/requests/N5-default-button.md: MessageBoxRequest.defaultButton reaches the kit's MessageBox.
