@@ -78,6 +78,7 @@ import {
   firstFloatRect,
   firstSizeWithin,
   minimumSize,
+  newlyFloating,
   raised,
   sameRect,
   titleButtonsWidth,
@@ -215,6 +216,12 @@ export class DockEngine implements DockLive {
   private reserveShown = 0;
   /** Stops pinScroll on the dock's element (P9.9 point 1). */
   private unpin: (() => void) | null = null;
+  /**
+   * The panels an arrangement has just made float (P9.4, P9.8 point 1): until their windows are
+   * laid out, the sideways scroll offsets they had where they were docked are not carried into the
+   * window (errata M1 entry 19).
+   */
+  private placedAfresh = new Set<string>();
   private readonly changeListener = {
     onBeforeAction: (action: Action) => this.onBeforeAction(action),
     onAfterAction: (action: Action) => this.onAfterAction(action),
@@ -1083,12 +1090,43 @@ export class DockEngine implements DockLive {
     const positions = new Map<Element, { top: number; left: number }>();
     const root = this.element;
     if (!root) return positions;
+    const fresh = new Set(Array.from(this.placedAfresh, (panel) => `flexlayout-tab-${tabIdOf(this.mode, panel)}`));
     for (const element of Array.from(root.querySelectorAll('.flexlayout__tab *'))) {
-      if (element.scrollTop !== 0 || element.scrollLeft !== 0) {
-        positions.set(element, { top: element.scrollTop, left: element.scrollLeft });
-      }
+      // A window an arrangement has just placed shows its content from its left edge.
+      const left = fresh.size > 0 && fresh.has(element.closest('.flexlayout__tab')?.id ?? '') ? 0 : element.scrollLeft;
+      if (element.scrollTop !== 0 || left !== 0) positions.set(element, { top: element.scrollTop, left });
     }
     return positions;
+  }
+
+  /**
+   * P9.8 point 1 (errata M1 entry 19): a window that an arrangement has just placed, without a
+   * person's action on it, shows its content from its left edge. The panel may have been scrolled
+   * sideways where it was docked (a narrow column, where the focus revealed a field at its right);
+   * that offset is not carried into the window (scrollPositions leaves it out while the panel is in
+   * `placedAfresh`), and once the window is laid out (two frames: the move's own layout, and the
+   * browser's reveal of a focused field's caret after it) every sideways offset inside it is put
+   * back to 0. Vertical offsets are the panel's own (the Log follows its end) and are kept.
+   */
+  private showFromLeft(panels: readonly string[]): void {
+    const view = this.element?.ownerDocument.defaultView;
+    if (panels.length === 0 || !view) return;
+    for (const panel of panels) this.placedAfresh.add(panel);
+    const unscrollSideways = () => {
+      for (const panel of panels) {
+        const window = this.element?.querySelector(`[id="flexlayout-tab-${tabIdOf(this.mode, panel)}"]`);
+        if (!window) continue;
+        for (const element of [window, ...Array.from(window.querySelectorAll('*'))]) {
+          if (element.scrollLeft !== 0) element.scrollLeft = 0;
+        }
+      }
+    };
+    view.requestAnimationFrame(() =>
+      view.requestAnimationFrame(() => {
+        unscrollSideways();
+        for (const panel of panels) this.placedAfresh.delete(panel);
+      }),
+    );
   }
 
   /** The focus is in `panel`, on its tab, or on another tab of its group. */
@@ -1726,6 +1764,10 @@ export class DockEngine implements DockLive {
       if (!isViewerId(window.panel) && !names.includes(window.panel)) this.remembered[window.panel] = window.rect;
     }
     const viewers = this.floats.filter((window) => isViewerId(window.panel));
+    const afresh = newlyFloating(
+      this.floats.map((window) => window.panel),
+      names,
+    );
     this.floats = [...windows, ...viewers];
     this.stack = this.floats.map((window) => window.panel);
     this.preview.clear();
@@ -1734,6 +1776,7 @@ export class DockEngine implements DockLive {
     const result = this.reconcileTree(docked, new Set(this.visiblePanels()), readDock(this.settings()).parked);
     let tree = result.tree;
     for (const id of this.transients.ids()) if (!this.isFloating(id)) tree = insertPanel(tree, this.mode, id);
+    this.showFromLeft(afresh);
     this.rebuild(tree);
     this.store(tree, result.parked);
     this.syncSizes();

@@ -376,3 +376,12 @@ export function zIndexOf(stack: readonly string[], panel: string): number {
 export function raised(stack: readonly string[], panel: string): string[] {
   return [...stack.filter((id) => id !== panel), panel];
 }
+
+/**
+ * The panels of an arrangement's windows (`after`) that did not float before it (`before`): the
+ * windows it places afresh, which show their content from the left edge (errata M1 entry 19). A
+ * window that floated already keeps what it shows.
+ */
+export function newlyFloating(before: readonly string[], after: readonly string[]): string[] {
+  return after.filter((panel) => !before.includes(panel));
+}

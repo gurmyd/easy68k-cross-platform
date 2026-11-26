@@ -12,6 +12,7 @@ import {
   WINDOW_BORDER,
   keyStep,
   minimumSize,
+  newlyFloating,
   raised,
   readFloating,
   sizedRect,
@@ -21,6 +22,14 @@ import {
 
 const AREA = { width: 1400, height: 800 };
 const rect = (x: number, y: number, width = 300, height = 200) => ({ x, y, width, height });
+
+describe('windows an arrangement places afresh (errata M1 entry 19)', () => {
+  it('are the ones that did not float before; a window that floated keeps what it shows', () => {
+    expect(newlyFloating([], ['hardware', 'memory'])).toEqual(['hardware', 'memory']);
+    expect(newlyFloating(['memory', 'viewer:3'], ['hardware', 'memory'])).toEqual(['hardware']);
+    expect(newlyFloating(['hardware'], [])).toEqual([]);
+  });
+});
 
 describe('bounds (P9.2): at least 48 px of the title bar inside, moved back, never resized', () => {
   it('keeps a window that is inside where it is', () => {

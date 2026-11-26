@@ -135,6 +135,31 @@ async function whatIsSeen(app: App): Promise<{ picture: { share: number; left: n
   });
 }
 
+/**
+ * How far the Hardware panel's own scroll area is scrolled sideways (errata M1 entry 19: a window
+ * an arrangement has just placed shows its content from its left edge, whatever the panel showed
+ * where it was docked and wherever the keyboard focus is).
+ */
+async function hardwareSideways(app: App): Promise<number> {
+  return app.page.evaluate(async () => {
+    // Read after the frames in which a placed window is laid out (a frame, or 100 ms without one).
+    for (let i = 0; i < 3; i++) {
+      await new Promise<void>((done) => {
+        const timer = setTimeout(done, 100);
+        requestAnimationFrame(() => {
+          clearTimeout(timer);
+          done();
+        });
+      });
+    }
+    return (
+      document.querySelector<HTMLElement>(
+        '[data-e68-workspace]:not([hidden]) [data-e68-panel="hardware"] [data-hw-scroll]',
+      )?.scrollLeft ?? -1
+    );
+  });
+}
+
 /** Whether two boxes overlap (more than touching). */
 const overlap = (a: ScreenBox, b: ScreenBox) =>
   a.x < b.x + b.width - 0.5 && b.x < a.x + a.width - 0.5 && a.y < b.y + b.height - 0.5 && b.y < a.y + a.height - 0.5;
@@ -542,6 +567,10 @@ for (const locked of [true, false]) {
         ],
         JSON.stringify({ now: b, hardware, memory, dock }),
       ).toEqual([]);
+      // The step before left the Hardware panel scrolled sideways in its narrow column (View >
+      // Hardware revealed its first address field there) and the focus in that field: the window
+      // shows its content from its left edge all the same, with nothing scrolled back by the test.
+      expect(await hardwareSideways(app), 'the Hardware window shows its left edge').toBe(0);
       const seenNow = await whatIsSeen(app);
       expect(seenNow.devices, 'the Hardware displays, lamps, switches and push buttons are seen').toBe(100);
       expect(seenNow.picture.left, 'at least the left 400 px of the Output picture are seen').toBeGreaterThanOrEqual(
@@ -596,18 +625,10 @@ for (const size of [
     await expect.poll(() => floatingWindows(app)).toEqual(['Hardware', 'Memory']);
     const hardware = await windowBox(app, 'Hardware');
     const memory = await windowBox(app, 'Memory');
-    if (size.width < 1920) {
-      // At 1366 by 768 the Hardware window is narrower than its content (erratum M2 entry 8): a
-      // field at its right that has the keyboard (View > Hardware focuses the first one) scrolls the
-      // panel sideways. That is the panel's own scrolling, not a window over it: measured from its
-      // left edge, as a person sees it after a scroll back.
-      await app.page.evaluate(() => {
-        const scroller = document.querySelector<HTMLElement>(
-          '[data-e68-workspace]:not([hidden]) [data-e68-panel="hardware"] [data-hw-scroll]',
-        );
-        if (scroller) scroller.scrollLeft = 0;
-      });
-    }
+    // At 1366 by 768 the Hardware window is narrower than its content (P9.10 point 1) and the focus
+    // is in its first address field, at its right (View > Hardware put it there): the window shows
+    // its content from its left edge all the same (errata M1 entry 19). Nothing is scrolled back.
+    expect(await hardwareSideways(app), 'the Hardware window shows its left edge').toBe(0);
     const seen = await whatIsSeen(app);
     expect(seen.devices, "the Hardware panel's displays, lamps, switches and push buttons are uncovered").toBe(100);
     if (size.width >= 1920) {
@@ -783,13 +804,9 @@ for (const size of [
       for (const [id, box] of Object.entries(left)) if (over(window, box)) covering.push(`${titles[i]} over ${id}`);
     }
     expect(covering, JSON.stringify({ windows, left })).toEqual([]);
-    // The Hardware window's displays, lamps and switches stay uncovered.
-    await app.page.evaluate(() => {
-      const scroller = document.querySelector<HTMLElement>(
-        '[data-e68-workspace]:not([hidden]) [data-e68-panel="hardware"] [data-hw-scroll]',
-      );
-      if (scroller) scroller.scrollLeft = 0;
-    });
+    // The Hardware window's displays, lamps and switches stay uncovered, seen from its left edge
+    // without a scroll back (errata M1 entry 19).
+    expect(await hardwareSideways(app), 'the Hardware window shows its left edge').toBe(0);
     expect((await whatIsSeen(app)).devices).toBe(100);
   });
 }

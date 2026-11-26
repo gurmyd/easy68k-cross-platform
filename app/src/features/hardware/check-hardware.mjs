@@ -53,6 +53,7 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
 import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../tests/browser-checks/ending.mjs';
+import { buttonsAreTabStops, stopsRequired, tabStopsFromFocus } from '../../../../tests/browser-checks/tab-stops.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -746,9 +747,11 @@ const inside = (box, view) =>
 /**
  * Tab from the panel's first control to its last (and Shift+Tab back): where each focused control is
  * against the area's visible box (it must be inside: scrolled into view), and the page's other
- * scrolls (they must stay 0, errata N1 26).
+ * scrolls (they must stay 0, errata N1 26). `need` is how many stops the walk has on a system
+ * (tab-stops.mjs): read before the first Tab, with the focus where the walk starts.
  */
 async function tabWalk(page, backward) {
+  const need = await tabStopsFromFocus(page, SCROLLER, backward);
   const stops = [];
   for (let i = 0; i < 80; i++) {
     const where = await page.evaluate((selector) => {
@@ -779,8 +782,19 @@ async function tabWalk(page, backward) {
   }
   const hidden = stops.filter((stop) => !inside(stop.box, stop.view));
   const moved = stops.filter((stop) => stop.outer !== 0);
-  return { count: stops.length, hidden, moved };
+  return { count: stops.length, hidden, moved, need };
 }
+
+/**
+ * The walk went through every control Tab stops at on this system (never fewer than the 20 counted
+ * on Windows where Tab stops at buttons; Safari's engine on a Mac stops at the fields only), each
+ * one in view, and nothing but the panel scrolled.
+ */
+const walkedAll = (walk, buttonsStop) =>
+  walk.count >= stopsRequired(walk.need, buttonsStop, 20) && walk.hidden.length === 0 && walk.moved.length === 0;
+const walkFacts = (walk) =>
+  `${walk.count} stops (every control: ${walk.need.everywhere}; by Safari's rule on a Mac: ${walk.need.safari}); ` +
+  `hidden ${JSON.stringify(walk.hidden.slice(0, 2))}; moved ${walk.moved.length}`;
 
 /** Focuses the panel's first control (as focusPanel does) with the area scrolled to its start. */
 async function focusFirst(page, last = false) {
@@ -820,6 +834,23 @@ async function wheelTo(page, dx, dy) {
     [SCROLLER, dx, dy],
     5000,
   );
+  // A browser that scrolls smoothly (WebKit on Linux: about 200 ms after the last notch) is still
+  // on its way: the facts are read once the area has come to rest (its offsets unchanged for 10
+  // frames in a row), so that what is judged is where the wheel took it, on every system.
+  await until(
+    page,
+    (selector) => {
+      const area = document.querySelector(selector);
+      const at = `${area.scrollLeft},${area.scrollTop}`;
+      const state = (window.__wheelRest ??= { at: '', frames: 0 });
+      state.frames = state.at === at ? state.frames + 1 : 0;
+      state.at = at;
+      return state.frames >= 10;
+    },
+    SCROLLER,
+    5000,
+  );
+  await page.evaluate(() => delete window.__wheelRest);
   return scrollFacts(page);
 }
 
@@ -871,6 +902,8 @@ async function clickLastMapCheck(page) {
  */
 async function shortRegionPass(browser, name) {
   const p = `${name}/short region:`;
+  const buttonsStop = await buttonsAreTabStops(browser);
+  console.log(`  note ${name}: Tab ${buttonsStop ? 'stops' : 'does not stop'} at plain buttons in this browser`);
   const { context, page, errors } = await openApp(browser, { width: 1366, height: 768 });
   await page.locator('.e68-modeswitch [data-mode="simulator"]').click();
   await page.evaluate(() => window.__easy68k.ctx.commands.run('sim.view.hardware'));
@@ -912,16 +945,12 @@ async function shortRegionPass(browser, name) {
   const forward = await tabWalk(page, false);
   check(
     `${p} docked: Tab through every control: each one is scrolled into view by the panel, nothing else scrolls`,
-    forward.count >= 20 && forward.hidden.length === 0 && forward.moved.length === 0,
-    `${forward.count} stops; hidden ${JSON.stringify(forward.hidden.slice(0, 2))}; moved ${forward.moved.length}`,
+    walkedAll(forward, buttonsStop),
+    walkFacts(forward),
   );
   await focusFirst(page, true);
   const backward = await tabWalk(page, true);
-  check(
-    `${p} docked: Shift+Tab back through them: likewise`,
-    backward.count >= 20 && backward.hidden.length === 0 && backward.moved.length === 0,
-    `${backward.count} stops; hidden ${JSON.stringify(backward.hidden.slice(0, 2))}; moved ${backward.moved.length}`,
-  );
+  check(`${p} docked: Shift+Tab back through them: likewise`, walkedAll(backward, buttonsStop), walkFacts(backward));
 
   // Floating at 360 x 280.
   await page.evaluate(() => {
@@ -970,15 +999,15 @@ async function shortRegionPass(browser, name) {
   const floatForward = await tabWalk(page, false);
   check(
     `${p} floating: Tab through every control: each one is scrolled into view by the panel, nothing else scrolls`,
-    floatForward.count >= 20 && floatForward.hidden.length === 0 && floatForward.moved.length === 0,
-    `${floatForward.count} stops; hidden ${JSON.stringify(floatForward.hidden.slice(0, 2))}; moved ${floatForward.moved.length}`,
+    walkedAll(floatForward, buttonsStop),
+    walkFacts(floatForward),
   );
   await focusFirst(page, true);
   const floatBackward = await tabWalk(page, true);
   check(
     `${p} floating: Shift+Tab back through them: likewise`,
-    floatBackward.count >= 20 && floatBackward.hidden.length === 0 && floatBackward.moved.length === 0,
-    `${floatBackward.count} stops; hidden ${JSON.stringify(floatBackward.hidden.slice(0, 2))}; moved ${floatBackward.moved.length}`,
+    walkedAll(floatBackward, buttonsStop),
+    walkFacts(floatBackward),
   );
 
   // Large enough: nothing scrolls, the panel's rows start where they did.

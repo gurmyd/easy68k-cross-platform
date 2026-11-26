@@ -73,7 +73,7 @@
     "check:additions": "node app/src/features/additions/check-additions.mjs",
     "check:frame-policy": "node tools/check-frame-policy.mjs",
     "check:arrange": "node app/src/features/layout/check-arrange.mjs",
-    "test:check-ending": "node --test tests/browser-checks/ending.test.mjs",
+    "test:check-ending": "node --test tests/browser-checks/ending.test.mjs tests/browser-checks/tab-stops.test.mjs",
     "check:rc": "node tests/integration/rc/rc.mjs",
     "oracle:wine:build": "docker build -t easy68k-oracle-wine tests/oracle/wine",
     "oracle:wine:asm": "node tests/oracle/wine/asm/regenerate.mjs",

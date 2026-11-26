@@ -29,6 +29,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium, webkit } from '@playwright/test';
 import { createServer } from 'vite';
 import { closeAtEnd, closeWithin, doneWith, endChecks } from '../../../../tests/browser-checks/ending.mjs';
+import { buttonsAreTabStops, stopsRequired, tabStopsFromFocus } from '../../../../tests/browser-checks/tab-stops.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, '../../..');
@@ -321,6 +322,8 @@ async function nrTabWalk(page, panel, backward = false) {
     },
     [panel, backward],
   );
+  // How many stops the walk has on a system (tab-stops.mjs), read with the focus at its start.
+  const need = await tabStopsFromFocus(page, `[data-e68-panel="${panel}"]`, backward);
   const stops = [];
   for (let i = 0; i < 60; i++) {
     const where = await nrFocused(page, panel);
@@ -332,8 +335,20 @@ async function nrTabWalk(page, panel, backward = false) {
     count: stops.length,
     hidden: stops.filter((stop) => !stop.seen),
     moved: stops.filter((stop) => stop.outer !== 0),
+    need,
   };
 }
+
+/**
+ * The walk went through every control Tab stops at on this system (never fewer than `floor`, the
+ * figure counted on Windows, where Tab stops at buttons; Safari's engine on a Mac stops at the
+ * fields only), each one in view, and nothing outside the panel scrolled.
+ */
+const nrWalkedAll = (walk, buttonsStop, floor) =>
+  walk.count >= stopsRequired(walk.need, buttonsStop, floor) && walk.hidden.length === 0 && walk.moved.length === 0;
+const nrWalkFacts = (walk) =>
+  `${walk.count} stops (every control: ${walk.need.everywhere}; by Safari's rule on a Mac: ${walk.need.safari}); ` +
+  `hidden ${JSON.stringify(walk.hidden.slice(0, 2))}; moved ${walk.moved.length}`;
 
 async function nrTheme(page, theme) {
   await page.evaluate((t) => window.__easy68k.ctx.commands.run('app.theme.set', t), theme);
@@ -351,6 +366,8 @@ async function nrTheme(page, theme) {
  */
 async function narrowRegionPass(browser, name, spec) {
   const p = `${name}/narrow region (${spec.panel}):`;
+  const buttonsStop = await buttonsAreTabStops(browser);
+  console.log(`  note ${name}: Tab ${buttonsStop ? 'stops' : 'does not stop'} at plain buttons in this browser`);
   const situations = [
     ['docked 1366 x 768', 1366, 768, null],
     ['docked 1024 x 700', 1024, 700, null],
@@ -416,14 +433,14 @@ async function narrowRegionPass(browser, name, spec) {
     const forward = await nrTabWalk(page, spec.panel);
     check(
       `${p} ${label}: Tab through every control lands each one in view, nothing outside the panel scrolls`,
-      forward.count >= spec.minStops && forward.hidden.length === 0 && forward.moved.length === 0,
-      `${forward.count} stops; hidden ${JSON.stringify(forward.hidden.slice(0, 2))}; moved ${forward.moved.length}`,
+      nrWalkedAll(forward, buttonsStop, spec.minStops),
+      nrWalkFacts(forward),
     );
     const backward = await nrTabWalk(page, spec.panel, true);
     check(
       `${p} ${label}: Shift+Tab back through them, likewise`,
-      backward.count >= spec.minStops && backward.hidden.length === 0 && backward.moved.length === 0,
-      `${backward.count} stops; hidden ${JSON.stringify(backward.hidden.slice(0, 2))}; moved ${backward.moved.length}`,
+      nrWalkedAll(backward, buttonsStop, spec.minStops),
+      nrWalkFacts(backward),
     );
     if (spec.keyboard) {
       const keys = await spec.keyboard(page, label);

@@ -571,10 +571,13 @@ async function narrowPass(browser, name) {
       // Where 1.0.0's row fitted with room for the addition at its smallest, nothing overflows.
       const room = before.room - Math.max(0, before.toolbar.scroll - before.toolbar.client);
       if (room >= 40) {
+        // The page is no wider than 1.0.0's row makes it: on a system with wider fonts (DejaVu Sans,
+        // Ubuntu) the menu bar and its mode switch already make 1.0.0's page 534 px wide at 500 px
+        // (errata M2 entry 10); what the addition must not do is widen it further.
         check(
           `${at} the row fits (1.0.0 left ${room} px)`,
-          now.toolbar.scroll <= now.toolbar.client && now.page.scroll <= now.page.client,
-          JSON.stringify({ toolbar: now.toolbar, page: now.page }),
+          now.toolbar.scroll <= now.toolbar.client && now.page.scroll <= Math.max(now.page.client, before.page.scroll),
+          JSON.stringify({ toolbar: now.toolbar, page: now.page, pageWithout: before.page }),
         );
       } else {
         note(
